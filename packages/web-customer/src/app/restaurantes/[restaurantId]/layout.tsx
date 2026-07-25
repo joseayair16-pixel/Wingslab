@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 
 export function generateStaticParams() {
-  return [{ restaurantId: 'placeholder' }];
+  return [];
 }
 
 export function generateMetadata(): Metadata {

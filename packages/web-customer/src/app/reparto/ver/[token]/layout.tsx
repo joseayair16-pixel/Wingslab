@@ -1,5 +1,5 @@
 export function generateStaticParams() {
-  return [{ token: 'placeholder' }];
+  return [];
 }
 
 export default function DeliveryTicketLayout({
