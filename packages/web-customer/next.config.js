@@ -1,5 +1,3 @@
-const { setupDevPlatform } = require('@cloudflare/next-on-pages');
-
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
@@ -13,6 +11,7 @@ const nextConfig = {
 };
 
 if (process.env.NODE_ENV === 'development') {
+  const { setupDevPlatform } = require('@cloudflare/next-on-pages');
   setupDevPlatform();
 }
 
