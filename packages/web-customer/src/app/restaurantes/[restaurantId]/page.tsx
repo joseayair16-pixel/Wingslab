@@ -92,8 +92,6 @@ type PublicRestaurantDetail = {
 import { usePushNotifications } from '../../../hooks/usePushNotifications';
 import { useCartStore, type CartItem } from '../../../store/cartStore';
 
-export const runtime = 'edge';
-
 type CheckoutForm = {
   street: string;
   number: string;

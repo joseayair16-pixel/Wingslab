@@ -9,8 +9,6 @@
 
 import { useEffect, useState } from 'react';
 
-export const runtime = 'edge';
-
 interface DeliveryTicketData {
   id: string;
   orderReference: string;

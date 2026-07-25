@@ -7,12 +7,6 @@ const nextConfig = {
   images: {
     unoptimized: true,
   },
-  trailingSlash: true,
 };
-
-if (process.env.NODE_ENV === 'development') {
-  const { setupDevPlatform } = require('@cloudflare/next-on-pages');
-  setupDevPlatform();
-}
 
 module.exports = nextConfig;
