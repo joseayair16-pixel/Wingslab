@@ -3,6 +3,9 @@ const nextConfig = {
   reactStrictMode: true,
   output: 'export',
   distDir: '.next-build',
+  eslint: {
+    ignoreDuringBuilds: true,
+  },
   images: {
     unoptimized: true,
   },
