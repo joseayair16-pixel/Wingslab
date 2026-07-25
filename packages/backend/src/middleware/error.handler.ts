@@ -1,0 +1,57 @@
+/**
+ * Error Handler Middleware
+ */
+
+import { FastifyError, FastifyReply, FastifyRequest } from 'fastify';
+import { isAppError } from '../errors/app-error';
+import { recordErrorMetric } from '../utils/metrics';
+import { logger } from '../utils/logger';
+import { buildRequestContext } from '../utils/request-context';
+
+export const errorHandler = async (
+  error: FastifyError,
+  request: FastifyRequest,
+  reply: FastifyReply
+) => {
+  const context = buildRequestContext(request);
+
+  logger.error('Error caught', {
+    ...context,
+    statusCode: error.statusCode,
+    errorCode: error.code,
+    errorMessage: error.message,
+  });
+
+  reply.header('x-request-id', context.requestId);
+
+  if (isAppError(error)) {
+    recordErrorMetric(error.code);
+    return reply.status(error.statusCode).send({
+      success: false,
+      meta: {
+        requestId: context.requestId,
+      },
+      error: {
+        code: error.code,
+        message: error.message,
+        details: error.details,
+      },
+    });
+  }
+
+  const status = error.statusCode || 500;
+  const message = error.message || 'Internal Server Error';
+  recordErrorMetric(error.code || 'INTERNAL_ERROR');
+
+  return reply.status(status).send({
+    success: false,
+    meta: {
+      requestId: context.requestId,
+    },
+    error: {
+      code: error.code || 'INTERNAL_ERROR',
+      message,
+      details: process.env.NODE_ENV === 'development' ? error.stack : undefined,
+    },
+  });
+};

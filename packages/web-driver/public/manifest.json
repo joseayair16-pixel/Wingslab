@@ -1,0 +1,21 @@
+{
+  "name": "SaDeL Driver",
+  "short_name": "SaDeL Driver",
+  "description": "Gestiona disponibilidad, entregas y seguimiento desde el panel del repartidor SaDeL.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#161616",
+  "icons": [
+    {
+      "src": "/app-icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/app-icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

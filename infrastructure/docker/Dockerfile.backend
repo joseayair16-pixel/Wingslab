@@ -1,0 +1,60 @@
+ARG NODE_VERSION=18
+ARG ALPINE_VERSION=18-alpine
+
+# Build stage
+FROM node:${NODE_VERSION}-alpine AS builder
+
+WORKDIR /app
+
+# Copy root config
+COPY package.json package-lock.json tsconfig.json ./
+
+# Copy packages
+COPY packages/shared ./packages/shared
+COPY packages/backend ./packages/backend
+
+# Install ALL dependencies
+RUN npm ci
+
+# Build shared package
+RUN npm run build -w @sadel/shared
+
+# Generate Prisma client
+RUN npx prisma generate --schema=packages/backend/prisma/schema.prisma
+
+# Build backend
+RUN npm run build -w @sadel/backend
+
+# Production stage
+FROM node:${NODE_VERSION}-alpine
+
+WORKDIR /app
+
+# Install dumb-init for proper signal handling
+RUN apk add --no-cache dumb-init tini
+
+# Copy root package files
+COPY package.json package-lock.json ./
+
+# Copy built artifacts
+COPY --from=builder /app/packages/shared/dist ./packages/shared/dist
+COPY --from=builder /app/packages/shared/package.json ./packages/shared/package.json
+COPY --from=builder /app/packages/backend/dist ./packages/backend/dist
+COPY --from=builder /app/packages/backend/package.json ./packages/backend/package.json
+
+# Copy Prisma schema for client generation
+COPY --from=builder /app/packages/backend/prisma ./packages/backend/prisma
+COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
+
+# Install production dependencies only
+RUN npm ci --only=production --omit=dev && npm cache clean --force
+
+# Regenerate Prisma client for production
+RUN npx prisma generate --schema=packages/backend/prisma/schema.prisma
+
+EXPOSE 3001
+
+# Use tini for proper signal handling
+ENTRYPOINT ["/sbin/tini", "--"]
+
+CMD ["node", "packages/backend/dist/index.js"]

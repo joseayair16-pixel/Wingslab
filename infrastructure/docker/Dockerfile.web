@@ -1,0 +1,49 @@
+ARG NODE_VERSION=18
+ARG APP=web-admin
+ARG PORT=3000
+
+# Build stage
+FROM node:${NODE_VERSION}-alpine AS builder
+
+WORKDIR /app
+
+# Copy root config
+COPY package.json package-lock.json tsconfig.json ./
+
+# Copy packages
+COPY packages/shared ./packages/shared
+COPY packages/${APP} ./packages/${APP}
+
+# Install ALL dependencies
+RUN npm ci
+
+# Build shared package
+RUN npm run build -w @sadel/shared
+
+# Build Next.js app
+RUN npm run build -w @sadel/${APP}
+
+# Production stage
+FROM node:${NODE_VERSION}-alpine
+
+WORKDIR /app
+
+# Install tini for signal handling
+RUN apk add --no-cache tini
+
+# Copy root package files
+COPY package.json package-lock.json ./
+
+# Copy built artifacts from builder
+COPY --from=builder /app/packages/shared/dist ./packages/shared/dist
+COPY --from=builder /app/packages/shared/package.json ./packages/shared/package.json
+COPY --from=builder /app/packages/${APP} ./packages/${APP}
+
+# Install production dependencies only
+RUN npm ci --only=production --omit=dev && npm cache clean --force
+
+EXPOSE ${PORT}
+
+ENTRYPOINT ["/sbin/tini", "--"]
+
+CMD ["npm", "start", "-w", "@sadel/${APP}"]

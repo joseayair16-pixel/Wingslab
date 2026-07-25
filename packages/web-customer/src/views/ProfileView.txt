@@ -1,0 +1,374 @@
+        {activeSection === 'profile' ? (
+          <div className="mt-6 max-w-5xl mx-auto px-4 lg:px-0 pb-32">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              
+              {/* Columna Izquierda: Tarjeta de Usuario y Ajustes de Cuenta */}
+              <div className="lg:col-span-1 space-y-6">
+                
+                {/* Tarjeta de Perfil */}
+                <div className="bg-white rounded-3xl border border-black/[0.03] shadow-[0_4px_24px_rgba(0,0,0,0.02)] p-6 group hover:-translate-y-0.5 hover:shadow-[0_8px_32px_rgba(0,0,0,0.04)] transition-all duration-300">
+                  <div className="flex flex-col items-center text-center">
+                    <div className="relative group/avatar cursor-pointer">
+                      <div className="flex h-24 w-24 items-center justify-center rounded-full bg-[#C4B5FD] font-bold text-black text-3xl transition-colors group-hover/avatar:bg-[#A78BFA]">
+                        {sessionUser?.name?.substring(0, 2).toUpperCase() || 'US'}
+                      </div>
+                      <div className="absolute inset-0 bg-black/40 rounded-full flex items-center justify-center opacity-0 group-hover/avatar:opacity-100 transition-opacity">
+                        <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+                      </div>
+                    </div>
+                    <h3 className="mt-5 text-xl font-semibold text-neutral-950 tracking-tight">{sessionUser?.name || 'Sin nombre'}</h3>
+                    <p className="text-sm font-medium text-neutral-500 mt-1">{sessionUser?.phone || 'Sin teléfono'}</p>
+                    <p className="text-xs text-neutral-400 mt-2 bg-neutral-50 px-3 py-1.5 rounded-full">Miembro desde {memberSinceLabel}</p>
+                    
+                    <button
+                      className="mt-6 w-full rounded-full bg-white border border-black/[0.08] py-2.5 text-sm font-semibold text-neutral-700 hover:bg-[#F3E8FF] hover:text-[#5B21B6] hover:border-[#C4B5FD] transition-all flex items-center justify-center gap-2"
+                      onClick={() => {
+                        setEditName(sessionUser?.name || '');
+                        setEditPhone(sessionUser?.phone || '');
+                        setIsEditingProfile(true);
+                      }}
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
+                      Editar perfil
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Columna Derecha: Direcciones y Preferencias */}
+              <div className="lg:col-span-2 space-y-6">
+                
+                {/* Direcciones */}
+                <div className="bg-white rounded-3xl border border-black/[0.03] shadow-[0_4px_24px_rgba(0,0,0,0.02)] overflow-hidden">
+                  <div className="px-6 py-5 border-b border-black/[0.03] flex justify-between items-center">
+                    <h3 className="text-lg font-semibold text-neutral-950 tracking-tight">Mis direcciones</h3>
+                  </div>
+
+                  {isEditingAddress ? (
+                    <div className="p-6 space-y-4">
+                      {/* Buscador de Dirección */}
+                      <div className="relative">
+                        <label className="text-xs font-semibold uppercase tracking-[0.15em] text-neutral-400">Buscar dirección</label>
+                        <div className="mt-1 flex gap-2">
+                          <div className="relative flex-1">
+                            <input
+                              type="text"
+                              placeholder="Escribe tu calle y número..."
+                              value={addressSearchQuery}
+                              onChange={(e) => {
+                                setAddressSearchQuery(e.target.value);
+                                void searchAddressPhoton(e.target.value);
+                              }}
+                              className="w-full rounded-xl border border-black/10 bg-white p-3 text-sm focus:border-neutral-950 focus:outline-none focus:ring-1 focus:ring-neutral-950 pr-10"
+                            />
+                            {isSearchingAddress && (
+                              <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                                <div className="h-4 w-4 animate-spin rounded-full border-2 border-neutral-300 border-t-neutral-600" />
+                              </div>
+                            )}
+                          </div>
+                          <button
+                            type="button"
+                            onClick={fillProfileAddressWithCurrentLocation}
+                            className="rounded-xl border border-black/10 bg-white px-4 text-sm font-semibold text-neutral-700 hover:bg-neutral-50 transition flex items-center gap-2"
+                          >
+                            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.828 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                            </svg>
+                            GPS
+                          </button>
+                        </div>
+
+                        {/* Sugerencias */}
+                        {addressSuggestions.length > 0 && (
+                          <div className="absolute z-10 left-0 right-0 mt-1 bg-white rounded-xl border border-black/5 shadow-lg max-h-60 overflow-y-auto">
+                            {addressSuggestions.map((suggestion, index) => (
+                              <button
+                                key={index}
+                                type="button"
+                                onClick={() => selectSuggestion(suggestion)}
+                                className="w-full text-left px-4 py-3 text-sm hover:bg-neutral-50 border-b border-black/[0.03] last:border-0"
+                              >
+                                <p className="font-medium text-neutral-800">{suggestion.name}</p>
+                                <p className="text-xs text-neutral-500 mt-0.5">{suggestion.description}</p>
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Mapa */}
+                      <div className="flex items-center gap-2 text-xs text-neutral-600 bg-[#F3E8FF] px-4 py-2.5 rounded-xl border border-[#DDD6FE]/50">
+                        <svg className="h-4 w-4 text-[#7C3AED]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.828 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                        </svg>
+                        <span className="font-medium">Por favor, arrastra el pin en el mapa exactamente donde quieres recibir tu entrega.</span>
+                      </div>
+                      
+                      <div id="map-address" className="h-60 w-full rounded-xl border border-black/[0.05] z-0" />
+
+                      {/* Datos complementarios */}
+                      <div className="grid gap-4 md:grid-cols-2">
+                        <div className="md:col-span-2">
+                          <Field label="Calle seleccionada" value={profileAddress.street} readOnly placeholder="Selecciona en el mapa o busca arriba" />
+                        </div>
+                        <Field label="Número exterior" value={profileAddress.number} onChange={(value) => handleProfileAddressChange('number', value)} placeholder="Ej. 123" />
+                        <Field label="Depto / Interior (Opcional)" value={profileAddress.apartment || ''} onChange={(value) => handleProfileAddressChange('apartment', value)} placeholder="Depto 3B" />
+                        <div className="md:col-span-2">
+                          <Field label="Referencia" value={profileAddress.reference || ''} onChange={(value) => handleProfileAddressChange('reference', value)} placeholder="Porton negro, frente al parque" />
+                        </div>
+                      </div>
+
+                      <div className="flex flex-wrap gap-3 pt-2">
+                        <button
+                          type="button"
+                          onClick={saveProfileAddress}
+                          className="rounded-full bg-[#C4B5FD] px-5 py-2.5 text-sm font-semibold text-black transition hover:bg-[#A78BFA]"
+                        >
+                          Guardar Dirección
+                        </button>
+                        <button
+                          type="button"
+                          onClick={cancelProfileAddressEditing}
+                          className="rounded-full border border-black/10 px-5 py-2.5 text-sm font-semibold text-neutral-700 transition hover:bg-neutral-50"
+                        >
+                          Cancelar
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="divide-y divide-black/[0.03]">
+                        {addresses.length > 0 ? (
+                          addresses.map((addr) => (
+                            <div key={addr.id} className="px-6 py-5 flex items-center justify-between hover:bg-neutral-50 hover:-translate-y-px hover:shadow-[0_2px_8px_rgba(0,0,0,0.02)] transition-all cursor-pointer group">
+                              <div className="flex items-start gap-4">
+                                <div className="mt-0.5 p-2.5 rounded-2xl bg-neutral-50 border border-black/[0.03] text-neutral-500 group-hover:bg-[#F3E8FF] group-hover:text-[#5B21B6] group-hover:border-[#C4B5FD] transition-all">
+                                  {addr.reference?.toLowerCase().includes('casa') ? (
+                                    <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m0 0l-7 7-7-7M19 10v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" /></svg>
+                                  ) : addr.reference?.toLowerCase().includes('trabajo') || addr.reference?.toLowerCase().includes('oficina') ? (
+                                    <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>
+                                  ) : (
+                                    <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.828 0l-4.244-4.243a8 8 0 1111.314 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+                                  )}
+                                </div>
+                                <div>
+                                  <div className="flex items-center gap-2">
+                                    <p className="text-sm font-semibold text-neutral-950">{addr.reference || 'Dirección'}</p>
+                                    {addr.isDefault && (
+                                      <span className="text-[10px] uppercase font-bold px-2.5 py-0.5 bg-[#C4B5FD] text-black rounded-full tracking-wide">Principal</span>
+                                    )}
+                                  </div>
+                                  <p className="text-sm text-neutral-600 mt-1 leading-snug">{addr.street} #{addr.number}{addr.apartment ? `, Int ${addr.apartment}` : ''}, {addr.neighborhood}</p>
+                                  <p className="text-xs text-neutral-400 mt-0.5">{addr.city}, {addr.state}</p>
+                                </div>
+                              </div>
+                              
+                              <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setProfileAddress(addr);
+                                    setIsEditingAddress(true);
+                                  }}
+                                  className="p-2 rounded-full hover:bg-[#F3E8FF] text-neutral-400 hover:text-[#5B21B6] transition-colors"
+                                  title="Editar"
+                                >
+                                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
+                                </button>
+                                <button
+                                  onClick={async (e) => {
+                                    e.stopPropagation();
+                                    try {
+                                      await requestJson({
+                                        apiBase,
+                                        path: `/customer/addresses/${addr.id}`,
+                                        options: {
+                                          method: 'DELETE',
+                                          headers: { 'Authorization': `Bearer ${token}` },
+                                        },
+                                      });
+                                      void loadAddresses();
+                                      setToastMessage('Dirección eliminada');
+                                      setTimeout(() => setToastMessage(''), 2000);
+                                    } catch (err) {
+                                      console.error(err);
+                                    }
+                                  }}
+                                  className="p-2 rounded-full hover:bg-red-50 text-neutral-400 hover:text-red-600 transition-colors"
+                                  title="Eliminar"
+                                >
+                                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                                </button>
+                              </div>
+                            </div>
+                          ))
+                        ) : (
+                          <div className="px-6 py-12 text-center flex flex-col items-center">
+                            <div className="w-14 h-14 bg-neutral-50 rounded-full flex items-center justify-center text-neutral-300 mb-4 border border-black/[0.05]">
+                              <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.828 0l-4.244-4.243a8 8 0 1111.314 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+                            </div>
+                            <p className="text-neutral-900 font-semibold text-lg">Aún no hay direcciones</p>
+                            <p className="text-neutral-500 text-sm mt-1.5 max-w-sm">Guarda tu ubicación para que tus próximos pedidos lleguen en tiempo récord.</p>
+                          </div>
+                        )}
+                      </div>
+                      <div className="px-6 py-5 bg-neutral-50/50 border-t border-black/[0.03]">
+                        <button
+                          className="w-full py-4 rounded-2xl border-2 border-dashed border-neutral-300 bg-white text-sm font-semibold text-neutral-600 hover:text-[#5B21B6] hover:border-[#C4B5FD] hover:bg-[#F3E8FF]/50 transition-all flex items-center justify-center gap-2 group"
+                          onClick={() => {
+                            setProfileAddress({
+                              street: '',
+                              number: '',
+                              apartment: '',
+                              neighborhood: '',
+                              city: '',
+                              state: '',
+                              zipCode: '',
+                              country: 'MX',
+                              reference: '',
+                              latitude: 0,
+                              longitude: 0,
+                              isDefault: false,
+                            } as CustomerProfileAddress);
+                            setIsEditingAddress(true);
+                          }}
+                        >
+                          <svg className="w-5 h-5 text-neutral-400 group-hover:text-[#5B21B6] transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
+                          Agregar nueva dirección
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </div>
+
+                {/* Preferencias */}
+                <div className="bg-white rounded-3xl border border-black/[0.03] shadow-[0_4px_24px_rgba(0,0,0,0.02)] overflow-hidden">
+                  <div className="px-6 py-5 border-b border-black/[0.03]">
+                    <h3 className="text-lg font-semibold text-neutral-950 tracking-tight">Preferencias de entrega</h3>
+                  </div>
+                  <div className="divide-y divide-black/[0.03]">
+                    
+                    <div className="px-6 py-5 flex items-center justify-between hover:bg-neutral-50 transition cursor-pointer" onClick={() => updatePreferences({ deliveryPreference: customerProfile?.deliveryPreference === 'NO_DOORBELL' ? null : 'NO_DOORBELL' })}>
+                      <div className="flex items-center gap-4">
+                        <div className={`p-2.5 rounded-2xl transition-colors ${customerProfile?.deliveryPreference === 'NO_DOORBELL' ? 'bg-orange-100 text-orange-600' : 'bg-neutral-100 text-neutral-500'}`}>
+                          <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" /></svg>
+                        </div>
+                        <div>
+                          <p className="text-sm font-semibold text-neutral-950">No tocar el timbre / puerta</p>
+                          <p className="text-xs text-neutral-500 mt-0.5">Mándame mensaje o llámame. Ideal si hay bebés o mascotas.</p>
+                        </div>
+                      </div>
+                      <div className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-300 ${customerProfile?.deliveryPreference === 'NO_DOORBELL' ? 'bg-[#5B21B6]' : 'bg-neutral-200'}`}>
+                        <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-[0_2px_4px_rgba(0,0,0,0.1)] transition-transform duration-300 ${customerProfile?.deliveryPreference === 'NO_DOORBELL' ? 'translate-x-5' : 'translate-x-0.5'}`} />
+                      </div>
+                    </div>
+
+                    <div className="px-6 py-5 flex items-center justify-between hover:bg-neutral-50 transition cursor-pointer" onClick={() => updatePreferences({ deliveryPreference: customerProfile?.deliveryPreference === 'CALL_ON_ARRIVAL' ? null : 'CALL_ON_ARRIVAL' })}>
+                      <div className="flex items-center gap-4">
+                        <div className={`p-2.5 rounded-2xl transition-colors ${customerProfile?.deliveryPreference === 'CALL_ON_ARRIVAL' ? 'bg-blue-100 text-blue-600' : 'bg-neutral-100 text-neutral-500'}`}>
+                          <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" /></svg>
+                        </div>
+                        <div>
+                          <p className="text-sm font-semibold text-neutral-950">Llamar al llegar</p>
+                          <p className="text-xs text-neutral-500 mt-0.5">El repartidor te marcará por teléfono cuando esté afuera.</p>
+                        </div>
+                      </div>
+                      <div className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-300 ${customerProfile?.deliveryPreference === 'CALL_ON_ARRIVAL' ? 'bg-[#5B21B6]' : 'bg-neutral-200'}`}>
+                        <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-[0_2px_4px_rgba(0,0,0,0.1)] transition-transform duration-300 ${customerProfile?.deliveryPreference === 'CALL_ON_ARRIVAL' ? 'translate-x-5' : 'translate-x-0.5'}`} />
+                      </div>
+                    </div>
+
+                    <div className="px-6 py-5 flex items-center justify-between hover:bg-neutral-50 transition cursor-pointer" onClick={() => updatePreferences({ deliveryPreference: customerProfile?.deliveryPreference === 'PREFER_WHATSAPP' ? null : 'PREFER_WHATSAPP' })}>
+                      <div className="flex items-center gap-4">
+                        <div className={`p-2.5 rounded-2xl transition-colors ${customerProfile?.deliveryPreference === 'PREFER_WHATSAPP' ? 'bg-green-100 text-green-600' : 'bg-neutral-100 text-neutral-500'}`}>
+                          <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" /></svg>
+                        </div>
+                        <div>
+                          <p className="text-sm font-semibold text-neutral-950">Contactar por WhatsApp</p>
+                          <p className="text-xs text-neutral-500 mt-0.5">Prefiero mensajes o llamadas por WhatsApp en vez de línea normal.</p>
+                        </div>
+                      </div>
+                      <div className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-300 ${customerProfile?.deliveryPreference === 'PREFER_WHATSAPP' ? 'bg-[#5B21B6]' : 'bg-neutral-200'}`}>
+                        <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-[0_2px_4px_rgba(0,0,0,0.1)] transition-transform duration-300 ${customerProfile?.deliveryPreference === 'PREFER_WHATSAPP' ? 'translate-x-5' : 'translate-x-0.5'}`} />
+                      </div>
+                    </div>
+
+                    <div className="px-6 py-5 flex items-center justify-between hover:bg-neutral-50 transition cursor-pointer" onClick={() => updatePreferences({ deliveryPreference: customerProfile?.deliveryPreference === 'HONK_ON_ARRIVAL' ? null : 'HONK_ON_ARRIVAL' })}>
+                      <div className="flex items-center gap-4">
+                        <div className={`p-2.5 rounded-2xl transition-colors ${customerProfile?.deliveryPreference === 'HONK_ON_ARRIVAL' ? 'bg-indigo-100 text-indigo-600' : 'bg-neutral-100 text-neutral-500'}`}>
+                          <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" /></svg>
+                        </div>
+                        <div>
+                          <p className="text-sm font-semibold text-neutral-950">Tocar claxon al llegar</p>
+                          <p className="text-xs text-neutral-500 mt-0.5">El repartidor tocará el claxon de su moto/auto en vez del timbre.</p>
+                        </div>
+                      </div>
+                      <div className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-300 ${customerProfile?.deliveryPreference === 'HONK_ON_ARRIVAL' ? 'bg-[#5B21B6]' : 'bg-neutral-200'}`}>
+                        <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-[0_2px_4px_rgba(0,0,0,0.1)] transition-transform duration-300 ${customerProfile?.deliveryPreference === 'HONK_ON_ARRIVAL' ? 'translate-x-5' : 'translate-x-0.5'}`} />
+                      </div>
+                    </div>
+
+                    <div className="px-6 py-5 flex items-center justify-between hover:bg-neutral-50 transition cursor-pointer" onClick={() => updatePreferences({ deliveryPreference: customerProfile?.deliveryPreference === 'BEWARE_OF_DOG' ? null : 'BEWARE_OF_DOG' })}>
+                      <div className="flex items-center gap-4">
+                        <div className={`p-2.5 rounded-2xl transition-colors ${customerProfile?.deliveryPreference === 'BEWARE_OF_DOG' ? 'bg-red-100 text-red-600' : 'bg-neutral-100 text-neutral-500'}`}>
+                          <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+                        </div>
+                        <div>
+                          <p className="text-sm font-semibold text-neutral-950">Cuidado con el perro</p>
+                          <p className="text-xs text-neutral-500 mt-0.5">Avisa al repartidor que hay mascotas sueltas en la propiedad.</p>
+                        </div>
+                      </div>
+                      <div className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-300 ${customerProfile?.deliveryPreference === 'BEWARE_OF_DOG' ? 'bg-[#5B21B6]' : 'bg-neutral-200'}`}>
+                        <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-[0_2px_4px_rgba(0,0,0,0.1)] transition-transform duration-300 ${customerProfile?.deliveryPreference === 'BEWARE_OF_DOG' ? 'translate-x-5' : 'translate-x-0.5'}`} />
+                      </div>
+                    </div>
+
+                  </div>
+                </div>
+
+                {/* Ajustes de Cuenta */}
+                <div className="bg-white rounded-3xl border border-black/[0.03] shadow-[0_4px_24px_rgba(0,0,0,0.02)] overflow-hidden mt-6">
+                  <div className="px-6 py-5 border-b border-black/[0.03]">
+                    <h3 className="text-sm font-semibold text-neutral-950 tracking-tight flex items-center gap-2">
+                      <svg className="w-4 h-4 text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+                      Ajustes de cuenta
+                    </h3>
+                  </div>
+                  <div className="divide-y divide-black/[0.03]">
+                    <div className="px-6 py-4 flex items-center justify-between hover:bg-neutral-50 transition cursor-pointer group" onClick={() => setIsChangingPassword(true)}>
+                      <div className="flex items-center gap-4">
+                        <div className="p-2 rounded-full bg-neutral-50 group-hover:bg-[#F3E8FF] transition-colors">
+                          <svg className="h-5 w-5 text-neutral-400 group-hover:text-[#5B21B6] transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
+                        </div>
+                        <p className="text-sm font-semibold text-neutral-800">Cambiar contraseña</p>
+                      </div>
+                      <svg className="h-4 w-4 text-neutral-300 group-hover:text-[#5B21B6]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+                    </div>
+                    
+                    <div className="px-6 py-4 flex items-center justify-between hover:bg-red-50/50 transition cursor-pointer group" onClick={() => clearSession('Has cerrado sesión.')}>
+                      <div className="flex items-center gap-4">
+                        <div className="p-2 rounded-full bg-neutral-50 group-hover:bg-red-100 transition-colors">
+                          <svg className="h-5 w-5 text-neutral-400 group-hover:text-red-600 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>
+                        </div>
+                        <p className="text-sm font-semibold text-neutral-800 group-hover:text-red-600 transition-colors">Cerrar sesión</p>
+                      </div>
+                    </div>
+
+                    <div className="px-6 py-4 flex items-center justify-between hover:bg-red-50/50 transition cursor-pointer group">
+                      <div className="flex items-center gap-4">
+                        <div className="p-2 rounded-full bg-neutral-50 group-hover:bg-red-100 transition-colors">
+                          <svg className="h-5 w-5 text-neutral-300 group-hover:text-red-500 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                        </div>
+                        <p className="text-sm font-semibold text-neutral-400 group-hover:text-red-500 transition-colors">Eliminar cuenta</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+              </div>
+            </div>
+          </div>
+        ) : null}

@@ -1,0 +1,116 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+  --app-bg: #f6f6f4;
+  --text-main: #161616;
+}
+
+html {
+  min-height: 100%;
+  background: var(--app-bg);
+}
+
+body {
+  min-height: 100vh;
+  margin: 0;
+  background:
+    radial-gradient(circle at top left, rgba(255, 255, 255, 0.95), transparent 24%),
+    radial-gradient(circle at bottom right, rgba(229, 229, 224, 0.85), transparent 28%),
+    var(--app-bg);
+  color: var(--text-main);
+  font-family: 'Inter', 'Avenir Next', 'Segoe UI', 'Helvetica Neue', sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+::selection {
+  background: rgba(17, 17, 17, 0.14);
+}
+
+/* Dark Mode Magic Filter */
+html.dark {
+  filter: invert(0.96) hue-rotate(180deg) saturate(0.65) contrast(1.02);
+  background: #09090a;
+}
+
+html.dark img, 
+html.dark video, 
+html.dark iframe,
+html.dark .no-invert {
+  filter: invert(1) hue-rotate(180deg) saturate(1.54); /* Correct image saturation back to 100% (1 / 0.65) */
+}
+
+/* Extra pop for brand identity colors (Sky and Blue) */
+html.dark [class*="sky-"],
+html.dark [class*="blue-"] {
+  filter: saturate(1.4);
+}
+
+/* Premium Animations for Transfer Payments */
+@keyframes float-gentle {
+  0%, 100% {
+    transform: translateY(0);
+    box-shadow: 0 4px 20px rgba(14, 165, 233, 0.06);
+  }
+  50% {
+    transform: translateY(-3px);
+    box-shadow: 0 10px 25px rgba(14, 165, 233, 0.12);
+  }
+}
+
+.animate-float-gentle {
+  animation: float-gentle 4s ease-in-out infinite;
+}
+
+/* Hide scrollbars elegantly while preserving functionality */
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+.scrollbar-none {
+  -ms-overflow-style: none;  /* IE and Edge */
+  scrollbar-width: none;  /* Firefox */
+}
+
+/* Heartbeat animation for active orders button */
+@keyframes heartbeat {
+  0% {
+    transform: scale(1);
+    box-shadow: 0 1px 3px rgba(14, 165, 233, 0.1);
+  }
+  14% {
+    transform: scale(1.03);
+    box-shadow: 0 4px 14px rgba(14, 165, 233, 0.28);
+  }
+  28% {
+    transform: scale(1);
+    box-shadow: 0 1px 3px rgba(14, 165, 233, 0.1);
+  }
+  42% {
+    transform: scale(1.03);
+    box-shadow: 0 4px 14px rgba(14, 165, 233, 0.28);
+  }
+  70% {
+    transform: scale(1);
+    box-shadow: 0 1px 3px rgba(14, 165, 233, 0.1);
+  }
+}
+
+.animate-heartbeat {
+  animation: heartbeat 2.2s cubic-bezier(0.25, 0.8, 0.25, 1) infinite;
+}
+
+
+/* SaDelLogo Display Logic - Shows the precise Canvas-generated version */
+html.dark .sadel-logo-light { display: none !important; }
+html:not(.dark) .sadel-logo-dark { display: none !important; }
+html.dark .sadel-logo-dark {
+  /* Prevent the global HTML invert from affecting the pre-inverted white text */
+  filter: invert(1) hue-rotate(180deg) saturate(1.54) !important;
+}

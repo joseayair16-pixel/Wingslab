@@ -1,0 +1,83 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+  --app-bg: #f6f6f4;
+  --text-main: #161616;
+
+  /* Azul Celeste – Identidad SaDeL */
+  --accent: #87CEEB;
+  --accent-hover: #5bb5db;
+  --accent-soft: #eef8fd;
+  --accent-soft-hover: #d6eef9;
+  --accent-text: #ffffff;
+}
+
+html {
+  min-height: 100%;
+  background: var(--app-bg);
+}
+
+body {
+  min-height: 100vh;
+  margin: 0;
+  background:
+    radial-gradient(circle at top left, rgba(255, 255, 255, 0.95), transparent 24%),
+    radial-gradient(circle at bottom right, rgba(229, 229, 224, 0.85), transparent 28%),
+    var(--app-bg);
+  color: var(--text-main);
+  font-family: 'Avenir Next', 'Segoe UI', 'Helvetica Neue', sans-serif;
+}
+
+.sadel-logo-light { box-shadow: 0 0 transparent, 0 0 transparent, 0 0 transparent; }
+
+html.dark .sadel-logo-light { display: none !important; }
+html:not(.dark) .sadel-logo-dark { display: none !important; }
+html.dark:not(.pure-dark) .sadel-logo-dark {
+  filter: invert(1) hue-rotate(180deg) saturate(1.54) !important;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+::selection {
+  background: rgba(17, 17, 17, 0.14);
+}
+
+/* Dark Mode Magic Filter */
+html.dark {
+  filter: invert(0.96) hue-rotate(180deg) saturate(0.65) contrast(1.02);
+  background: #09090a;
+}
+
+html.dark img, 
+html.dark video, 
+html.dark iframe,
+html.dark .no-invert {
+  filter: invert(1) hue-rotate(180deg) saturate(1.54); /* Correct image saturation back to 100% (1 / 0.65) */
+}
+
+/* Extra pop for brand identity colors (Sky Blue accents) */
+html.dark [class*="accent-"],
+html.dark [class*="sky-"] {
+  filter: saturate(1.4);
+}
+
+@keyframes moto-rumble {
+  0%, 100% { transform: translateY(0) scaleX(1) rotate(0deg); }
+  20% { transform: translateY(-6px) scaleX(0.98) rotate(-4deg); }
+  40% { transform: translateY(1px) scaleX(1.02) rotate(2deg); }
+  60% { transform: translateY(-4px) scaleX(0.99) rotate(-2deg); }
+  80% { transform: translateY(0) scaleX(1.01) rotate(1deg); }
+}
+
+.animate-moto-ride {
+  display: inline-block;
+  animation: moto-rumble 0.8s ease-in-out infinite;
+  will-change: transform;
+  backface-visibility: hidden;
+  transform: translateZ(0);
+}

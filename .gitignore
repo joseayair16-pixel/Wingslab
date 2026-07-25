@@ -1,0 +1,68 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Production
+dist/
+build/
+out/
+.next
+.next-build
+.next-dev
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+.env.*.vault
+
+# Database backups
+backups/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Testing
+coverage/
+.nyc_output
+
+# Docker
+.dockerignore
+
+# Database
+*.sqlite
+*.db
+
+# Temporary
+tmp/
+temp/
+*.tmp
+
+# Scratch and junk
+scratch/
+checkout_block.txt
+checkout_vars.txt
+create_dummy.js
+dummy.tsx
+dummy_out.txt
+replace_profile_view.js
+*.bak
+packages/backend/scratch-*
+packages/backend/src/check_transfer_db.*

@@ -1,0 +1,109 @@
+import { FastifyInstance } from 'fastify';
+import { z } from 'zod';
+import { prisma } from '../config/database';
+import { sendPushNotification } from '../services/notification.service';
+
+const subscribeSchema = z.object({
+  endpoint: z.string().url(),
+  keys: z.object({
+    p256dh: z.string(),
+    auth: z.string(),
+  }),
+});
+
+export async function registerNotificationRoutes(fastify: FastifyInstance): Promise<void> {
+  fastify.post('/notifications/subscribe', async (request, reply) => {
+    try {
+      await request.jwtVerify();
+    } catch {
+      return reply.status(401).send({
+        success: false,
+        error: {
+          code: 'UNAUTHORIZED',
+          message: 'Debes iniciar sesión para suscribirte a las notificaciones.',
+        },
+      });
+    }
+
+    const parsed = subscribeSchema.safeParse(request.body);
+
+    if (!parsed.success) {
+      return reply.status(400).send({
+        success: false,
+        error: {
+          code: 'INVALID_PAYLOAD',
+          message: 'Datos de suscripción inválidos.',
+        },
+      });
+    }
+
+    const payload = request.user as { sub: string };
+    const { endpoint, keys } = parsed.data;
+
+    try {
+      await prisma.pushSubscription.upsert({
+        where: { endpoint },
+        update: {
+          userId: payload.sub,
+          p256dh: keys.p256dh,
+          auth: keys.auth,
+        },
+        create: {
+          userId: payload.sub,
+          endpoint,
+          p256dh: keys.p256dh,
+          auth: keys.auth,
+        },
+      });
+
+      return reply.send({
+        success: true,
+        message: 'Suscripción guardada correctamente.',
+      });
+    } catch (error) {
+      return reply.status(500).send({
+        success: false,
+        error: {
+          code: 'SERVER_ERROR',
+          message: 'No se pudo guardar la suscripción.',
+        },
+      });
+    }
+  });
+
+  fastify.get('/notifications/vapid-key', async (request, reply) => {
+    return reply.send({
+      success: true,
+      publicKey: process.env.VAPID_PUBLIC_KEY,
+    });
+  });
+
+  fastify.post('/notifications/test-push', async (request, reply) => {
+    try {
+      await request.jwtVerify();
+    } catch {
+      return reply.status(401).send({
+        success: false,
+        error: { code: 'UNAUTHORIZED', message: 'Debes iniciar sesión para probar notificaciones.' },
+      });
+    }
+
+    const payload = request.user as { sub: string; role?: string };
+    request.log.info(`[PushTest] Enviando notificación de prueba a usuario ${payload.sub}`);
+
+    const result = await sendPushNotification(payload.sub, {
+      title: '🔔 Notificación de prueba',
+      body: '¡Las notificaciones push funcionan correctamente!',
+      tag: 'test-push',
+      vibrate: [200, 100, 200],
+    });
+
+    return reply.send({
+      success: result.success,
+      message: result.success
+        ? `Notificación enviada (${result.totalSent}/${result.totalAttempted} exitosos)`
+        : 'No se pudo enviar la notificación. ¿Tienes una suscripción push activa?',
+      details: result,
+    });
+  });
+}

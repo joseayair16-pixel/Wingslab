@@ -1,0 +1,39 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+  --app-bg: #f6f6f4;
+  --text-main: #161616;
+}
+
+html {
+  min-height: 100%;
+  background: var(--app-bg);
+}
+
+body {
+  min-height: 100vh;
+  margin: 0;
+  background:
+    radial-gradient(circle at top left, rgba(255, 255, 255, 0.95), transparent 24%),
+    radial-gradient(circle at bottom right, rgba(229, 229, 224, 0.85), transparent 28%),
+    var(--app-bg);
+  color: var(--text-main);
+  font-family: 'Avenir Next', 'Segoe UI', 'Helvetica Neue', sans-serif;
+}
+
+html.dark .sadel-logo-light { display: none !important; }
+html:not(.dark) .sadel-logo-dark { display: none !important; }
+html.dark:not(.pure-dark) .sadel-logo-dark {
+  filter: drop-shadow(0px 0px 8px rgba(255, 255, 255, 0.4));
+}
+
+* {
+  box-sizing: border-box;
+}
+
+::selection {
+  background: rgba(17, 17, 17, 0.14);
+}

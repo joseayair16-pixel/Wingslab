@@ -1,0 +1,39 @@
+{
+  "name": "sadel-monorepo",
+  "version": "1.0.0",
+  "description": "SaDeL - Multi-region Delivery Platform",
+  "private": true,
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "predev": "npm run build -w @sadel/shared",
+    "dev": "concurrently \"npm run dev -w @sadel/shared\" \"npm run dev -w @sadel/backend\" \"npm run dev -w @sadel/web-admin\" \"npm run dev -w @sadel/web-restaurant\" \"npm run dev -w @sadel/web-customer\" \"npm run dev -w @sadel/web-driver\"",
+    "build": "npm run build -ws",
+    "lint": "eslint . --ext .ts,.tsx",
+    "format": "prettier --write \"**/*.{ts,tsx,json,md}\"",
+    "type-check": "tsc --noEmit",
+    "test": "jest",
+    "verify:web": "npm run lint --workspace @sadel/web-customer && npm run lint --workspace @sadel/web-admin && npm run lint --workspace @sadel/web-restaurant && npm run lint --workspace @sadel/web-driver && npm run type-check --workspace @sadel/web-customer && npm run type-check --workspace @sadel/web-admin && npm run type-check --workspace @sadel/web-restaurant && npm run type-check --workspace @sadel/web-driver && npm run build --workspace @sadel/web-customer && npm run build --workspace @sadel/web-admin && npm run build --workspace @sadel/web-restaurant && npm run build --workspace @sadel/web-driver",
+    "verify:flow": "npm run test:flow --workspace @sadel/backend",
+    "verify:backend": "npm run test:http --workspace @sadel/backend && npm run test:failures --workspace @sadel/backend",
+    "db:migrate": "cd packages/backend && npm run db:migrate",
+    "db:generate": "cd packages/backend && npm run db:generate",
+    "db:seed:billing-demo": "cd packages/backend && npm run db:seed:billing-demo",
+    "docker:up": "docker compose -f infrastructure/docker/docker-compose.yml up -d",
+    "docker:down": "docker compose -f infrastructure/docker/docker-compose.yml down",
+    "docker:build": "docker compose -f infrastructure/docker/docker-compose.yml build"
+  },
+  "devDependencies": {
+    "@typescript-eslint/eslint-plugin": "^7.0.0",
+    "@typescript-eslint/parser": "^7.0.0",
+    "concurrently": "^8.2.2",
+    "eslint": "^8.56.0",
+    "prettier": "^3.1.1",
+    "typescript": "^5.3.3"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=9.0.0"
+  }
+}

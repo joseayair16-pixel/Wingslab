@@ -1,0 +1,146 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: sadel-postgres
+    environment:
+      POSTGRES_USER: sadel_user
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-sadel_password_dev}
+      POSTGRES_DB: sadel_db
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sadel_user"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - sadel-network
+
+  redis:
+    image: redis:7-alpine
+    container_name: sadel-redis
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - sadel-network
+
+  backend:
+    build:
+      context: ../..
+      dockerfile: infrastructure/docker/Dockerfile.backend
+    container_name: sadel-backend
+    environment:
+      NODE_ENV: ${NODE_ENV:-development}
+      DATABASE_URL: postgresql://sadel_user:${POSTGRES_PASSWORD:-sadel_password_dev}@postgres:5432/sadel_db
+      REDIS_URL: redis://redis:6379
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
+      CORS_ORIGIN: ${CORS_ORIGIN:-*}
+      VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
+      VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-}
+      PORT: 3001
+    ports:
+      - "3001:3001"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - sadel-network
+
+  web-admin:
+    build:
+      context: ../..
+      dockerfile: infrastructure/docker/Dockerfile.web
+      args:
+        APP: web-admin
+        PORT: 3000
+    container_name: sadel-web-admin
+    environment:
+      NODE_ENV: ${NODE_ENV:-development}
+      NEXT_PUBLIC_API_URL: http://localhost:3001
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+    restart: unless-stopped
+    networks:
+      - sadel-network
+
+  web-restaurant:
+    build:
+      context: ../..
+      dockerfile: infrastructure/docker/Dockerfile.web
+      args:
+        APP: web-restaurant
+        PORT: 3002
+    container_name: sadel-web-restaurant
+    environment:
+      NODE_ENV: ${NODE_ENV:-development}
+      NEXT_PUBLIC_API_URL: http://localhost:3001
+    ports:
+      - "3002:3002"
+    depends_on:
+      - backend
+    restart: unless-stopped
+    networks:
+      - sadel-network
+
+  web-customer:
+    build:
+      context: ../..
+      dockerfile: infrastructure/docker/Dockerfile.web
+      args:
+        APP: web-customer
+        PORT: 3003
+    container_name: sadel-web-customer
+    environment:
+      NODE_ENV: ${NODE_ENV:-development}
+      NEXT_PUBLIC_API_URL: http://localhost:3001
+    ports:
+      - "3003:3003"
+    depends_on:
+      - backend
+    restart: unless-stopped
+    networks:
+      - sadel-network
+
+  web-driver:
+    build:
+      context: ../..
+      dockerfile: infrastructure/docker/Dockerfile.web
+      args:
+        APP: web-driver
+        PORT: 3004
+    container_name: sadel-web-driver
+    environment:
+      NODE_ENV: ${NODE_ENV:-development}
+      NEXT_PUBLIC_API_URL: http://localhost:3001
+    ports:
+      - "3004:3004"
+    depends_on:
+      - backend
+    restart: unless-stopped
+    networks:
+      - sadel-network
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  sadel-network:
+    driver: bridge
