@@ -1,5 +1,9 @@
 'use client';
 
+export function generateStaticParams() {
+  return [];
+}
+
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { AuthUser, readStoredSession, requestJson, uploadMediaAsset, convertImageFileToDataUrl, getOrderStatusLabel, isRestaurant, getBusinessArticleCapitalized, getBusinessRef, ApiRequestError } from '@sadel/shared';
