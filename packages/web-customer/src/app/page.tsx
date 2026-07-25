@@ -1,5 +1,4 @@
 'use client';
-/* build-trigger */
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';

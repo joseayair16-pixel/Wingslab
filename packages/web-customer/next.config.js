@@ -7,6 +7,14 @@ const nextConfig = {
   images: {
     unoptimized: true,
   },
+  async rewrites() {
+    return [
+      {
+        source: '/sadel-production.up.railway.app/:path*',
+        destination: 'https://sadel-production.up.railway.app/:path*',
+      },
+    ];
+  },
 };
 
 module.exports = nextConfig;
