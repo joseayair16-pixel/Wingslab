@@ -873,7 +873,7 @@ export default function RestaurantPage({
       }
 
       if (savedSession.token && savedSession.user) {
-        const apiBaseUrl = savedSession.apiBase || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
+        const apiBaseUrl = savedSession.apiBase || process.env.NEXT_PUBLIC_API_URL || '/api';
         requestJson<{ success: true; data: { status: string } }>({
           apiBase: apiBaseUrl,
           path: '/auth/perfil',
@@ -5950,14 +5950,14 @@ function TransientNoticeBanner({
                       let uploadedUrl = '';
                       if (proofSource) {
                         uploadedUrl = await persistTransferProof({
-                          apiBase: apiBase || 'http://localhost:3001',
+                          apiBase: apiBase || '/api',
                           token: token || localStorage.getItem('sadel.customer.token') || '',
                           source: proofSource,
                           fileName: proofName,
                         });
                       }
 
-                      const response = await fetch(`${apiBase || 'http://localhost:3001'}/customer/support/tickets`, {
+                      const response = await fetch(`${apiBase || '/api'}/customer/support/tickets`, {
                         method: 'POST',
                         headers: {
                           'Content-Type': 'application/json',

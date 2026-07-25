@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+const API_URL = process.env.NEXT_PUBLIC_API_URL || '/api';
 
 let cachedVapidKey: string | null = null;
 let vapidKeyPromise: Promise<string> | null = null;

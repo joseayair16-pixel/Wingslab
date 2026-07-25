@@ -851,7 +851,7 @@ export default function Home() {
 
     setLoadingSupportTickets(true);
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/customer/support/tickets`, {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || '/api'}/customer/support/tickets`, {
         headers: {
           'Authorization': `Bearer ${localToken}`,
         },
@@ -1168,7 +1168,7 @@ export default function Home() {
       if (savedSession.apiBase && !savedSession.apiBase.includes('localhost:4000')) {
         setApiBase(savedSession.apiBase);
       } else {
-        setApiBase(process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api');
+        setApiBase(process.env.NEXT_PUBLIC_API_URL || '/api');
       }
 
       if (savedSession.token) {
@@ -1212,7 +1212,7 @@ export default function Home() {
 
       // Verify user status on init — if suspended, show modal even without socket event
       if (savedSession.token && savedSession.user) {
-        const apiBaseUrl = savedSession.apiBase || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
+        const apiBaseUrl = savedSession.apiBase || process.env.NEXT_PUBLIC_API_URL || '/api';
         requestJson<{ success: true; data: { status: string } }>({
           apiBase: apiBaseUrl,
           path: '/auth/perfil',
@@ -2539,7 +2539,7 @@ export default function Home() {
         }
       }
 
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/pedidos`, {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || '/api'}/pedidos`, {
         method: 'POST',
         headers,
         body: JSON.stringify(body),
@@ -5014,7 +5014,7 @@ export default function Home() {
                               setSubmittingSupport(true);
 
                               try {
-                                const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/customer/support/tickets`, {
+                                const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || '/api'}/customer/support/tickets`, {
                                   method: 'POST',
                                   headers: {
                                     'Content-Type': 'application/json',
@@ -5143,7 +5143,7 @@ export default function Home() {
                               setSubmittingSupport(true);
 
                               try {
-                                const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/customer/support/tickets`, {
+                                const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || '/api'}/customer/support/tickets`, {
                                   method: 'POST',
                                   headers: {
                                     'Content-Type': 'application/json',
@@ -5954,7 +5954,7 @@ export default function Home() {
                                     });
                                   }
 
-                                  const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/customer/support/tickets`, {
+                                  const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || '/api'}/customer/support/tickets`, {
                                     method: 'POST',
                                     headers: {
                                       'Content-Type': 'application/json',
@@ -6603,7 +6603,7 @@ export default function Home() {
                   };
 
                   try {
-                    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+                    const apiUrl = process.env.NEXT_PUBLIC_API_URL || '/api';
                     const response = await fetch(`${apiUrl}/public/solicitudes`, {
                       method: 'POST',
                       headers: { 'Content-Type': 'application/json' },
@@ -6761,7 +6761,7 @@ export default function Home() {
                   };
 
                   try {
-                    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+                    const apiUrl = process.env.NEXT_PUBLIC_API_URL || '/api';
                     const response = await fetch(`${apiUrl}/public/solicitudes`, {
                       method: 'POST',
                       headers: { 'Content-Type': 'application/json' },
@@ -7380,14 +7380,14 @@ function TransientNoticeBanner({
                       let uploadedUrl = '';
                       if (proofSource) {
                         uploadedUrl = await persistTransferProof({
-                          apiBase: apiBase || 'http://localhost:3001',
+                          apiBase: apiBase || '/api',
                           token: token || localStorage.getItem('sadel.customer.token') || '',
                           source: proofSource,
                           fileName: proofName,
                         });
                       }
 
-                      const response = await fetch(`${apiBase || 'http://localhost:3001'}/customer/support/tickets`, {
+                      const response = await fetch(`${apiBase || '/api'}/customer/support/tickets`, {
                         method: 'POST',
                         headers: {
                           'Content-Type': 'application/json',

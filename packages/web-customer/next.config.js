@@ -10,7 +10,7 @@ const nextConfig = {
   async rewrites() {
     return [
       {
-        source: '/sadel-production.up.railway.app/:path*',
+        source: '/api/:path*',
         destination: 'https://sadel-production.up.railway.app/:path*',
       },
     ];
