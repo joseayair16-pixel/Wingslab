@@ -63,6 +63,10 @@ create_dummy.js
 dummy.tsx
 dummy_out.txt
 replace_profile_view.js
+test-api.js
+test-drivers.js
+test-port.js
+test-time.js
 *.bak
 packages/backend/scratch-*
 packages/backend/src/check_transfer_db.*

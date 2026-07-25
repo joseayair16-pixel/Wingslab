@@ -504,12 +504,9 @@ export async function registerRestaurantPanelRoutes(fastify: FastifyInstance): P
     });
 
     restaurant.patch('/restaurant-panel/perfil', async (request, reply) => {
-      console.log('--- DEBUGGER: PATCH /restaurant-panel/perfil received body:', JSON.stringify(request.body, null, 2));
       const parsed = parseBody(restaurantProfileSchema.safeParse(request.body));
-      console.log('--- DEBUGGER: PATCH /restaurant-panel/perfil parsed result:', JSON.stringify(parsed, null, 2));
 
       if ('error' in parsed) {
-        console.error('--- DEBUGGER: Zod validation error:', JSON.stringify(parsed.error, null, 2));
         return reply.status(400).send(parsed.error);
       }
 
