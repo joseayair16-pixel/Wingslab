@@ -836,10 +836,6 @@ export default function Home() {
   useEffect(() => {
     const savedSession = readStoredSession(storageKey);
 
-    if (savedSession.apiBase && savedSession.apiBase.startsWith('/')) {
-      setApiBase(savedSession.apiBase);
-    }
-
     if (savedSession.token) {
       setToken(savedSession.token);
     }
@@ -926,7 +922,6 @@ export default function Home() {
     setVerifyingCode(true);
     setError('');
     setAuthMessage('');
-    persistApiBase(storageKey, apiBase);
 
     try {
       const payload = await requestJson<AuthResponse>({
@@ -2414,41 +2409,41 @@ export default function Home() {
 
   if (!isAdminSession) {
     return (
-      <main className="min-h-screen bg-[#f7f4ec] px-4 py-4 text-neutral-900 md:px-6">
-        <div className="mx-auto flex min-h-screen max-w-[1540px] flex-col py-4">
-          <header className="sticky top-0 z-50 flex items-center justify-center border-b border-black/5 bg-white/80 px-4 py-5 backdrop-blur">
+      <main className="flex h-dvh flex-col bg-[#f7f4ec] p-4 text-neutral-900 md:p-6">
+        <div className="mx-auto flex h-full max-w-[1540px] flex-col">
+          <header className="flex shrink-0 items-center justify-center border-b border-black/5 bg-white/80 px-4 py-5 backdrop-blur">
             <p className="text-3xl font-semibold tracking-[-0.05em] text-neutral-950 md:text-4xl">SaDeL</p>
           </header>
 
           <section className="grid flex-1 gap-0 overflow-hidden rounded-b-[32px] bg-white shadow-[0_24px_80px_rgba(15,15,15,0.06)] lg:grid-cols-2">
-            <div className="relative min-h-[280px] overflow-hidden bg-neutral-950 lg:min-h-full">
+            <div className="relative min-h-[35vh] overflow-hidden bg-neutral-950 lg:min-h-full">
               <img
                 src="https://images.unsplash.com/photo-1552566626-52f8b828add9?auto=format&fit=crop&w=1600&q=80"
                 alt="Interior de un restaurante como portada del acceso administrativo de SaDeL"
                 className="h-full w-full object-cover"
               />
-              <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(0,0,0,0.18)_0%,rgba(0,0,0,0.72)_100%)]" />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/30 to-black/10 lg:bg-gradient-to-r lg:from-black/70 lg:via-black/40 lg:to-transparent" />
               <div className="absolute inset-x-0 bottom-0 p-6 text-white md:p-8 lg:p-10">
                 <span className="inline-flex rounded-full bg-[#d7b46a] px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.24em] text-neutral-950">
                   SaDeL Admin
                 </span>
-                <h1 className="mt-4 max-w-xl text-4xl font-semibold leading-tight tracking-[-0.05em] md:text-5xl">
+                <h1 className="mt-4 max-w-xl text-2xl font-semibold leading-tight tracking-[-0.05em] md:text-4xl lg:text-5xl">
                   Acceso exclusivo para administracion y control operativo.
                 </h1>
-                <p className="mt-3 max-w-lg text-sm leading-7 text-white/78 md:text-base">
-                  Entra aqui para supervisar restaurantes, revisar regiones y operar la plataforma con una consola pensada para administradores.
+                <p className="mt-3 max-w-lg text-sm leading-6 text-white/80 md:text-base md:leading-7">
+                  Entra aqui para supervisar restaurantes, revisar regiones y operar la plataforma.
                 </p>
               </div>
             </div>
 
-            <div className="flex items-center justify-center bg-[#fbfbf8] px-5 py-10 md:px-8">
-              <div className="w-full max-w-[460px] text-center">
-                <p className="text-sm font-semibold uppercase tracking-[0.28em] text-neutral-400">Bienvenido</p>
-                <h2 className="mt-4 text-4xl font-semibold leading-tight tracking-[-0.05em] text-neutral-950 md:text-5xl">
+            <div className="flex items-center justify-center bg-[#fbfbf8] px-5 py-8 md:px-8 md:py-10">
+              <div className="w-full max-w-[420px] text-center">
+                <p className="text-xs font-semibold uppercase tracking-[0.22em] text-neutral-400">Bienvenido</p>
+                <h2 className="mt-3 text-2xl font-semibold leading-tight tracking-[-0.05em] text-neutral-950 md:text-3xl lg:text-4xl">
                   Inicia sesion para administrar SaDeL
                 </h2>
-                <p className="mt-4 text-base leading-7 text-neutral-600">
-                  Este acceso es diferente al de restaurante y comensal. Solo entra el equipo administrativo autorizado.
+                <p className="mt-3 text-sm leading-6 text-neutral-500 md:text-base md:leading-7">
+                  Acceso exclusivo para el equipo administrativo autorizado.
                 </p>
 
                 <form
@@ -2456,14 +2451,8 @@ export default function Home() {
                     event.preventDefault();
                     void loginWithPassword();
                   }}
-                  className="mt-10 grid gap-4 text-left"
+                  className="mt-8 grid gap-4 text-left"
                 >
-                  <Field
-                    label="API base URL"
-                    value={apiBase}
-                    onChange={setApiBase}
-                    placeholder="/api"
-                  />
                   <Field
                     label="Usuario"
                     value={phone}
@@ -2481,19 +2470,18 @@ export default function Home() {
                   <button
                     type="submit"
                     disabled={verifyingCode || !phone.trim() || !password.trim()}
-                    className="mt-2 rounded-full bg-neutral-950 px-6 py-4 text-base font-semibold text-white transition hover:bg-neutral-800 disabled:cursor-not-allowed disabled:bg-neutral-300"
+                    className="mt-2 rounded-full bg-neutral-950 px-6 py-3.5 text-sm font-semibold text-white transition-all duration-300 hover:bg-neutral-800 disabled:cursor-not-allowed disabled:bg-neutral-300 disabled:text-neutral-500 active:scale-[0.98]"
                   >
                     {verifyingCode ? 'Ingresando...' : 'Iniciar sesion'}
                   </button>
 
-
                   {error ? <Callout tone="danger">{error}</Callout> : null}
                 </form>
 
-                <div className="mt-8 rounded-[28px] border border-black/5 bg-white px-5 py-4 text-left">
-                  <p className="text-xs font-semibold uppercase tracking-[0.22em] text-neutral-400">Acceso administrativo</p>
-                  <p className="mt-2 text-sm leading-6 text-neutral-600">
-                    Usa el usuario y la contraseña asignados al administrador. Este panel permite controlar operacion, restaurantes y configuracion regional.
+                <div className="mt-8 rounded-2xl border border-black/5 bg-white px-5 py-4 text-left">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-neutral-400">Acceso administrativo</p>
+                  <p className="mt-2 text-sm leading-6 text-neutral-500">
+                    Usa las credenciales asignadas por el equipo de SaDeL. Este panel permite controlar la operacion completa.
                   </p>
                 </div>
               </div>
