@@ -323,22 +323,64 @@ export async function createBillingSettlement(restaurantId: string) {
     throw new Error('Restaurant not found');
   }
 
-  const periodStart = resolveBillingStart(restaurant);
-
-  // Align periodEnd to the previous Sunday at 23:59:59
   const now = new Date();
-  let periodEnd = new Date(now);
-  const dayOfWeek = periodEnd.getDay();
-  periodEnd.setDate(periodEnd.getDate() - dayOfWeek);
+
+  // Auto-heal: if lastBillingSettledAt is in the future, reject the bad settlement
+  if (restaurant.lastBillingSettledAt && restaurant.lastBillingSettledAt.getTime() > now.getTime()) {
+    await prisma.restaurantBillingSettlement.updateMany({
+      where: {
+        restaurantId,
+        status: 'PENDING',
+        periodEnd: restaurant.lastBillingSettledAt,
+      },
+      data: { status: 'REJECTED', notes: 'Anulado automáticamente: corte generado antes de tiempo.' },
+    });
+    await prisma.restaurant.update({
+      where: { id: restaurantId },
+      data: { lastBillingSettledAt: null },
+    });
+    restaurant.lastBillingSettledAt = null;
+  }
+
+  // Auto-heal: reject any $0 PENDING settlements with delivered orders (clearly incorrect)
+  await prisma.restaurantBillingSettlement.updateMany({
+    where: {
+      restaurantId,
+      status: 'PENDING',
+      amount: 0,
+      deliveredOrders: { gt: 0 },
+    },
+    data: { status: 'REJECTED', notes: 'Anulado automáticamente: monto $0 con pedidos entregados.' },
+  });
+
+  // Align periodEnd to the PREVIOUS Sunday at 23:59:59
+  // On Sunday, go back 7 days; otherwise, go back to the most recent Sunday
+  const dayOfWeek = now.getDay();
+  const daysToPreviousSunday = dayOfWeek === 0 ? 7 : dayOfWeek;
+  const periodEnd = new Date(now);
+  periodEnd.setDate(periodEnd.getDate() - daysToPreviousSunday);
   periodEnd.setHours(23, 59, 59, 0);
 
-  // Don't create a settlement for a period that hasn't ended yet
-  // e.g. on Sunday before 23:59:59, periodEnd would be in the future
+  // Safety check: periodEnd must be in the past
   if (periodEnd.getTime() >= now.getTime()) {
     throw new Error(`El período de corte actual (${periodEnd.toISOString()}) aún no ha finalizado.`);
   }
 
+  const periodStart = resolveBillingStart(restaurant);
   const summary = await buildRestaurantBillingSummary(restaurant, periodEnd);
+
+  // Skip creating a settlement for empty periods (no orders, no debt)
+  const newDebt = summary.serviceFeeRevenue + summary.platformFeeRevenue;
+  if (summary.deliveredOrders === 0 && newDebt === 0) {
+    // Just update lastBillingSettledAt to mark the period as processed
+    // so future periods start from here
+    await prisma.restaurant.update({
+      where: { id: restaurantId },
+      data: { lastBillingSettledAt: periodEnd },
+    });
+    console.log(`[BillingJob] Periodo vacío para restaurante ${restaurant.id}. Marcado como procesado.`);
+    return null;
+  }
 
   // Calculate due date (3 days after period end = Wednesday)
   const dueDate = new Date(periodEnd);
