@@ -2461,10 +2461,9 @@ export default function Home() {
     }
 
     setSocketStatus('connecting');
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || (typeof window !== 'undefined' && window.location.hostname !== 'localhost' && !window.location.hostname.includes('192.168.') ? 'https://sadel-production.up.railway.app' : '');
-    const socket = io(apiUrl || '', {
-      path: apiUrl ? '/socket.io' : '/api/socket.io',
-      transports: apiUrl ? ['websocket', 'polling'] : ['polling'],
+    const socket = io('https://sadel-production.up.railway.app', {
+      path: '/socket.io',
+      transports: ['websocket', 'polling'],
       autoConnect: true,
       reconnection: true,
       reconnectionAttempts: Infinity,
