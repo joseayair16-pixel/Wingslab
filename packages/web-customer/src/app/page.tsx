@@ -3230,7 +3230,7 @@ export default function Home() {
 
     setSocketStatus('connecting');
     const socket = io(apiBase, {
-      transports: ['websocket', 'polling'],
+      transports: ['polling'],
       autoConnect: true,
       reconnection: true,
     });

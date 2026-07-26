@@ -1557,7 +1557,7 @@ export default function Home() {
 
     setSocketStatus('connecting');
     const socket = io(apiBase, {
-      transports: ['websocket'],
+      transports: ['polling'],
       autoConnect: true,
       reconnection: true,
       reconnectionDelay: 2000,
