@@ -1165,7 +1165,7 @@ export default function Home() {
         setOrderAlertAudioState(supportsWebAudio ? 'needs-gesture' : 'unsupported');
       }
 
-      if (savedSession.apiBase && !savedSession.apiBase.includes('localhost:4000')) {
+      if (savedSession.apiBase && !savedSession.apiBase.startsWith('http')) {
         setApiBase(savedSession.apiBase);
       } else {
         setApiBase(process.env.NEXT_PUBLIC_API_URL || '/api');

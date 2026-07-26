@@ -829,7 +829,7 @@ export default function RestaurantPage({
         }
       }
 
-      if (savedSession.apiBase) {
+      if (savedSession.apiBase && !savedSession.apiBase.startsWith('http')) {
         setApiBase(savedSession.apiBase);
       }
 
