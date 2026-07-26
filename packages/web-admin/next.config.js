@@ -3,7 +3,7 @@ const { PHASE_DEVELOPMENT_SERVER } = require('next/constants');
 module.exports = (phase) => {
   const config = {
     reactStrictMode: true,
-    distDir: phase === PHASE_DEVELOPMENT_SERVER ? '.next-dev' : '.next-build',
+    distDir: phase === PHASE_DEVELOPMENT_SERVER ? '.next-dev' : '.next',
     images: {
       unoptimized: true,
     },
