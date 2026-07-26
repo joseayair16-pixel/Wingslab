@@ -158,9 +158,12 @@ export async function registerPublicDeliveryRoutes(fastify: FastifyInstance): Pr
       const order = dToken.order;
 
       // Si el pedido tiene un PIN requerido por seguridad (solo para transferencias), es obligatorio proporcionarlo y debe coincidir exactamente
-      if (order.paymentMethod === 'TRANSFER' && order.handoverPin) {
+      if (order.paymentMethod === 'TRANSFER' && (order.handoverPin || order.deliveryPin)) {
         const providedPin = body.success ? body.data.pin : undefined;
-        if (!providedPin || providedPin.trim() === '' || providedPin !== order.handoverPin) {
+        const validPin = providedPin && providedPin.trim() !== '' && (
+          providedPin === order.handoverPin || providedPin === order.deliveryPin
+        );
+        if (!validPin) {
           return reply.status(400).send({
             success: false,
             error: { code: 'INVALID_PIN', message: 'El PIN de seguridad del cliente es obligatorio y es incorrecto.' },

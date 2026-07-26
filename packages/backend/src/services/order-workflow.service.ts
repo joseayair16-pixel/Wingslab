@@ -1139,7 +1139,7 @@ export async function updateOrderStatusByDriver({
       );
     }
 
-    if (currentOrder.paymentMethod !== PaymentMethod.CASH && currentOrder.deliveryPin && currentOrder.deliveryPin !== pin) {
+    if (currentOrder.paymentMethod !== PaymentMethod.CASH && (currentOrder.deliveryPin || currentOrder.handoverPin) && currentOrder.deliveryPin !== pin && currentOrder.handoverPin !== pin) {
       throw createDomainError(
         403,
         'INVALID_DELIVERY_PIN',
