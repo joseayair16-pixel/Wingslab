@@ -93,6 +93,8 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
       // Allow non-browser requests (no origin header) and matching origins
       if (corsOrigin === '*' || !origin) {
         cb(null, true);
+      } else if (origin.endsWith('.vercel.app')) {
+        cb(null, true);
       } else {
         const allowedOrigins = corsOrigin.split(',').map((o) => o.trim());
         if (allowedOrigins.indexOf(origin) !== -1) {
