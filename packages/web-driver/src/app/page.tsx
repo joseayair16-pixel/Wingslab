@@ -701,7 +701,9 @@ export default function Home() {
     let cancelled = false;
 
     if (pendingAssignedOrder) {
-      console.log('[Alarm] New order assigned pending acceptance:', pendingAssignedOrder.id);
+      if (process.env.NODE_ENV !== 'production') {
+        console.log('[Alarm] New order assigned pending acceptance:', pendingAssignedOrder.id);
+      }
 
       // Ensure AudioContext is ready before playing alarm
       void ensureAudioContextReady().finally(() => {
@@ -1341,7 +1343,9 @@ export default function Home() {
         body: JSON.stringify(subscription)
       });
 
-      console.log('Subscribed to push notifications');
+      if (process.env.NODE_ENV !== 'production') {
+        console.log('Subscribed to push notifications');
+      }
     } catch (error) {
       console.error('Failed to subscribe to push:', error);
     }
@@ -1353,7 +1357,7 @@ export default function Home() {
     }
   }, [token, sessionUser, subscribeToPush]);
 
-  // Efecto para el rastreo de ubicación (polling controlado; evita reinicios por pendingOrders)
+  // Efecto para el rastreo de ubicación (watchPosition; evita reinicios por pendingOrders)
   useEffect(() => {
     if (!token || !sessionUser || sessionUser.role !== 'DRIVER' || !shareLocationGps) {
       return;
@@ -1366,8 +1370,7 @@ export default function Home() {
     const ACTIVE_STATUSES = ['CONFIRMED', 'PREPARING', 'READY', 'PICKED_UP', 'IN_TRANSIT'] as const;
     const GEO_PAUSE_KEY = 'sadel.driver.geoPausedUntil';
 
-    let intervalId: ReturnType<typeof setInterval> | null = null;
-    let inFlight = false;
+    let watchId: number | null = null;
     let cancelled = false;
     let consecutiveFailures = 0;
     let lastErrorLogAt = 0;
@@ -1397,9 +1400,6 @@ export default function Home() {
       return { hasActiveDeliveries, isAvailable, shouldTrack: hasActiveDeliveries || isAvailable };
     };
 
-    const getPollIntervalMs = (hasActiveDeliveries: boolean) =>
-      hasActiveDeliveries ? 30000 : 180000;
-
     const shouldSend = (lat: number, lng: number) => {
       if (!lastPosition) return true;
       const deltaLat = Math.abs(lat - lastPosition.lat);
@@ -1428,10 +1428,10 @@ export default function Home() {
       }
     };
 
-    const stopPolling = () => {
-      if (intervalId) {
-        clearInterval(intervalId);
-        intervalId = null;
+    const stopWatching = () => {
+      if (watchId !== null) {
+        navigator.geolocation.clearWatch(watchId);
+        watchId = null;
       }
     };
 
@@ -1440,60 +1440,63 @@ export default function Home() {
         const now = Date.now();
         if (now - lastErrorLogAt > 5 * 60 * 1000) {
           lastErrorLogAt = now;
-          console.debug('Geolocation unavailable (transient). Will retry later.');
+          if (process.env.NODE_ENV !== 'production') {
+            console.debug('Geolocation unavailable (transient). Will retry later.');
+          }
         }
         return;
       }
-      console.warn('Geolocation permission denied.');
+      if (process.env.NODE_ENV !== 'production') {
+        console.warn('Geolocation permission denied.');
+      }
     };
 
-    const pollLocationOnce = () => {
-      if (cancelled || document.visibilityState === 'hidden' || inFlight) return;
+    const onPositionSuccess = (position: GeolocationPosition) => {
+      if (cancelled) return;
+
+      consecutiveFailures = 0;
+      writePausedUntil(0);
+
+      const lat = parseFloat(position.coords.latitude.toFixed(6));
+      const lng = parseFloat(position.coords.longitude.toFixed(6));
+
+      if (document.visibilityState === 'hidden') return;
+      if (!shouldSend(lat, lng)) return;
+
+      lastPosition = { lat, lng };
+      void postLocation(lat, lng);
+    };
+
+    const onPositionError = (error: GeolocationPositionError) => {
+      if (cancelled) return;
+
+      consecutiveFailures += 1;
+      maybeLogGeoError(error);
+
+      if (error.code === 1) {
+        stopWatching();
+        return;
+      }
+
+      if (consecutiveFailures >= 3) {
+        const pauseMs = consecutiveFailures >= 5 ? 15 * 60 * 1000 : 5 * 60 * 1000;
+        writePausedUntil(Date.now() + pauseMs);
+      }
+    };
+
+    const startWatching = () => {
+      stopWatching();
+      if (cancelled || document.visibilityState === 'hidden') return;
+
+      const { hasActiveDeliveries, shouldTrack } = getTrackingMode();
+      if (!shouldTrack) return;
 
       const pausedUntil = readPausedUntil();
       if (Date.now() < pausedUntil) return;
 
-      const { hasActiveDeliveries, shouldTrack } = getTrackingMode();
-      if (!shouldTrack) {
-        stopPolling();
-        return;
-      }
-
-      inFlight = true;
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          inFlight = false;
-          if (cancelled) return;
-
-          consecutiveFailures = 0;
-          writePausedUntil(0);
-
-          const lat = parseFloat(position.coords.latitude.toFixed(6));
-          const lng = parseFloat(position.coords.longitude.toFixed(6));
-
-          if (document.visibilityState === 'hidden') return;
-          if (!shouldSend(lat, lng)) return;
-
-          lastPosition = { lat, lng };
-          void postLocation(lat, lng);
-        },
-        (error) => {
-          inFlight = false;
-          if (cancelled) return;
-
-          consecutiveFailures += 1;
-          maybeLogGeoError(error);
-
-          if (error.code === 1) {
-            stopPolling();
-            return;
-          }
-
-          if (consecutiveFailures >= 3) {
-            const pauseMs = consecutiveFailures >= 5 ? 15 * 60 * 1000 : 5 * 60 * 1000;
-            writePausedUntil(Date.now() + pauseMs);
-          }
-        },
+      watchId = navigator.geolocation.watchPosition(
+        onPositionSuccess,
+        onPositionError,
         {
           enableHighAccuracy: hasActiveDeliveries,
           timeout: hasActiveDeliveries ? 20000 : 12000,
@@ -1502,40 +1505,29 @@ export default function Home() {
       );
     };
 
-    const startPolling = () => {
-      stopPolling();
-      if (cancelled || document.visibilityState === 'hidden') return;
-
-      const { hasActiveDeliveries, shouldTrack } = getTrackingMode();
-      if (!shouldTrack) return;
-
-      pollLocationOnce();
-      intervalId = setInterval(pollLocationOnce, getPollIntervalMs(hasActiveDeliveries));
-    };
-
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
-        startPolling();
+        startWatching();
       } else {
-        stopPolling();
+        stopWatching();
       }
     };
 
     const handleOnline = () => {
       consecutiveFailures = 0;
       writePausedUntil(0);
-      startPolling();
+      startWatching();
     };
 
     document.addEventListener('visibilitychange', handleVisibilityChange);
     window.addEventListener('online', handleOnline);
-    gpsRescheduleRef.current = startPolling;
-    startPolling();
+    gpsRescheduleRef.current = startWatching;
+    startWatching();
 
     return () => {
       cancelled = true;
       gpsRescheduleRef.current = null;
-      stopPolling();
+      stopWatching();
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('online', handleOnline);
     };
@@ -1612,7 +1604,9 @@ export default function Home() {
       if (socket.connected && document.visibilityState !== 'hidden') {
         const idleTime = Date.now() - lastEventTime;
         if (idleTime > 90000) {
-          console.warn('[Socket] Zombie detection: no events for 90s, forcing reload');
+          if (process.env.NODE_ENV !== 'production') {
+            console.warn('[Socket] Zombie detection: no events for 90s, forcing reload');
+          }
           void loadPendingOrders();
           void loadDashboard();
           lastEventTime = Date.now();

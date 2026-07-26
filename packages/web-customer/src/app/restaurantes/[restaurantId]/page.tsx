@@ -596,7 +596,9 @@ export default function RestaurantPage({
           .then((arr) => context.decodeAudioData(arr))
           .then((buf) => {
             customerAudioBufferRef.current = buf;
-            console.log('[Web Audio API] notifica.wav loaded and decoded successfully.');
+            if (process.env.NODE_ENV !== 'production') {
+              console.log('[Web Audio API] notifica.wav loaded and decoded successfully.');
+            }
           })
           .catch((err) => {
             console.error('[Web Audio API] Failed to load/decode notifica.wav:', err);
@@ -607,7 +609,9 @@ export default function RestaurantPage({
           .then((arr) => context.decodeAudioData(arr))
           .then((buf) => {
             chatMessageBufferRef.current = buf;
-            console.log('[Web Audio API] mensaje.wav loaded and decoded successfully.');
+            if (process.env.NODE_ENV !== 'production') {
+              console.log('[Web Audio API] mensaje.wav loaded and decoded successfully.');
+            }
           })
           .catch((err) => {
             console.error('[Web Audio API] Failed to load/decode mensaje.wav:', err);
@@ -618,7 +622,9 @@ export default function RestaurantPage({
           .then((arr) => context.decodeAudioData(arr))
           .then((buf) => {
             customerLlegueBufferRef.current = buf;
-            console.log('[Web Audio API] llegue.wav loaded and decoded successfully.');
+            if (process.env.NODE_ENV !== 'production') {
+              console.log('[Web Audio API] llegue.wav loaded and decoded successfully.');
+            }
           })
           .catch((err) => {
             console.error('[Web Audio API] Failed to load/decode llegue.wav:', err);
@@ -750,6 +756,7 @@ export default function RestaurantPage({
   const recentNoticeKeysRef = useRef<string[]>([]);
   const lastActiveOrderStatusRef = useRef<string>('');
   const recentCreatedOrderRef = useRef<{ id: string; orderReference: string; paymentMethod?: string } | null>(null);
+  const creatingOrderRef = useRef(false);
 
   // Estados para Modal de Repartidor Llegó
   const [isDriverArrivedModalOpen, setIsDriverArrivedModalOpen] = useState(false);
@@ -1102,7 +1109,9 @@ export default function RestaurantPage({
 
     for (const eventName of liveEvents) {
       socket.on(eventName, (payload: any) => {
-        console.log(`[Socket.io] [Restaurante] Evento recibido: "${eventName}"`, payload);
+        if (process.env.NODE_ENV !== 'production') {
+          console.log(`[Socket.io] [Restaurante] Evento recibido: "${eventName}"`, payload);
+        }
 
         if (eventName === 'order:driver-location') {
           if (recentCreatedOrderRef.current?.id === payload.orderId || activeOrderListItems.some((o) => o.id === payload.orderId)) {
@@ -1159,18 +1168,24 @@ export default function RestaurantPage({
         }
 
         if (['order:driver-arrived', 'order:driver_arrived'].includes(eventName) && payload.orderId) {
-          console.log(`[Socket.io] [Restaurante] Cargando detalles de pedido para ID de llegada: ${payload.orderId}`);
+          if (process.env.NODE_ENV !== 'production') {
+            console.log(`[Socket.io] [Restaurante] Cargando detalles de pedido para ID de llegada: ${payload.orderId}`);
+          }
           requestJson<{ success: true; data: CustomerOrderDetail }>({
             apiBase,
             path: `/me/pedidos/${payload.orderId}`,
             token,
             fallbackMessage: 'No se pudo cargar el detalle del pedido.',
           }).then((res) => {
-            console.log(`[Socket.io] [Restaurante] Detalle cargado con éxito para modal de llegada:`, res.data);
+            if (process.env.NODE_ENV !== 'production') {
+              console.log(`[Socket.io] [Restaurante] Detalle cargado con éxito para modal de llegada:`, res.data);
+            }
             setArrivedOrder(res.data);
             setIsDriverArrivedModalOpen(true);
           }).catch((err) => {
-            console.error(`[Socket.io] [Restaurante] Error al obtener detalles de pedido en llegada:`, err);
+            if (process.env.NODE_ENV !== 'production') {
+              console.error(`[Socket.io] [Restaurante] Error al obtener detalles de pedido en llegada:`, err);
+            }
           });
         }
 
@@ -1289,6 +1304,9 @@ export default function RestaurantPage({
     });
 
     return () => {
+      for (const eventName of liveEvents) {
+        socket.off(eventName);
+      }
       socket.off('account:suspended');
       socket.emit('leave-room', sessionUser.id, 'CUSTOMER');
       socket.disconnect();
@@ -2051,10 +2069,10 @@ function triggerHaptic(pattern: number | number[] = 10) {
   }
 
   async function createOrder() {
-    if (creatingOrder || !restaurant) {
+    if (creatingOrderRef.current || creatingOrder || !restaurant) {
       return;
     }
-
+    creatingOrderRef.current = true;
     if (checkoutValidationMessage) {
       setError(checkoutValidationMessage);
       return;
@@ -2311,6 +2329,7 @@ function triggerHaptic(pattern: number | number[] = 10) {
       }
     } finally {
       setCreatingOrder(false);
+      creatingOrderRef.current = false;
     }
   }
 

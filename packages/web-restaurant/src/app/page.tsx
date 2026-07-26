@@ -343,7 +343,6 @@ function getCustomerOrigin(): string {
     if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
       return 'http://localhost:3000';
     }
-    return window.location.origin;
   }
   return '';
 }
@@ -955,6 +954,7 @@ export default function Home() {
   const [socketAttempts, setSocketAttempts] = useState(0);
   const [carouselIndexMap, setCarouselIndexMap] = useState<Record<string, number>>({});
   const [toasts, setToasts] = useState<ToastItem[]>([]);
+  const toastTimeoutsRef = useRef<Map<string, NodeJS.Timeout>>(new Map());
   const [hoveredWeeklyPointIndex, setHoveredWeeklyPointIndex] = useState<number | null>(null);
   const [selectedWeeklyPointIndex, setSelectedWeeklyPointIndex] = useState<number | null>(null);
   const [dashboardChartView, setDashboardChartView] = useState<'revenue' | 'orders'>('revenue');
@@ -963,7 +963,7 @@ export default function Home() {
     'needs-gesture'
   );
   const [lastFailedAction, setLastFailedAction] = useState<RestaurantRetryAction | null>(null);
-  const seenLiveEventKeysRef = useRef<string[]>([]);
+  const seenLiveEventKeysRef = useRef<Set<string>>(new Set());
   const ordersRef = useRef(orders);
   ordersRef.current = orders;
   const pendingNotificationOrderIdRef = useRef<string | null>(null);
@@ -1750,10 +1750,16 @@ export default function Home() {
   function pushToast(tone: ToastItem['tone'], title: string, message: string) {
     const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     setToasts((current) => [{ id, tone, title, message }, ...current].slice(0, 6));
-    setTimeout(() => dismissToast(id), 4000);
+    const timeoutId = setTimeout(() => dismissToast(id), 4000);
+    toastTimeoutsRef.current.set(id, timeoutId);
   }
 
   function dismissToast(id: string) {
+    const timeoutId = toastTimeoutsRef.current.get(id);
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+      toastTimeoutsRef.current.delete(id);
+    }
     setToasts((current) => current.filter((toast) => toast.id !== id));
   }
 
@@ -2373,7 +2379,9 @@ export default function Home() {
     setSocketStatus('connected');
     setSocketAttempts(0);
     if (socketRef.current) {
-      console.log('[Socket] Conectado. Socket ID:', socketRef.current.id, '| Uniéndome al room RESTAURANT:', sessionUser?.id);
+      if (process.env.NODE_ENV !== 'production') {
+        console.log('[Socket] Conectado. Socket ID:', socketRef.current.id, '| Uniéndome al room RESTAURANT:', sessionUser?.id);
+      }
       if (sessionUser) {
         socketRef.current.emit('join-room', sessionUser.id, 'RESTAURANT');
       }
@@ -2383,15 +2391,23 @@ export default function Home() {
   };
 
   handleLiveEventRef.current = (eventName: any, payload: any) => {
-    console.log('[Socket] Live event procesando:', eventName, payload);
+    if (process.env.NODE_ENV !== 'production') {
+      console.log('[Socket] Live event procesando:', eventName, payload);
+    }
     const liveEventKey = buildLiveEventKey(eventName, payload);
 
-    if (seenLiveEventKeysRef.current.includes(liveEventKey)) {
-      console.log('[Socket] Evento duplicado ignorado. Key:', liveEventKey);
+    if (seenLiveEventKeysRef.current.has(liveEventKey)) {
+      if (process.env.NODE_ENV !== 'production') {
+        console.log('[Socket] Evento duplicado ignorado. Key:', liveEventKey);
+      }
       return;
     }
 
-    seenLiveEventKeysRef.current = [...seenLiveEventKeysRef.current.slice(-39), liveEventKey];
+    seenLiveEventKeysRef.current.add(liveEventKey);
+    if (seenLiveEventKeysRef.current.size > 40) {
+      const first = seenLiveEventKeysRef.current.values().next().value;
+      if (first) seenLiveEventKeysRef.current.delete(first);
+    }
 
     if (eventName === 'order:support-requested') {
       setSupportRequestsQueue((current) => [...current, payload as any]);
@@ -2449,7 +2465,9 @@ export default function Home() {
   useEffect(() => {
     if (!token || !sessionUser || sessionUser.role !== 'RESTAURANT') {
       if (socketRef.current) {
-        console.log('[Socket] Limpiando/desconectando socket por cambio de sesión.');
+        if (process.env.NODE_ENV !== 'production') {
+          console.log('[Socket] Limpiando/desconectando socket por cambio de sesión.');
+        }
         socketRef.current.disconnect();
         socketRef.current = null;
         setSocketStatus('idle');
@@ -2459,14 +2477,18 @@ export default function Home() {
 
     // Reuse existing connection to prevent connection storms and Fast Refresh disconnects
     if (socketRef.current && socketRef.current.connected) {
-      console.log('[Socket] Reutilizando conexión activa:', socketRef.current.id);
+      if (process.env.NODE_ENV !== 'production') {
+        console.log('[Socket] Reutilizando conexión activa:', socketRef.current.id);
+      }
       socketRef.current.emit('join-room', sessionUser.id, 'RESTAURANT');
       return;
     }
 
     // Always disconnect stale socket on re-mount (handles Fast Refresh)
     if (socketRef.current) {
-      console.log('[Socket] Cerrando socket previo por re-montaje.');
+      if (process.env.NODE_ENV !== 'production') {
+        console.log('[Socket] Cerrando socket previo por re-montaje.');
+      }
       socketRef.current.removeAllListeners();
       socketRef.current.disconnect();
       socketRef.current = null;
@@ -2504,9 +2526,11 @@ export default function Home() {
     });
 
     // Debug: escuchar CUALQUIER evento que llegue
-    socket.onAny((eventName: string, ...args: unknown[]) => {
-      console.log('[Socket] Evento recibido:', eventName, JSON.stringify(args).slice(0, 300));
-    });
+    if (process.env.NODE_ENV !== 'production') {
+      socket.onAny((eventName: string, ...args: unknown[]) => {
+        console.log('[Socket] Evento recibido:', eventName, JSON.stringify(args).slice(0, 300));
+      });
+    }
 
     for (const eventName of liveEvents) {
       socket.on(
@@ -2545,7 +2569,9 @@ export default function Home() {
       if (socket.connected && document.visibilityState !== 'hidden') {
         const idleTime = Date.now() - lastEventTime;
         if (idleTime > 90000) {
+        if (process.env.NODE_ENV !== 'production') {
           console.warn('[Socket] Zombie detection: no events for 90s, reloading orders');
+        }
           void loadOrdersOnly();
           lastEventTime = Date.now();
         }
@@ -2787,6 +2813,15 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
+    return () => {
+      for (const [id, timeoutId] of toastTimeoutsRef.current) {
+        clearTimeout(timeoutId);
+      }
+      toastTimeoutsRef.current.clear();
+    };
+  }, []);
+
+  useEffect(() => {
     if (!activeIncomingOrder) {
       setIncomingOrderCountdownMs(newOrderDecisionWindowMs);
       setIsSelectingPrepTime(false);
@@ -2959,7 +2994,7 @@ export default function Home() {
         });
       }
 
-      await loadDashboard();
+      await loadOrdersOnly();
       if (actionKey === 'accept') {
         setAcceptancePromptOrderId(null);
       } else if (actionKey === 'handover') {
@@ -3065,7 +3100,7 @@ export default function Home() {
         fallbackMessage: 'No se pudo agregar tiempo al pedido.',
       });
 
-      await loadDashboard();
+      await loadOrdersOnly();
       setAuthMessage(`Se agregaron ${additionalMinutes} min y el cliente verá la nueva hora estimada.`);
       pushToast('success', 'Tiempo actualizado', `+${additionalMinutes} min agregados al pedido.`);
       return true;
@@ -3137,7 +3172,7 @@ export default function Home() {
         },
       });
 
-      await loadDashboard();
+      await loadOrdersOnly();
       const message = 'Repartidor asignado y tablero sincronizado.';
       setAuthMessage(message);
       setLastFailedAction(null);
@@ -4430,7 +4465,7 @@ export default function Home() {
       hint: `${activeOrders.length} activas ahora`,
       tone: 'amber',
       icon: 'orders',
-      deliveredCount: todayOrders.filter((o) => o.status === 'DELIVERED').length,
+      deliveredCount: todayOrders.filter((o) => o.status === 'DELIVERED' || o.status === 'COMPLETED').length,
       rejectedCount: todayOrders.filter((o) => o.status === 'REJECTED' || o.status === 'CANCELLED').length,
     },
     {
@@ -5380,7 +5415,7 @@ export default function Home() {
                     if (data.success) {
                       pushToast('success', 'Éxito', 'Has aceptado la solicitud de apoyo.');
                       setSupportRequestsQueue((current) => current.slice(1));
-                      void loadDashboard();
+                      void loadOrdersOnly();
                     } else {
                       pushToast('error', 'Error', data.error?.message || 'No se pudo aceptar la solicitud.');
                     }
@@ -5867,7 +5902,7 @@ export default function Home() {
                             fallbackMessage: 'Error al confirmar el pago.',
                             retry: { attempts: 1, backoffMs: 400 },
                           });
-                          await loadDashboard();
+                          await loadOrdersOnly();
                           setHandoverPromptOrderId(null);
                           setHandoverPinInput('');
                           setHandoverError(null);
@@ -5875,7 +5910,7 @@ export default function Home() {
                         } catch (err) {
                           const msg = getRequestErrorMessage(err, 'Error al procesar la entrega.');
                           pushToast('error', 'Error', msg);
-                          try { await loadDashboard(); } catch {}
+                          try { await loadOrdersOnly(); } catch {}
                         } finally {
                           setActiveActionKey(null);
                         }
@@ -5898,7 +5933,7 @@ export default function Home() {
                             fallbackMessage: 'Error al confirmar la entrega.',
                             retry: { attempts: 0 },
                           });
-                          await loadDashboard();
+                          await loadOrdersOnly();
                           setHandoverPromptOrderId(null);
                           setHandoverPinInput('');
                           setHandoverError(null);
@@ -5922,7 +5957,7 @@ export default function Home() {
                             setHandoverError(msg || 'Error al confirmar la entrega.');
                             pushToast('error', 'Error', msg || 'Error al confirmar la entrega.');
                           }
-                          try { await loadDashboard(); } catch {}
+                          try { await loadOrdersOnly(); } catch {}
                         } finally {
                           setActiveActionKey(null);
                         }
@@ -6058,7 +6093,7 @@ export default function Home() {
                         fallbackMessage: 'Error al confirmar la recolección.',
                         retry: { attempts: 0 },
                       });
-                      await loadDashboard();
+                      await loadOrdersOnly();
                       setPickupConfirmOrderId(null);
                       setPickupConfirmPinInput('');
                       setPickupConfirmError(null);
@@ -6082,7 +6117,7 @@ export default function Home() {
                         setPickupConfirmError(msg || 'Error al confirmar la recolección.');
                         pushToast('error', 'Error', msg || 'Error al confirmar la recolección.');
                       }
-                      try { await loadDashboard(); } catch {}
+                      try { await loadOrdersOnly(); } catch {}
                     } finally {
                       setActiveActionKey(null);
                     }
@@ -7821,7 +7856,12 @@ export default function Home() {
                             {profile && (<button
                               type="button"
                               onClick={() => {
-                                const url = `${getCustomerOrigin()}/restaurantes/${profile!.id}`;
+                                const origin = getCustomerOrigin();
+                                if (!origin) {
+                                  pushToast('error', 'No configurado', 'Define NEXT_PUBLIC_CUSTOMER_URL en las variables de entorno para compartir tu tienda.');
+                                  return;
+                                }
+                                const url = `${origin}/restaurantes/${profile!.id}`;
                                 try {
                                   if (navigator.clipboard?.writeText) {
                                     navigator.clipboard.writeText(url);
@@ -9656,7 +9696,7 @@ export default function Home() {
                                                     },
                                                     fallbackMessage: 'No se pudo cancelar el pedido.',
                                                   }).then(() => {
-                                                    loadDashboard();
+                                                    loadOrdersOnly();
                                                     pushToast('success', 'Pedido cancelado', `Motivo: ${reason.trim()}`);
                                                   }).catch((err: any) => {
                                                     pushToast('error', 'Error', err?.message || 'No se pudo cancelar.');
@@ -11232,7 +11272,7 @@ export default function Home() {
                                       fallbackMessage: 'Error al aprobar cancelación.',
                                     });
                                     pushToast('success', 'Cancelación aprobada', 'El cliente será notificado.');
-                                    loadDashboard();
+                                    loadOrdersOnly();
                                   } catch (err: any) {
                                     pushToast('error', 'Error', err?.message || 'No se pudo procesar.');
                                   }
@@ -11253,7 +11293,7 @@ export default function Home() {
                                       fallbackMessage: 'Error al rechazar cancelación.',
                                     });
                                     pushToast('info', 'Cancelación rechazada', 'El pedido continúa su curso.');
-                                    loadDashboard();
+                                    loadOrdersOnly();
                                   } catch (err: any) {
                                     pushToast('error', 'Error', err?.message || 'No se pudo procesar.');
                                   }
@@ -11500,7 +11540,7 @@ export default function Home() {
                                   },
                                   fallbackMessage: 'No se pudo reprogramar la entrega.',
                                 });
-                                await loadDashboard();
+                                await loadOrdersOnly();
                                 pushToast('success', 'Entrega reprogramada', `Nueva entrega programada para ${newDateTime.toLocaleString('es-MX', { dateStyle: 'short', timeStyle: 'short' })}.`);
                                 setRescheduleDate('');
                                 setRescheduleTime('');
@@ -12496,7 +12536,7 @@ export default function Home() {
                           });
                           setCancelConfirmOrder(null);
                           pushToast('success', 'Pedido cancelado', `Motivo: ${cancelReason.trim()}`);
-                          loadDashboard();
+                          loadOrdersOnly();
                         } catch (err: any) {
                           pushToast('error', 'Error', err?.message || 'No se pudo cancelar.');
                         }
@@ -12574,7 +12614,7 @@ export default function Home() {
                           });
                           setCancelRequestModalOrder(null);
                           pushToast('success', 'Cancelación aprobada', 'El cliente será notificado.');
-                          loadDashboard();
+                          loadOrdersOnly();
                         } catch (err: any) {
                           pushToast('error', 'Error', err?.message || 'No se pudo procesar.');
                         } finally {
@@ -12600,7 +12640,7 @@ export default function Home() {
                           });
                           setCancelRequestModalOrder(null);
                           pushToast('info', 'Cancelación rechazada', 'El pedido continúa su curso.');
-                          loadDashboard();
+                          loadOrdersOnly();
                         } catch (err: any) {
                           pushToast('error', 'Error', err?.message || 'No se pudo procesar.');
                         } finally {

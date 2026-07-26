@@ -529,6 +529,8 @@ describe('http integration contracts', () => {
             platformFeeRevenue: 0,
             deliveredOrders: 0,
             platformFeeRate: 0,
+            serviceFee: 0,
+            platformFeePerOrder: 0,
             billingCycle: 'WEEKLY',
             periodStart: new Date().toISOString(),
             periodEnd: new Date().toISOString(),
