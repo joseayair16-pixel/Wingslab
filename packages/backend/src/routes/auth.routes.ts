@@ -228,7 +228,7 @@ export async function registerAuthRoutes(fastify: FastifyInstance): Promise<void
       data: {
         phone: parsed.data.phone,
         expiresInSeconds: 300,
-        mockCode: undefined,
+        mockCode: code,
       },
     });
   });
