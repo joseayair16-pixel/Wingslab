@@ -323,10 +323,17 @@ export async function createBillingSettlement(restaurantId: string) {
   const periodStart = resolveBillingStart(restaurant);
 
   // Align periodEnd to the previous Sunday at 23:59:59
-  const periodEnd = new Date();
+  const now = new Date();
+  let periodEnd = new Date(now);
   const dayOfWeek = periodEnd.getDay();
   periodEnd.setDate(periodEnd.getDate() - dayOfWeek);
   periodEnd.setHours(23, 59, 59, 0);
+
+  // Don't create a settlement for a period that hasn't ended yet
+  // e.g. on Sunday before 23:59:59, periodEnd would be in the future
+  if (periodEnd.getTime() >= now.getTime()) {
+    throw new Error(`El período de corte actual (${periodEnd.toISOString()}) aún no ha finalizado.`);
+  }
 
   const summary = await buildRestaurantBillingSummary(restaurant, periodEnd);
 
