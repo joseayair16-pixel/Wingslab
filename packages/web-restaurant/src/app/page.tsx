@@ -5681,9 +5681,9 @@ export default function Home() {
       {/* MODAL DE DESPACHO EXPRESS QR (REPARTO PROPIO) */}
       {activeQrCodeData ? (() => {
         const isProd = typeof window !== 'undefined' && window.location.hostname !== 'localhost' && !window.location.hostname.includes('192.168.');
-        const customerOrigin = isProd
-          ? 'https://sadel.app'
-          : typeof window !== 'undefined' ? `http://${window.location.hostname}:3003` : 'http://localhost:3003';
+        const customerOrigin = process.env.NEXT_PUBLIC_CUSTOMER_URL || (isProd
+          ? 'https://sa-de-l-web-customer.vercel.app'
+          : typeof window !== 'undefined' ? `http://${window.location.hostname}:3003` : 'http://localhost:3003');
         const deliveryUrl = `${customerOrigin}/reparto/ver/${activeQrCodeData.token}`;
 
         return (
