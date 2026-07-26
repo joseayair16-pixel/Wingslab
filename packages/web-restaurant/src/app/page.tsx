@@ -337,7 +337,13 @@ type ProductDraft = {
 };
 
 const defaultApiBase = 'https://sadel-production.up.railway.app';
-const customerSiteUrl = process.env.NEXT_PUBLIC_CUSTOMER_URL || 'https://sadel.app';
+function getCustomerOrigin(): string {
+  if (process.env.NEXT_PUBLIC_CUSTOMER_URL) return process.env.NEXT_PUBLIC_CUSTOMER_URL;
+  if (typeof window !== 'undefined') {
+    if (window.location.hostname === 'localhost') return 'http://localhost:3000';
+  }
+  return 'https://sadel.app';
+}
 const storageKey = 'sadel.restaurant';
 const orderAlertSoundPreferenceKey = `${storageKey}.orderAlertSoundEnabled`;
 const newOrderDecisionWindowMs = 2 * 60 * 1000;
@@ -7809,8 +7815,7 @@ export default function Home() {
                             {profile && (<button
                               type="button"
                               onClick={() => {
-                                const origin = customerSiteUrl;
-                                const url = `${origin}/restaurantes/${profile!.id}`;
+                                const url = `${getCustomerOrigin()}/restaurantes/${profile!.id}`;
                                 try {
                                   if (navigator.clipboard?.writeText) {
                                     navigator.clipboard.writeText(url);
