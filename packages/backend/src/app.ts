@@ -4,6 +4,7 @@ import fastifyJwt from '@fastify/jwt';
 import fastifyRateLimit from '@fastify/rate-limit';
 import fastifyCompress from '@fastify/compress';
 import Fastify, { FastifyInstance } from 'fastify';
+import http from 'http';
 import { Server as SocketIOServer } from 'socket.io';
 import { createAdapter } from '@socket.io/redis-adapter';
 import Redis from 'ioredis';
@@ -61,10 +62,24 @@ function createNoopSocketServer(): SocketIOServer {
 
 export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyInstance> {
   const { enableRateLimit = true, enableSocketIO = true } = options;
+
+  // Create a single HTTP server shared between Socket.IO and Fastify
+  const httpServer = http.createServer();
+
   const fastify = Fastify({
     logger: NODE_ENV === 'development',
     bodyLimit: 10485760, // 10MB
     requestTimeout: 30000, // 30s timeout
+    serverFactory: (handler) => {
+      // Only forward non-socket.io requests to Fastify;
+      // Socket.IO has its own listener on the same server and will handle /socket.io
+      httpServer.on('request', (req, res) => {
+        if (!req.url?.startsWith('/socket.io')) {
+          handler(req, res);
+        }
+      });
+      return httpServer;
+    },
   });
 
   // Configuración de cabeceras seguras (Helmet) con Content Security Policy
@@ -157,7 +172,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   });
 
   fastify.io = enableSocketIO
-    ? new SocketIOServer(fastify.server, {
+    ? new SocketIOServer(httpServer, {
         cors: {
           origin: process.env.CORS_ORIGIN || '*',
           credentials: true,
