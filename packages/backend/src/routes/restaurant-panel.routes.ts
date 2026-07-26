@@ -258,6 +258,8 @@ export async function registerRestaurantPanelRoutes(fastify: FastifyInstance): P
           id: true,
           billingCycle: true,
           platformFeeRate: true,
+          serviceFee: true,
+          platformFeePerOrder: true,
           lastBillingSettledAt: true,
           status: true,
           createdAt: true,

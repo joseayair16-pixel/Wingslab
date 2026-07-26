@@ -7,6 +7,8 @@ type BillingSeed = {
   name?: string;
   billingCycle: BillingCycle;
   platformFeeRate: number;
+  serviceFee: number;
+  platformFeePerOrder: number;
   lastBillingSettledAt: Date | null;
   createdAt: Date;
 };
@@ -83,7 +85,7 @@ export async function buildRestaurantBillingSummary(seed: BillingSeed, cutEnd?: 
   const aggregate = await prisma.order.aggregate({
     where: {
       restaurantId: seed.id,
-      status: 'DELIVERED',
+      status: { in: ['DELIVERED', 'COMPLETED'] },
       createdAt: {
         gte: debtStart,
         lte: periodEnd,
@@ -91,8 +93,6 @@ export async function buildRestaurantBillingSummary(seed: BillingSeed, cutEnd?: 
     },
     _sum: {
       totalAmount: true,
-      serviceFee: true,
-      platformFee: true,
     },
     _count: {
       id: true,
@@ -100,9 +100,9 @@ export async function buildRestaurantBillingSummary(seed: BillingSeed, cutEnd?: 
   });
  
   const deliveredRevenue = aggregate._sum.totalAmount || 0;
-  const serviceFeeRevenue = aggregate._sum.serviceFee || 0;
-  const platformFeeRevenue = aggregate._sum.platformFee || 0;
   const deliveredOrders = aggregate._count.id;
+  const serviceFeeRevenue = (seed.serviceFee || 0) * deliveredOrders;
+  const platformFeeRevenue = (seed.platformFeePerOrder || 0) * deliveredOrders;
   
   // Calculate existing unpaid settlements debt
   const unpaidSettlements = await prisma.restaurantBillingSettlement.aggregate({
@@ -150,7 +150,7 @@ export async function buildRestaurantOperationalStats(restaurantId: string): Pro
       where: { restaurantId },
     }),
     prisma.order.count({
-      where: { restaurantId, status: 'DELIVERED' },
+      where: { restaurantId, status: { in: ['DELIVERED', 'COMPLETED'] } },
     }),
     prisma.order.count({
       where: {
@@ -180,7 +180,7 @@ export async function buildRestaurantOperationalStats(restaurantId: string): Pro
       },
     }),
     prisma.order.aggregate({
-      where: { restaurantId, status: 'DELIVERED' },
+      where: { restaurantId, status: { in: ['DELIVERED', 'COMPLETED'] } },
       _sum: {
         totalAmount: true,
       },
@@ -206,7 +206,7 @@ export async function buildRestaurantWeeklyPerformance(restaurantId: string) {
   const orders = await prisma.order.findMany({
     where: {
       restaurantId,
-      status: 'DELIVERED',
+      status: { in: ['DELIVERED', 'COMPLETED'] },
       createdAt: {
         gte: startDate,
       },
@@ -261,6 +261,8 @@ export async function buildRestaurantOverview() {
       hasOwnDelivery: true,
       billingCycle: true,
       platformFeeRate: true,
+      serviceFee: true,
+      platformFeePerOrder: true,
       lastBillingSettledAt: true,
       createdAt: true,
     },
@@ -271,6 +273,8 @@ export async function buildRestaurantOverview() {
       id: restaurant.id,
       billingCycle: restaurant.billingCycle,
       platformFeeRate: restaurant.platformFeeRate,
+      serviceFee: restaurant.serviceFee,
+      platformFeePerOrder: restaurant.platformFeePerOrder,
       lastBillingSettledAt: restaurant.lastBillingSettledAt,
       createdAt: restaurant.createdAt,
     }))
@@ -305,6 +309,8 @@ export async function createBillingSettlement(restaurantId: string) {
       id: true,
       billingCycle: true,
       platformFeeRate: true,
+      serviceFee: true,
+      platformFeePerOrder: true,
       lastBillingSettledAt: true,
       createdAt: true,
     },
