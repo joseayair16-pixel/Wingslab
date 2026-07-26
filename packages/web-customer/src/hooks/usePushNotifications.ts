@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || '/api';
+const API_URL = process.env.NEXT_PUBLIC_API_URL || (typeof window !== 'undefined' && window.location.hostname !== 'localhost' && !window.location.hostname.includes('192.168.') ? 'https://sadel-production.up.railway.app' : '/api');
 
 let cachedVapidKey: string | null = null;
 let vapidKeyPromise: Promise<string> | null = null;
