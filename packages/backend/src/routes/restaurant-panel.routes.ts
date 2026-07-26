@@ -316,7 +316,9 @@ export async function registerRestaurantPanelRoutes(fastify: FastifyInstance): P
         });
       }
 
-      const periodStart = ownedRestaurant.lastBillingSettledAt || ownedRestaurant.createdAt;
+      const periodStart = ownedRestaurant.lastBillingSettledAt && ownedRestaurant.lastBillingSettledAt.getTime() <= Date.now()
+        ? ownedRestaurant.lastBillingSettledAt
+        : ownedRestaurant.createdAt;
 
       const orders = await prisma.order.findMany({
         where: {

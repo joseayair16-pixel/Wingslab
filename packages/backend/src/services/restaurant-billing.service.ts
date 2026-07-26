@@ -21,6 +21,8 @@ export type RestaurantBillingSummary = {
   platformFeeRevenue: number;
   deliveredOrders: number;
   platformFeeRate: number;
+  serviceFee: number;
+  platformFeePerOrder: number;
   billingCycle: BillingCycle;
   periodStart: string;
   periodEnd: string;
@@ -129,6 +131,8 @@ export async function buildRestaurantBillingSummary(seed: BillingSeed, cutEnd?: 
     platformFeeRevenue: roundCurrency(platformFeeRevenue),
     deliveredOrders,
     platformFeeRate: seed.platformFeeRate,
+    serviceFee: seed.serviceFee,
+    platformFeePerOrder: seed.platformFeePerOrder,
     billingCycle: seed.billingCycle,
     periodStart: cycleStart.toISOString(),
     periodEnd: periodEnd.toISOString(),
