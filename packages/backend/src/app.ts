@@ -3,9 +3,8 @@ import fastifyHelmet from '@fastify/helmet';
 import fastifyJwt from '@fastify/jwt';
 import fastifyRateLimit from '@fastify/rate-limit';
 import fastifyCompress from '@fastify/compress';
+import fastifySocketIO from 'fastify-socket.io';
 import Fastify, { FastifyInstance } from 'fastify';
-import http from 'http';
-import { Server as SocketIOServer } from 'socket.io';
 import { createAdapter } from '@socket.io/redis-adapter';
 import Redis from 'ioredis';
 
@@ -41,48 +40,21 @@ type BuildAppOptions = {
 
 const NODE_ENV = process.env.NODE_ENV || 'development';
 
-// Validar variables de entorno al arrancar
 if (NODE_ENV === 'production') {
   validateEnvironment();
 }
 
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
 
-function createNoopSocketServer(): SocketIOServer {
-  return {
-    to() {
-      return {
-        emit() {
-          return true;
-        },
-      };
-    },
-  } as unknown as SocketIOServer;
-}
-
 export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyInstance> {
   const { enableRateLimit = true, enableSocketIO = true } = options;
 
-  // Create a single HTTP server shared between Socket.IO and Fastify
-  const httpServer = http.createServer();
-
   const fastify = Fastify({
     logger: NODE_ENV === 'development',
-    bodyLimit: 10485760, // 10MB
-    requestTimeout: 30000, // 30s timeout
-    serverFactory: (handler) => {
-      // Only forward non-socket.io requests to Fastify;
-      // Socket.IO has its own listener on the same server and will handle /socket.io
-      httpServer.on('request', (req, res) => {
-        if (!req.url?.startsWith('/socket.io')) {
-          handler(req, res);
-        }
-      });
-      return httpServer;
-    },
+    bodyLimit: 10485760,
+    requestTimeout: 30000,
   });
 
-  // Configuración de cabeceras seguras (Helmet) con Content Security Policy
   await fastify.register(fastifyHelmet, {
     contentSecurityPolicy: {
       directives: {
@@ -95,17 +67,14 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     },
   });
 
-  // Compresión gzip/brotli para respuestas más rápidas
   await fastify.register(fastifyCompress, {
     global: true,
-    threshold: 1024, // solo comprimir respuestas > 1KB
+    threshold: 1024,
   });
 
-  // Configuración de CORS segura y compatible con cookies/credenciales
   await fastify.register(fastifyCors, {
     origin: (origin, cb) => {
       const corsOrigin = process.env.CORS_ORIGIN || '*';
-      // Allow non-browser requests (no origin header) and matching origins
       if (corsOrigin === '*' || !origin) {
         cb(null, true);
       } else if (origin.endsWith('.vercel.app')) {
@@ -122,7 +91,6 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     credentials: true,
   });
 
-  // JWT con expiración de sesión reducida a 7 días por seguridad
   await fastify.register(fastifyJwt, {
     secret: JWT_SECRET,
     sign: {
@@ -140,6 +108,17 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
       keyGenerator: (request) => {
         return request.ip;
       },
+    });
+  }
+
+  if (enableSocketIO) {
+    await fastify.register(fastifySocketIO, {
+      cors: {
+        origin: process.env.CORS_ORIGIN || '*',
+        credentials: true,
+      },
+      pingInterval: 10000,
+      pingTimeout: 5000,
     });
   }
 
@@ -171,17 +150,6 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     });
   });
 
-  fastify.io = enableSocketIO
-    ? new SocketIOServer(httpServer, {
-        cors: {
-          origin: process.env.CORS_ORIGIN || '*',
-          credentials: true,
-        },
-        pingInterval: 10000,
-        pingTimeout: 5000,
-      })
-    : createNoopSocketServer();
-
   if (enableSocketIO) {
     if (process.env.REDIS_URL) {
       try {
@@ -201,18 +169,16 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   }
 
   fastify.addHook('onClose', async () => {
-    if (enableSocketIO) {
+    if (enableSocketIO && fastify.io) {
       await fastify.io.close();
     }
   });
 
   await setupRoutes(fastify);
 
-  // Iniciar tarea programada de facturacion
   startBillingJob();
   startBillingOverdueJob();
 
-  // Iniciar tarea programada de facturacion de repartidores
   const cutoffStartup = startDriverBillingCutoffJob();
   scheduleDriverBillingOverdueCron();
   cutoffStartup.then(() => {
@@ -220,7 +186,6 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     console.log('[App] Driver billing overdue startup check completed after cutoff sync.');
   });
 
-  // Iniciar tarea programada de auto-rechazo de pedidos
   startOrderTimeoutJob(fastify);
   startRestaurantHoursJob(fastify);
   startJitDispatchJob(fastify);
@@ -258,7 +223,6 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     };
   });
 
-  // Endpoint de métricas (Prometheus-compatible)
   fastify.get('/metrics', async () => {
     const snapshot = getMetricsSnapshot();
     return {
