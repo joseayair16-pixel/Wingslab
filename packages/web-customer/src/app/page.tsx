@@ -1412,9 +1412,7 @@ export default function Home() {
     if (filterFreeDelivery) {
       result = result.filter(r => r.effectiveDeliveryFee === 0);
     }
-    if (filterNearby) {
-      result = result.filter(r => r.calculatedDistance <= 5); // Cerca de mí: 5km
-    }
+
     if (filterPromotions) {
       result = result.filter(r =>
         r.description?.toLowerCase().includes('promo') ||
@@ -1435,6 +1433,10 @@ export default function Home() {
         if (firstBestScore !== secondBestScore) {
           return secondBestScore - firstBestScore;
         }
+      }
+
+      if (filterNearby && first.calculatedDistance !== null && second.calculatedDistance !== null) {
+        return first.calculatedDistance - second.calculatedDistance;
       }
 
       const firstScore = rankRestaurant(first, userRegion);

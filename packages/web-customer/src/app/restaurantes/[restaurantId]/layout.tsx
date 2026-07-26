@@ -1,8 +1,6 @@
 import type { Metadata } from 'next';
 
-export function generateStaticParams() {
-  return [];
-}
+export const dynamic = 'force-dynamic';
 
 export function generateMetadata(): Metadata {
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://sadel.app';
