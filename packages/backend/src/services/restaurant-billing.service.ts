@@ -357,16 +357,17 @@ export async function createBillingSettlement(restaurantId: string) {
     data: { status: 'REJECTED', notes: 'Anulado automáticamente: monto $0 con pedidos entregados.' },
   });
 
-  // Align periodEnd to the PREVIOUS Sunday at 23:59:59
-  // On Sunday, go back 7 days; otherwise, go back to the most recent Sunday
+  // Align periodEnd to the most recent Sunday at 23:59:59
+  // On Sunday, periodEnd = today at 23:59 (covers current week)
+  // On other days, periodEnd = previous Sunday at 23:59
   const dayOfWeek = now.getDay();
-  const daysToPreviousSunday = dayOfWeek === 0 ? 7 : dayOfWeek;
   const periodEnd = new Date(now);
-  periodEnd.setDate(periodEnd.getDate() - daysToPreviousSunday);
+  periodEnd.setDate(periodEnd.getDate() - dayOfWeek);
   periodEnd.setHours(23, 59, 59, 0);
 
-  // Safety check: periodEnd must be in the past
-  if (periodEnd.getTime() >= now.getTime()) {
+  // Safety check: allow up to 5 min tolerance for the scheduled Sunday 23:59 cron
+  const MS_TOLERANCE = 5 * 60 * 1000;
+  if (periodEnd.getTime() > now.getTime() + MS_TOLERANCE) {
     throw new Error(`El período de corte actual (${periodEnd.toISOString()}) aún no ha finalizado.`);
   }
 

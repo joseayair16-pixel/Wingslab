@@ -337,6 +337,7 @@ type ProductDraft = {
 };
 
 const defaultApiBase = 'https://sadel-production.up.railway.app';
+const customerSiteUrl = process.env.NEXT_PUBLIC_CUSTOMER_URL || 'https://sadel.app';
 const storageKey = 'sadel.restaurant';
 const orderAlertSoundPreferenceKey = `${storageKey}.orderAlertSoundEnabled`;
 const newOrderDecisionWindowMs = 2 * 60 * 1000;
@@ -7808,9 +7809,7 @@ export default function Home() {
                             {profile && (<button
                               type="button"
                               onClick={() => {
-                                const origin = window.location.hostname !== 'localhost' && !window.location.hostname.includes('192.168.')
-                                  ? 'https://sadel.app'
-                                  : `http://${window.location.hostname}:3003`;
+                                const origin = customerSiteUrl;
                                 const url = `${origin}/restaurantes/${profile!.id}`;
                                 try {
                                   if (navigator.clipboard?.writeText) {
@@ -8476,13 +8475,14 @@ export default function Home() {
                         {(() => {
                           const totalRevenue = billingSummary?.deliveredRevenue ?? 0;
                           const platformFee = billingSummary?.platformFeeRevenue ?? 0;
+                          const platformFeePerOrder = billingSummary?.platformFeePerOrder ?? 0;
+                          if (totalRevenue <= 0 || platformFeePerOrder <= 0) return null;
                           const percentage = totalRevenue > 0 ? ((platformFee / totalRevenue) * 100).toFixed(1) : '0.0';
-                          if (totalRevenue <= 0) return null;
                           return (
                             <div className="mt-4 space-y-1">
                               <p className="text-xs font-semibold text-blue-700 bg-blue-50/60 border border-blue-100/40 rounded-xl px-3 py-2.5 w-fit flex items-center gap-2">
                                 <span>📈</span>
-                                <span>Comisión por uso de plataforma equivale al <strong>{percentage}%</strong> (${platformFee} MXN)</span>
+                                <span>Comisión por uso de plataforma equivale al <strong>{percentage}%</strong> (${platformFee.toFixed(2)} MXN)</span>
                               </p>
                               <p className="text-[10px] text-neutral-400 pl-1 leading-relaxed mt-1">
                                 * Tarifa cobrada al cliente que recaudas y transfieres al administrador.
