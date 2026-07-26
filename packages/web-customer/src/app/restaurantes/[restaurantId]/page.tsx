@@ -1068,7 +1068,8 @@ export default function RestaurantPage({
       return;
     }
 
-    const socket = io(apiBase, {
+    const socket = io('', {
+      path: '/api/socket.io',
       transports: ['polling'],
       autoConnect: true,
       reconnection: true,

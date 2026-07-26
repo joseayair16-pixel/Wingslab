@@ -3229,7 +3229,8 @@ export default function Home() {
     }
 
     setSocketStatus('connecting');
-    const socket = io(apiBase, {
+    const socket = io('', {
+      path: '/api/socket.io',
       transports: ['polling'],
       autoConnect: true,
       reconnection: true,
