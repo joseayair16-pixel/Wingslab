@@ -7320,19 +7320,19 @@ export default function Home() {
       ) : null}
       {!isRestaurantSession ? (
         <div className="relative mx-auto flex min-h-dvh flex-col">
-          <header className="sticky top-0 z-40 flex items-center justify-center border-b border-black/5 bg-white/80 px-4 py-4 backdrop-blur-sm">
+          <header className="sticky top-0 z-40 flex items-center justify-center border-b border-black/5 bg-white px-4 py-4">
             <SaDelLogo className="h-9 w-auto object-contain md:h-10" />
           </header>
 
           <section className="relative flex flex-1 flex-col overflow-hidden md:grid md:grid-cols-2">
-            <div className="relative h-52 min-h-[200px] shrink-0 md:h-auto md:min-h-dvh">
+            <div className="relative flex min-h-[220px] shrink-0 flex-col justify-end md:min-h-dvh">
               <img
                 src={welcomeImage}
                 alt=""
-                className="h-full w-full object-cover"
+                className="absolute inset-0 h-full w-full object-cover"
               />
-              <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/20 to-transparent md:bg-gradient-to-r md:from-black/60 md:via-black/30 md:to-transparent" />
-              <div className="absolute bottom-4 left-4 right-4 md:bottom-10 md:left-10 md:right-10">
+              <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/30 to-black/10 md:bg-gradient-to-r md:from-black/70 md:via-black/40 md:to-transparent" />
+              <div className="relative z-10 px-5 pb-6 md:px-10 md:pb-10">
                 <span className="inline-flex rounded-full bg-sky-500 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.2em] text-white">
                   SaDeL Business
                 </span>
