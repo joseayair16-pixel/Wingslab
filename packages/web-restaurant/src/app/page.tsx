@@ -7325,7 +7325,7 @@ export default function Home() {
           </header>
 
           <section className="relative flex flex-1 flex-col overflow-hidden md:grid md:grid-cols-2">
-            <div className="relative flex h-1/2 shrink-0 flex-col justify-end md:h-auto md:min-h-dvh">
+            <div className="relative flex flex-1 flex-col justify-end">
               <img
                 src={welcomeImage}
                 alt=""
