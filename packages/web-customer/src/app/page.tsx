@@ -338,10 +338,7 @@ const defaultProfileAddress: CustomerProfileAddress = {
   isDefault: false,
 };
 
-const defaultApiBase =
-  process.env.NEXT_PUBLIC_API_BASE_URL ||
-  process.env.NEXT_PUBLIC_API_URL ||
-  'http://localhost:3001';
+const defaultApiBase = '/api';
 const storageKey = 'sadel.customer';
 const profileAddressStorageKey = `${storageKey}.profile-address`;
 const persistentNoticeStorageKey = `${storageKey}.persistent-notice`;
@@ -851,7 +848,7 @@ export default function Home() {
 
     setLoadingSupportTickets(true);
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || '/api'}/customer/support/tickets`, {
+      const response = await fetch(`${'/api'}/customer/support/tickets`, {
         headers: {
           'Authorization': `Bearer ${localToken}`,
         },
@@ -1168,7 +1165,7 @@ export default function Home() {
       if (savedSession.apiBase && !savedSession.apiBase.startsWith('http')) {
         setApiBase(savedSession.apiBase);
       } else {
-        setApiBase(process.env.NEXT_PUBLIC_API_URL || '/api');
+        setApiBase('/api');
       }
 
       if (savedSession.token) {
@@ -1212,7 +1209,7 @@ export default function Home() {
 
       // Verify user status on init — if suspended, show modal even without socket event
       if (savedSession.token && savedSession.user) {
-        const apiBaseUrl = savedSession.apiBase || process.env.NEXT_PUBLIC_API_URL || '/api';
+        const apiBaseUrl = savedSession.apiBase || '/api';
         requestJson<{ success: true; data: { status: string } }>({
           apiBase: apiBaseUrl,
           path: '/auth/perfil',
@@ -2539,7 +2536,7 @@ export default function Home() {
         }
       }
 
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || '/api'}/pedidos`, {
+      const response = await fetch(`${'/api'}/pedidos`, {
         method: 'POST',
         headers,
         body: JSON.stringify(body),
@@ -5014,7 +5011,7 @@ export default function Home() {
                               setSubmittingSupport(true);
 
                               try {
-                                const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || '/api'}/customer/support/tickets`, {
+                                const response = await fetch(`${'/api'}/customer/support/tickets`, {
                                   method: 'POST',
                                   headers: {
                                     'Content-Type': 'application/json',
@@ -5143,7 +5140,7 @@ export default function Home() {
                               setSubmittingSupport(true);
 
                               try {
-                                const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || '/api'}/customer/support/tickets`, {
+                                const response = await fetch(`${'/api'}/customer/support/tickets`, {
                                   method: 'POST',
                                   headers: {
                                     'Content-Type': 'application/json',
@@ -5954,7 +5951,7 @@ export default function Home() {
                                     });
                                   }
 
-                                  const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || '/api'}/customer/support/tickets`, {
+                                  const response = await fetch(`${'/api'}/customer/support/tickets`, {
                                     method: 'POST',
                                     headers: {
                                       'Content-Type': 'application/json',
@@ -6603,7 +6600,7 @@ export default function Home() {
                   };
 
                   try {
-                    const apiUrl = process.env.NEXT_PUBLIC_API_URL || '/api';
+                    const apiUrl = '/api';
                     const response = await fetch(`${apiUrl}/public/solicitudes`, {
                       method: 'POST',
                       headers: { 'Content-Type': 'application/json' },
@@ -6761,7 +6758,7 @@ export default function Home() {
                   };
 
                   try {
-                    const apiUrl = process.env.NEXT_PUBLIC_API_URL || '/api';
+                    const apiUrl = '/api';
                     const response = await fetch(`${apiUrl}/public/solicitudes`, {
                       method: 'POST',
                       headers: { 'Content-Type': 'application/json' },

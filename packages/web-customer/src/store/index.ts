@@ -31,7 +31,7 @@ interface WebCustomerState {
 }
 
 export const useStore = create<WebCustomerState>((set) => ({
-  apiBase: process.env.NEXT_PUBLIC_API_URL || '/api', // default
+  apiBase: '/api',
   setApiBase: (url) => set({ apiBase: url }),
   
   token: '',

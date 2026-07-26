@@ -77,7 +77,7 @@ export default function DeliveryTicketPage({ params }: PageProps) {
     setIsMounted(true);
   }, []);
 
-  const apiBase = process.env.NEXT_PUBLIC_API_URL || '/api';
+  const apiBase = '/api';
 
   const triggerHaptic = (pattern: number[]) => {
     if (typeof window !== 'undefined' && window.navigator && window.navigator.vibrate) {

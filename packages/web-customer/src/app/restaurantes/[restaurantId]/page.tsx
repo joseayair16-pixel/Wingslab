@@ -246,10 +246,7 @@ type TransientNotice = {
   orderReference?: string;
 };
 
-const defaultApiBase =
-  process.env.NEXT_PUBLIC_API_BASE_URL ||
-  process.env.NEXT_PUBLIC_API_URL ||
-  'http://localhost:3001';
+const defaultApiBase = '/api';
 const storageKey = 'sadel.customer';
 const profileAddressStorageKey = `${storageKey}.profile-address`;
 const persistentNoticeStorageKey = `${storageKey}.persistent-notice`;
@@ -873,7 +870,7 @@ export default function RestaurantPage({
       }
 
       if (savedSession.token && savedSession.user) {
-        const apiBaseUrl = savedSession.apiBase || process.env.NEXT_PUBLIC_API_URL || '/api';
+        const apiBaseUrl = savedSession.apiBase || '/api';
         requestJson<{ success: true; data: { status: string } }>({
           apiBase: apiBaseUrl,
           path: '/auth/perfil',
