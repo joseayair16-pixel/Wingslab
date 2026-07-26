@@ -211,10 +211,7 @@ type DriverRetryAction =
     label: string;
   };
 
-const defaultApiBase =
-  process.env.NEXT_PUBLIC_API_BASE_URL ||
-  process.env.NEXT_PUBLIC_API_URL ||
-  'http://localhost:3001';
+const defaultApiBase = '/api';
 const storageKey = 'sadel.driver';
 const liveEvents = [
   'order:assigned',
@@ -856,7 +853,7 @@ export default function Home() {
       }
     }
 
-    if (savedSession.apiBase) {
+    if (savedSession.apiBase && !savedSession.apiBase.startsWith('http')) {
       setApiBase(savedSession.apiBase);
     }
     if (savedSession.token) {
@@ -2097,7 +2094,7 @@ export default function Home() {
                     type="text"
                     value={apiBase}
                     onChange={(e) => setApiBase(e.target.value)}
-                    placeholder="http://localhost:3001"
+                    placeholder="/api"
                     className="w-full rounded-xl border border-black/5 bg-neutral-50 px-4 py-3 text-xs outline-none focus:border-neutral-300 dark:bg-zinc-900 dark:border-zinc-800 dark:focus:border-zinc-700"
                   />
                 </label>
@@ -4385,7 +4382,7 @@ export default function Home() {
                   type="text"
                   value={apiBase}
                   onChange={(e) => setApiBase(e.target.value)}
-                  placeholder="http://localhost:3001"
+                  placeholder="/api"
                   className="w-full rounded-xl border border-black/5 bg-neutral-50 px-4 py-3 text-xs outline-none focus:border-neutral-300 dark:bg-zinc-900 dark:border-zinc-800"
                 />
               </label>

@@ -151,10 +151,7 @@ type RestaurantEditForm = {
   businessType?: BusinessType;
 };
 
-const defaultApiBase =
-  process.env.NEXT_PUBLIC_API_BASE_URL ||
-  process.env.NEXT_PUBLIC_API_URL ||
-  'http://localhost:3001';
+const defaultApiBase = '/api';
 const storageKey = 'sadel.admin';
 
 export default function RestaurantDetailPage() {
@@ -185,7 +182,7 @@ export default function RestaurantDetailPage() {
   useEffect(() => {
     const savedSession = readStoredSession(storageKey);
 
-    if (savedSession.apiBase) {
+    if (savedSession.apiBase && !savedSession.apiBase.startsWith('http')) {
       setApiBase(savedSession.apiBase);
     }
 

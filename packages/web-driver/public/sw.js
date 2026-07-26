@@ -67,7 +67,7 @@ self.addEventListener('notificationclick', function(event) {
   );
 });
 
-const CACHE_NAME = 'sadel-driver-v1';
+const CACHE_NAME = 'sadel-driver-v2';
 const PRECACHE_URLS = [
   '/sounds/notifica.wav',
   '/sounds/mensaje.wav',
@@ -85,7 +85,20 @@ self.addEventListener('install', function(event) {
 });
 
 self.addEventListener('activate', function(event) {
-  event.waitUntil(clients.claim());
+  event.waitUntil(
+    Promise.all([
+      clients.claim(),
+      caches.keys().then(function (cacheNames) {
+        return Promise.all(
+          cacheNames.map(function (cacheName) {
+            if (cacheName !== CACHE_NAME) {
+              return caches.delete(cacheName);
+            }
+          })
+        );
+      })
+    ])
+  );
 });
 
 // Escuchar mensajes desde la página para cachear o mostrar notificaciones de respaldo

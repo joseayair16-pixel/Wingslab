@@ -334,10 +334,7 @@ type ProductDraft = {
   optionGroups?: ProductOptionGroup[];
 };
 
-const defaultApiBase =
-  process.env.NEXT_PUBLIC_API_BASE_URL ||
-  process.env.NEXT_PUBLIC_API_URL ||
-  'http://localhost:3001';
+const defaultApiBase = '/api';
 const storageKey = 'sadel.restaurant';
 const orderAlertSoundPreferenceKey = `${storageKey}.orderAlertSoundEnabled`;
 const newOrderDecisionWindowMs = 2 * 60 * 1000;
@@ -1141,7 +1138,7 @@ export default function Home() {
       }
     }
 
-    if (savedSession.apiBase) {
+    if (savedSession.apiBase && !savedSession.apiBase.startsWith('http')) {
       setApiBase(savedSession.apiBase);
     }
 
@@ -7423,7 +7420,7 @@ export default function Home() {
                         label="API base URL"
                         value={apiBase}
                         onChange={setApiBase}
-                        placeholder="http://localhost:3001"
+                        placeholder="/api"
                       />
                     </div>
                   </details>

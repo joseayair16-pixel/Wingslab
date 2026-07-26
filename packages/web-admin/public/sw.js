@@ -76,19 +76,10 @@ self.addEventListener('notificationclick', function (event) {
   );
 });
 
-const CACHE_NAME = 'sadel-static-assets-v1';
-const ASSETS_TO_CACHE = [
-  '/sounds/notifica.wav',
-  '/sounds/mensaje.wav'
-];
+const CACHE_NAME = 'sadel-static-assets-v2';
 
 self.addEventListener('install', function (event) {
   self.skipWaiting();
-  event.waitUntil(
-    caches.open(CACHE_NAME).then(function (cache) {
-      return cache.addAll(ASSETS_TO_CACHE);
-    })
-  );
 });
 
 self.addEventListener('activate', function (event) {
@@ -106,43 +97,4 @@ self.addEventListener('activate', function (event) {
       })
     ])
   );
-});
-
-self.addEventListener('fetch', function (event) {
-  if (event.request.method !== 'GET') return;
-
-  const url = new URL(event.request.url);
-  
-  const isStaticAsset = 
-    url.origin === self.location.origin && 
-    !url.pathname.startsWith('/api/') &&
-    !url.pathname.includes('/_next/data/') &&
-    (url.pathname.includes('/_next/static/') || 
-     url.pathname.endsWith('.js') || 
-     url.pathname.endsWith('.css') ||
-     url.pathname.endsWith('.woff2') ||
-     url.pathname.endsWith('.png') ||
-     url.pathname.endsWith('.jpg') ||
-     url.pathname.endsWith('.jpeg') ||
-     url.pathname.endsWith('.svg') ||
-     url.pathname.endsWith('.ico'));
-
-  if (isStaticAsset) {
-    event.respondWith(
-      caches.match(event.request).then(function (cachedResponse) {
-        const fetchPromise = fetch(event.request).then(function (networkResponse) {
-          if (networkResponse && networkResponse.status === 200) {
-            const responseToCache = networkResponse.clone();
-            caches.open(CACHE_NAME).then(function (cache) {
-              cache.put(event.request, responseToCache);
-            });
-          }
-          return networkResponse;
-        }).catch(function () {
-          return cachedResponse;
-        });
-        return cachedResponse || fetchPromise;
-      })
-    );
-  }
 });

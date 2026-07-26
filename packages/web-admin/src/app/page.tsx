@@ -541,10 +541,7 @@ type AdminPortalSection =
   | 'stuck'
   | 'featured';
 
-const defaultApiBase =
-  process.env.NEXT_PUBLIC_API_BASE_URL ||
-  process.env.NEXT_PUBLIC_API_URL ||
-  'http://localhost:3001';
+const defaultApiBase = '/api';
 const storageKey = 'sadel.admin';
 const defaultRestaurantServiceFee = '5';
 
@@ -839,7 +836,7 @@ export default function Home() {
   useEffect(() => {
     const savedSession = readStoredSession(storageKey);
 
-    if (savedSession.apiBase) {
+    if (savedSession.apiBase && !savedSession.apiBase.startsWith('http')) {
       setApiBase(savedSession.apiBase);
     }
 
@@ -2465,7 +2462,7 @@ export default function Home() {
                     label="API base URL"
                     value={apiBase}
                     onChange={setApiBase}
-                    placeholder="http://localhost:3001"
+                    placeholder="/api"
                   />
                   <Field
                     label="Usuario"
