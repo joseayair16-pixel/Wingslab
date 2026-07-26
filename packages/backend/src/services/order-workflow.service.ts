@@ -1128,7 +1128,7 @@ export async function updateOrderStatusByDriver({
   return prisma.$transaction(async (tx) => {
     const currentOrder = await tx.order.findUnique({
       where: { id: order.id },
-      select: { status: true, deliveryPin: true, paymentMethod: true },
+      select: { status: true, deliveryPin: true, handoverPin: true, paymentMethod: true },
     });
 
     if (!currentOrder || currentOrder.status !== OrderStatus.IN_TRANSIT) {
