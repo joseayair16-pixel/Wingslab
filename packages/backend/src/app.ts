@@ -5,8 +5,8 @@ import fastifyRateLimit from '@fastify/rate-limit';
 import fastifyCompress from '@fastify/compress';
 import fastifySocketIO from 'fastify-socket.io';
 import Fastify, { FastifyInstance } from 'fastify';
+import http from 'http';
 import { createAdapter } from '@socket.io/redis-adapter';
-import Redis from 'ioredis';
 
 import './config/env';
 import { validateEnvironment } from './config/env';
@@ -49,10 +49,21 @@ const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-producti
 export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyInstance> {
   const { enableRateLimit = true, enableSocketIO = true } = options;
 
+  const httpServer = http.createServer();
+
   const fastify = Fastify({
     logger: NODE_ENV === 'development',
     bodyLimit: 10485760,
     requestTimeout: 30000,
+    serverFactory: (handler) => {
+      httpServer.on('request', (req, res) => {
+        if (req.url?.startsWith('/socket.io')) {
+          return;
+        }
+        handler(req, res);
+      });
+      return httpServer;
+    },
   });
 
   await fastify.register(fastifyHelmet, {

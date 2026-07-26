@@ -1068,9 +1068,10 @@ export default function RestaurantPage({
       return;
     }
 
-    const socket = io('', {
-      path: '/api/socket.io',
-      transports: ['polling'],
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL;
+    const socket = io(apiUrl || '', {
+      path: apiUrl ? '/socket.io' : '/api/socket.io',
+      transports: apiUrl ? ['websocket', 'polling'] : ['polling'],
       autoConnect: true,
       reconnection: true,
     });
