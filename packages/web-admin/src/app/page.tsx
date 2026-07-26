@@ -836,7 +836,7 @@ export default function Home() {
   useEffect(() => {
     const savedSession = readStoredSession(storageKey);
 
-    if (savedSession.apiBase && !savedSession.apiBase.startsWith('http')) {
+    if (savedSession.apiBase && savedSession.apiBase.startsWith('/')) {
       setApiBase(savedSession.apiBase);
     }
 

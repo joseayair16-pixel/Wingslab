@@ -1162,9 +1162,12 @@ export default function Home() {
         setOrderAlertAudioState(supportsWebAudio ? 'needs-gesture' : 'unsupported');
       }
 
-      if (savedSession.apiBase && !savedSession.apiBase.startsWith('http')) {
+      if (savedSession.apiBase && savedSession.apiBase.startsWith('/')) {
         setApiBase(savedSession.apiBase);
       } else {
+        if (savedSession.apiBase) {
+          window.localStorage.removeItem(`${storageKey}.apiBase`);
+        }
         setApiBase('/api');
       }
 
