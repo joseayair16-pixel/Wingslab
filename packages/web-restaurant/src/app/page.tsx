@@ -559,7 +559,7 @@ function getRestaurantCollectionAmount(order: OrderItem, profileHasOwnDelivery?:
   if (order.deliveredByRestaurant || (order.restaurant?.hasOwnDelivery ?? profileHasOwnDelivery ?? true)) {
     return order.totalAmount;
   }
-  return order.totalAmount - (order.deliveryFee || 0) - (order.serviceFee || 0) - (order.platformFee || 0);
+  return order.totalAmount - (order.deliveryFee || 0);
 }
 
 export default function Home() {
