@@ -7319,13 +7319,13 @@ export default function Home() {
         </div>
       ) : null}
       {!isRestaurantSession ? (
-        <div className="relative mx-auto flex min-h-dvh flex-col">
+        <div className="relative mx-auto flex h-dvh flex-col">
           <header className="sticky top-0 z-40 flex items-center justify-center border-b border-black/5 bg-white px-4 py-4">
             <SaDelLogo className="h-9 w-auto object-contain md:h-10" />
           </header>
 
           <section className="relative flex flex-1 flex-col overflow-hidden md:grid md:grid-cols-2">
-            <div className="relative flex min-h-[220px] shrink-0 flex-col justify-end md:min-h-dvh">
+            <div className="relative flex h-1/2 shrink-0 flex-col justify-end md:h-auto md:min-h-dvh">
               <img
                 src={welcomeImage}
                 alt=""
@@ -7345,7 +7345,7 @@ export default function Home() {
               </div>
             </div>
 
-            <div className="flex flex-1 items-center justify-center bg-[#fafafa] px-6 py-12 md:px-10">
+            <div className="flex flex-1 items-center justify-center bg-[#fafafa] px-6 py-6 md:py-12 md:px-10">
               <div className="w-full max-w-sm text-center">
                 <div className="mx-auto mb-6 flex h-14 w-14 items-center justify-center rounded-2xl bg-sky-50 shadow-sm ring-1 ring-sky-200/50">
                   <svg className="h-7 w-7 text-sky-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
