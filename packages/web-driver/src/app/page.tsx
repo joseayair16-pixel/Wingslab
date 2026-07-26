@@ -1963,7 +1963,7 @@ export default function Home() {
   // ==========================================
   if (isCheckingSession) {
     return (
-      <main className="min-h-screen bg-[#fbf8f1] dark:bg-black font-sans text-neutral-900 dark:text-zinc-100 flex items-center justify-center">
+      <main className="min-h-[100dvh] bg-[#fbf8f1] dark:bg-black font-sans text-neutral-900 dark:text-zinc-100 flex items-center justify-center">
         <div className="animate-pulse opacity-50">Cargando...</div>
       </main>
     );
@@ -1972,7 +1972,7 @@ export default function Home() {
   if (!token || !sessionUser) {
     return (
       <main 
-        className="min-h-screen flex flex-col justify-between bg-[#f5f1e8] text-neutral-900 transition-colors duration-300 dark:bg-black dark:text-zinc-100 font-sans antialiased relative"
+        className="min-h-[100dvh] flex flex-col justify-between bg-[#f5f1e8] text-neutral-900 transition-colors duration-300 dark:bg-black dark:text-zinc-100 font-sans antialiased relative"
         style={driverWelcomeImage ? {
           backgroundImage: `linear-gradient(to bottom, rgba(0,0,0,0.6), rgba(0,0,0,0.8)), url(${driverWelcomeImage})`,
           backgroundSize: 'cover',
@@ -2194,7 +2194,7 @@ export default function Home() {
 
   return (
     <main
-      className={`min-h-screen bg-[#f5f1e8] text-neutral-900 transition-colors duration-300 dark:bg-black dark:text-zinc-300 font-sans antialiased select-none overflow-x-hidden ${activeTab === 'active' ? 'pb-20' : ''}`}
+      className={`min-h-[100dvh] bg-[#f5f1e8] text-neutral-900 transition-colors duration-300 dark:bg-black dark:text-zinc-300 font-sans antialiased select-none overflow-x-hidden ${activeTab === 'active' ? 'pb-20' : ''}`}
       onTouchStart={handleTouchStart}
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
@@ -2766,7 +2766,7 @@ export default function Home() {
                       className={
                         isQueued
                           ? `rounded-3xl bg-white dark:bg-zinc-950 border border-neutral-150 dark:border-zinc-800 overflow-hidden shadow-sm ${isQueueBlocked ? 'opacity-60' : ''}`
-                          : `w-full bg-white dark:bg-zinc-950 border-0 flex-grow flex flex-col min-h-[calc(100vh-100px)] pb-[112px]`
+                          : `w-full bg-white dark:bg-zinc-950 border-0 flex-grow flex flex-col min-h-[calc(100dvh-100px)] pb-[112px]`
                       }
                     >
                       {/* ─── FOLIO + STATUS ─── */}

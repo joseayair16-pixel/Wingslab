@@ -114,3 +114,39 @@ html.dark .sadel-logo-dark {
   /* Prevent the global HTML invert from affecting the pre-inverted white text */
   filter: invert(1) hue-rotate(180deg) saturate(1.54) !important;
 }
+
+/* ===== iOS / Safari Hardening ===== */
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
+html {
+  color-scheme: light;
+}
+
+body {
+  overscroll-behavior: none;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  min-height: 100dvh;
+}
+
+button, a, input, select, textarea, label, [role="button"] {
+  touch-action: manipulation;
+}
+
+input, select, textarea {
+  font-size: 16px !important;
+}
+
+.min-h-dvh {
+  min-height: 100dvh;
+}
+
+.h-dvh {
+  height: 100dvh;
+}
+
+.max-h-dvh {
+  max-height: 100dvh;
+}

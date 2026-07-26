@@ -27,6 +27,10 @@ export default function RootLayout({
 }) {
   return (
     <html lang="es">
+      <head>
+        <meta name="color-scheme" content="light" />
+        <meta name="theme-color" content="#f6f6f4" />
+      </head>
       <body>
         <ServiceWorkerRegister />
         {children}

@@ -4704,7 +4704,7 @@ export default function Home() {
 
   if (checkingAuth) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-white dark:bg-neutral-900">
+      <div className="min-h-[100dvh] flex items-center justify-center bg-white dark:bg-neutral-900">
         <div className="flex flex-col items-center gap-4">
           <div className="w-12 h-12 border-4 border-sky-600 border-t-transparent rounded-full animate-spin"></div>
           <p className="text-sm font-medium text-neutral-500 dark:text-neutral-400">Cargando...</p>
@@ -4788,7 +4788,7 @@ export default function Home() {
 
   return (
     <main
-      className={`min-h-screen text-neutral-900 ${isRestaurantSession ? 'py-0' : 'px-4 py-5 md:px-6 lg:px-8'
+      className={`min-h-[100dvh] text-neutral-900 ${isRestaurantSession ? 'py-0' : 'px-4 py-5 md:px-6 lg:px-8'
         }`}
       onTouchStart={handleTouchStart}
       onTouchMove={handleTouchMove}
@@ -7503,7 +7503,7 @@ export default function Home() {
           ) : null}
         </div>
       ) : (
-        <div className="min-h-screen bg-[#f7f4ec]">
+        <div className="min-h-[100dvh] bg-[#f7f4ec]">
           <header className="sticky top-0 z-40 w-full border-b border-black/5 bg-white/92 backdrop-blur">
             <div className="grid grid-cols-[56px_1fr_56px] items-center px-3 py-4 md:px-6 lg:grid-cols-[220px_1fr_220px]">
               <div className="mx-auto w-full max-w-[1540px] contents">
@@ -7544,8 +7544,8 @@ export default function Home() {
             </div>
           </header>
 
-          <div className="flex min-h-[calc(100vh-5rem)] w-full bg-transparent">
-            <aside className="fixed left-0 top-[5rem] hidden h-[calc(100vh-5rem)] w-[260px] border-r border-black/5 bg-[#fbfbf8] lg:flex lg:flex-col">
+          <div className="flex min-h-[calc(100dvh-5rem)] w-full bg-transparent">
+            <aside className="fixed left-0 top-[5rem] hidden h-[calc(100dvh-5rem)] w-[260px] border-r border-black/5 bg-[#fbfbf8] lg:flex lg:flex-col">
               <div className="flex-1 overflow-y-auto px-4 py-6">
                 <div className="rounded-[28px] border border-black/5 bg-[linear-gradient(180deg,#ffffff_0%,#f5f2ea_100%)] p-4 shadow-[0_16px_45px_rgba(15,15,15,0.04)]">
                   <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-neutral-400">Operacion</p>
@@ -11606,7 +11606,7 @@ export default function Home() {
                 onClick={() => setZoomedImageUrl(null)}
                 aria-hidden="true"
               />
-              <div className="relative max-h-screen max-w-full overflow-auto p-4 flex flex-col items-center justify-center">
+              <div className="relative max-h-[100dvh] max-w-full overflow-auto p-4 flex flex-col items-center justify-center">
                 <button
                   type="button"
                   onClick={() => setZoomedImageUrl(null)}
