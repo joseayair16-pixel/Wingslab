@@ -340,9 +340,12 @@ const defaultApiBase = 'https://sadel-production.up.railway.app';
 function getCustomerOrigin(): string {
   if (process.env.NEXT_PUBLIC_CUSTOMER_URL) return process.env.NEXT_PUBLIC_CUSTOMER_URL;
   if (typeof window !== 'undefined') {
-    if (window.location.hostname === 'localhost') return 'http://localhost:3000';
+    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+      return 'http://localhost:3000';
+    }
+    return window.location.origin;
   }
-  return 'https://sadel.app';
+  return '';
 }
 const storageKey = 'sadel.restaurant';
 const orderAlertSoundPreferenceKey = `${storageKey}.orderAlertSoundEnabled`;
@@ -4350,12 +4353,12 @@ export default function Home() {
         if (isHelper) {
           return sum + order.deliveryFee;
         }
+        const deliveredByRestaurant = order.deliveredByRestaurant ?? false;
         const hasOwnDelivery = order.restaurant?.hasOwnDelivery ?? profile?.hasOwnDelivery;
-        if (hasOwnDelivery) {
+        if (deliveredByRestaurant || hasOwnDelivery) {
           return sum + order.totalAmount;
         }
-        // Platform delivery: store only gets food amount
-        return sum + (order.totalAmount - order.deliveryFee);
+        return sum + (order.totalAmount - (order.deliveryFee || 0));
       }, 0);
   }, [todayOrders, profile]);
 
@@ -4365,13 +4368,16 @@ export default function Home() {
       .reduce((sum, order) => {
         const isHelper = profile?.id ? order.supportRestaurantId === profile.id : false;
         let orderGross = 0;
-        const hasOwnDelivery = order.restaurant?.hasOwnDelivery ?? profile?.hasOwnDelivery;
         if (isHelper) {
           orderGross = order.deliveryFee;
-        } else if (hasOwnDelivery) {
-          orderGross = order.totalAmount;
         } else {
-          orderGross = order.totalAmount - order.deliveryFee;
+          const deliveredByRestaurant = order.deliveredByRestaurant ?? false;
+          const hasOwnDelivery = order.restaurant?.hasOwnDelivery ?? profile?.hasOwnDelivery;
+          if (deliveredByRestaurant || hasOwnDelivery) {
+            orderGross = order.totalAmount;
+          } else {
+            orderGross = order.totalAmount - (order.deliveryFee || 0);
+          }
         }
         return sum + (orderGross - (order.serviceFee ?? 0) - (order.platformFee ?? 0));
       }, 0);
@@ -7837,7 +7843,7 @@ export default function Home() {
                           </div>
                         </div>
 
-                        {profile?.status === 'ACTIVE' && (
+                        {profile && profile?.status === 'ACTIVE' ? (
                           <div className="flex flex-col sm:flex-row shrink-0 items-stretch sm:items-center gap-2">
                             <button
                               type="button"
@@ -7864,7 +7870,12 @@ export default function Home() {
                               {isBusinessOpen ? 'Cerrar Negocio' : '🚀 Abrir Negocio'}
                             </button>
                           </div>
-                        )}
+                        ) : profile === null ? (
+                          <div className="flex flex-col sm:flex-row shrink-0 items-stretch sm:items-center gap-2">
+                            <div className="w-full sm:w-[120px] h-[42px] rounded-full bg-neutral-100 animate-pulse" />
+                            <div className="w-full sm:w-[150px] h-[42px] rounded-full bg-neutral-100 animate-pulse" />
+                          </div>
+                        ) : null}
                       </div>
 
                       <div className="relative mt-4 flex flex-wrap gap-2 border-t border-black/5 pt-4">
@@ -12263,16 +12274,23 @@ export default function Home() {
                         <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-3 sm:gap-0">
                           <div className="min-w-0 flex-1">
                             <div className="flex items-center gap-2 flex-wrap">
-                              <span className="font-bold text-neutral-950 text-sm truncate max-w-[200px] sm:max-w-none">{order.orderReference}</span>
+                              <span className="text-sm sm:text-base font-bold text-neutral-950 leading-tight">
+                                {order.customer?.user?.name || 'Comensal Anónimo'}
+                              </span>
+                              {order.dailyCounter && (
+                                <span className="text-[11px] font-bold text-neutral-500 bg-neutral-100/80 rounded-full px-2 py-0.5">
+                                  Pedido #{order.dailyCounter}
+                                </span>
+                              )}
                               <span className="text-[10px] font-bold text-neutral-500 bg-neutral-100 rounded-full px-2 py-0.5 whitespace-nowrap">
                                 Facturado
                               </span>
                             </div>
-                            <p className="text-[11px] text-neutral-400 mt-1">
-                              {new Date(order.createdAt).toLocaleString('es-MX', { dateStyle: 'medium', timeStyle: 'short' })}
+                            <p className="text-[10px] text-neutral-400 mt-1.5 font-mono tracking-tight">
+                              {order.orderReference}
                             </p>
-                            <p className="text-xs text-neutral-600 mt-2 font-medium flex items-center gap-1">
-                              <span>👤</span> {order.customer?.user?.name || 'Comensal Anónimo'}
+                            <p className="text-[11px] text-neutral-500 mt-0.5">
+                              {new Date(order.createdAt).toLocaleString('es-MX', { dateStyle: 'medium', timeStyle: 'short' })}
                             </p>
                           </div>
                           <div className="flex sm:flex-col items-center sm:items-end gap-3 sm:gap-0 sm:text-right">
@@ -12360,16 +12378,23 @@ export default function Home() {
                         <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-3 sm:gap-0">
                           <div className="min-w-0 flex-1">
                             <div className="flex items-center gap-2 flex-wrap">
-                              <span className="font-bold text-neutral-950 text-sm truncate max-w-[200px] sm:max-w-none">{order.orderReference}</span>
-                              <span className="text-[10px] font-bold text-neutral-500 bg-neutral-100 rounded-full px-2 py-0.5 whitespace-nowrap">
+                              <span className="text-sm sm:text-base font-bold text-neutral-950 leading-tight">
+                                {order.customer?.user?.name || 'Comensal Anónimo'}
+                              </span>
+                              {order.dailyCounter && (
+                                <span className="text-[11px] font-bold text-neutral-500 bg-neutral-100/80 rounded-full px-2 py-0.5">
+                                  Pedido #{order.dailyCounter}
+                                </span>
+                              )}
+                              <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 border border-emerald-200/40 rounded-full px-2 py-0.5 whitespace-nowrap">
                                 Entregado
                               </span>
                             </div>
-                            <p className="text-[11px] text-neutral-400 mt-1">
-                              {new Date(order.createdAt).toLocaleString('es-MX', { dateStyle: 'medium', timeStyle: 'short' })}
+                            <p className="text-[10px] text-neutral-400 mt-1.5 font-mono tracking-tight">
+                              {order.orderReference}
                             </p>
-                            <p className="text-xs text-neutral-600 mt-2 font-medium flex items-center gap-1">
-                              <span>👤</span> {order.customer?.user?.name || 'Comensal Anónimo'}
+                            <p className="text-[11px] text-neutral-500 mt-0.5">
+                              {new Date(order.createdAt).toLocaleString('es-MX', { dateStyle: 'medium', timeStyle: 'short' })}
                             </p>
                           </div>
                           <div className="flex sm:flex-col items-center sm:items-end gap-3 sm:gap-0 sm:text-right">

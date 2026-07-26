@@ -333,6 +333,7 @@ export async function registerRestaurantPanelRoutes(fastify: FastifyInstance): P
         select: {
           id: true,
           orderReference: true,
+          dailyCounter: true,
           totalAmount: true,
           serviceFee: true,
           platformFee: true,
@@ -414,6 +415,7 @@ export async function registerRestaurantPanelRoutes(fastify: FastifyInstance): P
         select: {
           id: true,
           orderReference: true,
+          dailyCounter: true,
           totalAmount: true,
           serviceFee: true,
           platformFee: true,
@@ -429,7 +431,7 @@ export async function registerRestaurantPanelRoutes(fastify: FastifyInstance): P
           },
         },
       });
-      
+
       return reply.send({
         success: true,
         data: orders,
