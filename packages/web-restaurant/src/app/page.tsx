@@ -240,6 +240,8 @@ type RestaurantBillingSummary = {
   platformFeeRevenue: number;
   deliveredOrders: number;
   platformFeeRate: number;
+  serviceFee: number;
+  platformFeePerOrder: number;
   billingCycle: BillingCycle;
   periodStart: string;
   periodEnd: string;
@@ -8489,14 +8491,32 @@ export default function Home() {
                           );
                         })()}
 
-                        <div className="mt-6 grid gap-4 border-t border-black/5 pt-5">
-                          <div className="flex justify-between items-center text-sm">
-                            <span className="text-neutral-500 font-medium">Tarifa de Servicio (Clientes)</span>
-                            <span className="font-semibold text-neutral-950 bg-neutral-50 border border-black/5 rounded-lg px-2.5 py-1">${billingSummary?.serviceFeeRevenue ?? 0} MXN</span>
+                        <div className="mt-6 grid gap-3 border-t border-black/5 pt-5">
+                          <div className="flex items-center justify-between text-sm">
+                            <div className="flex items-center gap-2">
+                              <span className="text-neutral-500 font-medium">Tarifa de Servicio</span>
+                              <span className="text-[11px] font-semibold text-neutral-400 bg-neutral-100/80 rounded-md px-2 py-0.5">${(billingSummary?.serviceFee ?? 0).toFixed(2)} c/u</span>
+                            </div>
+                            <span className="font-semibold text-neutral-950 bg-neutral-50 border border-black/5 rounded-lg px-2.5 py-1">
+                              ${billingSummary?.serviceFeeRevenue ?? 0} MXN
+                            </span>
                           </div>
-                          <div className="flex justify-between items-center text-sm">
-                            <span className="text-neutral-500 font-medium">Uso de la Plataforma (Tu cargo)</span>
-                            <span className="font-semibold text-neutral-950 bg-neutral-50 border border-black/5 rounded-lg px-2.5 py-1">${billingSummary?.platformFeeRevenue ?? 0} MXN</span>
+                          <div className="flex items-center justify-between text-sm">
+                            <div className="flex items-center gap-2">
+                              <span className="text-neutral-500 font-medium">Uso de la Plataforma</span>
+                              <span className="text-[11px] font-semibold text-neutral-400 bg-neutral-100/80 rounded-md px-2 py-0.5">${(billingSummary?.platformFeePerOrder ?? 0).toFixed(2)} c/u</span>
+                            </div>
+                            <span className="font-semibold text-neutral-950 bg-neutral-50 border border-black/5 rounded-lg px-2.5 py-1">
+                              ${billingSummary?.platformFeeRevenue ?? 0} MXN
+                            </span>
+                          </div>
+                          <div className="flex items-center justify-between text-xs text-neutral-400 pt-1 border-t border-black/5">
+                            <span>{billingSummary?.deliveredOrders ?? 0} pedido{(billingSummary?.deliveredOrders ?? 0) !== 1 ? 's' : ''} en este período</span>
+                            <span className="text-neutral-500">
+                              {billingSummary && billingSummary.deliveredOrders > 0 && billingSummary.serviceFee > 0
+                                ? `${billingSummary.serviceFee} × ${billingSummary.deliveredOrders} = $${billingSummary.serviceFeeRevenue}`
+                                : ''}
+                            </span>
                           </div>
                           <div className="flex justify-between items-center text-sm">
                             <span className="text-neutral-500 font-medium">Próximo Corte de Caja</span>
