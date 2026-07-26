@@ -34,8 +34,10 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="es">
+    <html lang="es" className="light" style={{ colorScheme: 'light' }}>
       <head>
+        <meta name="color-scheme" content="light" />
+        <meta name="theme-color" content="#f5f1e8" />
       </head>
       <body>
         <Script 
