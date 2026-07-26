@@ -48,8 +48,11 @@ function addCycle(date: Date, cycle: BillingCycle) {
   return next;
 }
 
-function resolveBillingStart(seed: BillingSeed) {
-  return seed.lastBillingSettledAt || seed.createdAt;
+function resolveBillingStart(seed: BillingSeed, now: Date = new Date()) {
+  if (seed.lastBillingSettledAt && seed.lastBillingSettledAt.getTime() <= now.getTime()) {
+    return seed.lastBillingSettledAt;
+  }
+  return seed.createdAt;
 }
 
 function roundCurrency(value: number) {
