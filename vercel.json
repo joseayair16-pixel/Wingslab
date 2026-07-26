@@ -1,5 +1,5 @@
 {
   "framework": "nextjs",
   "installCommand": "npm install",
-  "buildCommand": "bash scripts/vercel-build.sh"
+  "buildCommand": "npm run build -w @sadel/shared && npm run build -w @sadel/${VERCEL_PROJECT_NAME#sa-de-l-}"
 }
