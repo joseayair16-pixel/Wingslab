@@ -334,7 +334,7 @@ type ProductDraft = {
   optionGroups?: ProductOptionGroup[];
 };
 
-const defaultApiBase = '/api';
+const defaultApiBase = 'https://sadel-production.up.railway.app';
 const storageKey = 'sadel.restaurant';
 const orderAlertSoundPreferenceKey = `${storageKey}.orderAlertSoundEnabled`;
 const newOrderDecisionWindowMs = 2 * 60 * 1000;
