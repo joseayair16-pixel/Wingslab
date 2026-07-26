@@ -281,7 +281,7 @@ export async function registerRestaurantPanelRoutes(fastify: FastifyInstance): P
 
       const billingSummary = await buildRestaurantBillingSummary(ownedRestaurant);
       const recentSettlements = await prisma.restaurantBillingSettlement.findMany({
-        where: { restaurantId: ownedRestaurant.id },
+        where: { restaurantId: ownedRestaurant.id, status: { not: 'REJECTED' } },
         orderBy: { createdAt: 'desc' },
         take: 50,
       });

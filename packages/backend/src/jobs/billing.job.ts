@@ -25,12 +25,14 @@ async function processAllRestaurants(): Promise<void> {
 
 async function catchUpMissedCuts(): Promise<void> {
   const cutoff = new Date(Date.now() - MS_PER_WEEK);
+  const now = new Date();
   const overdue = await prisma.restaurant.findMany({
     where: {
       status: 'ACTIVE',
       OR: [
         { lastBillingSettledAt: null },
         { lastBillingSettledAt: { lt: cutoff } },
+        { lastBillingSettledAt: { gt: now } },
       ],
     },
     select: { id: true, name: true },

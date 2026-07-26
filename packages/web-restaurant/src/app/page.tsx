@@ -8621,13 +8621,13 @@ export default function Home() {
                                   </p>
                                 </div>
                                 
-                                <div className="flex items-center gap-6">
-                                  <div className="text-right">
-                                    <p className="text-xl font-black text-neutral-950">${settlement.amount} MXN</p>
-                                    <p className="text-[10px] text-neutral-500 font-semibold mt-0.5">
-                                      Servicio: ${settlement.serviceFeeTotal} | Plataforma: ${settlement.platformFeeTotal}
-                                    </p>
-                                  </div>
+                                  <div className="flex items-center gap-6">
+                                    <div className="text-right">
+                                      <p className="text-xl font-black text-neutral-950">${(settlement.amount ?? 0).toFixed(2)} MXN</p>
+                                      <p className="text-[10px] text-neutral-500 font-semibold mt-0.5">
+                                        Servicio: ${(settlement.serviceFeeTotal ?? 0).toFixed(2)} | Plataforma: ${(settlement.platformFeeTotal ?? 0).toFixed(2)}
+                                      </p>
+                                    </div>
                                   
                                   <div className="min-w-[120px] text-right">
                                     {settlement.status === 'PENDING' ? (
@@ -12206,12 +12206,12 @@ export default function Home() {
           ) : null}
 
           {isDetailsModalOpen ? (
-            <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/55 px-4 py-5 backdrop-blur-sm animate-fade-in">
-              <div className="w-full max-w-[640px] rounded-[28px] bg-white p-5 shadow-[0_28px_90px_rgba(15,15,15,0.34)] sm:p-6 max-h-[80vh] flex flex-col animate-scale-up">
+            <div className="fixed inset-0 z-[80] flex items-start sm:items-center justify-center bg-black/55 px-2 py-4 sm:px-4 sm:py-5 backdrop-blur-sm animate-fade-in overflow-y-auto">
+              <div className="w-full max-w-[640px] rounded-[28px] bg-white p-4 sm:p-6 shadow-[0_28px_90px_rgba(15,15,15,0.34)] max-h-[90vh] sm:max-h-[85vh] flex flex-col animate-scale-up mx-auto">
                 <div className="flex items-start justify-between gap-4">
-                  <div>
-                    <p className="text-xs font-semibold uppercase tracking-[0.22em] text-neutral-400">Facturacion</p>
-                    <h3 className="mt-2 text-2xl font-bold tracking-[-0.03em] text-neutral-950">
+                  <div className="min-w-0">
+                    <p className="text-xs font-semibold uppercase tracking-[0.22em] text-neutral-400">Facturación</p>
+                    <h3 className="mt-2 text-xl sm:text-2xl font-bold tracking-[-0.03em] text-neutral-950">
                       Detalle del Corte
                     </h3>
                     <p className="text-xs text-neutral-500 mt-1">
@@ -12221,45 +12221,45 @@ export default function Home() {
                   <button
                     type="button"
                     onClick={() => setIsDetailsModalOpen(false)}
-                    className="rounded-full border border-black/10 px-4 py-2 text-sm font-semibold text-neutral-700 transition hover:bg-neutral-100"
+                    className="shrink-0 rounded-full border border-black/10 px-3 py-1.5 sm:px-4 sm:py-2 text-xs sm:text-sm font-semibold text-neutral-700 transition hover:bg-neutral-100"
                   >
                     Cerrar
                   </button>
                 </div>
 
-                {/* Resumen rápido del corte */}
-                <div className="mt-6 grid grid-cols-3 gap-3 rounded-2xl bg-neutral-50 p-4 border border-black/5">
+                {/* Summary Cards */}
+                <div className="mt-5 sm:mt-6 grid grid-cols-3 gap-2 sm:gap-3 rounded-2xl bg-neutral-50 p-3 sm:p-4 border border-black/5">
                   <div className="text-center">
                     <p className="text-[10px] uppercase font-bold text-neutral-400">Pedidos</p>
-                    <p className="text-lg font-bold text-neutral-950 mt-1">{settlementOrders.length}</p>
+                    <p className="text-base sm:text-lg font-bold text-neutral-950 mt-1">{settlementOrders.length}</p>
                   </div>
-                  <div className="text-center border-x border-black/5">
+                  <div className="text-center border-x border-black/5 px-2">
                     <p className="text-[10px] uppercase font-bold text-neutral-400">Volumen Bruto</p>
-                    <p className="text-lg font-bold text-neutral-950 mt-1">
-                      ${settlementOrders.reduce((sum, o) => sum + o.totalAmount, 0)}
+                    <p className="text-base sm:text-lg font-bold text-neutral-950 mt-1">
+                      ${settlementOrders.reduce((sum: number, o: any) => sum + (o.totalAmount || 0), 0).toFixed(2)}
                     </p>
                   </div>
                   <div className="text-center">
-                    <p className="text-[10px] uppercase font-bold text-neutral-400">Total Pago</p>
-                    <p className="text-lg font-bold text-sky-700 mt-1">
-                      ${selectedSettlementForDetails?.amount}
+                    <p className="text-[10px] uppercase font-bold text-neutral-400">Total Deuda</p>
+                    <p className="text-base sm:text-lg font-bold text-sky-700 mt-1">
+                      ${(selectedSettlementForDetails?.amount ?? 0).toFixed(2)}
                     </p>
                   </div>
                 </div>
 
-                <div className="mt-6 overflow-y-auto flex-1 space-y-3 pr-1">
+                <div className="mt-4 sm:mt-6 overflow-y-auto flex-1 space-y-3 pr-0.5 sm:pr-1 -mr-0.5 sm:-mr-1">
                   {loadingSettlementOrders ? (
                     <div className="flex justify-center py-12">
                       <div className="h-6 w-6 animate-spin rounded-full border-2 border-neutral-300 border-t-neutral-900"></div>
                     </div>
                   ) : settlementOrders.length > 0 ? (
-                    settlementOrders.map((order) => (
-                      <div key={order.id} className="rounded-2xl border border-black/5 bg-white p-4 text-sm transition hover:shadow-md hover:border-neutral-200">
-                        <div className="flex justify-between items-start">
-                          <div>
-                            <div className="flex items-center gap-2">
-                              <span className="font-bold text-neutral-950">{order.orderReference}</span>
-                              <span className="text-[10px] font-bold text-neutral-500 bg-neutral-100 rounded-full px-2 py-0.5">
+                    settlementOrders.map((order: any) => (
+                      <div key={order.id} className="rounded-2xl border border-black/5 bg-white p-3 sm:p-4 text-sm transition hover:shadow-md hover:border-neutral-200">
+                        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-3 sm:gap-0">
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="font-bold text-neutral-950 text-sm truncate max-w-[200px] sm:max-w-none">{order.orderReference}</span>
+                              <span className="text-[10px] font-bold text-neutral-500 bg-neutral-100 rounded-full px-2 py-0.5 whitespace-nowrap">
                                 Facturado
                               </span>
                             </div>
@@ -12270,22 +12270,23 @@ export default function Home() {
                               <span>👤</span> {order.customer?.user?.name || 'Comensal Anónimo'}
                             </p>
                           </div>
-                          <div className="text-right">
-                            <span className="text-[11px] font-bold text-neutral-400 block uppercase">Total Pedido</span>
-                            <span className="text-base font-extrabold text-neutral-950">${order.totalAmount}</span>
-                            
-                            <div className="mt-2 text-xs bg-sky-50/50 text-sky-700 border border-sky-100/30 rounded-lg p-1.5 inline-block text-left">
-                              <p className="flex justify-between gap-4">
-                                <span className="text-[10px] text-sky-600 font-semibold">T. Servicio:</span>
-                                <span className="font-bold">${order.serviceFee}</span>
+                          <div className="flex sm:flex-col items-center sm:items-end gap-3 sm:gap-0 sm:text-right">
+                            <div className="text-right shrink-0">
+                              <span className="text-[10px] sm:text-[11px] font-bold text-neutral-400 block uppercase leading-tight">Total</span>
+                              <span className="text-base sm:text-lg font-extrabold text-neutral-950">${(order.totalAmount || 0).toFixed(2)}</span>
+                            </div>
+                            <div className="text-xs bg-sky-50/50 text-sky-700 border border-sky-100/30 rounded-lg p-1.5 sm:p-2 inline-block text-left shrink-0">
+                              <p className="flex justify-between gap-3 sm:gap-4">
+                                <span className="text-[10px] text-sky-600 font-semibold">Servicio:</span>
+                                <span className="font-bold tabular-nums">${(order.serviceFee || 0).toFixed(2)}</span>
                               </p>
-                              <p className="flex justify-between gap-4 mt-0.5">
+                              <p className="flex justify-between gap-3 sm:gap-4 mt-0.5">
                                 <span className="text-[10px] text-sky-600 font-semibold">Plataforma:</span>
-                                <span className="font-bold">${order.platformFee}</span>
+                                <span className="font-bold tabular-nums">${(order.platformFee || 0).toFixed(2)}</span>
                               </p>
-                              <div className="border-t border-sky-200/50 mt-1 pt-1 flex justify-between gap-4 font-black">
+                              <div className="border-t border-sky-200/50 mt-1 pt-1 flex justify-between gap-3 sm:gap-4 font-black">
                                 <span className="text-[10px] text-sky-700">Comisión Total:</span>
-                                <span>${order.serviceFee + order.platformFee}</span>
+                                <span className="tabular-nums">${((order.serviceFee || 0) + (order.platformFee || 0)).toFixed(2)}</span>
                               </div>
                             </div>
                           </div>
@@ -12301,12 +12302,12 @@ export default function Home() {
           ) : null}
 
           {isCurrentPeriodDetailsOpen ? (
-            <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/55 px-4 py-5 backdrop-blur-sm animate-fade-in">
-              <div className="w-full max-w-[640px] rounded-[28px] bg-white p-5 shadow-[0_28px_90px_rgba(15,15,15,0.34)] sm:p-6 max-h-[80vh] flex flex-col animate-scale-up">
+            <div className="fixed inset-0 z-[80] flex items-start sm:items-center justify-center bg-black/55 px-2 py-4 sm:px-4 sm:py-5 backdrop-blur-sm animate-fade-in overflow-y-auto">
+              <div className="w-full max-w-[640px] rounded-[28px] bg-white p-4 sm:p-6 shadow-[0_28px_90px_rgba(15,15,15,0.34)] max-h-[90vh] sm:max-h-[85vh] flex flex-col animate-scale-up mx-auto">
                 <div className="flex items-start justify-between gap-4">
-                  <div>
+                  <div className="min-w-0">
                     <p className="text-xs font-semibold uppercase tracking-[0.22em] text-neutral-400">Semana Actual</p>
-                    <h3 className="mt-2 text-2xl font-bold tracking-[-0.03em] text-neutral-950">
+                    <h3 className="mt-2 text-xl sm:text-2xl font-bold tracking-[-0.03em] text-neutral-950">
                       Desglose de Comisiones
                     </h3>
                     <p className="text-xs text-neutral-500 mt-1">
@@ -12316,45 +12317,46 @@ export default function Home() {
                   <button
                     type="button"
                     onClick={() => setIsCurrentPeriodDetailsOpen(false)}
-                    className="rounded-full border border-black/10 px-4 py-2 text-sm font-semibold text-neutral-700 transition hover:bg-neutral-100"
+                    className="shrink-0 rounded-full border border-black/10 px-3 py-1.5 sm:px-4 sm:py-2 text-xs sm:text-sm font-semibold text-neutral-700 transition hover:bg-neutral-100"
                   >
                     Cerrar
                   </button>
                 </div>
 
-                {/* Resumen rápido del acumulado */}
-                <div className="mt-6 grid grid-cols-3 gap-3 rounded-2xl bg-neutral-50 p-4 border border-black/5">
+                {/* Summary Cards */}
+                <div className="mt-5 sm:mt-6 grid grid-cols-3 gap-2 sm:gap-3 rounded-2xl bg-neutral-50 p-3 sm:p-4 border border-black/5">
                   <div className="text-center">
                     <p className="text-[10px] uppercase font-bold text-neutral-400">Pedidos</p>
-                    <p className="text-lg font-bold text-neutral-950 mt-1">{currentPeriodOrders.length}</p>
+                    <p className="text-base sm:text-lg font-bold text-neutral-950 mt-1">{currentPeriodOrders.length}</p>
                   </div>
-                  <div className="text-center border-x border-black/5">
+                  <div className="text-center border-x border-black/5 px-2">
                     <p className="text-[10px] uppercase font-bold text-neutral-400">Volumen Bruto</p>
-                    <p className="text-lg font-bold text-neutral-950 mt-1">
-                      ${currentPeriodOrders.reduce((sum, o) => sum + o.totalAmount, 0)}
+                    <p className="text-base sm:text-lg font-bold text-neutral-950 mt-1">
+                      ${currentPeriodOrders.reduce((sum: number, o: any) => sum + (o.totalAmount || 0), 0).toFixed(2)}
                     </p>
                   </div>
                   <div className="text-center">
                     <p className="text-[10px] uppercase font-bold text-neutral-400">Total Deuda</p>
-                    <p className="text-lg font-bold text-sky-700 mt-1">
-                      ${billingSummary?.currentDebt ?? 0}
+                    <p className="text-base sm:text-lg font-bold text-sky-700 mt-1">
+                      ${(billingSummary?.currentDebt ?? 0).toFixed(2)}
                     </p>
                   </div>
                 </div>
 
-                <div className="mt-6 overflow-y-auto flex-1 space-y-3 pr-1">
+                {/* Order List */}
+                <div className="mt-4 sm:mt-6 overflow-y-auto flex-1 space-y-3 pr-0.5 sm:pr-1 -mr-0.5 sm:-mr-1">
                   {loadingCurrentPeriodOrders ? (
                     <div className="flex justify-center py-12">
                       <div className="h-6 w-6 animate-spin rounded-full border-2 border-neutral-300 border-t-neutral-900"></div>
                     </div>
                   ) : currentPeriodOrders.length > 0 ? (
-                    currentPeriodOrders.map((order) => (
-                      <div key={order.id} className="rounded-2xl border border-black/5 bg-white p-4 text-sm transition hover:shadow-md hover:border-neutral-200">
-                        <div className="flex justify-between items-start">
-                          <div>
-                            <div className="flex items-center gap-2">
-                              <span className="font-bold text-neutral-950">{order.orderReference}</span>
-                              <span className="text-[10px] font-bold text-neutral-500 bg-neutral-100 rounded-full px-2 py-0.5">
+                    currentPeriodOrders.map((order: any) => (
+                      <div key={order.id} className="rounded-2xl border border-black/5 bg-white p-3 sm:p-4 text-sm transition hover:shadow-md hover:border-neutral-200">
+                        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-3 sm:gap-0">
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="font-bold text-neutral-950 text-sm truncate max-w-[200px] sm:max-w-none">{order.orderReference}</span>
+                              <span className="text-[10px] font-bold text-neutral-500 bg-neutral-100 rounded-full px-2 py-0.5 whitespace-nowrap">
                                 Entregado
                               </span>
                             </div>
@@ -12365,22 +12367,23 @@ export default function Home() {
                               <span>👤</span> {order.customer?.user?.name || 'Comensal Anónimo'}
                             </p>
                           </div>
-                          <div className="text-right">
-                            <span className="text-[11px] font-bold text-neutral-400 block uppercase">Total Pedido</span>
-                            <span className="text-base font-extrabold text-neutral-950">${order.totalAmount}</span>
-                            
-                            <div className="mt-2 text-xs bg-sky-50/50 text-sky-700 border border-sky-100/30 rounded-lg p-1.5 inline-block text-left">
-                              <p className="flex justify-between gap-4">
-                                <span className="text-[10px] text-sky-600 font-semibold">T. Servicio:</span>
-                                <span className="font-bold">${order.serviceFee}</span>
+                          <div className="flex sm:flex-col items-center sm:items-end gap-3 sm:gap-0 sm:text-right">
+                            <div className="text-right shrink-0">
+                              <span className="text-[10px] sm:text-[11px] font-bold text-neutral-400 block uppercase leading-tight">Total</span>
+                              <span className="text-base sm:text-lg font-extrabold text-neutral-950">${(order.totalAmount || 0).toFixed(2)}</span>
+                            </div>
+                            <div className="text-xs bg-sky-50/50 text-sky-700 border border-sky-100/30 rounded-lg p-1.5 sm:p-2 inline-block text-left shrink-0">
+                              <p className="flex justify-between gap-3 sm:gap-4">
+                                <span className="text-[10px] text-sky-600 font-semibold">Servicio:</span>
+                                <span className="font-bold tabular-nums">${(order.serviceFee || 0).toFixed(2)}</span>
                               </p>
-                              <p className="flex justify-between gap-4 mt-0.5">
+                              <p className="flex justify-between gap-3 sm:gap-4 mt-0.5">
                                 <span className="text-[10px] text-sky-600 font-semibold">Plataforma:</span>
-                                <span className="font-bold">${order.platformFee}</span>
+                                <span className="font-bold tabular-nums">${(order.platformFee || 0).toFixed(2)}</span>
                               </p>
-                              <div className="border-t border-sky-200/50 mt-1 pt-1 flex justify-between gap-4 font-black">
+                              <div className="border-t border-sky-200/50 mt-1 pt-1 flex justify-between gap-3 sm:gap-4 font-black">
                                 <span className="text-[10px] text-sky-700">Comisión Total:</span>
-                                <span>${order.serviceFee + order.platformFee}</span>
+                                <span className="tabular-nums">${((order.serviceFee || 0) + (order.platformFee || 0)).toFixed(2)}</span>
                               </div>
                             </div>
                           </div>
@@ -12390,8 +12393,8 @@ export default function Home() {
                   ) : (
                     <div className="text-center py-8 text-neutral-500">
                       <span className="text-3xl block mb-2">🍽️</span>
-                      <p className="font-semibold text-neutral-700">No hay ventas registradas aún</p>
-                      <p className="text-xs mt-1">Los pedidos entregados en esta semana aparecerán aquí para desglosar sus comisiones.</p>
+                      <p className="font-semibold text-neutral-700">No hay pedidos registrados aún</p>
+                      <p className="text-xs mt-1">Los pedidos entregados en esta semana aparecerán aquí.</p>
                     </div>
                   )}
                 </div>
