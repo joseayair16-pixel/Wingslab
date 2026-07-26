@@ -1,5 +1,5 @@
 {
   "framework": "nextjs",
   "installCommand": "npm install",
-  "buildCommand": "npm run build -w @sadel/shared && PROJECT_NAME=${VERCEL_PROJECT_NAME#sa-de-l-} && npm run build -w @sadel/$PROJECT_NAME && cp -r packages/$PROJECT_NAME/.next .next"
+  "buildCommand": "npm run build -w @sadel/shared && PROJECT_NAME=${VERCEL_PROJECT_NAME#sa-de-l-} && npm run build -w @sadel/$PROJECT_NAME && cp -rL packages/$PROJECT_NAME/.next .next"
 }
