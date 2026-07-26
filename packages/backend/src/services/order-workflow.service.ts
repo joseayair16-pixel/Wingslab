@@ -400,10 +400,10 @@ export async function updateOrderStatusByRestaurant({
           readyAt: now,
           ...(order.fulfillmentType !== 'PICKUP' ? { pickedUpAt: null } : {}),
           ...(order.fulfillmentType !== 'PICKUP' && order.paymentMethod === PaymentMethod.TRANSFER
-            ? {
-                handoverPin: Math.floor(1000 + Math.random() * 9000).toString(),
-                deliveryPin: Math.floor(1000 + Math.random() * 9000).toString(),
-              }
+            ? (() => {
+                const samePin = Math.floor(1000 + Math.random() * 9000).toString();
+                return { handoverPin: samePin, deliveryPin: samePin };
+              })()
             : {}),
           ...(readyEstimatedDeliveryTime ? { estimatedDeliveryTime: readyEstimatedDeliveryTime } : {}),
         } : {}),
