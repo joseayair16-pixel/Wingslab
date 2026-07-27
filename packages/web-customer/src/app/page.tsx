@@ -1896,8 +1896,12 @@ export default function Home() {
       const [restaurantsData, ordersData, featuredData, offersData] = await Promise.all([restaurantsPromise, ordersPromise, featuredPromise, offersPromise]);
 
       if (callId !== loadDashboardCallIdRef.current) return;
+      const validFeatured = featuredData.filter((r: any) => {
+        if (!userLocation || r.distanceKm === null || r.deliveryRadius === null) return false;
+        return r.distanceKm <= r.deliveryRadius;
+      });
       setRestaurants(restaurantsData.data.items || []);
-      setFeaturedRestaurants(featuredData);
+      setFeaturedRestaurants(validFeatured);
       setOfferProducts(offersData);
       setSelectedRestaurantId((current) => {
         if (current && restaurantsData.data.items.some((item) => item.id === current)) {

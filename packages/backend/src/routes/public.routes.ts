@@ -229,7 +229,8 @@ export async function registerPublicRoutes(fastify: FastifyInstance): Promise<vo
       })
       .filter((restaurant) => (openOnly ? restaurant.isOpen : true))
       .filter((restaurant) => {
-        if (restaurant.distanceKm === null) return true; // Si no hay coordenadas del cliente, los mostramos todos
+        if (restaurant.distanceKm === null) return true;
+        if (restaurant.deliveryRadius === null) return false;
         const maxRadius = restaurant.deliveryRadius ?? 3;
         return restaurant.distanceKm <= maxRadius;
       })
@@ -678,9 +679,10 @@ export async function registerPublicRoutes(fastify: FastifyInstance): Promise<vo
             { latitude, longitude },
             { latitude: restaurant.latitude, longitude: restaurant.longitude }
           );
-          const maxRadius = restaurant.hasOwnDelivery
-            ? (restaurant.deliveryRadius ?? 3)
-            : (regionsByCode.get(restaurant.region)?.deliveryRadius ?? 20);
+          let maxRadius = restaurant.hasOwnDelivery
+            ? restaurant.deliveryRadius
+            : (regionsByCode.get(restaurant.region)?.deliveryRadius ?? null);
+          if (maxRadius === null) return false;
           return distanceKm <= maxRadius;
         })
         .map((restaurant: any) => {
