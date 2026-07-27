@@ -4060,6 +4060,35 @@ export default function Home() {
             </div>
           )}
 
+          {!isAuthenticated && (
+            <div className="mx-4 mt-4">
+              <button
+                type="button"
+                onClick={() => setIsAuthModalOpen(true)}
+                className="group relative w-full overflow-hidden rounded-2xl bg-gradient-to-b from-neutral-900 to-neutral-950 p-4 text-left shadow-[0_8px_24px_rgba(0,0,0,0.12)] transition-all duration-200 hover:shadow-[0_12px_32px_rgba(0,0,0,0.18)] active:scale-[0.98]"
+              >
+                <div className="relative z-10">
+                  <div className="flex items-center gap-2">
+                    <div className="flex h-8 w-8 items-center justify-center rounded-full bg-white/10">
+                      <svg className="h-4 w-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                      </svg>
+                    </div>
+                    <p className="text-sm font-semibold text-white">Iniciar sesión</p>
+                  </div>
+                  <p className="mt-1.5 text-[11px] text-white/50 font-medium leading-relaxed">
+                    Accede para ver tus pedidos y guardar tus favoritos.
+                  </p>
+                </div>
+                <div className="absolute right-3 top-1/2 -translate-y-1/2 text-white/20 transition-transform duration-200 group-hover:translate-x-0.5">
+                  <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  </svg>
+                </div>
+              </button>
+            </div>
+          )}
+
           <div className="flex-1 px-3 py-4 space-y-0.5">
             <button
               type="button"
@@ -5141,18 +5170,18 @@ export default function Home() {
                     <button
                       type="button"
                       onClick={() => setIsJoinDriverModalOpen(true)}
-                      className="group flex items-center gap-3.5 rounded-2xl border border-black/5 bg-white p-3 text-left transition-all duration-300 hover:border-indigo-500/30 hover:shadow-lg hover:shadow-indigo-500/[0.02] hover:-translate-y-0.5 active:scale-[0.98] w-full shadow-sm"
+                      className="group flex items-center gap-3.5 rounded-2xl border border-black/5 bg-white p-3 text-left transition-all duration-300 hover:border-sky-1000/30 hover:shadow-lg hover:shadow-sky-1000/[0.02] hover:-translate-y-0.5 active:scale-[0.98] w-full shadow-sm"
                     >
-                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600 transition-colors group-hover:bg-indigo-100">
+                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-sky-100 text-sky-500 transition-colors group-hover:bg-sky-200">
                         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M8 17a2 2 0 100-4 2 2 0 000 4zM18 17a2 2 0 100-4 2 2 0 000 4zM8 15h2l2-2.5h2l1.5 2.5M12 10.5V7l-1.5 1" />
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M5.5 16.5a2 2 0 100-4 2 2 0 000 4zM18.5 16.5a2 2 0 100-4 2 2 0 000 4zM12 16.5V10l-4 3H5M12 10l4 3h3M9 5l3 3 3-3" />
                         </svg>
                       </div>
                       <div className="min-w-0 flex-1">
-                        <p className="text-xs font-extrabold text-neutral-900 group-hover:text-indigo-600 transition-colors">Ser Repartidor</p>
+                        <p className="text-xs font-extrabold text-neutral-900 group-hover:text-sky-500 transition-colors">Ser Repartidor</p>
                         <p className="text-[10px] text-neutral-500 font-semibold mt-0.5">Entrega pedidos con tu moto</p>
                       </div>
-                      <div className="text-neutral-300 group-hover:text-indigo-500 transition-colors pl-1">
+                      <div className="text-neutral-300 group-hover:text-sky-1000 transition-colors pl-1">
                         <svg className="w-4 h-4 transform group-hover:translate-x-0.5 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.5">
                           <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
                         </svg>

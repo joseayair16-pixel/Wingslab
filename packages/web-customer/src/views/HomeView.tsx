@@ -83,7 +83,7 @@ export const HomeView = React.memo(function HomeView({
   }, [offerProducts, businessTypeFilter]);
 
   // When searching, default to searching everything (both restaurants and stores)
-  const [prevBusinessTypeFilter, setPrevBusinessTypeFilter] = useState<BusinessTypeTab>('restaurants');
+  const [prevBusinessTypeFilter, setPrevBusinessTypeFilter] = useState<BusinessTypeTab>('all');
   const isSearching = searchQuery.trim().length > 0;
   React.useEffect(() => {
     if (isSearching) {

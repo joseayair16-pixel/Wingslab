@@ -521,7 +521,7 @@ export function AuthModal({ isOpen, onClose, onSuccess, apiBase }: AuthModalProp
                     <>
                       {authStep === 'request' ? (
                         <>
-                          <div className="grid grid-cols-2 gap-2.5">
+                          <div className="grid grid-cols-2 gap-4">
                             <Field
                               label="Nombre(s)"
                               value={name}
