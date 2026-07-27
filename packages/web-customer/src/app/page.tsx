@@ -375,7 +375,18 @@ const liveEvents = [
   'order:cancellation-rejected',
 ] as const;
 
-
+function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const toRad = (v: number) => (v * Math.PI) / 180;
+  const R = 6371;
+  const dLat = toRad(lat2 - lat1);
+  const dLon = toRad(lon2 - lon1);
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) *
+    Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+}
 
 export default function Home() {
   const router = useRouter();
@@ -2251,16 +2262,6 @@ export default function Home() {
         }
       }
 
-      function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number) {
-        const toRad = (v: number) => (v * Math.PI) / 180;
-        const R = 6371;
-        const dLat = toRad(lat2 - lat1);
-        const dLon = toRad(lon2 - lon1);
-        const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
-        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-        return R * c;
-      }
-
       const addrLat = typeof address.latitude === 'string' ? parseFloat(address.latitude) : address.latitude;
       const addrLng = typeof address.longitude === 'string' ? parseFloat(address.longitude) : address.longitude;
       const distanceToAddressKm = haversineKm(userLocation.latitude, userLocation.longitude, addrLat, addrLng);
@@ -2568,6 +2569,67 @@ export default function Home() {
     }
 
     void run().finally(() => setIsLocationChecked(true));
+  }, []);
+
+  // Watch position to detect when user enters/exits delivery range
+  useEffect(() => {
+    let watchId: number | null = null;
+    let lastPosition: { lat: number; lng: number } | null = null;
+    let lastReloadAt = 0;
+    let isFirstCallback = true;
+    const MIN_DISTANCE_M = 150;
+    const RELOAD_COOLDOWN_MS = 30000;
+    const MAX_ACCURACY_M = 500;
+
+    async function startWatch() {
+      if (!navigator.geolocation || !navigator.permissions) return;
+      try {
+        const perm = await navigator.permissions.query({ name: 'geolocation' });
+        if (perm.state === 'denied') return;
+      } catch {
+        return;
+      }
+
+      watchId = navigator.geolocation.watchPosition(
+        (position) => {
+          const { latitude, longitude, accuracy } = position.coords;
+          if (accuracy > MAX_ACCURACY_M) return;
+
+          if (isFirstCallback) {
+            isFirstCallback = false;
+            lastPosition = { lat: latitude, lng: longitude };
+            return;
+          }
+
+          if (!lastPosition) return;
+          const dist = haversineKm(lastPosition.lat, lastPosition.lng, latitude, longitude);
+          if (dist * 1000 < MIN_DISTANCE_M) return;
+
+          const now = Date.now();
+          if (now - lastReloadAt < RELOAD_COOLDOWN_MS) return;
+          lastReloadAt = now;
+          lastPosition = { lat: latitude, lng: longitude };
+
+          setUserLocation({
+            latitude,
+            longitude,
+            accuracy,
+            address: 'Ubicación actual',
+            ts: now,
+          });
+        },
+        () => {},
+        { enableHighAccuracy: false, timeout: 15000, maximumAge: 60000 },
+      );
+    }
+
+    startWatch();
+
+    return () => {
+      if (watchId !== null) {
+        navigator.geolocation.clearWatch(watchId);
+      }
+    };
   }, []);
 
   const hasAttemptedPushSyncRef = useRef(false);
