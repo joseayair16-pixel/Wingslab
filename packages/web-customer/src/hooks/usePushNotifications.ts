@@ -75,10 +75,24 @@ export const usePushNotifications = () => {
 
       const publicKey = await fetchVapidKey();
 
-      const sub = await registration.pushManager.subscribe({
-        userVisibleOnly: true,
-        applicationServerKey: urlBase64ToUint8Array(publicKey),
-      });
+      let sub: PushSubscription | null = null;
+      let attempts = 0;
+      while (!sub && attempts < 3) {
+        try {
+          sub = await registration.pushManager.subscribe({
+            userVisibleOnly: true,
+            applicationServerKey: urlBase64ToUint8Array(publicKey),
+          });
+        } catch (subscribeError: any) {
+          attempts++;
+          if (subscribeError?.name === 'AbortError' && attempts < 3) {
+            await new Promise((r) => setTimeout(r, 1000 * attempts));
+            continue;
+          }
+          throw subscribeError;
+        }
+      }
+      if (!sub) return;
 
       setSubscription(sub);
       setIsSubscribed(true);
@@ -87,7 +101,9 @@ export const usePushNotifications = () => {
 
     } catch (error: any) {
       if (error?.message !== 'Permiso de notificación no concedido') {
-        console.error('Error al suscribirse a notificaciones:', error);
+        if (process.env.NODE_ENV !== 'production') {
+          console.error('Error al suscribirse a notificaciones:', error);
+        }
       }
       throw error;
     }

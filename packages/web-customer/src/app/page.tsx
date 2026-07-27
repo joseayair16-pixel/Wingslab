@@ -3242,7 +3242,9 @@ export default function Home() {
 
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
-        console.log('[Socket.io] App visible - Sincronizando datos...');
+        if (process.env.NODE_ENV !== 'production') {
+          console.log('[Socket.io] App visible - Sincronizando datos...');
+        }
         if (socket.disconnected) {
           socket.connect();
         } else {
