@@ -7543,9 +7543,9 @@ export default function Home() {
           </header>
 
           <div className="flex min-h-[calc(100dvh-5rem)] w-full bg-transparent">
-            <aside className="fixed left-0 top-[5rem] hidden h-[calc(100dvh-5rem)] w-[260px] border-r border-black/5 bg-[#fbfbf8] lg:flex lg:flex-col">
+            <aside className="fixed left-0 top-[5rem] hidden h-[calc(100dvh-5rem)] w-[260px] border-r border-black/5 bg-white lg:flex lg:flex-col">
               <div className="flex-1 overflow-y-auto px-4 py-6">
-                <div className="rounded-[28px] border border-black/5 bg-[linear-gradient(180deg,#ffffff_0%,#f5f2ea_100%)] p-4 shadow-[0_16px_45px_rgba(15,15,15,0.04)]">
+                <div className="rounded-[28px] border border-black/5 bg-white p-4 shadow-[0_16px_45px_rgba(15,15,15,0.04)]">
                   <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-neutral-400">Operacion</p>
                   <p className="mt-2 text-lg font-semibold tracking-[-0.03em] text-neutral-950">{restaurantName}</p>
                   <p className="mt-1 text-sm text-neutral-500">{operationalStatusLabel}</p>
@@ -7640,7 +7640,7 @@ export default function Home() {
               </div>
             </aside>
 
-            <div className="flex-1 bg-[#f5f1e8] lg:ml-[260px] min-w-0">
+            <div className="flex-1 bg-[#f8f8f8] lg:ml-[260px] min-w-0">
               <div className="p-4 md:p-6 max-w-full overflow-hidden">
                 {(() => {
                   const overdueCount = billingSummary?.recentSettlements?.filter((s: any) => s.status === 'OVERDUE').length ?? 0;
@@ -7806,7 +7806,7 @@ export default function Home() {
                     })()}
 
                     {/* ── Hero compacto ─────────────────────────────────── */}
-                    <section className="relative overflow-hidden rounded-[28px] border border-black/5 bg-[radial-gradient(ellipse_at_top_left,rgba(255,255,255,0.97),rgba(248,246,242,0.93)_55%,rgba(237,233,224,0.90)_100%)] p-5 shadow-[0_16px_50px_rgba(15,15,15,0.06)] backdrop-blur md:p-6">
+                    <section className="relative overflow-hidden rounded-[28px] border border-black/5 bg-white p-5 shadow-[0_16px_50px_rgba(15,15,15,0.06)] backdrop-blur md:p-6">
                       <div className="pointer-events-none absolute inset-0">
                         <div className="absolute left-[-5%] top-[-20%] h-36 w-36 rounded-full bg-sky-200/35 blur-3xl" />
                         <div className="absolute right-[-4%] bottom-[-20%] h-32 w-48 rounded-full bg-blue-200/25 blur-3xl" />
@@ -12031,7 +12031,7 @@ export default function Home() {
                 </div>
 
                 <div className="min-h-0 flex-1 overflow-y-auto px-4 py-5">
-                  <div className="rounded-[28px] border border-black/5 bg-[linear-gradient(180deg,#ffffff_0%,#f5f2ea_100%)] p-4 shadow-[0_16px_45px_rgba(15,15,15,0.04)]">
+                  <div className="rounded-[28px] border border-black/5 bg-white p-4 shadow-[0_16px_45px_rgba(15,15,15,0.04)]">
                     <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-neutral-400">Operacion</p>
                     <p className="mt-2 text-lg font-semibold tracking-[-0.03em] text-neutral-950">{restaurantName}</p>
                     <p className="mt-1 text-sm text-neutral-500">{operationalStatusLabel}</p>
@@ -13545,7 +13545,7 @@ function Panel({
   const palette = toneStyles[tone];
 
   return (
-    <section className="relative overflow-hidden rounded-[28px] border border-black/5 bg-[linear-gradient(180deg,rgba(255,255,255,0.985),rgba(250,248,244,0.94))] p-4 shadow-[0_18px_50px_rgba(15,15,15,0.05)] backdrop-blur md:p-5">
+    <section className="relative overflow-hidden rounded-[28px] border border-black/5 bg-white p-4 shadow-[0_18px_50px_rgba(15,15,15,0.05)] backdrop-blur md:p-5">
       <div className={`absolute inset-x-0 top-0 h-1.5 bg-gradient-to-r ${palette.accent}`} />
       <div className="relative mb-4 border-b border-black/5 pb-3">
         <span className={`inline-flex rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] ${palette.chip}`}>
