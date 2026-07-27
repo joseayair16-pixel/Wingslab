@@ -2100,10 +2100,15 @@ export default function Home() {
             data: { items: [], total: 0, page: 1, limit: 15, hasMore: false },
           } satisfies PaginatedOrdersResponse);
 
-      const featuredPromise = fetch(`${apiBase}/public/featured`)
-        .then(r => r.json())
-        .then(d => d.success ? d.data : [])
-        .catch(() => []);
+      const featuredPromise = userLocation
+        ? fetch(`${apiBase}/public/featured?latitude=${userLocation.latitude}&longitude=${userLocation.longitude}`)
+            .then(r => r.json())
+            .then(d => d.success ? d.data : [])
+            .catch(() => [])
+        : fetch(`${apiBase}/public/featured`)
+            .then(r => r.json())
+            .then(d => d.success ? d.data : [])
+            .catch(() => []);
 
       const offersPromise = userLocation
         ? fetch(`${apiBase}/public/ofertas?latitude=${userLocation.latitude}&longitude=${userLocation.longitude}`)

@@ -514,6 +514,15 @@ export async function registerPublicRoutes(fastify: FastifyInstance): Promise<vo
 
   fastify.get('/public/featured', async (request, reply) => {
     try {
+      const querySchema = z.object({
+        latitude: z.coerce.number().min(-90).max(90).optional(),
+        longitude: z.coerce.number().min(-180).max(180).optional(),
+      });
+      const query = querySchema.safeParse(request.query);
+      const hasCoordinates = query.success && query.data.latitude !== undefined && query.data.longitude !== undefined;
+      const latitude = query.success ? query.data.latitude : undefined;
+      const longitude = query.success ? query.data.longitude : undefined;
+
       const now = new Date();
       const activePurchases = await prisma.featuredPurchase.findMany({
         where: {
@@ -535,6 +544,15 @@ export async function registerPublicRoutes(fastify: FastifyInstance): Promise<vo
         orderBy: { createdAt: 'desc' },
       });
 
+      const regionCodes = Array.from(new Set(activePurchases.map(p => p.restaurant.region).filter(Boolean)));
+      const regions = regionCodes.length
+        ? await prisma.region.findMany({
+            where: { code: { in: regionCodes } },
+            select: { code: true, deliveryRadius: true, pricingModel: true, baseRate: true, perKmRate: true, baseDeliveryFee: true, minDeliveryFee: true, maxDeliveryFee: true },
+          })
+        : [];
+      const regionsByCode = new Map(regions.map(r => [r.code, r]));
+
       const seenIds = new Set<string>();
       const featured = activePurchases
         .filter((p) => {
@@ -542,24 +560,39 @@ export async function registerPublicRoutes(fastify: FastifyInstance): Promise<vo
           seenIds.add(p.restaurant.id);
           return true;
         })
-        .map((p) => ({
-          id: p.restaurant.id,
-          name: p.restaurant.name,
-          logo: p.restaurant.logo,
-          coverImage: p.restaurant.featuredFlyer || p.restaurant.coverImage,
-          region: p.restaurant.region,
-          businessType: p.restaurant.businessType,
-          minDeliveryTime: p.restaurant.minDeliveryTime,
-          maxDeliveryTime: p.restaurant.maxDeliveryTime,
-          rating: p.restaurant.stats?.rating || 0,
-          reviewCount: p.restaurant.stats?.reviewCount || 0,
-          isOpen: isRestaurantOpenNow(
-            p.restaurant.status,
-            p.restaurant.isAcceptingOrders,
-            p.restaurant.isPaused,
-            p.restaurant.operatingHours
-          ),
-        }));
+        .map((p) => {
+          const distanceKm = hasCoordinates && p.restaurant.latitude != null && p.restaurant.longitude != null
+            ? getDistanceInKm(
+                { latitude: latitude!, longitude: longitude! },
+                { latitude: p.restaurant.latitude, longitude: p.restaurant.longitude }
+              )
+            : null;
+          const deliveryRadius = p.restaurant.hasOwnDelivery ? p.restaurant.deliveryRadius : (regionsByCode.get(p.restaurant.region)?.deliveryRadius ?? null);
+          return {
+            id: p.restaurant.id,
+            name: p.restaurant.name,
+            logo: p.restaurant.logo,
+            coverImage: p.restaurant.featuredFlyer || p.restaurant.coverImage,
+            region: p.restaurant.region,
+            businessType: p.restaurant.businessType,
+            minDeliveryTime: p.restaurant.minDeliveryTime,
+            maxDeliveryTime: p.restaurant.maxDeliveryTime,
+            rating: p.restaurant.stats?.rating || 0,
+            reviewCount: p.restaurant.stats?.reviewCount || 0,
+            isOpen: isRestaurantOpenNow(
+              p.restaurant.status,
+              p.restaurant.isAcceptingOrders,
+              p.restaurant.isPaused,
+              p.restaurant.operatingHours
+            ),
+            distanceKm,
+            deliveryRadius,
+          };
+        })
+        .filter((r) => {
+          if (!hasCoordinates || r.distanceKm === null) return true;
+          return r.distanceKm <= (r.deliveryRadius ?? 20);
+        });
 
       return reply.send({ success: true, data: featured });
     } catch (error) {
