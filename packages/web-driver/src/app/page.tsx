@@ -2575,7 +2575,7 @@ export default function Home() {
       )}
 
       {/* CABECERA PRINCIPAL (STICKY + BLUR) */}
-      <header className="sticky top-0 z-40 border-b border-black/5 bg-[#fbf8f1]/90 dark:bg-black/90 dark:border-zinc-900/80 backdrop-blur-md px-6 py-6 transition">
+      <header className="sticky top-0 z-40 border-b border-black/5 bg-white dark:bg-neutral-950 dark:border-zinc-900/80 px-6 py-6 transition">
         <div className="max-w-5xl mx-auto flex items-center justify-between w-full">
           {/* Superior Izquierda: Menu Hamburguesa */}
           <button

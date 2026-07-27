@@ -4681,7 +4681,7 @@ export default function Home() {
       description: 'Pedidos que siguen dentro del flujo operativo.',
       tone:
         unresolvedOrdersCount > 0
-          ? 'border-amber-200 bg-amber-50 text-amber-800'
+          ? 'border-sky-200 bg-sky-50 text-sky-800'
           : 'border-black/5 bg-neutral-50 text-neutral-700',
     },
     {
@@ -7526,9 +7526,9 @@ export default function Home() {
                       </span>
                     )}
                   </button>
-                  <SaDelLogo className="hidden h-9 w-auto object-contain lg:block" />
                 </div>
-                <div className="px-3 text-center">
+                <div className="px-3 text-center flex flex-col items-center gap-0">
+                  <SaDelLogo className="h-4 w-auto object-contain lg:h-6" />
                   <p className="truncate text-lg font-semibold tracking-[-0.03em] text-neutral-950 md:text-2xl">
                     {restaurantName}
                   </p>
@@ -7819,7 +7819,7 @@ export default function Home() {
                             {restaurantName}
                           </h1>
                           <div className="mt-1.5 flex flex-wrap items-center gap-2">
-                            <span className="inline-flex items-center gap-1 rounded-full border border-amber-100 bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700">
+                            <span className="inline-flex items-center gap-1 rounded-full border border-sky-200 bg-sky-50 px-2.5 py-1 text-xs font-semibold text-sky-700">
                               ⭐ {profile?.stats?.rating ? profile.stats.rating.toFixed(1) : 'Nuevo'}
                               {(profile?.stats?.reviewCount ?? 0) > 0 && (
                                 <span className="font-normal text-amber-600">({profile?.stats?.reviewCount})</span>
@@ -7830,7 +7830,7 @@ export default function Home() {
                                 profile?.status === 'ACTIVE' && isBusinessOpen && isWithinHours
                                   ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
                                   : isBusinessPaused
-                                  ? 'border-amber-200 bg-amber-50 text-amber-700'
+                                  ? 'border-sky-200 bg-sky-50 text-sky-700'
                                   : 'border-neutral-200 bg-neutral-100 text-neutral-600'
                               }`}
                             >
@@ -8000,7 +8000,7 @@ export default function Home() {
                               <div
                                 className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] ${
                                   metric.tone === 'amber'
-                                    ? 'border-amber-200 bg-amber-50 text-amber-700'
+                                    ? 'border-sky-200 bg-sky-50 text-sky-700'
                                     : metric.tone === 'emerald'
                                     ? 'border-sky-200 bg-sky-50 text-sky-700'
                                     : metric.tone === 'sky'
@@ -8151,7 +8151,7 @@ export default function Home() {
                               <span className="h-2 w-2 rounded-full bg-amber-400" />
                               <h3 className="text-xs font-bold uppercase tracking-wider text-neutral-600">{profile?.businessType !== 'RESTAURANT' ? 'Por Surtir' : 'Por Aceptar'}</h3>
                             </div>
-                            <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-bold text-amber-700">
+                            <span className="rounded-full bg-sky-100 px-2 py-0.5 text-xs font-bold text-sky-700">
                               {activeOrders.filter(o => o.status === 'PENDING').length}
                             </span>
                           </div>
@@ -8170,9 +8170,9 @@ export default function Home() {
                                         : order.orderReference.slice(-6)}
                                     </p>
                                     {order.id.startsWith('mock-order-') && (
-                                      <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[9px] font-bold text-amber-800 shrink-0 animate-pulse">
-                                        SIMULACIÓN
-                                      </span>
+                        <span className="rounded bg-sky-100 px-1.5 py-0.5 text-[9px] font-bold text-sky-800 shrink-0 animate-pulse">
+                          SIMULACIÓN
+                        </span>
                                     )}
                                     {unreadMessagesMap[order.id] > 0 && (
                                       <button
@@ -8256,9 +8256,9 @@ export default function Home() {
                                         : order.orderReference.slice(-6)}
                                     </p>
                                     {order.id.startsWith('mock-order-') && (
-                                      <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[9px] font-bold text-amber-800 shrink-0 animate-pulse">
-                                        SIMULACIÓN
-                                      </span>
+                        <span className="rounded bg-sky-100 px-1.5 py-0.5 text-[9px] font-bold text-sky-800 shrink-0 animate-pulse">
+                          SIMULACIÓN
+                        </span>
                                     )}
                                     {unreadMessagesMap[order.id] > 0 && (
                                       <span className="inline-flex items-center gap-0.5 rounded-full bg-rose-500 px-1.5 py-0.5 text-[9px] font-black text-white animate-pulse shadow-sm">
@@ -8363,7 +8363,7 @@ export default function Home() {
                                         </span>
                                       )}
                                       {order.id.startsWith('mock-order-') && (
-                                        <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[9px] font-bold text-amber-800 shrink-0 animate-pulse">
+                                          <span className="rounded bg-sky-100 px-1.5 py-0.5 text-[9px] font-bold text-sky-800 shrink-0 animate-pulse">
                                           SIMULACIÓN
                                         </span>
                                       )}
@@ -8685,7 +8685,7 @@ export default function Home() {
                                   
                                   <div className="min-w-[120px] text-right">
                                     {settlement.status === 'PENDING' ? (
-                                      <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 border border-amber-200/40 px-3 py-1 text-xs font-bold text-amber-800 animate-pulse">
+                                      <span className="inline-flex items-center gap-1 rounded-full bg-sky-100 border border-sky-200/40 px-3 py-1 text-xs font-bold text-sky-800 animate-pulse">
                                         ⏱️ Pendiente
                                       </span>
                                     ) : (settlement.status as string) === 'IN_REVIEW' ? (
@@ -9125,13 +9125,13 @@ export default function Home() {
                                     )}
                                   </p>
                                   {order.id.startsWith('mock-order-') && (
-                                    <span className="rounded bg-amber-100 px-2 py-0.5 text-xs font-bold text-amber-800 animate-pulse">
+                                    <span className="rounded bg-sky-100 px-2 py-0.5 text-xs font-bold text-sky-800 animate-pulse">
                                       SIMULACIÓN
                                     </span>
                                   )}
                                   <StatusBadge status={order.status} />
                                   {(order as any).cancellationRequestedAt && !(order as any).cancelledBy && ['CONFIRMED', 'PREPARING'].includes(order.status) && (
-                                    <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 border border-amber-300 px-2.5 py-0.5 text-xs font-bold text-amber-700 shadow-sm">
+                                    <span className="inline-flex items-center gap-1 rounded-full bg-sky-100 border border-sky-300 px-2.5 py-0.5 text-xs font-bold text-sky-700 shadow-sm">
                                       🧾 Cancelación solicitada
                                     </span>
                                   )}
@@ -9314,7 +9314,7 @@ export default function Home() {
                                             : 'Reparto propio (Sin asignar)'}
                                       </span>
                                     ) : (
-                                      <span className="font-medium text-amber-600 bg-amber-50 px-2 py-0.5 rounded border border-amber-100/50">
+                                      <span className="font-medium text-sky-600 bg-sky-50 px-2 py-0.5 rounded border border-sky-100/50">
                                         Sin repartidor asignado
                                       </span>
                                     )}
@@ -9404,11 +9404,11 @@ export default function Home() {
                                 })()}
 
                                 {(order as any).fulfillmentType !== 'PICKUP' && (order.status === 'CONFIRMED' || order.status === 'PREPARING') && !order.driver && !order.noDriversAvailable && !hasOwnDelivery && (
-                                  <div className="mt-2 flex items-center gap-2 rounded-xl border border-amber-100 bg-amber-50/70 px-3 py-2 text-xs font-semibold text-amber-800 shadow-sm animate-pulse w-fit">
-                                    <span className="relative flex h-2 w-2">
-                                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
-                                      <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
-                                    </span>
+                  <div className="mt-2 flex items-center gap-2 rounded-xl border border-sky-100 bg-sky-50/70 px-3 py-2 text-xs font-semibold text-sky-800 shadow-sm animate-pulse w-fit">
+                    <span className="relative flex h-2 w-2">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-sky-400 opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-2 w-2 bg-sky-500"></span>
+                    </span>
                                     Asignando repartidor...
                                   </div>
                                 )}
@@ -9972,7 +9972,7 @@ export default function Home() {
                               className={`group flex items-center gap-2 rounded-full px-4 py-2.5 text-[13px] font-bold shadow-sm ring-1 transition hover:shadow-md ${profile.status === 'ACTIVE' && profile.isAcceptingOrders
                                 ? 'bg-emerald-50/80 text-emerald-700 ring-emerald-200/60 hover:bg-emerald-100'
                                 : profile.status === 'SUSPENDED'
-                                  ? 'bg-amber-50/80 text-amber-700 ring-amber-200/60 hover:bg-amber-100'
+                                  ? 'bg-sky-50/80 text-sky-700 ring-sky-200/60 hover:bg-sky-100'
                                   : 'bg-neutral-100/80 text-neutral-500 ring-black/5 hover:bg-neutral-200'
                                 }`}
                             >
@@ -10995,7 +10995,7 @@ export default function Home() {
                         <div className="flex items-center gap-2">
                           <StatusBadge status={selectedOrderForTicket.status} />
                           {selectedOrderForTicket.id.startsWith('mock-order-') && (
-                            <span className="inline-flex items-center gap-1 rounded bg-amber-100 px-2 py-0.5 text-xs font-black tracking-wide text-amber-800 animate-pulse">
+                            <span className="inline-flex items-center gap-1 rounded bg-sky-100 px-2 py-0.5 text-xs font-black tracking-wide text-sky-800 animate-pulse">
                               ⚠️ MODO SIMULACIÓN
                             </span>
                           )}
@@ -11475,7 +11475,7 @@ export default function Home() {
                     <div className={`mt-5 rounded-2xl border p-4 ${
                       isStore ? 'border-sky-200 bg-sky-50 text-sky-800' :
                       isUrgent
-                        ? 'border-amber-200 bg-amber-50 text-amber-800'
+                        ? 'border-sky-200 bg-sky-50 text-sky-800'
                         : 'border-neutral-200 bg-neutral-50 text-neutral-700'
                     }`}>
                       {!isStore && (
@@ -11658,7 +11658,7 @@ export default function Home() {
                       paymentDetailOrder.paymentStatus === 'COMPLETED'
                         ? 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-600/20'
                         : paymentDetailOrder.paymentStatus === 'PENDING'
-                        ? 'bg-amber-50 text-amber-700 ring-1 ring-amber-600/20'
+                        ? 'bg-sky-50 text-sky-700 ring-1 ring-sky-600/20'
                         : 'bg-rose-50 text-rose-700 ring-1 ring-rose-600/20'
                     }`}>
                       {paymentDetailOrder.paymentStatus === 'COMPLETED' ? '✓ Aprobado' : paymentDetailOrder.paymentStatus === 'PENDING' ? '⏳ Pendiente' : '✗ Rechazado'}
@@ -13414,7 +13414,7 @@ export default function Home() {
                                       </div>
                                       
                                       <span className={`text-[10px] px-2.5 py-0.5 rounded-full font-bold tracking-wide uppercase ${
-                                        ticket.status === 'PENDING' ? 'bg-amber-50 text-amber-700 border border-amber-200/50' :
+                                        ticket.status === 'PENDING' ? 'bg-sky-50 text-sky-700 border border-sky-200/50' :
                                         ticket.status === 'IN_PROGRESS' ? 'bg-blue-50 text-blue-700 border border-blue-200/50' :
                                         'bg-emerald-50 text-emerald-700 border border-emerald-200/50'
                                       }`}>
@@ -13515,7 +13515,7 @@ function Panel({
   > = {
     amber: {
       accent: 'from-amber-300/80 via-orange-200/70 to-transparent',
-      chip: 'bg-amber-100 text-amber-700',
+      chip: 'bg-sky-100 text-sky-700',
     },
     emerald: {
       accent: 'from-emerald-300/80 via-lime-200/70 to-transparent',
@@ -13599,6 +13599,23 @@ function RestaurantNavIcon({ kind }: { kind: RestaurantPortalSection }) {
     );
   }
 
+  if (kind === 'featured') {
+    return (
+      <svg className="h-5 w-5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
+      </svg>
+    );
+  }
+
+  if (kind === 'settings') {
+    return (
+      <svg className="h-5 w-5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+        <circle cx="12" cy="12" r="3" strokeWidth={1.7} />
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
+      </svg>
+    );
+  }
+
   return (
     <svg className="h-5 w-5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor">
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M12 4v3m0 10v3m8-8h-3M7 12H4" />
@@ -13638,7 +13655,7 @@ function SettingsBadge({
   tone: 'amber' | 'emerald' | 'sky' | 'violet';
 }) {
   const tones = {
-    amber: 'border-amber-200/80 bg-amber-50/80 text-amber-800',
+    amber: 'border-sky-200/80 bg-sky-50/80 text-sky-800',
     emerald: 'border-emerald-200/80 bg-emerald-50/80 text-emerald-800',
     sky: 'border-sky-200/80 bg-sky-50/80 text-sky-700',
     violet: 'border-sky-200/80 bg-sky-50/80 text-sky-700',
@@ -13843,7 +13860,7 @@ function EmptyState({ text }: { text: string }) {
 
 function StatusBadge({ status }: { status: OrderStatus }) {
   const palette: Record<OrderStatus, string> = {
-    PENDING: 'border-amber-200 bg-amber-50 text-amber-700',
+    PENDING: 'border-sky-200 bg-sky-50 text-sky-700',
     CONFIRMED: 'border-sky-200 bg-sky-50 text-sky-700',
     PREPARING: 'border-orange-200 bg-orange-50 text-orange-700',
     READY: 'border-emerald-200 bg-emerald-50 text-emerald-700',
@@ -13891,10 +13908,10 @@ function TransferCountdown({ createdAt }: { createdAt: string | Date }) {
   const seconds = timeLeft % 60;
 
   return (
-    <div className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 border border-amber-200 px-3 py-1 text-xs font-bold text-amber-700">
+    <div className="inline-flex items-center gap-1.5 rounded-full bg-sky-50 border border-sky-200 px-3 py-1 text-xs font-bold text-sky-700">
       <span className="relative flex h-2 w-2">
-        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
-        <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
+        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-sky-400 opacity-75"></span>
+        <span className="relative inline-flex rounded-full h-2 w-2 bg-sky-500"></span>
       </span>
       <span>
         Aceptar en: {String(minutes).padStart(2, '0')}:{String(seconds).padStart(2, '0')}
@@ -14251,7 +14268,7 @@ function getRestaurantOperationalStatusLabel(status?: string, isAcceptingOrders?
 
 function getRestaurantOperationalStatusTone(status?: string, isAcceptingOrders?: boolean, isPaused?: boolean, isWithinHours = true) {
   if (status === 'ACTIVE') {
-    if (isPaused) return 'bg-amber-100 text-amber-700';
+    if (isPaused) return 'bg-sky-100 text-sky-700';
     if (!isAcceptingOrders) return 'bg-neutral-100 text-neutral-600';
     return isWithinHours ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700 border-rose-200';
   }
@@ -14260,7 +14277,7 @@ function getRestaurantOperationalStatusTone(status?: string, isAcceptingOrders?:
     return 'bg-rose-100 text-rose-700';
   }
 
-  return 'bg-amber-100 text-amber-700';
+  return 'bg-sky-100 text-sky-700';
 }
 
 function getImageValidationMessage(value: string, kind: 'cover' | 'logo' | 'product') {
