@@ -2336,7 +2336,7 @@ export default function Home() {
     }
 
     void loadDashboard();
-  }, [loadDashboard, token, sessionUser]);
+  }, [loadDashboard, token, sessionUser?.id]);
 
   // Cargar mensajes de chat en tiempo real cuando se abre un ticket o se cambia a la pestaña de chat
   useEffect(() => {
@@ -2350,22 +2350,20 @@ export default function Home() {
   useEffect(() => {
     if (selectedOrderForTicket) {
       const updated = orders.find((o) => o.id === selectedOrderForTicket.id);
-      if (updated) {
+      if (updated && updated !== selectedOrderForTicket) {
         setSelectedOrderForTicket(updated);
       }
     }
-  }, [orders, selectedOrderForTicket?.id]);
+  }, [orders, selectedOrderForTicket]);
 
   useEffect(() => {
     if (selectedOrderForEtaExtension) {
       const updated = orders.find((o) => o.id === selectedOrderForEtaExtension.id);
-      if (updated) {
-        setSelectedOrderForEtaExtension(updated);
-      } else {
-        setSelectedOrderForEtaExtension(null);
+      if (updated !== selectedOrderForEtaExtension) {
+        setSelectedOrderForEtaExtension(updated || null);
       }
     }
-  }, [orders, selectedOrderForEtaExtension?.id]);
+  }, [orders, selectedOrderForEtaExtension]);
 
   // Stable refs for event callbacks to prevent stale closures and avoid recreating WebSocket connections
   const handleConnectRef = useRef<() => void>();
