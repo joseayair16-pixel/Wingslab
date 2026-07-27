@@ -426,6 +426,7 @@ export default function Home() {
   const isChatOpen = useChatStore(state => state.isChatOpen);
   const [searchResults, setSearchResults] = useState<RestaurantSummary[] | null>(null);
   const searchCacheRef = useRef<Record<string, RestaurantSummary[]>>({});
+  const loadDashboardCallIdRef = useRef(0);
   const [isSearchingProducts, setIsSearchingProducts] = useState(false);
   const [isChangingPassword, setIsChangingPassword] = useState(false);
   const [isEditingProfile, setIsEditingProfile] = useState(false);
@@ -1843,6 +1844,7 @@ export default function Home() {
   }, [searchQuery, searchType, apiBase]);
 
   const loadDashboard = useCallback(async (silent = false) => {
+    const callId = ++loadDashboardCallIdRef.current;
     if (!silent) {
       setLoadingDashboard(true);
     }
@@ -1882,10 +1884,7 @@ export default function Home() {
             .then(r => r.json())
             .then(d => d.success ? d.data : [])
             .catch(() => [])
-        : fetch(`${apiBase}/public/featured`)
-            .then(r => r.json())
-            .then(d => d.success ? d.data : [])
-            .catch(() => []);
+        : Promise.resolve([]);
 
       const offersPromise = userLocation
         ? fetch(`${apiBase}/public/ofertas?latitude=${userLocation.latitude}&longitude=${userLocation.longitude}`)
@@ -1896,6 +1895,7 @@ export default function Home() {
 
       const [restaurantsData, ordersData, featuredData, offersData] = await Promise.all([restaurantsPromise, ordersPromise, featuredPromise, offersPromise]);
 
+      if (callId !== loadDashboardCallIdRef.current) return;
       setRestaurants(restaurantsData.data.items || []);
       setFeaturedRestaurants(featuredData);
       setOfferProducts(offersData);
@@ -1928,6 +1928,7 @@ export default function Home() {
         return ordersData.data.items[0]?.id || '';
       });
     } catch (requestError) {
+      if (callId !== loadDashboardCallIdRef.current) return;
       setRestaurants([]);
       setSelectedRestaurantId('');
       setSelectedRestaurant(null);
@@ -1944,6 +1945,7 @@ export default function Home() {
         setError(errorMessage || 'No se pudo cargar el panel.');
       }
     } finally {
+      if (callId !== loadDashboardCallIdRef.current) return;
       if (!silent) {
         setLoadingDashboard(false);
       }

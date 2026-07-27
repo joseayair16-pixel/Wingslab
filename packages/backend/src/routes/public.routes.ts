@@ -591,7 +591,8 @@ export async function registerPublicRoutes(fastify: FastifyInstance): Promise<vo
         })
         .filter((r) => {
           if (!hasCoordinates || r.distanceKm === null) return true;
-          return r.distanceKm <= (r.deliveryRadius ?? 20);
+          if (r.deliveryRadius === null) return false;
+          return r.distanceKm <= (r.deliveryRadius ?? 0);
         });
 
       return reply.send({ success: true, data: featured });
