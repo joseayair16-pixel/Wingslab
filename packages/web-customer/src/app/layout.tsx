@@ -1,7 +1,19 @@
 import type { Metadata } from 'next';
-import Script from 'next/script';
+import { Inter, Plus_Jakarta_Sans } from 'next/font/google';
 import '../styles/globals.css';
 import ServiceWorkerRegister from './ServiceWorkerRegister';
+
+const inter = Inter({
+  subsets: ['latin'],
+  variable: '--font-inter',
+  display: 'swap',
+});
+
+const plusJakartaSans = Plus_Jakarta_Sans({
+  subsets: ['latin'],
+  variable: '--font-plus-jakarta-sans',
+  display: 'swap',
+});
 
 export const metadata: Metadata = {
   title: 'SaDeL Eats',
@@ -34,16 +46,14 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="es" className="light" style={{ colorScheme: 'light' }}>
+    <html lang="es" className={`${inter.variable} ${plusJakartaSans.variable} light`} style={{ colorScheme: 'light' }}>
       <head>
         <meta name="color-scheme" content="light" />
         <meta name="theme-color" content="#f5f1e8" />
+        <link rel="preconnect" href="https://maps.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
       </head>
       <body>
-        <Script 
-          src={`https://maps.googleapis.com/maps/api/js?key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || ''}&libraries=places&loading=async`}
-          strategy="afterInteractive"
-        />
         <ServiceWorkerRegister />
         {children}
       </body>

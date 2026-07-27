@@ -239,10 +239,14 @@ export const HomeView = React.memo(function HomeView({
                 {featuredRestaurants.map((fr: any) => (
                   <button key={fr.id} onClick={() => router.push(`/restaurantes/${fr.id}`)}
                     className="group relative w-72 shrink-0 overflow-hidden rounded-[30px] border border-black/5 bg-white text-left transition-all duration-300 ease-out hover:-translate-y-1 hover:border-black/10 hover:shadow-[0_24px_60px_rgba(15,15,15,0.08)] active:scale-[0.98]">
-                    <div className="relative overflow-hidden">
-                      <img src={fr.coverImage || '/default-cover.jpg'} alt={`Portada de ${fr.name}`}
-                        className="h-40 w-full object-cover sm:h-44 transition duration-300 group-hover:scale-105"
-                        loading="lazy" decoding="async" />
+                    <div className="relative overflow-hidden h-40 sm:h-44">
+                      <Image
+                        src={fr.coverImage || '/default-cover.jpg'}
+                        alt={`Portada de ${fr.name}`}
+                        fill
+                        sizes="288px"
+                        className="object-cover transition duration-300 group-hover:scale-105"
+                      />
                       <div className="absolute inset-x-0 top-0 flex items-start justify-between p-4 z-10 pointer-events-none">
                         <div className="flex items-center gap-1.5 bg-white/90 backdrop-blur-sm rounded-full px-3 py-1.5 text-xs font-bold text-sky-700 shadow-sm pointer-events-auto">
                           <span className="text-sm leading-none">⭐</span>
@@ -253,9 +257,15 @@ export const HomeView = React.memo(function HomeView({
                     </div>
                     <div className="relative px-4 pb-4 pt-4">
                       <div className="mb-3 flex items-end gap-3">
-                        <div className="-mt-11 flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-2xl border-4 border-white bg-white shadow-[0_10px_24px_rgba(15,15,15,0.14)]">
+                        <div className="-mt-11 flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-2xl border-4 border-white bg-white shadow-[0_10px_24px_rgba(15,15,15,0.14)] relative">
                           {fr.logo ? (
-                            <img src={fr.logo} alt={`Logo de ${fr.name}`} className="h-full w-full object-cover" loading="lazy" />
+                            <Image
+                              src={fr.logo}
+                              alt={`Logo de ${fr.name}`}
+                              fill
+                              sizes="64px"
+                              className="object-cover"
+                            />
                           ) : (
                             <div className="h-full w-full bg-neutral-200 flex items-center justify-center text-lg font-bold text-neutral-500">{fr.name?.[0]}</div>
                           )}
@@ -296,14 +306,15 @@ export const HomeView = React.memo(function HomeView({
                   offerGroup.products.map((product: any) => (
                     <button key={product.id} onClick={() => router.push(`/restaurantes/${offerGroup.restaurant.id}?focusProduct=${product.id}`)}
                       className="group w-44 shrink-0 overflow-hidden rounded-[18px] border border-black/5 bg-white text-left transition-all duration-300 ease-out hover:-translate-y-1 hover:border-black/10 hover:shadow-[0_12px_30px_rgba(15,15,15,0.08)] active:scale-[0.98]">
-                      <div className="relative overflow-hidden">
-                        {product.image ? (
-                          <img
-                            src={product.image}
-                            alt={product.name}
-                            className="h-24 w-full object-cover transition duration-300 group-hover:scale-105"
-                            loading="lazy" decoding="async"
-                          />
+                        <div className="relative overflow-hidden h-24">
+                          {product.image ? (
+                            <Image
+                              src={product.image}
+                              alt={product.name}
+                              fill
+                              sizes="176px"
+                              className="object-cover transition duration-300 group-hover:scale-105"
+                            />
                         ) : (
                           <div className="h-24 w-full bg-gradient-to-br from-neutral-100 to-neutral-200 flex items-center justify-center">
                             <svg className="w-8 h-8 text-neutral-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
@@ -318,8 +329,8 @@ export const HomeView = React.memo(function HomeView({
                       <div className="px-2 pb-2 pt-2">
                         <div className="flex items-center gap-1.5 mb-1">
                           {offerGroup.restaurant.logo && (
-                            <div className="flex h-5 w-5 shrink-0 items-center justify-center overflow-hidden rounded-full bg-white shadow-sm">
-                              <img src={offerGroup.restaurant.logo} alt={offerGroup.restaurant.name} className="h-full w-full object-cover" />
+                            <div className="flex h-5 w-5 shrink-0 items-center justify-center overflow-hidden rounded-full bg-white shadow-sm relative">
+                              <Image src={offerGroup.restaurant.logo} alt={offerGroup.restaurant.name} fill sizes="20px" className="object-cover" />
                             </div>
                           )}
                           <p className="text-[9px] font-bold text-neutral-500 truncate">{offerGroup.restaurant.name}</p>
@@ -504,13 +515,14 @@ export const HomeView = React.memo(function HomeView({
                       className={`flex items-center gap-3.5 p-4 ${restaurant.isOpen ? 'cursor-pointer' : ''}`}
                     >
                       {/* Restaurant Logo */}
-                      <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-black/5 bg-white shadow-sm">
+                      <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-black/5 bg-white shadow-sm relative">
                         {restaurant.logo ? (
-                          <img
+                          <Image
                             src={restaurant.logo}
                             alt={restaurant.name}
-                            className="h-full w-full object-cover"
-                            loading="lazy"
+                            fill
+                            sizes="48px"
+                            className="object-cover"
                           />
                         ) : (
                           <span className="text-sm font-bold text-neutral-700">
@@ -565,12 +577,15 @@ export const HomeView = React.memo(function HomeView({
                             >
                               {/* Product Image */}
                               {product.image ? (
-                                <img
-                                  src={product.image}
-                                  alt={product.name}
-                                  className="h-12 w-12 rounded-xl object-cover shrink-0 border border-black/5"
-                                  loading="lazy"
-                                />
+                                <div className="relative h-12 w-12 shrink-0 overflow-hidden rounded-xl border border-black/5">
+                                  <Image
+                                    src={product.image}
+                                    alt={product.name}
+                                    fill
+                                    sizes="48px"
+                                    className="object-cover"
+                                  />
+                                </div>
                               ) : (
                                 <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-neutral-100 text-base shrink-0 border border-black/5">
                                   🍔
@@ -626,14 +641,14 @@ export const HomeView = React.memo(function HomeView({
                       onClick={() => restaurant.isOpen && router.push(`/restaurantes/${restaurant.id}`)}
                       className={restaurant.isOpen ? 'cursor-pointer' : ''}
                     >
-                      <div className="relative overflow-hidden">
+                      <div className="relative overflow-hidden h-40 sm:h-44">
                         {restaurant.coverImage ? (
-                          <img
+                          <Image
                             src={restaurant.coverImage}
                             alt={`Portada de ${restaurant.name}`}
-                            className={`h-40 w-full object-cover sm:h-44 transition duration-300 ${!restaurant.isOpen ? 'grayscale-[80%] brightness-75' : ''}`}
-                            loading="lazy"
-                            decoding="async"
+                            fill
+                            sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+                            className={`object-cover transition duration-300 ${!restaurant.isOpen ? 'grayscale-[80%] brightness-75' : ''}`}
                           />
                         ) : (
                           <div className={`h-40 w-full sm:h-44 transition duration-300 ${buildRestaurantCoverFallback(primaryCategory?.id || 'all')} ${!restaurant.isOpen ? 'grayscale-[80%] brightness-75' : ''}`} />
@@ -687,13 +702,14 @@ export const HomeView = React.memo(function HomeView({
 
                       <div className="relative px-4 pb-4 pt-4">
                         <div className="mb-3 flex items-end gap-3">
-                          <div className="-mt-11 flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-2xl border-4 border-white bg-white shadow-[0_10px_24px_rgba(15,15,15,0.14)]">
+                          <div className="-mt-11 flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-2xl border-4 border-white bg-white shadow-[0_10px_24px_rgba(15,15,15,0.14)] relative">
                             {restaurant.logo ? (
-                              <img
+                              <Image
                                 src={restaurant.logo}
                                 alt={`Logo de ${restaurant.name}`}
-                                className="h-full w-full object-cover"
-                                loading="lazy"
+                                fill
+                                sizes="64px"
+                                className="object-cover"
                               />
                             ) : (
                               <span className="text-lg font-semibold text-neutral-900">

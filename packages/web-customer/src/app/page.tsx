@@ -1,7 +1,8 @@
 'use client';
 
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState, useTransition, useDeferredValue } from 'react';
 import { useRouter } from 'next/navigation';
+import Script from 'next/script';
 import { io } from 'socket.io-client';
 import {
   ApiResponse,
@@ -419,6 +420,8 @@ export default function Home() {
   const activeSection = useStore(state => state.activeSection);
   const setActiveSection = useStore(state => state.setActiveSection);
   const searchQuery = useStore(state => state.searchQuery);
+  const deferredSearchQuery = useDeferredValue(searchQuery);
+  const isSearchStale = searchQuery !== deferredSearchQuery;
   const setSearchQuery = useStore(state => state.setSearchQuery);
   const searchType = useStore(state => state.searchType);
   const [searchResults, setSearchResults] = useState<RestaurantSummary[] | null>(null);
@@ -1370,7 +1373,7 @@ export default function Home() {
   const restaurantsWithDistances = useMemo(() => {
     // When there's an active search with at least 3 chars, ONLY use search results.
     // Never fall back to the full dashboard list during a search.
-    const hasActiveSearch = searchQuery.trim().length >= 3;
+    const hasActiveSearch = deferredSearchQuery.trim().length >= 3;
     const listToProcess = hasActiveSearch
       ? (searchResults || [])  // During loading, show empty (skeletons handle the UI)
       : restaurants;
@@ -1386,10 +1389,10 @@ export default function Home() {
       }
       return { ...r, calculatedDistance: dist || 0 };
     });
-  }, [restaurants, searchResults, searchQuery, latestAddress.latitude, latestAddress.longitude]);
+  }, [restaurants, searchResults, deferredSearchQuery, latestAddress.latitude, latestAddress.longitude]);
 
   const filteredRestaurants = useMemo(() => {
-    const query = normalizeSearchValue(searchQuery);
+    const query = normalizeSearchValue(deferredSearchQuery);
     const filteredByCategory = restaurantsWithDistances.filter((restaurant) => {
       if (selectedCategory === 'all') {
         return true;
@@ -1452,7 +1455,7 @@ export default function Home() {
 
       return first.name.localeCompare(second.name);
     });
-  }, [restaurants, searchResults, searchQuery, selectedCategory, userRegion, filterOpenNow, filterFreeDelivery, filterNearby, filterPromotions, filterBestRated]);
+  }, [restaurants, searchResults, deferredSearchQuery, selectedCategory, userRegion, filterOpenNow, filterFreeDelivery, filterNearby, filterPromotions, filterBestRated]);
 
   const playCustomerAlertAudio = useCallback(() => {
     try {
@@ -3996,6 +3999,10 @@ export default function Home() {
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
     >
+      <Script
+        src={`https://maps.googleapis.com/maps/api/js?key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || ''}&libraries=places&loading=async`}
+        strategy="lazyOnload"
+      />
       <div className={`fixed inset-0 z-[9999] bg-[#f7f7f2] transition-opacity duration-700 pointer-events-none ${isTransitioning ? 'opacity-100' : 'opacity-0'}`} />
       {/* Pull to refresh indicator */}
       <div

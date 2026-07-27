@@ -23,16 +23,13 @@ self.addEventListener('push', function (event) {
 
   event.waitUntil(
     self.registration.showNotification(title, options).catch(function () {
-      // Si showNotification falla (icono no disponible, etc.), reintentar sin icono
       if (options.icon) {
         delete options.icon;
       }
       if (options.badge) {
         delete options.badge;
       }
-      return self.registration.showNotification(title, options).catch(function () {
-        // Silenciar error si también falla sin icono
-      });
+      return self.registration.showNotification(title, options).catch(function () {});
     })
   );
 });
@@ -69,9 +66,7 @@ self.addEventListener('notificationclick', function (event) {
         if ('navigate' in matchingClient && matchingClient.url !== urlToOpen) {
           try {
             matchingClient.navigate(urlToOpen);
-          } catch (e) {
-            // navigate puede fallar (iOS); postMessage ya fue enviado
-          }
+          } catch (e) {}
         }
         return matchingClient.focus();
       } else {
@@ -81,9 +76,19 @@ self.addEventListener('notificationclick', function (event) {
   );
 });
 
-const CACHE_NAME = 'sadel-static-assets-v2';
+const CACHE_NAME = 'sadel-static-assets-v3';
+const STATIC_ASSETS = [
+  '/SaDeL.png',
+  '/app-icon-192.png',
+  '/manifest.json',
+];
 
 self.addEventListener('install', function (event) {
+  event.waitUntil(
+    caches.open(CACHE_NAME).then(function (cache) {
+      return cache.addAll(STATIC_ASSETS).catch(function () {});
+    })
+  );
   self.skipWaiting();
 });
 
@@ -102,4 +107,51 @@ self.addEventListener('activate', function (event) {
       })
     ])
   );
+});
+
+self.addEventListener('fetch', function (event) {
+  var requestUrl = new URL(event.request.url);
+
+  // Skip non-GET and non-http(s) requests
+  if (event.request.method !== 'GET' || !requestUrl.protocol.startsWith('http')) return;
+
+  // Skip API calls — always go to network
+  if (requestUrl.pathname.startsWith('/api/')) return;
+
+  // Skip socket.io
+  if (requestUrl.pathname.includes('socket.io')) return;
+
+  // Cache-first for static assets (JS, CSS, images, fonts)
+  if (
+    requestUrl.pathname.match(/\.(js|css|png|jpg|jpeg|gif|svg|webp|avif|ico|woff2?|ttf|otf|eot)(\?.*)?$/) ||
+    requestUrl.origin === self.location.origin
+  ) {
+    event.respondWith(
+      caches.match(event.request).then(function (cachedResponse) {
+        if (cachedResponse) {
+          // Fetch in background to update cache
+          fetch(event.request).then(function (networkResponse) {
+            if (networkResponse && networkResponse.ok) {
+              caches.open(CACHE_NAME).then(function (cache) {
+                cache.put(event.request, networkResponse);
+              });
+            }
+          }).catch(function () {});
+          return cachedResponse;
+        }
+
+        return fetch(event.request).then(function (networkResponse) {
+          if (networkResponse && networkResponse.ok) {
+            var responseToCache = networkResponse.clone();
+            caches.open(CACHE_NAME).then(function (cache) {
+              cache.put(event.request, responseToCache);
+            });
+          }
+          return networkResponse;
+        }).catch(function () {
+          return caches.match('/SaDeL.png');
+        });
+      })
+    );
+  }
 });
