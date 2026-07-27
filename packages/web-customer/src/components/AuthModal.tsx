@@ -361,7 +361,7 @@ export function AuthModal({ isOpen, onClose, onSuccess, apiBase }: AuthModalProp
         </button>
 
         {/* Content Container */}
-        <div className="overflow-y-auto flex-1 pr-1.5 scrollbar-thin">
+        <div className="overflow-y-auto overflow-x-hidden flex-1 pr-1.5 scrollbar-thin">
           <div className="text-center pt-2">
             <SaDelLogo className="mx-auto h-12 w-auto object-contain" />
             <p className="mt-1.5 text-[11px] uppercase tracking-[0.2em] text-neutral-400 font-semibold">
@@ -521,7 +521,7 @@ export function AuthModal({ isOpen, onClose, onSuccess, apiBase }: AuthModalProp
                     <>
                       {authStep === 'request' ? (
                         <>
-                          <div className="grid grid-cols-2 gap-4">
+                          <div className="grid grid-cols-2 gap-4 min-w-0">
                             <Field
                               label="Nombre(s)"
                               value={name}

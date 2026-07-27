@@ -4064,7 +4064,7 @@ export default function Home() {
             <div className="mx-4 mt-4">
               <button
                 type="button"
-                onClick={() => setIsAuthModalOpen(true)}
+                onClick={() => { setShowAuthModal(true); setIsSideMenuOpen(false); }}
                 className="group relative w-full overflow-hidden rounded-2xl bg-gradient-to-b from-neutral-900 to-neutral-950 p-4 text-left shadow-[0_8px_24px_rgba(0,0,0,0.12)] transition-all duration-200 hover:shadow-[0_12px_32px_rgba(0,0,0,0.18)] active:scale-[0.98]"
               >
                 <div className="relative z-10">
