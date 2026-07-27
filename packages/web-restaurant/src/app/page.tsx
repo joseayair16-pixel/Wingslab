@@ -7502,7 +7502,7 @@ export default function Home() {
         </div>
       ) : (
         <div className="min-h-[100dvh] bg-[#f7f4ec]">
-          <header className="sticky top-0 z-40 w-full border-b border-black/5 bg-white/92 backdrop-blur">
+          <header className="sticky top-0 z-40 w-full border-b border-black/5 bg-white">
             <div className="grid grid-cols-[56px_1fr_56px] items-center px-3 py-4 md:px-6 lg:grid-cols-[220px_1fr_220px]">
               <div className="mx-auto w-full max-w-[1540px] contents">
                 <div className="flex items-center">
