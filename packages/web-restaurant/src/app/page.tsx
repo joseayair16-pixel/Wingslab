@@ -351,10 +351,13 @@ function getCustomerOrigin(): string {
         return `${protocol}//app.${rest}${port ? `:${port}` : ''}`;
       }
     }
-    const subdomains = hostname.split('.');
-    if (subdomains.length >= 3) {
-      return `${protocol}//${subdomains.slice(1).join('.')}${port ? `:${port}` : ''}`;
+    if (!hostname.endsWith('.vercel.app')) {
+      const subdomains = hostname.split('.');
+      if (subdomains.length >= 3) {
+        return `${protocol}//${subdomains.slice(1).join('.')}${port ? `:${port}` : ''}`;
+      }
     }
+    return `${protocol}//${hostname}${port ? `:${port}` : ''}`;
   }
   return '';
 }
@@ -5740,11 +5743,8 @@ export default function Home() {
 
       {/* MODAL DE DESPACHO EXPRESS QR (REPARTO PROPIO) */}
       {activeQrCodeData ? (() => {
-        const isProd = typeof window !== 'undefined' && window.location.hostname !== 'localhost' && !window.location.hostname.includes('192.168.');
-        const customerOrigin = process.env.NEXT_PUBLIC_CUSTOMER_URL || (isProd
-          ? 'https://sa-de-l-web-customer.vercel.app'
-          : typeof window !== 'undefined' ? `http://${window.location.hostname}:3003` : 'http://localhost:3003');
-        const deliveryUrl = `${customerOrigin}/reparto/ver/${activeQrCodeData.token}`;
+        const origin = getCustomerOrigin() || (typeof window !== 'undefined' ? `${window.location.protocol}//${window.location.host}` : 'http://localhost:3003');
+        const deliveryUrl = `${origin}/reparto/ver/${activeQrCodeData.token}`;
 
         return (
           <div
