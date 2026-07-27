@@ -168,7 +168,6 @@ export async function registerRestaurantOrderRoutes(fastify: FastifyInstance): P
         expiresAt.setHours(expiresAt.getHours() + 3); // Vence en 3 horas
 
         if (!dToken) {
-          // Auto-curación: crear el token si el pedido está en tránsito pero no tiene token
           dToken = await (prisma as any).deliveryToken.create({
             data: {
               orderId: order.id,
@@ -176,8 +175,7 @@ export async function registerRestaurantOrderRoutes(fastify: FastifyInstance): P
               expiresAt,
             },
           });
-        } else if (new Date() > dToken.expiresAt) {
-          // Renovar token si ya expiró
+        } else {
           dToken = await (prisma as any).deliveryToken.update({
             where: { id: dToken.id },
             data: {
