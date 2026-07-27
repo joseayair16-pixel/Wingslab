@@ -5,10 +5,8 @@ import { useRouter } from 'next/navigation';
 import Script from 'next/script';
 import { io } from 'socket.io-client';
 import {
-  ApiResponse,
   AuthResponse,
   AuthUser,
-  SendCodeResponse,
   clearStoredSession,
   isAuthRequestError,
   persistApiBase,
@@ -24,10 +22,12 @@ import {
 } from '@sadel/shared';
 import { usePushNotifications } from '../hooks/usePushNotifications';
 import { useCartStore, type CartItem } from '../store/cartStore';
+import { useChatStore } from '../store/chatStore';
 import dynamic from 'next/dynamic';
 import { useStore } from '../store';
 import { RestaurantSearchBar } from '../components/RestaurantSearchBar';
 import { AuthModal } from '../components/AuthModal';
+import { ChatPanel } from '../components/ChatPanel';
 import { SaDelLogo } from '../components/SaDelLogo';
 
 const HomeView = dynamic(() => import('../views/HomeView').then(mod => mod.HomeView), { ssr: false });
@@ -47,8 +47,6 @@ type OrderStatus =
   | 'REJECTED';
 
 type PaymentMethod = 'CASH' | 'TRANSFER';
-type AuthMode = 'login' | 'register' | 'recovery';
-type AuthStep = 'welcome' | 'request' | 'verify';
 
 type RestaurantSummary = {
   id: string;
@@ -424,6 +422,8 @@ export default function Home() {
   const isSearchStale = searchQuery !== deferredSearchQuery;
   const setSearchQuery = useStore(state => state.setSearchQuery);
   const searchType = useStore(state => state.searchType);
+  const unreadMessagesMap = useChatStore(state => state.unreadMessagesMap);
+  const isChatOpen = useChatStore(state => state.isChatOpen);
   const [searchResults, setSearchResults] = useState<RestaurantSummary[] | null>(null);
   const searchCacheRef = useRef<Record<string, RestaurantSummary[]>>({});
   const [isSearchingProducts, setIsSearchingProducts] = useState(false);
@@ -807,13 +807,6 @@ export default function Home() {
     }, { enableHighAccuracy: false, timeout: 10000, maximumAge: 60000 });
   }
 
-  const [authMode, setAuthMode] = useState<AuthMode>('login');
-  const [authStep, setAuthStep] = useState<AuthStep>('welcome');
-  const [phone, setPhone] = useState('');
-  const [name, setName] = useState('');
-  const [password, setPassword] = useState('');
-  const [otpCode, setOtpCode] = useState('');
-  const [phoneExists, setPhoneExists] = useState<boolean | null>(null);
   const [restaurants, setRestaurants] = useState<RestaurantSummary[]>([]);
   const [featuredRestaurants, setFeaturedRestaurants] = useState<any[]>([]);
   const [offerProducts, setOfferProducts] = useState<any[]>([]);
@@ -947,8 +940,6 @@ export default function Home() {
   const [carouselIndex, setCarouselIndex] = useState(0);
   const [, setNotifications] = useState<CustomerNotification[]>([]);
   const [transientNotice, setTransientNotice] = useState<TransientNotice | null>(null);
-  const [sendingCode, setSendingCode] = useState(false);
-  const [verifyingCode, setVerifyingCode] = useState(false);
 
   // Join Platform States
   const [isRequestSuccessModalOpen, setIsRequestSuccessModalOpen] = useState(false);
@@ -980,16 +971,7 @@ export default function Home() {
   const chatMessageBufferRef = useRef<AudioBuffer | null>(null);
   const hasCustomerInteractedRef = useRef(false);
   const { isSubscribed, permission: pushPermission, subscribe: subscribePush, unsubscribe: unsubscribePush } = usePushNotifications();
-  // Chat Real-Time State
-  const [isChatOpen, setIsChatOpen] = useState(false);
-  const [chatMessages, setChatMessages] = useState<any[]>([]);
-  const [chatInput, setChatInput] = useState('');
-  const [loadingChat, setLoadingChat] = useState(false);
-  const [sendingChatMessage, setSendingChatMessage] = useState(false);
-  const [unreadMessagesMap, setUnreadMessagesMap] = useState<Record<string, number>>({});
   const selectedOrderIdRef = useRef(selectedOrderId);
-  const isChatOpenRef = useRef(isChatOpen);
-  const chatBottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     selectedOrderIdRef.current = selectedOrderId;
@@ -1001,16 +983,11 @@ export default function Home() {
       const chatOrderId = urlParams.get('chat');
       if (chatOrderId) {
         setSelectedOrderId(chatOrderId);
-        setIsChatOpen(true);
-        // Remove the parameter from the URL to prevent reopening on reload
+        useChatStore.getState().openChat(chatOrderId);
         window.history.replaceState({}, '', '/');
       }
     }
   }, []);
-
-  useEffect(() => {
-    isChatOpenRef.current = isChatOpen;
-  }, [isChatOpen]);
 
   const isAuthenticated = Boolean(token && sessionUser?.role === 'CUSTOMER');
 
@@ -1020,14 +997,6 @@ export default function Home() {
       return () => clearTimeout(t);
     }
   }, [isAuthChecked]);
-
-  useEffect(() => {
-    if (isChatOpen) {
-      setTimeout(() => {
-        chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-      }, 100);
-    }
-  }, [chatMessages, isChatOpen]);
   const [loadingDashboard, setLoadingDashboard] = useState(false);
   const [, setLoadingRestaurant] = useState(false);
   const [loadingDetail, setLoadingDetail] = useState(false);
@@ -1036,8 +1005,6 @@ export default function Home() {
   const [socketStatus, setSocketStatus] = useState<'idle' | 'connecting' | 'connected' | 'reconnecting'>('idle');
   const [, setSocketAttempts] = useState(0);
   const [error, setError] = useState('');
-  const [authMessage, setAuthMessage] = useState('');
-  const [mockCode, setMockCode] = useState('');
   const seenLiveEventKeysRef = useRef<string[]>([]);
   const [isSideMenuOpen, setIsSideMenuOpen] = useState(false);
   const [isCartOpen, setIsCartOpen] = useState(false);
@@ -1761,111 +1728,6 @@ export default function Home() {
   const cartDeliveryFee = cart.length ? (cartDeliveryFeeVal || 0) : 0;
   const cartTotal = cartSubtotal + cartServiceFee + cartDeliveryFee;
 
-  function persistSession(nextToken: string, user: AuthUser) {
-    setToken(nextToken);
-    setSessionUser(user);
-    persistStoredSession({
-      storageKey,
-      apiBase,
-      token: nextToken,
-      user,
-    });
-  }
-
-  // handleLoginSuccess moved downstream to prevent block-scoped variable usage before declaration
-
-  function openAuthMode(mode: AuthMode) {
-    setAuthMode(mode);
-    setAuthStep('request');
-    setPhone('');
-    setName('');
-    setError('');
-    setAuthMessage('');
-    setMockCode('');
-    setOtpCode('');
-    setPassword('');
-    setConfirmPassword('');
-    setPhoneExists(null);
-  }
-
-  function returnToWelcome() {
-    setAuthStep('welcome');
-    setPhone('');
-    setName('');
-    setError('');
-    setAuthMessage('');
-    setMockCode('');
-    setOtpCode('');
-    setPassword('');
-    setPhoneExists(null);
-  }
-
-  function handlePhoneChange(value: string) {
-    const nextPhone = value.replace(/\D/g, '').slice(-10);
-
-    setPhone(nextPhone);
-    setPhoneExists(null);
-    setError('');
-    setAuthMessage('');
-
-    if (authMode === 'register' && authStep === 'verify') {
-      setAuthStep('request');
-      setOtpCode('');
-      setMockCode('');
-    }
-  }
-
-  async function checkPhoneExists(nextPhone: string): Promise<boolean> {
-    const payload = await requestJson<ApiResponse<{ exists: boolean; phone: string }>>({
-      apiBase,
-      path: '/auth/check-phone',
-      options: {
-        method: 'POST',
-        body: JSON.stringify({ phone: nextPhone, role: 'CUSTOMER' }),
-      },
-      fallbackMessage: 'No se pudo validar el telefono.',
-    });
-
-    const exists = Boolean(payload.data?.exists);
-    setPhoneExists(exists);
-    return exists;
-  }
-
-  async function loginWithPassword() {
-    setVerifyingCode(true);
-    setError('');
-    setAuthMessage('');
-    persistApiBase(storageKey, apiBase);
-
-    try {
-      const payload = await requestJson<AuthResponse>({
-        apiBase,
-        path: '/auth/login',
-        options: {
-          method: 'POST',
-          body: JSON.stringify({
-            phone: phone.trim(),
-            password: password.trim(),
-          }),
-        },
-        fallbackMessage: 'No se pudo iniciar sesion.',
-      });
-
-      if (payload.data.user.role !== 'CUSTOMER') {
-        clearSession('La cuenta autenticada no pertenece a un cliente.');
-        return;
-      }
-
-      persistSession(payload.data.token, payload.data.user);
-      setPassword('');
-      setAuthStep('verify');
-    } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : 'Telefono o contraseña incorrectos.');
-    } finally {
-      setVerifyingCode(false);
-    }
-  }
-
   function clearSession(message?: string) {
     setToken('');
     setSessionUser(null);
@@ -1891,107 +1753,19 @@ export default function Home() {
     if (typeof window !== 'undefined') {
       window.localStorage.removeItem(profileAddressStorageKey);
     }
-    setAuthMode('login');
-    setAuthStep('welcome');
-    if (message) {
-      setAuthMessage(message);
-    }
   }
 
-  async function sendCode() {
-    setSendingCode(true);
-    setError('');
-    setAuthMessage('');
-    setMockCode('');
-    persistApiBase(storageKey, apiBase);
-
-    try {
-      // En modo registro, verificar que el teléfono no exista
-      if (authMode === 'register') {
-        const exists = await checkPhoneExists(phone.trim());
-
-        if (exists) {
-          setError('Este telefono ya tiene una cuenta registrada.');
-          return;
-        }
-      }
-
-      const payload = await requestJson<SendCodeResponse>({
-        apiBase,
-        path: '/auth/enviar-codigo',
-        options: {
-          method: 'POST',
-          body: JSON.stringify({
-            phone: phone.trim(),
-            intent: authMode === 'recovery' ? 'recovery' : 'register',
-            role: 'CUSTOMER',
-          }),
-        },
-        fallbackMessage: 'No se pudo enviar el codigo.',
-      });
-
-      setMockCode(payload.data.mockCode || '');
-      setAuthMessage(`Codigo enviado a ${payload.data.phone}.`);
-      setAuthStep('verify');
-    } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : 'No se pudo enviar el codigo.');
-    } finally {
-      setSendingCode(false);
-    }
+  function persistSession(nextToken: string, user: AuthUser) {
+    setToken(nextToken);
+    setSessionUser(user);
+    persistStoredSession({
+      storageKey,
+      apiBase,
+      token: nextToken,
+      user,
+    });
   }
 
-  async function verifyCode() {
-    setVerifyingCode(true);
-    setError('');
-    setAuthMessage('');
-
-    try {
-      const payload = await requestJson<any>({
-        apiBase,
-        path: '/auth/verificar-codigo',
-        options: {
-          method: 'POST',
-          body: JSON.stringify({
-            phone: phone.trim(),
-            code: otpCode,
-            name: name.trim() || undefined,
-            password: password.trim() || undefined,
-            intent: authMode === 'recovery' ? 'recovery' : 'register',
-            role: 'CUSTOMER',
-          }),
-        },
-        fallbackMessage: 'No se pudo verificar el codigo.',
-      });
-
-      if (authMode === 'recovery') {
-        setAuthMessage('Contraseña actualizada correctamente. Ahora puedes iniciar sesión.');
-        setAuthMode('login');
-        setOtpCode('');
-        setMockCode('');
-        setPassword('');
-        setConfirmPassword('');
-        setAuthStep('welcome');
-        return;
-      }
-
-      if (payload.data.user.role !== 'CUSTOMER') {
-        clearSession('La cuenta autenticada no pertenece a un cliente.');
-        return;
-      }
-
-      persistSession(payload.data.token, payload.data.user);
-      setAuthMessage(`Sesion iniciada para ${payload.data.user.name}.`);
-      setOtpCode('');
-      setMockCode('');
-      setPassword('');
-      setConfirmPassword('');
-      setAuthStep('verify');
-    } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : 'No se pudo verificar el codigo.');
-    } finally {
-      setVerifyingCode(false);
-    }
-  }
   // Sync userLocation to a ref to prevent GPS fluctuations from triggering/aborting the search effect
   const userLocationRef = useRef(userLocation);
   useEffect(() => {
@@ -2671,63 +2445,16 @@ export default function Home() {
   }, [apiBase, token]);
 
   const loadChatMessages = useCallback(async (orderId: string) => {
-    if (!token) return;
-    setLoadingChat(true);
-    try {
-      const response = await fetch(`${apiBase}/orders/${orderId}/messages`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
-      });
-      const data = await response.json();
-      if (data.success) {
-        setChatMessages(data.messages);
-        setUnreadMessagesMap((prev) => {
-          if (!prev[orderId]) return prev;
-          const copy = { ...prev };
-          delete copy[orderId];
-          return copy;
-        });
-      }
-    } catch (err) {
-      console.error('Error loading chat messages:', err);
-    } finally {
-      setLoadingChat(false);
-    }
+    const loadMessages = useChatStore.getState().loadChatMessages;
+    await loadMessages(orderId, apiBase, token);
   }, [apiBase, token]);
 
   const sendChatMessage = async () => {
-    if (!token || !selectedOrderId || !chatInput.trim() || sendingChatMessage) return;
-    const currentInput = chatInput;
-    setChatInput('');
-    setSendingChatMessage(true);
-
-    try {
-      const response = await fetch(`${apiBase}/orders/${selectedOrderId}/messages`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-        body: JSON.stringify({ content: currentInput }),
-      });
-      const data = await response.json();
-      if (data.success) {
-        setChatMessages((prev) => [...prev, data.message]);
-
-        // Mensaje enviado correctamente, no reproducimos sonido para el emisor
-      } else {
-        setChatInput(currentInput);
-        setToastMessage('Error al enviar mensaje');
-        setTimeout(() => setToastMessage(''), 2000);
-      }
-    } catch (err) {
-      console.error('Error sending message:', err);
-      setChatInput(currentInput);
-      setToastMessage('Error de conexión');
+    const state = useChatStore.getState();
+    const result = await state.sendChatMessage(apiBase, token);
+    if (result.error) {
+      setToastMessage(result.error);
       setTimeout(() => setToastMessage(''), 2000);
-    } finally {
-      setSendingChatMessage(false);
     }
   };
 
@@ -3475,37 +3202,22 @@ export default function Home() {
         void playChatMessageSound();
       }
 
-      if (payload.orderId === selectedOrderIdRef.current) {
-        setChatMessages((prev) => {
-          if (prev.some((msg) => msg.id === payload.id)) return prev;
-          return [...prev, payload];
-        });
+      const chatStore = useChatStore.getState();
+      const notification = chatStore.handleIncomingMessage(payload, selectedOrderIdRef.current, chatStore.isChatOpen);
 
-        // If chat is not open, increment the unread count
-        if (!isChatOpenRef.current) {
-          setUnreadMessagesMap((prev) => ({
-            ...prev,
-            [payload.orderId]: (prev[payload.orderId] || 0) + 1
-          }));
-        }
-      } else {
-        setUnreadMessagesMap((prev) => ({
-          ...prev,
-          [payload.orderId]: (prev[payload.orderId] || 0) + 1
-        }));
+      if (notification) {
+        setNotifications((current) =>
+          [
+            {
+              id: notification.id,
+              title: notification.title,
+              message: notification.message,
+              createdAt: new Date().toISOString(),
+            },
+            ...current,
+          ].slice(0, 8)
+        );
       }
-
-      setNotifications((current) =>
-        [
-          {
-            id: payload.id,
-            title: `Mensaje de ${payload.senderName}`,
-            message: payload.content,
-            createdAt: new Date().toISOString(),
-          },
-          ...current,
-        ].slice(0, 8)
-      );
     });
 
     return () => {
@@ -3575,7 +3287,6 @@ export default function Home() {
 
     setReordering(true);
     setError('');
-    setAuthMessage('');
 
     try {
       const payload = await requestJson<{ success: true; data: { id: string; orderReference: string } }>({
@@ -4192,7 +3903,7 @@ export default function Home() {
                     }}
                     onOpenChat={() => {
                       const orderId = pinnedOrder?.id || activeOrderListItem.id;
-                      setIsChatOpen(true);
+                      useChatStore.getState().openChat(orderId);
                       void loadChatMessages(orderId);
                     }}
                   />
@@ -5680,7 +5391,7 @@ export default function Home() {
                       <button
                         onClick={() => {
                           setIsDetailModalOpen(false);
-                          setIsChatOpen(true);
+                          useChatStore.getState().openChat(selectedOrder.id);
                           void loadChatMessages(selectedOrder.id);
                         }}
                         className="w-full flex items-center justify-center gap-3 p-4 bg-neutral-900 hover:bg-neutral-800 text-white rounded-2xl font-bold shadow-lg shadow-neutral-900/20 transition-all active:scale-[0.98] group"
@@ -6051,107 +5762,15 @@ export default function Home() {
           </div>
         )}
 
-        {/* Cajón de Chat Flotante (Estilo Rappi/Uber Premium) */}
+        {/* Chat Panel */}
         {isChatOpen && selectedOrder && (
-          <div className="fixed inset-0 z-50 flex justify-end bg-black/40 backdrop-blur-sm animate-fade-in" onClick={() => setIsChatOpen(false)}>
-            <div
-              className="w-full max-w-md bg-white/95 backdrop-blur-md h-full flex flex-col shadow-2xl border-l border-neutral-200 animate-slide-left"
-              onClick={(e) => e.stopPropagation()}
-            >
-              {/* Header */}
-              <div className="p-4 border-b border-neutral-100 flex items-center justify-between bg-sky-100/50">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-sky-500 flex items-center justify-center text-white font-bold shadow-md shadow-sky-200">
-                    {selectedOrder.restaurant.name.substring(0, 2).toUpperCase()}
-                  </div>
-                  <div>
-                    <h4 className="font-bold text-neutral-900 leading-tight">{selectedOrder.restaurant.name}</h4>
-                    <p className="text-xs text-neutral-500">Soporte y chat de pedido</p>
-                  </div>
-                </div>
-                <button
-                  className="p-2 hover:bg-neutral-100 rounded-full transition-colors"
-                  onClick={() => setIsChatOpen(false)}
-                >
-                  <svg className="w-6 h-6 text-neutral-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-              </div>
-
-              {/* Feed de Mensajes */}
-              <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-neutral-50/50">
-                {loadingChat ? (
-                  <div className="h-full flex items-center justify-center text-neutral-500">
-                    <div className="flex flex-col items-center gap-2">
-                      <div className="w-6 h-6 border-2 border-sky-500 border-t-transparent rounded-full animate-spin"></div>
-                      <p className="text-sm">Cargando chat...</p>
-                    </div>
-                  </div>
-                ) : chatMessages.length === 0 ? (
-                  <div className="h-full flex flex-col items-center justify-center text-center p-6 text-neutral-400">
-                    <span className="text-4xl mb-3">💬</span>
-                    <p className="font-semibold text-neutral-700">¡Inicia la conversación!</p>
-                    <p className="text-xs mt-1 max-w-xs">Escribe si tienes dudas sobre tu pedido, dirección o algún inconveniente.</p>
-                  </div>
-                ) : (
-                  chatMessages.map((msg: any) => {
-                    const isMe = msg.senderRole === 'CUSTOMER';
-                    return (
-                      <div key={msg.id} className={`flex ${isMe ? 'justify-end' : 'justify-start'} animate-scale-up`}>
-                        <div className={`max-w-[75%] rounded-2xl px-4 py-2.5 shadow-sm text-sm ${isMe
-                          ? 'bg-sky-500 text-white rounded-tr-none'
-                          : 'bg-white text-neutral-800 border border-neutral-100 rounded-tl-none'
-                          }`}>
-                          {!isMe && (
-                            <p className="text-[10px] font-bold text-sky-500 mb-0.5 uppercase tracking-wide">
-                              {selectedOrder.restaurant.businessType && selectedOrder.restaurant.businessType !== 'RESTAURANT' ? 'Tienda' : 'Restaurante'}
-                            </p>
-                          )}
-                          <p className="leading-relaxed whitespace-pre-wrap">{msg.content}</p>
-                          <p className={`text-[9px] text-right mt-1 ${isMe ? 'text-sky-200' : 'text-neutral-400'}`}>
-                            {new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                          </p>
-                        </div>
-                      </div>
-                    );
-                  })
-                )}
-                <div ref={chatBottomRef} />
-              </div>
-
-              {/* Input Area */}
-              <div className="p-4 border-t border-neutral-100 bg-white">
-                <form
-                  onSubmit={(e) => {
-                    e.preventDefault();
-                    void sendChatMessage();
-                  }}
-                  className="flex gap-2"
-                >
-                  <input
-                    type="text"
-                    value={chatInput}
-                    onChange={(e) => setChatInput(e.target.value)}
-                    placeholder="Escribe un mensaje al restaurante..."
-                    className="flex-1 px-4 py-2.5 border border-neutral-200 rounded-full text-sm focus:outline-none focus:border-sky-1000 focus:ring-1 focus:ring-sky-1000 transition-all bg-neutral-50"
-                  />
-                  <button
-                    type="submit"
-                    disabled={!chatInput.trim() || sendingChatMessage}
-                    className="w-10 h-10 bg-sky-500 text-white rounded-full flex items-center justify-center hover:bg-sky-600 active:scale-95 disabled:bg-neutral-200 disabled:text-neutral-400 transition-all shadow-md shadow-sky-200"
-                  >
-                    <svg className="w-5 h-5 transform rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-                    </svg>
-                  </button>
-                </form>
-              </div>
-            </div>
-          </div>
+          <ChatPanel
+            order={selectedOrder}
+            token={token}
+            apiBase={apiBase}
+            onClose={() => useChatStore.getState().closeChat()}
+          />
         )}
-
-
 
         {/* Modal de Calificación */}
         {isRatingModalOpen && (() => {
