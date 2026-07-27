@@ -340,8 +340,20 @@ const defaultApiBase = 'https://sadel-production.up.railway.app';
 function getCustomerOrigin(): string {
   if (process.env.NEXT_PUBLIC_CUSTOMER_URL) return process.env.NEXT_PUBLIC_CUSTOMER_URL;
   if (typeof window !== 'undefined') {
-    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+    const { hostname, port, protocol } = window.location;
+    if (hostname === 'localhost' || hostname === '127.0.0.1') {
       return 'http://localhost:3000';
+    }
+    const prefixes = ['restaurante.', 'restaurant.', 'admin.', 'dashboard.', 'r.'];
+    for (const prefix of prefixes) {
+      if (hostname.startsWith(prefix)) {
+        const rest = hostname.slice(prefix.length);
+        return `${protocol}//app.${rest}${port ? `:${port}` : ''}`;
+      }
+    }
+    const subdomains = hostname.split('.');
+    if (subdomains.length >= 3) {
+      return `${protocol}//${subdomains.slice(1).join('.')}${port ? `:${port}` : ''}`;
     }
   }
   return '';
@@ -7526,15 +7538,16 @@ export default function Home() {
                       </span>
                     )}
                   </button>
+                  <SaDelLogo className="hidden h-9 w-auto object-contain lg:block" />
                 </div>
                 <div className="px-3 text-center flex flex-col items-center gap-0">
-                  <SaDelLogo className="h-4 w-auto object-contain lg:h-6" />
+                  <SaDelLogo className="h-4 w-auto object-contain lg:hidden" />
                   <p className="truncate text-lg font-semibold tracking-[-0.03em] text-neutral-950 md:text-2xl">
                     {restaurantName}
                   </p>
                 </div>
                 <div className="flex items-center justify-end">
-                  <span className="hidden rounded-full bg-neutral-100 px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.18em] text-neutral-500 lg:inline-flex">
+                  <span className="hidden rounded-full bg-sky-100 px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.18em] text-sky-700 lg:inline-flex">
                     {businessTypeLabel(profile?.businessType)}
                   </span>
                 </div>
@@ -7545,8 +7558,9 @@ export default function Home() {
           <div className="flex min-h-[calc(100dvh-5rem)] w-full bg-transparent">
             <aside className="fixed left-0 top-[5rem] hidden h-[calc(100dvh-5rem)] w-[260px] border-r border-black/5 bg-white lg:flex lg:flex-col">
               <div className="flex-1 overflow-y-auto px-4 py-6">
-                <div className="rounded-[28px] border border-black/5 bg-white p-4 shadow-[0_16px_45px_rgba(15,15,15,0.04)]">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-neutral-400">Operacion</p>
+                <div className="relative overflow-hidden rounded-[28px] border border-sky-200/60 bg-white p-4 shadow-[0_16px_45px_rgba(14,165,233,0.08)]">
+                  <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-sky-300/80 via-cyan-200/70 to-transparent" />
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-sky-600">Operacion</p>
                   <p className="mt-2 text-lg font-semibold tracking-[-0.03em] text-neutral-950">{restaurantName}</p>
                   <p className="mt-1 text-sm text-neutral-500">{operationalStatusLabel}</p>
                 </div>
@@ -7853,7 +7867,7 @@ export default function Home() {
                             )}
                             {profile && (<button
                               type="button"
-                              onClick={() => {
+                              onClick={async () => {
                                 const origin = getCustomerOrigin();
                                 if (!origin) {
                                   pushToast('error', 'No configurado', 'Define NEXT_PUBLIC_CUSTOMER_URL en las variables de entorno para compartir tu tienda.');
@@ -7861,9 +7875,7 @@ export default function Home() {
                                 }
                                 const url = `${origin}/restaurantes/${profile!.id}`;
                                 try {
-                                  if (navigator.clipboard?.writeText) {
-                                    navigator.clipboard.writeText(url);
-                                  }
+                                  await navigator.clipboard.writeText(url);
                                   pushToast('success', 'Enlace copiado', 'El enlace de tu tienda se copió al portapapeles.');
                                 } catch {
                                   pushToast('error', 'Error', 'No se pudo copiar el enlace. Intenta de nuevo.');
@@ -12031,8 +12043,9 @@ export default function Home() {
                 </div>
 
                 <div className="min-h-0 flex-1 overflow-y-auto px-4 py-5">
-                  <div className="rounded-[28px] border border-black/5 bg-white p-4 shadow-[0_16px_45px_rgba(15,15,15,0.04)]">
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-neutral-400">Operacion</p>
+                  <div className="relative overflow-hidden rounded-[28px] border border-sky-200/60 bg-white p-4 shadow-[0_16px_45px_rgba(14,165,233,0.08)]">
+                    <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-sky-300/80 via-cyan-200/70 to-transparent" />
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-sky-600">Operacion</p>
                     <p className="mt-2 text-lg font-semibold tracking-[-0.03em] text-neutral-950">{restaurantName}</p>
                     <p className="mt-1 text-sm text-neutral-500">{operationalStatusLabel}</p>
                   </div>

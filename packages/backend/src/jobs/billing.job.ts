@@ -24,61 +24,100 @@ async function processAllRestaurants(): Promise<void> {
 }
 
 async function catchUpMissedCuts(): Promise<void> {
-  const cutoff = new Date(Date.now() - MS_PER_WEEK);
   const now = new Date();
-  const overdue = await prisma.restaurant.findMany({
-    where: {
-      status: 'ACTIVE',
-      OR: [
-        { lastBillingSettledAt: null },
-        { lastBillingSettledAt: { lt: cutoff } },
-        { lastBillingSettledAt: { gt: now } },
-      ],
-    },
-    select: { id: true, name: true },
+  const weekAgo = new Date(now.getTime() - MS_PER_WEEK);
+
+  const restaurants = await prisma.restaurant.findMany({
+    where: { status: 'ACTIVE' },
+    select: { id: true, name: true, lastBillingSettledAt: true, createdAt: true },
   });
 
-  if (overdue.length === 0) return;
+  if (restaurants.length === 0) return;
 
-  console.log(`[BillingJob] Catch-up: ${overdue.length} restaurant(s) missed a weekly cut. Processing...`);
-  for (const restaurant of overdue) {
+  const allSettlements = await prisma.restaurantBillingSettlement.findMany({
+    where: { status: { in: ['PENDING', 'OVERDUE'] } },
+    select: { restaurantId: true, periodEnd: true },
+  });
+
+  const pendingMap = new Map<string, Date>();
+  for (const s of allSettlements) {
+    const existing = pendingMap.get(s.restaurantId);
+    if (!existing || s.periodEnd > existing) pendingMap.set(s.restaurantId, s.periodEnd);
+  }
+
+  const toProcess: Array<{ id: string; name: string }> = [];
+
+  for (const r of restaurants) {
     try {
-      console.log(`[BillingJob] Catch-up: Processing ${restaurant.name} (${restaurant.id})...`);
-      await createBillingSettlement(restaurant.id);
-      console.log(`[BillingJob] Catch-up: Successfully created settlement for ${restaurant.name}.`);
+      const lastSettled = r.lastBillingSettledAt || r.createdAt;
+
+      const latestPending = pendingMap.get(r.id);
+      if (latestPending && latestPending >= lastSettled) continue;
+
+      const deliveredCount = await prisma.order.count({
+        where: {
+          restaurantId: r.id,
+          status: { in: ['DELIVERED', 'COMPLETED'] },
+          createdAt: { gte: lastSettled },
+        },
+      });
+
+      if (deliveredCount === 0) {
+        if (lastSettled < weekAgo) {
+          await prisma.restaurant.update({
+            where: { id: r.id },
+            data: { lastBillingSettledAt: now },
+          });
+          console.log(`[BillingJob] Catch-up: Marcado como procesado ${r.name} (${r.id}) — sin pedidos.`);
+        }
+        continue;
+      }
+
+      toProcess.push({ id: r.id, name: r.name });
     } catch (error) {
-      console.error(`[BillingJob] Catch-up: Failed to create settlement for ${restaurant.name}:`, error);
+      console.error(`[BillingJob] Catch-up: Error al verificar ${r.name}:`, error);
+    }
+  }
+
+  if (toProcess.length === 0) {
+    console.log('[BillingJob] Catch-up: Todos los restaurantes están al día.');
+    return;
+  }
+
+  console.log(`[BillingJob] Catch-up: ${toProcess.length} restaurante(s) requieren corte.`);
+  for (const r of toProcess) {
+    try {
+      console.log(`[BillingJob] Catch-up: Procesando ${r.name} (${r.id})...`);
+      await createBillingSettlement(r.id);
+      console.log(`[BillingJob] Catch-up: Corte creado para ${r.name}.`);
+    } catch (error) {
+      console.error(`[BillingJob] Catch-up: Error al crear corte para ${r.name}:`, error);
     }
   }
 }
 
 export function startBillingJob() {
-  // Periodic catch-up: every 30 minutes, check if any restaurant missed a weekly cut.
-  // This ensures that even if the server was down on Sunday at 23:59, the cut is
-  // recovered within 30 minutes of restarting — no matter what day it is.
-  cron.schedule('*/30 * * * *', async () => {
+  cron.schedule('*/15 * * * *', async () => {
     try {
       await catchUpMissedCuts();
     } catch (error) {
-      console.error('[BillingJob] Health check failed:', error);
+      console.error('[BillingJob] Error en verificación cada 15 min:', error);
     }
   });
 
-  // Run every Sunday at 11:59 PM for the exact scheduled cut
   cron.schedule('59 23 * * 0', async () => {
-    console.log('[BillingJob] Starting weekly billing cut-off...');
+    console.log('[BillingJob] Iniciando corte semanal...');
     try {
       await processAllRestaurants();
-      console.log('[BillingJob] Weekly billing cut-off completed.');
+      console.log('[BillingJob] Corte semanal completado.');
     } catch (error) {
-      console.error('[BillingJob] Critical error in billing job:', error);
+      console.error('[BillingJob] Error crítico en corte semanal:', error);
     }
   });
 
-  // Also run once immediately at startup to catch up on cuts missed while the server was off
   catchUpMissedCuts().then(() => {
-    console.log('[BillingJob] Startup catch-up check complete.');
+    console.log('[BillingJob] Verificación inicial completada.');
   });
 
-  console.log('[BillingJob] Scheduled for every Sunday at 11:59 PM. Health check every 30 min.');
+  console.log('[BillingJob] Programado: domingo 23:59 corte + verificación cada 15 min.');
 }
