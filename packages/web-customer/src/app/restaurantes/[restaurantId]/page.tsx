@@ -4838,10 +4838,10 @@ function triggerHaptic(pattern: number | number[] = 10) {
                     </span>
                   </div>
 
-                  <div className={isPromoCarousel ? "relative mt-5" : "mt-5"}>
+                  <div className={isPromoCarousel ? "relative mt-5" : "mt-5 overflow-hidden"}>
                     <div className={isPromoCarousel
                       ? "flex gap-3 overflow-x-auto pb-2 scroll-smooth snap-x snap-mandatory [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-                      : "mt-5 grid gap-4 md:grid-cols-2"
+                      : "grid gap-4 sm:grid-cols-2 lg:grid-cols-3"
                     }>
                     {category.products.map((product) => {
                       const quantity = getCartQuantity(product.id);
@@ -4978,8 +4978,8 @@ function triggerHaptic(pattern: number | number[] = 10) {
                               </div>
                               <div className="flex flex-1 flex-col justify-between p-5">
                                 <div>
-                                  <h3 className="text-lg font-semibold text-neutral-950 dark:text-white">{product.name}</h3>
-                                  <p className="mt-2 text-sm leading-6 text-neutral-600 dark:text-neutral-400">{product.description}</p>
+                                  <h3 className="text-lg font-semibold text-neutral-950 dark:text-white break-words">{product.name}</h3>
+                                  <p className="mt-2 text-sm leading-6 text-neutral-600 dark:text-neutral-400 break-words">{product.description}</p>
                                   {product.sellBy === 'WEIGHT' ? (
                                     <p className="mt-4 text-xl font-semibold text-neutral-950 dark:text-white">{formatCurrency(product.unitPrice || product.price)}/kg</p>
                                   ) : product.discountPrice ? (
