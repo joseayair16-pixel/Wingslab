@@ -131,7 +131,7 @@ self.addEventListener('fetch', function (event) {
         if (cachedResponse) {
           // Fetch in background to update cache
           fetch(event.request).then(function (networkResponse) {
-            if (networkResponse && networkResponse.ok) {
+            if (networkResponse && networkResponse.ok && networkResponse.status !== 206) {
               caches.open(CACHE_NAME).then(function (cache) {
                 cache.put(event.request, networkResponse);
               });
@@ -141,7 +141,7 @@ self.addEventListener('fetch', function (event) {
         }
 
         return fetch(event.request).then(function (networkResponse) {
-          if (networkResponse && networkResponse.ok) {
+          if (networkResponse && networkResponse.ok && networkResponse.status !== 206) {
             var responseToCache = networkResponse.clone();
             caches.open(CACHE_NAME).then(function (cache) {
               cache.put(event.request, responseToCache);

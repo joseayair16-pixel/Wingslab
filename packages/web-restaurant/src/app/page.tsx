@@ -631,6 +631,7 @@ export default function Home() {
   const [featuredPackages, setFeaturedPackages] = useState<{ days: number; price: number }[]>([]);
   const [showFeaturedModal, setShowFeaturedModal] = useState(false);
   const [showPhonePreviewModal, setShowPhonePreviewModal] = useState(false);
+  const [showMenuPreview, setShowMenuPreview] = useState(false);
   const [proofPreviewUrl, setProofPreviewUrl] = useState<string | null>(null);
   const [featuredDays, setFeaturedDays] = useState(1);
   const [featuredPaymentProof, setFeaturedPaymentProof] = useState('');
@@ -9857,8 +9858,17 @@ export default function Home() {
                           )}
                           <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
                           <div className="absolute inset-x-0 top-0 flex items-start justify-between gap-3 p-4 md:p-6 lg:p-8">
-                            <div className="rounded-full bg-white/90 backdrop-blur-md px-4 py-2.5 text-[11px] font-bold uppercase tracking-widest text-sky-900 shadow-sm border border-white/40 ring-1 ring-black/5">
-                              Vista Previa: Tu Tienda
+                            <div className="flex items-center gap-2">
+                              <div className="rounded-full bg-white/90 backdrop-blur-md px-4 py-2.5 text-[11px] font-bold uppercase tracking-widest text-sky-900 shadow-sm border border-white/40 ring-1 ring-black/5">
+                                Vista Previa: Tu Tienda
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => setShowMenuPreview(true)}
+                                className="rounded-full bg-white/90 backdrop-blur-md px-4 py-2.5 text-[11px] font-bold uppercase tracking-widest text-neutral-700 shadow-sm border border-white/40 ring-1 ring-black/5 transition hover:bg-white hover:text-sky-900"
+                              >
+                                📱 Menu en cliente
+                              </button>
                             </div>
                             <button
                               type="button"
@@ -10299,7 +10309,125 @@ export default function Home() {
                           <EmptyState text="Todavia no tienes categorias. Crea la primera para empezar a publicar tu menu." />
                         ) : null}
                       </div>
+
+                {showMenuPreview ? (
+                  <div
+                    className="fixed inset-0 z-[85] flex items-center justify-center bg-black/60 px-4 py-5 backdrop-blur-sm animate-fade-in"
+                    onClick={() => setShowMenuPreview(false)}
+                  >
+                    <div
+                      className="relative flex items-center justify-center"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <button
+                        onClick={() => setShowMenuPreview(false)}
+                        className="absolute -top-12 right-0 sm:right-auto sm:-top-12 sm:left-1/2 sm:-translate-x-1/2 flex items-center gap-1.5 rounded-full bg-white/90 px-4 py-2 text-sm font-semibold text-neutral-700 shadow-lg hover:bg-white hover:text-neutral-900 transition-all z-10"
+                      >
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                        Cerrar vista previa
+                      </button>
+                      <div className="relative w-[340px] h-[620px] bg-neutral-900 rounded-[44px] p-3 shadow-2xl ring-1 ring-white/10 overflow-hidden">
+                        <div className="absolute top-0 inset-x-0 h-6 flex justify-center z-20">
+                          <div className="w-32 h-5.5 bg-neutral-900 rounded-b-2xl"></div>
+                        </div>
+                        <div className="relative w-full h-full bg-white rounded-[36px] overflow-hidden flex flex-col">
+                          <div className="flex justify-between items-center px-5 pt-3 pb-0.5 text-[9px] font-bold text-neutral-900">
+                            <span>9:41</span>
+                            <div className="flex gap-1 items-center">
+                              <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/></svg>
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M15.67 4H14V2h-4v2H8.33C7.6 4 7 4.6 7 5.33v15.33C7 21.4 7.6 22 8.33 22h7.33c.74 0 1.34-.6 1.34-1.33V5.33C17 4.6 16.4 4 15.67 4z"/></svg>
+                            </div>
+                          </div>
+                          <div className="px-3.5 py-1.5 border-b border-neutral-100">
+                            <h1 className="text-sm font-black text-neutral-900">{storeDraft.name || profile.name}</h1>
+                            <p className="text-[10px] text-neutral-500 mt-0.5">Menú</p>
+                          </div>
+                          <div className="flex-1 overflow-y-auto px-3 py-2 space-y-4">
+                            {storeCategories.length === 0 ? (
+                              <div className="flex flex-col items-center justify-center h-full text-center">
+                                <p className="text-xs text-neutral-400">Sin categorias disponibles</p>
+                              </div>
+                            ) : (
+                              storeCategories.map((category) => (
+                                <div key={category.id}>
+                                  <h2 className="text-xs font-bold text-neutral-900 mb-2">{category.name}</h2>
+                                  {category.products.length === 0 ? (
+                                    <div className="flex items-center justify-center h-20 rounded-2xl border border-dashed border-neutral-200 bg-neutral-50">
+                                      <p className="text-[10px] text-neutral-400">Sin productos</p>
+                                    </div>
+                                  ) : (
+                                    <div className="space-y-2">
+                                      {category.products.map((product) => (
+                                        <article
+                                          key={product.id}
+                                          className="overflow-hidden rounded-2xl border border-black/[0.04] bg-white shadow-[0_1px_6px_rgba(0,0,0,0.02)]"
+                                        >
+                                          <div className="flex h-full gap-0">
+                                            <div className="relative h-28 w-28 shrink-0">
+                                              {product.image ? (
+                                                <>
+                                                  <div
+                                                    className="h-full w-full overflow-hidden"
+                                                    style={{ transform: `scale(${(product.imageZoom ?? 100) / 100})`, transformOrigin: 'center center' }}
+                                                  >
+                                                    <img
+                                                      src={product.image}
+                                                      alt={product.name}
+                                                      className="h-full w-full object-contain transition-opacity duration-300"
+                                                      style={{ objectPosition: product.imagePosition || undefined }}
+                                                      loading="lazy"
+                                                    />
+                                                  </div>
+                                                  {product.discountPrice ? (
+                                                    <div className="absolute left-1 top-1 z-10 flex items-center gap-1 rounded-full bg-rose-500/90 px-2 py-0.5 text-[8px] font-bold text-white shadow-sm backdrop-blur-sm">
+                                                      <span>-{Math.round((1 - product.discountPrice / product.price) * 100)}%</span>
+                                                    </div>
+                                                  ) : null}
+                                                </>
+                                              ) : (
+                                                <div className="h-full w-full bg-gradient-to-br from-neutral-100 to-neutral-200" />
+                                              )}
+                                            </div>
+                                            <div className="flex flex-1 flex-col justify-between p-3 min-w-0">
+                                              <div>
+                                                <h3 className="text-[11px] font-semibold text-neutral-950 break-words leading-tight">{product.name}</h3>
+                                                <p className="mt-1 text-[9px] leading-relaxed text-neutral-500 break-words line-clamp-2">{product.description}</p>
+                                                {product.discountPrice ? (
+                                                  <div className="mt-1.5 flex items-center gap-1.5 flex-wrap">
+                                                    <span className="text-xs font-bold text-rose-600">{formatCurrency(product.discountPrice)}</span>
+                                                    <span className="text-[9px] text-neutral-400 line-through">{formatCurrency(product.price)}</span>
+                                                    <span className="rounded-full bg-rose-50 px-1.5 py-0.5 text-[7px] font-bold text-rose-600">-{Math.round((1 - product.discountPrice / product.price) * 100)}%</span>
+                                                  </div>
+                                                ) : (
+                                                  <p className="mt-1.5 text-xs font-semibold text-neutral-950">{formatCurrency(product.price)}</p>
+                                                )}
+                                              </div>
+                                              <div className="mt-2 flex items-center justify-end">
+                                                <div className="rounded-full bg-neutral-100 px-3 py-1 text-[8px] font-bold text-neutral-900">
+                                                  Agregar
+                                                </div>
+                                              </div>
+                                            </div>
+                                          </div>
+                                        </article>
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
+                              ))
+                            )}
+                          </div>
+                          <div className="absolute bottom-1.5 inset-x-0 flex justify-center">
+                            <div className="w-20 h-1 bg-black/15 rounded-full"></div>
+                          </div>
+                        </div>
+                      </div>
                     </div>
+                  </div>
+                ) : null}
+
+                    </div>
+
                   ) : (activeSection === 'settings' || (activeSection === 'store' && !profile)) ? (
                     <>
 

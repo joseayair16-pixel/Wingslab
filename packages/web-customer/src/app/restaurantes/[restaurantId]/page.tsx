@@ -2438,7 +2438,7 @@ function triggerHaptic(pattern: number | number[] = 10) {
 
   return (
     <main
-      className="min-h-[100dvh] bg-[#f5f1e8] text-neutral-900 transition-colors duration-500"
+      className="min-h-[100dvh] bg-[#fafafa] text-neutral-900 transition-colors duration-500"
       onTouchStart={handleTouchStart}
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}

@@ -3569,7 +3569,7 @@ export default function Home() {
 
   if (!isAuthChecked || !isLocationChecked) {
     return (
-      <div className="min-h-screen bg-[#f5f1e8] flex items-center justify-center">
+      <div className="min-h-screen bg-[#fafafa] flex items-center justify-center">
         <div className="text-neutral-500 text-sm font-medium">Cargando...</div>
       </div>
     );
@@ -3586,7 +3586,7 @@ export default function Home() {
           </div>
 
           <div className="text-center">
-            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-[#f5f1e8] text-neutral-600">
+            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-[#f0f0f0] text-neutral-600">
               <svg className="h-7 w-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.828 0l-4.243-4.243a8 8 0 1111.314 0z" />
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
@@ -3773,7 +3773,7 @@ export default function Home() {
 
   return (
     <main
-      className={`relative min-h-[100dvh] bg-[#f5f1e8] text-neutral-900 transition-colors duration-300 ${isCartOpen || isSideMenuOpen ? 'overflow-hidden' : ''}`}
+      className={`relative min-h-[100dvh] bg-[#fafafa] text-neutral-900 transition-colors duration-300 ${isCartOpen || isSideMenuOpen ? 'overflow-hidden' : ''}`}
       onTouchStart={handleTouchStart}
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
@@ -3782,7 +3782,7 @@ export default function Home() {
         src={`https://maps.googleapis.com/maps/api/js?key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || ''}&libraries=places&loading=async`}
         strategy="lazyOnload"
       />
-      <div className={`fixed inset-0 z-[9999] bg-[#f7f7f2] transition-opacity duration-700 pointer-events-none ${isTransitioning ? 'opacity-100' : 'opacity-0'}`} />
+      <div className={`fixed inset-0 z-[9999] bg-white transition-opacity duration-700 pointer-events-none ${isTransitioning ? 'opacity-100' : 'opacity-0'}`} />
       {/* Pull to refresh indicator */}
       <div
         className={`fixed top-0 left-0 right-0 z-50 flex justify-center pt-2 pointer-events-none transition-opacity ${pullDistance > 0 || isRefreshing ? 'opacity-100' : 'opacity-0'}`}
@@ -4021,7 +4021,7 @@ export default function Home() {
         <div className="absolute inset-0 bg-black/40 backdrop-blur-[1px]" onClick={() => setIsSideMenuOpen(false)} />
         <aside
           ref={sideMenuRef}
-          className={`absolute left-0 top-0 flex h-full w-[300px] max-w-[85vw] flex-col bg-[#fefefc] shadow-[0_24px_90px_rgba(15,15,15,0.18)] transition-transform duration-300 ease-out ${isSideMenuOpen ? 'translate-x-0' : '-translate-x-full'}`}
+          className={`absolute left-0 top-0 flex h-full w-[300px] max-w-[85vw] flex-col bg-white shadow-[0_24px_90px_rgba(15,15,15,0.18)] transition-transform duration-300 ease-out ${isSideMenuOpen ? 'translate-x-0' : '-translate-x-full'}`}
         >
           <div className="flex items-center justify-between px-5 py-4 border-b border-black/[0.04]">
             <p className="text-base font-bold tracking-tight text-neutral-900">Tu cuenta</p>
@@ -5123,11 +5123,11 @@ export default function Home() {
                     >
                       <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-sky-100 text-sky-500 transition-colors group-hover:bg-sky-200">
                         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 10.5V6a3.75 3.75 0 10-7.5 0v4.5m11.356-1.993l1.263 12c.07.665-.45 1.243-1.119 1.243H4.25a1.125 1.125 0 01-1.12-1.243l1.264-12A1.125 1.125 0 015.513 7.5h12.974c.576 0 1.059.435 1.119 1.007zM8.625 10.5a.375.375 0 11-.75 0 .375.375 0 01.75 0zm7.5 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z" />
                         </svg>
                       </div>
                       <div className="min-w-0 flex-1">
-                        <p className="text-xs font-extrabold text-neutral-900 group-hover:text-sky-500 transition-colors">Vender en SaDeL</p>
+                        <p className="text-xs font-extrabold text-neutral-900 group-hover:text-sky-500 transition-colors">Quiero vender por SaDeL</p>
                         <p className="text-[10px] text-neutral-500 font-semibold mt-0.5">Registra tu negocio y vende más</p>
                       </div>
                       <div className="text-neutral-300 group-hover:text-sky-1000 transition-colors pl-1">
@@ -5145,7 +5145,7 @@ export default function Home() {
                     >
                       <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600 transition-colors group-hover:bg-indigo-100">
                         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M8 17a2 2 0 100-4 2 2 0 000 4zM18 17a2 2 0 100-4 2 2 0 000 4zM8 15h2l2-2.5h2l1.5 2.5M12 10.5V7l-1.5 1" />
                         </svg>
                       </div>
                       <div className="min-w-0 flex-1">

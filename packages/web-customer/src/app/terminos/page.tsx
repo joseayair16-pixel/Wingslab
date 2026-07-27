@@ -5,7 +5,7 @@ import { SaDelLogo } from '../../components/SaDelLogo';
 
 export default function TermsPage() {
   return (
-    <main className="min-h-screen bg-[#f5f1e8] text-neutral-900 font-sans pb-16">
+    <main className="min-h-screen bg-[#fafafa] text-neutral-900 font-sans pb-16">
       {/* Header */}
       <header className="sticky top-0 z-40 border-b border-black/5 bg-white">
         <div className="mx-auto flex max-w-4xl items-center justify-between px-4 py-4 md:px-6">

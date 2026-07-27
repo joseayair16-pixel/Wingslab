@@ -49,7 +49,7 @@ export default function RootLayout({
     <html lang="es" className={`${inter.variable} ${plusJakartaSans.variable} light`} style={{ colorScheme: 'light' }}>
       <head>
         <meta name="color-scheme" content="light" />
-        <meta name="theme-color" content="#f5f1e8" />
+        <meta name="theme-color" content="#fafafa" />
         <link rel="preconnect" href="https://maps.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
       </head>

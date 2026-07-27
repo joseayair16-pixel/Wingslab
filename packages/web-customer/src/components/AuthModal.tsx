@@ -347,7 +347,7 @@ export function AuthModal({ isOpen, onClose, onSuccess, apiBase }: AuthModalProp
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-md p-4 max-sm:p-0 max-sm:items-end animate-[fadeIn_0.2s_ease-out]">
-      <div className="relative w-full max-w-md overflow-hidden rounded-[32px] bg-white p-6 shadow-2xl border border-black/5 flex flex-col max-h-[90dvh] max-sm:max-h-[92dvh] max-sm:rounded-t-[32px] max-sm:rounded-b-none pb-[calc(1.5rem+env(safe-area-inset-bottom))] animate-[scaleUp_0.25s_cubic-bezier(0.16,1,0.3,1)] max-sm:animate-[slideUp_0.3s_cubic-bezier(0.16,1,0.3,1)]">
+      <div className="relative w-full max-w-md overflow-hidden rounded-[32px] bg-white p-6 shadow-[0_32px_64px_-12px_rgba(0,0,0,0.14)] border border-black/[0.04] flex flex-col max-h-[90dvh] max-sm:max-h-[92dvh] max-sm:rounded-t-[32px] max-sm:rounded-b-none pb-[calc(1.5rem+env(safe-area-inset-bottom))] animate-[scaleUp_0.25s_cubic-bezier(0.16,1,0.3,1)] max-sm:animate-[slideUp_0.3s_cubic-bezier(0.16,1,0.3,1)]">
         {/* Close Button */}
         <button
           type="button"
@@ -374,7 +374,7 @@ export function AuthModal({ isOpen, onClose, onSuccess, apiBase }: AuthModalProp
               <div className="text-center">
                 <h3 className="text-2xl font-bold tracking-[-0.03em] text-neutral-900">¡Hola!</h3>
                 <p className="mt-2 text-sm text-neutral-500 leading-relaxed">
-                  Inicia sesión o crea una cuenta para descubrir los mejores restaurantes y hacer tus pedidos.
+                  Inicia sesión para pedir por SaDeL
                 </p>
 
                 <div className="mt-8 grid gap-3">
@@ -384,7 +384,7 @@ export function AuthModal({ isOpen, onClose, onSuccess, apiBase }: AuthModalProp
                       setAuthMode('login');
                       setAuthStep('request');
                     }}
-                    className="w-full rounded-2xl bg-[#0a0a0a] py-3.5 text-sm font-semibold text-[#ffffff] transition hover:bg-[#262626] active:scale-[0.98]"
+                    className="w-full rounded-2xl bg-[#0a0a0a] py-3.5 text-sm font-semibold text-[#ffffff] transition-all duration-200 hover:bg-[#262626] hover:shadow-[0_8px_24px_rgba(10,10,10,0.12)] active:scale-[0.98]"
                   >
                     Ya tengo cuenta
                   </button>
@@ -394,7 +394,7 @@ export function AuthModal({ isOpen, onClose, onSuccess, apiBase }: AuthModalProp
                       setAuthMode('register');
                       setAuthStep('request');
                     }}
-                    className="w-full rounded-2xl border border-black/10 bg-white py-3.5 text-sm font-semibold text-[#171717] transition hover:bg-neutral-50 active:scale-[0.98] shadow-sm"
+                    className="w-full rounded-2xl border border-black/[0.08] bg-white py-3.5 text-sm font-semibold text-[#171717] transition-all duration-200 hover:bg-neutral-50 hover:shadow-[0_8px_24px_rgba(0,0,0,0.06)] active:scale-[0.98] shadow-sm"
                   >
                     Registrarme
                   </button>
@@ -402,12 +402,12 @@ export function AuthModal({ isOpen, onClose, onSuccess, apiBase }: AuthModalProp
               </div>
             ) : (
               <div>
-                <div className="mb-5">
-                  <span className="inline-block rounded-full bg-accent-soft px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-sky-500">
+                <div className="mb-6">
+                  <span className="inline-block rounded-full bg-accent-soft/80 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.12em] text-sky-600">
                     {authMode === 'register' ? 'Nuevo usuario' : authMode === 'recovery' ? 'Restablecer' : 'Miembro'}
                   </span>
-                  <h3 className="mt-2 text-xl font-bold tracking-[-0.03em] text-neutral-955">{modeCopy.title}</h3>
-                  <p className="text-xs text-neutral-500 mt-1">{modeCopy.subtitle}</p>
+                  <h3 className="mt-3 text-2xl font-bold tracking-[-0.03em] text-neutral-950">{modeCopy.title}</h3>
+                  <p className="text-sm text-neutral-500 mt-1.5">{modeCopy.subtitle}</p>
                 </div>
 
                 <div className="grid gap-4">
@@ -432,7 +432,7 @@ export function AuthModal({ isOpen, onClose, onSuccess, apiBase }: AuthModalProp
                         type="button"
                         onClick={loginWithPassword}
                         disabled={verifyingCode || phone.length !== 10 || !password.trim()}
-                        className="mt-2 w-full rounded-2xl bg-[#0a0a0a] py-3.5 text-sm font-semibold text-[#ffffff] transition hover:bg-[#262626] disabled:cursor-not-allowed disabled:bg-neutral-200 disabled:text-neutral-400 active:scale-[0.98]"
+                        className="mt-3 w-full rounded-2xl bg-[#0a0a0a] py-3.5 text-sm font-semibold text-[#ffffff] transition-all duration-200 hover:bg-[#262626] hover:shadow-[0_8px_24px_rgba(10,10,10,0.12)] disabled:cursor-not-allowed disabled:bg-neutral-100 disabled:text-neutral-400 disabled:shadow-none active:scale-[0.98]"
                       >
                         {verifyingCode ? 'Ingresando...' : 'Iniciar sesión'}
                       </button>
@@ -462,7 +462,7 @@ export function AuthModal({ isOpen, onClose, onSuccess, apiBase }: AuthModalProp
                             type="button"
                             onClick={sendCode}
                             disabled={sendingCode || phone.length !== 10}
-                            className="mt-2 w-full rounded-2xl bg-[#0a0a0a] py-3.5 text-sm font-semibold text-[#ffffff] transition hover:bg-[#262626] disabled:cursor-not-allowed disabled:bg-neutral-200 disabled:text-neutral-400 active:scale-[0.98]"
+                            className="mt-3 w-full rounded-2xl bg-[#0a0a0a] py-3.5 text-sm font-semibold text-[#ffffff] transition-all duration-200 hover:bg-[#262626] hover:shadow-[0_8px_24px_rgba(10,10,10,0.12)] disabled:cursor-not-allowed disabled:bg-neutral-100 disabled:text-neutral-400 disabled:shadow-none active:scale-[0.98]"
                           >
                             {sendingCode ? 'Enviando código...' : 'Enviar código'}
                           </button>
@@ -482,7 +482,7 @@ export function AuthModal({ isOpen, onClose, onSuccess, apiBase }: AuthModalProp
                             type="button"
                             onClick={verifyCode}
                             disabled={verifyingCode || otpCode.trim().length !== 6}
-                            className="w-full rounded-2xl bg-[#0a0a0a] py-3.5 text-sm font-semibold text-[#ffffff] transition hover:bg-[#262626] disabled:cursor-not-allowed disabled:bg-neutral-200 disabled:text-neutral-400 active:scale-[0.98] active-scale"
+                            className="w-full rounded-2xl bg-[#0a0a0a] py-3.5 text-sm font-semibold text-[#ffffff] transition-all duration-200 hover:bg-[#262626] hover:shadow-[0_8px_24px_rgba(10,10,10,0.12)] disabled:cursor-not-allowed disabled:bg-neutral-100 disabled:text-neutral-400 disabled:shadow-none active:scale-[0.98] active-scale"
                           >
                             {verifyingCode ? 'Verificando...' : 'Confirmar código'}
                           </button>
@@ -510,7 +510,7 @@ export function AuthModal({ isOpen, onClose, onSuccess, apiBase }: AuthModalProp
                             type="button"
                             onClick={handleResetPassword}
                             disabled={verifyingCode || password.length < 6 || password !== confirmPassword}
-                            className="w-full rounded-2xl bg-[#0a0a0a] py-3.5 text-sm font-semibold text-[#ffffff] transition hover:bg-[#262626] disabled:cursor-not-allowed disabled:bg-neutral-200 disabled:text-neutral-400 active:scale-[0.98] active-scale"
+                            className="w-full rounded-2xl bg-[#0a0a0a] py-3.5 text-sm font-semibold text-[#ffffff] transition-all duration-200 hover:bg-[#262626] hover:shadow-[0_8px_24px_rgba(10,10,10,0.12)] disabled:cursor-not-allowed disabled:bg-neutral-100 disabled:text-neutral-400 disabled:shadow-none active:scale-[0.98] active-scale"
                           >
                             {verifyingCode ? 'Restableciendo...' : 'Restablecer contraseña'}
                           </button>
@@ -521,7 +521,7 @@ export function AuthModal({ isOpen, onClose, onSuccess, apiBase }: AuthModalProp
                     <>
                       {authStep === 'request' ? (
                         <>
-                          <div className="grid grid-cols-2 gap-3">
+                          <div className="grid grid-cols-2 gap-2.5">
                             <Field
                               label="Nombre(s)"
                               value={name}
@@ -557,18 +557,20 @@ export function AuthModal({ isOpen, onClose, onSuccess, apiBase }: AuthModalProp
                             type="button"
                             onClick={sendCode}
                             disabled={sendingCode || !name.trim() || !lastName.trim() || !dateOfBirth || phone.length !== 10 || phoneExists === true}
-                            className="mt-2 w-full rounded-2xl bg-[#0a0a0a] py-3.5 text-sm font-semibold text-[#ffffff] transition hover:bg-[#262626] disabled:cursor-not-allowed disabled:bg-neutral-200 disabled:text-neutral-400 active:scale-[0.98]"
+                            className="mt-3 w-full rounded-2xl bg-[#0a0a0a] py-3.5 text-sm font-semibold text-[#ffffff] transition-all duration-200 hover:bg-[#262626] hover:shadow-[0_8px_24px_rgba(10,10,10,0.12)] disabled:cursor-not-allowed disabled:bg-neutral-100 disabled:text-neutral-400 disabled:shadow-none active:scale-[0.98]"
                           >
                             {sendingCode ? 'Enviando código...' : 'Enviar código'}
                           </button>
                         </>
                       ) : authStep === 'verify' ? (
-                        <div className="space-y-4">
-                          <p className="text-xs text-neutral-600 bg-neutral-50 rounded-2xl p-3 border border-black/5 leading-relaxed">
-                            Ingresa el código OTP enviado a tu número <strong className="text-neutral-900">{formatPhoneNumber(phone)}</strong> para verificar.
-                          </p>
+                        <div className="space-y-5">
+                          <div className="rounded-2xl bg-neutral-50/80 p-4 border border-black/[0.04]">
+                            <p className="text-sm text-neutral-600 leading-relaxed">
+                              Ingresa el código que enviamos a <strong className="text-neutral-900">{formatPhoneNumber(phone)}</strong>
+                            </p>
+                          </div>
                           <Field
-                            label="Código OTP"
+                            label="Código de verificación"
                             value={otpCode}
                             onChange={setOtpCode}
                             placeholder="123456"
@@ -576,13 +578,13 @@ export function AuthModal({ isOpen, onClose, onSuccess, apiBase }: AuthModalProp
                           
                           <div className="flex items-center justify-between text-xs text-neutral-500 px-1">
                             {countdown > 0 ? (
-                              <span>Reenviar código en <strong className="text-neutral-700">{countdown}s</strong></span>
+                              <span>Reenviar en <strong className="text-neutral-700">{countdown}s</strong></span>
                             ) : (
                               <button
                                 type="button"
                                 onClick={sendCode}
                                 disabled={sendingCode}
-                                className="font-bold text-sky-500 hover:underline transition"
+                                className="font-semibold text-sky-600 hover:text-sky-700 transition-colors"
                               >
                                 Volver a enviar código
                               </button>
@@ -593,16 +595,16 @@ export function AuthModal({ isOpen, onClose, onSuccess, apiBase }: AuthModalProp
                             type="button"
                             onClick={verifyCode}
                             disabled={verifyingCode || otpCode.trim().length !== 6}
-                            className="w-full rounded-2xl bg-[#0a0a0a] py-3.5 text-sm font-semibold text-[#ffffff] transition hover:bg-[#262626] disabled:cursor-not-allowed disabled:bg-neutral-200 disabled:text-neutral-400 active:scale-[0.98] active-scale"
+                            className="w-full rounded-2xl bg-[#0a0a0a] py-3.5 text-sm font-semibold text-[#ffffff] transition-all duration-200 hover:bg-[#262626] hover:shadow-[0_8px_24px_rgba(10,10,10,0.12)] disabled:cursor-not-allowed disabled:bg-neutral-100 disabled:text-neutral-400 disabled:shadow-none active:scale-[0.98] active-scale"
                           >
                             {verifyingCode ? 'Verificando...' : 'Verificar código'}
                           </button>
                         </div>
                       ) : (
-                        <div className="space-y-4">
-                          <div className="bg-neutral-50 rounded-2xl p-3 border border-black/5">
-                            <p className="text-xs text-neutral-700 font-semibold">Crea tu contraseña</p>
-                            <p className="text-[11px] text-neutral-500 mt-0.5">Ingresa una contraseña segura para acceder más rápido.</p>
+                        <div className="space-y-5">
+                          <div className="rounded-2xl bg-neutral-50/80 p-4 border border-black/[0.04]">
+                            <p className="text-sm font-semibold text-neutral-800">Crea tu contraseña</p>
+                            <p className="text-xs text-neutral-500 mt-1 leading-relaxed">Elige una contraseña segura para acceder más rápido en el futuro.</p>
                           </div>
                           <Field
                             label="Contraseña"
@@ -625,7 +627,7 @@ export function AuthModal({ isOpen, onClose, onSuccess, apiBase }: AuthModalProp
                             type="button"
                             onClick={handleCompleteRegister}
                             disabled={verifyingCode || password.length < 6 || password !== confirmPassword}
-                            className="w-full rounded-2xl bg-[#0a0a0a] py-3.5 text-sm font-semibold text-[#ffffff] transition hover:bg-[#262626] disabled:cursor-not-allowed disabled:bg-neutral-200 disabled:text-neutral-400 active:scale-[0.98] active-scale"
+                            className="w-full rounded-2xl bg-[#0a0a0a] py-3.5 text-sm font-semibold text-[#ffffff] transition-all duration-200 hover:bg-[#262626] hover:shadow-[0_8px_24px_rgba(10,10,10,0.12)] disabled:cursor-not-allowed disabled:bg-neutral-100 disabled:text-neutral-400 disabled:shadow-none active:scale-[0.98] active-scale"
                           >
                             {verifyingCode ? 'Creando cuenta...' : 'Crear cuenta'}
                           </button>
@@ -641,9 +643,9 @@ export function AuthModal({ isOpen, onClose, onSuccess, apiBase }: AuthModalProp
                       setError('');
                       setAuthMessage('');
                     }}
-                    className="mt-2 text-center text-xs font-semibold text-neutral-500 hover:text-neutral-900 transition"
+                    className="mt-2 text-center text-xs font-semibold text-neutral-400 hover:text-neutral-900 transition-colors duration-200"
                   >
-                    Atrás
+                    ← Atrás
                   </button>
 
                   {mockCode && (
@@ -708,7 +710,7 @@ function Field({
           onChange(rawValue);
         }}
         placeholder={placeholder}
-        className="rounded-2xl border border-black/10 bg-white px-4 py-3 text-sm text-neutral-950 outline-none transition placeholder:text-neutral-400 focus:border-black/20 focus:ring-1 focus:ring-black/10"
+        className="rounded-2xl border border-black/[0.08] bg-white px-4 py-3 text-sm text-neutral-950 outline-none transition-all duration-200 placeholder:text-neutral-400 shadow-[0_1px_2px_rgba(0,0,0,0.02)] focus:border-black/20 focus:shadow-[0_4px_12px_rgba(0,0,0,0.04)] focus:ring-2 focus:ring-black/[0.04]"
       />
     </label>
   );

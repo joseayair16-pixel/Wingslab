@@ -72,7 +72,7 @@ export const HomeView = React.memo(function HomeView({
   const searchType = useStore(state => state.searchType);
   const activeSection = useStore(state => state.activeSection);
 
-  const [businessTypeFilter, setBusinessTypeFilter] = useState<BusinessTypeTab>('restaurants');
+  const [businessTypeFilter, setBusinessTypeFilter] = useState<BusinessTypeTab>('all');
 
   const filteredOfferProducts = useMemo(() => {
     if (businessTypeFilter === 'all') return offerProducts;
@@ -159,9 +159,9 @@ export const HomeView = React.memo(function HomeView({
   };
 
   const tabs: { key: BusinessTypeTab; label: string; icon: string }[] = [
+    { key: 'all', label: 'Todo', icon: '📋' },
     { key: 'restaurants', label: 'Restaurantes', icon: '🍽️' },
     { key: 'stores', label: 'Tiendas', icon: '🏪' },
-    { key: 'all', label: 'Todo', icon: '📋' },
   ];
 
   return (
@@ -213,13 +213,13 @@ export const HomeView = React.memo(function HomeView({
                     key={category.id}
                     type="button"
                     onClick={() => setSelectedCategory(category.id)}
-                    className={`flex min-w-[56px] flex-col items-center rounded-[14px] border px-2 py-1.5 text-center transition-all active-scale sm:min-w-[66px] sm:rounded-[16px] sm:px-2.5 sm:py-2 md:min-w-[76px] md:rounded-[18px] md:px-3 md:py-2.5 ${isActive
+                    className={`flex w-[56px] flex-col items-center overflow-hidden rounded-[14px] border px-2 py-1.5 text-center transition-all active-scale sm:w-[66px] sm:rounded-[16px] sm:px-2.5 sm:py-2 md:w-[76px] md:rounded-[18px] md:px-3 md:py-2.5 ${isActive
                       ? 'border-transparent bg-accent text-white shadow-[0_8px_20px_rgba(135,206,235,0.2)]'
-                      : 'border-black/5 bg-[#faf7f1] text-neutral-800 hover:border-black/10 hover:bg-white'
+                      : 'border-black/5 bg-[#f5f5f5] text-neutral-800 hover:border-black/10 hover:bg-white'
                       }`}
                   >
                     <span className="text-[18px] leading-none sm:text-[20px] md:text-[22px]">{category.icon}</span>
-                    <span className={`mt-1 text-[10px] font-semibold leading-3 sm:mt-1.5 sm:text-[11px] md:mt-2 md:text-xs ${isActive ? 'text-black' : 'text-neutral-900'}`}>
+                    <span className={`mt-1 w-full truncate text-[10px] font-semibold leading-3 sm:mt-1.5 sm:text-[11px] md:mt-2 md:text-xs ${isActive ? 'text-black' : 'text-neutral-900'}`}>
                       {category.name}
                     </span>
                   </button>
