@@ -766,7 +766,7 @@ export async function registerPublicRoutes(fastify: FastifyInstance): Promise<vo
     }
   });
 
-  fastify.get('/zonas-activas', async (request, reply) => {
+  fastify.get('/public/zonas-activas', async (request, reply) => {
     try {
       const restaurants = await prisma.restaurant.findMany({
         where: {
