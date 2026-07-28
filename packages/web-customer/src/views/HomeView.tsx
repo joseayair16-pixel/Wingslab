@@ -784,55 +784,63 @@ export const HomeView = React.memo(function HomeView({
             } />
           ) : businessTypeFilter === 'all' && activeZones.length > 0 ? (
             <div className="space-y-5">
-              <div className="rounded-[28px] border border-dashed border-black/10 bg-neutral-50 px-5 py-8 text-center">
-                <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-full bg-sky-100 text-sky-600">
-                  <svg className="h-7 w-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" d="M15 10.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1 1 15 0Z" />
+              <div className="relative overflow-hidden rounded-[32px] border border-black/[0.04] bg-gradient-to-br from-white to-neutral-50/80 px-6 py-10 text-center shadow-[0_2px_20px_rgba(0,0,0,0.03)]">
+                <div className="absolute -right-12 -top-12 h-40 w-40 rounded-full bg-sky-400/5 blur-3xl" />
+                <div className="absolute -left-12 -bottom-12 h-32 w-32 rounded-full bg-amber-400/5 blur-3xl" />
+                <div className="relative mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-[22px] bg-gradient-to-br from-neutral-900 to-neutral-800 shadow-[0_8px_24px_rgba(0,0,0,0.12)]">
+                  <svg className="h-7 w-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="1.5">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M15.182 16.318A4.486 4.486 0 0 0 12.016 15a4.486 4.486 0 0 0-3.198 1.318M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0ZM9.75 9.75c0 .414-.168.75-.375.75S9 10.164 9 9.75 9.168 9 9.375 9s.375.336.375.75Zm-.375 0h.008v.015h-.008V9.75Zm5.625 0c0 .414-.168.75-.375.75s-.375-.336-.375-.75.168-.75.375-.75.375.336.375.75Zm-.375 0h.008v.015h-.008V9.75Z" />
                   </svg>
                 </div>
-                <h3 className="text-lg font-bold text-neutral-900">No hay restaurantes en tu zona aún</h3>
-                <p className="mt-1 text-sm text-neutral-500">
-                  Pero puedes explorar las ciudades donde ya tenemos restaurantes activos:
+                <h3 className="text-[22px] font-black tracking-[-0.04em] text-neutral-900">Aún no hay actividad en tu zona</h3>
+                <p className="mt-2 max-w-md mx-auto text-[15px] font-medium leading-relaxed text-neutral-500">
+                  Pero puedes explorar las ciudades donde ya estamos presentes y descubrir nuevos sabores:
                 </p>
-                <div className="mt-4 flex flex-wrap justify-center gap-2">
+                <div className="mt-6 flex flex-wrap justify-center gap-2.5">
                   {activeZones.map((zone: any) => (
                     <button
                       key={zone.regionCode}
                       type="button"
                       onClick={() => onZoneSelect?.(zone)}
-                      className="inline-flex items-center gap-1.5 rounded-full border border-sky-200/60 bg-sky-50 px-3.5 py-2 text-sm font-semibold text-sky-700 transition hover:bg-sky-100 hover:border-sky-300 active:scale-[0.97]"
+                      className="group relative inline-flex items-center gap-2 overflow-hidden rounded-full border border-white/50 bg-white/70 px-4 py-2.5 text-sm font-bold text-neutral-800 shadow-[0_2px_12px_rgba(0,0,0,0.04)] backdrop-blur-xl transition-all duration-300 hover:-translate-y-0.5 hover:shadow-[0_8px_24px_rgba(0,0,0,0.08)] active:scale-[0.97]"
                     >
-                      <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M15 10.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1 1 15 0Z" />
-                      </svg>
-                      {zone.regionName}
-                      <span className="rounded-full bg-sky-200/50 px-1.5 py-0.5 text-[10px] font-bold text-sky-600">{zone.restaurantCount}</span>
+                      <span className="relative z-10 flex items-center gap-1.5">
+                        <svg className="h-4 w-4 text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M15 10.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1 1 15 0Z" />
+                        </svg>
+                        {zone.regionName}
+                      </span>
+                      <span className="relative z-10 inline-flex items-center justify-center rounded-full bg-neutral-900/5 px-2 py-0.5 text-[11px] font-bold text-neutral-500 backdrop-blur-sm">
+                        {zone.restaurantCount}
+                      </span>
+                      <div className="absolute inset-0 bg-gradient-to-r from-white via-sky-50/30 to-white opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
                     </button>
                   ))}
                 </div>
               </div>
 
-              <div className="rounded-[28px] border border-dashed border-amber-200/60 bg-amber-50/40 px-5 py-6 text-center">
-                <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-amber-100 text-amber-600">
-                  <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" d="M12 6v12m-6-6h12" />
+              <div className="relative overflow-hidden rounded-[32px] border border-black/[0.04] bg-gradient-to-br from-amber-50/30 to-white px-6 py-7 text-center shadow-[0_2px_20px_rgba(0,0,0,0.03)]">
+                <div className="absolute -right-8 -top-8 h-28 w-28 rounded-full bg-amber-400/10 blur-3xl" />
+                <div className="relative mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-[18px] bg-gradient-to-br from-amber-500 to-orange-500 shadow-[0_4px_16px_rgba(245,158,11,0.2)]">
+                  <svg className="h-6 w-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="1.8">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
                   </svg>
                 </div>
-                <h3 className="text-base font-bold text-neutral-900">¿Tienes un negocio?</h3>
-                <p className="mt-1 text-sm text-neutral-500">
-                  Podemos estar en tu localidad. Registra tu restaurante o tienda y llega a más clientes.
+                <h3 className="text-lg font-extrabold tracking-[-0.03em] text-neutral-900">¿Tienes un negocio?</h3>
+                <p className="mt-1.5 max-w-sm mx-auto text-sm font-medium text-neutral-500">
+                  Lleva tu restaurante o tienda a más clientes. Registrarlo es rápido y sin costo.
                 </p>
                 <button
                   type="button"
                   onClick={onJoinClick}
-                  className="mt-4 inline-flex items-center gap-2 rounded-full bg-neutral-950 px-6 py-3 text-sm font-bold text-white transition hover:bg-neutral-800 active:scale-[0.97]"
+                  className="group relative mt-5 inline-flex items-center gap-2.5 overflow-hidden rounded-full bg-neutral-900 px-7 py-3.5 text-[15px] font-bold text-white shadow-[0_8px_24px_rgba(0,0,0,0.12)] transition-all duration-300 hover:-translate-y-0.5 hover:shadow-[0_12px_32px_rgba(0,0,0,0.18)] active:scale-[0.97]"
                 >
-                  Registrar mi negocio
-                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M13.5 4.5 21 12m0 0-7.5 7.5M21 12H3" />
+                  <span className="relative z-10">Registrar mi negocio</span>
+                  <svg className="relative z-10 h-4 w-4 transition-transform duration-300 group-hover:translate-x-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.5">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5 21 12m0 0-7.5 7.5M21 12H3" />
                   </svg>
+                  <div className="absolute inset-0 bg-gradient-to-r from-neutral-800 to-neutral-950 opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
                 </button>
               </div>
             </div>
