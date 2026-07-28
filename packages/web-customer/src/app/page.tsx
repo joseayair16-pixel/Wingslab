@@ -5173,8 +5173,13 @@ export default function Home() {
                       className="group flex items-center gap-3.5 rounded-2xl border border-black/5 bg-white p-3 text-left transition-all duration-300 hover:border-sky-1000/30 hover:shadow-lg hover:shadow-sky-1000/[0.02] hover:-translate-y-0.5 active:scale-[0.98] w-full shadow-sm"
                     >
                       <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-sky-100 text-sky-500 transition-colors group-hover:bg-sky-200">
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M5.5 16.5a2 2 0 100-4 2 2 0 000 4zM18.5 16.5a2 2 0 100-4 2 2 0 000 4zM12 16.5V10l-4 3H5M12 10l4 3h3M9 5l3 3 3-3" />
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                          <circle cx="6" cy="17" r="2.5" />
+                          <circle cx="18" cy="17" r="2.5" />
+                          <path d="M6 17V8l3-4h5l2 4h2a3 3 0 013 3v1l-4 3-3-3h-4" />
+                          <path d="M9 11h2" />
+                          <path d="M14 7l-1 4" />
+                          <path d="M5 14h3l2 3" />
                         </svg>
                       </div>
                       <div className="min-w-0 flex-1">

@@ -173,7 +173,6 @@ export const HomeView = React.memo(function HomeView({
           <div className="flex justify-center gap-4 md:gap-5">
             {tabs.map((tab) => {
               const isActive = businessTypeFilter === tab.key;
-              const imgSrc = tab.key === 'restaurants' ? '/restaurantes.png' : tab.key === 'stores' ? '/tiendas.png' : '/todos.png';
               return (
                 <button
                   key={tab.key}
@@ -182,18 +181,16 @@ export const HomeView = React.memo(function HomeView({
                     setBusinessTypeFilter(tab.key);
                     setSelectedCategory('all');
                   }}
-                   className={`relative rounded-lg md:rounded-xl transition-all active:scale-[0.97] max-w-[80px] md:max-w-[100px] ${
-                    isActive ? 'ring-2 ring-accent ring-offset-2' : 'opacity-40 grayscale hover:opacity-70 hover:grayscale-[50%]'
+                  className={`relative flex flex-col items-center gap-1.5 rounded-xl transition-all active:scale-[0.97] w-[76px] md:w-[92px] py-2 ${
+                    isActive
+                      ? 'ring-2 ring-accent ring-offset-2 bg-accent/5'
+                      : 'opacity-50 hover:opacity-80'
                   }`}
                 >
-                  <Image
-                    src={imgSrc}
-                    alt={tab.label}
-                    width={500}
-                    height={350}
-                    className="w-full h-auto"
-                    priority
-                  />
+                  <span className={`text-xl md:text-2xl ${isActive ? '' : 'grayscale'}`}>{tab.icon}</span>
+                  <span className={`text-[11px] font-semibold md:text-xs ${isActive ? 'text-accent' : 'text-neutral-500'}`}>
+                    {tab.label}
+                  </span>
                 </button>
               );
             })}

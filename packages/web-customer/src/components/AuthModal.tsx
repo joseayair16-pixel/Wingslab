@@ -521,7 +521,7 @@ export function AuthModal({ isOpen, onClose, onSuccess, apiBase }: AuthModalProp
                     <>
                       {authStep === 'request' ? (
                         <>
-                          <div className="grid grid-cols-2 gap-4 min-w-0">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 min-w-0">
                             <Field
                               label="Nombre(s)"
                               value={name}
@@ -710,7 +710,7 @@ function Field({
           onChange(rawValue);
         }}
         placeholder={placeholder}
-        className="rounded-2xl border border-black/[0.08] bg-white px-4 py-3 text-sm text-neutral-950 outline-none transition-all duration-200 placeholder:text-neutral-400 shadow-[0_1px_2px_rgba(0,0,0,0.02)] focus:border-black/20 focus:shadow-[0_4px_12px_rgba(0,0,0,0.04)] focus:ring-2 focus:ring-black/[0.04]"
+        className={`rounded-2xl border border-black/[0.08] bg-white px-4 text-sm text-neutral-950 outline-none transition-all duration-200 placeholder:text-neutral-400 shadow-[0_1px_2px_rgba(0,0,0,0.02)] focus:border-black/20 focus:shadow-[0_4px_12px_rgba(0,0,0,0.04)] focus:ring-2 focus:ring-black/[0.04] h-12 py-3 ${type === 'date' ? 'appearance-none' : ''}`}
       />
     </label>
   );

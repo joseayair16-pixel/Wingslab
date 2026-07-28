@@ -315,20 +315,6 @@ export default function Home() {
   const [updatingAvailability, setUpdatingAvailability] = useState<DriverAvailability | null>(null);
   const [activeActionKey, setActiveActionKey] = useState<string | null>(null);
   const [toasts, setToasts] = useState<ToastItem[]>([]);
-  const [driverWelcomeImage, setDriverWelcomeImage] = useState<string>('');
-
-  useEffect(() => {
-    if (!token) {
-      fetch(`${apiBase}/settings`)
-        .then(res => res.json())
-        .then(data => {
-          if (data.success && data.data.driverWelcomeImage) {
-            setDriverWelcomeImage(data.data.driverWelcomeImage);
-          }
-        })
-        .catch(console.error);
-    }
-  }, [token, apiBase]);
 
   // Pull to refresh
   const [pullDistance, setPullDistance] = useState(0);
@@ -1971,75 +1957,67 @@ export default function Home() {
 
   if (!token || !sessionUser) {
     return (
-      <main 
-        className="min-h-[100dvh] flex flex-col justify-between bg-[#f5f1e8] text-neutral-900 transition-colors duration-300 dark:bg-black dark:text-zinc-100 font-sans antialiased relative"
-        style={driverWelcomeImage ? {
-          backgroundImage: `linear-gradient(to bottom, rgba(0,0,0,0.6), rgba(0,0,0,0.8)), url(${driverWelcomeImage})`,
-          backgroundSize: 'cover',
-          backgroundPosition: 'center'
-        } : {}}
+      <main className="min-h-[100dvh] flex flex-col justify-between bg-white text-neutral-900 font-sans antialiased"
       >
-        {/* Cabecera Técnica del Desarrollador (Login) */}
-        <header className="px-6 py-4 flex justify-between items-center bg-transparent max-w-md mx-auto w-full z-10 relative">
+        <header className="px-6 py-5 flex justify-between items-center max-w-md mx-auto w-full">
           <div className="flex items-center gap-2">
-            <SaDelLogo className="h-8 w-auto drop-shadow-md" forceDark={!!driverWelcomeImage} />
+            <SaDelLogo className="h-8 w-auto" />
           </div>
         </header>
 
         <section className="w-full max-w-md mx-auto px-6 py-4 flex-1 flex flex-col justify-center">
-          <div className="rounded-[36px] bg-white/90 p-8 backdrop-blur-xl dark:bg-zinc-950/80 shadow-[0_24px_80px_rgba(0,0,0,0.08)] dark:shadow-[0_24px_80px_rgba(0,0,0,0.8)] transition duration-300 ring-1 ring-inset ring-black/5 dark:ring-white/5">
+          <div className="rounded-[32px] bg-white p-8 shadow-[0_8px_32px_rgba(0,0,0,0.06)] border border-black/[0.06]">
             <div className="text-center mb-8">
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-accent-soft px-3 py-1 text-[10px] font-black uppercase tracking-widest text-accent dark:bg-accent-hover/20 dark:text-sky-300">
-                <span className="h-1.5 w-1.5 rounded-full bg-accent-hover animate-pulse" />
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-sky-50 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-sky-600">
+                <span className="h-1.5 w-1.5 rounded-full bg-sky-500 animate-pulse" />
                 Acceso Repartidor
               </span>
-              <h1 className="text-3xl font-black tracking-tight text-neutral-900 dark:text-zinc-50 mt-4">
+              <h1 className="text-2xl font-bold tracking-tight text-neutral-900 mt-5">
                 Bienvenido a SaDeL
               </h1>
-              <p className="text-sm font-medium text-neutral-500 dark:text-zinc-400 mt-2 leading-relaxed">
+              <p className="text-sm text-neutral-500 mt-1.5 leading-relaxed">
                 Ingresa con tu número y contraseña para comenzar a recibir pedidos.
               </p>
             </div>
 
-            <div className="space-y-5">
-              <label className="block space-y-2">
-                <span className="text-xs font-bold uppercase tracking-widest text-neutral-500 dark:text-zinc-400">Teléfono Celular</span>
+            <div className="space-y-4">
+              <label className="block space-y-1.5">
+                <span className="text-xs font-semibold text-neutral-600">Teléfono Celular</span>
                 <div className="relative flex items-center">
-                  <span className="absolute left-5 text-sm font-bold text-neutral-400">+52</span>
+                  <span className="absolute left-4 text-sm font-semibold text-neutral-400">+52</span>
                   <input
                     type="tel"
                     placeholder="55 1234 5678"
-                    className="w-full rounded-[20px] border-0 bg-neutral-100/80 px-4 py-4 pl-14 text-[15px] font-medium text-neutral-900 outline-none transition placeholder:text-neutral-400 focus:bg-white focus:ring-2 focus:ring-accent dark:bg-zinc-900/80 dark:text-zinc-50 dark:focus:bg-zinc-900"
+                    className="w-full rounded-2xl border border-black/[0.08] bg-white px-4 py-3.5 pl-12 text-sm text-neutral-900 outline-none transition-all placeholder:text-neutral-400 shadow-[0_1px_2px_rgba(0,0,0,0.02)] focus:border-black/20 focus:shadow-[0_4px_12px_rgba(0,0,0,0.04)] focus:ring-2 focus:ring-black/[0.04]"
                     value={phone}
                     onChange={(e) => setPhone(e.target.value)}
                   />
                 </div>
               </label>
 
-              <label className="block space-y-2">
-                <span className="text-xs font-bold uppercase tracking-widest text-neutral-500 dark:text-zinc-400">Contraseña</span>
+              <label className="block space-y-1.5">
+                <span className="text-xs font-semibold text-neutral-600">Contraseña</span>
                 <div className="relative flex items-center">
                   <input
                     type="password"
                     placeholder="••••••••••••"
-                    className="w-full rounded-[20px] border-0 bg-neutral-100/80 px-5 py-4 text-[15px] font-medium text-neutral-900 outline-none transition placeholder:text-neutral-400 focus:bg-white focus:ring-2 focus:ring-accent dark:bg-zinc-900/80 dark:text-zinc-50 dark:focus:bg-zinc-900"
+                    className="w-full rounded-2xl border border-black/[0.08] bg-white px-4 py-3.5 text-sm text-neutral-900 outline-none transition-all placeholder:text-neutral-400 shadow-[0_1px_2px_rgba(0,0,0,0.02)] focus:border-black/20 focus:shadow-[0_4px_12px_rgba(0,0,0,0.04)] focus:ring-2 focus:ring-black/[0.04]"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                   />
                 </div>
               </label>
 
-              <div className="pt-2">
+              <div className="pt-1">
                 <button
                   type="button"
                   onClick={() => void loginWithPassword()}
                   disabled={verifyingCode || phone.trim().length < 8 || password.trim().length < 4}
-                  className="w-full rounded-[20px] bg-neutral-950 py-4.5 font-bold tracking-wide text-white text-[15px] shadow-lg shadow-neutral-900/20 hover:bg-neutral-800 active:scale-[0.98] transition-all disabled:cursor-not-allowed disabled:bg-neutral-300 disabled:shadow-none dark:bg-accent-hover dark:text-white dark:hover:bg-sky-400 dark:shadow-accent/30 dark:disabled:bg-zinc-800 dark:disabled:text-zinc-600 flex items-center justify-center gap-2"
-                  style={{ paddingTop: '1.125rem', paddingBottom: '1.125rem' }}
+                  className="w-full rounded-2xl bg-[#0a0a0a] py-3.5 text-sm font-semibold text-white transition-all duration-200 hover:bg-[#262626] hover:shadow-[0_8px_24px_rgba(10,10,10,0.12)] disabled:cursor-not-allowed disabled:bg-neutral-100 disabled:text-neutral-400 disabled:shadow-none active:scale-[0.98] flex items-center justify-center gap-2"
                 >
                   {verifyingCode ? (
                     <>
-                      <div className="h-5 w-5 animate-spin rounded-full border-2 border-white/20 border-t-white" />
+                      <div className="h-4 w-4 animate-spin rounded-full border-2 border-white/20 border-t-white" />
                       Conectando...
                     </>
                   ) : (
@@ -2064,7 +2042,7 @@ export default function Home() {
         </section>
 
         {/* Footer simple de marca */}
-        <footer className="px-6 py-6 text-center text-[10px] uppercase font-bold tracking-widest text-neutral-400 dark:text-zinc-600 max-w-sm mx-auto">
+        <footer className="px-6 py-6 text-center text-[11px] font-semibold tracking-wider text-neutral-400 max-w-sm mx-auto">
           SaDeL Logistics · Pro Console v2.0
         </footer>
 

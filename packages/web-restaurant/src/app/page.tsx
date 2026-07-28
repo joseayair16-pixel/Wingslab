@@ -4711,7 +4711,7 @@ export default function Home() {
     { key: 'dashboard', label: 'Dashboard' },
     { key: 'orders', label: 'Ordenes' },
     { key: 'store', label: 'Mi Tienda' },
-    { key: 'billing', label: 'Facturacion' },
+    { key: 'billing', label: 'Balance' },
     { key: 'featured', label: 'Destacados' },
     { key: 'settings', label: 'Configuracion' },
   ];
@@ -8565,7 +8565,7 @@ export default function Home() {
                               <span className="text-[11px] font-semibold text-neutral-400 bg-neutral-100/80 rounded-md px-2 py-0.5">${(billingSummary?.serviceFee ?? 0).toFixed(2)} c/u</span>
                             </div>
                             <span className="font-semibold text-neutral-950 bg-neutral-50 border border-black/5 rounded-lg px-2.5 py-1">
-                              ${billingSummary?.serviceFeeRevenue ?? 0} MXN
+                              ${(billingSummary?.serviceFeeRevenue ?? 0).toFixed(2)} MXN
                             </span>
                           </div>
                           <div className="flex items-center justify-between text-sm">
@@ -8574,7 +8574,7 @@ export default function Home() {
                               <span className="text-[11px] font-semibold text-neutral-400 bg-neutral-100/80 rounded-md px-2 py-0.5">${(billingSummary?.platformFeePerOrder ?? 0).toFixed(2)} c/u</span>
                             </div>
                             <span className="font-semibold text-neutral-950 bg-neutral-50 border border-black/5 rounded-lg px-2.5 py-1">
-                              ${billingSummary?.platformFeeRevenue ?? 0} MXN
+                              ${(billingSummary?.platformFeeRevenue ?? 0).toFixed(2)} MXN
                             </span>
                           </div>
                           <div className="flex items-center justify-between text-xs text-neutral-400 pt-1 border-t border-black/5">
@@ -8583,13 +8583,16 @@ export default function Home() {
                               {billingSummary && billingSummary.deliveredOrders > 0 && billingSummary.serviceFee > 0
                                 ? `${billingSummary.serviceFee} × ${billingSummary.deliveredOrders} = $${billingSummary.serviceFeeRevenue}`
                                 : ''}
+                              {billingSummary && billingSummary.deliveredOrders > 0 && (billingSummary.platformFeePerOrder ?? 0) > 0
+                                ? ` · ${billingSummary.platformFeePerOrder} × ${billingSummary.deliveredOrders} = $${billingSummary.platformFeeRevenue}`
+                                : ''}
                             </span>
                           </div>
                           <div className="flex justify-between items-center text-sm">
                             <span className="text-neutral-500 font-medium">Próximo Corte de Caja</span>
                             <span className="font-bold text-sky-700 bg-sky-50/50 border border-sky-100/20 rounded-lg px-2.5 py-1">
                               {billingSummary?.nextChargeDate
-                                ? new Date(billingSummary.nextChargeDate).toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'short' })
+                                ? new Date(billingSummary.nextChargeDate).toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long' })
                                 : '--'}
                             </span>
                           </div>
@@ -9040,7 +9043,7 @@ export default function Home() {
                 ) : null}
 
                 {activeSection === 'orders' ? (
-                  <Panel title={profile?.businessType !== 'RESTAURANT' ? 'Pedidos' : 'Ordenes'} subtitle={profile?.businessType !== 'RESTAURANT' ? 'Vista rapida para surtido y despacho' : 'Vista rapida para cocina y despacho'}>
+                   <Panel title={profile?.businessType !== 'RESTAURANT' ? 'Pedidos' : 'Ordenes'} subtitle={profile?.businessType !== 'RESTAURANT' ? 'Vista rapida para surtido y despacho' : 'Vista rapida para cocina y despacho'} tone="violet">
                     {lastFailedAction ? (
                       <div className="mb-4 rounded-[28px] border border-rose-100 bg-rose-50 p-4">
                         <p className="text-sm font-semibold text-rose-800">Ultima accion fallida: {lastFailedAction.label}</p>
