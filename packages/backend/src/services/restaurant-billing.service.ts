@@ -398,8 +398,9 @@ export async function createBillingSettlement(restaurantId: string) {
   const reference = `CRT-${yy}${mm}${dd}-${shortId}`;
 
   const [settlement] = await prisma.$transaction([
-    prisma.restaurantBillingSettlement.create({
-      data: {
+    prisma.restaurantBillingSettlement.upsert({
+      where: { reference },
+      create: {
         restaurantId,
         billingCycle: summary.billingCycle,
         feeRate: summary.platformFeeRate,
@@ -413,6 +414,14 @@ export async function createBillingSettlement(restaurantId: string) {
         platformFeeTotal: summary.platformFeeRevenue,
         status: 'PENDING',
         reference,
+      },
+      update: {
+        amount: summary.serviceFeeRevenue + summary.platformFeeRevenue,
+        serviceFeeTotal: summary.serviceFeeRevenue,
+        platformFeeTotal: summary.platformFeeRevenue,
+        deliveredOrders: summary.deliveredOrders,
+        deliveredRevenue: summary.deliveredRevenue,
+        status: 'PENDING',
       },
     }),
     prisma.restaurant.update({
