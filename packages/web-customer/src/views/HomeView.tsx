@@ -782,7 +782,7 @@ export const HomeView = React.memo(function HomeView({
                 ? 'No encontramos resultados con esa búsqueda. Prueba con otro nombre o zona.'
                 : 'No encontramos restaurantes con esa búsqueda. Prueba con otro nombre o zona.'
             } />
-          ) : activeZones.length > 0 ? (
+          ) : businessTypeFilter === 'all' && activeZones.length > 0 ? (
             <div className="space-y-5">
               <div className="rounded-[28px] border border-dashed border-black/10 bg-neutral-50 px-5 py-8 text-center">
                 <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-full bg-sky-100 text-sky-600">
