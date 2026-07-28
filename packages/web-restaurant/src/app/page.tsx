@@ -1006,6 +1006,8 @@ export default function Home() {
   const chatAudioRef = useRef<HTMLAudioElement | null>(null);
   const chatMessageAudioRef = useRef<HTMLAudioElement | null>(null);
   const wakeLockRef = useRef<any>(null);
+  const alarmSourceRef = useRef<AudioBufferSourceNode | OscillatorNode | null>(null);
+  const pulseIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const hasUserInteractedRef = useRef(false);
   const hasShownOrderAlertBlockedToastRef = useRef(false);
   const coverImageInputRef = useRef<HTMLInputElement | null>(null);
@@ -1021,6 +1023,7 @@ export default function Home() {
   const cropContainerRef = useRef<HTMLDivElement | null>(null);
 
   const handleTouchStart = (e: React.TouchEvent) => {
+    void warmOrderAlertAudio(true);
     if (window.scrollY === 0) {
       touchStartY.current = e.touches[0].clientY;
     }
@@ -1836,7 +1839,6 @@ export default function Home() {
       bc.close();
     } catch { /* BroadcastChannel not supported */ }
 
-    // Decode + play WAV via Web Audio API
     try {
       const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
       if (!AudioCtx) return false;
@@ -1847,22 +1849,78 @@ export default function Home() {
       const ctx = audioContextRef.current;
       if (ctx.state === 'suspended') await ctx.resume();
 
+      // 1. Try WAV buffer playback
       if (!audioBufferRef.current && audioArrayBufferRef.current) {
         audioBufferRef.current = await ctx.decodeAudioData(audioArrayBufferRef.current.slice(0));
       }
-      if (!audioBufferRef.current) return false;
+      if (audioBufferRef.current) {
+        const source = ctx.createBufferSource();
+        source.buffer = audioBufferRef.current;
+        const gain = ctx.createGain();
+        gain.gain.value = 1.0;
+        source.connect(gain);
+        gain.connect(ctx.destination);
+        source.start(0);
+        return true;
+      }
+    } catch {
+      // WAV falló, seguimos con oscilador
+    }
 
-      const source = ctx.createBufferSource();
-      source.buffer = audioBufferRef.current;
-      const gain = ctx.createGain();
-      gain.gain.value = 1.0;
-      source.connect(gain);
-      gain.connect(ctx.destination);
-      source.start(0);
-      return true;
+    // 2. Oscillator fallback (no necesita archivo WAV)
+    try {
+      if (audioContextRef.current) {
+        const ctx = audioContextRef.current;
+        if (ctx.state === 'suspended') await ctx.resume();
+        const osc = ctx.createOscillator();
+        osc.type = 'square';
+        osc.frequency.value = 880;
+
+        const gain = ctx.createGain();
+        gain.gain.value = 0.6;
+
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(0);
+
+        let pulseState = true;
+        if (pulseIntervalRef.current) {
+          clearInterval(pulseIntervalRef.current);
+        }
+        pulseIntervalRef.current = setInterval(() => {
+          pulseState = !pulseState;
+          gain.gain.value = pulseState ? 0.6 : 0.0;
+        }, 400);
+
+        alarmSourceRef.current = osc;
+
+        // Clean up pulse interval after ~4s (one-shot alert, not loop)
+        setTimeout(() => {
+          if (pulseIntervalRef.current) {
+            clearInterval(pulseIntervalRef.current);
+            pulseIntervalRef.current = null;
+          }
+        }, 4000);
+
+        return true;
+      }
+    } catch {
+      // oscilador falló, último recurso: <audio>
+    }
+
+    // 3. Fallback extremo: <audio>
+    try {
+      const audioEl = document.getElementById('restaurant-alert-audio') as HTMLAudioElement | null;
+      if (audioEl) {
+        audioEl.currentTime = 0;
+        await audioEl.play();
+        return true;
+      }
     } catch {
       return false;
     }
+
+    return false;
   }, [isOrderAlertSoundEnabled]);
 
   const playChatPopSound = useCallback(async () => {
@@ -2641,7 +2699,7 @@ export default function Home() {
   }, [apiBase, token, sessionUser?.id, sessionUser?.role]);
 
   useEffect(() => {
-    if (!isOrderAlertSoundEnabled || orderAlertAudioState !== 'needs-gesture') {
+    if (!isOrderAlertSoundEnabled || orderAlertAudioState === 'unsupported') {
       return;
     }
 
@@ -2666,6 +2724,12 @@ export default function Home() {
 
   useEffect(() => {
     return () => {
+      if (pulseIntervalRef.current) {
+        clearInterval(pulseIntervalRef.current);
+        pulseIntervalRef.current = null;
+      }
+      try { alarmSourceRef.current?.stop(); } catch { /* ya terminó */ }
+      alarmSourceRef.current = null;
       if (!audioContextRef.current) {
         return;
       }
@@ -13656,6 +13720,7 @@ export default function Home() {
           </div>
         </div>
       )}
+      <audio id="restaurant-alert-audio" src="/sounds/notifica.wav" preload="auto" loop></audio>
     </main>
   );
 }

@@ -473,11 +473,18 @@ export async function registerAdminDriverRoutes(fastify: FastifyInstance): Promi
       }
 
       const updateData: any = {};
-      
+
       if (payload.data.platformFeePerOrder !== undefined) {
         updateData.platformFeePerOrder = payload.data.platformFeePerOrder;
       }
-      
+
+      if (Object.keys(updateData).length > 0) {
+        await prisma.driver.update({
+          where: { id: driver.id },
+          data: updateData,
+        });
+      }
+
       if (payload.data.settleDebt === true) {
         const debtAnchor = driver.lastBillingSettledAt || driver.createdAt;
         const adminUser = getAuthenticatedUser(request);
@@ -547,6 +554,12 @@ export async function registerAdminDriverRoutes(fastify: FastifyInstance): Promi
           });
         });
       }
+
+      return reply.send({
+        success: true,
+        message: 'Tarifa actualizada correctamente.',
+        data: { platformFeePerOrder: updateData.platformFeePerOrder ?? driver.platformFeePerOrder },
+      });
     });
 
     adminDrivers.get('/admin/repartidores/:id/orders', async (request, reply) => {

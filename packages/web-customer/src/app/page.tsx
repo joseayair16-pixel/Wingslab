@@ -2005,8 +2005,48 @@ export default function Home() {
       localStorage.removeItem('locationSource');
       localStorage.removeItem('userLocation');
     } catch (e) {}
-    loadDashboard();
-  }, [loadDashboard]);
+
+    // Try GPS immediately to re-acquire location after manual zone override
+    if (typeof navigator !== 'undefined' && navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          const { latitude, longitude, accuracy } = position.coords;
+          let address = 'Ubicación actual';
+          const tryGeocode = async () => {
+            try {
+              const google = (window as any).google;
+              if (google) {
+                const geocoder = new google.maps.Geocoder();
+                await new Promise<void>((resolve) => {
+                  geocoder.geocode(
+                    { location: { lat: latitude, lng: longitude } },
+                    (results: any, status: any) => {
+                      if (status === 'OK' && results?.[0]) {
+                        address = results[0].formatted_address;
+                      }
+                      resolve();
+                    }
+                  );
+                });
+              }
+            } catch {}
+            const loc = { latitude, longitude, accuracy, address, ts: Date.now() };
+            setUserLocation(loc);
+            setLocationSource('gps');
+            setLocationDenied(false);
+            try {
+              localStorage.setItem('locationSource', 'gps');
+              localStorage.setItem('userLocation', JSON.stringify(loc));
+              localStorage.removeItem('locationDenied');
+            } catch {}
+          };
+          void tryGeocode();
+        },
+        () => {},
+        { enableHighAccuracy: false, timeout: 10000, maximumAge: 60000 }
+      );
+    }
+  }, []);
 
   const loadProfile = useCallback(async () => {
     if (!token) return;

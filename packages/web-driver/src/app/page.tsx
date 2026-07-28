@@ -523,6 +523,7 @@ export default function Home() {
   const audioArrayBufferRef = useRef<ArrayBuffer | null>(null);
   const alarmSourceRef = useRef<AudioBufferSourceNode | OscillatorNode | null>(null);
   const pulseIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const hasUserInteractedRef = useRef(false);
 
   // Buscar si hay un pedido asignado pendiente de aceptar (estilo Uber)
   const pendingAssignedOrder = pendingOrders.find((order) => {
@@ -796,7 +797,7 @@ export default function Home() {
     const onVisible = () => {
       if (document.visibilityState === 'visible') {
         const ctx = audioCtxRef.current;
-        if (ctx && ctx.state === 'suspended') {
+        if (ctx && ctx.state === 'suspended' && hasUserInteractedRef.current) {
           ctx.resume();
         }
       }
@@ -805,8 +806,22 @@ export default function Home() {
     return () => document.removeEventListener('visibilitychange', onVisible);
   }, [pendingAssignedOrder?.id, pendingAssignedOrder?.isAcceptedByDriver]);
 
+  // Precalentar AudioContext en cualquier interacción (touch, click, tecla)
+  useEffect(() => {
+    function onInteraction() {
+      warmupAudioContext();
+    }
+    window.addEventListener('pointerdown', onInteraction, { passive: true });
+    window.addEventListener('keydown', onInteraction);
+    return () => {
+      window.removeEventListener('pointerdown', onInteraction);
+      window.removeEventListener('keydown', onInteraction);
+    };
+  }, []);
+
   function warmupAudioContext() {
     // Solo se debe llamar desde un gesto del usuario (click/touch).
+    hasUserInteractedRef.current = true;
     void ensureAudioContextReady().then((ctx) => {
       if (!ctx) return;
       if (ctx.state !== 'running') return;
