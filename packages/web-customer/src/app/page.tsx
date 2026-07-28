@@ -823,6 +823,7 @@ export default function Home() {
 
   const [restaurants, setRestaurants] = useState<RestaurantSummary[]>([]);
   const [activeZones, setActiveZones] = useState<any[]>([]);
+  const [selectedZoneName, setSelectedZoneName] = useState<string | null>(null);
   const [featuredRestaurants, setFeaturedRestaurants] = useState<any[]>([]);
   const [offerProducts, setOfferProducts] = useState<any[]>([]);
   const [selectedRestaurantId, setSelectedRestaurantId] = useState('');
@@ -1982,6 +1983,7 @@ export default function Home() {
 
   const handleZoneSelect = useCallback((zone: { latitude: number; longitude: number; regionName: string }) => {
     const loc = { latitude: zone.latitude, longitude: zone.longitude, accuracy: undefined, address: zone.regionName, ts: Date.now() };
+    setSelectedZoneName(zone.regionName);
     setLocationSource('manual');
     setLocationDenied(true);
     setUserLocation(loc);
@@ -1989,6 +1991,19 @@ export default function Home() {
       localStorage.setItem('locationDenied', '1');
       localStorage.setItem('locationSource', 'manual');
       localStorage.setItem('userLocation', JSON.stringify(loc));
+    } catch (e) {}
+    loadDashboard();
+  }, [loadDashboard]);
+
+  const handleResetZone = useCallback(() => {
+    setSelectedZoneName(null);
+    setLocationSource('gps');
+    setLocationDenied(false);
+    setUserLocation(null);
+    try {
+      localStorage.removeItem('locationDenied');
+      localStorage.removeItem('locationSource');
+      localStorage.removeItem('userLocation');
     } catch (e) {}
     loadDashboard();
   }, [loadDashboard]);
@@ -5202,7 +5217,9 @@ export default function Home() {
             buildRestaurantInitials={buildRestaurantInitials}
             formatDeliverySummary={formatDeliverySummary}
             activeZones={activeZones}
+            selectedZoneName={selectedZoneName}
             onZoneSelect={handleZoneSelect}
+            onResetZone={handleResetZone}
             onJoinClick={() => setIsJoinRestModalOpen(true)}
           />
         ) : null}

@@ -44,8 +44,9 @@ export function startOrderTimeoutJob(fastify: FastifyInstance) {
           status: { in: [OrderStatus.PENDING, OrderStatus.CONFIRMED, OrderStatus.PREPARING] },
         },
         include: {
-          restaurant: { select: { userId: true } },
+          restaurant: { select: { userId: true, name: true } },
           customer: { select: { userId: true } },
+          driver: { select: { userId: true } },
         },
       });
 
@@ -63,6 +64,25 @@ export function startOrderTimeoutJob(fastify: FastifyInstance) {
 
             if (driverUserId) {
               emitNotification(fastify.io, driverUserId, 'DRIVER', 'order:unassigned', { orderId: cr.id }, { requestId: crypto.randomBytes(8).toString('hex'), orderId: cr.id });
+
+              try {
+                await sendPushNotification(driverUserId, {
+                  title: 'Pedido cancelado — Liberado de la entrega',
+                  body: 'El cliente canceló el pedido por falta de respuesta del restaurante. Ya no es necesario que realices la entrega.',
+                  icon: '/SaDeL.png',
+                  badge: '/SaDeL.png',
+                  vibrate: [600, 200, 600, 200, 600],
+                  requireInteraction: true,
+                  tag: `order-cancelled-${cr.id}`,
+                  data: {
+                    orderId: cr.id,
+                    event: 'order:cancelled',
+                    url: '/',
+                  },
+                });
+              } catch (pushErr) {
+                logger.error(`[OrderTimeoutJob] Error enviando push de cancelación al repartidor ${driverUserId}:`, pushErr);
+              }
             }
 
             logger.info(`[OrderTimeoutJob] Cancelación auto-aprobada para pedido ${cr.id}`);

@@ -4,6 +4,7 @@ import { prisma } from '../config/database';
 import { authenticate, authorize } from '../middleware/auth';
 import { OrderStatus, UserRole } from '@prisma/client';
 import { emitNotification } from '../services/socket.service';
+import { sendPushNotification } from '../services/notification.service';
 
 const querySchema = z.object({
   status: z.nativeEnum(OrderStatus).optional(),
@@ -195,7 +196,13 @@ export const registerAdminOrdersRoutes = async (fastify: FastifyInstance) => {
         const { reason } = cancelSchema.parse(request.body);
         const adminId = (request.user as any).id;
 
-        const order = await prisma.order.findUnique({ where: { id } });
+        const order = await prisma.order.findUnique({
+          where: { id },
+          include: {
+            restaurant: { select: { name: true } },
+            driver: { select: { userId: true } },
+          },
+        });
         if (!order) {
           return reply.status(404).send({ success: false, error: { message: 'Order not found' } });
         }
@@ -208,8 +215,21 @@ export const registerAdminOrdersRoutes = async (fastify: FastifyInstance) => {
         const updatedOrder = await prisma.$transaction(async (tx) => {
           const canceled = await tx.order.update({
             where: { id },
-            data: { status: 'CANCELLED' },
+            data: {
+              status: 'CANCELLED',
+              driverId: null,
+              driverAssignedAt: null,
+              isAcceptedByDriver: false,
+            },
           });
+
+          // Free the driver if assigned
+          if (order.driverId) {
+            await tx.driver.updateMany({
+              where: { id: order.driverId },
+              data: { availability: 'AVAILABLE' as any },
+            });
+          }
 
           // Add tracking log
           await tx.orderTracking.create({
@@ -224,6 +244,28 @@ export const registerAdminOrdersRoutes = async (fastify: FastifyInstance) => {
 
           return canceled;
         });
+
+        // Notify driver via push if assigned
+        if (order.driver?.userId) {
+          try {
+            await sendPushNotification(order.driver.userId, {
+              title: 'Pedido cancelado por el administrador',
+              body: `El pedido de ${order.restaurant?.name || 'tu zona'} fue cancelado por un administrador. Motivo: ${reason}`,
+              icon: '/SaDeL.png',
+              badge: '/SaDeL.png',
+              vibrate: [600, 200, 600, 200, 600],
+              requireInteraction: true,
+              tag: `order-cancelled-${id}`,
+              data: {
+                orderId: id,
+                event: 'order:cancelled',
+                url: '/',
+              },
+            });
+          } catch (pushErr) {
+            request.log.error(pushErr as any, '[Push] Error al notificar cancelación al repartidor');
+          }
+        }
 
         return reply.send({
           success: true,

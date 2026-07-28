@@ -39,7 +39,9 @@ interface HomeViewProps {
   buildRestaurantInitials: (name: string) => string;
   formatDeliverySummary: (distance: any) => string;
   activeZones?: any[];
+  selectedZoneName?: string | null;
   onZoneSelect?: (zone: any) => void;
+  onResetZone?: () => void;
   onJoinClick?: () => void;
 }
 
@@ -71,7 +73,9 @@ export const HomeView = React.memo(function HomeView({
   buildRestaurantInitials,
   formatDeliverySummary,
   activeZones = [],
+  selectedZoneName,
   onZoneSelect,
+  onResetZone,
   onJoinClick,
 }: HomeViewProps) {
   const searchQuery = useStore(state => state.searchQuery);
@@ -629,6 +633,7 @@ export const HomeView = React.memo(function HomeView({
               </div>
             ) : (
             /* ──────── RESTAURANT / TIENDA SEARCH LAYOUT (Full Cards) ──────── */
+            <div className="space-y-6">
             <div className="grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
               {filteredByBusinessType.map((restaurant) => {
                 const primaryCategory = restaurant.storeCategories?.[0];
@@ -773,7 +778,23 @@ export const HomeView = React.memo(function HomeView({
                 );
               })}
             </div>
-            )
+            {selectedZoneName && (
+              <div className="mt-6 flex justify-center">
+                <button
+                  type="button"
+                  onClick={onResetZone}
+                  className="inline-flex items-center gap-2 rounded-full border border-black/5 bg-white/80 px-5 py-2.5 text-sm font-semibold text-neutral-600 shadow-sm backdrop-blur transition-all duration-200 hover:-translate-y-0.5 hover:border-sky-200/50 hover:text-sky-700 hover:shadow-[0_4px_16px_rgba(14,165,233,0.1)] active:scale-[0.97]"
+                >
+                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 15 3 9m0 0 6-6M3 9h12a6 6 0 0 1 0 12h-3" />
+                  </svg>
+                  Cambiar zona
+                  <span className="ml-0.5 font-bold text-neutral-800">{selectedZoneName}</span>
+                </button>
+              </div>
+            )}
+            </div>
+          )
           ) : isSearching ? (
             <EmptyState text={
               businessTypeFilter === 'stores'
@@ -794,7 +815,7 @@ export const HomeView = React.memo(function HomeView({
                 </div>
                 <h3 className="text-[22px] font-black tracking-[-0.04em] text-neutral-900">Aún no hay actividad en tu zona</h3>
                 <p className="mt-2 max-w-md mx-auto text-[15px] font-medium leading-relaxed text-neutral-500">
-                  Pero puedes explorar las ciudades donde ya estamos presentes y descubrir nuevos sabores:
+                  Pero puedes explorar las ciudades donde ya estamos presentes y descubrir nuevos lugares:
                 </p>
                 <div className="mt-6 flex flex-wrap justify-center gap-2.5">
                   {activeZones.map((zone: any) => (
@@ -822,7 +843,7 @@ export const HomeView = React.memo(function HomeView({
 
               <div className="relative overflow-hidden rounded-[32px] border border-black/[0.04] bg-gradient-to-br from-amber-50/30 to-white px-6 py-7 text-center shadow-[0_2px_20px_rgba(0,0,0,0.03)]">
                 <div className="absolute -right-8 -top-8 h-28 w-28 rounded-full bg-amber-400/10 blur-3xl" />
-                <div className="relative mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-[18px] bg-gradient-to-br from-amber-500 to-orange-500 shadow-[0_4px_16px_rgba(245,158,11,0.2)]">
+                <div className="relative mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-[18px] bg-gradient-to-br from-sky-500 to-blue-600 shadow-[0_4px_16px_rgba(14,165,233,0.25)]">
                   <svg className="h-6 w-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="1.8">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
                   </svg>

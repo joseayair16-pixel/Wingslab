@@ -101,26 +101,28 @@ self.addEventListener('activate', function(event) {
   );
 });
 
-// Escuchar mensajes desde la página para cachear o mostrar notificaciones de respaldo
+// Escuchar mensajes desde la página para mostrar notificaciones de respaldo en background
 self.addEventListener('message', function(event) {
   if (event.data && event.data.type === 'SHOW_NOTIFICATION') {
+    const orderId = event.data.data?.orderId || 'unknown';
     const options = {
       body: event.data.body || 'Tienes una nueva orden asignada.',
       icon: '/SaDeL.png',
       badge: '/SaDeL.png',
       vibrate: [500, 100, 500, 100, 500],
-      tag: 'driver-order-tag',
+      tag: 'driver-assignment-' + orderId,
       silent: false,
       requireInteraction: true,
       data: event.data.data || {},
     };
-    self.registration.showNotification(event.data.title || 'Nueva Asignación', options);
+    self.registration.showNotification(event.data.title || 'Nueva Asignación', options).catch(function () {});
   }
 });
 
-// Cache-first para notifica.wav
+// Cache-first para todos los sonidos bajo /sounds/
 self.addEventListener('fetch', function(event) {
-  if (event.request.url.includes('/sounds/notifica.wav')) {
+  const url = new URL(event.request.url);
+  if (url.pathname.startsWith('/sounds/') && url.pathname.endsWith('.wav')) {
     event.respondWith(
       caches.match(event.request).then(function(cached) {
         return cached || fetch(event.request);

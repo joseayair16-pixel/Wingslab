@@ -1701,6 +1701,24 @@ export async function autoAssignDriver(
         tag: `order-assigned-${assignedOrder.id}`,
       });
 
+      // Si la orden ya está READY al asignar, enviar también push de recogida
+      if (assignedOrder.status === OrderStatus.READY) {
+        void sendPushNotification(candidate.userId, {
+          title: 'Pedido listo para recoger',
+          body: `El pedido de ${assignedOrder.restaurant.name} está listo. Pasa a recogerlo.`,
+          icon: '/SaDeL.png',
+          badge: '/SaDeL.png',
+          vibrate: [500, 200, 500],
+          requireInteraction: true,
+          tag: `order-ready-${assignedOrder.id}`,
+          data: {
+            orderId: assignedOrder.id,
+            event: 'order:ready',
+            url: `/?orderId=${assignedOrder.id}`,
+          },
+        });
+      }
+
       return { driver: candidate, order: assignedOrder };
     }
     return null;

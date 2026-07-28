@@ -541,43 +541,43 @@ export default function Home() {
     };
   }, []);
 
-  // Screen Wake Lock API para mantener la pantalla encendida cuando está disponible
+  // Screen Wake Lock API para mantener la pantalla encendida mientras la app está abierta
   useEffect(() => {
-    async function requestWakeLock() {
-      if (typeof window !== 'undefined' && 'wakeLock' in navigator && driverProfile?.availability === 'AVAILABLE') {
-        try {
-          if (!wakeLockRef.current) {
-            wakeLockRef.current = await (navigator as any).wakeLock.request('screen');
-            console.log('[WakeLock] Screen Wake Lock holds successfully.');
-          }
-        } catch (err) {
-          console.warn('[WakeLock] Failed to request screen wake lock:', err);
+    async function acquireWakeLock() {
+      try {
+        if ('wakeLock' in navigator && driverProfile?.availability === 'AVAILABLE' && !wakeLockRef.current) {
+          wakeLockRef.current = await (navigator as any).wakeLock.request('screen');
         }
-      }
+      } catch {}
     }
 
     async function releaseWakeLock() {
-      if (wakeLockRef.current) {
-        try {
+      try {
+        if (wakeLockRef.current) {
           await wakeLockRef.current.release();
           wakeLockRef.current = null;
-          console.log('[WakeLock] Screen Wake Lock released successfully.');
-        } catch (err) {
-          console.error('[WakeLock] Error releasing screen wake lock:', err);
         }
-      }
+      } catch {}
     }
 
     if (driverProfile?.availability === 'AVAILABLE') {
-      void requestWakeLock();
+      void acquireWakeLock();
     } else {
       void releaseWakeLock();
     }
 
-    return () => {
-      if (wakeLockRef.current) {
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible' && driverProfile?.availability === 'AVAILABLE') {
+        void acquireWakeLock();
+      } else if (document.visibilityState === 'hidden') {
         void releaseWakeLock();
       }
+    };
+    document.addEventListener('visibilitychange', onVisibilityChange);
+
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+      void releaseWakeLock();
     };
   }, [driverProfile?.availability]);
 

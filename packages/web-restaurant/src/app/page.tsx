@@ -2779,22 +2779,48 @@ export default function Home() {
 
     worker.postMessage('start');
 
-    if ('wakeLock' in navigator) {
-      (navigator as any).wakeLock.request('screen').then((wl: any) => {
-        wakeLockRef.current = wl;
-      }).catch(() => {});
-    }
-
     return () => {
       worker.postMessage('stop');
       worker.terminate();
       URL.revokeObjectURL(workerUrl);
-      if (wakeLockRef.current) {
-        wakeLockRef.current.release().catch(() => {});
-        wakeLockRef.current = null;
-      }
     };
   }, [activeIncomingOrder, isOrderAlertSoundEnabled, playIncomingOrderAlert]);
+
+  // Screen Wake Lock: keep display on while the app is open
+  useEffect(() => {
+    async function acquireWakeLock() {
+      try {
+        if ('wakeLock' in navigator && !wakeLockRef.current) {
+          wakeLockRef.current = await (navigator as any).wakeLock.request('screen');
+        }
+      } catch {}
+    }
+
+    async function releaseWakeLock() {
+      try {
+        if (wakeLockRef.current) {
+          await wakeLockRef.current.release();
+          wakeLockRef.current = null;
+        }
+      } catch {}
+    }
+
+    void acquireWakeLock();
+
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        void acquireWakeLock();
+      } else {
+        void releaseWakeLock();
+      }
+    };
+    document.addEventListener('visibilitychange', onVisibilityChange);
+
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+      void releaseWakeLock();
+    };
+  }, []);
 
   useEffect(() => {
     const updateRootClock = () => {

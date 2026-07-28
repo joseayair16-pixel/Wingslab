@@ -419,6 +419,7 @@ export async function registerRestaurantOrderRoutes(fastify: FastifyInstance): P
                   badge: '/SaDeL.png',
                   vibrate: [500, 200, 500],
                   requireInteraction: true,
+                  tag: `order-ready-${params.data.id}`,
                   data: {
                     orderId: params.data.id,
                     event: 'order:ready',
@@ -2058,6 +2059,25 @@ export async function registerRestaurantOrderRoutes(fastify: FastifyInstance): P
             { orderId: params.data.id },
             { requestId: requestContext.requestId, orderId: params.data.id }
           );
+
+          try {
+            await sendPushNotification(driverUserId, {
+              title: 'Pedido cancelado — Liberado de la entrega',
+              body: 'El cliente canceló el pedido. Ya no es necesario que realices la entrega.',
+              icon: '/SaDeL.png',
+              badge: '/SaDeL.png',
+              vibrate: [600, 200, 600, 200, 600],
+              requireInteraction: true,
+              tag: `order-cancelled-${params.data.id}`,
+              data: {
+                orderId: params.data.id,
+                event: 'order:cancelled',
+                url: '/',
+              },
+            });
+          } catch (pushErr) {
+            request.log.error(pushErr as any, '[Push] Error al notificar cancelación al repartidor');
+          }
         }
 
         return reply.send({
@@ -2143,6 +2163,25 @@ export async function registerRestaurantOrderRoutes(fastify: FastifyInstance): P
             { orderId: params.data.id },
             { requestId: requestContext.requestId, orderId: params.data.id }
           );
+
+          try {
+            await sendPushNotification(driverUserId, {
+              title: 'Pedido cancelado por el restaurante',
+              body: `El restaurante canceló el pedido. Motivo: ${parsed.data.reason}`,
+              icon: '/SaDeL.png',
+              badge: '/SaDeL.png',
+              vibrate: [600, 200, 600, 200, 600],
+              requireInteraction: true,
+              tag: `order-cancelled-${params.data.id}`,
+              data: {
+                orderId: params.data.id,
+                event: 'order:cancelled',
+                url: '/',
+              },
+            });
+          } catch (pushErr) {
+            request.log.error(pushErr as any, '[Push] Error al notificar cancelación al repartidor');
+          }
         }
 
         return reply.send({
