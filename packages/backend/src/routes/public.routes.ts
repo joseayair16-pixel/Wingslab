@@ -770,8 +770,6 @@ export async function registerPublicRoutes(fastify: FastifyInstance): Promise<vo
     try {
       const restaurants = await prisma.restaurant.findMany({
         where: {
-          status: 'ACTIVE',
-          isAcceptingOrders: true,
           region: { not: '' },
         },
         select: {
