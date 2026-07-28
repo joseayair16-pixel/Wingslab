@@ -521,7 +521,8 @@ export default function Home() {
   const audioCtxRef = useRef<AudioContext | null>(null);
   const audioBufferRef = useRef<AudioBuffer | null>(null);
   const audioArrayBufferRef = useRef<ArrayBuffer | null>(null);
-  const alarmSourceRef = useRef<AudioBufferSourceNode | null>(null);
+  const alarmSourceRef = useRef<AudioBufferSourceNode | OscillatorNode | null>(null);
+  const pulseIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   // Buscar si hay un pedido asignado pendiente de aceptar (estilo Uber)
   const pendingAssignedOrder = pendingOrders.find((order) => {
@@ -637,26 +638,59 @@ export default function Home() {
   }
 
   function playAlarmSound() {
-    // Asegurar que no haya dos alarmas superpuestas
     stopAlarmSound(alarmSourceRef.current);
 
-    // Intentar con Web Audio API (buffer precargado)
     const ctx = audioCtxRef.current;
-    const buf = audioBufferRef.current;
-    if (ctx && buf) {
-      ctx.resume();
-      const source = ctx.createBufferSource();
-      source.buffer = buf;
-      source.loop = true;
-      const gain = ctx.createGain();
-      gain.gain.value = 1.0;
-      source.connect(gain);
-      gain.connect(ctx.destination);
-      source.start(0);
-      alarmSourceRef.current = source;
-      return source;
+    if (!ctx) return null;
+
+    ctx.resume();
+
+    try {
+      // 1. Intentar con el buffer WAV decodificado (suena mejor)
+      const buf = audioBufferRef.current;
+      if (buf) {
+        const source = ctx.createBufferSource();
+        source.buffer = buf;
+        source.loop = true;
+        const gain = ctx.createGain();
+        gain.gain.value = 1.0;
+        source.connect(gain);
+        gain.connect(ctx.destination);
+        source.start(0);
+        alarmSourceRef.current = source;
+        return source;
+      }
+    } catch {
+      // falla el WAV, seguimos con oscilador
     }
-    // Fallback: <audio> element
+
+    // 2. Oscilador programático — NO depende de archivos externos
+    try {
+      const osc = ctx.createOscillator();
+      osc.type = 'square';
+      osc.frequency.value = 880;
+
+      const gain = ctx.createGain();
+      gain.gain.value = 0.6;
+
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(0);
+
+      // Pulsos rítmicos: alterna volumen cada 400ms (efecto de alarma)
+      let state = true;
+      pulseIntervalRef.current = setInterval(() => {
+        state = !state;
+        gain.gain.value = state ? 0.6 : 0.0;
+      }, 400);
+
+      alarmSourceRef.current = osc;
+      return osc;
+    } catch {
+      // falló el oscilador, último recurso: <audio>
+    }
+
+    // 3. Fallback extremo: <audio> (sujeto a autoplay policy)
     const audioEl = document.getElementById('driver-alert-audio') as HTMLAudioElement | null;
     if (audioEl) {
       audioEl.loop = true;
@@ -666,12 +700,16 @@ export default function Home() {
     return null;
   }
 
-  function stopAlarmSound(sourceNode: AudioBufferSourceNode | null) {
+  function stopAlarmSound(sourceNode: AudioBufferSourceNode | OscillatorNode | null) {
     if (sourceNode) {
       try { sourceNode.stop(); } catch (e) { /* ya terminó */ }
     }
     if (alarmSourceRef.current === sourceNode) {
       alarmSourceRef.current = null;
+    }
+    if (pulseIntervalRef.current) {
+      clearInterval(pulseIntervalRef.current);
+      pulseIntervalRef.current = null;
     }
     const audioEl = document.getElementById('driver-alert-audio') as HTMLAudioElement | null;
     if (audioEl) {
@@ -683,7 +721,7 @@ export default function Home() {
   // Alarma acústica (bucle sonar Uber) y vibración periódica ante nueva asignación
   useEffect(() => {
     let vibrationInterval: NodeJS.Timeout | null = null;
-    let sourceNode: AudioBufferSourceNode | null = null;
+    let sourceNode: AudioBufferSourceNode | OscillatorNode | null = null;
     let cancelled = false;
 
     if (pendingAssignedOrder) {

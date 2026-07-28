@@ -12,7 +12,6 @@ self.addEventListener('push', function (event) {
     icon: data.icon || '/SaDeL.png',
     badge: data.badge || '/SaDeL.png',
     vibrate: data.vibrate || [500, 100, 500, 100, 500],
-    sound: data.sound || undefined,
     requireInteraction: data.requireInteraction !== undefined ? data.requireInteraction : true,
     data: data.data || {},
     tag: data.tag || 'driver-order-tag',
