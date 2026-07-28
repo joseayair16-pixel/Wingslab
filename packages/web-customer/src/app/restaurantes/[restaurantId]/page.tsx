@@ -2157,7 +2157,7 @@ function triggerHaptic(pattern: number | number[] = 10) {
         const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)); 
         const distance = R * c;
         
-        const MAX_DISTANCE_KM = 5;
+        const MAX_DISTANCE_KM = 1;
         
         if (distance > MAX_DISTANCE_KM) {
           setDeliveryErrorModal(`Estás demasiado lejos de la dirección de entrega (${distance.toFixed(1)} km). Para pedir a esta distancia debes usar pago por transferencia.`);
@@ -2226,6 +2226,7 @@ function triggerHaptic(pattern: number | number[] = 10) {
         paymentMethod: normalizedCheckoutForm.paymentMethod,
         ...(paymentProofUrl ? { paymentProofUrl } : {}),
         ...(combinedNotes ? { notes: combinedNotes } : {}),
+        locationVerified: !!currentLocation,
       };
 
       if (fulfillmentType !== 'PICKUP') {
@@ -2254,7 +2255,7 @@ function triggerHaptic(pattern: number | number[] = 10) {
         token,
         options: {
           method: 'POST',
-          headers: fulfillmentType !== 'PICKUP' ? { 'X-Location-Verified': '1' } : undefined,
+          headers: fulfillmentType !== 'PICKUP' && currentLocation ? { 'X-Location-Verified': '1' } : undefined,
           body: JSON.stringify(body),
         },
         fallbackMessage: 'No se pudo crear el pedido.',

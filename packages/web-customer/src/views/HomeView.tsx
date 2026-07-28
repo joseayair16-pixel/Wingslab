@@ -38,6 +38,9 @@ interface HomeViewProps {
   buildRestaurantCoverFallback: (categoryId: string) => string;
   buildRestaurantInitials: (name: string) => string;
   formatDeliverySummary: (distance: any) => string;
+  activeZones?: any[];
+  onZoneSelect?: (zone: any) => void;
+  onJoinClick?: () => void;
 }
 
 export const HomeView = React.memo(function HomeView({
@@ -66,7 +69,10 @@ export const HomeView = React.memo(function HomeView({
   router,
   buildRestaurantCoverFallback,
   buildRestaurantInitials,
-  formatDeliverySummary
+  formatDeliverySummary,
+  activeZones = [],
+  onZoneSelect,
+  onJoinClick,
 }: HomeViewProps) {
   const searchQuery = useStore(state => state.searchQuery);
   const searchType = useStore(state => state.searchType);
@@ -173,6 +179,7 @@ export const HomeView = React.memo(function HomeView({
           <div className="flex justify-center gap-4 md:gap-5">
             {tabs.map((tab) => {
               const isActive = businessTypeFilter === tab.key;
+              const imgSrc = tab.key === 'restaurants' ? '/restaurantes.png' : tab.key === 'stores' ? '/tiendas.png' : '/todos.png';
               return (
                 <button
                   key={tab.key}
@@ -181,16 +188,18 @@ export const HomeView = React.memo(function HomeView({
                     setBusinessTypeFilter(tab.key);
                     setSelectedCategory('all');
                   }}
-                  className={`relative flex flex-col items-center gap-1.5 rounded-xl transition-all active:scale-[0.97] w-[76px] md:w-[92px] py-2 ${
-                    isActive
-                      ? 'ring-2 ring-accent ring-offset-2 bg-accent/5'
-                      : 'opacity-50 hover:opacity-80'
+                   className={`relative rounded-lg md:rounded-xl transition-all active:scale-[0.97] max-w-[80px] md:max-w-[100px] ${
+                    isActive ? 'ring-2 ring-accent ring-offset-2' : 'opacity-40 grayscale hover:opacity-70 hover:grayscale-[50%]'
                   }`}
                 >
-                  <span className={`text-xl md:text-2xl ${isActive ? '' : 'grayscale'}`}>{tab.icon}</span>
-                  <span className={`text-[11px] font-semibold md:text-xs ${isActive ? 'text-accent' : 'text-neutral-500'}`}>
-                    {tab.label}
-                  </span>
+                  <Image
+                    src={imgSrc}
+                    alt={tab.label}
+                    width={500}
+                    height={350}
+                    className="w-full h-auto"
+                    priority
+                  />
                 </button>
               );
             })}
@@ -765,6 +774,68 @@ export const HomeView = React.memo(function HomeView({
               })}
             </div>
             )
+          ) : isSearching ? (
+            <EmptyState text={
+              businessTypeFilter === 'stores'
+                ? 'No encontramos tiendas con esa búsqueda. Prueba con otro nombre o zona.'
+                : businessTypeFilter === 'all'
+                ? 'No encontramos resultados con esa búsqueda. Prueba con otro nombre o zona.'
+                : 'No encontramos restaurantes con esa búsqueda. Prueba con otro nombre o zona.'
+            } />
+          ) : activeZones.length > 0 ? (
+            <div className="space-y-5">
+              <div className="rounded-[28px] border border-dashed border-black/10 bg-neutral-50 px-5 py-8 text-center">
+                <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-full bg-sky-100 text-sky-600">
+                  <svg className="h-7 w-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" d="M15 10.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1 1 15 0Z" />
+                  </svg>
+                </div>
+                <h3 className="text-lg font-bold text-neutral-900">No hay restaurantes en tu zona aún</h3>
+                <p className="mt-1 text-sm text-neutral-500">
+                  Pero puedes explorar las ciudades donde ya tenemos restaurantes activos:
+                </p>
+                <div className="mt-4 flex flex-wrap justify-center gap-2">
+                  {activeZones.map((zone: any) => (
+                    <button
+                      key={zone.regionCode}
+                      type="button"
+                      onClick={() => onZoneSelect?.(zone)}
+                      className="inline-flex items-center gap-1.5 rounded-full border border-sky-200/60 bg-sky-50 px-3.5 py-2 text-sm font-semibold text-sky-700 transition hover:bg-sky-100 hover:border-sky-300 active:scale-[0.97]"
+                    >
+                      <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M15 10.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1 1 15 0Z" />
+                      </svg>
+                      {zone.regionName}
+                      <span className="rounded-full bg-sky-200/50 px-1.5 py-0.5 text-[10px] font-bold text-sky-600">{zone.restaurantCount}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="rounded-[28px] border border-dashed border-amber-200/60 bg-amber-50/40 px-5 py-6 text-center">
+                <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-amber-100 text-amber-600">
+                  <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" d="M12 6v12m-6-6h12" />
+                  </svg>
+                </div>
+                <h3 className="text-base font-bold text-neutral-900">¿Tienes un negocio?</h3>
+                <p className="mt-1 text-sm text-neutral-500">
+                  Podemos estar en tu localidad. Registra tu restaurante o tienda y llega a más clientes.
+                </p>
+                <button
+                  type="button"
+                  onClick={onJoinClick}
+                  className="mt-4 inline-flex items-center gap-2 rounded-full bg-neutral-950 px-6 py-3 text-sm font-bold text-white transition hover:bg-neutral-800 active:scale-[0.97]"
+                >
+                  Registrar mi negocio
+                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M13.5 4.5 21 12m0 0-7.5 7.5M21 12H3" />
+                  </svg>
+                </button>
+              </div>
+            </div>
           ) : (
             <EmptyState text={
               businessTypeFilter === 'stores'

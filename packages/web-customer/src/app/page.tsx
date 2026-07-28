@@ -737,8 +737,10 @@ export default function Home() {
       
       // Force locationDenied to true to block cash payments later, since they are bypassing GPS
       setLocationDenied(true);
+      setLocationSource('manual');
       try { 
-        localStorage.setItem('locationDenied', '1'); 
+        localStorage.setItem('locationDenied', '1');
+        localStorage.setItem('locationSource', 'manual');
         localStorage.setItem('userLocation', JSON.stringify(loc)); 
       } catch (e) { }
       
@@ -820,6 +822,7 @@ export default function Home() {
   }
 
   const [restaurants, setRestaurants] = useState<RestaurantSummary[]>([]);
+  const [activeZones, setActiveZones] = useState<any[]>([]);
   const [featuredRestaurants, setFeaturedRestaurants] = useState<any[]>([]);
   const [offerProducts, setOfferProducts] = useState<any[]>([]);
   const [selectedRestaurantId, setSelectedRestaurantId] = useState('');
@@ -840,6 +843,7 @@ export default function Home() {
   const [userZone, setUserZone] = useState<string | null>(null);
   const [locationExpired, setLocationExpired] = useState(false);
   const [locationDenied, setLocationDenied] = useState(false);
+  const [locationSource, setLocationSource] = useState<'gps' | 'manual' | null>(null);
   const [isLocationChecked, setIsLocationChecked] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<'CASH' | 'TRANSFER'>('CASH');
   const [fulfillmentType, setFulfillmentType] = useState<'DELIVERY' | 'PICKUP'>('DELIVERY');
@@ -1906,6 +1910,14 @@ export default function Home() {
 
       const [restaurantsData, ordersData, featuredData, offersData] = await Promise.all([restaurantsPromise, ordersPromise, featuredPromise, offersPromise]);
 
+      // Fetch active zones once for the empty state explorer
+      if (!activeZones.length) {
+        fetch(`${apiBase}/public/zonas-activas`)
+          .then(r => r.json())
+          .then(d => { if (d.success) setActiveZones(d.data); })
+          .catch(() => {});
+      }
+
       if (callId !== loadDashboardCallIdRef.current) return;
       const validFeatured = featuredData.filter((r: any) => {
         if (!userLocation || r.distanceKm === null || r.deliveryRadius === null) return false;
@@ -1970,6 +1982,19 @@ export default function Home() {
   const loadMoreOrders = useCallback(() => {
     setVisibleOrdersCount((prev) => prev + 10);
   }, []);
+
+  const handleZoneSelect = useCallback((zone: { latitude: number; longitude: number; regionName: string }) => {
+    const loc = { latitude: zone.latitude, longitude: zone.longitude, accuracy: undefined, address: zone.regionName, ts: Date.now() };
+    setLocationSource('manual');
+    setLocationDenied(true);
+    setUserLocation(loc);
+    try {
+      localStorage.setItem('locationDenied', '1');
+      localStorage.setItem('locationSource', 'manual');
+      localStorage.setItem('userLocation', JSON.stringify(loc));
+    } catch (e) {}
+    loadDashboard();
+  }, [loadDashboard]);
 
   const loadProfile = useCallback(async () => {
     if (!token) return;
@@ -2200,9 +2225,9 @@ export default function Home() {
       let address = addresses.find(a => a.id === addressId);
       if (!address) return;
 
-      if (locationDenied) {
-        setToastMessage('No puedes realizar pedidos sin permitir el acceso a tu ubicación.');
-        setTimeout(() => setToastMessage(''), 3000);
+      if (locationDenied && paymentMethod === 'CASH') {
+        setToastMessage('Para pagar en efectivo es necesario permitir el acceso a tu ubicación. Puedes usar transferencia.');
+        setTimeout(() => setToastMessage(''), 3500);
         return;
       }
 
@@ -2265,7 +2290,7 @@ export default function Home() {
       const addrLat = typeof address.latitude === 'string' ? parseFloat(address.latitude) : address.latitude;
       const addrLng = typeof address.longitude === 'string' ? parseFloat(address.longitude) : address.longitude;
       const distanceToAddressKm = haversineKm(userLocation.latitude, userLocation.longitude, addrLat, addrLng);
-      const MAX_CASH_DISTANCE_KM = 0.5;
+      const MAX_CASH_DISTANCE_KM = 1;
 
       if (distanceToAddressKm > MAX_CASH_DISTANCE_KM && paymentMethod !== 'TRANSFER') {
         setToastMessage('Por la distancia a tu ubicación actual, esta entrega solo está disponible pagando por transferencia.');
@@ -2286,10 +2311,6 @@ export default function Home() {
         'Authorization': `Bearer ${token}`,
       };
 
-      if (!locationDenied && userLocation && !isPickup) {
-        headers['X-Location-Verified'] = '1';
-      }
-
       const body: Record<string, any> = {
         restaurantId: selectedRestaurant?.id,
         items: cart.map(item => ({
@@ -2301,6 +2322,7 @@ export default function Home() {
         paymentMethod,
         paymentProofUrl: paymentMethod === 'TRANSFER' ? paymentProofUrl : undefined,
         notes: orderNotes,
+        locationVerified: locationSource === 'gps',
       };
 
       if (!isPickup) {
@@ -2478,7 +2500,8 @@ export default function Home() {
       return new Promise((resolve) => {
         navigator.geolocation.getCurrentPosition(async (position) => {
           setLocationDenied(false);
-          try { localStorage.removeItem('locationDenied'); } catch (e) { }
+          setLocationSource('gps');
+          try { localStorage.removeItem('locationDenied'); localStorage.setItem('locationSource', 'gps'); } catch (e) { }
           const { latitude, longitude, accuracy } = position.coords;
           try {
             const google = (window as any).google;
@@ -2523,6 +2546,8 @@ export default function Home() {
           try {
             const denied = window.localStorage.getItem('locationDenied') === '1';
             if (denied) setLocationDenied(true);
+            const source = window.localStorage.getItem('locationSource') as 'gps' | 'manual' | null;
+            if (source) setLocationSource(source);
           } catch (e) { }
           const storedRaw = window.localStorage.getItem('userLocation');
           if (storedRaw) {
@@ -3661,9 +3686,11 @@ export default function Home() {
                         };
 
                         const loc = { latitude, longitude, accuracy, address: addressPayload.reference, ts: Date.now() };
-                        try { localStorage.setItem('userLocation', JSON.stringify(loc)); } catch (e) { }
+                        try { localStorage.setItem('userLocation', JSON.stringify(loc)); localStorage.setItem('locationSource', 'gps'); } catch (e) { }
                         setLocationExpired(false);
                         setUserLocation(loc);
+                        setLocationSource('gps');
+                        setLocationDenied(false);
 
                         // Call backend to verify/upsert address and mark it as verified
                         try {
@@ -3686,9 +3713,11 @@ export default function Home() {
                     });
                   } catch (err) {
                     const loc = { latitude, longitude, accuracy, address: 'Ubicación actual', ts: Date.now() };
-                    try { localStorage.setItem('userLocation', JSON.stringify(loc)); } catch (e) { }
+                    try { localStorage.setItem('userLocation', JSON.stringify(loc)); localStorage.setItem('locationSource', 'gps'); } catch (e) { }
                     setLocationExpired(false);
                     setUserLocation(loc);
+                    setLocationSource('gps');
+                    setLocationDenied(false);
                   }
                 }, (err) => {
                   const errCode = err && (err as any).code;
@@ -5122,6 +5151,9 @@ export default function Home() {
             buildRestaurantCoverFallback={buildRestaurantCoverFallback}
             buildRestaurantInitials={buildRestaurantInitials}
             formatDeliverySummary={formatDeliverySummary}
+            activeZones={activeZones}
+            onZoneSelect={handleZoneSelect}
+            onJoinClick={() => setIsJoinRestModalOpen(true)}
           />
         ) : null}
       </div>
@@ -5173,14 +5205,7 @@ export default function Home() {
                       className="group flex items-center gap-3.5 rounded-2xl border border-black/5 bg-white p-3 text-left transition-all duration-300 hover:border-sky-1000/30 hover:shadow-lg hover:shadow-sky-1000/[0.02] hover:-translate-y-0.5 active:scale-[0.98] w-full shadow-sm"
                     >
                       <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-sky-100 text-sky-500 transition-colors group-hover:bg-sky-200">
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                          <circle cx="6" cy="17" r="2.5" />
-                          <circle cx="18" cy="17" r="2.5" />
-                          <path d="M6 17V8l3-4h5l2 4h2a3 3 0 013 3v1l-4 3-3-3h-4" />
-                          <path d="M9 11h2" />
-                          <path d="M14 7l-1 4" />
-                          <path d="M5 14h3l2 3" />
-                        </svg>
+                        <span className="text-lg">🏍️</span>
                       </div>
                       <div className="min-w-0 flex-1">
                         <p className="text-xs font-extrabold text-neutral-900 group-hover:text-sky-500 transition-colors">Ser Repartidor</p>

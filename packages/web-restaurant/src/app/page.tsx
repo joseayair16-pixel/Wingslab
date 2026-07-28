@@ -8579,14 +8579,6 @@ export default function Home() {
                           </div>
                           <div className="flex items-center justify-between text-xs text-neutral-400 pt-1 border-t border-black/5">
                             <span>{billingSummary?.deliveredOrders ?? 0} pedido{(billingSummary?.deliveredOrders ?? 0) !== 1 ? 's' : ''} en este período</span>
-                            <span className="text-neutral-500">
-                              {billingSummary && billingSummary.deliveredOrders > 0 && billingSummary.serviceFee > 0
-                                ? `${billingSummary.serviceFee} × ${billingSummary.deliveredOrders} = $${billingSummary.serviceFeeRevenue}`
-                                : ''}
-                              {billingSummary && billingSummary.deliveredOrders > 0 && (billingSummary.platformFeePerOrder ?? 0) > 0
-                                ? ` · ${billingSummary.platformFeePerOrder} × ${billingSummary.deliveredOrders} = $${billingSummary.platformFeeRevenue}`
-                                : ''}
-                            </span>
                           </div>
                           <div className="flex justify-between items-center text-sm">
                             <span className="text-neutral-500 font-medium">Próximo Corte de Caja</span>

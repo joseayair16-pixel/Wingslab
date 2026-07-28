@@ -39,6 +39,7 @@ type OrderInput = {
   paymentMethod: PaymentMethod;
   paymentProofUrl?: string;
   notes?: string;
+  locationVerified?: boolean;
 };
 
 type CreateOrderParams = {
@@ -81,6 +82,16 @@ function isLocationCapturedRecently(capturedAt?: string | number): boolean {
 function validateCustomerLocation(input: OrderInput, customerUserId: string) {
   const requireLocation = String(process.env.REQUIRE_CUSTOMER_LOCATION_FOR_ORDERS || 'true').toLowerCase() !== 'false';
   if (!requireLocation) return;
+
+  // Si el frontend indica que la ubicación NO está verificada (dirección manual, no GPS),
+  // bloqueamos pago en efectivo aunque haya coordenadas.
+  if (!input.locationVerified && input.paymentMethod === PaymentMethod.CASH) {
+    throw new AppError(
+      400,
+      'LOCATION_NOT_VERIFIED',
+      'Para pagos en efectivo es obligatorio permitir el acceso GPS a tu ubicación actual.'
+    );
+  }
 
   // Si no hay ubicación actual, solo bloqueamos si el método de pago es EFECTIVO.
   // Si es TRANSFERENCIA, permitimos continuar sin GPS (tolerancia a fallos técnicos del dispositivo).
@@ -138,7 +149,7 @@ function validateCustomerLocation(input: OrderInput, customerUserId: string) {
   const accuracyBufferKm = typeof accuracy === 'number' ? Math.min(accuracy / 1000, 1) : 0;
   const maxDistanceKm =
     input.paymentMethod === PaymentMethod.CASH
-      ? getPositiveNumberEnv('ORDER_CASH_MAX_CUSTOMER_DISTANCE_KM', 1.5)
+      ? getPositiveNumberEnv('ORDER_CASH_MAX_CUSTOMER_DISTANCE_KM', 1)
       : getPositiveNumberEnv('ORDER_TRANSFER_MAX_CUSTOMER_DISTANCE_KM', 5);
 
   if (distanceKm > maxDistanceKm + accuracyBufferKm) {

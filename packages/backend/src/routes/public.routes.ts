@@ -765,4 +765,62 @@ export async function registerPublicRoutes(fastify: FastifyInstance): Promise<vo
       });
     }
   });
+
+  fastify.get('/zonas-activas', async (request, reply) => {
+    try {
+      const restaurants = await prisma.restaurant.findMany({
+        where: {
+          status: 'ACTIVE',
+          isAcceptingOrders: true,
+          region: { not: '' },
+        },
+        select: {
+          region: true,
+          latitude: true,
+          longitude: true,
+        },
+      });
+
+      if (!restaurants.length) {
+        return reply.send({ success: true, data: [] });
+      }
+
+      const grouped = new Map<string, { latitudes: number[]; longitudes: number[] }>();
+      for (const r of restaurants) {
+        if (!r.region) continue;
+        const entry = grouped.get(r.region) || { latitudes: [], longitudes: [] };
+        entry.latitudes.push(r.latitude);
+        entry.longitudes.push(r.longitude);
+        grouped.set(r.region, entry);
+      }
+
+      const regionCodes = Array.from(grouped.keys());
+      const regions = await prisma.region.findMany({
+        where: { code: { in: regionCodes } },
+      });
+      const regionsByCode = new Map(regions.map(r => [r.code, r]));
+
+      const data = Array.from(grouped.entries()).map(([code, coords]) => {
+        const region = regionsByCode.get(code);
+        const avgLat = coords.latitudes.reduce((a, b) => a + b, 0) / coords.latitudes.length;
+        const avgLng = coords.longitudes.reduce((a, b) => a + b, 0) / coords.longitudes.length;
+        return {
+          regionCode: code,
+          regionName: region?.name || code,
+          city: region?.city || null,
+          state: region?.state || null,
+          restaurantCount: coords.latitudes.length,
+          latitude: avgLat,
+          longitude: avgLng,
+        };
+      });
+
+      return reply.send({ success: true, data });
+    } catch (error: any) {
+      return reply.status(500).send({
+        success: false,
+        error: { message: error.message || 'Error al obtener zonas activas.' },
+      });
+    }
+  });
 }
