@@ -33,9 +33,68 @@ export type NotificationPayload = {
   data?: Record<string, unknown>;
 };
 
+export type PushOptions = {
+  ttl?: number;
+  urgency?: 'very-low' | 'low' | 'normal' | 'high';
+};
+
+const RETRY_CONFIG = {
+  maxAttempts: 3,
+  baseDelayMs: 1000,
+} as const;
+
+function isTransientError(error: any): boolean {
+  if (!error) return false;
+  const code = error.statusCode;
+  if (code === 429) return true;
+  if (code >= 500 && code < 600) return true;
+  if (code === undefined && error.message?.includes('network') || error.message?.includes('timeout') || error.message?.includes('ETIMEDOUT') || error.message?.includes('ECONNRESET')) return true;
+  return false;
+}
+
+function isExpiredSubscription(error: any): boolean {
+  return error?.statusCode === 410 || error?.statusCode === 404;
+}
+
+function determineUrgency(payload: NotificationPayload): 'high' | 'normal' {
+  if (payload.sound) return 'high';
+  if (payload.requireInteraction) return 'high';
+  if (payload.vibrate && payload.vibrate.some(v => v >= 500)) return 'high';
+  return 'normal';
+}
+
+async function sendWithRetry(
+  subscription: webpush.PushSubscription,
+  payloadString: string,
+  options: { ttl: number; urgency: string },
+  attempt: number = 1
+): Promise<{ success: boolean }> {
+  try {
+    await webpush.sendNotification(subscription, payloadString, {
+      TTL: options.ttl,
+      urgency: options.urgency as any,
+    });
+    return { success: true };
+  } catch (error: any) {
+    if (isExpiredSubscription(error)) {
+      throw error;
+    }
+
+    if (isTransientError(error) && attempt < RETRY_CONFIG.maxAttempts) {
+      const delay = RETRY_CONFIG.baseDelayMs * Math.pow(2, attempt - 1);
+      logger.warn(`[PushService] Reintento ${attempt}/${RETRY_CONFIG.maxAttempts} en ${delay}ms — ${error.message}`);
+      await new Promise(resolve => setTimeout(resolve, delay));
+      return sendWithRetry(subscription, payloadString, options, attempt + 1);
+    }
+
+    throw error;
+  }
+}
+
 export const sendPushNotification = async (
   userId: string,
-  payload: NotificationPayload
+  payload: NotificationPayload,
+  options?: PushOptions
 ) => {
   if (!vapidConfigured) {
     logger.error(`[PushService] Intento de enviar push sin VAPID configurado (userId=${userId}, title="${payload.title}")`);
@@ -52,6 +111,9 @@ export const sendPushNotification = async (
   }
 
   const payloadString = JSON.stringify(payload);
+  const ttl = options?.ttl ?? 86400;
+  const urgency = options?.urgency ?? determineUrgency(payload);
+
   const results = await Promise.allSettled(
     subscriptions.map(async (sub) => {
       const pushSubscription = {
@@ -60,12 +122,17 @@ export const sendPushNotification = async (
       };
 
       try {
-        await webpush.sendNotification(pushSubscription, payloadString);
+        await sendWithRetry(pushSubscription, payloadString, { ttl, urgency });
         return { success: true, endpoint: sub.endpoint };
       } catch (error: any) {
-        logger.error(`[PushService] Fallo al enviar push a ${sub.endpoint}`, { error: error.message, statusCode: error.statusCode });
+        logger.error(`[PushService] Fallo definitivo al enviar push a ${sub.endpoint}`, {
+          error: error.message,
+          statusCode: error.statusCode,
+          title: payload.title,
+          userId,
+        });
 
-        if (error.statusCode === 410 || error.statusCode === 404) {
+        if (isExpiredSubscription(error)) {
           await prisma.pushSubscription.delete({ where: { id: sub.id } });
           logger.info(`[PushService] Suscripción expirada eliminada: ${sub.id}`);
         }
@@ -76,7 +143,13 @@ export const sendPushNotification = async (
   );
 
   const successful = results.filter((r) => r.status === 'fulfilled').length;
-  logger.info(`[PushService] Resumen: ${successful}/${subscriptions.length} exitosos para usuario ${userId}`);
+  const failed = results.filter((r) => r.status === 'rejected').length;
+
+  if (failed > 0) {
+    logger.warn(`[PushService] Resumen: ${successful}/${subscriptions.length} exitosos, ${failed} fallidos — usuario ${userId}, título "${payload.title}"`);
+  } else if (successful > 0) {
+    logger.info(`[PushService] Resumen: ${successful}/${subscriptions.length} exitosos — usuario ${userId}, título "${payload.title}"`);
+  }
 
   return {
     success: successful > 0,

@@ -634,24 +634,21 @@ export default function RestaurantPage({
         customerAudioContextRef.current.resume().catch(() => {});
       }
 
-      const audioEl = document.getElementById('customer-alert-audio') as HTMLAudioElement | null;
-      if (audioEl && audioEl.paused) {
-        audioEl.volume = 0;
-        audioEl.play().then(() => {
-          audioEl.pause();
-          audioEl.volume = 1;
-          audioEl.currentTime = 0;
-        }).catch(() => {});
-      }
-
-      const llegueAudioEl = document.getElementById('customer-llegue-audio') as HTMLAudioElement | null;
-      if (llegueAudioEl && llegueAudioEl.paused) {
-        llegueAudioEl.volume = 0;
-        llegueAudioEl.play().then(() => {
-          llegueAudioEl.pause();
-          llegueAudioEl.volume = 1;
-          llegueAudioEl.currentTime = 0;
-        }).catch(() => {});
+      // Silent unlock: play an inaudible oscillator to prime the audio engine
+      // without playing any actual .wav files (avoids spurious notification sounds on iOS)
+      if (customerAudioContextRef.current) {
+        try {
+          const ctx = customerAudioContextRef.current;
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          gain.gain.value = 0;
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.start();
+          osc.stop(ctx.currentTime + 0.05);
+        } catch (e) {
+          // ignore
+        }
       }
     };
     document.addEventListener('pointerdown', handleGlobalInteraction, { once: true, passive: true });

@@ -76,11 +76,14 @@ self.addEventListener('notificationclick', function (event) {
   );
 });
 
-const CACHE_NAME = 'sadel-static-assets-v3';
+const CACHE_NAME = 'sadel-customer-v4';
 const STATIC_ASSETS = [
   '/SaDeL.png',
   '/app-icon-192.png',
   '/manifest.json',
+  '/sounds/notifica.wav',
+  '/sounds/mensaje.wav',
+  '/sounds/llegue.wav',
 ];
 
 self.addEventListener('install', function (event) {

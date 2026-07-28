@@ -3,6 +3,7 @@ import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 
 import { prisma } from '../config/database';
+import { getRedis } from '../config/redis';
 import { sendAppError } from '../errors/http';
 import { authenticate, authorize, getAuthenticatedUser } from '../middleware/auth';
 import { customerOrderDetailSelect, customerOrderListSelect } from '../services/order-selects';
@@ -113,6 +114,24 @@ export async function registerOrderRoutes(fastify: FastifyInstance): Promise<voi
       const user = getAuthenticatedUser(request);
       const requestContext = getOrCreateRequestContext(request);
 
+      // Rate limit by phone: max 1 order per 5 minutes
+      try {
+        const redis = getRedis();
+        const phoneRateKey = `order_rate:phone:${user.phone}`;
+        const recentOrder = await redis.get(phoneRateKey);
+        if (recentOrder) {
+          return reply.status(429).send({
+            success: false,
+            error: {
+              code: 'PHONE_RATE_LIMIT',
+              message: 'Ya realizaste un pedido recientemente. Espera 5 minutos para crear otro.',
+            },
+          });
+        }
+      } catch (err) {
+        request.log.warn({ err }, 'Redis unavailable for phone rate limit, allowing order');
+      }
+
       try {
         const order = await createOrderForCustomer({
           prisma,
@@ -183,6 +202,15 @@ export async function registerOrderRoutes(fastify: FastifyInstance): Promise<voi
             }
           } catch {}
         })();
+
+        // Set phone rate limit after successful order
+        try {
+          const redis = getRedis();
+          const phoneRateKey = `order_rate:phone:${user.phone}`;
+          await redis.set(phoneRateKey, order.id, 'EX', 300);
+        } catch (err) {
+          request.log.warn({ err }, 'Redis unavailable for phone rate limit set');
+        }
 
         return reply.status(201).send({
           success: true,

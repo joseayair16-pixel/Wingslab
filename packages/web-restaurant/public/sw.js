@@ -1,3 +1,38 @@
+const CACHE_NAME = 'sadel-restaurant-v1';
+const PRECACHE_URLS = [
+  '/sounds/notifica.wav',
+  '/sounds/mensaje.wav',
+  '/SaDeL.png',
+  '/app-icon-192.png',
+  '/manifest.json',
+];
+
+self.addEventListener('install', function (event) {
+  self.skipWaiting();
+  event.waitUntil(
+    caches.open(CACHE_NAME).then(function (cache) {
+      return cache.addAll(PRECACHE_URLS).catch(function () {});
+    })
+  );
+});
+
+self.addEventListener('activate', function (event) {
+  event.waitUntil(
+    Promise.all([
+      clients.claim(),
+      caches.keys().then(function (cacheNames) {
+        return Promise.all(
+          cacheNames.map(function (cacheName) {
+            if (cacheName !== CACHE_NAME) {
+              return caches.delete(cacheName);
+            }
+          })
+        );
+      }),
+    ])
+  );
+});
+
 self.addEventListener('push', function (event) {
   let data;
   try {
@@ -15,7 +50,7 @@ self.addEventListener('push', function (event) {
     sound: data.sound || undefined,
     requireInteraction: data.requireInteraction !== undefined ? data.requireInteraction : true,
     data: data.data || {},
-    tag: data.tag || 'default',
+    tag: data.tag || 'sadel-restaurant-order',
   };
 
   event.waitUntil(
@@ -33,7 +68,6 @@ self.addEventListener('notificationclick', function(event) {
   const orderId = event.notification.data?.orderId || event.notification.data?.id || null;
 
   event.waitUntil((async () => {
-    // Guardar en IndexedDB como respaldo por si postMessage se pierde
     if (orderId) {
       try {
         const db = await new Promise((resolve, reject) => {
@@ -53,7 +87,6 @@ self.addEventListener('notificationclick', function(event) {
 
     if (targetClient) {
       await targetClient.focus();
-      // Intentar postMessage varias veces para cubrir el tiempo de hidratación
       for (let i = 0; i < 5; i++) {
         await new Promise(r => setTimeout(r, 600));
         try {
@@ -62,16 +95,30 @@ self.addEventListener('notificationclick', function(event) {
         } catch {}
       }
     } else {
-      // Sin ventana existente: abrir con ?orderId en la URL (más fiable que postMessage)
       await self.clients.openWindow(orderId ? `/?orderId=${orderId}` : '/');
     }
   })());
 });
 
-self.addEventListener('install', function() {
-  self.skipWaiting();
-});
+self.addEventListener('fetch', function (event) {
+  if (event.request.method !== 'GET') return;
 
-self.addEventListener('activate', function(event) {
-  event.waitUntil(self.clients.claim());
+  const url = new URL(event.request.url);
+
+  if (url.pathname.startsWith('/sounds/')) {
+    event.respondWith(
+      caches.match(event.request).then(function (cached) {
+        if (cached) return cached;
+        return fetch(event.request).then(function (response) {
+          if (response && response.ok) {
+            const copy = response.clone();
+            caches.open(CACHE_NAME).then(function (cache) {
+              cache.put(event.request, copy);
+            });
+          }
+          return response;
+        });
+      })
+    );
+  }
 });

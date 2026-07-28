@@ -1607,24 +1607,21 @@ export default function Home() {
         customerAudioContextRef.current.resume().catch(() => {});
       }
 
-      const audioEl = document.getElementById('customer-alert-audio') as HTMLAudioElement | null;
-      if (audioEl && audioEl.paused) {
-        audioEl.volume = 0;
-        audioEl.play().then(() => {
-          audioEl.pause();
-          audioEl.volume = 1;
-          audioEl.currentTime = 0;
-        }).catch(() => {});
-      }
-
-      const llegueAudioEl = document.getElementById('customer-llegue-audio') as HTMLAudioElement | null;
-      if (llegueAudioEl && llegueAudioEl.paused) {
-        llegueAudioEl.volume = 0;
-        llegueAudioEl.play().then(() => {
-          llegueAudioEl.pause();
-          llegueAudioEl.volume = 1;
-          llegueAudioEl.currentTime = 0;
-        }).catch(() => {});
+      // Silent unlock: play an inaudible oscillator to prime the audio engine
+      // without playing any actual .wav files (avoids spurious notification sounds on iOS)
+      if (customerAudioContextRef.current) {
+        try {
+          const ctx = customerAudioContextRef.current;
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          gain.gain.value = 0;
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.start();
+          osc.stop(ctx.currentTime + 0.05);
+        } catch (e) {
+          // ignore
+        }
       }
     };
 
@@ -3325,6 +3322,8 @@ export default function Home() {
     };
   }, [apiBase, sessionUser?.id, token]);
 
+  const soundedStatusChangesRef = useRef<Set<string>>(new Set());
+
   useEffect(() => {
     const previousSnapshot = orderStatusSnapshotRef.current;
     const nextSnapshot: Record<string, string> = {};
@@ -3338,7 +3337,53 @@ export default function Home() {
         continue;
       }
 
-      if (normalizedStatus === 'REJECTED') {
+      const changeKey = `${order.id}:${normalizedStatus}`;
+      const alreadySounded = soundedStatusChangesRef.current.has(changeKey);
+
+      if (!alreadySounded) {
+        const nextSet = new Set(soundedStatusChangesRef.current);
+        if (nextSet.size >= 100) {
+          const entries = [...nextSet];
+          nextSet.clear();
+          entries.slice(-80).forEach(k => nextSet.add(k));
+        }
+        nextSet.add(changeKey);
+        soundedStatusChangesRef.current = nextSet;
+      }
+
+      if (normalizedStatus === 'DELIVERED') {
+        if (!alreadySounded) {
+          try {
+            if (window.localStorage.getItem('customerAlertSoundEnabled') !== 'false') {
+              void playCustomerLlegueSound();
+            }
+          } catch (e) {}
+        }
+        setOrderToRate(order.id);
+        setRatingBusinessType((order as any).restaurant?.businessType || null);
+        setIsRatingModalOpen(true);
+      } else if (normalizedStatus === 'READY') {
+        if (!alreadySounded) {
+          try {
+            if (window.localStorage.getItem('customerAlertSoundEnabled') !== 'false') {
+              void playCustomerLlegueSound();
+            }
+          } catch (e) {}
+        }
+        showTransientNotice({
+          key: `order-status-ready:${order.id}`,
+          title: 'Pedido listo',
+          description: `Tu pedido ${order.orderReference} está listo.`,
+          tone: 'success',
+        });
+      } else if (normalizedStatus === 'REJECTED') {
+        if (!alreadySounded) {
+          try {
+            if (window.localStorage.getItem('customerAlertSoundEnabled') !== 'false') {
+              void playCustomerAlertAudio();
+            }
+          } catch (e) {}
+        }
         showTransientNotice({
           key: `order-status-rejected:${order.id}:${normalizedStatus}`,
           title: 'Pedido rechazado',
@@ -3349,9 +3394,14 @@ export default function Home() {
           paymentMethod: order.paymentMethod,
           orderReference: order.orderReference,
         });
-      }
-
-      if (normalizedStatus === 'CANCELLED') {
+      } else if (normalizedStatus === 'CANCELLED') {
+        if (!alreadySounded) {
+          try {
+            if (window.localStorage.getItem('customerAlertSoundEnabled') !== 'false') {
+              void playCustomerAlertAudio();
+            }
+          } catch (e) {}
+        }
         showTransientNotice({
           key: `order-status-cancelled:${order.id}:${normalizedStatus}`,
           title: 'Pedido cancelado',
