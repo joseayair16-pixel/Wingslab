@@ -823,7 +823,14 @@ export default function Home() {
 
   const [restaurants, setRestaurants] = useState<RestaurantSummary[]>([]);
   const [activeZones, setActiveZones] = useState<any[]>([]);
-  const [selectedZoneName, setSelectedZoneName] = useState<string | null>(null);
+  const [selectedZoneName, setSelectedZoneName] = useState<string | null>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        return window.localStorage.getItem('selectedZoneName') || null;
+      } catch {}
+    }
+    return null;
+  });
   const [featuredRestaurants, setFeaturedRestaurants] = useState<any[]>([]);
   const [offerProducts, setOfferProducts] = useState<any[]>([]);
   const [selectedRestaurantId, setSelectedRestaurantId] = useState('');
@@ -1991,6 +1998,7 @@ export default function Home() {
       localStorage.setItem('locationDenied', '1');
       localStorage.setItem('locationSource', 'manual');
       localStorage.setItem('userLocation', JSON.stringify(loc));
+      localStorage.setItem('selectedZoneName', zone.regionName);
     } catch (e) {}
     loadDashboard();
   }, [loadDashboard]);
@@ -2004,6 +2012,7 @@ export default function Home() {
       localStorage.removeItem('locationDenied');
       localStorage.removeItem('locationSource');
       localStorage.removeItem('userLocation');
+      localStorage.removeItem('selectedZoneName');
     } catch (e) {}
 
     // Try GPS immediately to re-acquire location after manual zone override
@@ -2553,7 +2562,12 @@ export default function Home() {
         navigator.geolocation.getCurrentPosition(async (position) => {
           setLocationDenied(false);
           setLocationSource('gps');
-          try { localStorage.removeItem('locationDenied'); localStorage.setItem('locationSource', 'gps'); } catch (e) { }
+          setSelectedZoneName(null);
+          try {
+            localStorage.removeItem('locationDenied');
+            localStorage.removeItem('selectedZoneName');
+            localStorage.setItem('locationSource', 'gps');
+          } catch (e) { }
           const { latitude, longitude, accuracy } = position.coords;
           try {
             const google = (window as any).google;
@@ -2615,6 +2629,11 @@ export default function Home() {
                   const fresh = await tryUpdateFromGeolocation();
                   if (fresh) {
                     setUserLocation(fresh as any);
+                    setSelectedZoneName(null);
+                    try {
+                      localStorage.removeItem('selectedZoneName');
+                      localStorage.removeItem('locationDenied');
+                    } catch {}
                     return;
                   }
                 }
@@ -2629,15 +2648,22 @@ export default function Home() {
               setLocationExpired(true);
               try {
                 window.localStorage.removeItem('userLocation');
+                window.localStorage.removeItem('selectedZoneName');
               } catch (e) {
                 console.warn('Could not remove stale userLocation:', e);
               }
               setUserLocation(null);
+              setSelectedZoneName(null);
               return;
             }
 
             // Otherwise use stored
             setUserLocation(stored);
+            // Restore selectedZoneName for manual zone selections
+            const savedZoneName = window.localStorage.getItem('selectedZoneName');
+            if (savedZoneName) {
+              setSelectedZoneName(savedZoneName);
+            }
           }
         }
       } catch (e) {
