@@ -144,7 +144,7 @@ type CustomerOrderListItem = {
     number: string;
     neighborhood: string;
     reference?: string | null;
-  };
+  } | null;
   cancellationRequestedAt?: string | null;
   cancelledBy?: string | null;
 };

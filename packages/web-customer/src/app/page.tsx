@@ -144,7 +144,7 @@ type CustomerOrderListItem = {
     number: string;
     neighborhood: string;
     reference?: string | null;
-  };
+  } | null;
 };
 
 type CustomerOrderDetail = {
@@ -200,7 +200,7 @@ type CustomerOrderDetail = {
     reference?: string | null;
     latitude: number;
     longitude: number;
-  };
+  } | null;
   items: Array<{
     id: string;
     quantity: number;
@@ -2909,8 +2909,8 @@ export default function Home() {
       const google = (window as any).google;
       if (!google || !google.maps) return;
 
-      const lat = pinnedOrder.address.latitude;
-      const lng = pinnedOrder.address.longitude;
+      const lat = pinnedOrder.address?.latitude;
+      const lng = pinnedOrder.address?.longitude;
 
       if (!lat || !lng) return;
 
@@ -2990,8 +2990,8 @@ export default function Home() {
       infoWindow.open(mapRef.current, driverMarkerRef.current);
 
       // Ajustar cámara para mostrar ambos al inicio
-      const destLat = pinnedOrder.address.latitude;
-      const destLng = pinnedOrder.address.longitude;
+      const destLat = pinnedOrder.address?.latitude;
+      const destLng = pinnedOrder.address?.longitude;
       const bounds = new google.maps.LatLngBounds();
       bounds.extend({ lat: destLat, lng: destLng });
       bounds.extend({ lat, lng });
@@ -3026,8 +3026,8 @@ export default function Home() {
         } else {
           // Ajustar cámara suavemente al finalizar el planeo
           if (mapRef.current) {
-            const destLat = pinnedOrder.address.latitude;
-            const destLng = pinnedOrder.address.longitude;
+            const destLat = pinnedOrder.address?.latitude;
+            const destLng = pinnedOrder.address?.longitude;
             const bounds = new google.maps.LatLngBounds();
             bounds.extend({ lat: destLat, lng: destLng });
             bounds.extend({ lat: endLat, lng: endLng });
@@ -8128,6 +8128,7 @@ function getEtaMessage(order: CustomerOrderDetail | null) {
 }
 
 function formatShortAddress(address: CustomerOrderListItem['address']) {
+  if (!address) return '';
   return `${address.street} ${address.number}, ${address.neighborhood}`;
 }
 
