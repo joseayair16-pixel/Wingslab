@@ -362,17 +362,25 @@ export async function registerRestaurantOrderRoutes(fastify: FastifyInstance): P
             try {
               const businessType = (order as any).restaurant?.businessType;
               const isPickup = (order as any).fulfillmentType === 'PICKUP';
-              const body = isPickup
+              const body = isPickup && config.status === OrderStatus.READY
                 ? (isRestaurant(businessType)
                     ? 'Tu pedido está listo para recoger en sucursal. ¡Pasa por él! 🛍️'
                     : 'Tu pedido está listo para recoger en tienda. ¡Pasa por él! 🛍️')
-                : isRestaurant(businessType)
-                  ? config.pushBody
-                  : config.pushBody
-                    .replace(/el restaurante/gi, 'la tienda')
-                    .replace(/del restaurante/gi, 'de la tienda')
-                    .replace(/al restaurante/gi, 'a la tienda')
-                    .replace(/tu orden/gi, 'tu pedido');
+                : isPickup
+                  ? (isRestaurant(businessType)
+                      ? config.pushBody
+                      : config.pushBody
+                        .replace(/el restaurante/gi, 'la tienda')
+                        .replace(/del restaurante/gi, 'de la tienda')
+                        .replace(/al restaurante/gi, 'a la tienda')
+                        .replace(/tu orden/gi, 'tu pedido'))
+                  : isRestaurant(businessType)
+                    ? config.pushBody
+                    : config.pushBody
+                      .replace(/el restaurante/gi, 'la tienda')
+                      .replace(/del restaurante/gi, 'de la tienda')
+                      .replace(/al restaurante/gi, 'a la tienda')
+                      .replace(/tu orden/gi, 'tu pedido');
               const pushResult = await sendPushNotification(order.customer.user.id, {
                 title: config.pushTitle,
                 body,
