@@ -6082,7 +6082,9 @@ export default function Home() {
 
         {/* Modal de Calificación */}
         {isRatingModalOpen && (() => {
-          const isPickupRating = ratingIsPickup;
+          const ratingOrder = orderToRate ? orders.find((o: any) => o.id === orderToRate) : null;
+          const isPickupRating = ratingOrder ? (ratingOrder as any)?.fulfillmentType === 'PICKUP' : ratingIsPickup;
+          const bizType = ratingOrder?.restaurant?.businessType || ratingBusinessType;
           return (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 px-4 py-6" onClick={(e) => e.stopPropagation()}>
             <div className="bg-white rounded-2xl border border-black/[0.03] shadow-[0_4px_24px_rgba(0,0,0,0.08)] p-6 w-full max-w-md h-fit max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
@@ -6091,13 +6093,13 @@ export default function Home() {
                   <span className="text-3xl">{isPickupRating ? '🛍️' : '🎉'}</span>
                 </div>
                 <h3 className="text-2xl font-semibold text-neutral-950">{isPickupRating ? '¡Pedido recogido!' : '¡Tu pedido ha llegado!'}</h3>
-                <p className="text-sm text-neutral-500">{isPickupRating ? 'Gracias por tu compra. ¿Nos ayudas a mejorar calificando tu experiencia?' : (ratingBusinessType && ratingBusinessType !== 'RESTAURANT' ? '¡Disfruta tu pedido! ¿Nos ayudas a mejorar calificando tu experiencia?' : '¡Buen provecho! ¿Nos ayudas a mejorar calificando tu experiencia?')}</p>
+                <p className="text-sm text-neutral-500">{isPickupRating ? 'Gracias por tu compra. ¿Nos ayudas a mejorar calificando tu experiencia?' : (bizType && bizType !== 'RESTAURANT' ? '¡Disfruta tu pedido! ¿Nos ayudas a mejorar calificando tu experiencia?' : '¡Buen provecho! ¿Nos ayudas a mejorar calificando tu experiencia?')}</p>
               </div>
 
               <div className="space-y-6">
                 {/* Calificación Restaurante */}
                 <div>
-                  <label className="text-sm font-medium text-neutral-700 block mb-2 text-center">{ratingBusinessType && ratingBusinessType !== 'RESTAURANT' ? '¿Qué tal estuvo tu pedido?' : '¿Qué tal estuvo la comida?'}</label>
+                  <label className="text-sm font-medium text-neutral-700 block mb-2 text-center">{bizType && bizType !== 'RESTAURANT' ? '¿Qué tal estuvo tu pedido?' : '¿Qué tal estuvo la comida?'}</label>
                   <div className="flex gap-2 justify-center">
                     {[1, 2, 3, 4, 5].map((star) => (
                       <button
@@ -6142,7 +6144,7 @@ export default function Home() {
                     id="rating-comment"
                     value={ratingComment}
                     onChange={(e) => setRatingComment(e.target.value)}
-                    placeholder={ratingBusinessType && ratingBusinessType !== 'RESTAURANT' ? 'Cuéntanos qué tal estuvo tu pedido o el servicio...' : 'Cuéntanos qué tal estuvo la comida o el servicio...'}
+                    placeholder={bizType && bizType !== 'RESTAURANT' ? 'Cuéntanos qué tal estuvo tu pedido o el servicio...' : 'Cuéntanos qué tal estuvo la comida o el servicio...'}
                     className="w-full rounded-xl border border-neutral-200 bg-white px-4 py-3 text-neutral-950 outline-none transition focus:border-emerald-300 min-h-[80px] text-sm"
                   />
                 </div>
