@@ -1272,69 +1272,71 @@ export async function handoverOrderFromRestaurant({
   orderId: string;
   pin?: string;
 }) {
-  return prisma.$transaction(async (tx) => {
-    const order = await tx.order.findUnique({
-      where: { id: orderId },
-      include: { restaurant: true, driver: true },
-    });
+  // Validate PIN and update attempts OUTSIDE the transaction so throws persist
+  const order = await prisma.order.findUnique({
+    where: { id: orderId },
+    include: { restaurant: true },
+  });
 
-    if (!order) {
-      throw createDomainError(404, 'ORDER_NOT_FOUND', 'No se encontro el pedido.');
-    }
+  if (!order) {
+    throw createDomainError(404, 'ORDER_NOT_FOUND', 'No se encontro el pedido.');
+  }
 
-    if (order.restaurant.userId !== restaurantUserId) {
-      throw createDomainError(403, 'FORBIDDEN', 'No tienes permiso para modificar este pedido.');
-    }
+  if (order.restaurant.userId !== restaurantUserId) {
+    throw createDomainError(403, 'FORBIDDEN', 'No tienes permiso para modificar este pedido.');
+  }
 
-    if (order.status !== OrderStatus.READY) {
-      throw createDomainError(409, 'INVALID_ORDER_TRANSITION', 'El pedido no esta listo para entregar.');
-    }
+  if (order.status !== OrderStatus.READY) {
+    throw createDomainError(409, 'INVALID_ORDER_TRANSITION', 'El pedido no esta listo para entregar.');
+  }
 
-    if (order.handoverPin) {
-      if (order.handoverPin !== pin) {
-        const newAttempts = (order.handoverPinAttempts || 0) + 1;
+  if (order.handoverPin) {
+    if (order.handoverPin !== pin) {
+      const newAttempts = (order.handoverPinAttempts || 0) + 1;
 
-        if (newAttempts >= 3) {
-          const newPin = Math.floor(1000 + Math.random() * 9000).toString();
-          await tx.order.update({
-            where: { id: order.id },
-            data: {
-              handoverPin: newPin,
-              handoverPinAttempts: 0,
-              handoverPinUpdatedAt: new Date(),
-            },
-          });
-
-          logger.warn('Handover PIN exhausted, new PIN generated', {
-            orderId: order.id,
-            restaurantUserId,
-            oldPin: order.handoverPin,
-            newPin,
-          });
-
-          throw createDomainError(403, 'PIN_RESET', 'PIN agotado. Se generó un nuevo PIN. Pídelo al repartidor.');
-        }
-
-        await tx.order.update({
+      if (newAttempts >= 3) {
+        const newPin = Math.floor(1000 + Math.random() * 9000).toString();
+        await prisma.order.update({
           where: { id: order.id },
-          data: { handoverPinAttempts: newAttempts },
+          data: {
+            handoverPin: newPin,
+            handoverPinAttempts: 0,
+            handoverPinUpdatedAt: new Date(),
+          },
         });
 
-        throw createDomainError(403, 'INVALID_PIN', `PIN incorrecto. Intento ${newAttempts}/3.`);
+        logger.warn('Handover PIN exhausted, new PIN generated', {
+          orderId: order.id,
+          restaurantUserId,
+          oldPin: order.handoverPin,
+          newPin,
+        });
+
+        throw createDomainError(403, 'PIN_RESET', 'PIN agotado. Se generó un nuevo PIN. Pídelo al repartidor.');
       }
 
-      await tx.order.update({
+      await prisma.order.update({
         where: { id: order.id },
-        data: { handoverPinAttempts: 0 },
+        data: { handoverPinAttempts: newAttempts },
       });
+
+      throw createDomainError(403, 'INVALID_PIN', `PIN incorrecto. Intento ${newAttempts}/3.`);
     }
 
+    await prisma.order.update({
+      where: { id: order.id },
+      data: { handoverPinAttempts: 0 },
+    });
+  }
+
+  return prisma.$transaction(async (tx) => {
     const updatedOrder = await tx.order.update({
       where: { id: order.id },
       data: {
         status: OrderStatus.PICKED_UP,
         pickedUpAt: new Date(),
         estimatedDeliveryTime: calculatePickedUpEta(order as any),
+        ...(order.paymentMethod === PaymentMethod.CASH ? { paymentStatus: PaymentStatus.COMPLETED } : {}),
       },
       select: restaurantOrderWorkflowSelect,
     });
@@ -1369,37 +1371,61 @@ export async function completePickupByRestaurant({
   orderId: string;
   pin?: string;
 }) {
-  return prisma.$transaction(async (tx) => {
-    const order = await tx.order.findUnique({
-      where: { id: orderId },
-      include: { restaurant: true },
-    });
+  // Validate PIN and update attempts OUTSIDE the transaction so throws persist the count
+  const order = await prisma.order.findUnique({
+    where: { id: orderId },
+    include: { restaurant: true },
+  });
 
-    if (!order) {
-      throw createDomainError(404, 'ORDER_NOT_FOUND', 'No se encontro el pedido.');
+  if (!order) {
+    throw createDomainError(404, 'ORDER_NOT_FOUND', 'No se encontro el pedido.');
+  }
+
+  if (order.restaurant.userId !== restaurantUserId) {
+    throw createDomainError(403, 'FORBIDDEN', 'No tienes permiso para modificar este pedido.');
+  }
+
+  if (order.status !== OrderStatus.READY) {
+    throw createDomainError(409, 'INVALID_ORDER_TRANSITION', 'El pedido no esta listo para recoger.');
+  }
+
+  if (order.fulfillmentType !== 'PICKUP') {
+    throw createDomainError(400, 'INVALID_FULFILLMENT_TYPE', 'Solo pedidos para recoger en sucursal pueden marcarse como recogidos.');
+  }
+
+  if (order.paymentMethod === PaymentMethod.TRANSFER) {
+    if (!order.pickupPin) {
+      throw createDomainError(400, 'NO_PICKUP_PIN', 'Este pedido no tiene un PIN de recoleccion asignado.');
     }
 
-    if (order.restaurant.userId !== restaurantUserId) {
-      throw createDomainError(403, 'FORBIDDEN', 'No tienes permiso para modificar este pedido.');
+    // Auto-migrate old alphanumeric PINs (A3ZS) to numeric-only
+    if (/[A-Za-z]/.test(order.pickupPin)) {
+      const newPin = Math.floor(1000 + Math.random() * 9000).toString();
+      await prisma.order.update({
+        where: { id: order.id },
+        data: {
+          pickupPin: newPin,
+          handoverPinAttempts: 0,
+          handoverPinUpdatedAt: new Date(),
+        },
+      });
+
+      logger.warn('Pickup PIN auto-migrated from legacy format to numeric', {
+        orderId: order.id,
+        restaurantUserId,
+        oldPin: order.pickupPin,
+        newPin,
+      });
+
+      throw createDomainError(403, 'PIN_RESET', 'PIN actualizado a formato numerico. Pidelo al cliente.');
     }
 
-    if (order.status !== OrderStatus.READY) {
-      throw createDomainError(409, 'INVALID_ORDER_TRANSITION', 'El pedido no esta listo para recoger.');
-    }
+    if (!pin || pin.trim() === '' || pin !== order.pickupPin) {
+      const newAttempts = (order.handoverPinAttempts || 0) + 1;
 
-    if (order.fulfillmentType !== 'PICKUP') {
-      throw createDomainError(400, 'INVALID_FULFILLMENT_TYPE', 'Solo pedidos para recoger en sucursal pueden marcarse como recogidos.');
-    }
-
-    if (order.paymentMethod === PaymentMethod.TRANSFER) {
-      if (!order.pickupPin) {
-        throw createDomainError(400, 'NO_PICKUP_PIN', 'Este pedido no tiene un PIN de recoleccion asignado.');
-      }
-
-      // Auto-migrate old alphanumeric PINs (A3ZS) to numeric-only
-      if (/[A-Za-z]/.test(order.pickupPin)) {
+      if (newAttempts >= 3) {
         const newPin = Math.floor(1000 + Math.random() * 9000).toString();
-        await tx.order.update({
+        await prisma.order.update({
           where: { id: order.id },
           data: {
             pickupPin: newPin,
@@ -1408,56 +1434,33 @@ export async function completePickupByRestaurant({
           },
         });
 
-        logger.warn('Pickup PIN auto-migrated from legacy format to numeric', {
+        logger.warn('Pickup PIN exhausted, new PIN generated', {
           orderId: order.id,
           restaurantUserId,
           oldPin: order.pickupPin,
           newPin,
         });
 
-        throw createDomainError(403, 'PIN_RESET', 'PIN actualizado a formato numerico. Pidelo al cliente.');
+        throw createDomainError(403, 'PIN_RESET', 'PIN agotado. Se genero un nuevo PIN. Pidelo al cliente.');
       }
 
-      if (!pin || pin.trim() === '' || pin !== order.pickupPin) {
-        const newAttempts = (order.handoverPinAttempts || 0) + 1;
-
-        if (newAttempts >= 3) {
-          const newPin = Math.floor(1000 + Math.random() * 9000).toString();
-          await tx.order.update({
-            where: { id: order.id },
-            data: {
-              pickupPin: newPin,
-              handoverPinAttempts: 0,
-              handoverPinUpdatedAt: new Date(),
-            },
-          });
-
-          logger.warn('Pickup PIN exhausted, new PIN generated', {
-            orderId: order.id,
-            restaurantUserId,
-            oldPin: order.pickupPin,
-            newPin,
-          });
-
-          throw createDomainError(403, 'PIN_RESET', 'PIN agotado. Se genero un nuevo PIN. Pidelo al cliente.');
-        }
-
-        await tx.order.update({
-          where: { id: order.id },
-          data: { handoverPinAttempts: newAttempts },
-        });
-
-        throw createDomainError(403, 'INVALID_PIN', `PIN incorrecto. Intento ${newAttempts}/3.`);
-      }
-
-      await tx.order.update({
+      await prisma.order.update({
         where: { id: order.id },
-        data: { handoverPinAttempts: 0 },
+        data: { handoverPinAttempts: newAttempts },
       });
+
+      throw createDomainError(403, 'INVALID_PIN', `PIN incorrecto. Intento ${newAttempts}/3.`);
     }
 
-    const updatedOrder = await tx.order.update({
+    await prisma.order.update({
       where: { id: order.id },
+      data: { handoverPinAttempts: 0 },
+    });
+  }
+
+  return prisma.$transaction(async (tx) => {
+    const updatedOrder = await tx.order.update({
+      where: { id: orderId },
       data: {
         status: OrderStatus.COMPLETED,
         completedAt: new Date(),
