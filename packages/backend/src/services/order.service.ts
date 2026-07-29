@@ -590,7 +590,7 @@ export async function createOrderForCustomer({
       }
 
       const pickupPin = isPickup && input.paymentMethod === PaymentMethod.TRANSFER
-        ? Math.random().toString(36).slice(2, 6).toUpperCase()
+        ? String(Math.floor(1000 + Math.random() * 9000))
         : undefined;
 
       const order = await tx.order.create({

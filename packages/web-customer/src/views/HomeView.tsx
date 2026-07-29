@@ -410,7 +410,7 @@ export const HomeView = React.memo(function HomeView({
                 type="button"
                 onClick={() => setFilterOpenNow(!filterOpenNow)}
                 className={`shrink-0 px-4 py-2 rounded-full text-[13px] font-semibold border transition-all active-scale flex items-center gap-1.5 ${filterOpenNow
-                  ? 'bg-emerald-50 text-emerald-800 border-emerald-200 shadow-[0_2px_10px_rgba(16,185,129,0.2)]'
+                  ? 'bg-accent text-sky-950 border-transparent shadow-[0_2px_10px_rgba(135,206,235,0.4)]'
                   : 'bg-white text-neutral-700 border-black/5 hover:bg-neutral-50'
                   }`}
               >
