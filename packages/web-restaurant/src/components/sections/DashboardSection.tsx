@@ -111,10 +111,34 @@ export const DashboardSection = React.memo(function DashboardSection({
     && todayOrders.length > 0;
 
   const projectedRevenue = useMemo(() => {
-    return orders
-      .filter((order: any) => !order.id.startsWith('mock-order-') && !['CANCELLED', 'REJECTED'].includes(order.status))
-      .reduce((sum: number, order: any) => sum + order.totalAmount, 0);
-  }, [orders]);
+    const today = new Date();
+    const currentYear = today.getFullYear();
+    const currentMonth = today.getMonth();
+    const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
+    const elapsedDays = today.getDate();
+
+    const monthOrders = orders.filter((o: any) => {
+      if (o.id.startsWith('mock-order-')) return false;
+      if (['CANCELLED', 'REJECTED'].includes(o.status)) return false;
+      const d = new Date(o.createdAt);
+      return d.getMonth() === currentMonth && d.getFullYear() === currentYear;
+    });
+
+    if (monthOrders.length === 0) return 0;
+
+    const revenueSoFar = monthOrders.reduce((sum: number, order: any) => {
+      const isHelper = profile?.id ? order.supportRestaurantId === profile.id : false;
+      if (isHelper) return sum + order.deliveryFee;
+      const deliveredByRestaurant = order.deliveredByRestaurant ?? false;
+      const hasOwnDelivery = order.restaurant?.hasOwnDelivery ?? profile?.hasOwnDelivery;
+      if (deliveredByRestaurant || hasOwnDelivery) return sum + order.totalAmount;
+      return sum + (order.totalAmount - (order.deliveryFee || 0));
+    }, 0);
+
+    const dailyAvg = revenueSoFar / Math.max(elapsedDays, 1);
+
+    return Math.round(dailyAvg * daysInMonth * 100) / 100;
+  }, [orders, profile]);
 
   const todayRevenue = useMemo(() => {
     return todayOrders
@@ -162,7 +186,7 @@ export const DashboardSection = React.memo(function DashboardSection({
     {
       label: 'Proyeccion mensual',
       value: formatCurrency(projectedRevenue),
-      hint: 'Ingreso total estimado del periodo.',
+      hint: 'Proyeccion mensual basada en el promedio diario del mes.',
       tone: 'sky', icon: 'revenue' as const,
     },
     {
