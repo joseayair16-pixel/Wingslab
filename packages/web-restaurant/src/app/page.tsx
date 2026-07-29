@@ -5886,11 +5886,11 @@ export default function Home() {
                       pushToast('success', 'Recolección confirmada', 'El pedido fue marcado como recogido exitosamente.');
                     } catch (err) {
                       const msg = getRequestErrorMessage(err, '');
-                      if (msg.includes('PIN_RESET') || msg.includes('PIN agotado')) {
-                        setPickupConfirmError('🔁 PIN agotado. Se generó un nuevo PIN. Pídelo al cliente.');
+                      if (msg.includes('PIN_RESET') || msg.includes('PIN agotado') || msg.includes('PIN actualizado')) {
+                        setPickupConfirmError('🔁 PIN actualizado. Pídelo al cliente.');
                         setPickupConfirmPinInput('');
                         setPickupConfirmAttemptsLeft(3);
-                        pushToast('info', '🔄 Nuevo PIN', 'El PIN anterior expiró. Pídelo al cliente nuevamente.');
+                        pushToast('info', '🔄 Nuevo PIN', 'El PIN fue renovado. Pídelo al cliente.');
                       } else if (msg.includes('PIN incorrecto')) {
                         const match = msg.match(/Intento (\d+)\/3/);
                         const attempt = match ? parseInt(match[1]) : 0;

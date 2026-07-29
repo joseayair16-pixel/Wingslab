@@ -1396,6 +1396,28 @@ export async function completePickupByRestaurant({
         throw createDomainError(400, 'NO_PICKUP_PIN', 'Este pedido no tiene un PIN de recoleccion asignado.');
       }
 
+      // Auto-migrate old alphanumeric PINs (A3ZS) to numeric-only
+      if (/[A-Za-z]/.test(order.pickupPin)) {
+        const newPin = Math.floor(1000 + Math.random() * 9000).toString();
+        await tx.order.update({
+          where: { id: order.id },
+          data: {
+            pickupPin: newPin,
+            handoverPinAttempts: 0,
+            handoverPinUpdatedAt: new Date(),
+          },
+        });
+
+        logger.warn('Pickup PIN auto-migrated from legacy format to numeric', {
+          orderId: order.id,
+          restaurantUserId,
+          oldPin: order.pickupPin,
+          newPin,
+        });
+
+        throw createDomainError(403, 'PIN_RESET', 'PIN actualizado a formato numerico. Pidelo al cliente.');
+      }
+
       if (!pin || pin.trim() === '' || pin !== order.pickupPin) {
         const newAttempts = (order.handoverPinAttempts || 0) + 1;
 
