@@ -778,21 +778,6 @@ export const HomeView = React.memo(function HomeView({
                 );
               })}
             </div>
-            {selectedZoneName && (
-              <div className="mt-6 flex justify-center">
-                <button
-                  type="button"
-                  onClick={onResetZone}
-                  className="inline-flex items-center gap-2 rounded-full border border-black/5 bg-white/80 px-5 py-2.5 text-sm font-semibold text-neutral-600 shadow-sm backdrop-blur transition-all duration-200 hover:-translate-y-0.5 hover:border-sky-200/50 hover:text-sky-700 hover:shadow-[0_4px_16px_rgba(14,165,233,0.1)] active:scale-[0.97]"
-                >
-                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 15 3 9m0 0 6-6M3 9h12a6 6 0 0 1 0 12h-3" />
-                  </svg>
-                  Cambiar zona
-                  <span className="ml-0.5 font-bold text-neutral-800">{selectedZoneName}</span>
-                </button>
-              </div>
-            )}
             </div>
           )
           ) : isSearching ? (
@@ -876,6 +861,20 @@ export const HomeView = React.memo(function HomeView({
           )}
         </Panel>
       </div>
+
+      {selectedZoneName && (
+        <button
+          type="button"
+          onClick={onResetZone}
+          className="fixed bottom-6 left-1/2 z-50 -translate-x-1/2 inline-flex items-center gap-2 rounded-full border border-black/5 bg-white/90 px-5 py-3 text-sm font-semibold text-neutral-600 shadow-lg backdrop-blur-lg transition-all duration-200 hover:-translate-y-0.5 hover:border-sky-200/50 hover:text-sky-700 hover:shadow-[0_8px_24px_rgba(14,165,233,0.15)] active:scale-[0.97]"
+        >
+          <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M9 15 3 9m0 0 6-6M3 9h12a6 6 0 0 1 0 12h-3" />
+          </svg>
+          Cambiar zona
+          <span className="ml-0.5 font-bold text-neutral-800">{selectedZoneName}</span>
+        </button>
+      )}
     </>
   );
 });
