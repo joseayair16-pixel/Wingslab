@@ -1913,7 +1913,24 @@ export default function Home() {
             .catch(() => [])
         : Promise.resolve([]);
 
-      const [restaurantsData, ordersData, featuredData, offersData] = await Promise.all([restaurantsPromise, ordersPromise, featuredPromise, offersPromise]);
+      const TIMEOUT_MS = 10_000;
+      const withTimeout = <T,>(p: Promise<T>): Promise<T> =>
+        Promise.race([
+          p,
+          new Promise<never>((_, reject) =>
+            setTimeout(() => reject(new Error('Tiempo de espera agotado')), TIMEOUT_MS)
+          ),
+        ]);
+      const [restaurantsResult, ordersResult, featuredResult, offersResult] = await Promise.allSettled([
+        withTimeout(restaurantsPromise),
+        withTimeout(ordersPromise),
+        withTimeout(featuredPromise),
+        withTimeout(offersPromise),
+      ]);
+      const restaurantsData = restaurantsResult.status === 'fulfilled' ? restaurantsResult.value : { success: true, data: { items: [], total: 0, page: 1, limit: 24, hasMore: false } } as RestaurantListResponse;
+      const ordersData = ordersResult.status === 'fulfilled' ? ordersResult.value : { success: true, data: { items: [], total: 0, page: 1, limit: 15, hasMore: false } } as PaginatedOrdersResponse;
+      const featuredData = featuredResult.status === 'fulfilled' ? featuredResult.value : [];
+      const offersData = offersResult.status === 'fulfilled' ? offersResult.value : [];
 
       // Fetch active zones once for the empty state explorer
       if (!activeZones.length) {
