@@ -1869,9 +1869,9 @@ export default function Home() {
       setLoadingDashboard(true);
     }
     setError('');
-    persistApiBase(storageKey, apiBase);
 
     try {
+      persistApiBase(storageKey, apiBase);
       // Do not request restaurants from the backend unless we have a valid userLocation.
       // Backend will not filter by distance if coordinates are missing, which can show
       // restaurants from other cities. We prefer showing no restaurants until the user
@@ -2568,6 +2568,16 @@ export default function Home() {
   useEffect(() => {
     void loadDashboard();
   }, [loadDashboard, token, sessionUser]);
+
+  // Safety net: force loadingDashboard to false after 15s regardless of what happens inside loadDashboard
+  useEffect(() => {
+    if (!loadingDashboard) return;
+    const timer = setTimeout(() => {
+      setLoadingDashboard(false);
+      setError('La conexión está tardando demasiado. Verifica tu conexión a internet.');
+    }, 15_000);
+    return () => clearTimeout(timer);
+  }, [loadingDashboard]);
 
   useEffect(() => {
     const LOCATION_TTL = 24 * 60 * 60 * 1000; // 24 hours
