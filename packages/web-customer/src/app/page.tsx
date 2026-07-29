@@ -1341,11 +1341,11 @@ export default function Home() {
       return profileAddress;
     }
 
-    if (selectedOrder) {
+    if (selectedOrder?.address) {
       return mapOrderAddressToProfile(selectedOrder.address);
     }
 
-    if (sortedOrders.length > 0) {
+    if (sortedOrders.length > 0 && sortedOrders[0].address) {
       return {
         street: sortedOrders[0].address.street,
         number: sortedOrders[0].address.number,
@@ -3554,7 +3554,7 @@ export default function Home() {
               ...(item.specialInstructions ? { specialInstructions: item.specialInstructions } : {}),
             })),
             fulfillmentType: selectedOrder.fulfillmentType || 'DELIVERY',
-            ...(selectedOrder.fulfillmentType === 'PICKUP'
+            ...(selectedOrder.fulfillmentType === 'PICKUP' || !selectedOrder.address
               ? {}
               : {
                   deliveryAddress: customAddress || {
@@ -6960,7 +6960,7 @@ function buildRestaurantCoverFallback(categoryId: RestaurantCategoryId) {
   return fallbackByCategory[categoryId];
 }
 
-function mapOrderAddressToProfile(address: CustomerOrderDetail['address']): CustomerProfileAddress {
+function mapOrderAddressToProfile(address: NonNullable<CustomerOrderDetail['address']>): CustomerProfileAddress {
   return {
     street: address.street,
     number: address.number,

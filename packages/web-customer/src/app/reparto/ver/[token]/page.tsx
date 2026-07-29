@@ -599,6 +599,7 @@ export default function DeliveryTicketPage({ params }: PageProps) {
                 {activeList.map((deliv, index) => {
                   const isCash = deliv.data.paymentMethod === 'CASH';
                   const addressObj = deliv.data.deliveryAddress;
+                  if (!addressObj) return null;
                   const addressText = `${addressObj.street} ${addressObj.number}, ${addressObj.neighborhood}, ${addressObj.city}`;
                   const googleMapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(addressText)}`;
                   const wazeUrl = addressObj.latitude && addressObj.longitude
@@ -886,6 +887,7 @@ export default function DeliveryTicketPage({ params }: PageProps) {
   }
 
   const addressObj = currentTicket.deliveryAddress;
+  if (!addressObj) return <p className="text-sm text-neutral-500">Dirección no disponible</p>;
   const addressText = `${addressObj.street} ${addressObj.number}, ${addressObj.neighborhood}, ${addressObj.city}`;
   const googleMapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(addressText)}`;
 

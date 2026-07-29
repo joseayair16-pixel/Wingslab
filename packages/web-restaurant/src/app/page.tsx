@@ -7544,23 +7544,25 @@ export default function Home() {
                   />
                 ) : null}
 
-                <FeaturedSection
-                  featuredPackages={featuredPackages}
-                  featuredRequests={featuredRequests}
-                  featuredFlyerUploading={featuredFlyerUploading}
-                  showPhonePreviewModal={showPhonePreviewModal}
-                  setFeaturedDays={setFeaturedDays}
-                  setFeaturedPaymentProof={setFeaturedPaymentProof}
-                  setShowFeaturedModal={setShowFeaturedModal}
-                  setProofPreviewUrl={setProofPreviewUrl}
-                  setShowPhonePreviewModal={setShowPhonePreviewModal}
-                  setFeaturedFlyerUploading={setFeaturedFlyerUploading}
-                  profile={profile}
-                  setProfile={setProfile}
-                  token={token}
-                  apiBase={apiBase}
-                  pushToast={pushToast}
-                />
+                {activeSection === 'featured' ? (
+                  <FeaturedSection
+                    featuredPackages={featuredPackages}
+                    featuredRequests={featuredRequests}
+                    featuredFlyerUploading={featuredFlyerUploading}
+                    showPhonePreviewModal={showPhonePreviewModal}
+                    setFeaturedDays={setFeaturedDays}
+                    setFeaturedPaymentProof={setFeaturedPaymentProof}
+                    setShowFeaturedModal={setShowFeaturedModal}
+                    setProofPreviewUrl={setProofPreviewUrl}
+                    setShowPhonePreviewModal={setShowPhonePreviewModal}
+                    setFeaturedFlyerUploading={setFeaturedFlyerUploading}
+                    profile={profile}
+                    setProfile={setProfile}
+                    token={token}
+                    apiBase={apiBase}
+                    pushToast={pushToast}
+                  />
+                ) : null}
 
                 {activeSection === 'orders' ? (
                    <Panel title={profile?.businessType !== 'RESTAURANT' ? 'Pedidos' : 'Ordenes'} subtitle={profile?.businessType !== 'RESTAURANT' ? 'Vista rapida para surtido y despacho' : 'Vista rapida para cocina y despacho'} tone="violet">

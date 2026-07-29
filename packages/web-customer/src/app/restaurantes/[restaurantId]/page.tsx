@@ -2285,12 +2285,12 @@ function triggerHaptic(pattern: number | number[] = 10) {
             name: createdOrderPayload.data.restaurant.name,
             logo: createdOrderPayload.data.restaurant.logo,
           },
-          address: {
+          address: createdOrderPayload.data.address ? {
             street: createdOrderPayload.data.address.street,
             number: createdOrderPayload.data.address.number,
             neighborhood: createdOrderPayload.data.address.neighborhood,
             reference: createdOrderPayload.data.address.reference,
-          },
+          } : null,
         };
 
         setActiveOrderListItems((prev) => [newOrderListItem, ...prev]);
