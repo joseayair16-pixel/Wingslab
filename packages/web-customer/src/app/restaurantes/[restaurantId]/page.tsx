@@ -732,6 +732,7 @@ export default function RestaurantPage({
   const [isRatingModalOpen, setIsRatingModalOpen] = useState(false);
   const [orderToRate, setOrderToRate] = useState<string | null>(null);
   const [ratingBusinessType, setRatingBusinessType] = useState<string | null>(null);
+  const [ratingIsPickup, setRatingIsPickup] = useState(false);
   const [restaurantRating, setRestaurantRating] = useState(0);
   const [driverRatingVal, setDriverRatingVal] = useState(0);
   const [ratingComment, setRatingComment] = useState('');
@@ -1007,6 +1008,7 @@ export default function RestaurantPage({
         if (unratedOrder) {
           setOrderToRate(unratedOrder.id);
           setRatingBusinessType((unratedOrder as any).restaurant?.businessType || null);
+          setRatingIsPickup(false);
           setIsRatingModalOpen(true);
         }
 
@@ -1156,13 +1158,17 @@ export default function RestaurantPage({
 
         if (eventName === 'order:delivered' && payload.orderId) {
           setOrderToRate(payload.orderId);
-          setRatingBusinessType(null);
+          const order = activeOrderDetailsMap[payload.orderId];
+          setRatingBusinessType(order?.restaurant?.businessType || null);
+          setRatingIsPickup(false);
           setIsRatingModalOpen(true);
         }
 
         if (eventName === 'order:completed' && payload.orderId) {
           setOrderToRate(payload.orderId);
-          setRatingBusinessType(null);
+          const order = activeOrderDetailsMap[payload.orderId];
+          setRatingBusinessType(order?.restaurant?.businessType || null);
+          setRatingIsPickup(true);
           setIsRatingModalOpen(true);
         }
 
@@ -2955,8 +2961,7 @@ function triggerHaptic(pattern: number | number[] = 10) {
 
         {/* Modal de Calificación */}
         {isRatingModalOpen && (() => {
-          const ratingOrder = orderToRate ? activeOrderDetailsMap[orderToRate] || null : null;
-          const isPickupRating = (ratingOrder as any)?.fulfillmentType === 'PICKUP';
+          const isPickupRating = ratingIsPickup;
           return (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 px-4 py-6" onClick={(e) => e.stopPropagation()}>
             <div className="bg-white rounded-2xl border border-black/[0.03] shadow-[0_4px_24px_rgba(0,0,0,0.08)] p-6 w-full max-w-md h-fit max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
@@ -3037,6 +3042,7 @@ function triggerHaptic(pattern: number | number[] = 10) {
                       setRestaurantRating(0);
                       setDriverRatingVal(0);
                       setRatingComment('');
+                      setRatingIsPickup(false);
                       setOrderToRate(null);
                     }}
                     className="flex-1 rounded-full bg-neutral-50 text-sm font-semibold text-neutral-600 py-3 transition hover:bg-neutral-100"
@@ -3072,6 +3078,7 @@ function triggerHaptic(pattern: number | number[] = 10) {
                       setRestaurantRating(0);
                       setDriverRatingVal(0);
                       setRatingComment('');
+                      setRatingIsPickup(false);
                       setOrderToRate(null);
                     }}
                     disabled={restaurantRating === 0}

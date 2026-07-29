@@ -954,6 +954,7 @@ export default function Home() {
   const [isRatingModalOpen, setIsRatingModalOpen] = useState(false);
   const [orderToRate, setOrderToRate] = useState<string | null>(null);
   const [ratingBusinessType, setRatingBusinessType] = useState<string | null>(null);
+  const [ratingIsPickup, setRatingIsPickup] = useState(false);
   const [restaurantRating, setRestaurantRating] = useState(0);
   const [driverRatingVal, setDriverRatingVal] = useState(0);
   const [ratingComment, setRatingComment] = useState('');
@@ -1967,6 +1968,7 @@ export default function Home() {
       if (unratedOrder) {
         setOrderToRate(unratedOrder.id);
         setRatingBusinessType((unratedOrder as any).restaurant?.businessType || null);
+        setRatingIsPickup(false);
         setIsRatingModalOpen(true);
       }
 
@@ -3259,11 +3261,13 @@ export default function Home() {
           setOrderToRate(payload.orderId);
           const ratedOrder = orders.find((o: any) => o.id === payload.orderId);
           setRatingBusinessType((ratedOrder as any)?.restaurant?.businessType || null);
+          setRatingIsPickup(false);
           setIsRatingModalOpen(true);
         } else if (eventName === 'order:completed' && payload.orderId) {
           setOrderToRate(payload.orderId);
           const completedOrder = orders.find((o: any) => o.id === payload.orderId);
           setRatingBusinessType((completedOrder as any)?.restaurant?.businessType || null);
+          setRatingIsPickup(true);
           setIsRatingModalOpen(true);
         } else if (eventName === 'order:pin-reset' && payload.orderId) {
           requestJson<{ success: true; data: CustomerOrderDetail }>({
@@ -6078,8 +6082,7 @@ export default function Home() {
 
         {/* Modal de Calificación */}
         {isRatingModalOpen && (() => {
-          const ratingOrder = orderToRate ? orders.find((o) => o.id === orderToRate) : null;
-          const isPickupRating = (ratingOrder as any)?.fulfillmentType === 'PICKUP';
+          const isPickupRating = ratingIsPickup;
           return (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 px-4 py-6" onClick={(e) => e.stopPropagation()}>
             <div className="bg-white rounded-2xl border border-black/[0.03] shadow-[0_4px_24px_rgba(0,0,0,0.08)] p-6 w-full max-w-md h-fit max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
@@ -6159,6 +6162,7 @@ export default function Home() {
                       setRestaurantRating(0);
                       setDriverRatingVal(0);
                       setRatingComment('');
+                      setRatingIsPickup(false);
                     }}
                     className="flex-1 rounded-full border border-neutral-200 bg-white px-4 py-3 text-sm font-semibold text-neutral-700 transition hover:bg-neutral-50"
                   >
@@ -6195,6 +6199,7 @@ export default function Home() {
                       setRestaurantRating(0);
                       setDriverRatingVal(0);
                       setRatingComment('');
+                      setRatingIsPickup(false);
                     }}
                     disabled={restaurantRating === 0}
                     className="flex-1 rounded-full bg-emerald-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-neutral-300"
