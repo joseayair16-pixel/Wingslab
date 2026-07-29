@@ -397,17 +397,6 @@ export const HomeView = React.memo(function HomeView({
             <div className="-mx-4 px-4 sm:mx-0 sm:px-0 mt-4 flex gap-2 overflow-x-auto pb-2 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:flex-wrap sm:overflow-visible sm:pb-0">
               <button
                 type="button"
-                onClick={() => setFilterOpenNow(!filterOpenNow)}
-                className={`shrink-0 px-4 py-2 rounded-full text-[13px] font-semibold border transition-all active-scale flex items-center gap-1.5 ${filterOpenNow
-                  ? 'bg-emerald-50 text-emerald-800 border-emerald-200 shadow-[0_2px_10px_rgba(16,185,129,0.2)]'
-                  : 'bg-white text-neutral-700 border-black/5 hover:bg-neutral-50'
-                  }`}
-              >
-                <span>🟢</span>
-                Abierto ahora
-              </button>
-              <button
-                type="button"
                 onClick={() => setFilterNearby(!filterNearby)}
                 className={`shrink-0 px-4 py-2 rounded-full text-[13px] font-semibold border transition-all active-scale flex items-center gap-1.5 ${filterNearby
                   ? 'bg-accent text-sky-950 border-transparent shadow-[0_2px_10px_rgba(135,206,235,0.4)]'
@@ -416,6 +405,17 @@ export const HomeView = React.memo(function HomeView({
               >
                 <span>📍</span>
                 Cerca de mí
+              </button>
+              <button
+                type="button"
+                onClick={() => setFilterOpenNow(!filterOpenNow)}
+                className={`shrink-0 px-4 py-2 rounded-full text-[13px] font-semibold border transition-all active-scale flex items-center gap-1.5 ${filterOpenNow
+                  ? 'bg-emerald-50 text-emerald-800 border-emerald-200 shadow-[0_2px_10px_rgba(16,185,129,0.2)]'
+                  : 'bg-white text-neutral-700 border-black/5 hover:bg-neutral-50'
+                  }`}
+              >
+                <span>🟢</span>
+                Abierto ahora
               </button>
               <button
                 type="button"
@@ -787,6 +787,14 @@ export const HomeView = React.memo(function HomeView({
                 : businessTypeFilter === 'all'
                 ? 'No encontramos resultados con esa búsqueda. Prueba con otro nombre o zona.'
                 : 'No encontramos restaurantes con esa búsqueda. Prueba con otro nombre o zona.'
+            } />
+          ) : restaurants.length > 0 && filteredByBusinessType.length === 0 ? (
+            <EmptyState text={
+              businessTypeFilter === 'stores'
+                ? 'No hay tiendas que coincidan con los filtros seleccionados.'
+                : businessTypeFilter === 'restaurants'
+                ? 'No hay restaurantes que coincidan con los filtros seleccionados.'
+                : 'No hay resultados que coincidan con los filtros seleccionados. Intenta ajustar los filtros.'
             } />
           ) : businessTypeFilter === 'all' && activeZones.length > 0 ? (
             <div className="space-y-5">
