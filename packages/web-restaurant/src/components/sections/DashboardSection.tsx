@@ -170,7 +170,7 @@ export const DashboardSection = React.memo(function DashboardSection({
       value: String(activeOrders.length),
       hint: `${todayOrders.length} pedidos el día de hoy.`,
       tone: 'sky', icon: 'orders' as const,
-      deliveredCount: todayOrders.filter((o: any) => o.status === 'DELIVERED').length,
+      deliveredCount: todayOrders.filter((o: any) => ['DELIVERED', 'PICKED_UP', 'COMPLETED'].includes(o.status)).length,
       rejectedCount: todayOrders.filter((o: any) => ['REJECTED', 'CANCELLED'].includes(o.status)).length,
     },
     {
