@@ -1101,6 +1101,7 @@ export default function RestaurantPage({
       'order:completed',
       'order:cancellation-approved',
       'order:cancellation-rejected',
+      'order:pin-reset',
       'order_chat:message_received',
       'order:driver-location',
     ];
@@ -1163,6 +1164,24 @@ export default function RestaurantPage({
           setOrderToRate(payload.orderId);
           setRatingBusinessType(null);
           setIsRatingModalOpen(true);
+        }
+
+        if (eventName === 'order:pin-reset' && payload.orderId) {
+          requestJson<{ success: true; data: CustomerOrderDetail }>({
+            apiBase,
+            path: `/me/pedidos/${payload.orderId}`,
+            token,
+          }).then((detailRes) => {
+            if (detailRes.success) {
+              setPickupReadyOrder((prev: any) =>
+                prev?.id === payload.orderId ? detailRes.data : prev
+              );
+              setActiveOrderDetailsMap((prev) => ({
+                ...prev,
+                [payload.orderId!]: detailRes.data,
+              }));
+            }
+          }).catch(() => {});
         }
 
         if (['order:driver-arrived', 'order:driver_arrived'].includes(eventName) && payload.orderId) {

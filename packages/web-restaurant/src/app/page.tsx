@@ -8070,18 +8070,30 @@ export default function Home() {
 
                                     // Platform delivery
                                     if ((order as any).fulfillmentType === 'PICKUP') {
+                                      if (order.paymentMethod === 'TRANSFER') {
+                                        return (
+                                          <>
+                                            <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-sky-600">
+                                              Recibido por transferencia
+                                            </p>
+                                            <p className="text-xl font-bold text-neutral-950">{formatCurrency(order.totalAmount)}</p>
+                                            <p className="text-[10px] text-emerald-600 font-semibold flex items-center gap-1 mt-1">
+                                              <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                                              El cliente recoge en sucursal
+                                            </p>
+                                          </>
+                                        );
+                                      }
                                       return (
                                         <>
                                           <p className="text-xs font-semibold uppercase tracking-[0.22em] text-emerald-600">
                                             Total a recibir
                                           </p>
                                           <p className="text-xl font-bold text-neutral-950">{formatCurrency(order.totalAmount)}</p>
-                                          {(order as any).fulfillmentType === 'PICKUP' && (
-                                            <p className="text-[10px] text-emerald-600 font-semibold flex items-center gap-1 mt-1">
-                                              <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                                              El cliente recoge en sucursal
-                                            </p>
-                                          )}
+                                          <p className="text-[10px] text-emerald-600 font-semibold flex items-center gap-1 mt-1">
+                                            <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                                            El cliente recoge en sucursal
+                                          </p>
                                         </>
                                       );
                                     }

@@ -373,6 +373,7 @@ const liveEvents = [
   'order:completed',
   'order:cancellation-approved',
   'order:cancellation-rejected',
+  'order:pin-reset',
 ] as const;
 
 function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
@@ -3264,6 +3265,22 @@ export default function Home() {
           const completedOrder = orders.find((o: any) => o.id === payload.orderId);
           setRatingBusinessType((completedOrder as any)?.restaurant?.businessType || null);
           setIsRatingModalOpen(true);
+        } else if (eventName === 'order:pin-reset' && payload.orderId) {
+          requestJson<{ success: true; data: CustomerOrderDetail }>({
+            apiBase,
+            path: `/me/pedidos/${payload.orderId}`,
+            token,
+          }).then((detailRes) => {
+            if (detailRes.success) {
+              setPickupReadyOrder((prev: any) =>
+                prev?.id === payload.orderId ? detailRes.data : prev
+              );
+              setActiveOrderDetailsMap((prev) => ({
+                ...prev,
+                [payload.orderId!]: detailRes.data,
+              }));
+            }
+          }).catch(() => {});
         } else if (eventName === 'order:ready') {
           try {
             if (window.localStorage.getItem('customerAlertSoundEnabled') !== 'false') {
@@ -7725,6 +7742,7 @@ const notificationTitleMap: Record<(typeof liveEvents)[number], string> = {
   'order:completed': 'Pedido recogido',
   'order:cancellation-approved': 'Cancelación aprobada',
   'order:cancellation-rejected': 'Cancelación rechazada',
+  'order:pin-reset': 'Nuevo PIN de recolección',
 };
 
 function isActiveOrderStatus(status: string) {
@@ -7918,6 +7936,10 @@ function buildNotificationMessage(
 
   if (eventName === 'order:completed') {
     return 'Tu pedido ha sido recogido. Gracias por tu compra.';
+  }
+
+  if (eventName === 'order:pin-reset') {
+    return 'El PIN de recolección fue renovado. Proporciónalo al restaurante.';
   }
 
   if (eventName === 'order:driver-arrived' || eventName === 'order:driver_arrived') {

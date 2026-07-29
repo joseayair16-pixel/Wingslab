@@ -142,7 +142,7 @@ async function processUnclaimedReadyOrders(db: PrismaClient, io: any) {
 }
 
 async function processAutoCompletePickupOrders(db: PrismaClient, io: any) {
-  const cutoff = new Date(Date.now() - 60 * 60 * 1000);
+  const cutoff = new Date(Date.now() - 120 * 60 * 1000);
 
   const staleOrders = await db.order.findMany({
     where: {
