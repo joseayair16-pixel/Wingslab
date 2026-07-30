@@ -3482,7 +3482,7 @@ function triggerHaptic(pattern: number | number[] = 10) {
                       {fulfillmentType !== 'PICKUP' && (
                       <div className="flex items-center justify-between text-neutral-500">
                         <span className="flex items-center gap-1">
-                           <span className="text-[10px]"><svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round"><circle cx="6" cy="15" r="2.5" /><circle cx="18" cy="15" r="2.5" /><path d="M6 15l2.5-7H13l2 4.5h3" /><path d="M13 8l1.5 3" /></svg></span> Envío
+                           <span className="text-[10px]">🛵</span> Envío
                         </span>
                         <span className="font-medium text-neutral-700">{formatCurrency(estimatedDeliveryFee)}</span>
                       </div>
@@ -3520,7 +3520,7 @@ function triggerHaptic(pattern: number | number[] = 10) {
                           </svg>
                         </span>
                       )}
-                      <span><svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round"><circle cx="6" cy="15" r="2.5" /><circle cx="18" cy="15" r="2.5" /><path d="M6 15l2.5-7H13l2 4.5h3" /><path d="M13 8l1.5 3" /></svg></span> Enviar a domicilio
+                      <span>🛵</span> Enviar a domicilio
                     </button>
                     <button
                       type="button"
@@ -3676,68 +3676,47 @@ function triggerHaptic(pattern: number | number[] = 10) {
               <div className="flex-1 space-y-4 overflow-y-auto px-4 pb-8 pt-5 sm:px-5">
 
                   {fulfillmentType === 'PICKUP' ? (
-                    <div className="rounded-[22px] border border-black/[0.04] bg-white p-4 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
-                      <div className="mb-4 flex items-center justify-between">
+                    <div className="rounded-[22px] border border-black/[0.04] bg-white p-3 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
+                      <div className="mb-2 flex items-center justify-between">
                         <div className="flex items-center gap-2">
-                          <div className="flex h-7 w-7 items-center justify-center rounded-full bg-emerald-50">
-                            <span className="text-[11px]"><svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13.5 21v-7.5a.75.75 0 01.75-.75h3a.75.75 0 01.75.75V21m-4.5 0H2.36m11.14 0H18m0 0h3.64m-1.39 0V9.349m-16.5 11.65V9.35m0 0a3.001 3.001 0 003.75-.615A2.993 2.993 0 009.75 9.75c.896 0 1.7-.393 2.25-1.016a2.993 2.993 0 002.25 1.016c.896 0 1.7-.393 2.25-1.016a3.001 3.001 0 003.75.614m-16.5 0a3.004 3.004 0 01-.621-4.72L4.318 3.44A1.5 1.5 0 015.378 3h13.243a1.5 1.5 0 011.06.44l1.19 1.189a3 3 0 01-.621 4.72m-13.5 8.65h3.75a.75.75 0 00.75-.75V13.5a.75.75 0 00-.75-.75H6.75a.75.75 0 00-.75.75v3.75c0 .415.336.75.75.75z" /></svg></span>
+                          <div className="flex h-6 w-6 items-center justify-center rounded-full bg-emerald-50">
+                            <span className="text-[10px]"><svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13.5 21v-7.5a.75.75 0 01.75-.75h3a.75.75 0 01.75.75V21m-4.5 0H2.36m11.14 0H18m0 0h3.64m-1.39 0V9.349m-16.5 11.65V9.35m0 0a3.001 3.001 0 003.75-.615A2.993 2.993 0 009.75 9.75c.896 0 1.7-.393 2.25-1.016a2.993 2.993 0 002.25 1.016c.896 0 1.7-.393 2.25-1.016a3.001 3.001 0 003.75.614m-16.5 0a3.004 3.004 0 01-.621-4.72L4.318 3.44A1.5 1.5 0 015.378 3h13.243a1.5 1.5 0 011.06.44l1.19 1.189a3 3 0 01-.621 4.72m-13.5 8.65h3.75a.75.75 0 00.75-.75V13.5a.75.75 0 00-.75-.75H6.75a.75.75 0 00-.75.75v3.75c0 .415.336.75.75.75z" /></svg></span>
                           </div>
                           <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-neutral-400">
                             Recoger en
                           </p>
                         </div>
-                        <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-[9px] font-bold text-emerald-600">
+                        <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[9px] font-bold text-emerald-600">
                           Paso 1
                         </span>
                       </div>
                       <div className="overflow-hidden rounded-2xl border border-black/[0.04] bg-gradient-to-br from-white to-neutral-50/80 shadow-sm">
-                        <div className="p-5 pb-0">
-                          <div className="flex items-start gap-3.5">
-                            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-400 to-emerald-600 shadow-sm shadow-emerald-200/50">
-                              <span className="text-xl text-white"><svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13.5 21v-7.5a.75.75 0 01.75-.75h3a.75.75 0 01.75.75V21m-4.5 0H2.36m11.14 0H18m0 0h3.64m-1.39 0V9.349m-16.5 11.65V9.35m0 0a3.001 3.001 0 003.75-.615A2.993 2.993 0 009.75 9.75c.896 0 1.7-.393 2.25-1.016a2.993 2.993 0 002.25 1.016c.896 0 1.7-.393 2.25-1.016a3.001 3.001 0 003.75.614m-16.5 0a3.004 3.004 0 01-.621-4.72L4.318 3.44A1.5 1.5 0 015.378 3h13.243a1.5 1.5 0 011.06.44l1.19 1.189a3 3 0 01-.621 4.72m-13.5 8.65h3.75a.75.75 0 00.75-.75V13.5a.75.75 0 00-.75-.75H6.75a.75.75 0 00-.75.75v3.75c0 .415.336.75.75.75z" /></svg></span>
+                        <div className="p-4 pb-0">
+                          <div className="flex items-start gap-3">
+                            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-400 to-emerald-600 shadow-sm shadow-emerald-200/50">
+                              <span className="text-lg text-white"><svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13.5 21v-7.5a.75.75 0 01.75-.75h3a.75.75 0 01.75.75V21m-4.5 0H2.36m11.14 0H18m0 0h3.64m-1.39 0V9.349m-16.5 11.65V9.35m0 0a3.001 3.001 0 003.75-.615A2.993 2.993 0 009.75 9.75c.896 0 1.7-.393 2.25-1.016a2.993 2.993 0 002.25 1.016c.896 0 1.7-.393 2.25-1.016a3.001 3.001 0 003.75.614m-16.5 0a3.004 3.004 0 01-.621-4.72L4.318 3.44A1.5 1.5 0 015.378 3h13.243a1.5 1.5 0 011.06.44l1.19 1.189a3 3 0 01-.621 4.72m-13.5 8.65h3.75a.75.75 0 00.75-.75V13.5a.75.75 0 00-.75-.75H6.75a.75.75 0 00-.75.75v3.75c0 .415.336.75.75.75z" /></svg></span>
                             </div>
                             <div className="min-w-0 flex-1 pt-0.5">
-                              <p className="text-[15px] font-bold leading-tight text-neutral-900">
+                              <p className="text-[14px] font-bold leading-tight text-neutral-900">
                                 {restaurant?.name || 'Restaurante'}
                               </p>
                               {restaurant?.address && (
-                                <p className="mt-1 text-[13px] leading-relaxed text-neutral-500 line-clamp-2">
+                                <p className="mt-0.5 text-[12px] leading-relaxed text-neutral-500 line-clamp-1">
                                   {restaurant.address}
                                 </p>
                               )}
                             </div>
                           </div>
                         </div>
-                        <div className="mt-4 px-5">
-                          <div className="flex items-center gap-2.5 rounded-xl bg-amber-50/80 px-3.5 py-3">
-                            <div className="flex h-6 w-6 items-center justify-center rounded-full bg-amber-100">
-                              <span className="text-[11px]">⏰</span>
+                        <div className="px-4 pb-4">
+                          <div className="mt-2 flex items-center gap-2 rounded-xl bg-amber-50/80 px-3 py-2.5">
+                            <div className="flex h-5 w-5 items-center justify-center rounded-full bg-amber-100">
+                              <span className="text-[10px]">⏰</span>
                             </div>
-                            <p className="text-[12px] font-medium leading-snug text-amber-700">
-                              Te avisaremos cuando esté listo para recoger
+                            <p className="text-[11px] font-medium leading-snug text-amber-700">
+                              Te avisaremos cuando esté listo
                             </p>
                           </div>
-                        </div>
-                        <div className="p-5 pt-4">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              if (restaurant?.latitude && restaurant?.longitude) {
-                                window.open(
-                                  `https://www.google.com/maps/dir/?api=1&destination=${restaurant.latitude},${restaurant.longitude}`,
-                                  '_blank'
-                                );
-                              } else if (restaurant?.address) {
-                                window.open(
-                                  `https://www.google.com/maps/search/${encodeURIComponent(restaurant.address)}`,
-                                  '_blank'
-                                );
-                              }
-                            }}
-                            className="flex w-full items-center justify-center gap-2 rounded-xl bg-neutral-900 py-3 text-[13px] font-semibold text-white transition hover:bg-neutral-800 active:scale-[0.98]"
-                          >
-                            <span><svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z" /></svg></span> Cómo llegar
-                          </button>
                         </div>
                       </div>
                     </div>
@@ -4042,14 +4021,43 @@ function triggerHaptic(pattern: number | number[] = 10) {
                   </div>
                   )}
 
-                  {/* ── PASO 2: PAGO Y DETALLES ── */}
+                  {/* ── PASO 2: INSTRUCCIONES ── */}
+                  <div className="rounded-[22px] border border-black/[0.04] bg-white p-4 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
+                    <div className="flex items-center justify-between border-b border-black/[0.03] pb-2.5 mb-3.5">
+                      <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-neutral-400 flex items-center gap-1.5">
+                        <span><svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" /></svg></span> Instrucciones
+                      </p>
+                      <span className="rounded-full bg-sky-50 px-2 py-0.5 text-[9px] font-bold text-sky-600">
+                        Paso 2
+                      </span>
+                    </div>
+                    <div className="space-y-3.5">
+                      <Field 
+                        label="Instrucciones para la tienda" 
+                        value={checkoutForm.storeNotes} 
+                        onChange={(value) => setCheckoutForm((current) => ({ ...current, storeNotes: value }))} 
+                        placeholder="¿Algo que debamos saber?" 
+                      />
+
+                      {fulfillmentType !== 'PICKUP' && (
+                      <Field 
+                        label="Instrucciones para el repartidor" 
+                        value={checkoutForm.notes} 
+                        onChange={(value) => setCheckoutForm((current) => ({ ...current, notes: value }))} 
+                        placeholder="¿Dónde dejarlo o cómo encontrarte?" 
+                      />
+                      )}
+                    </div>
+                  </div>
+
+                  {/* ── PASO 3: PAGO Y DETALLES ── */}
                   <div className="rounded-[22px] border border-black/[0.04] bg-white p-4 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
                     <div className="flex items-center justify-between border-b border-black/[0.03] pb-2.5 mb-3.5">
                       <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-neutral-400 flex items-center gap-1.5">
                         <span><svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h3.75M9 15h3.75M9 18h3.75m3 .75H18a2.25 2.25 0 002.25-2.25V6.108c0-1.135-.845-2.098-1.976-2.192a48.424 48.424 0 00-1.123-.08m-5.801 0c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 00.75-.75 2.25 2.25 0 00-.1-.664m-5.8 0A2.251 2.251 0 0113.5 2.25H15a2.25 2.25 0 012.15 1.586m-5.8 0c-.376.023-.75.05-1.124.08C9.095 4.01 8.25 4.973 8.25 6.108V8.25m0 0H4.875c-.621 0-1.125.504-1.125 1.125v11.25c0 .621.504 1.125 1.125 1.125h9.75c.621 0 1.125-.504 1.125-1.125V9.375c0-.621-.504-1.125-1.125-1.125H8.25zM6.75 12h.008v.008H6.75V12zm0 3h.008v.008H6.75V15zm0 3h.008v.008H6.75V18z" /></svg></span> Detalles del pedido
                       </p>
                       <span className="rounded-full bg-sky-50 px-2 py-0.5 text-[9px] font-bold text-sky-600">
-                        Paso 2
+                        Paso 3
                       </span>
                     </div>
 
@@ -4247,72 +4255,9 @@ function triggerHaptic(pattern: number | number[] = 10) {
                     </div>
                   </div>
 
-                  {/* ── PASO 3: INSTRUCCIONES ── */}
-                  <div className="rounded-[22px] border border-black/[0.04] bg-white p-4 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
-                    <div className="flex items-center justify-between border-b border-black/[0.03] pb-2.5 mb-3.5">
-                      <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-neutral-400 flex items-center gap-1.5">
-                        <span><svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" /></svg></span> Instrucciones especiales
-                      </p>
-                      <span className="rounded-full bg-sky-50 px-2 py-0.5 text-[9px] font-bold text-sky-600">
-                        Paso 3
-                      </span>
-                    </div>
-                    <div className="space-y-3.5">
-                      <Field 
-                        label="Instrucciones para la tienda" 
-                        value={checkoutForm.storeNotes} 
-                        onChange={(value) => setCheckoutForm((current) => ({ ...current, storeNotes: value }))} 
-                        placeholder="Ej. Sin cebolla, salsas extra, sin cubiertos..." 
-                      />
 
-                      {fulfillmentType !== 'PICKUP' && (
-                      <Field 
-                        label="Instrucciones para el repartidor" 
-                        value={checkoutForm.notes} 
-                        onChange={(value) => setCheckoutForm((current) => ({ ...current, notes: value }))} 
-                        placeholder="Ej. Tocar timbre del portón café, dejar con guardia..." 
-                      />
-                      )}
-                    </div>
-                  </div>
 
-                  {/* ── PASO 4: RESUMEN DE PAGO ── */}
-                  <div className="rounded-[22px] border border-black/[0.04] bg-white p-4 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
-                    <div className="flex items-center justify-between border-b border-black/[0.03] pb-2.5 mb-3.5">
-                      <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-neutral-400 flex items-center gap-1.5">
-                        <span><svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 6v12m-3-2.818l.879.659c1.171.879 3.07.879 4.242 0 1.172-.879 1.172-2.303 0-3.182C13.536 12.219 12.768 12 12 12c-.725 0-1.45-.22-2.003-.659-1.106-.879-1.106-2.303 0-3.182s2.9-.879 4.006 0l.415.33M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg></span> Resumen del pago
-                      </p>
-                      <span className="rounded-full bg-sky-50 px-2 py-0.5 text-[9px] font-bold text-sky-600">
-                        Paso 4
-                      </span>
-                    </div>
-                    <div className="space-y-3 text-sm">
-                      <div className="flex items-center justify-between text-neutral-500">
-                        <span>Subtotal</span>
-                        <span className="font-semibold text-neutral-800">{formatCurrency(cartSubtotal)}</span>
-                      </div>
-                      {discountAmount > 0 && (
-                        <div className="flex items-center justify-between text-emerald-600 font-semibold bg-emerald-50 px-2 py-1 rounded-lg">
-                          <span>Descuento</span>
-                          <span>-{formatCurrency(discountAmount)}</span>
-                        </div>
-                      )}
-                      <div className="flex items-center justify-between text-neutral-500">
-                        <span>Servicio</span>
-                        <span className="font-semibold text-neutral-800">{formatCurrency(serviceFee)}</span>
-                      </div>
-                      {fulfillmentType !== 'PICKUP' && (
-                      <div className="flex items-center justify-between text-neutral-500">
-                        <span>Envío</span>
-                        <span className="font-semibold text-neutral-800">{formatCurrency(estimatedDeliveryFee)}</span>
-                      </div>
-                      )}
-                      <div className="border-t border-black/5 pt-3 mt-3 flex items-center justify-between font-extrabold text-neutral-950 text-base">
-                        <span>Total a pagar</span>
-                        <span className="text-lg tracking-tight text-neutral-950">{formatCurrency(orderTotal)}</span>
-                      </div>
-                    </div>
-                  </div>
+
 
                   {/* Redundant login card transformed into a premium callout */}
                   {checkoutValidationMessage && !token && (

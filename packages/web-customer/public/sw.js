@@ -76,22 +76,9 @@ self.addEventListener('notificationclick', function (event) {
   );
 });
 
-const CACHE_NAME = 'sadel-customer-v4';
-const STATIC_ASSETS = [
-  '/SaDeL.png',
-  '/app-icon-192.png',
-  '/manifest.json',
-  '/sounds/notifica.wav',
-  '/sounds/mensaje.wav',
-  '/sounds/llegue.wav',
-];
+const CACHE_NAME = 'sadel-customer-v5';
 
-self.addEventListener('install', function (event) {
-  event.waitUntil(
-    caches.open(CACHE_NAME).then(function (cache) {
-      return cache.addAll(STATIC_ASSETS).catch(function () {});
-    })
-  );
+self.addEventListener('install', function () {
   self.skipWaiting();
 });
 
@@ -115,34 +102,45 @@ self.addEventListener('activate', function (event) {
 self.addEventListener('fetch', function (event) {
   var requestUrl = new URL(event.request.url);
 
-  // Skip non-GET and non-http(s) requests
   if (event.request.method !== 'GET' || !requestUrl.protocol.startsWith('http')) return;
-
-  // Skip API calls — always go to network
   if (requestUrl.pathname.startsWith('/api/')) return;
-
-  // Skip socket.io
   if (requestUrl.pathname.includes('socket.io')) return;
 
-  // Cache-first for static assets (JS, CSS, images, fonts)
-  if (
-    requestUrl.pathname.match(/\.(js|css|png|jpg|jpeg|gif|svg|webp|avif|ico|woff2?|ttf|otf|eot)(\?.*)?$/) ||
-    requestUrl.origin === self.location.origin
-  ) {
+  // Navigation (HTML pages): network-first, fallback to cache
+  if (event.request.mode === 'navigate') {
+    event.respondWith(
+      fetch(event.request).then(function (networkResponse) {
+        return networkResponse;
+      }).catch(function () {
+        return caches.match(event.request);
+      })
+    );
+    return;
+  }
+
+  // JavaScript and CSS: network-first, no image fallback
+  if (requestUrl.pathname.match(/\.(js|css)(\?.*)?$/)) {
+    event.respondWith(
+      fetch(event.request).then(function (networkResponse) {
+        if (networkResponse && networkResponse.ok) {
+          var responseToCache = networkResponse.clone();
+          caches.open(CACHE_NAME).then(function (cache) {
+            cache.put(event.request, responseToCache);
+          });
+        }
+        return networkResponse;
+      }).catch(function () {
+        return caches.match(event.request);
+      })
+    );
+    return;
+  }
+
+  // Images and static assets: cache-first, fallback to network then nothing
+  if (requestUrl.pathname.match(/\.(png|jpg|jpeg|gif|svg|webp|avif|ico|woff2?|ttf|otf|eot)(\?.*)?$/)) {
     event.respondWith(
       caches.match(event.request).then(function (cachedResponse) {
-        if (cachedResponse) {
-          // Fetch in background to update cache
-          fetch(event.request).then(function (networkResponse) {
-            if (networkResponse && networkResponse.ok && networkResponse.status !== 206) {
-              caches.open(CACHE_NAME).then(function (cache) {
-                cache.put(event.request, networkResponse);
-              });
-            }
-          }).catch(function () {});
-          return cachedResponse;
-        }
-
+        if (cachedResponse) return cachedResponse;
         return fetch(event.request).then(function (networkResponse) {
           if (networkResponse && networkResponse.ok && networkResponse.status !== 206) {
             var responseToCache = networkResponse.clone();
@@ -151,8 +149,6 @@ self.addEventListener('fetch', function (event) {
             });
           }
           return networkResponse;
-        }).catch(function () {
-          return caches.match('/SaDeL.png');
         });
       })
     );
