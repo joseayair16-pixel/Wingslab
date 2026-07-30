@@ -3466,7 +3466,9 @@ function triggerHaptic(pattern: number | number[] = 10) {
                         <span className="font-medium text-neutral-700">{totalProducts}</span>
                       </div>
                       <div className="flex items-center justify-between text-neutral-500">
-                        <span>Subtotal</span>
+                        <span className="flex items-center gap-1">
+                          <span className="text-[10px]"><svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 6v12m-3-2.818l.879.659c1.171.879 3.07.879 4.242 0 1.172-.879 1.172-2.303 0-3.182C13.536 12.219 12.768 12 12 12c-.725 0-1.45-.22-2.003-.659-1.106-.879-1.106-2.303 0-3.182s2.9-.879 4.006 0l.415.33M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg></span> Subtotal
+                        </span>
                         <span className="font-medium text-neutral-700">{formatCurrency(cartSubtotal)}</span>
                       </div>
                       {discountAmount > 0 && (
@@ -3480,18 +3482,23 @@ function triggerHaptic(pattern: number | number[] = 10) {
                       {fulfillmentType !== 'PICKUP' && (
                       <div className="flex items-center justify-between text-neutral-500">
                         <span className="flex items-center gap-1">
-                          <span className="text-[10px]"><svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13.5 21v-7.5a.75.75 0 01.75-.75h3a.75.75 0 01.75.75V21m-4.5 0H2.36m11.14 0H18m0 0h3.64m-1.39 0V9.349m-16.5 11.65V9.35m0 0a3.001 3.001 0 003.75-.615A2.993 2.993 0 009.75 9.75c.896 0 1.7-.393 2.25-1.016a2.993 2.993 0 002.25 1.016c.896 0 1.7-.393 2.25-1.016a3.001 3.001 0 003.75.614m-16.5 0a3.004 3.004 0 01-.621-4.72L4.318 3.44A1.5 1.5 0 015.378 3h13.243a1.5 1.5 0 011.06.44l1.19 1.189a3 3 0 01-.621 4.72m-13.5 8.65h3.75a.75.75 0 00.75-.75V13.5a.75.75 0 00-.75-.75H6.75a.75.75 0 00-.75.75v3.75c0 .415.336.75.75.75z" /></svg></span> Envío
+                           <span className="text-[10px]"><svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round"><circle cx="6" cy="15" r="2.5" /><circle cx="18" cy="15" r="2.5" /><path d="M6 15l2.5-7H13l2 4.5h3" /><path d="M13 8l1.5 3" /></svg></span> Envío
                         </span>
                         <span className="font-medium text-neutral-700">{formatCurrency(estimatedDeliveryFee)}</span>
                       </div>
                       )}
                       <div className="flex items-center justify-between text-neutral-500">
-                        <span>Servicio</span>
+                        <span className="flex items-center gap-1">
+                          <span className="text-[10px]"><svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M10.5 1.5H8.25A2.25 2.25 0 006 3.75v16.5a2.25 2.25 0 002.25 2.25h7.5A2.25 2.25 0 0018 20.25V3.75a2.25 2.25 0 00-2.25-2.25H13.5m-3 0V3h3V1.5m-3 0h3m-3 18.75h3" /></svg></span> Servicio
+                        </span>
                         <span className="font-medium text-neutral-700">{formatCurrency(serviceFee)}</span>
                       </div>
                     </div>
                     <div className="mt-2 flex items-center justify-between rounded-xl bg-neutral-900 px-3.5 py-2.5 shadow-lg shadow-neutral-900/15">
-                      <span className="text-xs font-semibold text-neutral-300">Total a pagar</span>
+                      <span className="flex items-center gap-1.5 text-xs font-semibold text-neutral-300">
+                        <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M2.25 8.25h19.5M2.25 9h19.5m-16.5 5.25h6m-6 2.25h3m-3.75 3h15a2.25 2.25 0 002.25-2.25V6.75A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25v10.5A2.25 2.25 0 004.5 19.5z" /></svg>
+                        Total a pagar
+                      </span>
                       <span className="text-base font-extrabold tracking-tight text-white">{formatCurrency(orderTotal)}</span>
                     </div>
                   </div>
@@ -3513,7 +3520,7 @@ function triggerHaptic(pattern: number | number[] = 10) {
                           </svg>
                         </span>
                       )}
-                      <span><svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13.5 21v-7.5a.75.75 0 01.75-.75h3a.75.75 0 01.75.75V21m-4.5 0H2.36m11.14 0H18m0 0h3.64m-1.39 0V9.349m-16.5 11.65V9.35m0 0a3.001 3.001 0 003.75-.615A2.993 2.993 0 009.75 9.75c.896 0 1.7-.393 2.25-1.016a2.993 2.993 0 002.25 1.016c.896 0 1.7-.393 2.25-1.016a3.001 3.001 0 003.75.614m-16.5 0a3.004 3.004 0 01-.621-4.72L4.318 3.44A1.5 1.5 0 015.378 3h13.243a1.5 1.5 0 011.06.44l1.19 1.189a3 3 0 01-.621 4.72m-13.5 8.65h3.75a.75.75 0 00.75-.75V13.5a.75.75 0 00-.75-.75H6.75a.75.75 0 00-.75.75v3.75c0 .415.336.75.75.75z" /></svg></span> Enviar a domicilio
+                      <span><svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round"><circle cx="6" cy="15" r="2.5" /><circle cx="18" cy="15" r="2.5" /><path d="M6 15l2.5-7H13l2 4.5h3" /><path d="M13 8l1.5 3" /></svg></span> Enviar a domicilio
                     </button>
                     <button
                       type="button"
@@ -3564,12 +3571,12 @@ function triggerHaptic(pattern: number | number[] = 10) {
                         }
                       }}
                       disabled={!restaurant?.isOpen}
-                      className="group relative flex overflow-hidden items-center justify-center gap-1.5 rounded-xl bg-sky-500 px-4 py-2.5 text-sm font-bold text-white shadow-[0_4px_12px_-4px_rgba(14,165,233,0.4)] transition-all hover:bg-sky-400 hover:shadow-[0_8px_20px_-6px_rgba(14,165,233,0.5)] active:scale-[0.97] disabled:cursor-not-allowed disabled:bg-neutral-100 disabled:text-neutral-400 disabled:shadow-none"
+                      className="group relative flex overflow-hidden items-center justify-center gap-2 rounded-xl bg-sky-500 px-6 py-3 text-sm font-bold text-white shadow-[0_4px_16px_-4px_rgba(14,165,233,0.45)] transition-all hover:bg-sky-400 hover:shadow-[0_8px_24px_-6px_rgba(14,165,233,0.55)] active:scale-[0.97] disabled:cursor-not-allowed disabled:bg-neutral-100 disabled:text-neutral-400 disabled:shadow-none animate-pulse-glow"
                     >
                       <div className="absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/20 to-transparent transition-transform duration-1000 group-hover:translate-x-full disabled:hidden" />
-                      <span className="relative flex items-center justify-center gap-1.5">
+                      <span className="relative flex items-center justify-center gap-2">
                         Completar pedido
-                        <svg className="h-3.5 w-3.5 shrink-0 group-hover:translate-x-0.5 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <svg className="h-4 w-4 shrink-0 animate-arrow-slide group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" />
                         </svg>
                       </span>
@@ -5790,41 +5797,45 @@ function triggerHaptic(pattern: number | number[] = 10) {
                   </button>
                 ) : (() => {
                   const qty = getCartQuantity(previewProduct.id);
-                  return qty > 0 ? (
-                    <div className="flex w-full items-center justify-between rounded-xl bg-neutral-50 p-1">
+                  return (
+                    <>
+                      {qty > 0 && (
+                        <div className="flex items-center justify-between rounded-xl bg-neutral-50 p-1">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (qty <= 1) setPreviewProduct(null);
+                              updateCartItem(previewProduct.id, { quantity: qty - 1 });
+                            }}
+                            className="flex h-10 w-10 items-center justify-center rounded-lg text-neutral-500 transition hover:bg-white hover:text-neutral-800 active:scale-90"
+                          >
+                            {qty === 1 ? (
+                              <svg className="h-4 w-4 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                            ) : (
+                              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M20 12H4" /></svg>
+                            )}
+                          </button>
+                          <span className="flex h-10 w-10 items-center justify-center text-base font-bold text-neutral-900">{qty}</span>
+                          <button
+                            type="button"
+                            onClick={() => addToCart(previewProduct as any)}
+                            className="flex h-10 w-10 items-center justify-center rounded-lg text-neutral-500 transition hover:bg-white hover:text-neutral-800 active:scale-90"
+                          >
+                            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" /></svg>
+                          </button>
+                        </div>
+                      )}
                       <button
                         type="button"
                         onClick={() => {
-                          if (qty <= 1) {
-                            setPreviewProduct(null);
-                          }
-                          updateCartItem(previewProduct.id, { quantity: qty - 1 });
+                          if (qty === 0) addToCart(previewProduct as any);
+                          setPreviewProduct(null);
                         }}
-                        className="flex h-10 w-10 items-center justify-center rounded-lg text-neutral-500 transition hover:bg-white hover:text-neutral-800 active:scale-90"
+                        className="flex-1 rounded-xl bg-neutral-900 py-3.5 text-sm font-bold text-white shadow-lg shadow-neutral-900/20 transition hover:bg-neutral-800 active:scale-[0.97]"
                       >
-                        {qty === 1 ? (
-                          <svg className="h-4 w-4 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                        ) : (
-                          <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M20 12H4" /></svg>
-                        )}
+                        {qty > 0 ? 'Listo' : 'Agregar al carrito'}
                       </button>
-                      <span className="flex h-10 w-10 items-center justify-center text-base font-bold text-neutral-900">{qty}</span>
-                      <button
-                        type="button"
-                        onClick={() => addToCart(previewProduct as any)}
-                        className="flex h-10 w-10 items-center justify-center rounded-lg text-neutral-500 transition hover:bg-white hover:text-neutral-800 active:scale-90"
-                      >
-                        <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" /></svg>
-                      </button>
-                    </div>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() => addToCart(previewProduct as any)}
-                      className="flex-1 rounded-xl bg-neutral-900 py-3.5 text-sm font-bold text-white shadow-lg shadow-neutral-900/20 transition hover:bg-neutral-800 active:scale-[0.97]"
-                    >
-                      Agregar al carrito
-                    </button>
+                    </>
                   );
                 })()}
               </div>
