@@ -2025,14 +2025,17 @@ export default function Home() {
       
       const unratedOrder = ordersData.data.items.find(
         (order) =>
-          normalizeOrderStatusValue(order.status) === 'DELIVERED' &&
           !order.review &&
-          !localStorage.getItem(`sadel_dismissed_rating_${order.id}`)
+          !localStorage.getItem(`sadel_dismissed_rating_${order.id}`) &&
+          !localStorage.getItem(`sadel_prompted_rating_${order.id}`) &&
+          (normalizeOrderStatusValue(order.status) === 'DELIVERED' ||
+           normalizeOrderStatusValue(order.status) === 'COMPLETED')
       );
       if (unratedOrder) {
+        try { localStorage.setItem(`sadel_prompted_rating_${unratedOrder.id}`, 'true'); } catch {}
         setOrderToRate(unratedOrder.id);
         setRatingBusinessType((unratedOrder as any).restaurant?.businessType || null);
-        setRatingIsPickup(false);
+        setRatingIsPickup(normalizeOrderStatusValue(unratedOrder.status) === 'COMPLETED');
         setIsRatingModalOpen(true);
       }
 
@@ -3285,6 +3288,8 @@ export default function Home() {
             tone: 'danger',
           });
         } else if (eventName === 'order:delivered' && payload.orderId) {
+          if (localStorage.getItem(`sadel_dismissed_rating_${payload.orderId}`) ||
+              localStorage.getItem(`sadel_prompted_rating_${payload.orderId}`)) return;
           try {
             if (window.localStorage.getItem('customerAlertSoundEnabled') !== 'false') {
               void playCustomerLlegueSound();
@@ -3295,7 +3300,20 @@ export default function Home() {
           setRatingBusinessType((ratedOrder as any)?.restaurant?.businessType || null);
           setRatingIsPickup(false);
           setIsRatingModalOpen(true);
+        } else if (eventName === 'order:picked-up' && payload.orderId) {
+          const pickedOrder = orders.find((o: any) => o.id === payload.orderId);
+          const isPickupOrder = (pickedOrder as any)?.fulfillmentType === 'PICKUP';
+          if (isPickupOrder) {
+            if (localStorage.getItem(`sadel_dismissed_rating_${payload.orderId}`) ||
+                localStorage.getItem(`sadel_prompted_rating_${payload.orderId}`)) return;
+            setOrderToRate(payload.orderId);
+            setRatingBusinessType((pickedOrder as any)?.restaurant?.businessType || null);
+            setRatingIsPickup(true);
+            setIsRatingModalOpen(true);
+          }
         } else if (eventName === 'order:completed' && payload.orderId) {
+          if (localStorage.getItem(`sadel_dismissed_rating_${payload.orderId}`) ||
+              localStorage.getItem(`sadel_prompted_rating_${payload.orderId}`)) return;
           setOrderToRate(payload.orderId);
           const completedOrder = orders.find((o: any) => o.id === payload.orderId);
           setRatingBusinessType((completedOrder as any)?.restaurant?.businessType || null);
@@ -5939,10 +5957,10 @@ export default function Home() {
                           },
                           body: JSON.stringify({
                             rating: restaurantRating,
-                            comment: ratingComment || undefined,
-                            ...(driverRatingVal > 0 ? {
+                            ...(ratingComment ? { comment: ratingComment } : {}),
+                            ...(!ratingIsPickup && driverRatingVal > 0 ? {
                               driverRating: driverRatingVal,
-                              driverComment: ratingComment || undefined,
+                              ...(ratingComment ? { driverComment: ratingComment } : {}),
                             } : {}),
                           }),
                         });

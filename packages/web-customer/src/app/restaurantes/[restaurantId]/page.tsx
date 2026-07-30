@@ -1183,6 +1183,8 @@ export default function RestaurantPage({
         }
 
         if (eventName === 'order:delivered' && payload.orderId) {
+          if (localStorage.getItem(`sadel_dismissed_rating_${payload.orderId}`) ||
+              localStorage.getItem(`sadel_prompted_rating_${payload.orderId}`)) return;
           setOrderToRate(payload.orderId);
           const order = activeOrderDetailsMapRef.current[payload.orderId];
           setRatingBusinessType(order?.restaurant?.businessType || null);
@@ -1194,6 +1196,8 @@ export default function RestaurantPage({
           const existing = activeOrderDetailsMapRef.current[payload.orderId];
           const isPickup = existing?.fulfillmentType === 'PICKUP';
           if (isPickup) {
+            if (localStorage.getItem(`sadel_dismissed_rating_${payload.orderId}`) ||
+                localStorage.getItem(`sadel_prompted_rating_${payload.orderId}`)) return;
             setOrderToRate(payload.orderId);
             setRatingBusinessType(existing?.restaurant?.businessType || null);
             setRatingIsPickup(true);
@@ -1202,6 +1206,8 @@ export default function RestaurantPage({
         }
 
         if (eventName === 'order:completed' && payload.orderId) {
+          if (localStorage.getItem(`sadel_dismissed_rating_${payload.orderId}`) ||
+              localStorage.getItem(`sadel_prompted_rating_${payload.orderId}`)) return;
           setOrderToRate(payload.orderId);
           const order = activeOrderDetailsMapRef.current[payload.orderId];
           setRatingBusinessType(order?.restaurant?.businessType || null);

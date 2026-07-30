@@ -55,6 +55,9 @@ tmp/
 temp/
 *.tmp
 
+# TypeScript
+*.tsbuildinfo
+
 # Scratch and junk
 scratch/
 checkout_block.txt
