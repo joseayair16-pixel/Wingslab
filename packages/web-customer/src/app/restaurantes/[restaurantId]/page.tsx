@@ -4673,8 +4673,8 @@ function triggerHaptic(pattern: number | number[] = 10) {
                 </div>
 
                 <div className="relative px-4 pb-4 pt-0 text-sm text-neutral-600 dark:text-neutral-300 md:px-6 md:pb-5 lg:px-7 lg:pt-5">
-                  <div className="-mt-12 flex flex-col items-center text-center lg:hidden">
-                    <div className="flex h-20 w-20 items-center justify-center overflow-hidden rounded-[22px] border-4 border-white dark:border-neutral-900 bg-white dark:bg-neutral-900 shadow-[0_8px_20px_rgba(15,15,15,0.14)] dark:shadow-none">
+                  <div className="-mt-14 flex flex-col items-center text-center lg:hidden">
+                    <div className="flex h-24 w-24 items-center justify-center overflow-hidden rounded-[22px] border-4 border-white dark:border-neutral-900 bg-white dark:bg-neutral-900 shadow-[0_8px_20px_rgba(15,15,15,0.14)] dark:shadow-none">
                       {restaurant.logo ? (
                         <img
                           src={restaurant.logo}
