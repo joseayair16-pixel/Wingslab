@@ -2074,14 +2074,14 @@ function triggerHaptic(pattern: number | number[] = 10) {
     let position: GeolocationPosition;
     try {
       position = await waitForPosition(false, 10_000);
-      if (position.coords.accuracy > 100) {
+      if (position.coords.accuracy > 200) {
         try {
-          position = await waitForPosition(true, 15_000);
+          position = await waitForPosition(true, 12_000);
         } catch { }
       }
     } catch {
       try {
-        position = await waitForPosition(true, 15_000);
+        position = await waitForPosition(true, 12_000);
       } catch {
         position = await waitForPosition(false, 10_000);
       }
@@ -2270,9 +2270,9 @@ function triggerHaptic(pattern: number | number[] = 10) {
           latitude: parseFloat(normalizedCheckoutForm.latitude),
           longitude: parseFloat(normalizedCheckoutForm.longitude),
         };
-        if (currentLocation) {
-          body.currentLocation = currentLocation;
-        }
+      }
+      if (currentLocation) {
+        body.currentLocation = currentLocation;
       }
 
       const payload = await requestJson<{ success: true; data: { id: string; orderReference: string } }>({
@@ -2281,7 +2281,6 @@ function triggerHaptic(pattern: number | number[] = 10) {
         token,
         options: {
           method: 'POST',
-          headers: fulfillmentType !== 'PICKUP' && currentLocation ? { 'X-Location-Verified': '1' } : undefined,
           body: JSON.stringify(body),
         },
         fallbackMessage: 'No se pudo crear el pedido.',
@@ -3878,27 +3877,19 @@ function triggerHaptic(pattern: number | number[] = 10) {
                                 </label>
                               </div>
                             ) : (
-                              <label className="relative flex cursor-pointer flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-neutral-200 bg-white px-4 py-7 text-center transition-all hover:border-sky-400 hover:bg-sky-50/20 active:scale-[0.98] group">
+                              <label className="relative flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed border-neutral-300 bg-white px-4 py-3 text-sm font-semibold text-neutral-700 transition-all hover:border-sky-400 hover:bg-sky-50 hover:text-sky-700 active:scale-[0.97] group">
                                 <input
                                   type="file"
                                   accept="image/*"
                                   onChange={(event) => void handleTransferProofChange(event)}
                                   className="sr-only"
                                 />
-                                <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-sky-50 to-white shadow-[0_2px_8px_rgba(14,165,233,0.12)] ring-1 ring-sky-200/50 transition-transform group-hover:scale-110 group-hover:shadow-[0_4px_16px_rgba(14,165,233,0.2)]">
-                                  <svg className="h-6 w-6 text-sky-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
-                                    <path strokeLinecap="round" strokeLinejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.16a15.53 15.53 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z" />
-                                    <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0z" />
-                                  </svg>
-                                </div>
-                                <div>
-                                  <p className="text-sm font-bold text-neutral-800">
-                                    Subir comprobante
-                                  </p>
-                                  <p className="text-xs text-neutral-400 mt-0.5">
-                                    Foto del ticket de transferencia
-                                  </p>
-                                </div>
+                                <svg className="h-4 w-4 text-neutral-400 group-hover:text-sky-500 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
+                                  <path strokeLinecap="round" strokeLinejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.16a15.53 15.53 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z" />
+                                  <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0z" />
+                                </svg>
+                                Subir comprobante
+                                <span className="text-[11px] font-normal text-neutral-400">Foto del ticket</span>
                               </label>
                             )}
                           </div>
