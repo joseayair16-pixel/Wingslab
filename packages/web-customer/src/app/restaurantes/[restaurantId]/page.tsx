@@ -1847,7 +1847,7 @@ function triggerHaptic(pattern: number | number[] = 10) {
           }
         });
       },
-      { rootMargin: '-120px 0px -60% 0px', threshold: 0 }
+      { rootMargin: '-184px 0px -60% 0px', threshold: 0 }
     );
 
     Object.values(categorySectionRefs.current).forEach((section) => {
@@ -1865,10 +1865,14 @@ function triggerHaptic(pattern: number | number[] = 10) {
       return;
     }
 
-    target.scrollIntoView({
+    const stickyHeader = document.querySelector('[data-sticky-header]');
+    const stickyHeight = stickyHeader ? stickyHeader.getBoundingClientRect().height + 72 : 184;
+
+    const targetPosition = target.getBoundingClientRect().top + window.scrollY - stickyHeight;
+
+    window.scrollTo({
+      top: targetPosition,
       behavior: 'smooth',
-      block: 'start',
-      inline: 'nearest',
     });
   }
 
@@ -4724,7 +4728,7 @@ function triggerHaptic(pattern: number | number[] = 10) {
                 </div>
               </section>
 
-              <div className="sticky top-[72px] z-20 -mx-4 bg-white/90 backdrop-blur-2xl border-b border-black/[0.04] md:-mx-6 lg:-mx-7">
+              <div data-sticky-header className="sticky top-[72px] z-20 -mx-4 bg-white/90 backdrop-blur-2xl border-b border-black/[0.04] md:-mx-6 lg:-mx-7">
                 <div className="px-4 py-3 md:px-6 lg:px-7">
                   <div className="relative w-full">
                     <input
@@ -4754,8 +4758,8 @@ function triggerHaptic(pattern: number | number[] = 10) {
                 </div>
                 {!productSearchQuery.trim() && (
                 <div className="px-4 pb-3 md:px-6 lg:px-7">
-                  <div className="-mx-1 overflow-x-auto px-1 pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-                    <div className="flex min-w-max gap-2 sm:gap-2.5">
+                  <div className="-mx-1 overflow-x-auto px-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                    <div className="flex min-w-max gap-1 sm:gap-1">
                       {(productSearchQuery.trim() ? (filteredRestaurant?.categories ?? []) : restaurant.categories).map((category) => {
                         const isActive = activeCategory === category.id;
                         return (
@@ -4763,13 +4767,16 @@ function triggerHaptic(pattern: number | number[] = 10) {
                             type="button"
                             key={category.id}
                             onClick={() => scrollToCategory(category.id)}
-                            className={`rounded-full px-5 py-2 text-[13.5px] font-bold transition-all duration-300 ${
+                            className={`relative px-4 py-3 text-[13.5px] font-semibold transition-all duration-200 ${
                               isActive
-                                ? 'bg-gradient-to-r from-sky-500 to-sky-400 text-white shadow-[0_4px_16px_rgba(14,165,233,0.35)] ring-1 ring-sky-400/50 scale-105'
-                                : 'bg-transparent text-neutral-500 hover:text-sky-600 hover:bg-sky-50/80 active:scale-95'
+                                ? 'text-sky-600'
+                                : 'text-neutral-500 hover:text-neutral-800'
                             }`}
                           >
                             {category.name}
+                            <span className={`absolute bottom-0 left-1/2 h-[3px] rounded-full bg-sky-500 transition-all duration-300 ${
+                              isActive ? 'w-5/6 -translate-x-1/2' : 'w-0 -translate-x-1/2'
+                            }`} />
                           </button>
                         );
                       })}
@@ -4864,7 +4871,7 @@ function triggerHaptic(pattern: number | number[] = 10) {
                   ref={(node) => {
                     categorySectionRefs.current[category.id] = node;
                   }}
-                  className="scroll-mt-28 mb-10 px-0 py-0 md:scroll-mt-32"
+                  className="scroll-mt-[184px] mb-10 px-0 py-0 md:scroll-mt-[184px]"
                 >
                   <div className="flex items-center justify-between gap-4 mb-2">
                     <h2 className="text-2xl font-bold tracking-[-0.03em] text-neutral-950 dark:text-white">{category.name}</h2>
@@ -4875,7 +4882,7 @@ function triggerHaptic(pattern: number | number[] = 10) {
 
                   <div className={isPromoCarousel || isLargeCategory ? "relative mt-5" : "mt-5 overflow-hidden"}>
                     <div className={isPromoCarousel || isLargeCategory
-                      ? "flex gap-4 overflow-x-auto pb-2 scroll-smooth snap-x snap-mandatory [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+                      ? "flex gap-3 overflow-x-auto pb-2 scroll-smooth snap-x snap-mandatory [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
                       : "grid gap-4 sm:grid-cols-2 lg:grid-cols-3"
                     }>
                     {category.products.map((product) => {
@@ -4943,8 +4950,66 @@ function triggerHaptic(pattern: number | number[] = 10) {
                               </div>
                             </div>
                           </article>
+                        ) : isLargeCategory ? (
+                          <article id={product.id} key={product.id} className="w-[44vw] shrink-0 snap-start sm:w-52 overflow-hidden rounded-2xl border border-black/[0.04] bg-white transition-all duration-300 shadow-[0_2px_12px_rgba(0,0,0,0.02)] hover:-translate-y-0.5 hover:shadow-[0_8px_24px_rgba(0,0,0,0.06)]">
+                            <div className="flex h-full flex-col">
+                              <div className="relative aspect-square overflow-hidden bg-neutral-50">
+                                {product.image ? (
+                                  <img
+                                    src={(product.images?.length ?? 0) > 1 && carouselIndexMap[product.id] ? product.images![carouselIndexMap[product.id]] : product.image}
+                                    alt={product.name}
+                                    className="h-full w-full object-cover transition duration-300 group-hover:scale-105"
+                                    style={{ objectPosition: product.imagePosition || 'center', transform: `scale(${(product.imageZoom ?? 100) / 100})` }}
+                                    loading="lazy"
+                                    decoding="async"
+                                  />
+                                ) : (
+                                  <div className="h-full w-full bg-gradient-to-br from-neutral-100 to-neutral-200" />
+                                )}
+                                {product.discountPrice && (
+                                  <div className="absolute left-1.5 top-1.5 flex items-center gap-1 rounded-full bg-rose-500/90 px-2 py-0.5 text-[9px] font-bold text-white shadow-sm">
+                                    <span>-{Math.round((1 - product.discountPrice / product.price) * 100)}%</span>
+                                  </div>
+                                )}
+                              </div>
+                              <div className="flex flex-1 flex-col p-3">
+                                <h3 className="text-[13px] font-semibold leading-tight text-neutral-900 line-clamp-2">{product.name}</h3>
+                                {product.sellBy === 'WEIGHT' ? (
+                                  <p className="mt-1 text-sm font-bold text-neutral-900">{formatCurrency(product.unitPrice || product.price)}/kg</p>
+                                ) : product.discountPrice ? (
+                                  <div className="mt-1 flex items-baseline gap-1.5">
+                                    <span className="text-sm font-bold text-rose-600">{formatCurrency(product.discountPrice)}</span>
+                                    <span className="text-[10px] text-neutral-400 line-through">{formatCurrency(product.price)}</span>
+                                  </div>
+                                ) : (
+                                  <p className="mt-1 text-sm font-bold text-neutral-900">{formatCurrency(product.price)}</p>
+                                )}
+                                <div className="mt-auto pt-2">
+                                  {quantity > 0 ? (
+                                    <div className="flex w-fit items-center gap-0.5 rounded-full border border-black/[0.06] bg-neutral-50 p-0.5">
+                                      <button type="button" onClick={() => { if (product.optionGroups?.length) { decreaseQuantityForProduct(product.id); } else { updateCartItem(product.id, { quantity: quantity - 1 }); } }} className="flex h-7 w-7 items-center justify-center rounded-full text-neutral-500 transition-all hover:bg-white active:scale-90" aria-label={`Quitar una unidad de ${product.name}`}>
+                                        {quantity === 1 ? (
+                                          <svg className="h-3 w-3 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                                        ) : (
+                                          <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M20 12H4" /></svg>
+                                        )}
+                                      </button>
+                                      <span className="flex h-7 w-7 items-center justify-center text-xs font-bold text-neutral-900">{quantity}</span>
+                                      <button type="button" onClick={() => addToCart(product)} className="flex h-7 w-7 items-center justify-center rounded-full text-neutral-500 transition-all hover:bg-white active:scale-90" aria-label={`Agregar una unidad de ${product.name}`}>
+                                        <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" /></svg>
+                                      </button>
+                                    </div>
+                                  ) : (
+                                    <button type="button" onClick={() => addToCart(product)} disabled={!restaurant.isOpen} className="w-full rounded-lg bg-neutral-900 py-2 text-[11px] font-bold text-white transition hover:bg-neutral-800 disabled:bg-neutral-200 disabled:text-neutral-400">
+                                      Agregar
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          </article>
                         ) : (
-                          <article id={product.id} key={product.id} className={isLargeCategory ? "w-72 shrink-0 snap-start sm:w-80 overflow-hidden rounded-[28px] border border-black/[0.04] bg-white transition-all duration-300 shadow-[0_2px_12px_rgba(0,0,0,0.02)] hover:-translate-y-1 hover:shadow-[0_12px_40px_rgba(0,0,0,0.06)]" : "overflow-hidden rounded-[28px] border border-black/[0.04] bg-white transition-all duration-300 shadow-[0_2px_12px_rgba(0,0,0,0.02)] hover:-translate-y-1 hover:shadow-[0_12px_40px_rgba(0,0,0,0.06)]"}>
+                          <article id={product.id} key={product.id} className="overflow-hidden rounded-[28px] border border-black/[0.04] bg-white transition-all duration-300 shadow-[0_2px_12px_rgba(0,0,0,0.02)] hover:-translate-y-1 hover:shadow-[0_12px_40px_rgba(0,0,0,0.06)]">
                             <div className="flex h-full flex-col gap-0 sm:flex-row">
                               <div className="relative h-48 w-full shrink-0 sm:aspect-square sm:h-auto sm:w-44">
                                 {product.image ? (
