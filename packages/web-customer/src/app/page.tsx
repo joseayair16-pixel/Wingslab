@@ -221,6 +221,8 @@ type CustomerOrderDetail = {
   cancellationRequestedAt?: string | null;
   cancelledBy?: string | null;
   fulfillmentType?: 'DELIVERY' | 'PICKUP';
+  scheduledDeliveryAt?: string | null;
+  scheduledDeliveryCustomerAcceptedAt?: string | null;
 };
 
 type PaginatedOrdersResponse = {
@@ -374,6 +376,9 @@ const liveEvents = [
   'order:cancellation-approved',
   'order:cancellation-rejected',
   'order:pin-reset',
+  'order:schedule-proposal',
+  'order:schedule-accepted',
+  'order:schedule-rejected',
 ] as const;
 
 function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
@@ -966,6 +971,8 @@ export default function Home() {
   const [carouselIndex, setCarouselIndex] = useState(0);
   const [, setNotifications] = useState<CustomerNotification[]>([]);
   const [transientNotice, setTransientNotice] = useState<TransientNotice | null>(null);
+  const [scheduleProposalOrder, setScheduleProposalOrder] = useState<CustomerOrderDetail | null>(null);
+  const [scheduleProposalLoading, setScheduleProposalLoading] = useState(false);
 
   // Join Platform States
   const [isRequestSuccessModalOpen, setIsRequestSuccessModalOpen] = useState(false);
@@ -1958,6 +1965,26 @@ export default function Home() {
         return '';
       });
       setOrders(ordersData.data.items);
+
+      // Check for orders that need schedule confirmation from customer
+      const pendingScheduleOrder = ordersData.data.items.find(
+        (o) => o.status === 'CONFIRMED'
+      );
+      if (pendingScheduleOrder) {
+        requestJson<{ success: true; data: CustomerOrderDetail }>({
+          apiBase,
+          path: `/me/pedidos/${pendingScheduleOrder.id}`,
+          token,
+        }).then((detailRes) => {
+          if (
+            detailRes.success &&
+            detailRes.data.scheduledDeliveryAt &&
+            !detailRes.data.scheduledDeliveryCustomerAcceptedAt
+          ) {
+            setScheduleProposalOrder(detailRes.data);
+          }
+        }).catch(() => {});
+      }
       
       const unratedOrder = ordersData.data.items.find(
         (order) =>
@@ -3234,6 +3261,7 @@ export default function Home() {
         );
 
         if (eventName === 'order:rejected') {
+          setScheduleProposalOrder((prev) => prev?.id === payload.orderId ? null : prev);
           const matchingOrder = orders.find((o) => o.id === payload.orderId);
           showTransientNotice({
             key: `socket-rejected:${liveEventKey}`,
@@ -3285,6 +3313,30 @@ export default function Home() {
               }));
             }
           }).catch(() => {});
+        } else if (eventName === 'order:schedule-proposal') {
+          if (payload.orderId) {
+            requestJson<{ success: true; data: CustomerOrderDetail }>({
+              apiBase,
+              path: `/me/pedidos/${payload.orderId}`,
+              token,
+            }).then((detailRes) => {
+              if (detailRes.success) {
+                setScheduleProposalOrder(detailRes.data);
+              }
+            }).catch(() => {});
+          }
+        } else if (eventName === 'order:schedule-accepted') {
+          if (payload.orderId) {
+            setScheduleProposalOrder(null);
+            showTransientNotice({
+              key: `schedule-accepted:${liveEventKey}`,
+              title: 'Fecha confirmada',
+              description: 'La fecha de entrega ha sido confirmada exitosamente.',
+              tone: 'success',
+            });
+          }
+        } else if (eventName === 'order:schedule-rejected') {
+          setScheduleProposalOrder(null);
         } else if (eventName === 'order:ready') {
           try {
             if (window.localStorage.getItem('customerAlertSoundEnabled') !== 'false') {
@@ -6864,6 +6916,144 @@ export default function Home() {
         </div>
       )}
 
+      {/* Modal de propuesta de programación de entrega */}
+      {scheduleProposalOrder && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 backdrop-blur-sm px-4 py-6">
+          <div className="bg-white rounded-3xl border border-black/[0.03] shadow-[0_40px_120px_rgba(0,0,0,0.35)] p-7 w-full max-w-md h-fit max-h-[90vh] overflow-y-auto relative">
+            {/* Customer icon */}
+            <div className="text-center mb-6">
+              <div className="w-20 h-20 bg-sky-100 rounded-full flex items-center justify-center mx-auto mb-4 ring-8 ring-sky-50">
+                <span className="text-4xl">📅</span>
+              </div>
+              <h3 className="text-2xl font-black text-neutral-950 tracking-tight">Fecha de entrega programada</h3>
+              <p className="text-sm text-neutral-500 mt-2 leading-relaxed">
+                <strong className="text-neutral-800">{scheduleProposalOrder.restaurant.name}</strong> propuso entregar tu pedido en la siguiente fecha:
+              </p>
+            </div>
+
+            {/* Date/Time display */}
+            {scheduleProposalOrder.scheduledDeliveryAt && (
+              <div className="bg-gradient-to-br from-sky-50 to-blue-50 rounded-2xl border border-sky-100 p-5 mb-6 text-center shadow-sm">
+                <p className="text-xs font-bold uppercase tracking-[0.2em] text-sky-600 mb-2">Fecha programada</p>
+                <p className="text-2xl font-black text-neutral-950">
+                  {new Date(scheduleProposalOrder.scheduledDeliveryAt).toLocaleDateString('es-MX', {
+                    weekday: 'long',
+                    day: 'numeric',
+                    month: 'long',
+                  })}
+                </p>
+                <div className="mt-2 inline-flex items-center gap-2 bg-white rounded-full px-4 py-1.5 border border-sky-200 shadow-sm">
+                  <svg className="w-4 h-4 text-sky-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <circle cx="12" cy="12" r="8" strokeWidth={2} />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 7v5l3 3" />
+                  </svg>
+                  <span className="text-sm font-bold text-sky-700">
+                    {new Date(scheduleProposalOrder.scheduledDeliveryAt).toLocaleTimeString('es-MX', {
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    })}
+                  </span>
+                </div>
+              </div>
+            )}
+
+            {/* Order reference */}
+            <div className="text-center mb-6">
+              <p className="text-xs font-medium text-neutral-400">
+                Pedido #{scheduleProposalOrder.orderReference?.slice(-6) || scheduleProposalOrder.dailyCounter || ''}
+              </p>
+              <p className="text-xs font-medium text-neutral-400 mt-0.5">
+                {scheduleProposalOrder.items?.length || 0} producto{(scheduleProposalOrder.items?.length || 0) !== 1 ? 's' : ''} · {formatCurrency(scheduleProposalOrder.totalAmount)}
+              </p>
+            </div>
+
+            {/* Actions */}
+            <div className="space-y-3">
+              <button
+                type="button"
+                onClick={async () => {
+                  setScheduleProposalLoading(true);
+                  try {
+                    const res = await requestJson<{ success: boolean; data?: { message: string } }>({
+                      apiBase,
+                      path: `/pedidos/${scheduleProposalOrder.id}/confirmar-programacion`,
+                      options: { method: 'POST' },
+                      token,
+                    });
+                    if (res.success) {
+                      setScheduleProposalOrder(null);
+                      showTransientNotice({
+                        key: `schedule-confirmed-${scheduleProposalOrder.id}`,
+                        title: '¡Fecha confirmada! ✅',
+                        description: `Tu pedido llegará el ${new Date(scheduleProposalOrder.scheduledDeliveryAt!).toLocaleDateString('es-MX', {
+                          weekday: 'long',
+                          day: 'numeric',
+                          month: 'long',
+                        })} a las ${new Date(scheduleProposalOrder.scheduledDeliveryAt!).toLocaleTimeString('es-MX', {
+                          hour: '2-digit',
+                          minute: '2-digit',
+                        })}.`,
+                        tone: 'success',
+                      });
+                    }
+                  } catch (e) {
+                    showTransientNotice({
+                      key: `schedule-error-${scheduleProposalOrder.id}`,
+                      title: 'Error',
+                      description: 'Ocurrió un error al confirmar la fecha. Intenta de nuevo.',
+                      tone: 'danger',
+                    });
+                  } finally {
+                    setScheduleProposalLoading(false);
+                  }
+                }}
+                disabled={scheduleProposalLoading}
+                className="w-full rounded-full bg-sky-600 px-5 py-4 text-sm font-bold text-white shadow-[0_4px_12px_rgba(2,132,199,0.3)] transition hover:bg-sky-700 hover:shadow-[0_8px_20px_rgba(2,132,199,0.4)] disabled:opacity-70 disabled:cursor-not-allowed active:scale-[0.98]"
+              >
+                {scheduleProposalLoading ? 'Confirmando...' : '✅ Aceptar fecha'}
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  if (!window.confirm('¿Estás seguro? Si cancelas, el pedido se cancelará y no podrás recuperarlo.')) return;
+                  setScheduleProposalLoading(true);
+                  try {
+                    const res = await requestJson<{ success: boolean; data?: { message: string } }>({
+                      apiBase,
+                      path: `/pedidos/${scheduleProposalOrder.id}/rechazar-programacion`,
+                      options: { method: 'POST' },
+                      token,
+                    });
+                    if (res.success) {
+                      setScheduleProposalOrder(null);
+                      showTransientNotice({
+                        key: `schedule-rejected-${scheduleProposalOrder.id}`,
+                        title: 'Pedido cancelado ❌',
+                        description: 'Cancelaste el pedido porque no aceptaste la fecha de entrega programada.',
+                        tone: 'danger',
+                      });
+                    }
+                  } catch (e) {
+                    showTransientNotice({
+                      key: `schedule-reject-error-${scheduleProposalOrder.id}`,
+                      title: 'Error',
+                      description: 'Ocurrió un error. Intenta de nuevo.',
+                      tone: 'danger',
+                    });
+                  } finally {
+                    setScheduleProposalLoading(false);
+                  }
+                }}
+                disabled={scheduleProposalLoading}
+                className="w-full rounded-full border border-rose-200 bg-white px-5 py-4 text-sm font-semibold text-rose-700 transition hover:bg-rose-50 disabled:opacity-60 disabled:cursor-not-allowed active:scale-[0.98]"
+              >
+                ❌ Cancelar pedido
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <audio id="customer-alert-audio" src="/sounds/notifica.wav" preload="auto"></audio>
       <audio id="chat-message-audio" src="/sounds/mensaje.wav" preload="auto"></audio>
       <audio id="customer-llegue-audio" src="/sounds/llegue.wav" preload="auto"></audio>
@@ -7750,6 +7940,9 @@ const notificationTitleMap: Record<(typeof liveEvents)[number], string> = {
   'order:cancellation-approved': 'Cancelación aprobada',
   'order:cancellation-rejected': 'Cancelación rechazada',
   'order:pin-reset': 'Nuevo PIN de recolección',
+  'order:schedule-proposal': 'Propuesta de fecha de entrega',
+  'order:schedule-accepted': 'Fecha de entrega confirmada',
+  'order:schedule-rejected': 'Fecha de entrega rechazada',
 };
 
 function isActiveOrderStatus(status: string) {

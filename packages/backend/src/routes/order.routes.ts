@@ -423,5 +423,238 @@ export async function registerOrderRoutes(fastify: FastifyInstance): Promise<voi
         return sendAppError(reply, error);
       }
     });
+
+    // ── Customer accepts scheduled delivery proposal ──
+    customer.post('/pedidos/:id/confirmar-programacion', async (request, reply) => {
+      const params = z.object({ id: z.string().min(1) }).safeParse(request.params);
+      if (!params.success) {
+        return reply.status(400).send({ success: false, error: { code: 'INVALID_PARAMS', message: 'ID de pedido inválido.' } });
+      }
+
+      const user = getAuthenticatedUser(request);
+      const requestContext = getOrCreateRequestContext(request);
+
+      try {
+        const order = await prisma.order.findFirst({
+          where: {
+            id: params.data.id,
+            customer: { userId: user.sub },
+            status: OrderStatus.CONFIRMED,
+            scheduledDeliveryAt: { not: null },
+            scheduledDeliveryCustomerAcceptedAt: null,
+          },
+          select: {
+            id: true,
+            orderReference: true,
+            scheduledDeliveryAt: true,
+            restaurant: {
+              select: {
+                id: true,
+                userId: true,
+                name: true,
+                businessType: true,
+                hasOwnDelivery: true,
+              },
+            },
+            customer: {
+              select: {
+                user: {
+                  select: { id: true, name: true },
+                },
+              },
+            },
+            fulfillmentType: true,
+          },
+        });
+
+        if (!order) {
+          return reply.status(404).send({
+            success: false,
+            error: { code: 'ORDER_NOT_FOUND', message: 'No se encontró el pedido o no está pendiente de confirmación de entrega.' },
+          });
+        }
+
+        const now = new Date();
+        await prisma.$transaction(async (tx) => {
+          await tx.order.update({
+            where: { id: order.id },
+            data: {
+              scheduledDeliveryCustomerAcceptedAt: now,
+              preparationStartedAt: now,
+            },
+          });
+          await tx.orderTracking.create({
+            data: {
+              orderId: order.id,
+              status: OrderStatus.CONFIRMED,
+              notes: 'El cliente aceptó la fecha de entrega programada. La preparación ha comenzado.',
+            },
+          });
+        });
+
+        // Notify restaurant via socket
+        emitNotification(
+          fastify.io,
+          order.restaurant.userId,
+          'RESTAURANT',
+          'order:schedule-accepted',
+          {
+            orderId: order.id,
+            message: 'El cliente aceptó la fecha de entrega programada.',
+          },
+          {
+            requestId: requestContext.requestId,
+            orderId: order.id,
+          }
+        );
+
+        // Send push confirmation to customer
+        try {
+          const businessType = order.restaurant.businessType;
+          const ref = businessType === 'RESTAURANT' ? 'el restaurante' : 'la tienda';
+          const formattedDate = order.scheduledDeliveryAt
+            ? new Date(order.scheduledDeliveryAt).toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long' })
+            : '';
+          const formattedTime = order.scheduledDeliveryAt
+            ? new Date(order.scheduledDeliveryAt).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })
+            : '';
+          await sendPushNotification(order.customer.user.id, {
+            title: '¡Fecha confirmada! ✅',
+            body: `Tu pedido llegará el ${formattedDate} a las ${formattedTime}. ${ref} ya está preparándolo.`,
+            icon: '/SaDeL.png',
+            badge: '/SaDeL.png',
+            vibrate: [300, 100, 300],
+            requireInteraction: false,
+            tag: `schedule-accepted-${order.id}`,
+            data: {
+              orderId: order.id,
+              event: 'order:schedule-accepted',
+              url: `/?orderId=${order.id}`,
+            },
+          });
+        } catch (pushErr) {
+          request.log.error(pushErr as any, `[Push] Error al enviar notificacion de confirmacion al comensal ${order.customer.user.id}`);
+        }
+
+        return reply.send({
+          success: true,
+          data: {
+            message: 'Fecha de entrega confirmada. Tu pedido ya está en preparación.',
+          },
+        });
+      } catch (error) {
+        return sendAppError(reply, error);
+      }
+    });
+
+    // ── Customer rejects scheduled delivery proposal → cancels order ──
+    customer.post('/pedidos/:id/rechazar-programacion', async (request, reply) => {
+      const params = z.object({ id: z.string().min(1) }).safeParse(request.params);
+      if (!params.success) {
+        return reply.status(400).send({ success: false, error: { code: 'INVALID_PARAMS', message: 'ID de pedido inválido.' } });
+      }
+
+      const user = getAuthenticatedUser(request);
+      const requestContext = getOrCreateRequestContext(request);
+
+      try {
+        const order = await prisma.order.findFirst({
+          where: {
+            id: params.data.id,
+            customer: { userId: user.sub },
+            status: OrderStatus.CONFIRMED,
+            scheduledDeliveryAt: { not: null },
+            scheduledDeliveryCustomerAcceptedAt: null,
+          },
+          select: {
+            id: true,
+            orderReference: true,
+            restaurant: {
+              select: {
+                id: true,
+                userId: true,
+                name: true,
+                businessType: true,
+              },
+            },
+            customer: {
+              select: {
+                user: { select: { id: true, name: true } },
+              },
+            },
+          },
+        });
+
+        if (!order) {
+          return reply.status(404).send({
+            success: false,
+            error: { code: 'ORDER_NOT_FOUND', message: 'No se encontró el pedido o no está pendiente de confirmación de entrega.' },
+          });
+        }
+
+        const cancellationReason = 'El cliente no aceptó la fecha de entrega programada.';
+
+        await prisma.order.update({
+          where: { id: order.id },
+          data: {
+            status: OrderStatus.CANCELLED,
+            cancellationReason,
+            cancelledBy: 'CUSTOMER',
+          },
+        });
+
+        await prisma.orderTracking.create({
+          data: {
+            orderId: order.id,
+            status: OrderStatus.CANCELLED,
+            notes: cancellationReason,
+          },
+        });
+
+        // Notify restaurant via socket
+        emitNotification(
+          fastify.io,
+          order.restaurant.userId,
+          'RESTAURANT',
+          'order:schedule-rejected',
+          {
+            orderId: order.id,
+            message: 'El cliente no aceptó la fecha de entrega programada. El pedido ha sido cancelado.',
+          },
+          {
+            requestId: requestContext.requestId,
+            orderId: order.id,
+          }
+        );
+
+        // Push to customer
+        try {
+          await sendPushNotification(order.customer.user.id, {
+            title: 'Pedido cancelado ❌',
+            body: 'Cancelaste el pedido porque no aceptaste la fecha de entrega programada.',
+            icon: '/SaDeL.png',
+            badge: '/SaDeL.png',
+            vibrate: [300, 100, 300],
+            requireInteraction: false,
+            data: {
+              orderId: order.id,
+              event: 'order:schedule-rejected',
+              url: `/?orderId=${order.id}`,
+            },
+          });
+        } catch (pushErr) {
+          request.log.error(pushErr as any, `[Push] Error al enviar notificacion de cancelacion al comensal ${order.customer.user.id}`);
+        }
+
+        return reply.send({
+          success: true,
+          data: {
+            message: 'Pedido cancelado. No se te hará ningún cobro.',
+          },
+        });
+      } catch (error) {
+        return sendAppError(reply, error);
+      }
+    });
   });
 }

@@ -42,6 +42,7 @@ const orderBaseScalarSelect = {
   isAcceptedByDriver: true,
   cashPaymentConfirmedAt: true,
   scheduledDeliveryAt: true,
+  scheduledDeliveryCustomerAcceptedAt: true,
   readyAt: true,
   driverArrivedAt: true,
   lastPickupAlertedAt: true,

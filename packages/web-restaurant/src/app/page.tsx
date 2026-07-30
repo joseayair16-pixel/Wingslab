@@ -117,6 +117,7 @@ type OrderItem = {
   createdAt: string;
   estimatedDeliveryTime?: string;
   scheduledDeliveryAt?: string;
+  scheduledDeliveryCustomerAcceptedAt?: string | null;
   preparationTimeMinutes?: number | null;
   preparationStartedAt?: string | null;
   preparationDeadlineAt?: string | null;
@@ -7695,17 +7696,35 @@ export default function Home() {
                                     {(() => {
                                       if (profile?.businessType === 'RESTAURANT') return null;
                                       if (!order.scheduledDeliveryAt) return null;
+                                      const isCustomerPending = !order.scheduledDeliveryCustomerAcceptedAt && order.status === 'CONFIRMED';
+                                      const isCustomerAccepted = !!order.scheduledDeliveryCustomerAcceptedAt;
                                       return (
-                                        <button
-                                          type="button"
-                                          onClick={(event) => {
-                                            event.stopPropagation();
-                                            setSelectedOrderForEtaExtension(order);
-                                          }}
-                                          className="text-xs text-neutral-500 font-medium flex items-center gap-1 bg-neutral-100/60 px-2 py-1 rounded-lg border border-black/5 shrink-0 hover:bg-neutral-200 transition active:scale-95"
-                                        >
-                                          📅 {formatDate(order.estimatedDeliveryTime || order.scheduledDeliveryAt || order.createdAt)}
-                                        </button>
+                                        <>
+                                          {isCustomerPending && (
+                                            <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 border border-amber-200 px-2.5 py-1 text-[10px] font-bold text-amber-700 shadow-sm shrink-0">
+                                              <span className="relative flex h-1.5 w-1.5">
+                                                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-amber-400 opacity-75"></span>
+                                                <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-amber-600"></span>
+                                              </span>
+                                              Pendiente de confirmación
+                                            </span>
+                                          )}
+                                          {isCustomerAccepted && (
+                                            <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 border border-emerald-200 px-2.5 py-1 text-[10px] font-bold text-emerald-700 shadow-sm shrink-0">
+                                              ✅ Cliente confirmó fecha
+                                            </span>
+                                          )}
+                                          <button
+                                            type="button"
+                                            onClick={(event) => {
+                                              event.stopPropagation();
+                                              setSelectedOrderForEtaExtension(order);
+                                            }}
+                                            className="text-xs text-neutral-500 font-medium flex items-center gap-1 bg-neutral-100/60 px-2 py-1 rounded-lg border border-black/5 shrink-0 hover:bg-neutral-200 transition active:scale-95"
+                                          >
+                                            📅 {formatDate(order.estimatedDeliveryTime || order.scheduledDeliveryAt || order.createdAt)}
+                                          </button>
+                                        </>
                                       );
                                     })()}
                                     {profile?.businessType !== 'RESTAURANT' && order.preparationTimeMinutes && order.preparationTimeMinutes > 1 && (order.status === 'CONFIRMED' || order.status === 'PREPARING') && (() => {

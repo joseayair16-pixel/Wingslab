@@ -390,8 +390,9 @@ model Order {
   paymentProofUrl String?
 
   estimatedDeliveryTime DateTime
-  scheduledDeliveryAt   DateTime?
-  deliveredByRestaurant Boolean  @default(false)
+  scheduledDeliveryAt              DateTime?
+  scheduledDeliveryCustomerAcceptedAt DateTime?
+  deliveredByRestaurant            Boolean  @default(false)
   actualDeliveryTime    DateTime?
   preparationTimeMinutes Int?
   preparationStartedAt   DateTime?

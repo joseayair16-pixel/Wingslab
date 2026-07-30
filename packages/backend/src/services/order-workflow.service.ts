@@ -31,6 +31,7 @@ type RestaurantOrderActionParams = WorkflowParams & {
   trackingNote: string;
   preparationTimeMinutes?: number;
   scheduledDeliveryAt?: string;
+  isScheduleProposal?: boolean;
   cancellationReason?: string | null;
   cancelledBy?: string | null;
 };
@@ -293,6 +294,7 @@ export async function updateOrderStatusByRestaurant({
   trackingNote,
   preparationTimeMinutes,
   scheduledDeliveryAt,
+  isScheduleProposal = false,
   cancellationReason,
   cancelledBy,
 }: RestaurantOrderActionParams) {
@@ -376,7 +378,9 @@ export async function updateOrderStatusByRestaurant({
               return {
                 scheduledDeliveryAt: scheduledDate,
                 preparationTimeMinutes: preparationTimeMinutes ?? 1,
-                preparationStartedAt: now,
+                ...(isScheduleProposal
+                  ? { preparationStartedAt: null as any }
+                  : { preparationStartedAt: now }),
                 preparationDeadlineAt: deadline,
                 etaExtendedMinutes: 0,
                 estimatedDeliveryTime: scheduledDate,

@@ -122,6 +122,8 @@ export interface Order {
   deliveryCoordinates?: Coordinates;
   estimatedDeliveryTime: Date;
   actualDeliveryTime?: Date;
+  scheduledDeliveryAt?: string;
+  scheduledDeliveryCustomerAcceptedAt?: string;
   pickupReadyAt?: Date;
   completedAt?: Date;
   pickupPin?: string;
@@ -360,6 +362,7 @@ export enum NotificationType {
   PAYMENT_REQUIRED = 'PAYMENT_REQUIRED',
   DRIVER_ASSIGNED = 'DRIVER_ASSIGNED',
   DRIVER_ARRIVED = 'DRIVER_ARRIVED',
+  SCHEDULE_PROPOSAL = 'SCHEDULE_PROPOSAL',
 }
 
 // ============== Region Types ==============

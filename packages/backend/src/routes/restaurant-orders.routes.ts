@@ -302,6 +302,8 @@ export async function registerRestaurantOrderRoutes(fastify: FastifyInstance): P
               : undefined
             : undefined;
 
+        const isScheduleProposal = Boolean(scheduledDeliveryAt);
+
         try {
           let order = await updateOrderStatusByRestaurant({
             prisma,
@@ -310,11 +312,14 @@ export async function registerRestaurantOrderRoutes(fastify: FastifyInstance): P
             nextStatus: config.status,
             trackingNote:
               (config.status === OrderStatus.CONFIRMED || config.status === OrderStatus.PREPARING)
-                ? `Pedido aceptado. Tiempo estimado de preparacion: ${preparationTimeMinutes === 35 ? '30+ min' : `${preparationTimeMinutes} min`
-                }.`
+                ? isScheduleProposal
+                  ? `Pedido aceptado con fecha programada. Esperando confirmación del cliente.`
+                  : `Pedido aceptado. Tiempo estimado de preparacion: ${preparationTimeMinutes === 35 ? '30+ min' : `${preparationTimeMinutes} min`
+                  }.`
                 : config.note,
             preparationTimeMinutes,
             scheduledDeliveryAt,
+            isScheduleProposal,
           });
 
           // Dequeue resolved order and activate next in queue
@@ -357,7 +362,36 @@ export async function registerRestaurantOrderRoutes(fastify: FastifyInstance): P
             }
           );
 
-          if (config.pushTitle && config.pushBody) {
+          if (isScheduleProposal) {
+            request.log.info(`[Push] Enviando notificacion de propuesta de programacion al comensal ${order.customer.user.id}`);
+            try {
+              const businessType = (order as any).restaurant?.businessType;
+              const ref = getBusinessRef(businessType);
+              const formattedDate = scheduledDeliveryAt
+                ? new Date(scheduledDeliveryAt).toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long' })
+                : '';
+              const formattedTime = scheduledDeliveryAt
+                ? new Date(scheduledDeliveryAt).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })
+                : '';
+              const pushResult = await sendPushNotification(order.customer.user.id, {
+                title: `📅 ${ref} propuso una fecha de entrega`,
+                body: `${ref} programó tu pedido para el ${formattedDate} a las ${formattedTime}. Ingresa para confirmar o cancelar.`,
+                icon: '/SaDeL.png',
+                badge: '/SaDeL.png',
+                vibrate: [500, 200, 500, 200, 500],
+                requireInteraction: true,
+                tag: `schedule-proposal-${params.data.id}`,
+                data: {
+                  orderId: params.data.id,
+                  event: 'order:schedule-proposal',
+                  url: `/?orderId=${params.data.id}`,
+                },
+              });
+              request.log.info(`[Push] Resultado notificacion propuesta programacion comensal ${order.customer.user.id}: ${JSON.stringify(pushResult)}`);
+            } catch (pushErr) {
+              request.log.error(pushErr as any, `[Push] Error al enviar notificacion de propuesta de programacion al comensal ${order.customer.user.id}`);
+            }
+          } else if (config.pushTitle && config.pushBody) {
             request.log.info(`[Push] Intentando enviar notificacion push al comensal ${order.customer.user.id} para el estado ${config.status}`);
             try {
               const businessType = (order as any).restaurant?.businessType;
@@ -441,8 +475,8 @@ export async function registerRestaurantOrderRoutes(fastify: FastifyInstance): P
             }
           }
 
-          // Verificar disponibilidad de repartidores inmediatamente al aceptar (solo delivery)
-          if ((config.status === OrderStatus.CONFIRMED || config.status === OrderStatus.PREPARING) && !order.restaurant.hasOwnDelivery && order.fulfillmentType !== 'PICKUP') {
+          // Verificar disponibilidad de repartidores inmediatamente al aceptar (solo delivery, skip schedule proposals)
+          if (!isScheduleProposal && (config.status === OrderStatus.CONFIRMED || config.status === OrderStatus.PREPARING) && !order.restaurant.hasOwnDelivery && order.fulfillmentType !== 'PICKUP') {
             try {
               const availableDrivers = await getAvailableDriversForRestaurant(prisma, user.sub, params.data.id);
               if (availableDrivers.length === 0) {
@@ -467,7 +501,9 @@ export async function registerRestaurantOrderRoutes(fastify: FastifyInstance): P
           }
 
           let shouldDispatchImmediately = false;
-          if (config.status === OrderStatus.READY) {
+          if (isScheduleProposal) {
+            request.log.info(`[JIT] Saltando asignacion para pedido ${order.id} porque es propuesta de programacion. Se asignara cuando el cliente confirme.`);
+          } else if (config.status === OrderStatus.READY) {
             shouldDispatchImmediately = true;
           } else if (config.status === OrderStatus.CONFIRMED || config.status === OrderStatus.PREPARING) {
             if (order.preparationDeadlineAt) {
