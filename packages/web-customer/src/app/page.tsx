@@ -6242,18 +6242,24 @@ export default function Home() {
                         });
                         const data = await response.json();
                         if (data.success) {
+                          setIsRatingModalOpen(false);
+                          setOrderToRate(null);
+                          setRestaurantRating(0);
+                          setDriverRatingVal(0);
+                          setRatingComment('');
+                          setRatingIsPickup(false);
                           setToastMessage('¡Gracias por tu calificación!');
                           setTimeout(() => setToastMessage(''), 2000);
+                          return;
                         }
+                        const errorMsg = data?.error?.message || 'No se pudo guardar tu calificación. Intenta de nuevo.';
+                        setToastMessage(errorMsg);
+                        setTimeout(() => setToastMessage(''), 4000);
                       } catch (err) {
                         console.error('Error submitting review:', err);
+                        setToastMessage('Error de conexión. Intenta de nuevo.');
+                        setTimeout(() => setToastMessage(''), 4000);
                       }
-                      setIsRatingModalOpen(false);
-                      setOrderToRate(null);
-                      setRestaurantRating(0);
-                      setDriverRatingVal(0);
-                      setRatingComment('');
-                      setRatingIsPickup(false);
                     }}
                     disabled={restaurantRating === 0}
                     className="flex-1 rounded-full bg-emerald-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-neutral-300"
