@@ -3338,21 +3338,21 @@ function triggerHaptic(pattern: number | number[] = 10) {
                     <div className="rounded-[22px] border border-black/[0.04] bg-white p-3 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
                       <div className="mb-2 flex items-center justify-between">
                         <div className="flex items-center gap-2">
-                          <div className="flex h-6 w-6 items-center justify-center rounded-full bg-emerald-50">
-                            <span className="text-[10px]"><svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13.5 21v-7.5a.75.75 0 01.75-.75h3a.75.75 0 01.75.75V21m-4.5 0H2.36m11.14 0H18m0 0h3.64m-1.39 0V9.349m-16.5 11.65V9.35m0 0a3.001 3.001 0 003.75-.615A2.993 2.993 0 009.75 9.75c.896 0 1.7-.393 2.25-1.016a2.993 2.993 0 002.25 1.016c.896 0 1.7-.393 2.25-1.016a3.001 3.001 0 003.75.614m-16.5 0a3.004 3.004 0 01-.621-4.72L4.318 3.44A1.5 1.5 0 015.378 3h13.243a1.5 1.5 0 011.06.44l1.19 1.189a3 3 0 01-.621 4.72m-13.5 8.65h3.75a.75.75 0 00.75-.75V13.5a.75.75 0 00-.75-.75H6.75a.75.75 0 00-.75.75v3.75c0 .415.336.75.75.75z" /></svg></span>
+                          <div className="flex h-6 w-6 items-center justify-center rounded-full bg-sky-50">
+                            <span className="text-[10px]"><svg className="h-3 w-3 text-sky-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13.5 21v-7.5a.75.75 0 01.75-.75h3a.75.75 0 01.75.75V21m-4.5 0H2.36m11.14 0H18m0 0h3.64m-1.39 0V9.349m-16.5 11.65V9.35m0 0a3.001 3.001 0 003.75-.615A2.993 2.993 0 009.75 9.75c.896 0 1.7-.393 2.25-1.016a2.993 2.993 0 002.25 1.016c.896 0 1.7-.393 2.25-1.016a3.001 3.001 0 003.75.614m-16.5 0a3.004 3.004 0 01-.621-4.72L4.318 3.44A1.5 1.5 0 015.378 3h13.243a1.5 1.5 0 011.06.44l1.19 1.189a3 3 0 01-.621 4.72m-13.5 8.65h3.75a.75.75 0 00.75-.75V13.5a.75.75 0 00-.75-.75H6.75a.75.75 0 00-.75.75v3.75c0 .415.336.75.75.75z" /></svg></span>
                           </div>
                           <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-neutral-400">
                             Recoger en
                           </p>
                         </div>
-                        <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[9px] font-bold text-emerald-600">
+                        <span className="rounded-full bg-sky-50 px-2 py-0.5 text-[9px] font-bold text-sky-600">
                           Paso 1
                         </span>
                       </div>
                       <div className="overflow-hidden rounded-2xl border border-black/[0.04] bg-gradient-to-br from-white to-neutral-50/80 shadow-sm">
                         <div className="p-4 pb-0">
                           <div className="flex items-start gap-3">
-                            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-400 to-emerald-600 shadow-sm shadow-emerald-200/50">
+                            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-sky-400 to-sky-600 shadow-sm shadow-sky-200/50">
                               <span className="text-lg text-white"><svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13.5 21v-7.5a.75.75 0 01.75-.75h3a.75.75 0 01.75.75V21m-4.5 0H2.36m11.14 0H18m0 0h3.64m-1.39 0V9.349m-16.5 11.65V9.35m0 0a3.001 3.001 0 003.75-.615A2.993 2.993 0 009.75 9.75c.896 0 1.7-.393 2.25-1.016a2.993 2.993 0 002.25 1.016c.896 0 1.7-.393 2.25-1.016a3.001 3.001 0 003.75.614m-16.5 0a3.004 3.004 0 01-.621-4.72L4.318 3.44A1.5 1.5 0 015.378 3h13.243a1.5 1.5 0 011.06.44l1.19 1.189a3 3 0 01-.621 4.72m-13.5 8.65h3.75a.75.75 0 00.75-.75V13.5a.75.75 0 00-.75-.75H6.75a.75.75 0 00-.75.75v3.75c0 .415.336.75.75.75z" /></svg></span>
                             </div>
                             <div className="min-w-0 flex-1 pt-0.5">
@@ -3744,7 +3744,7 @@ function triggerHaptic(pattern: number | number[] = 10) {
                             }}
                             className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg px-2.5 py-2 text-[11px] font-bold transition-all ${
                               checkoutForm.paymentMethod === 'CASH'
-                                ? 'bg-white text-neutral-900 shadow-sm'
+                                ? 'bg-sky-500 text-white shadow-sm shadow-sky-500/30'
                                 : 'text-neutral-500 hover:text-neutral-800'
                             }`}
                           >
@@ -3758,7 +3758,7 @@ function triggerHaptic(pattern: number | number[] = 10) {
                             }}
                             className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg px-2.5 py-2 text-[11px] font-bold transition-all ${
                               checkoutForm.paymentMethod === 'TRANSFER'
-                                ? 'bg-white text-neutral-900 shadow-sm'
+                                ? 'bg-sky-500 text-white shadow-sm shadow-sky-500/30'
                                 : 'text-neutral-500 hover:text-neutral-800'
                             }`}
                           >
@@ -3772,76 +3772,62 @@ function triggerHaptic(pattern: number | number[] = 10) {
                       {checkoutForm.paymentMethod === 'TRANSFER' && (
                         <div className="space-y-4 pt-2 animate-in fade-in duration-300">
                           {hasTransferDetails(restaurant) ? (
-                            <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 shadow-sm">
-                              <div className="flex items-center gap-2 mb-4">
-                                <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-emerald-200 text-emerald-800"><svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M2.25 21h19.5m-18-18v18m10.5-18v18m6-13.5V21M6.75 6.75h.75m-.75 3h.75m-.75 3h.75m3-6h.75m-.75 3h.75m-.75 3h.75M6.75 21v-3.375c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21M3 3h12m-.75 4.5H21m-3.75 3.75h.008v.008h-.008v-.008zm0 3h.008v.008h-.008v-.008zm0 3h.008v.008h-.008v-.008z" /></svg></span>
-                                <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-emerald-700">Datos bancarios</p>
+                            <div className="rounded-2xl border border-sky-300 bg-white p-4">
+                              <p className="text-xs font-semibold text-neutral-500 mb-3 flex items-center gap-1.5">
+                                <svg className="h-4 w-4 text-sky-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M2.25 21h19.5m-18-18v18m10.5-18v18m6-13.5V21M6.75 6.75h.75m-.75 3h.75m-.75 3h.75m3-6h.75m-.75 3h.75m-.75 3h.75M6.75 21v-3.375c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21M3 3h12m-.75 4.5H21m-3.75 3.75h.008v.008h-.008v-.008zm0 3h.008v.008h-.008v-.008zm0 3h.008v.008h-.008v-.008z" /></svg>
+                                Transferencia bancaria
+                              </p>
+                              <div className="rounded-xl bg-neutral-50 px-4 py-3 text-center mb-3">
+                                <p className="text-[11px] text-neutral-500 font-medium">Monto exacto a transferir</p>
+                                <p className="text-xl font-extrabold text-neutral-900 mt-0.5">{formatCurrency(orderTotal)}</p>
                               </div>
-                              <div className="space-y-1.5 text-sm text-emerald-900">
-                                <div className="text-center bg-emerald-800/10 rounded-xl px-4 py-3 border border-emerald-200/60">
-                                  <p className="text-[9px] font-extrabold uppercase tracking-wider text-emerald-600 mb-0.5">Monto a transferir</p>
-                                  <p className="font-extrabold text-emerald-950 text-lg">{formatCurrency(orderTotal)}</p>
+                              <div className="space-y-2.5 text-sm">
+                                <div className="flex items-center justify-between border-b border-neutral-100 pb-2">
+                                  <span className="text-neutral-500 text-[13px]">Banco</span>
+                                  <span className="font-semibold text-neutral-900">{restaurant?.transferBankName}</span>
                                 </div>
-                                <div className="flex items-center justify-between gap-3 bg-white/70 rounded-xl px-4 py-3 border border-emerald-200/60">
-                                  <span className="text-emerald-700 font-medium">Banco</span>
-                                  <span className="font-bold text-emerald-950">{restaurant?.transferBankName}</span>
-                                </div>
-                                <div className="flex items-center justify-between gap-3 bg-white/70 rounded-xl px-4 py-3 border border-emerald-200/60">
-                                  <span className="text-emerald-700 font-medium">Cuenta o tarjeta</span>
+                                <div className="flex items-center justify-between border-b border-neutral-100 pb-2">
+                                  <span className="text-neutral-500 text-[13px]">Cuenta</span>
                                   <div className="flex items-center gap-2">
-                                    <span className="font-bold text-emerald-950 select-all">{restaurant?.transferAccountNumber}</span>
+                                    <span className="font-mono font-semibold text-neutral-900 select-all">{restaurant?.transferAccountNumber}</span>
                                     <button
                                       type="button"
                                       onClick={() => handleCopyText(restaurant?.transferAccountNumber, 'account')}
-                                      className="flex h-8 w-8 items-center justify-center rounded-xl bg-emerald-200/60 text-emerald-700 hover:bg-emerald-300/70 active:scale-90 relative transition-all group"
-                                      title="Copiar número de cuenta"
+                                      className="flex h-7 w-7 items-center justify-center rounded-lg text-neutral-400 hover:bg-neutral-100 hover:text-neutral-600 active:scale-90 transition-all relative"
+                                      title="Copiar"
                                     >
                                       {copiedField === 'account' ? (
-                                        <svg className="h-4 w-4 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                                        <svg className="h-3.5 w-3.5 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
                                           <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                                         </svg>
                                       ) : (
-                                        <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                                        <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
                                           <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
                                           <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1" />
                                         </svg>
-                                      )}
-                                      {copiedField === 'account' && (
-                                        <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-emerald-500 shadow-sm">
-                                          <svg className="h-2.5 w-2.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={4}>
-                                            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                                          </svg>
-                                        </span>
                                       )}
                                     </button>
                                   </div>
                                 </div>
-                                <div className="flex items-center justify-between gap-3 bg-white/70 rounded-xl px-4 py-3 border border-emerald-200/60">
-                                  <span className="text-emerald-700 font-medium">Beneficiario</span>
+                                <div className="flex items-center justify-between">
+                                  <span className="text-neutral-500 text-[13px]">Beneficiario</span>
                                   <div className="flex items-center gap-2">
-                                    <span className="font-bold text-emerald-950">{restaurant?.transferBeneficiaryName}</span>
+                                    <span className="font-semibold text-neutral-900">{restaurant?.transferBeneficiaryName}</span>
                                     <button
                                       type="button"
                                       onClick={() => handleCopyText(restaurant?.transferBeneficiaryName, 'beneficiary')}
-                                      className="flex h-8 w-8 items-center justify-center rounded-xl bg-emerald-200/60 text-emerald-700 hover:bg-emerald-300/70 active:scale-90 relative transition-all group"
-                                      title="Copiar beneficiario"
+                                      className="flex h-7 w-7 items-center justify-center rounded-lg text-neutral-400 hover:bg-neutral-100 hover:text-neutral-600 active:scale-90 transition-all relative"
+                                      title="Copiar"
                                     >
                                       {copiedField === 'beneficiary' ? (
-                                        <svg className="h-4 w-4 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                                        <svg className="h-3.5 w-3.5 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
                                           <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                                         </svg>
                                       ) : (
-                                        <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                                        <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
                                           <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
                                           <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1" />
                                         </svg>
-                                      )}
-                                      {copiedField === 'beneficiary' && (
-                                        <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-emerald-500 shadow-sm">
-                                          <svg className="h-2.5 w-2.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={4}>
-                                            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                                          </svg>
-                                        </span>
                                       )}
                                     </button>
                                   </div>
@@ -3876,33 +3862,43 @@ function triggerHaptic(pattern: number | number[] = 10) {
                                     ✕
                                   </button>
                                 </div>
-                                <label className="relative flex cursor-pointer items-center justify-center gap-2 rounded-2xl border border-dashed border-neutral-300 bg-neutral-50/50 px-4 py-3 text-center transition-all hover:bg-neutral-50 hover:border-neutral-400 group">
+                                <label className="relative flex cursor-pointer items-center justify-center gap-2 rounded-2xl border border-dashed border-neutral-300 bg-white px-4 py-3.5 text-center transition-all hover:border-sky-400 hover:bg-sky-50/30 active:scale-[0.98] group">
                                   <input
                                     type="file"
                                     accept="image/*"
                                     onChange={(event) => void handleTransferProofChange(event)}
                                     className="sr-only"
                                   />
-                                  <span className="text-sm font-medium text-neutral-600 group-hover:text-neutral-800 transition-colors">
+                                  <svg className="h-4 w-4 text-neutral-400 group-hover:text-sky-500 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
+                                  </svg>
+                                  <span className="text-sm font-medium text-neutral-600 group-hover:text-sky-700 transition-colors">
                                     Cambiar comprobante
                                   </span>
                                 </label>
                               </div>
                             ) : (
-                              <label className="relative flex cursor-pointer flex-col items-center justify-center rounded-2xl border border-dashed border-neutral-300 bg-neutral-50/50 px-4 py-6 text-center transition-all hover:bg-neutral-50 hover:border-sky-400 group">
+                              <label className="relative flex cursor-pointer flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-neutral-200 bg-white px-4 py-7 text-center transition-all hover:border-sky-400 hover:bg-sky-50/20 active:scale-[0.98] group">
                                 <input
                                   type="file"
                                   accept="image/*"
                                   onChange={(event) => void handleTransferProofChange(event)}
                                   className="sr-only"
                                 />
-                                <span className="text-3xl transition-transform group-hover:scale-110">📤</span>
-                                <span className="mt-2 text-sm font-bold text-neutral-800">
-                                  Subir foto del comprobante
-                                </span>
-                                <span className="text-xs text-neutral-400 mt-1 max-w-[280px] leading-relaxed">
-                                  Toma una foto del ticket de transferencia o selecciónala desde tus archivos
-                                </span>
+                                <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-sky-50 to-white shadow-[0_2px_8px_rgba(14,165,233,0.12)] ring-1 ring-sky-200/50 transition-transform group-hover:scale-110 group-hover:shadow-[0_4px_16px_rgba(14,165,233,0.2)]">
+                                  <svg className="h-6 w-6 text-sky-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.16a15.53 15.53 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z" />
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0z" />
+                                  </svg>
+                                </div>
+                                <div>
+                                  <p className="text-sm font-bold text-neutral-800">
+                                    Subir comprobante
+                                  </p>
+                                  <p className="text-xs text-neutral-400 mt-0.5">
+                                    Foto del ticket de transferencia
+                                  </p>
+                                </div>
                               </label>
                             )}
                           </div>
