@@ -4896,7 +4896,7 @@ function triggerHaptic(pattern: number | number[] = 10) {
 
                   <div className={isPromoCarousel || isLargeCategory ? "relative mt-5" : "mt-5 overflow-hidden"}>
                     <div className={isPromoCarousel || isLargeCategory
-                      ? "flex gap-3 overflow-x-auto pb-2 scroll-smooth snap-x snap-mandatory [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+                      ? "flex gap-3 overflow-x-auto pb-2 scroll-smooth snap-x snap-mandatory pr-8 sm:pr-12 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
                       : "grid gap-4 sm:grid-cols-2 lg:grid-cols-3"
                     }>
                     {category.products.map((product) => {
@@ -5004,18 +5004,18 @@ function triggerHaptic(pattern: number | number[] = 10) {
                                 )}
                               </div>
                               <div className="flex flex-1 flex-col p-3">
-                                <h3 className="text-[13px] font-semibold leading-tight text-neutral-900 line-clamp-2">{product.name}</h3>
+                                 <h3 className="text-sm font-bold leading-snug text-neutral-900 line-clamp-2">{product.name}</h3>
                                 {product.sellBy === 'WEIGHT' ? (
-                                  <p className="mt-1 text-sm font-bold text-neutral-900">{formatCurrency(product.unitPrice || product.price)}/kg</p>
+                                  <p className="mt-0.5 text-xs font-semibold text-neutral-500">{formatCurrency(product.unitPrice || product.price)}/kg</p>
                                 ) : product.discountPrice ? (
-                                  <div className="mt-1 flex items-baseline gap-1.5">
-                                    <span className="text-sm font-bold text-rose-600">{formatCurrency(product.discountPrice)}</span>
+                                  <div className="mt-0.5 flex items-baseline gap-1.5">
+                                    <span className="text-xs font-bold text-rose-600">{formatCurrency(product.discountPrice)}</span>
                                     <span className="text-[10px] text-neutral-400 line-through">{formatCurrency(product.price)}</span>
                                   </div>
                                 ) : (
-                                  <p className="mt-1 text-sm font-bold text-neutral-900">{formatCurrency(product.price)}</p>
+                                  <p className="mt-0.5 text-xs font-semibold text-neutral-500">{formatCurrency(product.price)}</p>
                                 )}
-                                <div className="mt-auto pt-2">
+                                <div className="mt-auto pt-3">
                                   {quantity > 0 ? (
                                     <div className="flex w-fit items-center gap-0.5 rounded-full border border-black/[0.06] bg-neutral-50 p-0.5">
                                       <button type="button" onClick={() => { if (product.optionGroups?.length) { decreaseQuantityForProduct(product.id); } else { updateCartItem(product.id, { quantity: quantity - 1 }); } }} className="flex h-7 w-7 items-center justify-center rounded-full text-neutral-500 transition-all hover:bg-white active:scale-90" aria-label={`Quitar una unidad de ${product.name}`}>
@@ -5031,7 +5031,7 @@ function triggerHaptic(pattern: number | number[] = 10) {
                                       </button>
                                     </div>
                                   ) : (
-                                    <button type="button" onClick={() => addToCart(product)} disabled={!restaurant.isOpen} className="w-full rounded-lg bg-neutral-900 py-2 text-[11px] font-bold text-white transition hover:bg-neutral-800 disabled:bg-neutral-200 disabled:text-neutral-400">
+                                    <button type="button" onClick={() => addToCart(product)} disabled={!restaurant.isOpen} className="w-full rounded-xl bg-neutral-900 py-2.5 text-[11px] font-bold text-white transition hover:bg-neutral-800 disabled:bg-neutral-200 disabled:text-neutral-400">
                                       Agregar
                                     </button>
                                   )}
@@ -5595,7 +5595,7 @@ function triggerHaptic(pattern: number | number[] = 10) {
             type="button"
             onClick={() => setIsCartOpen(true)}
             className={`group relative flex w-full items-center justify-between overflow-hidden rounded-full bg-neutral-950 px-5 py-3.5 shadow-[0_8px_30px_rgb(0,0,0,0.2)] transition-all hover:scale-[1.02] active:scale-[0.98] active-scale ${
-              cartJustUpdated ? 'scale-[1.05] ring-4 ring-[#06c167]/40' : ''
+              cartJustUpdated ? 'scale-[1.05] ring-4 ring-[#0ea5e9]/40' : ''
             }`}
           >
             {/* Pulsing background effect */}
