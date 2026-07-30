@@ -676,10 +676,15 @@ export default function RestaurantPage({
     }
   }, [activeOrderListItems.length, carouselIndex]);
 
-  const cartStore = useCartStore();
+  const cartRestaurantId = useCartStore(state => state.restaurantId);
+  const cartItems = useCartStore(state => state.items);
+  const addItem = useCartStore(state => state.addItem);
+  const decreaseQuantity = useCartStore(state => state.decreaseQuantity);
+  const updateCartItemAction = useCartStore(state => state.updateItem);
+  const clearCartAction = useCartStore(state => state.clearCart);
   const [mounted, setMounted] = useState(false);
   useEffect(() => { setMounted(true); }, []);
-  const cart: CartItem[] = mounted && cartStore.restaurantId === params.restaurantId ? cartStore.items : [];
+  const cart: CartItem[] = mounted && cartRestaurantId === params.restaurantId ? cartItems : [];
   const [checkoutForm, setCheckoutForm] = useState<CheckoutForm>(defaultCheckoutForm);
   const [loadingRestaurant, setLoadingRestaurant] = useState(true);
   const [creatingOrder, setCreatingOrder] = useState(false);
@@ -1351,7 +1356,7 @@ export default function RestaurantPage({
       socket.emit('leave-room', sessionUser.id, 'CUSTOMER');
       socket.disconnect();
     };
-  }, [apiBase, sessionUser, token]);
+  }, [apiBase, sessionUser?.id, token]);
 
   useEffect(() => {
     if (!isCheckoutOpen || showMaxCashModal || showGpsCashModal || deliveryErrorModal || isPushReminderModalOpen) {
@@ -1716,7 +1721,7 @@ function triggerHaptic(pattern: number | number[] = 10) {
       return;
     }
 
-    cartStore.addItem({
+    addItem({
       cartItemId: product.id,
       productId: product.id,
       name: product.name,
@@ -1733,7 +1738,7 @@ function triggerHaptic(pattern: number | number[] = 10) {
   }
 
   function decreaseQuantityForProduct(productId: string) {
-    cartStore.decreaseQuantity(productId);
+    decreaseQuantity(productId);
     triggerHaptic(10);
   }
 
@@ -1767,7 +1772,7 @@ function triggerHaptic(pattern: number | number[] = 10) {
       ? (customizingProduct.unitPrice || 0) * customizingWeight / 1000
       : customizingProduct.price;
 
-    cartStore.addItem({
+    addItem({
       cartItemId,
       productId: customizingProduct.id,
       name: customizingProduct.name,
@@ -2048,7 +2053,7 @@ function triggerHaptic(pattern: number | number[] = 10) {
     cartItemId: string,
     patch: Partial<Pick<CartItem, 'quantity' | 'specialInstructions'>>
   ) {
-    cartStore.updateItem(cartItemId, patch);
+    updateCartItemAction(cartItemId, patch);
   }
 
   function getCartQuantity(productId: string) {
@@ -2331,7 +2336,7 @@ function triggerHaptic(pattern: number | number[] = 10) {
         // No-op
       }
 
-      cartStore.clearCart();
+      clearCartAction();
       setCheckoutForm((prev) => ({ ...prev, notes: '', storeNotes: '' }));
       setIsCheckoutOpen(false);
       setTransferProofName('');
@@ -3848,6 +3853,7 @@ function triggerHaptic(pattern: number | number[] = 10) {
                                   <img
                                     src={transferProofSource}
                                     alt={transferProofName}
+                                    loading="lazy" decoding="async"
                                     className="w-full h-48 object-contain bg-neutral-100"
                                   />
                                   <button
@@ -4213,13 +4219,13 @@ function triggerHaptic(pattern: number | number[] = 10) {
               <section className={`-mx-4 ${error ? 'mt-4' : 'mt-0'} lg:mx-0 lg:mt-0 overflow-hidden border-y border-black/5 dark:border-zinc-900/80 bg-white dark:bg-[#0c0c0e] shadow-[0_18px_60px_rgba(15,15,15,0.05)] dark:shadow-none lg:rounded-[32px] lg:border lg:border-black/5 lg:dark:border-zinc-900/80`}>
                 <div className="relative">
                   {restaurant.coverImage ? (
-                    <img
-                      src={restaurant.coverImage}
-                      alt={`Portada de ${restaurant.name}`}
-                      className="h-52 w-full object-cover md:h-72 lg:h-64"
-                      fetchPriority="high"
-                      decoding="async"
-                    />
+                      <img
+                        src={restaurant.coverImage}
+                        alt={`Banner de ${restaurant.name}`}
+                        loading="lazy" decoding="async"
+                        className="h-52 w-full object-cover md:h-72 lg:h-64"
+                        fetchPriority="high"
+                      />
                   ) : (
                     <div className="h-52 w-full bg-[linear-gradient(135deg,#fcd34d_0%,#f97316_100%)] md:h-72 lg:h-64" />
                   )}
@@ -4232,8 +4238,8 @@ function triggerHaptic(pattern: number | number[] = 10) {
                           <img
                             src={restaurant.logo}
                             alt={`Logo de ${restaurant.name}`}
+                            loading="lazy" decoding="async"
                             className="h-full w-full object-cover"
-                            decoding="async"
                           />
                         ) : (
                           <span className="text-xl font-semibold text-neutral-900 dark:text-white">{buildRestaurantInitials(restaurant.name)}</span>
@@ -4260,8 +4266,8 @@ function triggerHaptic(pattern: number | number[] = 10) {
                         <img
                           src={restaurant.logo}
                           alt={`Logo de ${restaurant.name}`}
+                          loading="lazy" decoding="async"
                           className="h-full w-full object-cover"
-                          decoding="async"
                         />
                       ) : (
                         <span className="text-lg font-semibold text-neutral-900 dark:text-white">{buildRestaurantInitials(restaurant.name)}</span>
@@ -4687,10 +4693,9 @@ function triggerHaptic(pattern: number | number[] = 10) {
                                     <img
                                       src={(product.images?.length ?? 0) > 1 && carouselIndexMap[product.id] ? product.images![carouselIndexMap[product.id]] : product.image}
                                       alt={product.name}
+                                      loading="lazy" decoding="async"
                                       className="h-full w-full object-cover transition-opacity duration-300"
                                       style={{ objectPosition: product.imagePosition || undefined }}
-                                      loading="lazy"
-                                      decoding="async"
                                     />
                                     {(product.images?.length ?? 0) > 1 && (
                                       <>
@@ -5309,6 +5314,7 @@ function triggerHaptic(pattern: number | number[] = 10) {
               <img
                 src={previewProduct.images[previewIndex]}
                 alt={previewProduct.name}
+                loading="lazy" decoding="async"
                 className="h-64 w-full object-contain p-6 sm:h-full sm:max-h-[500px] sm:p-8"
               />
               {previewProduct.discountPrice && (

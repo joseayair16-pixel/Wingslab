@@ -245,6 +245,13 @@ export function clearStoredSession(storageKey: string): void {
   }
 }
 
+const requestCache = new Map<string, { data: unknown; ts: number }>();
+const CACHE_TTL = 30_000;
+
+function getCacheKey(apiBase: string, path: string): string {
+  return `${apiBase}${path}`;
+}
+
 export async function requestJson<T>(params: {
   apiBase: string;
   path: string;
@@ -265,7 +272,15 @@ export async function requestJson<T>(params: {
   const backoffMs = Math.max(0, params.retry?.backoffMs || 350);
   let lastError: unknown;
   const hasBody = params.options?.body !== undefined;
+  const cacheKey = hasBody ? '' : getCacheKey(params.apiBase, params.path);
   let currentToken = params.token;
+
+  if (cacheKey) {
+    const entry = requestCache.get(cacheKey);
+    if (entry && Date.now() - entry.ts < CACHE_TTL) {
+      return entry.data as T;
+    }
+  }
 
   for (let attempt = 0; attempt <= attempts; attempt += 1) {
     try {
@@ -320,6 +335,15 @@ export async function requestJson<T>(params: {
         });
       }
 
+      if (cacheKey) {
+        requestCache.set(cacheKey, { data: payload, ts: Date.now() });
+        if (requestCache.size > 100) {
+          const cutoff = Date.now() - CACHE_TTL * 2;
+          for (const [k, v] of requestCache) {
+            if (v.ts < cutoff) requestCache.delete(k);
+          }
+        }
+      }
       return payload as T;
     } catch (error) {
       if (error instanceof SyntaxError) {

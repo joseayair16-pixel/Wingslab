@@ -1092,7 +1092,7 @@ export default function Home() {
 
     fetchPromotions();
     return () => controller.abort();
-  }, [apiBase, sessionUser, userZone]);
+  }, [apiBase, sessionUser?.role, userZone]);
 
   // Restore persistent modals after page reload
   useEffect(() => {
@@ -1123,7 +1123,7 @@ export default function Home() {
     } catch {
       localStorage.removeItem('sadel_persistent_modal');
     }
-  }, [token]);
+  }, [apiBase, token]);
 
   useEffect(() => {
     if (!isDetailModalOpen) {
@@ -2616,12 +2616,10 @@ export default function Home() {
     void loadDashboard();
   }, [loadDashboard, token, sessionUser]);
 
-  // Safety net: force loadingDashboard to false after 15s regardless of what happens inside loadDashboard
   useEffect(() => {
     if (!loadingDashboard) return;
     const timer = setTimeout(() => {
       setLoadingDashboard(false);
-      setError('La conexión está tardando demasiado. Verifica tu conexión a internet.');
     }, 15_000);
     return () => clearTimeout(timer);
   }, [loadingDashboard]);
@@ -3512,6 +3510,9 @@ export default function Home() {
 
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
+      for (const eventName of liveEvents) {
+        socket.off(eventName);
+      }
       socket.off('order_chat:message_received');
       socket.off('account:suspended');
       socket.emit('leave-room', sessionUserIdRef.current, 'CUSTOMER');
@@ -4319,7 +4320,7 @@ export default function Home() {
           {isAuthenticated && (
             <div className="mx-4 mt-4 flex items-center gap-3 rounded-2xl bg-sky-50/70 p-3.5 border border-sky-100/50">
               {sessionUser?.profilePhoto ? (
-                <img src={sessionUser.profilePhoto} alt="" className="h-10 w-10 rounded-full object-cover" />
+                <img src={sessionUser.profilePhoto} alt="" loading="lazy" decoding="async" className="h-10 w-10 rounded-full object-cover" />
               ) : (
                 <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-sky-500 font-bold text-white text-sm shadow-sm">
                   {((sessionUser?.name?.[0] || '') + (sessionUser?.lastName?.[0] || '')).toUpperCase() || 'U'}
@@ -6282,6 +6283,7 @@ export default function Home() {
               <img
                 src={promoImageUrl}
                 alt="Promoción Especial"
+                loading="lazy" decoding="async"
                 className="w-auto h-auto max-w-[90vw] sm:max-w-md max-h-[85vh] object-contain rounded-2xl md:rounded-3xl shadow-[0_20px_50px_rgba(0,0,0,0.3)]"
               />
             </div>
