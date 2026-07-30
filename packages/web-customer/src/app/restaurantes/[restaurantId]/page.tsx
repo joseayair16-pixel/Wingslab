@@ -4673,8 +4673,8 @@ function triggerHaptic(pattern: number | number[] = 10) {
                 </div>
 
                 <div className="relative px-4 pb-4 pt-0 text-sm text-neutral-600 dark:text-neutral-300 md:px-6 md:pb-5 lg:px-7 lg:pt-5">
-                  <div className="-mt-8 flex flex-col items-center text-center lg:hidden">
-                    <div className="flex h-16 w-16 items-center justify-center overflow-hidden rounded-[22px] border-4 border-white dark:border-neutral-900 bg-white dark:bg-neutral-900 shadow-[0_8px_20px_rgba(15,15,15,0.14)] dark:shadow-none">
+                  <div className="-mt-12 flex flex-col items-center text-center lg:hidden">
+                    <div className="flex h-20 w-20 items-center justify-center overflow-hidden rounded-[22px] border-4 border-white dark:border-neutral-900 bg-white dark:bg-neutral-900 shadow-[0_8px_20px_rgba(15,15,15,0.14)] dark:shadow-none">
                       {restaurant.logo ? (
                         <img
                           src={restaurant.logo}
@@ -5184,7 +5184,7 @@ function triggerHaptic(pattern: number | number[] = 10) {
                                     )}
                                   </div>
                                 </div>
-                                <div className="mt-auto pt-3">
+                                <div className="mt-auto pt-3 flex justify-end">
                                   {quantity > 0 ? (
                                     <div className="flex w-fit items-center gap-0.5 rounded-full border border-black/[0.06] bg-neutral-50 p-0.5">
                                       <button type="button" onClick={() => { if (product.optionGroups?.length) { decreaseQuantityForProduct(product.id); } else { updateCartItem(product.id, { quantity: quantity - 1 }); } }} className="flex h-7 w-7 items-center justify-center rounded-full text-neutral-500 transition-all hover:bg-white active:scale-90" aria-label={`Quitar una unidad de ${product.name}`}>
@@ -5200,7 +5200,7 @@ function triggerHaptic(pattern: number | number[] = 10) {
                                       </button>
                                     </div>
                                   ) : (
-                                    <button type="button" onClick={() => addToCart(product)} disabled={!restaurant.isOpen} className="w-full rounded-xl bg-neutral-900 py-2.5 text-[11px] font-bold text-white transition hover:bg-neutral-800 disabled:bg-neutral-200 disabled:text-neutral-400">
+                                    <button type="button" onClick={() => addToCart(product)} disabled={!restaurant.isOpen} className="rounded-xl bg-neutral-900 px-5 py-2.5 text-[11px] font-bold text-white transition hover:bg-neutral-800 disabled:bg-neutral-200 disabled:text-neutral-400">
                                       Agregar
                                     </button>
                                   )}
