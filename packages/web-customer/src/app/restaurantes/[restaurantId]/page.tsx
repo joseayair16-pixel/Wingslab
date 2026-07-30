@@ -4904,61 +4904,59 @@ function triggerHaptic(pattern: number | number[] = 10) {
 
                       return (
                         isPromoCarousel ? (
-                          <article id={product.id} key={product.id} className="group w-44 shrink-0 snap-start overflow-hidden rounded-[18px] border border-black/5 bg-white transition-all duration-300 ease-out hover:-translate-y-1 hover:border-black/10 hover:shadow-[0_12px_30px_rgba(15,15,15,0.08)] active:scale-[0.98]">
+                          <article id={product.id} key={product.id} className="group w-32 shrink-0 snap-start overflow-hidden rounded-2xl border border-black/[0.04] bg-white transition-all duration-300 shadow-[0_2px_8px_rgba(0,0,0,0.02)] hover:-translate-y-0.5 hover:shadow-[0_8px_24px_rgba(0,0,0,0.06)] active:scale-[0.98]">
                           
                             <div className="relative overflow-hidden">
                               {product.image ? (
-                                <img src={product.image} alt={product.name} className="h-24 w-full object-cover transition duration-300 group-hover:scale-105" loading="lazy" decoding="async" />
+                                <img src={product.image} alt={product.name} className="h-20 w-full object-cover transition duration-300 group-hover:scale-105" loading="lazy" decoding="async" />
                               ) : (
-                                <div className="flex h-24 w-full items-center justify-center bg-gradient-to-br from-neutral-100 to-neutral-200">
-                                  <svg className="h-8 w-8 text-neutral-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
+                                <div className="flex h-20 w-full items-center justify-center bg-gradient-to-br from-neutral-100 to-neutral-200">
+                                  <svg className="h-6 w-6 text-neutral-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
                                     <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607zM13.5 10.5h-3" />
                                   </svg>
                                 </div>
                               )}
                               {product.discountPrice && (
-                                <div className="absolute left-1.5 top-1.5 flex items-center gap-1 rounded-full bg-rose-500/90 px-2 py-0.5 text-[9px] font-bold text-white shadow-sm backdrop-blur-sm">
+                                <div className="absolute left-1.5 top-1.5 flex items-center gap-1 rounded-full bg-rose-500/90 px-1.5 py-0.5 text-[8px] font-bold text-white shadow-sm backdrop-blur-sm">
                                   <span>-{Math.round((1 - product.discountPrice / product.price) * 100)}%</span>
                                 </div>
                               )}
                             </div>
-                            <div className="px-2 pb-2 pt-2">
-                              <h3 className="truncate text-xs font-bold leading-tight text-neutral-900">{product.name}</h3>
+                            <div className="px-1.5 pb-1.5 pt-1">
+                              <h3 className="truncate text-[11px] font-bold leading-tight text-neutral-900">{product.name}</h3>
                               {product.sellBy === 'WEIGHT' ? (
-                                <p className="mt-1 text-sm font-black text-neutral-900">{formatCurrency(product.unitPrice || product.price)}/kg</p>
+                                <p className="mt-0.5 text-[11px] font-bold text-neutral-900">{formatCurrency(product.unitPrice || product.price)}/kg</p>
                               ) : product.discountPrice ? (
-                                <div className="mt-1 flex items-center gap-1.5">
-                                  <span className="text-sm font-black text-rose-600">{formatCurrency(product.discountPrice)}</span>
-                                  <span className="text-[10px] font-medium text-neutral-400 line-through">{formatCurrency(product.price)}</span>
+                                <div className="mt-0.5 flex items-baseline gap-1">
+                                  <span className="text-xs font-bold text-rose-600">{formatCurrency(product.discountPrice)}</span>
+                                  <span className="text-[9px] text-neutral-400 line-through">{formatCurrency(product.price)}</span>
                                 </div>
                               ) : (
-                                <p className="mt-1 text-sm font-black text-neutral-900">{formatCurrency(product.price)}</p>
+                                <p className="mt-0.5 text-xs font-bold text-neutral-900">{formatCurrency(product.price)}</p>
                               )}
                               {product.discountPrice && (
-                                <div className="mt-0.5">
-                                  <span className="rounded-full bg-emerald-50 px-1.5 py-0.5 text-[9px] font-bold text-emerald-600">
-                                    Ahorras {formatCurrency(product.price - product.discountPrice)}
-                                  </span>
-                                </div>
+                                <span className="mt-0.5 inline-block rounded-full bg-emerald-50 px-1 py-0.5 text-[8px] font-bold text-emerald-600">
+                                  -{formatCurrency(product.price - product.discountPrice)}
+                                </span>
                               )}
-                              <div className="mt-2">
+                              <div className="mt-1.5">
                                 {quantity > 0 ? (
-                                  <div className="flex w-fit items-center gap-0.5 rounded-full border border-black/[0.06] bg-neutral-50 p-0.5">
-                                    <button type="button" onClick={() => { if (product.optionGroups?.length) { decreaseQuantityForProduct(product.id); } else { updateCartItem(product.id, { quantity: quantity - 1 }); } }} className="flex h-6 w-6 items-center justify-center rounded-full text-neutral-500 transition-all hover:bg-white active:scale-90" aria-label={`Quitar una unidad de ${product.name}`}>
+                                  <div className="flex w-fit items-center gap-0.5 rounded-lg border border-black/[0.06] bg-neutral-50 p-0.5">
+                                    <button type="button" onClick={() => { if (product.optionGroups?.length) { decreaseQuantityForProduct(product.id); } else { updateCartItem(product.id, { quantity: quantity - 1 }); } }} className="flex h-5 w-5 items-center justify-center rounded-md text-neutral-500 transition-all hover:bg-white active:scale-90" aria-label={`Quitar una unidad de ${product.name}`}>
                                       {quantity === 1 ? (
                                         <svg className="h-2.5 w-2.5 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                                       ) : (
-                                        <svg className="h-2.5 w-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M20 12H4" /></svg>
+                                        <svg className="h-2 w-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M20 12H4" /></svg>
                                       )}
                                     </button>
-                                    <span className="flex h-6 w-6 items-center justify-center text-[11px] font-bold text-neutral-900">{quantity}</span>
-                                    <button type="button" onClick={() => addToCart(product)} className="flex h-6 w-6 items-center justify-center rounded-full text-neutral-500 transition-all hover:bg-white active:scale-90" aria-label={`Agregar una unidad de ${product.name}`}>
-                                      <svg className="h-2.5 w-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" /></svg>
+                                    <span className="flex h-5 w-5 items-center justify-center text-[10px] font-bold text-neutral-900">{quantity}</span>
+                                    <button type="button" onClick={() => addToCart(product)} className="flex h-5 w-5 items-center justify-center rounded-md text-neutral-500 transition-all hover:bg-white active:scale-90" aria-label={`Agregar una unidad de ${product.name}`}>
+                                      <svg className="h-2 w-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" /></svg>
                                     </button>
                                   </div>
                                 ) : (
-                                  <button type="button" onClick={() => addToCart(product)} disabled={!restaurant.isOpen} className="w-full rounded-full bg-neutral-100 py-1.5 text-[11px] font-bold text-neutral-900 transition hover:bg-neutral-200 disabled:cursor-not-allowed disabled:bg-neutral-50 disabled:text-neutral-400">
-                                    Agregar
+                                  <button type="button" onClick={() => addToCart(product)} disabled={!restaurant.isOpen} className="w-full rounded-lg bg-neutral-900 py-1.5 text-[10px] font-bold text-white transition hover:bg-neutral-800 disabled:bg-neutral-200 disabled:text-neutral-400">
+                                    +
                                   </button>
                                 )}
                               </div>
@@ -4991,8 +4989,8 @@ function triggerHaptic(pattern: number | number[] = 10) {
                                   <img
                                     src={(product.images?.length ?? 0) > 1 && carouselIndexMap[product.id] ? product.images![carouselIndexMap[product.id]] : product.image}
                                     alt={product.name}
-                                    className="h-full w-full object-cover transition duration-300 hover:scale-105"
-                                    style={{ objectPosition: product.imagePosition || 'center', transform: `scale(${(product.imageZoom ?? 100) / 100})` }}
+                                    className="h-full w-full object-contain transition duration-300 hover:scale-105"
+                                    style={{ objectPosition: product.imagePosition || 'center' }}
                                     loading="lazy"
                                     decoding="async"
                                   />
@@ -5162,7 +5160,7 @@ function triggerHaptic(pattern: number | number[] = 10) {
                     })}
                     </div>
                      {(isPromoCarousel || isLargeCategory) && (
-                      <div className="pointer-events-none absolute inset-y-0 right-0 w-16 md:w-24 bg-gradient-to-l from-white via-white/60 to-transparent" />
+                      <div className="pointer-events-none absolute inset-y-0 right-0 w-20 md:w-28 bg-gradient-to-l from-white via-white/60 to-transparent" />
                     )}
                   </div>
                 </section>
@@ -5741,16 +5739,56 @@ function triggerHaptic(pattern: number | number[] = 10) {
                 </div>
               </div>
               <div className="mt-6 flex items-center gap-3 border-t border-neutral-100 pt-5">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setPreviewProduct(null);
-                    addToCart(previewProduct as any);
-                  }}
-                  className="flex-1 rounded-xl bg-neutral-900 py-3.5 text-sm font-bold text-white shadow-lg shadow-neutral-900/20 transition hover:bg-neutral-800 active:scale-[0.97]"
-                >
-                  {previewProduct.optionGroups?.length ? 'Personalizar y agregar' : 'Agregar al carrito'}
-                </button>
+                {previewProduct.optionGroups?.length ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPreviewProduct(null);
+                      addToCart(previewProduct as any);
+                    }}
+                    className="flex-1 rounded-xl bg-neutral-900 py-3.5 text-sm font-bold text-white shadow-lg shadow-neutral-900/20 transition hover:bg-neutral-800 active:scale-[0.97]"
+                  >
+                    Personalizar y agregar
+                  </button>
+                ) : (() => {
+                  const qty = getCartQuantity(previewProduct.id);
+                  return qty > 0 ? (
+                    <div className="flex w-full items-center justify-between rounded-xl bg-neutral-50 p-1">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (qty <= 1) {
+                            setPreviewProduct(null);
+                          }
+                          updateCartItem(previewProduct.id, { quantity: qty - 1 });
+                        }}
+                        className="flex h-10 w-10 items-center justify-center rounded-lg text-neutral-500 transition hover:bg-white hover:text-neutral-800 active:scale-90"
+                      >
+                        {qty === 1 ? (
+                          <svg className="h-4 w-4 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                        ) : (
+                          <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M20 12H4" /></svg>
+                        )}
+                      </button>
+                      <span className="flex h-10 w-10 items-center justify-center text-base font-bold text-neutral-900">{qty}</span>
+                      <button
+                        type="button"
+                        onClick={() => addToCart(previewProduct as any)}
+                        className="flex h-10 w-10 items-center justify-center rounded-lg text-neutral-500 transition hover:bg-white hover:text-neutral-800 active:scale-90"
+                      >
+                        <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" /></svg>
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => addToCart(previewProduct as any)}
+                      className="flex-1 rounded-xl bg-neutral-900 py-3.5 text-sm font-bold text-white shadow-lg shadow-neutral-900/20 transition hover:bg-neutral-800 active:scale-[0.97]"
+                    >
+                      Agregar al carrito
+                    </button>
+                  );
+                })()}
               </div>
             </div>
           </div>
