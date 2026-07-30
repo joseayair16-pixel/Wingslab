@@ -308,13 +308,14 @@ export const HomeView = React.memo(function HomeView({
           <section className="-mx-4 md:mx-0">
             <div className="px-4 md:px-0 mb-3 flex items-center justify-between">
               <h2 className="text-xl font-black text-neutral-900">🔥 Ofertas imperdibles</h2>
-              <span className="text-xs font-bold text-rose-500">{filteredOfferProducts.reduce((a: number, b: any) => a + b.products.length, 0)} productos</span>
+              <span className="text-xs font-bold text-rose-500">{filteredOfferProducts.length} productos</span>
             </div>
             <div className="overflow-x-auto pb-2 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
               <div className="flex gap-3 px-4 md:px-0 min-w-max">
-                {filteredOfferProducts.map((offerGroup: any) =>
-                  offerGroup.products.map((product: any) => (
-                    <button key={product.id} onClick={() => router.push(`/restaurantes/${offerGroup.restaurant.id}?focusProduct=${product.id}`)}
+                {filteredOfferProducts.map((item: any) => {
+                  const { product, restaurant } = item;
+                  return (
+                    <button key={product.id} onClick={() => router.push(`/restaurantes/${restaurant.id}?focusProduct=${product.id}`)}
                       className="group w-44 shrink-0 overflow-hidden rounded-[18px] border border-black/5 bg-white text-left transition-all duration-300 ease-out hover:-translate-y-1 hover:border-black/10 hover:shadow-[0_12px_30px_rgba(15,15,15,0.08)] active:scale-[0.98]">
                         <div className="relative overflow-hidden h-24">
                           {product.image ? (
@@ -338,12 +339,12 @@ export const HomeView = React.memo(function HomeView({
                       </div>
                       <div className="px-2 pb-2 pt-2">
                         <div className="flex items-center gap-1.5 mb-1">
-                          {offerGroup.restaurant.logo && (
+                          {restaurant.logo && (
                             <div className="flex h-5 w-5 shrink-0 items-center justify-center overflow-hidden rounded-full bg-white shadow-sm relative">
-                              <Image src={offerGroup.restaurant.logo} alt={offerGroup.restaurant.name} fill sizes="20px" className="object-cover" />
+                              <Image src={restaurant.logo} alt={restaurant.name} fill sizes="20px" className="object-cover" />
                             </div>
                           )}
-                          <p className="text-[9px] font-bold text-neutral-500 truncate">{offerGroup.restaurant.name}</p>
+                          <p className="text-[9px] font-bold text-neutral-500 truncate">{restaurant.name}</p>
                         </div>
                         <h3 className="text-xs font-bold text-neutral-900 truncate leading-tight">{product.name}</h3>
                         <div className="flex items-center gap-1.5 mt-1">
@@ -355,8 +356,8 @@ export const HomeView = React.memo(function HomeView({
                         </div>
                       </div>
                     </button>
-                  ))
-                )}
+                  );
+                })}
               </div>
             </div>
           </section>

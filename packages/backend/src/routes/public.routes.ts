@@ -663,7 +663,6 @@ export async function registerPublicRoutes(fastify: FastifyInstance): Promise<vo
               categoryId: true,
             },
             orderBy: { createdAt: 'desc' },
-            take: 30,
           },
         },
       });
@@ -687,33 +686,30 @@ export async function registerPublicRoutes(fastify: FastifyInstance): Promise<vo
           return distanceKm <= maxRadius;
         })
         .filter((restaurant) => isRestaurantOpenNow(RestaurantStatus.ACTIVE, restaurant.isAcceptingOrders, restaurant.isPaused, restaurant.operatingHours))
-        .map((restaurant: any) => {
-          const products = restaurant.products.map((p: any) => {
+        .flatMap((restaurant: any) => {
+          return restaurant.products.map((p: any) => {
             const savings = Math.round(p.price - (p.discountPrice ?? p.price));
             return {
-              id: p.id,
-              name: p.name,
-              description: p.description,
-              price: p.price,
-              discountPrice: p.discountPrice,
-              image: p.image,
-              categoryId: p.categoryId,
-              savings,
-              discountPercent: Math.round((savings / p.price) * 100),
+              product: {
+                id: p.id,
+                name: p.name,
+                description: p.description,
+                price: p.price,
+                discountPrice: p.discountPrice,
+                image: p.image,
+                categoryId: p.categoryId,
+                savings,
+                discountPercent: Math.round((savings / p.price) * 100),
+              },
+              restaurant: {
+                id: restaurant.id,
+                name: restaurant.name,
+                logo: restaurant.logo,
+                coverImage: restaurant.coverImage,
+                businessType: restaurant.businessType,
+              },
             };
           });
-          const totalSavings = products.reduce((acc: number, p: any) => acc + p.savings, 0);
-          return {
-            restaurant: {
-              id: restaurant.id,
-              name: restaurant.name,
-              logo: restaurant.logo,
-              coverImage: restaurant.coverImage,
-              businessType: restaurant.businessType,
-            },
-            products,
-            totalSavings,
-          };
         });
 
       for (let i = offers.length - 1; i > 0; i--) {
