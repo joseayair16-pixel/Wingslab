@@ -3731,10 +3731,10 @@ function triggerHaptic(pattern: number | number[] = 10) {
                         />
                       )}
 
-                      {/* Selector de Método de Pago con Tarjetas Premium */}
-                      <div className="space-y-2">
-                        <label className="text-sm font-semibold text-neutral-800">Método de pago</label>
-                        <div className="grid grid-cols-2 gap-3">
+                      {/* Selector de Método de Pago */}
+                      <div>
+                        <label className="mb-2 block text-sm font-semibold text-neutral-800">Método de pago</label>
+                        <div className="flex gap-1.5 rounded-xl bg-neutral-100 p-0.5">
                           <button
                             type="button"
                             onClick={() => {
@@ -3742,31 +3742,28 @@ function triggerHaptic(pattern: number | number[] = 10) {
                               setTransferProofName('');
                               setTransferProofSource('');
                             }}
-                            className={`flex flex-col items-center justify-center rounded-2xl border p-4 text-center transition-all ${
+                            className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg px-2.5 py-2 text-[11px] font-bold transition-all ${
                               checkoutForm.paymentMethod === 'CASH'
-                                ? 'border-sky-500 bg-sky-50/30 ring-1 ring-sky-500/30'
-                                : 'border-black/[0.06] bg-white hover:border-black/10'
+                                ? 'bg-white text-neutral-900 shadow-sm'
+                                : 'text-neutral-500 hover:text-neutral-800'
                             }`}
                           >
-                            <span className="text-2xl"><svg className="h-8 w-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 6v12m-3-2.818l.879.659c1.171.879 3.07.879 4.242 0 1.172-.879 1.172-2.303 0-3.182C13.536 12.219 12.768 12 12 12c-.725 0-1.45-.22-2.003-.659-1.106-.879-1.106-2.303 0-3.182s2.9-.879 4.006 0l.415.33M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg></span>
-                            <span className="mt-2 text-sm font-bold text-neutral-900">Efectivo</span>
-                            <span className="text-[10px] text-neutral-400 mt-0.5">Paga al recibir</span>
+                            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 6v12m-3-2.818l.879.659c1.171.879 3.07.879 4.242 0 1.172-.879 1.172-2.303 0-3.182C13.536 12.219 12.768 12 12 12c-.725 0-1.45-.22-2.003-.659-1.106-.879-1.106-2.303 0-3.182s2.9-.879 4.006 0l.415.33M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                            Efectivo
                           </button>
-
                           <button
                             type="button"
                             onClick={() => {
                               setCheckoutForm((current) => ({ ...current, paymentMethod: 'TRANSFER' }));
                             }}
-                            className={`flex flex-col items-center justify-center rounded-2xl border p-4 text-center transition-all ${
+                            className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg px-2.5 py-2 text-[11px] font-bold transition-all ${
                               checkoutForm.paymentMethod === 'TRANSFER'
-                                ? 'border-sky-500 bg-sky-50/30 ring-1 ring-sky-500/30'
-                                : 'border-black/[0.06] bg-white hover:border-black/10'
+                                ? 'bg-white text-neutral-900 shadow-sm'
+                                : 'text-neutral-500 hover:text-neutral-800'
                             }`}
                           >
-                            <span className="text-2xl"><svg className="h-8 w-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M2.25 21h19.5m-18-18v18m10.5-18v18m6-13.5V21M6.75 6.75h.75m-.75 3h.75m-.75 3h.75m3-6h.75m-.75 3h.75m-.75 3h.75M6.75 21v-3.375c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21M3 3h12m-.75 4.5H21m-3.75 3.75h.008v.008h-.008v-.008zm0 3h.008v.008h-.008v-.008zm0 3h.008v.008h-.008v-.008z" /></svg></span>
-                            <span className="mt-2 text-sm font-bold text-neutral-900">Transferencia</span>
-                            <span className="text-[10px] text-neutral-400 mt-0.5">Sube tu comprobante</span>
+                            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M2.25 21h19.5m-18-18v18m10.5-18v18m6-13.5V21M6.75 6.75h.75m-.75 3h.75m-.75 3h.75m3-6h.75m-.75 3h.75m-.75 3h.75M6.75 21v-3.375c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21M3 3h12m-.75 4.5H21m-3.75 3.75h.008v.008h-.008v-.008zm0 3h.008v.008h-.008v-.008zm0 3h.008v.008h-.008v-.008z" /></svg>
+                            Transferencia
                           </button>
                         </div>
                       </div>
