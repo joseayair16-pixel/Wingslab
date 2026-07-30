@@ -4896,7 +4896,7 @@ function triggerHaptic(pattern: number | number[] = 10) {
 
                   <div className={isPromoCarousel || isLargeCategory ? "relative mt-5" : "mt-5 overflow-hidden"}>
                     <div className={isPromoCarousel || isLargeCategory
-                      ? "flex gap-3 overflow-x-auto pb-2 scroll-smooth snap-x snap-mandatory pr-8 sm:pr-12 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+                      ? "flex gap-3 overflow-x-auto pb-2 scroll-smooth snap-x snap-mandatory [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
                       : "grid gap-4 sm:grid-cols-2 lg:grid-cols-3"
                     }>
                     {category.products.map((product) => {
@@ -5158,6 +5158,7 @@ function triggerHaptic(pattern: number | number[] = 10) {
                         )
                       );
                     })}
+                      {(isPromoCarousel || isLargeCategory) && <div className="w-4 shrink-0 sm:w-8" />}
                     </div>
                      
                   </div>
