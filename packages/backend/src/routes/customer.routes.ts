@@ -657,7 +657,7 @@ export async function registerCustomerRoutes(fastify: FastifyInstance): Promise<
           });
         }
 
-        if (order.status !== 'DELIVERED' && order.status !== 'COMPLETED') {
+        if (order.status !== 'DELIVERED' && order.status !== 'COMPLETED' && order.status !== 'PICKED_UP') {
           return reply.status(400).send({
             success: false,
             error: {

@@ -2613,16 +2613,8 @@ export default function Home() {
   };
 
   useEffect(() => {
-    void loadDashboard();
+    void loadDashboard(true);
   }, [loadDashboard, token, sessionUser]);
-
-  useEffect(() => {
-    if (!loadingDashboard) return;
-    const timer = setTimeout(() => {
-      setLoadingDashboard(false);
-    }, 15_000);
-    return () => clearTimeout(timer);
-  }, [loadingDashboard]);
 
   useEffect(() => {
     const LOCATION_TTL = 24 * 60 * 60 * 1000; // 24 hours

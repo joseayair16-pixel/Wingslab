@@ -749,6 +749,7 @@ export default function RestaurantPage({
   const touchStartY = useRef(0);
   const [addresses, setAddresses] = useState<any[]>([]);
   const [selectedAddressId, setSelectedAddressId] = useState<string | null>(null);
+  const [showMapForAddress, setShowMapForAddress] = useState<string | null>(null);
   const [isAddingNewAddress, setIsAddingNewAddress] = useState(false);
   const [newAddressStep, setNewAddressStep] = useState<'search' | 'details'>('search');
   const [addressSearchQuery, setAddressSearchQuery] = useState('');
@@ -1020,17 +1021,18 @@ export default function RestaurantPage({
           }
         }
 
-        // Check if there is any delivered order that has not been rated and not dismissed
+        // Check if there is any delivered/completed order that has not been rated and not dismissed
         const unratedOrder = ordersPayload.data.items.find(
           (order) =>
-            normalizeOrderStatusValue(order.status) === 'DELIVERED' &&
             !order.review &&
-            !localStorage.getItem(`sadel_dismissed_rating_${order.id}`)
+            !localStorage.getItem(`sadel_dismissed_rating_${order.id}`) &&
+            (normalizeOrderStatusValue(order.status) === 'DELIVERED' ||
+             normalizeOrderStatusValue(order.status) === 'COMPLETED')
         );
         if (unratedOrder) {
           setOrderToRate(unratedOrder.id);
           setRatingBusinessType((unratedOrder as any).restaurant?.businessType || null);
-          setRatingIsPickup(false);
+          setRatingIsPickup(normalizeOrderStatusValue(unratedOrder.status) === 'COMPLETED');
           setIsRatingModalOpen(true);
         }
 
@@ -1184,6 +1186,17 @@ export default function RestaurantPage({
           setRatingBusinessType(order?.restaurant?.businessType || null);
           setRatingIsPickup(false);
           setIsRatingModalOpen(true);
+        }
+
+        if (eventName === 'order:picked-up' && payload.orderId) {
+          const existing = activeOrderDetailsMapRef.current[payload.orderId];
+          const isPickup = existing?.fulfillmentType === 'PICKUP';
+          if (isPickup) {
+            setOrderToRate(payload.orderId);
+            setRatingBusinessType(existing?.restaurant?.businessType || null);
+            setRatingIsPickup(true);
+            setIsRatingModalOpen(true);
+          }
         }
 
         if (eventName === 'order:completed' && payload.orderId) {
@@ -1376,7 +1389,9 @@ export default function RestaurantPage({
   }, [isCheckoutOpen, showMaxCashModal, showGpsCashModal, deliveryErrorModal, isPushReminderModalOpen]);
 
   useEffect(() => {
-    if (!isCheckoutOpen || (isAddingNewAddress && newAddressStep === 'search')) {
+    if (!isCheckoutOpen || (isAddingNewAddress && newAddressStep === 'search') || (!showMapForAddress && !isAddingNewAddress)) {
+      checkoutMapRef.current = null;
+      checkoutMarkerRef.current = null;
       return;
     }
 
@@ -1492,7 +1507,7 @@ export default function RestaurantPage({
     }, 150);
 
     return () => clearTimeout(timer);
-  }, [isCheckoutOpen, isAddingNewAddress, newAddressStep, checkoutForm.latitude, checkoutForm.longitude]);
+  }, [isCheckoutOpen, isAddingNewAddress, newAddressStep, showMapForAddress, checkoutForm.latitude, checkoutForm.longitude]);
 
   useEffect(() => {
     if (!isCheckoutOpen || !token) return;
@@ -3047,6 +3062,12 @@ function triggerHaptic(pattern: number | number[] = 10) {
                         try {
                           localStorage.setItem(`sadel_dismissed_rating_${orderToRate}`, 'true');
                         } catch (e) {}
+                        setActiveOrderListItems((prev) => prev.filter((o) => o.id !== orderToRate));
+                        setActiveOrderDetailsMap((prev) => {
+                          const next = { ...prev };
+                          delete next[orderToRate];
+                          return next;
+                        });
                       }
                       setIsRatingModalOpen(false);
                       setRestaurantRating(0);
@@ -3072,8 +3093,8 @@ function triggerHaptic(pattern: number | number[] = 10) {
                           },
                           body: JSON.stringify({
                             rating: restaurantRating,
-                            driverRating: isPickupRating ? null : (driverRatingVal || null),
-                            comment: ratingComment || '',
+                            ...(isPickupRating ? {} : { driverRating: driverRatingVal || undefined }),
+                            ...(ratingComment ? { comment: ratingComment } : {}),
                           }),
                         });
                         if (response.ok) {
@@ -3083,6 +3104,14 @@ function triggerHaptic(pattern: number | number[] = 10) {
                         }
                       } catch (e) {
                         showTransientNotice({ key: 'rating-error', title: 'Error', description: 'No se pudo conectar con el servidor.', tone: 'danger' });
+                      }
+                      if (orderToRate) {
+                        setActiveOrderListItems((prev) => prev.filter((o) => o.id !== orderToRate));
+                        setActiveOrderDetailsMap((prev) => {
+                          const next = { ...prev };
+                          delete next[orderToRate];
+                          return next;
+                        });
                       }
                       setIsRatingModalOpen(false);
                       setRestaurantRating(0);
@@ -3443,6 +3472,29 @@ function triggerHaptic(pattern: number | number[] = 10) {
                                 <p className="text-xs text-neutral-500 truncate mt-0.5">
                                   {addr.neighborhood || 'Sin colonia'}, {addr.city || 'Sin ciudad'}
                                 </p>
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setSelectedAddressId(addr.id);
+                                    setCheckoutForm((current) => ({
+                                      ...current,
+                                      street: addr.street || '',
+                                      number: addr.number || '',
+                                      neighborhood: addr.neighborhood || '',
+                                      city: addr.city || '',
+                                      state: addr.state || '',
+                                      zipCode: addr.zipCode || '',
+                                      latitude: String(addr.latitude),
+                                      longitude: String(addr.longitude),
+                                    }));
+                                    setShowMapForAddress(addr.id);
+                                  }}
+                                  className="mt-2 flex items-center gap-1 text-[11px] font-semibold text-sky-600 hover:text-sky-700 transition-colors"
+                                >
+                                  <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 6.75V15m6-6v8.25m.503 3.498l4.875-2.437c.381-.19.622-.58.622-1.006V4.82c0-.836-.88-1.38-1.628-1.006l-3.869 1.934c-.317.159-.69.159-1.006 0L9.503 3.252a1.125 1.125 0 00-1.006 0L3.622 5.689C3.24 5.88 3 6.27 3 6.695V19.18c0 .836.88 1.38 1.628 1.006l3.869-1.934c.317-.159.69-.159 1.006 0l4.994 2.497c.317.158.69.158 1.006 0z" /></svg>
+                                  Ver en mapa
+                                </button>
                               </button>
                             );
                           })}
@@ -3504,6 +3556,18 @@ function triggerHaptic(pattern: number | number[] = 10) {
                         >
                           <span><svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 9v6m3-3H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z" /></svg></span> Agregar dirección de entrega
                         </button>
+                      </div>
+                    )}
+
+                    {/* Referencias del domicilio (solo direcciones guardadas) */}
+                    {!isAddingNewAddress && (
+                      <div className="mt-4">
+                        <Field 
+                          label="Referencias del domicilio" 
+                          value={checkoutForm.reference} 
+                          onChange={(value) => setCheckoutForm((current) => ({ ...current, reference: value }))} 
+                          placeholder="Ej. Depto 4B, timbre blanco, portón café" 
+                        />
                       </div>
                     )}
 
@@ -3676,10 +3740,10 @@ function triggerHaptic(pattern: number | number[] = 10) {
                       </div>
                     )}
 
-                    {/* Google Map */}
+                    {/* Google Map (solo visible al hacer clic en "Ver en mapa" o al agregar dirección) */}
                     <div
                       id="map-checkout"
-                      className={`h-48 w-full rounded-2xl border border-black/5 mt-4 overflow-hidden shadow-inner no-invert ${(isAddingNewAddress && newAddressStep === 'search') ? 'hidden' : 'opacity-100'}`}
+                      className={`h-48 w-full rounded-2xl border border-black/5 mt-4 overflow-hidden shadow-inner no-invert transition-opacity duration-300 ${(showMapForAddress || (isAddingNewAddress && newAddressStep !== 'search')) ? '' : 'hidden'}`}
                     />
                   </div>
                   )}
@@ -3699,7 +3763,7 @@ function triggerHaptic(pattern: number | number[] = 10) {
                         label="Instrucciones para la tienda" 
                         value={checkoutForm.storeNotes} 
                         onChange={(value) => setCheckoutForm((current) => ({ ...current, storeNotes: value }))} 
-                        placeholder="¿Algo que debamos saber?" 
+                        placeholder="Ingresa indicaciones al restaurante" 
                       />
 
                       {fulfillmentType !== 'PICKUP' && (
@@ -3725,16 +3789,6 @@ function triggerHaptic(pattern: number | number[] = 10) {
                     </div>
 
                     <div className="space-y-4">
-                      {/* Referencias (solo para delivery y si no está agregando dirección) */}
-                      {fulfillmentType !== 'PICKUP' && !isAddingNewAddress && (
-                        <Field 
-                          label="Referencias del domicilio" 
-                          value={checkoutForm.reference} 
-                          onChange={(value) => setCheckoutForm((current) => ({ ...current, reference: value }))} 
-                          placeholder="Ej. Depto 4B, timbre blanco, portón café" 
-                        />
-                      )}
-
                       {/* Selector de Método de Pago */}
                       <div>
                         <label className="mb-2 block text-sm font-semibold text-neutral-800">Método de pago</label>
@@ -6082,7 +6136,7 @@ function formatEstimatedArrivalMinutes(estimatedDeliveryTime: string, status: st
     return null;
   }
 
-  if (['DELIVERED', 'CANCELLED', 'REJECTED', 'PENDING', 'DRIVER_ARRIVED'].includes(status)) {
+  if (['DELIVERED', 'CANCELLED', 'REJECTED', 'PENDING', 'DRIVER_ARRIVED', 'PICKED_UP'].includes(status)) {
     return null;
   }
 
