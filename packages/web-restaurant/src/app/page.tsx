@@ -5114,32 +5114,34 @@ export default function Home() {
                     </div>
                   )}
 
-                  {/* ACTIONS */}
-                  <div className="space-y-3 pt-2">
-                    <button
-                      type="button"
-                      onClick={() => setIsSelectingPrepTime(true)}
-                      disabled={Boolean(activeActionKey)}
-                      className="w-full rounded-full bg-sky-600 px-5 py-4 text-sm font-semibold text-white shadow-[0_4px_12px_rgba(2,132,199,0.3)] transition hover:bg-sky-700 disabled:cursor-not-allowed disabled:bg-sky-300"
-                    >
-                      Aceptar Pedido
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (activeIncomingOrder.paymentMethod === 'TRANSFER') {
-                          setTransferRefundOrder(activeIncomingOrder);
-                        } else {
-                          void runOrderAction(activeIncomingOrder.id, 'reject');
-                        }
-                      }}
-                      disabled={Boolean(activeActionKey)}
-                      className="w-full rounded-full border border-rose-200 bg-white px-5 py-4 text-sm font-semibold text-rose-700 transition hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                      {activeActionKey === `${activeIncomingOrder.id}:reject` ? 'Rechazando...' : 'Rechazar Pedido'}
-                    </button>
-                  </div>
                 </div>
+              </div>
+            </div>
+            {/* STICKY FOOTER WITH ACTIONS */}
+            <div className="shrink-0 border-t border-black/5 bg-white px-5 py-4 sm:px-8 shadow-[0_-8px_30px_rgba(0,0,0,0.06)]">
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setIsSelectingPrepTime(true)}
+                  disabled={Boolean(activeActionKey)}
+                  className="flex-1 rounded-full bg-sky-600 px-5 py-4 text-sm font-semibold text-white shadow-[0_4px_12px_rgba(2,132,199,0.3)] transition hover:bg-sky-700 disabled:cursor-not-allowed disabled:bg-sky-300"
+                >
+                  Aceptar Pedido
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (activeIncomingOrder.paymentMethod === 'TRANSFER') {
+                      setTransferRefundOrder(activeIncomingOrder);
+                    } else {
+                      void runOrderAction(activeIncomingOrder.id, 'reject');
+                    }
+                  }}
+                  disabled={Boolean(activeActionKey)}
+                  className="flex-1 rounded-full border border-rose-200 bg-white px-5 py-4 text-sm font-semibold text-rose-700 transition hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {activeActionKey === `${activeIncomingOrder.id}:reject` ? 'Rechazando...' : 'Rechazar Pedido'}
+                </button>
               </div>
             </div>
             )}
