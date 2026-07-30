@@ -1,0 +1,20 @@
+name: Mi Configuración Copilot
+version: 1.0.0
+schema: v1
+
+models:
+  - name: GitHub Copilot (GPT-4o)
+    provider: github-copilot
+    model: gpt-4o
+    roles:
+      - chat
+      - edit
+      - apply
+
+  - name: GitHub Copilot (Claude 3.5 Sonnet)
+    provider: github-copilot
+    model: claude-3.5-sonnet
+    roles:
+      - chat
+      - edit
+      - apply

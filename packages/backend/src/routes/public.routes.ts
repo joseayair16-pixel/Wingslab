@@ -646,6 +646,7 @@ export async function registerPublicRoutes(fastify: FastifyInstance): Promise<vo
           deliveryRadius: true,
           isAcceptingOrders: true,
           isPaused: true,
+          operatingHours: true,
           products: {
             where: {
               discountPrice: { not: null },
@@ -685,6 +686,7 @@ export async function registerPublicRoutes(fastify: FastifyInstance): Promise<vo
           if (maxRadius === null) return false;
           return distanceKm <= maxRadius;
         })
+        .filter((restaurant) => isRestaurantOpenNow(RestaurantStatus.ACTIVE, restaurant.isAcceptingOrders, restaurant.isPaused, restaurant.operatingHours))
         .map((restaurant: any) => {
           const products = restaurant.products.map((p: any) => {
             const savings = Math.round(p.price - (p.discountPrice ?? p.price));
