@@ -5172,12 +5172,12 @@ function triggerHaptic(pattern: number | number[] = 10) {
           </div>
         )}
 
-        {restaurant && (restaurant.instagram || restaurant.facebook || restaurant.tiktok) && (
+        {restaurant && (
           <div className="border-t border-black/5 pt-8 pb-4 mt-8">
             <p className="text-center text-sm font-semibold text-neutral-500 mb-4">
               Sigue a {restaurant.name} en redes sociales
             </p>
-            <div className="flex items-center justify-center gap-4">
+            <div className="flex items-center justify-center gap-4 min-h-[48px]">
               {restaurant.instagram && (
                 <a
                   href={restaurant.instagram}
