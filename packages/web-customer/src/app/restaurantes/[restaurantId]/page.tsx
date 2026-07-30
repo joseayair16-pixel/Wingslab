@@ -1790,7 +1790,7 @@ function triggerHaptic(pattern: number | number[] = 10) {
       price: itemPrice,
       discountPrice: customizingProduct.discountPrice,
       image: customizingProduct.image,
-      quantity: 1,
+      quantity: customizingQuantity,
       specialInstructions: customizingInstructions,
       selectedOptions: flatSelectedOptions as any,
       sellBy: customizingProduct.sellBy || 'UNIT',
@@ -2989,7 +2989,7 @@ function triggerHaptic(pattern: number | number[] = 10) {
             <div className="bg-white rounded-2xl border border-black/[0.03] shadow-[0_4px_24px_rgba(0,0,0,0.08)] p-6 w-full max-w-md h-fit max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
               <div className="text-center mb-6">
                 <div className="w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <span className="text-3xl">{isPickupRating ? '🛍️' : '🎉'}</span>
+                  <span className="text-3xl">{isPickupRating ? <svg className="h-8 w-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15.75 10.5V6a3.75 3.75 0 10-7.5 0v4.5m11.356-1.993l1.263 12c.07.665-.45 1.243-1.119 1.243H4.25a1.125 1.125 0 01-1.12-1.243l1.264-12A1.125 1.125 0 015.513 7.5h12.974c.576 0 1.059.435 1.119 1.007zM8.625 10.5a.375.375 0 11-.75 0 .375.375 0 01.75 0zm7.5 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z" /></svg> : '🎉'}</span>
                 </div>
                 <h3 className="text-2xl font-semibold text-neutral-950">{isPickupRating ? '¡Pedido recogido!' : '¡Tu pedido ha llegado!'}</h3>
                 <p className="text-sm text-neutral-500">{isPickupRating ? 'Gracias por tu compra. ¿Nos ayudas a mejorar calificando tu experiencia?' : (bizType && bizType !== 'RESTAURANT' ? '¡Disfruta tu pedido! ¿Nos ayudas a mejorar calificando tu experiencia?' : '¡Buen provecho! ¿Nos ayudas a mejorar calificando tu experiencia?')}</p>
@@ -3126,7 +3126,7 @@ function triggerHaptic(pattern: number | number[] = 10) {
               
               <div className="text-center mb-6">
                 <div className="w-20 h-20 bg-accent-soft dark:bg-sky-900/30 rounded-full flex items-center justify-center mx-auto mb-4 border-4 border-sky-100 dark:border-sky-800/20 shadow-inner">
-                  <span className="text-4xl animate-bounce">🛵</span>
+                  <span className="text-4xl animate-bounce"><svg className="h-10 w-10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13.5 21v-7.5a.75.75 0 01.75-.75h3a.75.75 0 01.75.75V21m-4.5 0H2.36m11.14 0H18m0 0h3.64m-1.39 0V9.349m-16.5 11.65V9.35m0 0a3.001 3.001 0 003.75-.615A2.993 2.993 0 009.75 9.75c.896 0 1.7-.393 2.25-1.016a2.993 2.993 0 002.25 1.016c.896 0 1.7-.393 2.25-1.016a3.001 3.001 0 003.75.614m-16.5 0a3.004 3.004 0 01-.621-4.72L4.318 3.44A1.5 1.5 0 015.378 3h13.243a1.5 1.5 0 011.06.44l1.19 1.189a3 3 0 01-.621 4.72m-13.5 8.65h3.75a.75.75 0 00.75-.75V13.5a.75.75 0 00-.75-.75H6.75a.75.75 0 00-.75.75v3.75c0 .415.336.75.75.75z" /></svg></span>
                 </div>
                 <h3 className="text-2xl font-black text-neutral-950 dark:text-white tracking-tight">¡Tu repartidor ha llegado!</h3>
                 <p className="text-sm text-neutral-500 dark:text-neutral-400 mt-1">El repartidor ya está afuera de tu domicilio con tu pedido.</p>
@@ -3152,7 +3152,7 @@ function triggerHaptic(pattern: number | number[] = 10) {
                             ? 'bg-sky-100 dark:bg-sky-900/30 text-sky-800 dark:text-sky-400 border border-sky-200 dark:border-sky-800/40'
                             : 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-400 border border-green-200 dark:border-green-800/40'
                       }`}>
-                        {arrivedOrder.paymentMethod === 'CASH' ? '💵 Efectivo' : arrivedOrder.paymentMethod === 'TRANSFER' ? '🏦 Transferencia' : '💳 Pago Online'}
+                        {arrivedOrder.paymentMethod === 'CASH' ? <><svg className="h-3.5 w-3.5 inline-block align-text-bottom" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 6v12m-3-2.818l.879.659c1.171.879 3.07.879 4.242 0 1.172-.879 1.172-2.303 0-3.182C13.536 12.219 12.768 12 12 12c-.725 0-1.45-.22-2.003-.659-1.106-.879-1.106-2.303 0-3.182s2.9-.879 4.006 0l.415.33M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg> Efectivo</> : arrivedOrder.paymentMethod === 'TRANSFER' ? <><svg className="h-3.5 w-3.5 inline-block align-text-bottom" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M2.25 21h19.5m-18-18v18m10.5-18v18m6-13.5V21M6.75 6.75h.75m-.75 3h.75m-.75 3h.75m3-6h.75m-.75 3h.75m-.75 3h.75M6.75 21v-3.375c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21M3 3h12m-.75 4.5H21m-3.75 3.75h.008v.008h-.008v-.008zm0 3h.008v.008h-.008v-.008zm0 3h.008v.008h-.008v-.008z" /></svg> Transferencia</> : '💳 Pago Online'}
                       </span>
                       <p className="text-[10px] text-neutral-400 dark:text-neutral-500 mt-1.5 font-medium">
                         {arrivedOrder.paymentMethod === 'CASH' ? 'Prepara el efectivo exacto' : 'Ya pagado vía app'}
@@ -3198,7 +3198,7 @@ function triggerHaptic(pattern: number | number[] = 10) {
             >
               <div className="text-center mb-6">
                 <div className="w-20 h-20 bg-emerald-200 rounded-full flex items-center justify-center mx-auto mb-4 border-4 border-emerald-100 shadow-inner">
-                  <span className="text-4xl">🛍️</span>
+                  <span className="text-4xl"><svg className="h-10 w-10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15.75 10.5V6a3.75 3.75 0 10-7.5 0v4.5m11.356-1.993l1.263 12c.07.665-.45 1.243-1.119 1.243H4.25a1.125 1.125 0 01-1.12-1.243l1.264-12A1.125 1.125 0 015.513 7.5h12.974c.576 0 1.059.435 1.119 1.007zM8.625 10.5a.375.375 0 11-.75 0 .375.375 0 01.75 0zm7.5 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z" /></svg></span>
                 </div>
                 <h3 className="text-2xl font-black text-neutral-950 tracking-tight">¡Tu pedido está listo!</h3>
                 <p className="text-sm text-neutral-500 mt-1">Pasa por tu pedido a {pickupReadyOrder.restaurant.name}.</p>
@@ -3229,7 +3229,7 @@ function triggerHaptic(pattern: number | number[] = 10) {
                             ? 'bg-sky-100 text-sky-800 border border-sky-200'
                             : 'bg-green-100 text-green-800 border border-green-200'
                       }`}>
-                        {pickupReadyOrder.paymentMethod === 'CASH' ? '💵 Efectivo' : pickupReadyOrder.paymentMethod === 'TRANSFER' ? '🏦 Transferencia' : '💳 Pago Online'}
+                        {pickupReadyOrder.paymentMethod === 'CASH' ? <><svg className="h-3.5 w-3.5 inline-block align-text-bottom" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 6v12m-3-2.818l.879.659c1.171.879 3.07.879 4.242 0 1.172-.879 1.172-2.303 0-3.182C13.536 12.219 12.768 12 12 12c-.725 0-1.45-.22-2.003-.659-1.106-.879-1.106-2.303 0-3.182s2.9-.879 4.006 0l.415.33M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg> Efectivo</> : pickupReadyOrder.paymentMethod === 'TRANSFER' ? <><svg className="h-3.5 w-3.5 inline-block align-text-bottom" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M2.25 21h19.5m-18-18v18m10.5-18v18m6-13.5V21M6.75 6.75h.75m-.75 3h.75m-.75 3h.75m3-6h.75m-.75 3h.75m-.75 3h.75M6.75 21v-3.375c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21M3 3h12m-.75 4.5H21m-3.75 3.75h.008v.008h-.008v-.008zm0 3h.008v.008h-.008v-.008zm0 3h.008v.008h-.008v-.008z" /></svg> Transferencia</> : '💳 Pago Online'}
                       </span>
                       <p className="text-[10px] text-neutral-400 mt-1.5 font-medium">
                         {pickupReadyOrder.paymentMethod === 'CASH' ? 'Paga al recoger' : 'Ya pagado'}
@@ -3379,57 +3379,43 @@ function triggerHaptic(pattern: number | number[] = 10) {
                             </div>
                           </div>
 
-                          {/* Quantity Stepper (Full Width) */}
-                          <div className="mt-3.5 flex items-center justify-between gap-2">
-                            <div className="flex items-center gap-0.5 rounded-full border border-black/[0.06] bg-neutral-50 p-0.5">
+                          <div className="mt-3.5 flex items-center gap-2">
+                            <div className="flex shrink-0 items-center gap-0.5 rounded-full border border-black/[0.06] bg-neutral-50 p-0.5">
                               <button
                                 type="button"
                                 onClick={() => updateCartItem(item.cartItemId, { quantity: item.quantity - 1 })}
-                                className="flex h-8 w-8 items-center justify-center rounded-full text-neutral-500 transition-all hover:bg-white hover:text-neutral-800 hover:shadow-sm active:scale-90"
+                                className="flex h-7 w-7 items-center justify-center rounded-full text-neutral-500 transition-all hover:bg-white hover:text-neutral-800 hover:shadow-sm active:scale-90"
                                 aria-label={`Quitar una unidad de ${item.name}`}
                               >
                                 {item.quantity === 1 ? (
-                                  <svg className="h-3.5 w-3.5 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <svg className="h-3 w-3 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                                   </svg>
                                 ) : (
-                                  <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M20 12H4" />
                                   </svg>
                                 )}
                               </button>
-                              <span className="flex h-8 w-8 items-center justify-center text-xs font-bold text-neutral-900">{item.quantity}</span>
+                              <span className="flex h-7 w-7 items-center justify-center text-xs font-bold text-neutral-900">{item.quantity}</span>
                               <button
                                 type="button"
                                 onClick={() => updateCartItem(item.cartItemId, { quantity: item.quantity + 1 })}
-                                className="flex h-8 w-8 items-center justify-center rounded-full text-neutral-500 transition-all hover:bg-white hover:text-neutral-800 hover:shadow-sm active:scale-90"
+                                className="flex h-7 w-7 items-center justify-center rounded-full text-neutral-500 transition-all hover:bg-white hover:text-neutral-800 hover:shadow-sm active:scale-90"
                                 aria-label={`Agregar una unidad de ${item.name}`}
                               >
-                                <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
                                 </svg>
                               </button>
                             </div>
 
-                            {/* Expand special instructions toggle area */}
                             <input
                               value={item.specialInstructions}
                               onChange={(event) => updateCartItem(item.cartItemId, { specialInstructions: event.target.value })}
-                              placeholder="Nota: sin cebolla, etc."
-                              className="flex-1 rounded-xl border border-transparent bg-neutral-50 px-2.5 py-1.5 text-xs text-neutral-700 outline-none transition-all placeholder:text-neutral-400 focus:border-sky-200 focus:bg-white focus:ring-2 focus:ring-sky-200/50"
+                              placeholder="Nota..."
+                              className="min-w-0 flex-1 rounded-xl border border-transparent bg-neutral-50 px-2.5 py-1.5 text-xs text-neutral-700 outline-none transition-all placeholder:text-neutral-400 focus:border-sky-200 focus:bg-white focus:ring-2 focus:ring-sky-200/50"
                             />
-
-                            {/* Quick Delete Trash Button */}
-                            <button
-                              type="button"
-                              onClick={() => updateCartItem(item.cartItemId, { quantity: 0 })}
-                              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-red-50 text-red-500 transition-all hover:bg-red-100 hover:text-red-600 active:scale-90"
-                              title="Eliminar del carrito"
-                            >
-                              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                              </svg>
-                            </button>
                           </div>
                         </div>
                       );
@@ -3469,13 +3455,13 @@ function triggerHaptic(pattern: number | number[] = 10) {
 
               {/* ── Summary Footer ── */}
               {cart.length ? (
-                <div className="sticky bottom-0 z-10 border-t border-black/[0.04] bg-white/90 px-4 pb-5 pt-4 backdrop-blur-xl sm:px-5">
+                <div className="sticky bottom-0 z-10 border-t border-black/[0.04] bg-white/90 px-4 pb-3 pt-3 backdrop-blur-xl sm:px-5">
                   {/* Summary Card */}
-                  <div className="rounded-[24px] bg-gradient-to-b from-neutral-50 to-neutral-100/60 p-4 ring-1 ring-black/[0.04]">
-                    <div className="space-y-2.5 text-[13px]">
+                  <div className="rounded-2xl bg-gradient-to-b from-neutral-50 to-neutral-100/60 p-3 ring-1 ring-black/[0.04]">
+                    <div className="space-y-1.5 text-xs">
                       <div className="flex items-center justify-between text-neutral-500">
-                        <span className="flex items-center gap-1.5">
-                          <span className="text-xs">📦</span> Productos
+                        <span className="flex items-center gap-1">
+                          <span className="text-[10px]"><svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /></svg></span> Productos
                         </span>
                         <span className="font-medium text-neutral-700">{totalProducts}</span>
                       </div>
@@ -3486,37 +3472,37 @@ function triggerHaptic(pattern: number | number[] = 10) {
                       {discountAmount > 0 && (
                         <div className="flex items-center justify-between text-emerald-600">
                           <span className="flex items-center gap-1">
-                            <span className="text-xs">🏷️</span> Descuento
+                            <span className="text-[10px]"><svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9.568 3H5.25A2.25 2.25 0 003 5.25v4.318c0 .597.237 1.17.659 1.591l9.581 9.581c.699.699 1.78.872 2.607.33a18.095 18.095 0 005.223-5.223c.542-.827.369-1.908-.33-2.607L11.16 3.66A2.25 2.25 0 009.568 3z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M6 6h.008v.008H6V6z" /></svg></span> Descuento
                           </span>
                           <span className="font-semibold">-{formatCurrency(discountAmount)}</span>
                         </div>
+                      )}
+                      {fulfillmentType !== 'PICKUP' && (
+                      <div className="flex items-center justify-between text-neutral-500">
+                        <span className="flex items-center gap-1">
+                          <span className="text-[10px]"><svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13.5 21v-7.5a.75.75 0 01.75-.75h3a.75.75 0 01.75.75V21m-4.5 0H2.36m11.14 0H18m0 0h3.64m-1.39 0V9.349m-16.5 11.65V9.35m0 0a3.001 3.001 0 003.75-.615A2.993 2.993 0 009.75 9.75c.896 0 1.7-.393 2.25-1.016a2.993 2.993 0 002.25 1.016c.896 0 1.7-.393 2.25-1.016a3.001 3.001 0 003.75.614m-16.5 0a3.004 3.004 0 01-.621-4.72L4.318 3.44A1.5 1.5 0 015.378 3h13.243a1.5 1.5 0 011.06.44l1.19 1.189a3 3 0 01-.621 4.72m-13.5 8.65h3.75a.75.75 0 00.75-.75V13.5a.75.75 0 00-.75-.75H6.75a.75.75 0 00-.75.75v3.75c0 .415.336.75.75.75z" /></svg></span> Envío
+                        </span>
+                        <span className="font-medium text-neutral-700">{formatCurrency(estimatedDeliveryFee)}</span>
+                      </div>
                       )}
                       <div className="flex items-center justify-between text-neutral-500">
                         <span>Servicio</span>
                         <span className="font-medium text-neutral-700">{formatCurrency(serviceFee)}</span>
                       </div>
-                      {fulfillmentType !== 'PICKUP' && (
-                      <div className="flex items-center justify-between text-neutral-500">
-                        <span className="flex items-center gap-1">
-                          <span className="text-xs">🛵</span> Envío
-                        </span>
-                        <span className="font-medium text-neutral-700">{formatCurrency(estimatedDeliveryFee)}</span>
-                      </div>
-                      )}
                     </div>
-                    <div className="mt-3 flex items-center justify-between rounded-2xl bg-neutral-900 px-4 py-3 shadow-lg shadow-neutral-900/15">
-                      <span className="text-sm font-semibold text-neutral-300">Total a pagar</span>
-                      <span className="text-lg font-extrabold tracking-tight text-white">{formatCurrency(orderTotal)}</span>
+                    <div className="mt-2 flex items-center justify-between rounded-xl bg-neutral-900 px-3.5 py-2.5 shadow-lg shadow-neutral-900/15">
+                      <span className="text-xs font-semibold text-neutral-300">Total a pagar</span>
+                      <span className="text-base font-extrabold tracking-tight text-white">{formatCurrency(orderTotal)}</span>
                     </div>
                   </div>
 
-                  <div className="mt-3 grid grid-cols-2 gap-1.5 rounded-2xl bg-neutral-100 p-1">
+                  <div className="mt-2 grid grid-cols-2 gap-1 rounded-xl bg-neutral-100 p-0.5">
                     <button
                       type="button"
                       onClick={() => setFulfillmentType('DELIVERY')}
-                      className={`relative flex items-center justify-center gap-1.5 rounded-xl px-3 py-2.5 text-[11px] font-bold transition-all duration-200 ${
+                      className={`relative flex items-center justify-center gap-1 rounded-lg px-2.5 py-2 text-[10px] font-bold transition-all duration-200 ${
                         fulfillmentType === 'DELIVERY'
-                          ? 'bg-sky-500 text-white shadow-md shadow-sky-500/30 scale-[1.02]'
+                          ? 'bg-sky-500 text-white shadow-sm shadow-sky-500/30'
                           : 'bg-transparent text-neutral-500 hover:text-neutral-800'
                       }`}
                     >
@@ -3527,14 +3513,14 @@ function triggerHaptic(pattern: number | number[] = 10) {
                           </svg>
                         </span>
                       )}
-                      <span>🛵</span> Enviar a domicilio
+                      <span><svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13.5 21v-7.5a.75.75 0 01.75-.75h3a.75.75 0 01.75.75V21m-4.5 0H2.36m11.14 0H18m0 0h3.64m-1.39 0V9.349m-16.5 11.65V9.35m0 0a3.001 3.001 0 003.75-.615A2.993 2.993 0 009.75 9.75c.896 0 1.7-.393 2.25-1.016a2.993 2.993 0 002.25 1.016c.896 0 1.7-.393 2.25-1.016a3.001 3.001 0 003.75.614m-16.5 0a3.004 3.004 0 01-.621-4.72L4.318 3.44A1.5 1.5 0 015.378 3h13.243a1.5 1.5 0 011.06.44l1.19 1.189a3 3 0 01-.621 4.72m-13.5 8.65h3.75a.75.75 0 00.75-.75V13.5a.75.75 0 00-.75-.75H6.75a.75.75 0 00-.75.75v3.75c0 .415.336.75.75.75z" /></svg></span> Enviar a domicilio
                     </button>
                     <button
                       type="button"
                       onClick={() => setFulfillmentType('PICKUP')}
-                      className={`relative flex items-center justify-center gap-1.5 rounded-xl px-3 py-2.5 text-[11px] font-bold transition-all duration-200 ${
+                      className={`relative flex items-center justify-center gap-1 rounded-lg px-2.5 py-2 text-[10px] font-bold transition-all duration-200 ${
                         fulfillmentType === 'PICKUP'
-                          ? 'bg-sky-500 text-white shadow-md shadow-sky-500/30 scale-[1.02]'
+                          ? 'bg-sky-500 text-white shadow-sm shadow-sky-500/30'
                           : 'bg-transparent text-neutral-500 hover:text-neutral-800'
                       }`}
                     >
@@ -3545,7 +3531,7 @@ function triggerHaptic(pattern: number | number[] = 10) {
                           </svg>
                         </span>
                       )}
-                      <span>🏪</span> Recoger en tienda
+                      <span><svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13.5 21v-7.5a.75.75 0 01.75-.75h3a.75.75 0 01.75.75V21m-4.5 0H2.36m11.14 0H18m0 0h3.64m-1.39 0V9.349m-16.5 11.65V9.35m0 0a3.001 3.001 0 003.75-.615A2.993 2.993 0 009.75 9.75c.896 0 1.7-.393 2.25-1.016a2.993 2.993 0 002.25 1.016c.896 0 1.7-.393 2.25-1.016a3.001 3.001 0 003.75.614m-16.5 0a3.004 3.004 0 01-.621-4.72L4.318 3.44A1.5 1.5 0 015.378 3h13.243a1.5 1.5 0 011.06.44l1.19 1.189a3 3 0 01-.621 4.72m-13.5 8.65h3.75a.75.75 0 00.75-.75V13.5a.75.75 0 00-.75-.75H6.75a.75.75 0 00-.75.75v3.75c0 .415.336.75.75.75z" /></svg></span> Recoger en tienda
                     </button>
                   </div>
 
@@ -3556,13 +3542,13 @@ function triggerHaptic(pattern: number | number[] = 10) {
                   ) : null}
 
                   {/* Action Buttons */}
-                  <div className="mt-4 grid gap-2.5 sm:grid-cols-2">
+                  <div className="mt-2 grid gap-2 sm:grid-cols-2">
                     <button
                       type="button"
                       onClick={() => setIsCartOpen(false)}
-                      className="group flex items-center justify-center gap-2 rounded-2xl border border-black/[0.06] bg-white px-5 py-3.5 text-[15px] font-semibold text-neutral-700 shadow-sm transition-all hover:bg-neutral-50 hover:shadow active:scale-[0.97] active-scale"
+                      className="group flex items-center justify-center gap-1.5 rounded-xl border border-black/[0.06] bg-white px-4 py-2.5 text-sm font-semibold text-neutral-700 shadow-sm transition-all hover:bg-neutral-50 hover:shadow active:scale-[0.97]"
                     >
-                      <svg className="h-4 w-4 text-neutral-400 transition-transform group-hover:-translate-x-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <svg className="h-3.5 w-3.5 text-neutral-400 transition-transform group-hover:-translate-x-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
                       </svg>
                       Seguir comprando
@@ -3578,12 +3564,12 @@ function triggerHaptic(pattern: number | number[] = 10) {
                         }
                       }}
                       disabled={!restaurant?.isOpen}
-                      className="group relative flex overflow-hidden items-center justify-center gap-2 rounded-2xl bg-sky-500 px-5 py-3.5 text-[15px] font-bold text-white shadow-[0_8px_20px_-6px_rgba(14,165,233,0.4)] transition-all hover:bg-sky-400 hover:shadow-[0_12px_24px_-8px_rgba(14,165,233,0.5)] active:scale-[0.97] active-scale disabled:cursor-not-allowed disabled:bg-neutral-100 disabled:text-neutral-400 disabled:shadow-none animate-pulse-glow"
+                      className="group relative flex overflow-hidden items-center justify-center gap-1.5 rounded-xl bg-sky-500 px-4 py-2.5 text-sm font-bold text-white shadow-[0_4px_12px_-4px_rgba(14,165,233,0.4)] transition-all hover:bg-sky-400 hover:shadow-[0_8px_20px_-6px_rgba(14,165,233,0.5)] active:scale-[0.97] disabled:cursor-not-allowed disabled:bg-neutral-100 disabled:text-neutral-400 disabled:shadow-none"
                     >
                       <div className="absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/20 to-transparent transition-transform duration-1000 group-hover:translate-x-full disabled:hidden" />
-                      <span className="relative flex items-center justify-center gap-2">
+                      <span className="relative flex items-center justify-center gap-1.5">
                         Completar pedido
-                        <svg className="h-4 w-4 shrink-0 animate-arrow-slide group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <svg className="h-3.5 w-3.5 shrink-0 group-hover:translate-x-0.5 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" />
                         </svg>
                       </span>
@@ -3658,11 +3644,11 @@ function triggerHaptic(pattern: number | number[] = 10) {
                       <h2 className="text-lg font-bold tracking-[-0.03em] text-neutral-950">Confirmar pedido</h2>
                       {fulfillmentType === 'PICKUP' ? (
                         <span className="rounded-full bg-sky-100 px-2.5 py-0.5 text-[10px] font-bold text-sky-700 ring-1 ring-sky-300/50">
-                          🏪 Recoger
+                          <svg className="h-3 w-3 inline-block align-text-bottom" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13.5 21v-7.5a.75.75 0 01.75-.75h3a.75.75 0 01.75.75V21m-4.5 0H2.36m11.14 0H18m0 0h3.64m-1.39 0V9.349m-16.5 11.65V9.35m0 0a3.001 3.001 0 003.75-.615A2.993 2.993 0 009.75 9.75c.896 0 1.7-.393 2.25-1.016a2.993 2.993 0 002.25 1.016c.896 0 1.7-.393 2.25-1.016a3.001 3.001 0 003.75.614m-16.5 0a3.004 3.004 0 01-.621-4.72L4.318 3.44A1.5 1.5 0 015.378 3h13.243a1.5 1.5 0 011.06.44l1.19 1.189a3 3 0 01-.621 4.72m-13.5 8.65h3.75a.75.75 0 00.75-.75V13.5a.75.75 0 00-.75-.75H6.75a.75.75 0 00-.75.75v3.75c0 .415.336.75.75.75z" /></svg> Recoger
                         </span>
                       ) : (
                         <span className="rounded-full bg-amber-100 px-2.5 py-0.5 text-[10px] font-bold text-amber-700 ring-1 ring-amber-300/50">
-                          🛵 Envío
+                          <svg className="h-3 w-3 inline-block align-text-bottom" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13.5 21v-7.5a.75.75 0 01.75-.75h3a.75.75 0 01.75.75V21m-4.5 0H2.36m11.14 0H18m0 0h3.64m-1.39 0V9.349m-16.5 11.65V9.35m0 0a3.001 3.001 0 003.75-.615A2.993 2.993 0 009.75 9.75c.896 0 1.7-.393 2.25-1.016a2.993 2.993 0 002.25 1.016c.896 0 1.7-.393 2.25-1.016a3.001 3.001 0 003.75.614m-16.5 0a3.004 3.004 0 01-.621-4.72L4.318 3.44A1.5 1.5 0 015.378 3h13.243a1.5 1.5 0 011.06.44l1.19 1.189a3 3 0 01-.621 4.72m-13.5 8.65h3.75a.75.75 0 00.75-.75V13.5a.75.75 0 00-.75-.75H6.75a.75.75 0 00-.75.75v3.75c0 .415.336.75.75.75z" /></svg> Envío
                         </span>
                       )}
                     </div>
@@ -3687,7 +3673,7 @@ function triggerHaptic(pattern: number | number[] = 10) {
                       <div className="mb-4 flex items-center justify-between">
                         <div className="flex items-center gap-2">
                           <div className="flex h-7 w-7 items-center justify-center rounded-full bg-emerald-50">
-                            <span className="text-[11px]">🏪</span>
+                            <span className="text-[11px]"><svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13.5 21v-7.5a.75.75 0 01.75-.75h3a.75.75 0 01.75.75V21m-4.5 0H2.36m11.14 0H18m0 0h3.64m-1.39 0V9.349m-16.5 11.65V9.35m0 0a3.001 3.001 0 003.75-.615A2.993 2.993 0 009.75 9.75c.896 0 1.7-.393 2.25-1.016a2.993 2.993 0 002.25 1.016c.896 0 1.7-.393 2.25-1.016a3.001 3.001 0 003.75.614m-16.5 0a3.004 3.004 0 01-.621-4.72L4.318 3.44A1.5 1.5 0 015.378 3h13.243a1.5 1.5 0 011.06.44l1.19 1.189a3 3 0 01-.621 4.72m-13.5 8.65h3.75a.75.75 0 00.75-.75V13.5a.75.75 0 00-.75-.75H6.75a.75.75 0 00-.75.75v3.75c0 .415.336.75.75.75z" /></svg></span>
                           </div>
                           <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-neutral-400">
                             Recoger en
@@ -3701,7 +3687,7 @@ function triggerHaptic(pattern: number | number[] = 10) {
                         <div className="p-5 pb-0">
                           <div className="flex items-start gap-3.5">
                             <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-400 to-emerald-600 shadow-sm shadow-emerald-200/50">
-                              <span className="text-xl text-white">🏪</span>
+                              <span className="text-xl text-white"><svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13.5 21v-7.5a.75.75 0 01.75-.75h3a.75.75 0 01.75.75V21m-4.5 0H2.36m11.14 0H18m0 0h3.64m-1.39 0V9.349m-16.5 11.65V9.35m0 0a3.001 3.001 0 003.75-.615A2.993 2.993 0 009.75 9.75c.896 0 1.7-.393 2.25-1.016a2.993 2.993 0 002.25 1.016c.896 0 1.7-.393 2.25-1.016a3.001 3.001 0 003.75.614m-16.5 0a3.004 3.004 0 01-.621-4.72L4.318 3.44A1.5 1.5 0 015.378 3h13.243a1.5 1.5 0 011.06.44l1.19 1.189a3 3 0 01-.621 4.72m-13.5 8.65h3.75a.75.75 0 00.75-.75V13.5a.75.75 0 00-.75-.75H6.75a.75.75 0 00-.75.75v3.75c0 .415.336.75.75.75z" /></svg></span>
                             </div>
                             <div className="min-w-0 flex-1 pt-0.5">
                               <p className="text-[15px] font-bold leading-tight text-neutral-900">
@@ -3743,7 +3729,7 @@ function triggerHaptic(pattern: number | number[] = 10) {
                             }}
                             className="flex w-full items-center justify-center gap-2 rounded-xl bg-neutral-900 py-3 text-[13px] font-semibold text-white transition hover:bg-neutral-800 active:scale-[0.98]"
                           >
-                            <span>📍</span> Cómo llegar
+                            <span><svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z" /></svg></span> Cómo llegar
                           </button>
                         </div>
                       </div>
@@ -3753,7 +3739,7 @@ function triggerHaptic(pattern: number | number[] = 10) {
                   <div className="rounded-[22px] border border-black/[0.04] bg-white p-4 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
                     <div className="flex items-center justify-between border-b border-black/[0.03] pb-2.5 mb-3.5">
                       <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-neutral-400 flex items-center gap-1.5">
-                        <span>📍</span> Dirección de entrega
+                        <span><svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z" /></svg></span> Dirección de entrega
                       </p>
                       <span className="rounded-full bg-sky-50 px-2 py-0.5 text-[9px] font-bold text-sky-600">
                         Paso 1
@@ -3794,7 +3780,7 @@ function triggerHaptic(pattern: number | number[] = 10) {
                               >
                                 <div className="flex items-center justify-between gap-2">
                                   <span className="text-[10px] font-bold uppercase tracking-wider text-neutral-400">
-                                    {addr.isDefault ? '🏠 Casa (Principal)' : '📍 Dirección'}
+                                    {addr.isDefault ? <><svg className="h-3 w-3 inline-block align-text-bottom" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M2.25 12l8.954-8.955c.44-.439 1.152-.439 1.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75M8.25 21h8.25" /></svg> Casa (Principal)</> : <><svg className="h-3 w-3 inline-block align-text-bottom" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z" /></svg> Dirección</>}
                                   </span>
                                   {isSelected && (
                                     <span className="flex h-4.5 w-4.5 items-center justify-center rounded-full bg-sky-500 text-[10px] font-bold text-white">
@@ -3867,7 +3853,7 @@ function triggerHaptic(pattern: number | number[] = 10) {
                           }}
                           className="w-full rounded-2xl border border-sky-300 bg-sky-50 px-4 py-4 text-sm font-bold text-sky-700 transition-all active-scale hover:bg-sky-100/50 shadow-sm flex items-center justify-center gap-2"
                         >
-                          <span>➕</span> Agregar dirección de entrega
+                          <span><svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 9v6m3-3H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z" /></svg></span> Agregar dirección de entrega
                         </button>
                       </div>
                     )}
@@ -3926,7 +3912,7 @@ function triggerHaptic(pattern: number | number[] = 10) {
                                       className="w-full px-4 py-3.5 text-left text-sm hover:bg-sky-50/40 border-b border-black/5 last:border-b-0 transition-colors flex flex-col gap-0.5"
                                     >
                                       <div className="flex items-center gap-2">
-                                        <span className="text-sky-500">📍</span>
+                                        <span className="text-sky-500"><svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z" /></svg></span>
                                         <p className="font-semibold text-neutral-900 line-clamp-1">{suggestion.name}</p>
                                       </div>
                                       <p className="text-xs text-neutral-500 truncate pl-6">{suggestion.description}</p>
@@ -3997,7 +3983,7 @@ function triggerHaptic(pattern: number | number[] = 10) {
                             </div>
 
                             <div className="flex items-center gap-2.5 rounded-2xl bg-sky-50/50 px-4 py-3 text-xs text-sky-700 border border-sky-100 shadow-sm">
-                              <span className="text-base shrink-0">📍</span>
+                              <span className="text-base shrink-0"><svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z" /></svg></span>
                               <p className="font-semibold leading-relaxed">Mueve el pin en el mapa para ubicar exactamente el lugar de tu entrega.</p>
                             </div>
 
@@ -4053,7 +4039,7 @@ function triggerHaptic(pattern: number | number[] = 10) {
                   <div className="rounded-[22px] border border-black/[0.04] bg-white p-4 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
                     <div className="flex items-center justify-between border-b border-black/[0.03] pb-2.5 mb-3.5">
                       <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-neutral-400 flex items-center gap-1.5">
-                        <span>📋</span> Detalles del pedido
+                        <span><svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h3.75M9 15h3.75M9 18h3.75m3 .75H18a2.25 2.25 0 002.25-2.25V6.108c0-1.135-.845-2.098-1.976-2.192a48.424 48.424 0 00-1.123-.08m-5.801 0c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 00.75-.75 2.25 2.25 0 00-.1-.664m-5.8 0A2.251 2.251 0 0113.5 2.25H15a2.25 2.25 0 012.15 1.586m-5.8 0c-.376.023-.75.05-1.124.08C9.095 4.01 8.25 4.973 8.25 6.108V8.25m0 0H4.875c-.621 0-1.125.504-1.125 1.125v11.25c0 .621.504 1.125 1.125 1.125h9.75c.621 0 1.125-.504 1.125-1.125V9.375c0-.621-.504-1.125-1.125-1.125H8.25zM6.75 12h.008v.008H6.75V12zm0 3h.008v.008H6.75V15zm0 3h.008v.008H6.75V18z" /></svg></span> Detalles del pedido
                       </p>
                       <span className="rounded-full bg-sky-50 px-2 py-0.5 text-[9px] font-bold text-sky-600">
                         Paso 2
@@ -4088,7 +4074,7 @@ function triggerHaptic(pattern: number | number[] = 10) {
                                 : 'border-black/[0.06] bg-white hover:border-black/10'
                             }`}
                           >
-                            <span className="text-2xl">💵</span>
+                            <span className="text-2xl"><svg className="h-8 w-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 6v12m-3-2.818l.879.659c1.171.879 3.07.879 4.242 0 1.172-.879 1.172-2.303 0-3.182C13.536 12.219 12.768 12 12 12c-.725 0-1.45-.22-2.003-.659-1.106-.879-1.106-2.303 0-3.182s2.9-.879 4.006 0l.415.33M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg></span>
                             <span className="mt-2 text-sm font-bold text-neutral-900">Efectivo</span>
                             <span className="text-[10px] text-neutral-400 mt-0.5">Paga al recibir</span>
                           </button>
@@ -4104,7 +4090,7 @@ function triggerHaptic(pattern: number | number[] = 10) {
                                 : 'border-black/[0.06] bg-white hover:border-black/10'
                             }`}
                           >
-                            <span className="text-2xl">🏦</span>
+                            <span className="text-2xl"><svg className="h-8 w-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M2.25 21h19.5m-18-18v18m10.5-18v18m6-13.5V21M6.75 6.75h.75m-.75 3h.75m-.75 3h.75m3-6h.75m-.75 3h.75m-.75 3h.75M6.75 21v-3.375c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21M3 3h12m-.75 4.5H21m-3.75 3.75h.008v.008h-.008v-.008zm0 3h.008v.008h-.008v-.008zm0 3h.008v.008h-.008v-.008z" /></svg></span>
                             <span className="mt-2 text-sm font-bold text-neutral-900">Transferencia</span>
                             <span className="text-[10px] text-neutral-400 mt-0.5">Sube tu comprobante</span>
                           </button>
@@ -4117,7 +4103,7 @@ function triggerHaptic(pattern: number | number[] = 10) {
                           {hasTransferDetails(restaurant) ? (
                             <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 shadow-sm">
                               <div className="flex items-center gap-2 mb-4">
-                                <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-emerald-200 text-emerald-800 text-xs">🏦</span>
+                                <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-emerald-200 text-emerald-800"><svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M2.25 21h19.5m-18-18v18m10.5-18v18m6-13.5V21M6.75 6.75h.75m-.75 3h.75m-.75 3h.75m3-6h.75m-.75 3h.75m-.75 3h.75M6.75 21v-3.375c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21M3 3h12m-.75 4.5H21m-3.75 3.75h.008v.008h-.008v-.008zm0 3h.008v.008h-.008v-.008zm0 3h.008v.008h-.008v-.008z" /></svg></span>
                                 <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-emerald-700">Datos bancarios</p>
                               </div>
                               <div className="space-y-1.5 text-sm text-emerald-900">
@@ -4193,7 +4179,7 @@ function triggerHaptic(pattern: number | number[] = 10) {
                             </div>
                           ) : (
                             <div className="rounded-2xl border border-amber-200 bg-amber-50/50 p-4 text-sm text-amber-800 leading-relaxed">
-                              ⚠️ Este restaurante aún no ha configurado sus datos de transferencia. Usa efectivo o vuelve más tarde.
+                              <svg className="h-4 w-4 inline-block align-text-bottom" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" /></svg> Este restaurante aún no ha configurado sus datos de transferencia. Usa efectivo o vuelve más tarde.
                             </div>
                           )}
 
@@ -4258,7 +4244,7 @@ function triggerHaptic(pattern: number | number[] = 10) {
                   <div className="rounded-[22px] border border-black/[0.04] bg-white p-4 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
                     <div className="flex items-center justify-between border-b border-black/[0.03] pb-2.5 mb-3.5">
                       <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-neutral-400 flex items-center gap-1.5">
-                        <span>📝</span> Instrucciones especiales
+                        <span><svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" /></svg></span> Instrucciones especiales
                       </p>
                       <span className="rounded-full bg-sky-50 px-2 py-0.5 text-[9px] font-bold text-sky-600">
                         Paso 3
@@ -4287,7 +4273,7 @@ function triggerHaptic(pattern: number | number[] = 10) {
                   <div className="rounded-[22px] border border-black/[0.04] bg-white p-4 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
                     <div className="flex items-center justify-between border-b border-black/[0.03] pb-2.5 mb-3.5">
                       <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-neutral-400 flex items-center gap-1.5">
-                        <span>💰</span> Resumen del pago
+                        <span><svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 6v12m-3-2.818l.879.659c1.171.879 3.07.879 4.242 0 1.172-.879 1.172-2.303 0-3.182C13.536 12.219 12.768 12 12 12c-.725 0-1.45-.22-2.003-.659-1.106-.879-1.106-2.303 0-3.182s2.9-.879 4.006 0l.415.33M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg></span> Resumen del pago
                       </p>
                       <span className="rounded-full bg-sky-50 px-2 py-0.5 text-[9px] font-bold text-sky-600">
                         Paso 4
@@ -4346,7 +4332,7 @@ function triggerHaptic(pattern: number | number[] = 10) {
                   {checkoutValidationMessage && token && (
                     <div className="mb-3.5 flex justify-center animate-in slide-in-from-bottom-2 fade-in duration-300">
                       <div className="flex items-center gap-2 rounded-full border border-rose-200/60 bg-rose-50/80 px-3.5 py-1.5 text-[11px] font-medium text-rose-600 shadow-sm backdrop-blur-md">
-                        <span className="flex h-4 w-4 items-center justify-center rounded-full bg-rose-500/20 text-[9px]">⚠️</span>
+                        <span className="flex h-4 w-4 items-center justify-center rounded-full bg-rose-500/20"><svg className="h-3 w-3 text-rose-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" /></svg></span>
                         <span>{checkoutValidationMessage}</span>
                       </div>
                     </div>
@@ -4418,7 +4404,7 @@ function triggerHaptic(pattern: number | number[] = 10) {
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity" onClick={() => setIsPushReminderModalOpen(false)}></div>
           <div className="relative w-full max-w-sm rounded-[32px] bg-white p-6 shadow-2xl animate-in zoom-in-95 duration-200">
             <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-accent-soft text-3xl">
-              {pushPermission === 'denied' ? '🔒' : '🔔'}
+              {pushPermission === 'denied' ? <svg className="h-8 w-8 text-neutral-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" /></svg> : <svg className="h-8 w-8 text-sky-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75v-.7V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0" /></svg>}
             </div>
             <h3 className="text-center text-xl font-bold tracking-tight text-neutral-900">
               {pushPermission === 'denied' ? 'Notificaciones bloqueadas' : '¡No pierdas de vista tu pedido!'}
@@ -4520,7 +4506,7 @@ function triggerHaptic(pattern: number | number[] = 10) {
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity" onClick={() => setShowGpsCashModal(false)}></div>
           <div className="relative w-full max-w-sm rounded-[32px] bg-white p-6 shadow-2xl animate-in zoom-in-95 duration-200">
             <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-rose-100 text-3xl">
-              📍
+              <svg className="h-8 w-8 text-rose-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z" /></svg>
             </div>
             <h3 className="text-center text-xl font-bold tracking-tight text-neutral-900">
               Ubicación no disponible
@@ -4560,7 +4546,7 @@ function triggerHaptic(pattern: number | number[] = 10) {
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity" onClick={() => setDeliveryErrorModal('')}></div>
           <div className="relative w-full max-w-sm rounded-[32px] bg-white p-6 shadow-2xl animate-in zoom-in-95 duration-200">
             <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-rose-100 text-3xl">
-              📍
+              <svg className="h-8 w-8 text-rose-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z" /></svg>
             </div>
             <h3 className="text-center text-xl font-bold tracking-tight text-neutral-900">
               Pedido no disponible
@@ -4661,7 +4647,7 @@ function triggerHaptic(pattern: number | number[] = 10) {
                       <div className="text-white">
                         <p className="text-3xl font-semibold tracking-[-0.04em]">{restaurant.name}</p>
                         <div className="mt-1 flex items-center gap-1 text-sm font-semibold text-white">
-                          ⭐ {restaurant.rating ? restaurant.rating.toFixed(1) : 'Nuevo'}
+                          <svg className="h-3.5 w-3.5 inline-block -mt-0.5" fill="currentColor" viewBox="0 0 24 24"><path d="M10.788 3.21c.448-1.077 1.976-1.077 2.424 0l2.082 5.007 5.404.433c1.164.093 1.636 1.545.749 2.305l-4.117 3.527 1.257 5.273c.271 1.136-.964 2.033-1.96 1.425L12 18.354 7.373 21.18c-.996.608-2.231-.29-1.96-1.425l1.257-5.273-4.117-3.527c-.887-.76-.415-2.212.749-2.305l5.404-.433 2.082-5.006z" /></svg> {restaurant.rating ? restaurant.rating.toFixed(1) : 'Nuevo'}
                           {(restaurant.reviewCount ?? 0) > 0 && (
                             <span className="font-normal text-white/70"> ({restaurant.reviewCount} reseñas)</span>
                           )}
@@ -4688,7 +4674,7 @@ function triggerHaptic(pattern: number | number[] = 10) {
                     </div>
                     <p className="mt-2 text-2xl font-semibold tracking-[-0.04em] text-neutral-950 dark:text-white">{restaurant.name}</p>
                     <div className="mt-0.5 flex items-center gap-1 text-sm font-semibold text-neutral-900 dark:text-neutral-100">
-                      ⭐ {restaurant.rating ? restaurant.rating.toFixed(1) : 'Nuevo'}
+                      <svg className="h-3.5 w-3.5" fill="currentColor" viewBox="0 0 24 24"><path d="M10.788 3.21c.448-1.077 1.976-1.077 2.424 0l2.082 5.007 5.404.433c1.164.093 1.636 1.545.749 2.305l-4.117 3.527 1.257 5.273c.271 1.136-.964 2.033-1.96 1.425L12 18.354 7.373 21.18c-.996.608-2.231-.29-1.96-1.425l1.257-5.273-4.117-3.527c-.887-.76-.415-2.212.749-2.305l5.404-.433 2.082-5.006z" /></svg> {restaurant.rating ? restaurant.rating.toFixed(1) : 'Nuevo'}
                       {(restaurant.reviewCount ?? 0) > 0 && (
                         <span className="font-normal text-neutral-500 dark:text-neutral-400"> ({restaurant.reviewCount} reseñas)</span>
                       )}
@@ -5311,7 +5297,7 @@ function triggerHaptic(pattern: number | number[] = 10) {
                 {/* Mensaje de Smart Stacking */}
                 {(activeOrderDetailsMap[selectedOrderId] as any).isSecondInRoute && (
                   <div className="flex items-center gap-3 p-4 bg-blue-50 rounded-2xl border border-blue-100 text-blue-800 text-sm">
-                    <span className="text-xl">🛵</span>
+                    <span className="text-xl"><svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13.5 21v-7.5a.75.75 0 01.75-.75h3a.75.75 0 01.75.75V21m-4.5 0H2.36m11.14 0H18m0 0h3.64m-1.39 0V9.349m-16.5 11.65V9.35m0 0a3.001 3.001 0 003.75-.615A2.993 2.993 0 009.75 9.75c.896 0 1.7-.393 2.25-1.016a2.993 2.993 0 002.25 1.016c.896 0 1.7-.393 2.25-1.016a3.001 3.001 0 003.75.614m-16.5 0a3.004 3.004 0 01-.621-4.72L4.318 3.44A1.5 1.5 0 015.378 3h13.243a1.5 1.5 0 011.06.44l1.19 1.189a3 3 0 01-.621 4.72m-13.5 8.65h3.75a.75.75 0 00.75-.75V13.5a.75.75 0 00-.75-.75H6.75a.75.75 0 00-.75.75v3.75c0 .415.336.75.75.75z" /></svg></span>
                     <p className="font-medium">
                       Tu repartidor está entregando un pedido cercano en tu ruta. ¡Llegará pronto!
                     </p>
@@ -5902,13 +5888,13 @@ function CompactActiveOrderBanner({
           <div className="relative shrink-0">
             <div className="w-10 h-10 rounded-2xl bg-neutral-950 flex items-center justify-center">
               <span className="text-lg">
-                {activeStatus === 'DELIVERED' ? '✅' :
-                 activeStatus === 'PICKED_UP' && isPickup ? '🛍️' :
-                 activeStatus === 'PICKED_UP' ? '🛵' :
-                 activeStatus === 'IN_TRANSIT' ? '🛵' :
-                 activeStatus === 'DRIVER_ARRIVED' ? '📍' :
-                 activeStatus === 'READY' ? '📦' :
-                 order?.restaurant?.businessType && order.restaurant.businessType !== 'RESTAURANT' ? '📦' : '🍳'}
+                {activeStatus === 'DELIVERED' ? <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg> :
+                 activeStatus === 'PICKED_UP' && isPickup ? <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15.75 10.5V6a3.75 3.75 0 10-7.5 0v4.5m11.356-1.993l1.263 12c.07.665-.45 1.243-1.119 1.243H4.25a1.125 1.125 0 01-1.12-1.243l1.264-12A1.125 1.125 0 015.513 7.5h12.974c.576 0 1.059.435 1.119 1.007zM8.625 10.5a.375.375 0 11-.75 0 .375.375 0 01.75 0zm7.5 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z" /></svg> :
+                 activeStatus === 'PICKED_UP' ? <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13.5 21v-7.5a.75.75 0 01.75-.75h3a.75.75 0 01.75.75V21m-4.5 0H2.36m11.14 0H18m0 0h3.64m-1.39 0V9.349m-16.5 11.65V9.35m0 0a3.001 3.001 0 003.75-.615A2.993 2.993 0 009.75 9.75c.896 0 1.7-.393 2.25-1.016a2.993 2.993 0 002.25 1.016c.896 0 1.7-.393 2.25-1.016a3.001 3.001 0 003.75.614m-16.5 0a3.004 3.004 0 01-.621-4.72L4.318 3.44A1.5 1.5 0 015.378 3h13.243a1.5 1.5 0 011.06.44l1.19 1.189a3 3 0 01-.621 4.72m-13.5 8.65h3.75a.75.75 0 00.75-.75V13.5a.75.75 0 00-.75-.75H6.75a.75.75 0 00-.75.75v3.75c0 .415.336.75.75.75z" /></svg> :
+                 activeStatus === 'IN_TRANSIT' ? <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13.5 21v-7.5a.75.75 0 01.75-.75h3a.75.75 0 01.75.75V21m-4.5 0H2.36m11.14 0H18m0 0h3.64m-1.39 0V9.349m-16.5 11.65V9.35m0 0a3.001 3.001 0 003.75-.615A2.993 2.993 0 009.75 9.75c.896 0 1.7-.393 2.25-1.016a2.993 2.993 0 002.25 1.016c.896 0 1.7-.393 2.25-1.016a3.001 3.001 0 003.75.614m-16.5 0a3.004 3.004 0 01-.621-4.72L4.318 3.44A1.5 1.5 0 015.378 3h13.243a1.5 1.5 0 011.06.44l1.19 1.189a3 3 0 01-.621 4.72m-13.5 8.65h3.75a.75.75 0 00.75-.75V13.5a.75.75 0 00-.75-.75H6.75a.75.75 0 00-.75.75v3.75c0 .415.336.75.75.75z" /></svg> :
+                 activeStatus === 'DRIVER_ARRIVED' ? <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z" /></svg> :
+                 activeStatus === 'READY' ? <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /></svg> :
+                 order?.restaurant?.businessType && order.restaurant.businessType !== 'RESTAURANT' ? <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /></svg> : <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9.53 16.122a3 3 0 00-5.78 1.128 2.25 2.25 0 01-2.4 2.245 4.5 4.5 0 008.4-2.245c0-.399-.078-.78-.22-1.128zm0 0a15.998 15.998 0 003.388-1.62m-5.043-.025a15.994 15.994 0 011.622-3.395m3.42 3.42a15.995 15.995 0 004.764-4.648l3.876-5.814a1.151 1.151 0 00-1.597-1.597L14.146 6.32a15.996 15.996 0 00-4.649 4.763m3.42 3.42a6.776 6.776 0 00-3.42-3.42" /></svg>}
               </span>
             </div>
             {!['DELIVERED', 'CANCELLED', 'REJECTED'].includes(activeStatus) && (
@@ -6042,7 +6028,7 @@ function CompactActiveOrderBanner({
               className="w-full py-2 px-3 rounded-xl border border-dashed border-neutral-300 hover:border-neutral-400 bg-neutral-50/50 flex items-center justify-between text-left hover:bg-neutral-50 transition-all active:scale-[0.98] active-scale group"
             >
               <div className="flex items-center gap-2.5">
-                <span className="text-base group-hover:scale-110 transition-transform">🛵</span>
+                <span className="text-base group-hover:scale-110 transition-transform"><svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13.5 21v-7.5a.75.75 0 01.75-.75h3a.75.75 0 01.75.75V21m-4.5 0H2.36m11.14 0H18m0 0h3.64m-1.39 0V9.349m-16.5 11.65V9.35m0 0a3.001 3.001 0 003.75-.615A2.993 2.993 0 009.75 9.75c.896 0 1.7-.393 2.25-1.016a2.993 2.993 0 002.25 1.016c.896 0 1.7-.393 2.25-1.016a3.001 3.001 0 003.75.614m-16.5 0a3.004 3.004 0 01-.621-4.72L4.318 3.44A1.5 1.5 0 015.378 3h13.243a1.5 1.5 0 011.06.44l1.19 1.189a3 3 0 01-.621 4.72m-13.5 8.65h3.75a.75.75 0 00.75-.75V13.5a.75.75 0 00-.75-.75H6.75a.75.75 0 00-.75.75v3.75c0 .415.336.75.75.75z" /></svg></span>
                 <div>
                   <p className="text-xs font-bold text-neutral-900">Seguimiento en Vivo</p>
                   <p className="text-[10px] text-neutral-500">Sigue la ubicación de tu repartidor en tiempo real</p>
