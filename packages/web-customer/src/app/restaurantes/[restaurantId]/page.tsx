@@ -4855,6 +4855,8 @@ function triggerHaptic(pattern: number | number[] = 10) {
               ) : restaurant.categories.map((category) => {
                 const isPromotions = category.id === '__promotions__';
                 const isPromoCarousel = isPromotions && category.products.length <= 6;
+                const isStore = !isRestaurant((restaurant as any).businessType);
+                const isLargeCategory = isStore && !isPromotions && category.products.length > 4;
                 return (
                 <section
                   key={category.id}
@@ -4871,9 +4873,9 @@ function triggerHaptic(pattern: number | number[] = 10) {
                     </span>
                   </div>
 
-                  <div className={isPromoCarousel ? "relative mt-5" : "mt-5 overflow-hidden"}>
-                    <div className={isPromoCarousel
-                      ? "flex gap-3 overflow-x-auto pb-2 scroll-smooth snap-x snap-mandatory [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+                  <div className={isPromoCarousel || isLargeCategory ? "relative mt-5" : "mt-5 overflow-hidden"}>
+                    <div className={isPromoCarousel || isLargeCategory
+                      ? "flex gap-4 overflow-x-auto pb-2 scroll-smooth snap-x snap-mandatory [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
                       : "grid gap-4 sm:grid-cols-2 lg:grid-cols-3"
                     }>
                     {category.products.map((product) => {
@@ -4882,6 +4884,7 @@ function triggerHaptic(pattern: number | number[] = 10) {
                       return (
                         isPromoCarousel ? (
                           <article id={product.id} key={product.id} className="group w-44 shrink-0 snap-start overflow-hidden rounded-[18px] border border-black/5 bg-white transition-all duration-300 ease-out hover:-translate-y-1 hover:border-black/10 hover:shadow-[0_12px_30px_rgba(15,15,15,0.08)] active:scale-[0.98]">
+                          
                             <div className="relative overflow-hidden">
                               {product.image ? (
                                 <img src={product.image} alt={product.name} className="h-24 w-full object-cover transition duration-300 group-hover:scale-105" loading="lazy" decoding="async" />
@@ -4941,7 +4944,7 @@ function triggerHaptic(pattern: number | number[] = 10) {
                             </div>
                           </article>
                         ) : (
-                          <article id={product.id} key={product.id} className="overflow-hidden rounded-[28px] border border-black/[0.04] bg-white transition-all duration-300 shadow-[0_2px_12px_rgba(0,0,0,0.02)] hover:-translate-y-1 hover:shadow-[0_12px_40px_rgba(0,0,0,0.06)]">
+                          <article id={product.id} key={product.id} className={isLargeCategory ? "w-72 shrink-0 snap-start sm:w-80 overflow-hidden rounded-[28px] border border-black/[0.04] bg-white transition-all duration-300 shadow-[0_2px_12px_rgba(0,0,0,0.02)] hover:-translate-y-1 hover:shadow-[0_12px_40px_rgba(0,0,0,0.06)]" : "overflow-hidden rounded-[28px] border border-black/[0.04] bg-white transition-all duration-300 shadow-[0_2px_12px_rgba(0,0,0,0.02)] hover:-translate-y-1 hover:shadow-[0_12px_40px_rgba(0,0,0,0.06)]"}>
                             <div className="flex h-full flex-col gap-0 sm:flex-row">
                               <div className="relative h-48 w-full shrink-0 sm:aspect-square sm:h-auto sm:w-44">
                                 {product.image ? (
@@ -5060,7 +5063,7 @@ function triggerHaptic(pattern: number | number[] = 10) {
                       );
                     })}
                     </div>
-                     {isPromoCarousel && (
+                     {(isPromoCarousel || isLargeCategory) && (
                       <div className="pointer-events-none absolute inset-y-0 right-0 w-16 md:w-24 bg-gradient-to-l from-white via-white/60 to-transparent" />
                     )}
                   </div>

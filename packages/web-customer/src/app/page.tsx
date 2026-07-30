@@ -1093,6 +1093,37 @@ export default function Home() {
     return () => controller.abort();
   }, [apiBase, sessionUser, userZone]);
 
+  // Restore persistent modals after page reload
+  useEffect(() => {
+    if (!token) return;
+    try {
+      const saved = localStorage.getItem('sadel_persistent_modal');
+      if (!saved) return;
+      const parsed = JSON.parse(saved);
+      if (!parsed.orderId || !parsed.type) return;
+      requestJson<{ success: true; data: CustomerOrderDetail }>({
+        apiBase,
+        path: `/me/pedidos/${parsed.orderId}`,
+        token,
+      }).then((detailRes) => {
+        if (!detailRes.success || !detailRes.data) {
+          localStorage.removeItem('sadel_persistent_modal');
+          return;
+        }
+        if (parsed.type === 'pickup_ready' && detailRes.data.fulfillmentType === 'PICKUP') {
+          setPickupReadyOrder(detailRes.data);
+        } else if (parsed.type === 'driver_arrived') {
+          setArrivedOrder(detailRes.data);
+          setIsDriverArrivedModalOpen(true);
+        }
+      }).catch(() => {
+        localStorage.removeItem('sadel_persistent_modal');
+      });
+    } catch {
+      localStorage.removeItem('sadel_persistent_modal');
+    }
+  }, [token]);
+
   useEffect(() => {
     if (!isDetailModalOpen) {
       setRefundContact('');
@@ -3353,6 +3384,7 @@ export default function Home() {
             }).then((detailRes) => {
               if (detailRes.success && detailRes.data.fulfillmentType === 'PICKUP') {
                 setPickupReadyOrder(detailRes.data);
+                try { localStorage.setItem('sadel_persistent_modal', JSON.stringify({ type: 'pickup_ready', orderId: payload.orderId })); } catch {}
                 return;
               }
               showTransientNotice({
@@ -3446,6 +3478,7 @@ export default function Home() {
                 console.log('[Socket.io] Abriendo modal premium de llegada del repartidor con datos:', orderData);
                 setArrivedOrder(orderData);
                 setIsDriverArrivedModalOpen(true);
+                try { localStorage.setItem('sadel_persistent_modal', JSON.stringify({ type: 'driver_arrived', orderId: payload.orderId })); } catch {}
               } else {
                 console.error(`[Socket.io] Error: se recibio ${eventName} pero los datos del pedido son nulos.`);
               }
@@ -6235,9 +6268,11 @@ export default function Home() {
                           },
                           body: JSON.stringify({
                             rating: restaurantRating,
-                            comment: ratingComment,
-                            driverRating: driverRatingVal,
-                            driverComment: ratingComment,
+                            comment: ratingComment || undefined,
+                            ...(driverRatingVal > 0 ? {
+                              driverRating: driverRatingVal,
+                              driverComment: ratingComment || undefined,
+                            } : {}),
                           }),
                         });
                         const data = await response.json();
@@ -6273,9 +6308,9 @@ export default function Home() {
           );
         })()}
 
-        {/* Modal de Repartidor Llegó */}
+        {/* Modal de Repartidor Llegó — no dismissible */}
         {isDriverArrivedModalOpen && arrivedOrder && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 backdrop-blur-sm px-4 py-6" onClick={() => setIsDriverArrivedModalOpen(false)}>
+          <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/70 backdrop-blur-sm px-4 py-6">
             <div
               className="bg-white dark:bg-[#121214] rounded-3xl border border-black/[0.03] dark:border-zinc-800/80 shadow-[0_20px_50px_rgba(0,0,0,0.15)] dark:shadow-[0_20px_50px_rgba(0,0,0,0.4)] p-7 w-full max-w-md h-fit max-h-[90vh] overflow-y-auto relative transition-all"
               onClick={(e) => e.stopPropagation()}
@@ -6337,7 +6372,11 @@ export default function Home() {
               <div className="mt-6 flex gap-3">
                 <button
                   type="button"
-                  onClick={() => setIsDriverArrivedModalOpen(false)}
+                  onClick={() => {
+                    setIsDriverArrivedModalOpen(false);
+                    setArrivedOrder(null);
+                    localStorage.removeItem('sadel_driver_arrived_order');
+                  }}
                   className="flex-1 rounded-full bg-neutral-950 dark:bg-white text-white dark:text-neutral-950 py-3.5 text-sm font-bold shadow-md transition hover:bg-neutral-800 dark:hover:bg-neutral-100 active:scale-95"
                 >
                   Entendido
@@ -6347,9 +6386,9 @@ export default function Home() {
           </div>
         )}
 
-        {/* Modal de pedido listo para recoger (pickup) */}
+        {/* Modal de pedido listo para recoger (pickup) — no dismissible */}
         {pickupReadyOrder && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 backdrop-blur-sm px-4 py-6" onClick={() => setPickupReadyOrder(null)}>
+          <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/70 backdrop-blur-sm px-4 py-6">
             <div
               className="bg-white rounded-3xl border border-black/[0.03] shadow-[0_20px_50px_rgba(0,0,0,0.15)] p-7 w-full max-w-md h-fit max-h-[90vh] overflow-y-auto relative transition-all"
               onClick={(e) => e.stopPropagation()}
@@ -6429,7 +6468,10 @@ export default function Home() {
               <div className="mt-6">
                 <button
                   type="button"
-                  onClick={() => setPickupReadyOrder(null)}
+                  onClick={() => {
+                    setPickupReadyOrder(null);
+                    localStorage.removeItem('sadel_pickup_ready_order');
+                  }}
                   className="w-full rounded-full bg-neutral-950 text-white py-3.5 text-sm font-bold shadow-md transition hover:bg-neutral-800 active:scale-95"
                 >
                   Entendido
@@ -7703,7 +7745,47 @@ const CompactActiveOrderBanner = React.memo(function CompactActiveOrderBanner({
           {/* Info condensada */}
           <div className="min-w-0">
             <p className="text-sm font-bold text-neutral-900 truncate">{activeStep?.label || 'Procesando'}</p>
-            {dynamicRemainingText ? (
+            {(order as any)?.scheduledDeliveryAt && !(order as any)?.scheduledDeliveryCustomerAcceptedAt ? (
+              <div className="mt-1 rounded-lg bg-amber-50 border border-amber-200 px-3 py-2 shadow-sm">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-amber-700">Fecha programada</p>
+                <p className="text-sm font-black text-amber-900 leading-tight">
+                  {new Date((order as any).scheduledDeliveryAt).toLocaleDateString('es-MX', {
+                    weekday: 'long', day: 'numeric', month: 'long'
+                  })}
+                </p>
+                <div className="flex items-center gap-1.5 mt-0.5">
+                  <svg className="w-3.5 h-3.5 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <circle cx="12" cy="12" r="8" strokeWidth={2} />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 7v5l3 3" />
+                  </svg>
+                  <span className="text-xs font-bold text-amber-800">
+                    {new Date((order as any).scheduledDeliveryAt).toLocaleTimeString('es-MX', {
+                      hour: '2-digit', minute: '2-digit'
+                    })}
+                  </span>
+                </div>
+              </div>
+            ) : (order as any)?.scheduledDeliveryAt && (order as any)?.scheduledDeliveryCustomerAcceptedAt ? (
+              <div className="mt-1 rounded-lg bg-emerald-50 border border-emerald-200 px-3 py-2 shadow-sm">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-emerald-700">Entrega programada</p>
+                <p className="text-sm font-black text-emerald-900 leading-tight">
+                  {new Date((order as any).scheduledDeliveryAt).toLocaleDateString('es-MX', {
+                    weekday: 'long', day: 'numeric', month: 'long'
+                  })}
+                </p>
+                <div className="flex items-center gap-1.5 mt-0.5">
+                  <svg className="w-3.5 h-3.5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <circle cx="12" cy="12" r="8" strokeWidth={2} />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 7v5l3 3" />
+                  </svg>
+                  <span className="text-xs font-bold text-emerald-800">
+                    {new Date((order as any).scheduledDeliveryAt).toLocaleTimeString('es-MX', {
+                      hour: '2-digit', minute: '2-digit'
+                    })}
+                  </span>
+                </div>
+              </div>
+            ) : dynamicRemainingText ? (
               <p className="text-xs text-neutral-500 mt-0.5 truncate">{dynamicRemainingText}</p>
             ) : (
               <p className="text-xs text-neutral-500 mt-0.5 truncate">{restaurantName}</p>
