@@ -1021,15 +1021,17 @@ export default function RestaurantPage({
           }
         }
 
-        // Check if there is any delivered/completed order that has not been rated and not dismissed
+        // Solo mostrar modal de calificación una vez (evita que reaparezca al recargar)
         const unratedOrder = ordersPayload.data.items.find(
           (order) =>
             !order.review &&
             !localStorage.getItem(`sadel_dismissed_rating_${order.id}`) &&
+            !localStorage.getItem(`sadel_prompted_rating_${order.id}`) &&
             (normalizeOrderStatusValue(order.status) === 'DELIVERED' ||
              normalizeOrderStatusValue(order.status) === 'COMPLETED')
         );
         if (unratedOrder) {
+          try { localStorage.setItem(`sadel_prompted_rating_${unratedOrder.id}`, 'true'); } catch {}
           setOrderToRate(unratedOrder.id);
           setRatingBusinessType((unratedOrder as any).restaurant?.businessType || null);
           setRatingIsPickup(normalizeOrderStatusValue(unratedOrder.status) === 'COMPLETED');
@@ -3476,24 +3478,28 @@ function triggerHaptic(pattern: number | number[] = 10) {
                                   type="button"
                                   onClick={(e) => {
                                     e.stopPropagation();
-                                    setSelectedAddressId(addr.id);
-                                    setCheckoutForm((current) => ({
-                                      ...current,
-                                      street: addr.street || '',
-                                      number: addr.number || '',
-                                      neighborhood: addr.neighborhood || '',
-                                      city: addr.city || '',
-                                      state: addr.state || '',
-                                      zipCode: addr.zipCode || '',
-                                      latitude: String(addr.latitude),
-                                      longitude: String(addr.longitude),
-                                    }));
-                                    setShowMapForAddress(addr.id);
+                                    if (showMapForAddress === addr.id) {
+                                      setShowMapForAddress(null);
+                                    } else {
+                                      setSelectedAddressId(addr.id);
+                                      setCheckoutForm((current) => ({
+                                        ...current,
+                                        street: addr.street || '',
+                                        number: addr.number || '',
+                                        neighborhood: addr.neighborhood || '',
+                                        city: addr.city || '',
+                                        state: addr.state || '',
+                                        zipCode: addr.zipCode || '',
+                                        latitude: String(addr.latitude),
+                                        longitude: String(addr.longitude),
+                                      }));
+                                      setShowMapForAddress(addr.id);
+                                    }
                                   }}
-                                  className="mt-2 flex items-center gap-1 text-[11px] font-semibold text-sky-600 hover:text-sky-700 transition-colors"
+                                  className="mt-2 flex items-center gap-1 text-[11px] font-semibold transition-colors"
                                 >
                                   <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 6.75V15m6-6v8.25m.503 3.498l4.875-2.437c.381-.19.622-.58.622-1.006V4.82c0-.836-.88-1.38-1.628-1.006l-3.869 1.934c-.317.159-.69.159-1.006 0L9.503 3.252a1.125 1.125 0 00-1.006 0L3.622 5.689C3.24 5.88 3 6.27 3 6.695V19.18c0 .836.88 1.38 1.628 1.006l3.869-1.934c.317-.159.69-.159 1.006 0l4.994 2.497c.317.158.69.158 1.006 0z" /></svg>
-                                  Ver en mapa
+                                  {showMapForAddress === addr.id ? 'Ocultar mapa' : 'Ver en mapa'}
                                 </button>
                               </button>
                             );
@@ -3921,35 +3927,41 @@ function triggerHaptic(pattern: number | number[] = 10) {
                                     ✕
                                   </button>
                                 </div>
-                                <label className="relative flex cursor-pointer items-center justify-center gap-2 rounded-2xl border border-dashed border-neutral-300 bg-white px-4 py-3.5 text-center transition-all hover:border-sky-400 hover:bg-sky-50/30 active:scale-[0.98] group">
+                                <label className="relative flex cursor-pointer items-center justify-center gap-2.5 rounded-2xl border-2 border-dashed border-neutral-200 bg-white px-5 py-4 text-sm font-bold text-neutral-700 transition-all hover:border-sky-300 hover:bg-sky-50/40 hover:text-sky-700 active:scale-[0.97] shadow-sm hover:shadow-md group">
                                   <input
                                     type="file"
                                     accept="image/*"
                                     onChange={(event) => void handleTransferProofChange(event)}
                                     className="sr-only"
                                   />
-                                  <svg className="h-4 w-4 text-neutral-400 group-hover:text-sky-500 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
-                                    <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
-                                  </svg>
-                                  <span className="text-sm font-medium text-neutral-600 group-hover:text-sky-700 transition-colors">
-                                    Cambiar comprobante
-                                  </span>
+                                  <div className="flex h-9 w-9 items-center justify-center rounded-full bg-sky-50 text-sky-500 group-hover:bg-sky-100 transition-colors">
+                                    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
+                                      <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
+                                    </svg>
+                                  </div>
+                                  <div className="flex flex-col items-start">
+                                    <span className="text-sm font-bold">Cambiar comprobante de pago</span>
+                                    <span className="text-[10px] font-medium text-neutral-400 group-hover:text-sky-500 transition-colors">Toca para seleccionar otro archivo</span>
+                                  </div>
                                 </label>
                               </div>
                             ) : (
-                              <label className="relative flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed border-neutral-300 bg-white px-4 py-3 text-sm font-semibold text-neutral-700 transition-all hover:border-sky-400 hover:bg-sky-50 hover:text-sky-700 active:scale-[0.97] group">
+                              <label className="relative flex cursor-pointer items-center justify-center gap-2.5 rounded-2xl border-2 border-dashed border-neutral-200 bg-white px-5 py-4 text-sm font-bold text-neutral-700 transition-all hover:border-sky-300 hover:bg-sky-50/40 hover:text-sky-700 active:scale-[0.97] shadow-sm hover:shadow-md group">
                                 <input
                                   type="file"
                                   accept="image/*"
                                   onChange={(event) => void handleTransferProofChange(event)}
                                   className="sr-only"
                                 />
-                                <svg className="h-4 w-4 text-neutral-400 group-hover:text-sky-500 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
-                                  <path strokeLinecap="round" strokeLinejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.16a15.53 15.53 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z" />
-                                  <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0z" />
-                                </svg>
-                                Subir comprobante
-                                <span className="text-[11px] font-normal text-neutral-400">Foto del ticket</span>
+                                <div className="flex h-9 w-9 items-center justify-center rounded-full bg-sky-50 text-sky-500 group-hover:bg-sky-100 transition-colors">
+                                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
+                                  </svg>
+                                </div>
+                                <div className="flex flex-col items-start">
+                                  <span className="text-sm font-bold">Subir comprobante de pago</span>
+                                  <span className="text-[10px] font-medium text-neutral-400 group-hover:text-sky-500 transition-colors">JPG, PNG o captura de pantalla</span>
+                                </div>
                               </label>
                             )}
                           </div>

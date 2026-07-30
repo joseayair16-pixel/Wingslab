@@ -854,9 +854,29 @@ export default function Home() {
   const cart: CartItem[] = mounted ? cartItems : [];
   const [, setCheckoutForm] = useState<CheckoutForm>(defaultCheckoutForm);
   const [selectedCheckoutAddressId, setSelectedCheckoutAddressId] = useState('');
-  const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number; address: string; accuracy?: number; ts?: number } | null>(null);
+  const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number; address: string; accuracy?: number; ts?: number } | null>(() => {
+    try {
+      const raw = typeof window !== 'undefined' ? window.localStorage.getItem('userLocation') : null;
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        const age = parsed.ts ? Date.now() - parsed.ts : Infinity;
+        if (age < 24 * 60 * 60 * 1000) return parsed;
+      }
+    } catch {}
+    return null;
+  });
+  const [locationExpired, setLocationExpired] = useState(() => {
+    try {
+      const raw = typeof window !== 'undefined' ? window.localStorage.getItem('userLocation') : null;
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        const age = parsed.ts ? Date.now() - parsed.ts : Infinity;
+        if (age >= 24 * 60 * 60 * 1000) return true;
+      }
+    } catch {}
+    return false;
+  });
   const [userZone, setUserZone] = useState<string | null>(null);
-  const [locationExpired, setLocationExpired] = useState(false);
   const [locationDenied, setLocationDenied] = useState(false);
   const [locationSource, setLocationSource] = useState<'gps' | 'manual' | null>(null);
   const [isLocationChecked, setIsLocationChecked] = useState(false);
@@ -2679,55 +2699,32 @@ export default function Home() {
             const source = window.localStorage.getItem('locationSource') as 'gps' | 'manual' | null;
             if (source) setLocationSource(source);
           } catch (e) { }
-          const storedRaw = window.localStorage.getItem('userLocation');
-          if (storedRaw) {
-            const stored = JSON.parse(storedRaw);
-            const age = stored.ts ? Date.now() - stored.ts : Infinity;
-
-            // If permission already granted, proactively update location in background
-            if (navigator.permissions) {
-              try {
-                // @ts-ignore permissions API
-                const perm = await navigator.permissions.query({ name: 'geolocation' });
-                if (perm.state === 'granted') {
-                  const fresh = await tryUpdateFromGeolocation();
-                  if (fresh) {
-                    setUserLocation(fresh as any);
-                    setSelectedZoneName(null);
-                    try {
-                      localStorage.removeItem('selectedZoneName');
-                      localStorage.removeItem('locationDenied');
-                    } catch {}
-                    return;
-                  }
+          // If permission granted, proactively refresh location in background
+          if (navigator.permissions) {
+            try {
+              // @ts-ignore permissions API
+              const perm = await navigator.permissions.query({ name: 'geolocation' });
+              if (perm.state === 'granted') {
+                const fresh = await tryUpdateFromGeolocation();
+                if (fresh) {
+                  setUserLocation(fresh as any);
+                  setSelectedZoneName(null);
+                  try {
+                    localStorage.removeItem('selectedZoneName');
+                    localStorage.removeItem('locationDenied');
+                  } catch {}
+                  return;
                 }
-              } catch (e) {
-                // ignore permission inspection failures
               }
+            } catch (e) {
+              // ignore permission inspection failures
             }
+          }
 
-            // If stored is older than TTL, ask the user to refresh location
-            if (age > LOCATION_TTL) {
-              // Mark stored location as expired and force the modal to ask for current location
-              setLocationExpired(true);
-              try {
-                window.localStorage.removeItem('userLocation');
-                window.localStorage.removeItem('selectedZoneName');
-              } catch (e) {
-                console.warn('Could not remove stale userLocation:', e);
-              }
-              setUserLocation(null);
-              setSelectedZoneName(null);
-              return;
-            }
-
-            // Otherwise use stored
-            setUserLocation(stored);
-            // Restore selectedZoneName for manual zone selections
-            const savedZoneName = window.localStorage.getItem('selectedZoneName');
-            if (savedZoneName) {
-              setSelectedZoneName(savedZoneName);
-            }
+          // Fallback: use stored location (already loaded synchronously via useState initializer)
+          const savedZoneName = window.localStorage.getItem('selectedZoneName');
+          if (savedZoneName) {
+            setSelectedZoneName(savedZoneName);
           }
         }
       } catch (e) {
