@@ -5039,25 +5039,78 @@ function triggerHaptic(pattern: number | number[] = 10) {
                               </div>
                             </div>
                           </article>
+                        ) : isStore ? (
+                          <article id={product.id} key={product.id} className="overflow-hidden rounded-2xl border border-black/[0.04] bg-white transition-all duration-300 shadow-[0_2px_12px_rgba(0,0,0,0.02)] hover:-translate-y-0.5 hover:shadow-[0_8px_24px_rgba(0,0,0,0.06)]">
+                            <div className="flex h-full flex-col">
+                              <div className="relative aspect-square overflow-hidden bg-neutral-50">
+                                {product.image ? (
+                                  <img
+                                    src={(product.images?.length ?? 0) > 1 && carouselIndexMap[product.id] ? product.images![carouselIndexMap[product.id]] : product.image}
+                                    alt={product.name}
+                                    className="h-full w-full object-contain transition duration-300 hover:scale-105"
+                                    style={{ objectPosition: product.imagePosition || 'center' }}
+                                    loading="lazy"
+                                    decoding="async"
+                                  />
+                                ) : (
+                                  <div className="h-full w-full bg-gradient-to-br from-neutral-100 to-neutral-200" />
+                                )}
+                                {product.discountPrice && (
+                                  <div className="absolute left-1.5 top-1.5 flex items-center gap-1 rounded-full bg-rose-500/90 px-2 py-0.5 text-[9px] font-bold text-white shadow-sm">
+                                    <span>-{Math.round((1 - product.discountPrice / product.price) * 100)}%</span>
+                                  </div>
+                                )}
+                              </div>
+                              <div className="flex flex-1 flex-col p-3">
+                                <h3 className="text-sm font-bold leading-snug text-neutral-900 line-clamp-2">{product.name}</h3>
+                                {product.sellBy === 'WEIGHT' ? (
+                                  <p className="mt-0.5 text-xs font-semibold text-neutral-500">{formatCurrency(product.unitPrice || product.price)}/kg</p>
+                                ) : product.discountPrice ? (
+                                  <div className="mt-0.5 flex items-baseline gap-1.5">
+                                    <span className="text-xs font-bold text-rose-600">{formatCurrency(product.discountPrice)}</span>
+                                    <span className="text-[10px] text-neutral-400 line-through">{formatCurrency(product.price)}</span>
+                                  </div>
+                                ) : (
+                                  <p className="mt-0.5 text-xs font-semibold text-neutral-500">{formatCurrency(product.price)}</p>
+                                )}
+                                <div className="mt-auto pt-3">
+                                  {quantity > 0 ? (
+                                    <div className="flex w-fit items-center gap-0.5 rounded-full border border-black/[0.06] bg-neutral-50 p-0.5">
+                                      <button type="button" onClick={() => { if (product.optionGroups?.length) { decreaseQuantityForProduct(product.id); } else { updateCartItem(product.id, { quantity: quantity - 1 }); } }} className="flex h-7 w-7 items-center justify-center rounded-full text-neutral-500 transition-all hover:bg-white active:scale-90" aria-label={`Quitar una unidad de ${product.name}`}>
+                                        {quantity === 1 ? (
+                                          <svg className="h-3 w-3 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                                        ) : (
+                                          <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M20 12H4" /></svg>
+                                        )}
+                                      </button>
+                                      <span className="flex h-7 w-7 items-center justify-center text-xs font-bold text-neutral-900">{quantity}</span>
+                                      <button type="button" onClick={() => addToCart(product)} className="flex h-7 w-7 items-center justify-center rounded-full text-neutral-500 transition-all hover:bg-white active:scale-90" aria-label={`Agregar una unidad de ${product.name}`}>
+                                        <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" /></svg>
+                                      </button>
+                                    </div>
+                                  ) : (
+                                    <button type="button" onClick={() => addToCart(product)} disabled={!restaurant.isOpen} className="w-full rounded-xl bg-neutral-900 py-2.5 text-[11px] font-bold text-white transition hover:bg-neutral-800 disabled:bg-neutral-200 disabled:text-neutral-400">
+                                      Agregar
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          </article>
                         ) : (
-                          <article id={product.id} key={product.id} className="overflow-hidden rounded-[28px] border border-black/[0.04] bg-white transition-all duration-300 shadow-[0_2px_12px_rgba(0,0,0,0.02)] hover:-translate-y-1 hover:shadow-[0_12px_40px_rgba(0,0,0,0.06)]">
-                            <div className="flex h-full flex-col gap-0 sm:flex-row">
-                              <div className="relative h-48 w-full shrink-0 sm:aspect-square sm:h-auto sm:w-44">
+                          <article id={product.id} key={product.id} className="overflow-hidden rounded-2xl border border-black/[0.04] bg-white transition-all duration-200 shadow-[0_1px_3px_rgba(0,0,0,0.04)] hover:shadow-[0_4px_12px_rgba(0,0,0,0.06)]">
+                            <div className="flex gap-3 p-3">
+                              <div className="relative h-24 w-24 shrink-0 overflow-hidden rounded-xl sm:h-28 sm:w-28">
                                 {product.image ? (
                                   <>
-                                    <div
-                                      className="h-full w-full overflow-hidden"
-                                      style={{ transform: `scale(${(product.imageZoom ?? 100) / 100})`, transformOrigin: 'center center' }}
-                                    >
-                                      <img
-                                        src={(product.images?.length ?? 0) > 1 && carouselIndexMap[product.id] ? product.images![carouselIndexMap[product.id]] : product.image}
-                                        alt={product.name}
-                                        className="h-full w-full object-contain transition-opacity duration-300"
-                                        style={{ objectPosition: product.imagePosition || undefined }}
-                                        loading="lazy"
-                                        decoding="async"
-                                      />
-                                    </div>
+                                    <img
+                                      src={(product.images?.length ?? 0) > 1 && carouselIndexMap[product.id] ? product.images![carouselIndexMap[product.id]] : product.image}
+                                      alt={product.name}
+                                      className="h-full w-full object-cover transition-opacity duration-300"
+                                      style={{ objectPosition: product.imagePosition || undefined }}
+                                      loading="lazy"
+                                      decoding="async"
+                                    />
                                     {(product.images?.length ?? 0) > 1 && (
                                       <>
                                         <button
@@ -5070,7 +5123,7 @@ function triggerHaptic(pattern: number | number[] = 10) {
                                               return { ...prev, [product.id]: (current - 1 + images.length) % images.length };
                                             });
                                           }}
-                                          className="absolute left-2 top-1/2 z-10 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full bg-white/80 text-sm text-neutral-800 shadow-md backdrop-blur-sm transition hover:bg-white"
+                                          className="absolute left-1 top-1/2 z-10 flex h-5 w-5 -translate-y-1/2 items-center justify-center rounded-full bg-white/70 text-[10px] text-neutral-700 shadow-sm transition hover:bg-white"
                                         >
                                           ‹
                                         </button>
@@ -5084,15 +5137,15 @@ function triggerHaptic(pattern: number | number[] = 10) {
                                               return { ...prev, [product.id]: (current + 1) % images.length };
                                             });
                                           }}
-                                          className="absolute right-2 top-1/2 z-10 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full bg-white/80 text-sm text-neutral-800 shadow-md backdrop-blur-sm transition hover:bg-white"
+                                          className="absolute right-1 top-1/2 z-10 flex h-5 w-5 -translate-y-1/2 items-center justify-center rounded-full bg-white/70 text-[10px] text-neutral-700 shadow-sm transition hover:bg-white"
                                         >
                                           ›
                                         </button>
-                                        <div className="absolute bottom-2 left-1/2 z-10 flex -translate-x-1/2 gap-1.5">
+                                        <div className="absolute bottom-1 left-1/2 z-10 flex -translate-x-1/2 gap-1">
                                           {(product.images || []).map((_, idx) => (
                                             <span
                                               key={idx}
-                                              className={`h-1.5 rounded-full transition-all ${idx === (carouselIndexMap[product.id] || 0) ? 'w-4 bg-white' : 'w-1.5 bg-white/60'}`}
+                                              className={`h-1 rounded-full transition-all ${idx === (carouselIndexMap[product.id] || 0) ? 'w-3 bg-white' : 'w-1 bg-white/60'}`}
                                             />
                                           ))}
                                         </div>
@@ -5100,56 +5153,70 @@ function triggerHaptic(pattern: number | number[] = 10) {
                                     )}
                                   </>
                                 ) : (
-                                  <div className="relative h-full w-full bg-gradient-to-br from-neutral-100 to-neutral-200" />
+                                  <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-neutral-100 to-neutral-200">
+                                    <svg className="h-6 w-6 text-neutral-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
+                                      <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607zM13.5 10.5h-3" />
+                                    </svg>
+                                  </div>
                                 )}
                                 {product.discountPrice && (
-                                  <div className="absolute left-2 top-2 z-10 flex items-center gap-1 rounded-full bg-rose-500/90 px-2.5 py-1 text-[10px] font-bold text-white shadow-sm backdrop-blur-sm">
+                                  <div className="absolute left-1.5 top-1.5 z-10 flex items-center gap-0.5 rounded-full bg-rose-500/90 px-1.5 py-0.5 text-[8px] font-bold text-white shadow-sm">
                                     <span>-{Math.round((1 - product.discountPrice / product.price) * 100)}%</span>
                                   </div>
                                 )}
-                              </div>
-                              <div className="flex flex-1 flex-col justify-between p-5">
-                                <div>
-                                  <h3 className="text-lg font-semibold text-neutral-950 dark:text-white break-words">{product.name}</h3>
-                                  <p className="mt-2 text-sm leading-6 text-neutral-600 dark:text-neutral-400 break-words">{product.description}</p>
-                                  {product.sellBy === 'WEIGHT' ? (
-                                    <p className="mt-4 text-xl font-semibold text-neutral-950 dark:text-white">{formatCurrency(product.unitPrice || product.price)}/kg</p>
-                                  ) : product.discountPrice ? (
-                                    <div className="mt-4">
-                                      <div className="flex items-center gap-2">
-                                        <span className="text-xl font-bold text-rose-600">{formatCurrency(product.discountPrice)}</span>
-                                        <span className="text-sm text-neutral-400 line-through">{formatCurrency(product.price)}</span>
-                                        <span className="rounded-full bg-rose-50 px-2 py-0.5 text-[10px] font-bold text-rose-600">-{Math.round((1 - product.discountPrice / product.price) * 100)}%</span>
-                                      </div>
-                                      <div className="mt-1">
-                                        <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-600">
-                                          Ahorras {formatCurrency(product.price - product.discountPrice)}
-                                        </span>
-                                      </div>
-                                    </div>
-                                  ) : (
-                                    <p className="mt-4 text-xl font-semibold text-neutral-950 dark:text-white">{formatCurrency(product.price)}</p>
-                                  )}
-                                </div>
-                                <div className="mt-5 flex items-center justify-between gap-3">
+                                <div className="absolute right-1.5 top-1.5 z-10">
                                   {quantity > 0 ? (
-                                    <div className="flex items-center gap-0.5 rounded-full border border-black/[0.06] bg-neutral-50 p-0.5">
-                                      <button type="button" onClick={() => { if (product.optionGroups?.length) { decreaseQuantityForProduct(product.id); } else { updateCartItem(product.id, { quantity: quantity - 1 }); } }} className="flex h-8 w-8 items-center justify-center rounded-full text-neutral-500 transition-all hover:bg-white hover:text-neutral-800 hover:shadow-sm active:scale-90" aria-label={`Quitar una unidad de ${product.name}`}>
+                                    <div className="flex items-center gap-0.5 rounded-lg bg-white/95 shadow-sm backdrop-blur-sm">
+                                      <button
+                                        type="button"
+                                        onClick={(e) => { e.stopPropagation(); if (product.optionGroups?.length) { decreaseQuantityForProduct(product.id); } else { updateCartItem(product.id, { quantity: quantity - 1 }); } }}
+                                        className="flex h-6 w-6 items-center justify-center rounded-l-lg text-neutral-500 transition hover:bg-neutral-100 active:scale-90"
+                                        aria-label={`Quitar una unidad de ${product.name}`}
+                                      >
                                         {quantity === 1 ? (
-                                          <svg className="h-3.5 w-3.5 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                                          <svg className="h-3 w-3 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                                         ) : (
-                                          <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M20 12H4" /></svg>
+                                          <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M20 12H4" /></svg>
                                         )}
                                       </button>
-                                      <span className="flex h-8 w-8 items-center justify-center text-sm font-bold text-neutral-900">{quantity}</span>
-                                      <button type="button" onClick={() => addToCart(product)} className="flex h-8 w-8 items-center justify-center rounded-full text-neutral-500 transition-all hover:bg-white hover:text-neutral-800 hover:shadow-sm active:scale-90" aria-label={`Agregar una unidad de ${product.name}`}>
-                                        <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" /></svg>
+                                      <span className="flex h-6 w-6 items-center justify-center text-xs font-bold text-neutral-900">{quantity}</span>
+                                      <button
+                                        type="button"
+                                        onClick={(e) => { e.stopPropagation(); addToCart(product); }}
+                                        className="flex h-6 w-6 items-center justify-center rounded-r-lg text-neutral-500 transition hover:bg-neutral-100 active:scale-90"
+                                        aria-label={`Agregar una unidad de ${product.name}`}
+                                      >
+                                        <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" /></svg>
                                       </button>
                                     </div>
                                   ) : (
-                                    <button type="button" onClick={() => addToCart(product)} disabled={!restaurant.isOpen} className="rounded-full bg-neutral-100 px-6 py-2.5 text-sm font-bold text-neutral-900 transition hover:bg-neutral-200 disabled:cursor-not-allowed disabled:bg-neutral-50 disabled:text-neutral-400">
-                                      Agregar
+                                    <button
+                                      type="button"
+                                      onClick={(e) => { e.stopPropagation(); addToCart(product); }}
+                                      disabled={!restaurant.isOpen}
+                                      className="flex h-7 w-7 items-center justify-center rounded-full bg-white/95 text-neutral-700 shadow-sm backdrop-blur-sm transition hover:bg-white hover:shadow-md active:scale-90 disabled:opacity-50"
+                                      aria-label={`Agregar ${product.name}`}
+                                    >
+                                      <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" /></svg>
                                     </button>
+                                  )}
+                                </div>
+                              </div>
+                              <div className="flex min-w-0 flex-1 flex-col justify-center gap-0.5">
+                                <h3 className="truncate text-sm font-bold text-neutral-900">{product.name}</h3>
+                                {product.description && (
+                                  <p className="text-xs leading-relaxed text-neutral-500 line-clamp-2">{product.description}</p>
+                                )}
+                                <div className="mt-0.5">
+                                  {product.sellBy === 'WEIGHT' ? (
+                                    <span className="text-sm font-bold text-neutral-900">{formatCurrency(product.unitPrice || product.price)}/kg</span>
+                                  ) : product.discountPrice ? (
+                                    <div className="flex items-baseline gap-1.5">
+                                      <span className="text-sm font-bold text-rose-600">{formatCurrency(product.discountPrice)}</span>
+                                      <span className="text-[10px] text-neutral-400 line-through">{formatCurrency(product.price)}</span>
+                                    </div>
+                                  ) : (
+                                    <span className="text-sm font-bold text-neutral-900">{formatCurrency(product.price)}</span>
                                   )}
                                 </div>
                               </div>
