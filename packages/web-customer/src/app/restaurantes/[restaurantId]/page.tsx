@@ -4672,9 +4672,9 @@ function triggerHaptic(pattern: number | number[] = 10) {
                   </div>
                 </div>
 
-                <div className="relative px-4 pb-5 pt-0 text-sm text-neutral-600 dark:text-neutral-300 md:px-6 md:pb-6 lg:px-7 lg:pt-5">
-                  <div className="-mt-10 flex flex-col items-center text-center lg:hidden">
-                    <div className="flex h-20 w-20 items-center justify-center overflow-hidden rounded-[28px] border-4 border-white dark:border-neutral-900 bg-white dark:bg-neutral-900 shadow-[0_10px_24px_rgba(15,15,15,0.14)] dark:shadow-none">
+                <div className="relative px-4 pb-4 pt-0 text-sm text-neutral-600 dark:text-neutral-300 md:px-6 md:pb-5 lg:px-7 lg:pt-5">
+                  <div className="-mt-8 flex flex-col items-center text-center lg:hidden">
+                    <div className="flex h-16 w-16 items-center justify-center overflow-hidden rounded-[22px] border-4 border-white dark:border-neutral-900 bg-white dark:bg-neutral-900 shadow-[0_8px_20px_rgba(15,15,15,0.14)] dark:shadow-none">
                       {restaurant.logo ? (
                         <img
                           src={restaurant.logo}
@@ -4683,11 +4683,11 @@ function triggerHaptic(pattern: number | number[] = 10) {
                           decoding="async"
                         />
                       ) : (
-                        <span className="text-xl font-semibold text-neutral-900 dark:text-white">{buildRestaurantInitials(restaurant.name)}</span>
+                        <span className="text-lg font-semibold text-neutral-900 dark:text-white">{buildRestaurantInitials(restaurant.name)}</span>
                       )}
                     </div>
-                    <p className="mt-4 text-3xl font-semibold tracking-[-0.04em] text-neutral-950 dark:text-white">{restaurant.name}</p>
-                    <div className="mt-1 flex items-center gap-1 text-sm font-semibold text-neutral-900 dark:text-neutral-100">
+                    <p className="mt-2 text-2xl font-semibold tracking-[-0.04em] text-neutral-950 dark:text-white">{restaurant.name}</p>
+                    <div className="mt-0.5 flex items-center gap-1 text-sm font-semibold text-neutral-900 dark:text-neutral-100">
                       ⭐ {restaurant.rating ? restaurant.rating.toFixed(1) : 'Nuevo'}
                       {(restaurant.reviewCount ?? 0) > 0 && (
                         <span className="font-normal text-neutral-500 dark:text-neutral-400"> ({restaurant.reviewCount} reseñas)</span>
@@ -4695,11 +4695,11 @@ function triggerHaptic(pattern: number | number[] = 10) {
                     </div>
                   </div>
 
-                  <div className="mt-6 flex flex-col lg:flex-row items-stretch lg:items-center gap-2 lg:gap-0 lg:divide-x divide-black/[0.06] rounded-[32px] border border-black/[0.04] bg-white p-2 shadow-[0_4px_24px_rgba(0,0,0,0.02)] lg:rounded-full lg:p-1.5 lg:pr-4 transition-all hover:shadow-[0_8px_32px_rgba(0,0,0,0.04)]">
+                  <div className="mt-3 flex flex-col lg:flex-row items-stretch lg:items-center gap-1.5 lg:gap-0 lg:divide-x divide-black/[0.06] rounded-2xl lg:rounded-full border border-black/[0.04] bg-white p-1.5 shadow-[0_2px_12px_rgba(0,0,0,0.02)] lg:p-1 lg:pr-3 transition-all hover:shadow-[0_6px_20px_rgba(0,0,0,0.04)]">
                     {/* Address */}
-                    <div className="w-full flex-1 rounded-[24px] lg:rounded-full bg-neutral-50 lg:bg-transparent px-4 py-3 lg:py-2 text-[13px] text-neutral-600 flex items-center gap-3">
-                      <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-white shadow-sm border border-black/[0.03] lg:bg-neutral-100 lg:shadow-none lg:border-transparent">
-                        <svg className="h-3.5 w-3.5 text-neutral-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <div className="w-full flex-1 rounded-xl lg:rounded-full bg-neutral-50 lg:bg-transparent px-3 py-2.5 lg:py-1.5 text-[12px] text-neutral-600 flex items-center gap-2">
+                      <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-white shadow-sm border border-black/[0.03] lg:bg-neutral-100 lg:shadow-none lg:border-transparent">
+                        <svg className="h-3 w-3 text-neutral-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.828 0l-4.243-4.243a8 8 0 1111.314 0z" />
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
                         </svg>
@@ -4708,28 +4708,28 @@ function triggerHaptic(pattern: number | number[] = 10) {
                     </div>
 
                     {/* Stats Grid for Mobile / Flex for Desktop */}
-                    <div className="flex w-full lg:w-auto gap-2 lg:gap-0">
-                      <div className="flex flex-1 lg:flex-none flex-col items-center justify-center gap-0.5 rounded-[24px] lg:rounded-none bg-neutral-50 lg:bg-transparent px-2 py-2 lg:px-5">
-                        <span className="text-[10px] font-extrabold uppercase tracking-widest text-neutral-400">Distancia</span>
-                        <div className="flex items-center gap-1 text-[13px] font-semibold text-neutral-700">
-                          <svg className="h-3.5 w-3.5 text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <div className="flex w-full lg:w-auto gap-1.5 lg:gap-0">
+                      <div className="flex flex-1 lg:flex-none flex-col items-center justify-center gap-0 rounded-xl lg:rounded-none bg-neutral-50 lg:bg-transparent px-2 py-1.5 lg:px-4">
+                        <span className="text-[9px] font-extrabold uppercase tracking-widest text-neutral-400">Distancia</span>
+                        <div className="flex items-center gap-1 text-[12px] font-semibold text-neutral-700">
+                          <svg className="h-3 w-3 text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
                           </svg>
                           <span>{distanceKm ? `${distanceKm.toFixed(1)} km` : '-- km'}</span>
                         </div>
                       </div>
-                      <div className="flex flex-1 lg:flex-none flex-col items-center justify-center gap-0.5 rounded-[24px] lg:rounded-none bg-neutral-50 lg:bg-transparent px-2 py-2 lg:px-5">
-                        <span className="text-[10px] font-extrabold uppercase tracking-widest text-neutral-400">Envío</span>
-                        <div className="flex items-center gap-1 text-[13px] font-semibold text-neutral-700">
-                          <svg className="h-3.5 w-3.5 text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <div className="flex flex-1 lg:flex-none flex-col items-center justify-center gap-0 rounded-xl lg:rounded-none bg-neutral-50 lg:bg-transparent px-2 py-1.5 lg:px-4">
+                        <span className="text-[9px] font-extrabold uppercase tracking-widest text-neutral-400">Envío</span>
+                        <div className="flex items-center gap-1 text-[12px] font-semibold text-neutral-700">
+                          <svg className="h-3 w-3 text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                           </svg>
                           <span>{formatDeliverySummary(restaurant.effectiveDeliveryFee)}</span>
                         </div>
                       </div>
-                      <div className="flex flex-1 lg:flex-none flex-col items-center justify-center gap-1 rounded-[24px] lg:rounded-none bg-neutral-50 lg:bg-transparent px-2 py-2 lg:px-5">
-                        <span className="text-[10px] font-extrabold uppercase tracking-widest text-neutral-400">Estado</span>
-                        <div className="flex items-center gap-1.5 text-[13px]">
+                      <div className="flex flex-1 lg:flex-none flex-col items-center justify-center gap-0 rounded-xl lg:rounded-none bg-neutral-50 lg:bg-transparent px-2 py-1.5 lg:px-4">
+                        <span className="text-[9px] font-extrabold uppercase tracking-widest text-neutral-400">Estado</span>
+                        <div className="flex items-center gap-1.5 text-[12px]">
                           <span className="relative flex h-2 w-2 shrink-0">
                             <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${restaurant.isOpen ? 'bg-emerald-500' : 'bg-red-500'}`}></span>
                             <span className={`relative inline-flex rounded-full h-2 w-2 ${restaurant.isOpen ? 'bg-emerald-500' : 'bg-red-500'}`}></span>
@@ -5164,59 +5164,45 @@ function triggerHaptic(pattern: number | number[] = 10) {
                                     <span>-{Math.round((1 - product.discountPrice / product.price) * 100)}%</span>
                                   </div>
                                 )}
-                                <div className="absolute right-1.5 top-1.5 z-10">
+                              </div>
+                              <div className="flex min-w-0 flex-1 flex-col">
+                                <div className="flex flex-col gap-0.5">
+                                  <h3 className="truncate text-sm font-bold text-neutral-900">{product.name}</h3>
+                                  {product.description && (
+                                    <p className="text-xs leading-relaxed text-neutral-500 line-clamp-2">{product.description}</p>
+                                  )}
+                                  <div className="mt-0.5">
+                                    {product.sellBy === 'WEIGHT' ? (
+                                      <span className="text-sm font-bold text-neutral-900">{formatCurrency(product.unitPrice || product.price)}/kg</span>
+                                    ) : product.discountPrice ? (
+                                      <div className="flex items-baseline gap-1.5">
+                                        <span className="text-sm font-bold text-rose-600">{formatCurrency(product.discountPrice)}</span>
+                                        <span className="text-[10px] text-neutral-400 line-through">{formatCurrency(product.price)}</span>
+                                      </div>
+                                    ) : (
+                                      <span className="text-sm font-bold text-neutral-900">{formatCurrency(product.price)}</span>
+                                    )}
+                                  </div>
+                                </div>
+                                <div className="mt-auto pt-3">
                                   {quantity > 0 ? (
-                                    <div className="flex items-center gap-0.5 rounded-lg bg-white/95 shadow-sm backdrop-blur-sm">
-                                      <button
-                                        type="button"
-                                        onClick={(e) => { e.stopPropagation(); if (product.optionGroups?.length) { decreaseQuantityForProduct(product.id); } else { updateCartItem(product.id, { quantity: quantity - 1 }); } }}
-                                        className="flex h-6 w-6 items-center justify-center rounded-l-lg text-neutral-500 transition hover:bg-neutral-100 active:scale-90"
-                                        aria-label={`Quitar una unidad de ${product.name}`}
-                                      >
+                                    <div className="flex w-fit items-center gap-0.5 rounded-full border border-black/[0.06] bg-neutral-50 p-0.5">
+                                      <button type="button" onClick={() => { if (product.optionGroups?.length) { decreaseQuantityForProduct(product.id); } else { updateCartItem(product.id, { quantity: quantity - 1 }); } }} className="flex h-7 w-7 items-center justify-center rounded-full text-neutral-500 transition-all hover:bg-white active:scale-90" aria-label={`Quitar una unidad de ${product.name}`}>
                                         {quantity === 1 ? (
                                           <svg className="h-3 w-3 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                                         ) : (
                                           <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M20 12H4" /></svg>
                                         )}
                                       </button>
-                                      <span className="flex h-6 w-6 items-center justify-center text-xs font-bold text-neutral-900">{quantity}</span>
-                                      <button
-                                        type="button"
-                                        onClick={(e) => { e.stopPropagation(); addToCart(product); }}
-                                        className="flex h-6 w-6 items-center justify-center rounded-r-lg text-neutral-500 transition hover:bg-neutral-100 active:scale-90"
-                                        aria-label={`Agregar una unidad de ${product.name}`}
-                                      >
+                                      <span className="flex h-7 w-7 items-center justify-center text-xs font-bold text-neutral-900">{quantity}</span>
+                                      <button type="button" onClick={() => addToCart(product)} className="flex h-7 w-7 items-center justify-center rounded-full text-neutral-500 transition-all hover:bg-white active:scale-90" aria-label={`Agregar una unidad de ${product.name}`}>
                                         <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" /></svg>
                                       </button>
                                     </div>
                                   ) : (
-                                    <button
-                                      type="button"
-                                      onClick={(e) => { e.stopPropagation(); addToCart(product); }}
-                                      disabled={!restaurant.isOpen}
-                                      className="flex h-7 w-7 items-center justify-center rounded-full bg-white/95 text-neutral-700 shadow-sm backdrop-blur-sm transition hover:bg-white hover:shadow-md active:scale-90 disabled:opacity-50"
-                                      aria-label={`Agregar ${product.name}`}
-                                    >
-                                      <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" /></svg>
+                                    <button type="button" onClick={() => addToCart(product)} disabled={!restaurant.isOpen} className="w-full rounded-xl bg-neutral-900 py-2.5 text-[11px] font-bold text-white transition hover:bg-neutral-800 disabled:bg-neutral-200 disabled:text-neutral-400">
+                                      Agregar
                                     </button>
-                                  )}
-                                </div>
-                              </div>
-                              <div className="flex min-w-0 flex-1 flex-col justify-center gap-0.5">
-                                <h3 className="truncate text-sm font-bold text-neutral-900">{product.name}</h3>
-                                {product.description && (
-                                  <p className="text-xs leading-relaxed text-neutral-500 line-clamp-2">{product.description}</p>
-                                )}
-                                <div className="mt-0.5">
-                                  {product.sellBy === 'WEIGHT' ? (
-                                    <span className="text-sm font-bold text-neutral-900">{formatCurrency(product.unitPrice || product.price)}/kg</span>
-                                  ) : product.discountPrice ? (
-                                    <div className="flex items-baseline gap-1.5">
-                                      <span className="text-sm font-bold text-rose-600">{formatCurrency(product.discountPrice)}</span>
-                                      <span className="text-[10px] text-neutral-400 line-through">{formatCurrency(product.price)}</span>
-                                    </div>
-                                  ) : (
-                                    <span className="text-sm font-bold text-neutral-900">{formatCurrency(product.price)}</span>
                                   )}
                                 </div>
                               </div>
