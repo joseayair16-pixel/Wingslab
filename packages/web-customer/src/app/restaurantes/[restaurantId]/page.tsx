@@ -4956,7 +4956,7 @@ function triggerHaptic(pattern: number | number[] = 10) {
                                   </div>
                                 ) : (
                                   <button type="button" onClick={() => addToCart(product)} disabled={!restaurant.isOpen} className="w-full rounded-lg bg-neutral-900 py-1.5 text-[10px] font-bold text-white transition hover:bg-neutral-800 disabled:bg-neutral-200 disabled:text-neutral-400">
-                                    +
+                                    Agregar
                                   </button>
                                 )}
                               </div>
@@ -5159,9 +5159,7 @@ function triggerHaptic(pattern: number | number[] = 10) {
                       );
                     })}
                     </div>
-                     {(isPromoCarousel || isLargeCategory) && (
-                      <div className="pointer-events-none absolute inset-y-0 right-0 w-20 md:w-28 bg-gradient-to-l from-white via-white/60 to-transparent" />
-                    )}
+                     
                   </div>
                 </section>
                 );
