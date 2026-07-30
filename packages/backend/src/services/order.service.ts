@@ -70,7 +70,7 @@ function getPositiveNumberEnv(name: string, fallback: number): number {
 }
 
 function isLocationCapturedRecently(capturedAt?: string | number): boolean {
-  if (!capturedAt) return true;
+  if (!capturedAt) return false;
 
   const timestamp = typeof capturedAt === 'number' ? capturedAt : Date.parse(capturedAt);
   if (!Number.isFinite(timestamp)) return false;
@@ -137,6 +137,10 @@ function validateCustomerLocation(input: OrderInput, customerUserId: string) {
     }
     return; // Es transferencia, ignoramos la precisión
   }
+
+  // Transferencia: no validamos distancia GPS vs dirección de entrega
+  // para permitir pedidos regalo desde cualquier ubicación.
+  if (input.paymentMethod !== PaymentMethod.CASH) return;
 
   const deliveryAddress = input.deliveryAddress!;
   const distanceKm = getDistanceInKm(
@@ -218,6 +222,70 @@ export async function createOrderForCustomer({
 
   const isPickup = input.fulfillmentType === 'PICKUP';
 
+  if (isPickup && input.paymentMethod === PaymentMethod.CASH) {
+    if (!input.locationVerified) {
+      throw new AppError(
+        400,
+        'LOCATION_NOT_VERIFIED',
+        'Para pagos en efectivo en sucursal es obligatorio permitir el acceso GPS a tu ubicación actual.'
+      );
+    }
+
+    if (!input.currentLocation) {
+      throw new AppError(
+        400,
+        'CUSTOMER_LOCATION_REQUIRED',
+        'Para pagos en efectivo en sucursal debes compartir tu ubicación actual.'
+      );
+    }
+
+    const { latitude, longitude, accuracy, capturedAt } = input.currentLocation;
+    const hasValidCoords =
+      Number.isFinite(latitude) && Number.isFinite(longitude) &&
+      latitude >= -90 && latitude <= 90 &&
+      longitude >= -180 && longitude <= 180;
+
+    if (!hasValidCoords || !isLocationCapturedRecently(capturedAt)) {
+      throw new AppError(
+        400,
+        'CUSTOMER_LOCATION_INVALID',
+        'La ubicación actual no es válida o está vencida. Por favor vuelve a verificarla para pagar en efectivo.'
+      );
+    }
+
+    const maxAccuracyMeters = getPositiveNumberEnv('ORDER_MAX_LOCATION_ACCURACY_METERS', 2000);
+    if (typeof accuracy === 'number' && accuracy > maxAccuracyMeters) {
+      throw new AppError(
+        400,
+        'CUSTOMER_LOCATION_LOW_ACCURACY',
+        'La ubicación actual no tiene suficiente precisión. Intenta activar la ubicación precisa para pagos en efectivo.'
+      );
+    }
+
+    const restaurantLocation = restaurant.latitude != null && restaurant.longitude != null
+      ? { latitude: restaurant.latitude, longitude: restaurant.longitude }
+      : null;
+
+    if (restaurantLocation) {
+      const distanceKm = getDistanceInKm(
+        { latitude, longitude },
+        restaurantLocation
+      );
+      const effectiveRadius = restaurant.hasOwnDelivery
+        ? (restaurant.deliveryRadius || 3)
+        : (regionConfig?.deliveryRadius || 20);
+      const bufferKm = parseFloat(String(process.env.DELIVERY_RADIUS_BUFFER_KM || '0.1')) || 0.1;
+
+      if (distanceKm > effectiveRadius + bufferKm) {
+        throw new AppError(
+          400,
+          'PICKUP_CASH_OUT_OF_RANGE',
+          `Para pagar en efectivo en sucursal debes estar dentro del área de cobertura del restaurante (distancia: ${distanceKm.toFixed(2)} km, radio: ${effectiveRadius} km).`
+        );
+      }
+    }
+  }
+
   if (!isPickup) {
     const effectiveDeliveryRadius = restaurant.hasOwnDelivery
       ? (restaurant.deliveryRadius || 3)
@@ -266,7 +334,7 @@ export async function createOrderForCustomer({
       }
     } catch (err) {
       if (err instanceof AppError) throw err;
-      logger.warn('Error validating delivery distance', { err });
+      throw new AppError(500, 'DELIVERY_RADIUS_VALIDATION_FAILED', 'Error al validar la distancia de entrega.');
     }
   }
 
@@ -557,24 +625,48 @@ export async function createOrderForCustomer({
         let verifiedAt = (address as any).locationVerifiedAt;
         const isVerificationStale = !verifiedAt || (Date.now() - new Date(verifiedAt).getTime()) > verificationTtlDays * 24 * 60 * 60 * 1000;
 
-        const hasLocationVerified = String(requestHeaders?.['x-location-verified'] || '') === '1';
-        if (isVerificationStale && hasLocationVerified) {
-          const now = new Date();
-          await tx.address.update({
-            where: { id: address.id },
-            data: {
-              latitude: input.deliveryAddress!.latitude,
-              longitude: input.deliveryAddress!.longitude,
-              locationVerifiedAt: now,
-            },
-          });
-          verifiedAt = now;
-        } else if (isVerificationStale) {
-          throw new AppError(
-            400,
-            'ADDRESS_NOT_VERIFIED',
-            'La dirección registrada no se verificó recientemente. Por favor verifica tu ubicación desde la app antes de crear el pedido.'
-          );
+        if (isVerificationStale) {
+          if (input.paymentMethod === PaymentMethod.CASH) {
+            const location = input.currentLocation;
+            const hasValidGps =
+              location &&
+              Number.isFinite(location.latitude) && Number.isFinite(location.longitude) &&
+              location.latitude >= -90 && location.latitude <= 90 &&
+              location.longitude >= -180 && location.longitude <= 180 &&
+              isLocationCapturedRecently(location.capturedAt);
+
+            if (!hasValidGps) {
+              throw new AppError(
+                400,
+                'ADDRESS_NOT_VERIFIED',
+                'Para pagos en efectivo la dirección debe verificarse recientemente. Activa tu ubicación GPS.'
+              );
+            }
+
+            const distanceKm = getDistanceInKm(
+              { latitude: location.latitude, longitude: location.longitude },
+              { latitude: input.deliveryAddress!.latitude, longitude: input.deliveryAddress!.longitude }
+            );
+            if (distanceKm > 1) {
+              throw new AppError(
+                400,
+                'ADDRESS_NOT_VERIFIED',
+                'Debes estar cerca de la dirección de entrega para verificarla con pago en efectivo.'
+              );
+            }
+
+            const now = new Date();
+            await tx.address.update({
+              where: { id: address.id },
+              data: {
+                latitude: input.deliveryAddress!.latitude,
+                longitude: input.deliveryAddress!.longitude,
+                locationVerifiedAt: now,
+              },
+            });
+            verifiedAt = now;
+          }
+          // For TRANSFER, allow stale address to proceed without re-verification
         }
 
         if (input.deliveryAddress!.reference && address.reference !== input.deliveryAddress!.reference) {
