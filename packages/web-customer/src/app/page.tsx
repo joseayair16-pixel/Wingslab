@@ -1302,22 +1302,7 @@ export default function Home() {
     }
   }, [userLocation]);
 
-  useEffect(() => {
-    if (!isCartOpen) {
-      return;
-    }
 
-    function handlePointerDown(event: MouseEvent) {
-      if (!cartRef.current?.contains(event.target as Node)) {
-        setIsCartOpen(false);
-      }
-    }
-
-    document.addEventListener('mousedown', handlePointerDown);
-    return () => {
-      document.removeEventListener('mousedown', handlePointerDown);
-    };
-  }, [isCartOpen]);
 
   useEffect(() => {
     if (!isSideMenuOpen) {

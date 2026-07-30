@@ -1354,23 +1354,6 @@ export default function RestaurantPage({
   }, [apiBase, sessionUser, token]);
 
   useEffect(() => {
-    if (!isCartOpen || showMaxCashModal || showGpsCashModal || deliveryErrorModal || isPushReminderModalOpen) {
-      return;
-    }
-
-    function handlePointerDown(event: MouseEvent) {
-      if (!cartRef.current?.contains(event.target as Node)) {
-        setIsCartOpen(false);
-      }
-    }
-
-    document.addEventListener('mousedown', handlePointerDown);
-    return () => {
-      document.removeEventListener('mousedown', handlePointerDown);
-    };
-  }, [isCartOpen, showMaxCashModal, showGpsCashModal, deliveryErrorModal, isPushReminderModalOpen]);
-
-  useEffect(() => {
     if (!isCheckoutOpen || showMaxCashModal || showGpsCashModal || deliveryErrorModal || isPushReminderModalOpen) {
       return;
     }
