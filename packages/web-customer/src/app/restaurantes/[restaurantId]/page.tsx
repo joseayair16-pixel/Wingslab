@@ -765,6 +765,20 @@ export default function RestaurantPage({
   const [pickupReadyOrder, setPickupReadyOrder] = useState<CustomerOrderDetail | null>(null);
   const [copiedField, setCopiedField] = useState<'account' | 'beneficiary' | 'amount' | null>(null);
 
+  // Image preview modal for store products
+  const [previewProduct, setPreviewProduct] = useState<{
+    images: string[];
+    name: string;
+    description: string;
+    price: number;
+    discountPrice?: number | null;
+    sellBy?: string;
+    unitPrice?: number | null;
+    id: string;
+    optionGroups?: ProductOptionGroup[];
+  } | null>(null);
+  const [previewIndex, setPreviewIndex] = useState(0);
+
   // Product options / customization modal state
   const [customizingProduct, setCustomizingProduct] = useState<PublicRestaurantDetail['categories'][number]['products'][number] | null>(null);
   const [carouselIndexMap, setCarouselIndexMap] = useState<Record<string, number>>({});
@@ -4953,12 +4967,31 @@ function triggerHaptic(pattern: number | number[] = 10) {
                         ) : isLargeCategory ? (
                           <article id={product.id} key={product.id} className="w-[44vw] shrink-0 snap-start sm:w-52 overflow-hidden rounded-2xl border border-black/[0.04] bg-white transition-all duration-300 shadow-[0_2px_12px_rgba(0,0,0,0.02)] hover:-translate-y-0.5 hover:shadow-[0_8px_24px_rgba(0,0,0,0.06)]">
                             <div className="flex h-full flex-col">
-                              <div className="relative aspect-square overflow-hidden bg-neutral-50">
+                              <div
+                                className="relative aspect-square overflow-hidden bg-neutral-50 cursor-pointer"
+                                onClick={() => {
+                                  const imgs = product.images?.length ? product.images : product.image ? [product.image] : [];
+                                  if (imgs.length) {
+                                    setPreviewProduct({
+                                      images: imgs,
+                                      name: product.name,
+                                      description: product.description,
+                                      price: product.price,
+                                      discountPrice: product.discountPrice,
+                                      sellBy: product.sellBy,
+                                      unitPrice: product.unitPrice,
+                                      id: product.id,
+                                      optionGroups: product.optionGroups,
+                                    });
+                                    setPreviewIndex(0);
+                                  }
+                                }}
+                              >
                                 {product.image ? (
                                   <img
                                     src={(product.images?.length ?? 0) > 1 && carouselIndexMap[product.id] ? product.images![carouselIndexMap[product.id]] : product.image}
                                     alt={product.name}
-                                    className="h-full w-full object-cover transition duration-300 group-hover:scale-105"
+                                    className="h-full w-full object-cover transition duration-300 hover:scale-105"
                                     style={{ objectPosition: product.imagePosition || 'center', transform: `scale(${(product.imageZoom ?? 100) / 100})` }}
                                     loading="lazy"
                                     decoding="async"
@@ -5620,6 +5653,109 @@ function triggerHaptic(pattern: number | number[] = 10) {
         onSuccess={handleLoginSuccess}
         apiBase={apiBase}
       />
+
+      {/* Quick View Modal for Stores */}
+      {previewProduct && (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 backdrop-blur-sm px-3 py-4 sm:px-6 sm:py-8"
+          onClick={() => setPreviewProduct(null)}
+        >
+          <div
+            className="relative flex w-full max-w-4xl flex-col overflow-hidden rounded-3xl bg-white shadow-2xl sm:flex-row sm:max-h-[85vh]"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Close button */}
+            <button
+              type="button"
+              onClick={() => setPreviewProduct(null)}
+              className="absolute right-3 top-3 z-20 flex h-8 w-8 items-center justify-center rounded-full bg-white/90 text-neutral-700 shadow-md backdrop-blur-sm transition hover:bg-white hover:scale-105 active:scale-95"
+            >
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+            </button>
+
+            {/* Image section */}
+            <div className="relative flex w-full items-center justify-center bg-neutral-50 sm:w-[55%] sm:min-h-[500px]">
+              <img
+                src={previewProduct.images[previewIndex]}
+                alt={previewProduct.name}
+                className="h-64 w-full object-contain p-6 sm:h-full sm:max-h-[500px] sm:p-8"
+              />
+              {previewProduct.discountPrice && (
+                <div className="absolute left-4 top-4 z-10 rounded-full bg-rose-500/90 px-3 py-1 text-[11px] font-bold text-white shadow-lg backdrop-blur-sm">
+                  -{Math.round((1 - previewProduct.discountPrice / previewProduct.price) * 100)}%
+                </div>
+              )}
+              {previewProduct.images.length > 1 && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => setPreviewIndex((prev) => (prev - 1 + previewProduct.images.length) % previewProduct.images.length)}
+                    className="absolute left-2 top-1/2 z-10 -translate-y-1/2 flex h-9 w-9 items-center justify-center rounded-full bg-white/80 text-neutral-700 shadow-md backdrop-blur-sm transition hover:bg-white hover:scale-105 active:scale-95"
+                  >
+                    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 19l-7-7 7-7" /></svg>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPreviewIndex((prev) => (prev + 1) % previewProduct.images.length)}
+                    className="absolute right-2 top-1/2 z-10 -translate-y-1/2 flex h-9 w-9 items-center justify-center rounded-full bg-white/80 text-neutral-700 shadow-md backdrop-blur-sm transition hover:bg-white hover:scale-105 active:scale-95"
+                  >
+                    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" /></svg>
+                  </button>
+                  <div className="absolute bottom-4 left-1/2 z-10 flex -translate-x-1/2 gap-1.5">
+                    {previewProduct.images.map((_, idx) => (
+                      <button
+                        key={idx}
+                        type="button"
+                        onClick={() => setPreviewIndex(idx)}
+                        className={`h-1.5 rounded-full transition-all duration-300 ${idx === previewIndex ? 'w-5 bg-neutral-900' : 'w-1.5 bg-neutral-300 hover:bg-neutral-500'}`}
+                      />
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
+
+            {/* Details section */}
+            <div className="flex w-full flex-col justify-between p-5 sm:w-[45%] sm:p-7">
+              <div className="overflow-y-auto">
+                <h2 className="text-xl font-bold leading-tight text-neutral-900 sm:text-2xl">{previewProduct.name}</h2>
+                {previewProduct.description && (
+                  <p className="mt-3 text-sm leading-relaxed text-neutral-600">{previewProduct.description}</p>
+                )}
+                <div className="mt-5">
+                  {previewProduct.sellBy === 'WEIGHT' ? (
+                    <p className="text-2xl font-bold text-neutral-900">{formatCurrency(previewProduct.unitPrice || previewProduct.price)}<span className="text-base font-medium text-neutral-500">/kg</span></p>
+                  ) : previewProduct.discountPrice ? (
+                    <div className="space-y-1">
+                      <div className="flex items-baseline gap-2.5">
+                        <span className="text-2xl font-bold text-rose-600">{formatCurrency(previewProduct.discountPrice)}</span>
+                        <span className="text-sm text-neutral-400 line-through">{formatCurrency(previewProduct.price)}</span>
+                      </div>
+                      <span className="inline-block rounded-full bg-emerald-50 px-2.5 py-0.5 text-[10px] font-bold text-emerald-600">
+                        Ahorras {formatCurrency(previewProduct.price - previewProduct.discountPrice)}
+                      </span>
+                    </div>
+                  ) : (
+                    <p className="text-2xl font-bold text-neutral-900">{formatCurrency(previewProduct.price)}</p>
+                  )}
+                </div>
+              </div>
+              <div className="mt-6 flex items-center gap-3 border-t border-neutral-100 pt-5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPreviewProduct(null);
+                    addToCart(previewProduct as any);
+                  }}
+                  className="flex-1 rounded-xl bg-neutral-900 py-3.5 text-sm font-bold text-white shadow-lg shadow-neutral-900/20 transition hover:bg-neutral-800 active:scale-[0.97]"
+                >
+                  {previewProduct.optionGroups?.length ? 'Personalizar y agregar' : 'Agregar al carrito'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }
