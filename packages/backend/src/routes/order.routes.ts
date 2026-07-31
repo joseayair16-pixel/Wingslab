@@ -16,6 +16,7 @@ import { sendWhatsAppNewOrder } from '../services/whatsapp.service';
 
 const createOrderSchema = z.object({
   restaurantId: z.string().min(1, 'El restaurante es obligatorio.'),
+  clientOrderKey: z.string().min(8, 'La clave de pedido es obligatoria.').max(64).optional(),
   items: z
     .array(
       z.object({
@@ -116,12 +117,21 @@ export async function registerOrderRoutes(fastify: FastifyInstance): Promise<voi
 
 
       try {
-        const order = await createOrderForCustomer({
+        const { order, isDuplicate } = await createOrderForCustomer({
           prisma,
           customerUserId: user.sub,
           input: parsed.data as any,
           requestHeaders: request.headers,
         });
+
+        // Pedido duplicado (reintento del cliente): no se vuelve a notificar al restaurante.
+        if (isDuplicate) {
+          return reply.status(200).send({
+            success: true,
+            data: order,
+            isDuplicate: true,
+          });
+        }
 
         const queueInfo = await enqueueRestaurantOrder(order.restaurant.id, order.id, order.createdAt);
 
@@ -190,6 +200,7 @@ export async function registerOrderRoutes(fastify: FastifyInstance): Promise<voi
         return reply.status(201).send({
           success: true,
           data: order,
+          isDuplicate: false,
         });
       } catch (error) {
         return sendAppError(reply, error);

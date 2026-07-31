@@ -342,6 +342,7 @@ model Address {
 model Order {
   id             String     @id @default(cuid())
   orderReference String     @unique // For human readable reference
+  clientOrderKey String?    @unique // Client-generated idempotency key to prevent duplicate orders
   dailyCounter   Int?
   restaurantId   String
   restaurant     Restaurant @relation(fields: [restaurantId], references: [id])

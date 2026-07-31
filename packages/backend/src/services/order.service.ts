@@ -9,6 +9,7 @@ import { calculateOrderEta } from '../utils/order-eta';
 
 type OrderInput = {
   restaurantId: string;
+  clientOrderKey?: string;
   items: Array<{
     productId: string;
     quantity: number;
@@ -201,6 +202,27 @@ export async function createOrderForCustomer({
 
   if (!customer) {
     throw new AppError(404, 'CUSTOMER_NOT_FOUND', 'No se encontro el perfil del cliente.');
+  }
+
+  // Idempotencia: si el cliente reintenta con la misma clientOrderKey (red caída,
+  // doble toque, timeout con retry), devolvemos el pedido ya creado sin duplicarlo.
+  if (input.clientOrderKey) {
+    const existingByKey = await prisma.order.findUnique({
+      where: { clientOrderKey: input.clientOrderKey },
+      select: customerCreatedOrderSelect,
+    });
+
+    if (existingByKey) {
+      if (existingByKey.customerId !== customer.id) {
+        throw new AppError(403, 'ORDER_IDEMPOTENCY_FORBIDDEN', 'La clave del pedido no pertenece a este cliente.');
+      }
+      logger.info('Order idempotency hit', {
+        orderId: existingByKey.id,
+        orderReference: existingByKey.orderReference,
+        clientOrderKey: input.clientOrderKey,
+      });
+      return { order: existingByKey, isDuplicate: true };
+    }
   }
 
   const restaurant = await prisma.restaurant.findUnique({
@@ -563,24 +585,25 @@ export async function createOrderForCustomer({
     );
   }
 
-  // Seguridad: Límite de Pedidos Activos (Máximo 2)
-  const activeOrdersCount = await prisma.order.count({
-    where: {
-      customerId: customer.id,
-      status: { notIn: [OrderStatus.DELIVERED, OrderStatus.COMPLETED, OrderStatus.CANCELLED, OrderStatus.REJECTED] }
-    }
-  });
-
-  if (activeOrdersCount >= 2) {
-    throw new AppError(
-      400,
-      'ACTIVE_ORDERS_LIMIT_EXCEEDED',
-      'Ya tienes 2 pedidos en proceso. Espera a que alguno se entregue para realizar otro.'
-    );
-  }
-
   try {
     return await prisma.$transaction(async (tx) => {
+      // Seguridad: Límite de Pedidos Activos (Máximo 2) — dentro de la transacción
+      // para evitar carreras entre dos creaciones concurrentes.
+      const activeOrdersCount = await tx.order.count({
+        where: {
+          customerId: customer.id,
+          status: { notIn: [OrderStatus.DELIVERED, OrderStatus.COMPLETED, OrderStatus.CANCELLED, OrderStatus.REJECTED] }
+        }
+      });
+
+      if (activeOrdersCount >= 2) {
+        throw new AppError(
+          400,
+          'ACTIVE_ORDERS_LIMIT_EXCEEDED',
+          'Ya tienes 2 pedidos en proceso. Espera a que alguno se entregue para realizar otro.'
+        );
+      }
+
       const startOfDay = new Date();
       startOfDay.setHours(0, 0, 0, 0);
 
@@ -688,6 +711,7 @@ export async function createOrderForCustomer({
       const order = await tx.order.create({
         data: {
           orderReference: generateOrderReference(),
+          clientOrderKey: input.clientOrderKey ?? null,
           dailyCounter,
           restaurantId: restaurant.id,
           customerId: customer.id,
@@ -764,9 +788,27 @@ export async function createOrderForCustomer({
         totalAmount: order.totalAmount,
       });
 
-      return order;
+      return { order, isDuplicate: false };
     });
   } catch (error) {
+    // P2002 en clientOrderKey: un request concurrente ya creó el pedido.
+    // Se devuelve el existente para garantizar idempotencia.
+    if (input.clientOrderKey && error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+      const existingByKey = await prisma.order.findUnique({
+        where: { clientOrderKey: input.clientOrderKey },
+        select: customerCreatedOrderSelect,
+      });
+
+      if (existingByKey && existingByKey.customerId === customer.id) {
+        logger.info('Order idempotency hit on P2002', {
+          orderId: existingByKey.id,
+          orderReference: existingByKey.orderReference,
+          clientOrderKey: input.clientOrderKey,
+        });
+        return { order: existingByKey, isDuplicate: true };
+      }
+    }
+
     if (isMissingPaymentProofColumnError(error)) {
       throw new AppError(
         503,

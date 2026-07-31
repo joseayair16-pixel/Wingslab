@@ -769,6 +769,13 @@ export default function RestaurantPage({
   const recentCreatedOrderRef = useRef<{ id: string; orderReference: string; paymentMethod?: string } | null>(null);
   const loadActiveOrdersRef = useRef<() => void>(() => {});
   const creatingOrderRef = useRef(false);
+  const clientOrderKeyRef = useRef('');
+
+  // Clave de idempotencia: se regenera cuando cambia el carrito, pero se mantiene
+  // estable entre reintentos del mismo pedido (red caída, doble toque).
+  useEffect(() => {
+    clientOrderKeyRef.current = '';
+  }, [cartItems]);
 
   // Estados para Modal de Repartidor Llegó
   const [isDriverArrivedModalOpen, setIsDriverArrivedModalOpen] = useState(false);
@@ -2278,6 +2285,9 @@ function triggerHaptic(pattern: number | number[] = 10) {
 
       const body: Record<string, any> = {
         restaurantId: restaurant.id,
+        clientOrderKey: (clientOrderKeyRef.current ||= (typeof crypto !== 'undefined' && 'randomUUID' in crypto
+          ? crypto.randomUUID()
+          : `ord-${Date.now()}-${Math.random().toString(36).slice(2, 12)}`)),
         items: cart.map((item) => ({
           productId: item.productId,
           quantity: item.quantity,
