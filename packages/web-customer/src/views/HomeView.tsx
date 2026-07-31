@@ -129,10 +129,14 @@ export const HomeView = React.memo(function HomeView({
   }, [filteredRestaurants, businessTypeFilter]);
 
   const filteredCategories = useMemo(() => {
-    if (businessTypeFilter === 'all') return platformCategories;
-    return platformCategories.filter((c) => {
+    // Solo mostrar categorías que al menos un restaurante/tienda tiene asignada.
+    const available = platformCategories.filter((c) => {
       const types = categoryBusinessTypes[c.id];
-      if (!types) return true;
+      return !!types && types.size > 0;
+    });
+    if (businessTypeFilter === 'all') return available;
+    return available.filter((c) => {
+      const types = categoryBusinessTypes[c.id];
       const hasRestaurant = [...types].some(t => isRestaurantType(t));
       const hasStore = [...types].some(t => !isRestaurantType(t));
       if (businessTypeFilter === 'restaurants') return hasRestaurant;
