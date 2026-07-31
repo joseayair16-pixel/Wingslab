@@ -2701,25 +2701,32 @@ export default function Home() {
             const source = window.localStorage.getItem('locationSource') as 'gps' | 'manual' | null;
             if (source) setLocationSource(source);
           } catch (e) { }
-          // If permission granted, proactively refresh location in background
-          if (navigator.permissions) {
+          // If permission granted, proactively refresh location in background.
+          // iOS Safari does not support the Permissions API (navigator.permissions
+          // is undefined), so on iOS we try getCurrentPosition directly; it fails
+          // fast (without re-prompting) if the user already denied access.
+          const permissionsSupported =
+            typeof navigator.permissions !== 'undefined' &&
+            typeof navigator.permissions.query === 'function';
+          let permissionGranted = false;
+          if (permissionsSupported) {
             try {
-              // @ts-ignore permissions API
               const perm = await navigator.permissions.query({ name: 'geolocation' });
-              if (perm.state === 'granted') {
-                const fresh = await tryUpdateFromGeolocation();
-                if (fresh) {
-                  setUserLocation(fresh as any);
-                  setSelectedZoneName(null);
-                  try {
-                    localStorage.removeItem('selectedZoneName');
-                    localStorage.removeItem('locationDenied');
-                  } catch {}
-                  return;
-                }
-              }
+              permissionGranted = perm.state === 'granted';
             } catch (e) {
               // ignore permission inspection failures
+            }
+          }
+          if (permissionGranted || !permissionsSupported) {
+            const fresh = await tryUpdateFromGeolocation();
+            if (fresh) {
+              setUserLocation(fresh as any);
+              setSelectedZoneName(null);
+              try {
+                localStorage.removeItem('selectedZoneName');
+                localStorage.removeItem('locationDenied');
+              } catch {}
+              return;
             }
           }
 
@@ -2748,12 +2755,18 @@ export default function Home() {
     const MAX_ACCURACY_M = 500;
 
     async function startWatch() {
-      if (!navigator.geolocation || !navigator.permissions) return;
-      try {
-        const perm = await navigator.permissions.query({ name: 'geolocation' });
-        if (perm.state === 'denied') return;
-      } catch {
-        return;
+      if (!navigator.geolocation) return;
+      if (
+        typeof navigator.permissions !== 'undefined' &&
+        typeof navigator.permissions.query === 'function'
+      ) {
+        try {
+          const perm = await navigator.permissions.query({ name: 'geolocation' });
+          if (perm.state === 'denied') return;
+        } catch {
+          // Permissions API unavailable/failed (e.g. iOS Safari): fall through and
+          // let watchPosition resolve the permission state itself.
+        }
       }
 
       watchId = navigator.geolocation.watchPosition(
@@ -2789,7 +2802,16 @@ export default function Home() {
             localStorage.setItem('locationSource', 'gps');
           } catch (e) { }
         },
-        () => {},
+        (err) => {
+          if (err && err.code === 1) {
+            setLocationDenied(true);
+            try { localStorage.setItem('locationDenied', '1'); } catch (e) { }
+            if (watchId !== null) {
+              navigator.geolocation.clearWatch(watchId);
+              watchId = null;
+            }
+          }
+        },
         { enableHighAccuracy: false, timeout: 15000, maximumAge: 60000 },
       );
     }
