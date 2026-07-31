@@ -2776,13 +2776,18 @@ export default function Home() {
           lastReloadAt = now;
           lastPosition = { lat: latitude, lng: longitude };
 
-          setUserLocation({
-            latitude,
-            longitude,
-            accuracy,
-            address: 'Ubicación actual',
-            ts: now,
-          });
+          const loc = { latitude, longitude, accuracy, address: 'Ubicación actual', ts: now };
+          userLocationRef.current = loc;
+          setUserLocation(loc);
+          setLocationDenied(false);
+          setLocationSource('gps');
+          setSelectedZoneName(null);
+          try {
+            localStorage.setItem('userLocation', JSON.stringify(loc));
+            localStorage.removeItem('locationDenied');
+            localStorage.removeItem('selectedZoneName');
+            localStorage.setItem('locationSource', 'gps');
+          } catch (e) { }
         },
         () => {},
         { enableHighAccuracy: false, timeout: 15000, maximumAge: 60000 },
