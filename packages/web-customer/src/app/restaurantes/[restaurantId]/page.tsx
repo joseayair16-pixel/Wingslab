@@ -55,6 +55,11 @@ type PublicRestaurantDetail = {
   serviceFee?: number | null;
   deliveryFee?: number | null;
   effectiveDeliveryFee?: number | null;
+  pricingModel?: string | null;
+  baseRate?: number | null;
+  perKmRate?: number | null;
+  minDeliveryFee?: number | null;
+  maxDeliveryFee?: number | null;
   deliveryRadius?: number | null;
   minDeliveryTime: number;
   maxDeliveryTime: number;
@@ -1683,19 +1688,14 @@ export default function RestaurantPage({
     [cart]
   );
   const serviceFee = toMoney(restaurant?.serviceFee);
-  const estimatedDeliveryFee = toMoney(restaurant?.effectiveDeliveryFee);
-  const orderTotal = Math.max(0, cartSubtotal - discountAmount + serviceFee + (fulfillmentType === 'PICKUP' ? 0 : estimatedDeliveryFee));
-  const checkoutValidationMessage = useMemo(() => {
-    return getCheckoutValidationMessage(checkoutForm, cart, restaurant, token, Boolean(transferProofSource));
-  }, [cart, checkoutForm, restaurant, token, transferProofSource]);
-
+  // Distancia efectiva: mientras se navega el menú usa la ubicación activa (para
+  // coincidir con el preview de la página principal); durante el checkout usa las
+  // coordenadas de la dirección de entrega ingresada. No se usa restaurant.distanceKm
+  // porque el backend lo calculó con la ubicación del usuario al cargar la página y
+  // quedaría desactualizado si la dirección de entrega difiere.
   const distanceKm = useMemo(() => {
     if (!restaurant || !restaurant.latitude || !restaurant.longitude) return null;
-    
-    if (typeof (restaurant as any).distanceKm === 'number') {
-      return (restaurant as any).distanceKm;
-    }
-    
+
     let customerLat = NaN;
     let customerLng = NaN;
 
@@ -1740,7 +1740,7 @@ export default function RestaurantPage({
     }
 
     if (isNaN(customerLat) || isNaN(customerLng)) return null;
-    
+
     return calculateHaversineDistance(
       customerLat,
       customerLng,
@@ -1748,6 +1748,33 @@ export default function RestaurantPage({
       restaurant.longitude
     );
   }, [restaurant, checkoutForm.latitude, checkoutForm.longitude, isCheckoutOpen]);
+
+  // Envío dinámico recalculado con la distancia efectiva (dirección de entrega real
+  // durante el checkout), usando la misma fórmula que el backend. El preview del
+  // backend (effectiveDeliveryFee) solo se usa como respaldo.
+  const deliveryFee = useMemo(() => {
+    if (fulfillmentType === 'PICKUP') return 0;
+    if (!restaurant) return 0;
+    if (restaurant.hasOwnDelivery) return toMoney(restaurant.deliveryFee);
+    if (
+      typeof distanceKm === 'number' &&
+      restaurant.pricingModel === 'distance' &&
+      typeof restaurant.baseRate === 'number' &&
+      typeof restaurant.perKmRate === 'number'
+    ) {
+      const extraKm = Math.max(0, distanceKm - 1);
+      let fee = restaurant.baseRate + extraKm * restaurant.perKmRate;
+      if (typeof restaurant.minDeliveryFee === 'number') fee = Math.max(fee, restaurant.minDeliveryFee);
+      if (typeof restaurant.maxDeliveryFee === 'number') fee = Math.min(fee, restaurant.maxDeliveryFee);
+      return Math.round(fee * 100) / 100;
+    }
+    return toMoney(restaurant.effectiveDeliveryFee);
+  }, [restaurant, distanceKm, fulfillmentType]);
+
+  const orderTotal = Math.max(0, cartSubtotal - discountAmount + serviceFee + (fulfillmentType === 'PICKUP' ? 0 : deliveryFee));
+  const checkoutValidationMessage = useMemo(() => {
+    return getCheckoutValidationMessage(checkoutForm, cart, restaurant, token, Boolean(transferProofSource));
+  }, [cart, checkoutForm, restaurant, token, transferProofSource]);
 
 function triggerHaptic(pattern: number | number[] = 10) {
   if (typeof window !== 'undefined' && navigator.vibrate) {
@@ -3280,7 +3307,7 @@ function triggerHaptic(pattern: number | number[] = 10) {
         onFulfillmentTypeChange={setFulfillmentType}
         isRestaurantOpen={restaurant?.isOpen}
         overrideServiceFee={serviceFee}
-        overrideDeliveryFee={estimatedDeliveryFee}
+        overrideDeliveryFee={deliveryFee}
         discountAmount={discountAmount}
       />
 
@@ -4353,7 +4380,7 @@ function triggerHaptic(pattern: number | number[] = 10) {
                           <svg className="h-3 w-3 text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                           </svg>
-                          <span>{formatDeliverySummary(restaurant.effectiveDeliveryFee)}</span>
+                          <span>{formatDeliverySummary(deliveryFee)}</span>
                         </div>
                       </div>
                       <div className="flex flex-1 lg:flex-none flex-col items-center justify-center gap-0 rounded-xl lg:rounded-none bg-neutral-50 lg:bg-transparent px-2 py-1.5 lg:px-4">
