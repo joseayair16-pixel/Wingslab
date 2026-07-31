@@ -1956,14 +1956,18 @@ export default function Home() {
 
     try {
       persistApiBase(storageKey, apiBase);
+      // Always read location from the ref so synchronous updates in
+      // handleZoneSelect are visible immediately — never rely on the
+      // async state closure, which can be stale during zone switching.
+      const loc = userLocationRef.current;
       // Do not request restaurants from the backend unless we have a valid userLocation.
       // Backend will not filter by distance if coordinates are missing, which can show
       // restaurants from other cities. We prefer showing no restaurants until the user
       // grants/updates their location or enters it manually.
-      const restaurantsPromise = userLocation
+      const restaurantsPromise = loc
         ? requestJson<RestaurantListResponse>({
           apiBase,
-          path: `/restaurantes?limit=24&openOnly=false&latitude=${userLocation.latitude}&longitude=${userLocation.longitude}`,
+          path: `/restaurantes?limit=24&openOnly=false&latitude=${loc.latitude}&longitude=${loc.longitude}`,
           fallbackMessage: 'No se pudo cargar la oferta de restaurantes.',
         })
         : Promise.resolve({
@@ -1983,15 +1987,15 @@ export default function Home() {
             data: { items: [], total: 0, page: 1, limit: 15, hasMore: false },
           } satisfies PaginatedOrdersResponse);
 
-      const featuredPromise = userLocation
-        ? fetch(`${apiBase}/public/featured?latitude=${userLocation.latitude}&longitude=${userLocation.longitude}`)
+      const featuredPromise = loc
+        ? fetch(`${apiBase}/public/featured?latitude=${loc.latitude}&longitude=${loc.longitude}`)
             .then(r => r.json())
             .then(d => d.success ? d.data : [])
             .catch(() => [])
         : Promise.resolve([]);
 
-      const offersPromise = userLocation
-        ? fetch(`${apiBase}/public/ofertas?latitude=${userLocation.latitude}&longitude=${userLocation.longitude}`)
+      const offersPromise = loc
+        ? fetch(`${apiBase}/public/ofertas?latitude=${loc.latitude}&longitude=${loc.longitude}`)
             .then(r => r.json())
             .then(d => d.success ? d.data : [])
             .catch(() => [])
@@ -2028,7 +2032,7 @@ export default function Home() {
 
       if (callId !== loadDashboardCallIdRef.current) return;
       const validFeatured = featuredData.filter((r: any) => {
-        if (!userLocation || r.distanceKm === null || r.deliveryRadius === null) return false;
+        if (!loc || r.distanceKm === null || r.deliveryRadius === null) return false;
         return r.distanceKm <= r.deliveryRadius;
       });
       setRestaurants(restaurantsData.data.items || []);
@@ -2168,6 +2172,7 @@ export default function Home() {
     const lat = zone.latitude ?? 0;
     const lng = zone.longitude ?? 0;
     const loc = { latitude: lat, longitude: lng, accuracy: undefined, address: zone.regionName, ts: Date.now() };
+    userLocationRef.current = loc;
     setSelectedZoneName(zone.regionName);
     setLocationSource('manual');
     setLocationDenied(true);
@@ -2222,6 +2227,7 @@ export default function Home() {
               }
             } catch {}
             const loc = { latitude, longitude, accuracy, address, ts: Date.now() };
+            userLocationRef.current = loc;
             setUserLocation(loc);
             setLocationSource('gps');
             setLocationDenied(false);
@@ -2230,14 +2236,20 @@ export default function Home() {
               localStorage.setItem('userLocation', JSON.stringify(loc));
               localStorage.removeItem('locationDenied');
             } catch {}
+            loadDashboard();
           };
           void tryGeocode();
         },
-        () => {},
+        () => {
+          // GPS failed — ensure the dashboard doesn't freeze indefinitely
+          loadDashboard();
+        },
         { enableHighAccuracy: false, timeout: 10000, maximumAge: 60000 }
       );
+    } else {
+      loadDashboard();
     }
-  }, []);
+  }, [loadDashboard]);
 
   const loadProfile = useCallback(async () => {
     if (!token) return;
