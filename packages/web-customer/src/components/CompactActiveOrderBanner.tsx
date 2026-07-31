@@ -418,8 +418,8 @@ export const CompactActiveOrderBanner = memo(function CompactActiveOrderBanner({
               <p className="text-xs text-neutral-500 mt-0.5 truncate">{restaurantName}</p>
             )}
             {isPickup && currentOrder.dailyCounter && (
-              <span className="inline-flex items-center gap-1 mt-1.5 px-2 py-0.5 rounded-full bg-neutral-100 border border-neutral-200 text-[9px] font-bold text-neutral-600">
-                Pedido #{String(currentOrder.dailyCounter).padStart(3, '0')}
+              <span className="inline-flex items-center gap-1 mt-1.5 px-2.5 py-1 rounded-full bg-neutral-100 border border-neutral-200 text-[11px] font-bold text-neutral-600">
+                Pedido #{currentOrder.dailyCounter}
               </span>
             )}
             {(order?.batchId && order?.deliverySequence != null && activeStatus === 'IN_TRANSIT') && (
@@ -472,7 +472,7 @@ export const CompactActiveOrderBanner = memo(function CompactActiveOrderBanner({
           href={`https://www.google.com/maps/dir/?api=1&destination=${currentOrder.restaurant.latitude},${currentOrder.restaurant.longitude}`}
           target="_blank"
           rel="noopener noreferrer"
-          className="mt-3 w-full flex items-center justify-center gap-2.5 rounded-full border-2 border-sky-200 bg-sky-50 py-3 text-sm font-bold text-sky-700 shadow-sm transition hover:bg-sky-100 hover:shadow-md active:scale-[0.97]"
+          className="mt-3 w-full flex items-center justify-center gap-2.5 rounded-full bg-sky-500 hover:bg-sky-600 py-3 text-sm font-bold text-white shadow-md transition hover:shadow-lg active:scale-[0.97]"
         >
           <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.828 0l-4.243-4.243a8 8 0 1111.314 0z" />
