@@ -2685,6 +2685,10 @@ export default function Home() {
       });
 
       setSelectedOrder(payload.data);
+      setActiveOrderDetailsMap((prev) => ({
+        ...prev,
+        [payload.data.id]: payload.data,
+      }));
       return payload.data;
     } catch (requestError) {
       setSelectedOrder(null);

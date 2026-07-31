@@ -76,6 +76,13 @@ export function formatEstimatedArrivalMinutes(
     return null;
   }
 
+  // En PENDING el restaurante aún no define su tiempo de preparación: el ETA
+  // del backend es solo un valor por defecto, no una promesa real. Mejor no
+  // mostrar un conteo hasta que el pedido sea confirmado.
+  if (status === 'PENDING') {
+    return null;
+  }
+
   const msUntilEta = etaDate.getTime() - currentTimestamp;
   const prefix = fulfillmentType === 'PICKUP' ? 'Listo para recoger' : 'Llega';
 
@@ -324,7 +331,7 @@ export const CompactActiveOrderBanner = memo(function CompactActiveOrderBanner({
     ? buildTimelineSteps(order, activeStatus)
     : buildFallbackTimelineSteps(activeStatus, fallbackOrder?.restaurant?.businessType, currentOrder.fulfillmentType);
 
-  const activeEtaTime = order?.estimatedDeliveryTime || fallbackOrder?.estimatedDeliveryTime;
+  const activeEtaTime = fallbackOrder?.estimatedDeliveryTime || order?.estimatedDeliveryTime;
   const restaurantName = order?.restaurant?.name || fallbackOrder?.restaurant?.name || '';
   const dynamicRemainingText = formatEstimatedArrivalMinutes(
     activeEtaTime,
@@ -414,6 +421,10 @@ export const CompactActiveOrderBanner = memo(function CompactActiveOrderBanner({
               </div>
             ) : dynamicRemainingText ? (
               <p className="text-xs text-neutral-500 mt-0.5 truncate">{dynamicRemainingText}</p>
+            ) : activeStatus === 'PENDING' ? (
+              <p className="text-xs text-neutral-500 mt-0.5 truncate">
+                Esperando confirmación del {getBusinessRef(currentOrder.restaurant?.businessType)}…
+              </p>
             ) : (
               <p className="text-xs text-neutral-500 mt-0.5 truncate">{restaurantName}</p>
             )}
