@@ -6313,26 +6313,26 @@ export default function Home() {
         </div>
       ) : null}
       {isProductModalOpen ? (
-        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-sky-950/40 px-4 py-5 backdrop-blur-md transition-all duration-500">
-          <div className="relative flex w-full max-w-[760px] max-h-[92vh] flex-col overflow-hidden rounded-[36px] bg-white shadow-[0_32px_120px_rgba(14,165,233,0.25)] ring-1 ring-sky-100">
+        <div className="fixed inset-0 z-[80] flex items-end justify-center bg-sky-950/40 backdrop-blur-md transition-all duration-500 sm:items-center sm:px-4 sm:py-5">
+          <div className="relative flex h-[94vh] w-full max-w-[760px] flex-col overflow-hidden rounded-t-[36px] bg-white shadow-[0_32px_120px_rgba(14,165,233,0.25)] ring-1 ring-sky-100 sm:h-auto sm:max-h-[92vh] sm:rounded-[36px]">
             
             {/* Ambient Background Glows */}
             <div className="pointer-events-none absolute -left-20 -top-20 h-64 w-64 rounded-full bg-sky-300/20 blur-[80px]" />
             <div className="pointer-events-none absolute -right-20 top-1/2 h-64 w-64 rounded-full bg-blue-300/10 blur-[80px]" />
 
             {/* Premium Header */}
-            <div className="relative shrink-0 border-b border-sky-100/50 bg-white/80 px-6 py-6 backdrop-blur-xl sm:px-10">
+            <div className="relative shrink-0 border-b border-sky-100/50 bg-white/80 px-5 py-4 backdrop-blur-xl sm:px-10 sm:py-6">
               <div className="flex items-center justify-between">
-                <div className="flex items-center gap-4">
-                  <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-sky-100 to-sky-50 text-sky-600 shadow-inner ring-1 ring-sky-200/50">
-                    <svg className="h-7 w-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /></svg>
+                <div className="flex items-center gap-3 sm:gap-4">
+                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-sky-100 to-sky-50 text-sky-600 shadow-inner ring-1 ring-sky-200/50 sm:h-14 sm:w-14">
+                    <svg className="h-6 w-6 sm:h-7 sm:w-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /></svg>
                   </div>
-                  <div>
-                    <h3 className="text-xl font-bold tracking-tight text-neutral-900 sm:text-2xl">
+                  <div className="min-w-0">
+                    <h3 className="text-lg font-bold tracking-tight text-neutral-900 sm:text-2xl">
                       {productDraft.id ? 'Editar producto' : 'Nuevo producto'}
                     </h3>
-                    <p className="mt-1 text-sm font-medium text-sky-700/70">
-                      {profile?.businessType === 'RESTAURANT' ? 'Gestiona la información, precios y extras de tu platillo.' : 'Gestiona la información, precios y variantes de tu producto.'}
+                    <p className="mt-0.5 text-[13px] font-medium text-sky-700/70 sm:mt-1 sm:text-sm">
+                      {profile?.businessType === 'RESTAURANT' ? 'Información, precios y extras de tu platillo.' : 'Información, precios y variantes de tu producto.'}
                     </p>
                   </div>
                 </div>
@@ -6362,7 +6362,7 @@ export default function Home() {
                       preparationTime: '15',
                     });
                   }}
-                  className="group inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-sky-50 text-sky-600 transition-all hover:bg-sky-100 hover:text-sky-900"
+                  className="group inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-sky-50 text-sky-600 transition-all hover:bg-sky-100 hover:text-sky-900 sm:h-12 sm:w-12"
                   aria-label="Cerrar"
                 >
                   <svg className="h-5 w-5 transition-transform duration-300 group-hover:rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" /></svg>
@@ -6371,7 +6371,7 @@ export default function Home() {
             </div>
 
             {/* Scrollable Content */}
-            <div className="relative flex-1 overflow-y-auto bg-gradient-to-b from-sky-50/30 to-white px-6 py-8 sm:px-10">
+            <div className="relative flex-1 overflow-y-auto bg-gradient-to-b from-sky-50/30 to-white px-5 py-6 sm:px-10 sm:py-8">
               <div className="space-y-10">
                 
                 {/* 1. Información Básica */}
@@ -6380,7 +6380,7 @@ export default function Home() {
                     <span className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-sky-400 to-sky-600 text-sm font-black text-white shadow-lg shadow-sky-500/30">1</span>
                     <h4 className="text-[13px] font-bold uppercase tracking-[0.15em] text-sky-900">Información Básica</h4>
                   </div>
-                  <div className="rounded-[28px] border border-white bg-white/80 p-6 shadow-[0_8px_30px_rgba(14,165,233,0.06)] backdrop-blur-md ring-1 ring-sky-100/50 sm:p-8">
+                  <div className="rounded-[28px] border border-white bg-white/80 p-5 shadow-[0_8px_30px_rgba(14,165,233,0.06)] backdrop-blur-md ring-1 ring-sky-100/50 sm:p-8">
                     <div className="grid gap-5 sm:grid-cols-2">
                       <label className="grid gap-2 text-sm text-neutral-600 sm:col-span-2">
                         <span className="text-[12px] font-bold uppercase tracking-[0.1em] text-neutral-600">Categoría</span>
@@ -6444,7 +6444,7 @@ export default function Home() {
                     <span className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-sky-400 to-sky-600 text-sm font-black text-white shadow-lg shadow-sky-500/30">2</span>
                     <h4 className="text-[13px] font-bold uppercase tracking-[0.15em] text-sky-900">Precios y Fotografía</h4>
                   </div>
-                  <div className="rounded-[28px] border border-white bg-white/80 p-6 shadow-[0_8px_30px_rgba(14,165,233,0.06)] backdrop-blur-md ring-1 ring-sky-100/50 sm:p-8">
+                  <div className="rounded-[28px] border border-white bg-white/80 p-5 shadow-[0_8px_30px_rgba(14,165,233,0.06)] backdrop-blur-md ring-1 ring-sky-100/50 sm:p-8">
                     <div className="grid gap-5 sm:grid-cols-2">
                       {/* Tipo de venta */}
                       <div className="sm:col-span-2">
@@ -6453,7 +6453,7 @@ export default function Home() {
                           <button
                             type="button"
                             onClick={() => setProductDraft((current) => ({ ...current, sellBy: 'UNIT' }))}
-                            className={`flex-1 rounded-xl py-2.5 text-xs font-bold transition-all ${
+                            className={`flex-1 rounded-xl py-3 text-[13px] font-bold transition-all sm:py-2.5 sm:text-xs ${
                               productDraft.sellBy === 'UNIT'
                                 ? 'bg-white text-sky-700 shadow-sm'
                                 : 'text-neutral-500 hover:text-neutral-700'
@@ -6464,7 +6464,7 @@ export default function Home() {
                           <button
                             type="button"
                             onClick={() => setProductDraft((current) => ({ ...current, sellBy: 'WEIGHT' }))}
-                            className={`flex-1 rounded-xl py-2.5 text-xs font-bold transition-all ${
+                            className={`flex-1 rounded-xl py-3 text-[13px] font-bold transition-all sm:py-2.5 sm:text-xs ${
                               productDraft.sellBy === 'WEIGHT'
                                 ? 'bg-white text-sky-700 shadow-sm'
                                 : 'text-neutral-500 hover:text-neutral-700'
@@ -6573,7 +6573,7 @@ export default function Home() {
                               </div>
                               <div className="flex-1">
                                 <p className="text-sm font-bold text-neutral-900">Subir imagen desde equipo</p>
-                                 <p className="text-xs text-neutral-500">Formato cuadrado 1:1 para mejor resultado. Si usas otra proporción, ajusta el encuadre de la imagen.</p>
+                                <p className="text-xs text-neutral-500">PNG o JPG. Recomendado 1:1.</p>
                               </div>
                               <input
                                 ref={productImageInputRef}
@@ -6598,7 +6598,7 @@ export default function Home() {
                             <div className="mt-4 flex flex-col items-center gap-1 sm:mt-0">
                               <div
                                 ref={cropContainerRef}
-                                className="group relative w-full select-none overflow-hidden rounded-2xl border border-neutral-200 bg-neutral-100 shadow-sm sm:w-44 sm:aspect-square"
+                                className="group relative w-full select-none overflow-hidden rounded-2xl border border-neutral-200 bg-neutral-100 shadow-sm aspect-[4/3] sm:w-44 sm:aspect-square"
                                 onMouseDown={(e) => {
                                   const div = cropContainerRef.current;
                                   if (!div) return;
@@ -6720,7 +6720,7 @@ export default function Home() {
                                 </div>
                                 <div className="absolute inset-x-0 bottom-0 flex items-center justify-center bg-gradient-to-t from-black/50 to-transparent pb-2 pt-6 opacity-0 transition-opacity group-hover:opacity-100">
                                   <span className="rounded-full bg-white/90 px-3 py-1 text-[11px] font-semibold text-neutral-800 shadow-sm backdrop-blur">
-                                    Arrastra para encuadrar, rueda/botones para zoom
+                                    Arrastra para encuadrar y haz zoom
                                   </span>
                                 </div>
                               </div>
@@ -6783,7 +6783,7 @@ export default function Home() {
                           <div>
                             <h4 className="text-sm font-bold text-rose-950">Restricción de Edad</h4>
                             <p className="mt-0.5 text-xs font-medium text-rose-700/80">
-                              {profile?.businessType === 'RESTAURANT' ? 'Activa esta opción si el producto contiene alcohol.' : 'Activa esta opción si es un producto para adultos.'}
+                              {profile?.businessType === 'RESTAURANT' ? 'Activa si contiene alcohol.' : 'Activa si es para adultos.'}
                             </p>
                           </div>
                         </div>
@@ -6844,7 +6844,7 @@ export default function Home() {
                       </div>
                       <h5 className="mt-4 text-sm font-bold text-sky-900">Sin opciones adicionales</h5>
                       <p className="mt-1.5 max-w-sm text-[13px] font-medium text-sky-700/60">
-                        {profile?.businessType === 'RESTAURANT' ? 'Si tu producto tiene variantes como tamaño, sabor o ingredientes extra, añádelas aquí.' : 'Si tu producto tiene variantes como talla, color o material, añádelas aquí.'}
+                        {profile?.businessType === 'RESTAURANT' ? 'Añade tamaños, sabores o ingredientes extra.' : 'Añade talla, color o material.'}
                       </p>
                     </div>
                   ) : (
@@ -7034,12 +7034,12 @@ export default function Home() {
             </div>
 
             {/* Sticky Footer */}
-            <div className="relative shrink-0 border-t border-sky-100/50 bg-white/70 px-6 py-5 backdrop-blur-xl sm:px-10">
-              <div className="flex items-center justify-end gap-3">
+            <div className="relative shrink-0 border-t border-sky-100/50 bg-white/70 px-5 py-4 backdrop-blur-xl sm:px-10 sm:py-5">
+              <div className="flex items-center gap-3">
                 <button
                   type="button"
                   onClick={() => setIsProductModalOpen(false)}
-                  className="rounded-full px-5 py-3 text-sm font-bold text-neutral-600 transition hover:bg-neutral-100 hover:text-neutral-900"
+                  className="flex-1 rounded-full border border-black/10 px-5 py-3 text-sm font-bold text-neutral-600 transition hover:bg-neutral-100 hover:text-neutral-900 sm:flex-none"
                 >
                   Cancelar
                 </button>
@@ -7056,7 +7056,7 @@ export default function Home() {
                     !productDraft.price.trim() ||
                     Boolean(getImageValidationMessage(productDraft.image.trim(), 'product'))
                   }
-                  className="group relative overflow-hidden rounded-full bg-gradient-to-r from-sky-500 to-sky-400 px-6 py-3 text-sm font-bold text-white shadow-[0_4px_16px_rgba(14,165,233,0.35)] ring-1 ring-sky-400/50 transition-all hover:scale-105 disabled:pointer-events-none disabled:opacity-60 disabled:shadow-none disabled:grayscale"
+                  className="group relative flex-1 overflow-hidden rounded-full bg-gradient-to-r from-sky-500 to-sky-400 px-6 py-3 text-sm font-bold text-white shadow-[0_4px_16px_rgba(14,165,233,0.35)] ring-1 ring-sky-400/50 transition-all hover:scale-105 disabled:pointer-events-none disabled:opacity-60 disabled:shadow-none disabled:grayscale sm:flex-none"
                 >
                   <div className="absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/30 to-transparent transition-transform duration-1000 group-hover:translate-x-full" />
                   <span className="relative z-10">
