@@ -7,6 +7,7 @@ import { AuthUser, readStoredSession, requestJson, submitReview, uploadMediaAsse
 import { io } from 'socket.io-client';
 import LiveTrackingMap from '../../../components/LiveTrackingMap';
 import { AuthModal } from '../../../components/AuthModal';
+import { CompactActiveOrderBanner, getEtaWindowMinutes } from '../../../components/CompactActiveOrderBanner';
 import { useForegroundPolling } from '../../../hooks/useForegroundPolling';
 import { SaDelLogo } from '../../../components/SaDelLogo';
 import CartDrawer from '../../../components/CartDrawer';
@@ -2663,7 +2664,6 @@ function triggerHaptic(pattern: number | number[] = 10) {
                 {activeOrder && (
                   <CompactActiveOrderBanner
                     order={activeOrder}
-                    carouselLabel={activeOrderListItems.length > 1 ? `Pedido ${carouselIndex + 1} de ${activeOrderListItems.length}` : undefined}
                     onOpenHistory={() => {
                       setSelectedOrderId(activeOrder.id);
                       setIsDetailModalOpen(true);
@@ -5554,214 +5554,6 @@ function triggerHaptic(pattern: number | number[] = 10) {
   );
 }
 
-function CompactActiveOrderBanner({
-  order,
-  onOpenHistory,
-  onOpenChat,
-  carouselLabel,
-  unreadCount = 0,
-  isTrackingEnabled = false,
-  setIsTrackingEnabled,
-  driverLocation,
-}: {
-  order: CustomerOrderDetail;
-  onOpenHistory: () => void;
-  onOpenChat: () => void;
-  carouselLabel?: string;
-  unreadCount?: number;
-  isTrackingEnabled?: boolean;
-  setIsTrackingEnabled?: (val: boolean) => void;
-  driverLocation?: { lat: number; lng: number } | null;
-}) {
-  const [currentTimestamp, setCurrentTimestamp] = useState(Date.now());
-
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setCurrentTimestamp(Date.now());
-    }, 15000);
-    return () => clearInterval(timer);
-  }, []);
-
-  const hasDriverArrived = order.status === 'IN_TRANSIT' && (order as any).tracking?.some((t: any) => t.notes === 'DRIVER_ARRIVED');
-  const activeStatus = hasDriverArrived ? 'DRIVER_ARRIVED' : order.status;
-  const isPickup = (order as any).fulfillmentType === 'PICKUP';
-
-  const steps = buildTimelineSteps(order, activeStatus);
-  const dynamicRemainingText = formatEstimatedArrivalMinutes(order.estimatedDeliveryTime, activeStatus, currentTimestamp, order.restaurant?.businessType, (order as any).fulfillmentType);
-
-  // Calcular el progreso de la barra
-  const doneCount = steps.filter(s => s.state === 'done').length;
-  const activeCount = steps.filter(s => s.state === 'active').length;
-  const progressPercent = Math.max(0, Math.min(100, ((doneCount + activeCount - 1) / (steps.length - 1)) * 100));
-
-  // Paso activo actual
-  const activeStep = steps.find(s => s.state === 'active') || steps[steps.length - 1];
-
-  return (
-    <section className="rounded-[20px] border border-black/[0.04] bg-white px-4 py-3.5 shadow-[0_2px_12px_rgba(0,0,0,0.06)]">
-      {/* Fila principal: estado + tiempo + acciones */}
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-3 min-w-0 flex-1">
-          {/* Indicador animado */}
-          <div className="relative shrink-0">
-            <div className="w-10 h-10 rounded-2xl bg-neutral-950 flex items-center justify-center">
-              <span className="text-lg">
-                {activeStatus === 'DELIVERED' ? <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg> :
-                 activeStatus === 'PICKED_UP' && isPickup ? <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15.75 10.5V6a3.75 3.75 0 10-7.5 0v4.5m11.356-1.993l1.263 12c.07.665-.45 1.243-1.119 1.243H4.25a1.125 1.125 0 01-1.12-1.243l1.264-12A1.125 1.125 0 015.513 7.5h12.974c.576 0 1.059.435 1.119 1.007zM8.625 10.5a.375.375 0 11-.75 0 .375.375 0 01.75 0zm7.5 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z" /></svg> :
-                 activeStatus === 'PICKED_UP' ? <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13.5 21v-7.5a.75.75 0 01.75-.75h3a.75.75 0 01.75.75V21m-4.5 0H2.36m11.14 0H18m0 0h3.64m-1.39 0V9.349m-16.5 11.65V9.35m0 0a3.001 3.001 0 003.75-.615A2.993 2.993 0 009.75 9.75c.896 0 1.7-.393 2.25-1.016a2.993 2.993 0 002.25 1.016c.896 0 1.7-.393 2.25-1.016a3.001 3.001 0 003.75.614m-16.5 0a3.004 3.004 0 01-.621-4.72L4.318 3.44A1.5 1.5 0 015.378 3h13.243a1.5 1.5 0 011.06.44l1.19 1.189a3 3 0 01-.621 4.72m-13.5 8.65h3.75a.75.75 0 00.75-.75V13.5a.75.75 0 00-.75-.75H6.75a.75.75 0 00-.75.75v3.75c0 .415.336.75.75.75z" /></svg> :
-                 activeStatus === 'IN_TRANSIT' ? <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13.5 21v-7.5a.75.75 0 01.75-.75h3a.75.75 0 01.75.75V21m-4.5 0H2.36m11.14 0H18m0 0h3.64m-1.39 0V9.349m-16.5 11.65V9.35m0 0a3.001 3.001 0 003.75-.615A2.993 2.993 0 009.75 9.75c.896 0 1.7-.393 2.25-1.016a2.993 2.993 0 002.25 1.016c.896 0 1.7-.393 2.25-1.016a3.001 3.001 0 003.75.614m-16.5 0a3.004 3.004 0 01-.621-4.72L4.318 3.44A1.5 1.5 0 015.378 3h13.243a1.5 1.5 0 011.06.44l1.19 1.189a3 3 0 01-.621 4.72m-13.5 8.65h3.75a.75.75 0 00.75-.75V13.5a.75.75 0 00-.75-.75H6.75a.75.75 0 00-.75.75v3.75c0 .415.336.75.75.75z" /></svg> :
-                 activeStatus === 'DRIVER_ARRIVED' ? <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z" /></svg> :
-                 activeStatus === 'READY' ? <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /></svg> :
-                 order?.restaurant?.businessType && order.restaurant.businessType !== 'RESTAURANT' ? <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /></svg> : <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9.53 16.122a3 3 0 00-5.78 1.128 2.25 2.25 0 01-2.4 2.245 4.5 4.5 0 008.4-2.245c0-.399-.078-.78-.22-1.128zm0 0a15.998 15.998 0 003.388-1.62m-5.043-.025a15.994 15.994 0 011.622-3.395m3.42 3.42a15.995 15.995 0 004.764-4.648l3.876-5.814a1.151 1.151 0 00-1.597-1.597L14.146 6.32a15.996 15.996 0 00-4.649 4.763m3.42 3.42a6.776 6.776 0 00-3.42-3.42" /></svg>}
-              </span>
-            </div>
-            {!['DELIVERED', 'CANCELLED', 'REJECTED'].includes(activeStatus) && (
-              <span className="absolute -top-0.5 -right-0.5 flex h-3 w-3">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500 border-2 border-white"></span>
-              </span>
-            )}
-          </div>
-
-          {/* Info condensada */}
-          <div className="min-w-0">
-            <p className="text-sm font-bold text-neutral-900 truncate">{activeStep?.label || 'Procesando'}</p>
-            {dynamicRemainingText ? (
-              <p className="text-xs text-neutral-500 mt-0.5 truncate">{dynamicRemainingText}</p>
-            ) : (
-              <p className="text-xs text-neutral-500 mt-0.5 truncate">{order.restaurant.name}</p>
-            )}
-            {isPickup && order.dailyCounter && (
-              <span className="inline-flex items-center gap-1 mt-1.5 px-2 py-0.5 rounded-full bg-neutral-100 border border-neutral-200 text-[9px] font-bold text-neutral-600">
-                Pedido #{String(order.dailyCounter).padStart(3, '0')}
-              </span>
-            )}
-          </div>
-        </div>
-
-        {/* Acciones */}
-        <div className="shrink-0 flex items-center gap-2">
-          <button
-            type="button"
-            onClick={onOpenChat}
-            title="Chat"
-            className="relative flex items-center justify-center w-9 h-9 rounded-full bg-sky-500 hover:bg-sky-600 active:scale-95 active-scale text-white shadow-sm transition-all"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-            </svg>
-            {unreadCount > 0 && (
-              <span className="absolute -top-1 -right-1 min-w-[16px] h-4 bg-red-500 text-white text-[9px] font-black rounded-full flex items-center justify-center px-1 animate-bounce shadow-sm">
-                {unreadCount > 9 ? '9+' : unreadCount}
-              </span>
-            )}
-          </button>
-
-          <button
-            type="button"
-            onClick={onOpenHistory}
-            className="rounded-full bg-neutral-100 hover:bg-neutral-200 px-3.5 py-2 text-xs font-semibold text-neutral-800 transition-colors active:scale-[0.97] active-scale"
-          >
-            Detalle
-          </button>
-        </div>
-      </div>
-
-      {/* PIN de recolección para pickup */}
-      {isPickup && (order as any).pickupPin && ['READY', 'PICKED_UP', 'IN_TRANSIT'].includes(activeStatus) && (
-        <div className="mt-3 flex items-center justify-center gap-2 py-2 px-3 bg-emerald-50/60 border border-emerald-200/60 rounded-xl">
-          <span className="text-[9px] font-bold text-emerald-600 uppercase tracking-wider">PIN de recolección:</span>
-          <span className="text-base font-black tracking-[0.25em] text-emerald-900 font-mono">{(order as any).pickupPin}</span>
-        </div>
-      )}
-
-      {/* Botón cómo llegar para pickup */}
-      {isPickup && ['READY', 'PICKED_UP'].includes(activeStatus) && (order as any)?.restaurant?.latitude && (order as any)?.restaurant?.longitude && (
-        <a
-          href={`https://www.google.com/maps/dir/?api=1&destination=${(order as any).restaurant.latitude},${(order as any).restaurant.longitude}`}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="mt-3 w-full flex items-center justify-center gap-2.5 rounded-full border-2 border-sky-200 bg-sky-50 py-3 text-sm font-bold text-sky-700 shadow-sm transition hover:bg-sky-100 hover:shadow-md active:scale-[0.97]"
-        >
-          <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.828 0l-4.243-4.243a8 8 0 1111.314 0z" />
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-          </svg>
-          Cómo llegar
-        </a>
-      )}
-
-      {/* deliveryPin en banner compacto */}
-      {!isPickup && ((order.deliveryPin || order.handoverPin) && ['READY', 'PICKED_UP', 'IN_TRANSIT'].includes(activeStatus)) && (
-        <div className="mt-3 flex items-center justify-center gap-2 py-2 px-3 bg-indigo-50/60 border border-indigo-200/60 rounded-xl">
-          <span className="text-[9px] font-bold text-indigo-600 uppercase tracking-wider">PIN de entrega:</span>
-          <span className="text-base font-black tracking-[0.25em] text-indigo-900 font-mono">{order.deliveryPin || order.handoverPin}</span>
-        </div>
-      )}
-
-      {/* Barra de progreso minimal */}
-      <div className="mt-3 mb-1">
-        <div className="h-1 w-full bg-neutral-100 rounded-full overflow-hidden">
-          <div
-            className="h-full bg-neutral-900 rounded-full transition-all duration-700 ease-out"
-            style={{ width: `${progressPercent}%` }}
-          />
-        </div>
-        <div className="flex justify-between mt-1.5">
-          {steps.map((step) => {
-            const isDone = step.state === 'done';
-            const isActive = step.state === 'active';
-            return (
-              <span
-                key={step.key}
-                className={`text-[9px] font-medium ${
-                  isActive ? 'text-neutral-900 font-bold' :
-                  isDone ? 'text-neutral-500' : 'text-neutral-300'
-                }`}
-              >
-                {step.label}
-              </span>
-            );
-          })}
-        </div>
-      </div>
-
-      {!isPickup && ['PENDING', 'CONFIRMED', 'PREPARING', 'READY', 'PICKED_UP', 'IN_TRANSIT', 'DRIVER_ARRIVED'].includes(order.status) && (
-        <div className="border-t border-black/[0.05] mt-4 pt-3">
-          {isTrackingEnabled ? (
-            <div className="space-y-2">
-              <LiveTrackingMap order={order} driverLocation={driverLocation || null} />
-              <button
-                type="button"
-                onClick={() => setIsTrackingEnabled && setIsTrackingEnabled(false)}
-                className="w-full text-xs font-semibold py-2 px-3 rounded-lg border border-black/10 hover:bg-neutral-50 text-neutral-600 flex items-center justify-center gap-1.5 transition-all active:scale-[0.98] active-scale"
-              >
-                <span>📴 Desactivar mapa (Ahorrar datos)</span>
-              </button>
-            </div>
-          ) : (
-            <button
-              type="button"
-              onClick={() => setIsTrackingEnabled && setIsTrackingEnabled(true)}
-              className="w-full py-2 px-3 rounded-xl border border-dashed border-neutral-300 hover:border-neutral-400 bg-neutral-50/50 flex items-center justify-between text-left hover:bg-neutral-50 transition-all active:scale-[0.98] active-scale group"
-            >
-              <div className="flex items-center gap-2.5">
-                <span className="text-base group-hover:scale-110 transition-transform"><svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13.5 21v-7.5a.75.75 0 01.75-.75h3a.75.75 0 01.75.75V21m-4.5 0H2.36m11.14 0H18m0 0h3.64m-1.39 0V9.349m-16.5 11.65V9.35m0 0a3.001 3.001 0 003.75-.615A2.993 2.993 0 009.75 9.75c.896 0 1.7-.393 2.25-1.016a2.993 2.993 0 002.25 1.016c.896 0 1.7-.393 2.25-1.016a3.001 3.001 0 003.75.614m-16.5 0a3.004 3.004 0 01-.621-4.72L4.318 3.44A1.5 1.5 0 015.378 3h13.243a1.5 1.5 0 011.06.44l1.19 1.189a3 3 0 01-.621 4.72m-13.5 8.65h3.75a.75.75 0 00.75-.75V13.5a.75.75 0 00-.75-.75H6.75a.75.75 0 00-.75.75v3.75c0 .415.336.75.75.75z" /></svg></span>
-                <div>
-                  <p className="text-xs font-bold text-neutral-900">Seguimiento en Vivo</p>
-                  <p className="text-[10px] text-neutral-500">Sigue la ubicación de tu repartidor en tiempo real</p>
-                </div>
-              </div>
-              <span className="text-[10px] font-bold text-indigo-600 bg-indigo-50 py-1 px-2.5 rounded-full group-hover:bg-indigo-100 transition-colors">
-                Seguir
-              </span>
-            </button>
-          )}
-        </div>
-      )}
-    </section>
-  );
-}
 
 function Field({
   label,
@@ -6133,25 +5925,6 @@ function formatShortTime(date: Date) {
   }).format(date);
 }
 
-function getEtaWindowMinutes(status: string) {
-  if (status === 'PENDING') {
-    return { early: 5, late: 5 };
-  }
-
-  if (status === 'CONFIRMED' || status === 'PREPARING') {
-    return { early: 4, late: 4 };
-  }
-
-  if (status === 'READY' || status === 'PICKED_UP') {
-    return { early: 3, late: 3 };
-  }
-
-  if (status === 'IN_TRANSIT') {
-    return { early: 2, late: 3 };
-  }
-
-  return { early: 0, late: 0 };
-}
 
 function formatEstimatedArrivalWindow(estimatedDeliveryTime: string, status: string, currentTimestamp: number = Date.now()) {
   const etaDate = new Date(estimatedDeliveryTime);
@@ -6189,57 +5962,6 @@ function formatEstimatedArrivalWindow(estimatedDeliveryTime: string, status: str
   return `Entre ${formatShortTime(start)} y ${formatShortTime(end)}`;
 }
 
-function formatEstimatedArrivalMinutes(estimatedDeliveryTime: string, status: string, currentTimestamp: number, businessType?: string | null, fulfillmentType?: 'DELIVERY' | 'PICKUP') {
-  const etaDate = new Date(estimatedDeliveryTime);
-  if (Number.isNaN(etaDate.getTime())) {
-    return null;
-  }
-
-  if (['DELIVERED', 'CANCELLED', 'REJECTED', 'PENDING', 'DRIVER_ARRIVED', 'PICKED_UP'].includes(status)) {
-    return null;
-  }
-
-  const msUntilEta = etaDate.getTime() - currentTimestamp;
-  const prefix = fulfillmentType === 'PICKUP' ? 'Listo para recoger' : 'Llega';
-
-  if (businessType && businessType !== 'RESTAURANT' && msUntilEta > 3 * 60 * 60 * 1000) {
-    const timeStr = etaDate.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' });
-    const now = new Date(currentTimestamp);
-    if (etaDate.toDateString() === now.toDateString()) {
-      return `${prefix} aprox. ${timeStr}`;
-    }
-    const dayStr = etaDate.toLocaleDateString('es-MX', { weekday: 'long' });
-    return `${prefix} aprox. ${dayStr} ${timeStr}`;
-  }
-
-  if (msUntilEta > 60 * 60 * 1000) {
-    const timeStr = etaDate.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' });
-    const now = new Date(currentTimestamp);
-    if (etaDate.toDateString() === now.toDateString()) {
-      return `${prefix} aprox. ${timeStr}`;
-    }
-    const dayStr = etaDate.toLocaleDateString('es-MX', { weekday: 'long' });
-    return `${prefix} aprox. ${dayStr} ${timeStr}`;
-  }
-
-  const windowMinutes = getEtaWindowMinutes(status);
-  
-  const startDiffMs = (etaDate.getTime() - windowMinutes.early * 60 * 1000) - currentTimestamp;
-  const endDiffMs = (etaDate.getTime() + windowMinutes.late * 60 * 1000) - currentTimestamp;
-  
-  const startMin = Math.max(0, Math.round(startDiffMs / 60000));
-  const endMin = Math.max(1, Math.round(endDiffMs / 60000));
-
-  if (endMin <= 1) {
-    return fulfillmentType === 'PICKUP' ? 'Listo para recoger en cualquier momento 🛍️' : 'Llega en cualquier momento 🛵';
-  }
-
-  if (startMin === 0) {
-    return fulfillmentType === 'PICKUP' ? `Listo para recoger en menos de ${endMin} min 🛍️` : `Llega en menos de ${endMin} min 🛵`;
-  }
-
-  return fulfillmentType === 'PICKUP' ? `Listo para recoger en ${startMin} - ${endMin} min 🛍️` : `Llega en ${startMin} - ${endMin} min 🛵`;
-}
 
 function getEtaMessage(order: CustomerOrderDetail | null) {
   if (!order) return null;
@@ -6534,96 +6256,6 @@ function isActiveOrderStatus(status: string) {
   return ['PENDING', 'CONFIRMED', 'PREPARING', 'READY', 'PICKED_UP', 'IN_TRANSIT', 'DRIVER_ARRIVED'].includes(normalizedStatus);
 }
 
-function buildTimelineSteps(order: CustomerOrderDetail, activeStatusOverride?: string) {
-  const status = activeStatusOverride || order.status;
-  const isPickup = order.fulfillmentType === 'PICKUP';
-
-  if (isPickup) {
-    return [
-      {
-        key: 'kitchen',
-        label: getOrderStatusLabel('PREPARING', order.restaurant?.businessType),
-        description: status === 'PENDING'
-          ? `${getBusinessArticleCapitalized(order.restaurant?.businessType)} ${getBusinessRef(order.restaurant?.businessType)} está revisando tu solicitud`
-          : 'Estamos preparando tu pedido',
-        state: status === 'PENDING' || status === 'CONFIRMED' || status === 'PREPARING'
-          ? 'active'
-          : ['READY', 'PICKED_UP', 'IN_TRANSIT', 'DRIVER_ARRIVED', 'DELIVERED'].includes(status)
-            ? 'done'
-            : 'pending',
-      },
-      {
-        key: 'ready',
-        label: 'Pedido listo',
-        description: `Tu pedido está listo para recoger en ${order.restaurant.name}`,
-        state: status === 'READY'
-          ? 'active'
-          : ['PICKED_UP', 'IN_TRANSIT', 'DRIVER_ARRIVED', 'DELIVERED'].includes(status)
-            ? 'done'
-            : 'pending',
-      },
-      {
-        key: 'picked_up',
-        label: 'Recogido',
-        description: 'Ya recogiste tu pedido. ¡Buen provecho!',
-        state: ['PICKED_UP', 'IN_TRANSIT', 'DRIVER_ARRIVED', 'DELIVERED'].includes(status)
-          ? 'done'
-          : 'pending',
-      },
-    ] as Array<{
-      key: string;
-      label: string;
-      description: string;
-      state: 'done' | 'active' | 'pending';
-    }>;
-  }
-
-  return [
-    {
-      key: 'kitchen',
-      label: getOrderStatusLabel('PREPARING', order.restaurant?.businessType),
-      description: status === 'PENDING'
-        ? `${getBusinessArticleCapitalized(order.restaurant?.businessType)} ${getBusinessRef(order.restaurant?.businessType)} está revisando tu solicitud`
-        : 'Estamos preparando tu pedido',
-      state: status === 'PENDING' || status === 'CONFIRMED' || status === 'PREPARING'
-        ? 'active'
-        : ['READY', 'PICKED_UP', 'IN_TRANSIT', 'DRIVER_ARRIVED', 'DELIVERED'].includes(status)
-          ? 'done'
-          : 'pending',
-    },
-    {
-      key: 'ready',
-      label: 'Pedido listo',
-      description: `${getBusinessArticleCapitalized(order.restaurant?.businessType)} ${getBusinessRef(order.restaurant?.businessType)} ha confirmado que tu pedido está listo`,
-      state: status === 'READY'
-        ? 'active'
-        : ['PICKED_UP', 'IN_TRANSIT', 'DRIVER_ARRIVED', 'DELIVERED'].includes(status)
-          ? 'done'
-          : 'pending',
-    },
-    {
-      key: 'transit',
-      label: status === 'DRIVER_ARRIVED' ? '¡Tu pedido ha llegado! 📍' : 'En camino',
-      description: status === 'DRIVER_ARRIVED' ? 'Sal a recibir a tu repartidor' : 'El repartidor está en camino, tu pedido llega pronto',
-      state: status === 'PICKED_UP' || status === 'IN_TRANSIT' || status === 'DRIVER_ARRIVED'
-        ? 'active'
-        : status === 'DELIVERED'
-          ? 'done'
-          : 'pending',
-    },
-    {
-      key: 'delivered',
-      label: 'Entregado',
-      description: 'El pedido llegó a tu domicilio.',
-      state: status === 'DELIVERED' ? 'done' : 'pending',
-    },
-  ] as Array<{
-    key: string;
-    label: string;
-    description: string;
-    state: 'done' | 'active' | 'pending';
-  }>;
-}
 
 function normalizeOrderStatusValue(status: string) {
   return status.trim().toUpperCase().replace(/[\s-]+/g, '_');

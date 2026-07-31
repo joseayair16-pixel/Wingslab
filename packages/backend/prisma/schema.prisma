@@ -433,6 +433,10 @@ model Order {
   stuckAlertLevel   Int      @default(0)
   stuckAlertedAt    DateTime?
 
+  // Overdue preparation escalation (restaurant pressure)
+  overdueAlertLevel   Int      @default(0)
+  overdueAlertedAt    DateTime?
+
   transactions Transaction[]
   tracking     OrderTracking[]
   review       Review?
@@ -452,6 +456,7 @@ model Order {
   @@index([restaurantId, status, createdAt])
   @@index([noDriversAvailable, status, createdAt])
   @@index([stuckAlertLevel, status])
+  @@index([overdueAlertLevel, status])
 }
 
 enum OrderStatus {

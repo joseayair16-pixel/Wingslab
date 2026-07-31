@@ -18,6 +18,7 @@ import {
   convertImageFileToDataUrl,
 } from '@sadel/shared';
 
+import { useForegroundPolling } from '../hooks/useForegroundPolling';
 import { printHtmlString } from '../utils/printHelper';
 import { generateTicketHtml } from '../utils/ticketGenerator';
 import { SaDelLogo } from '../components/SaDelLogo';
@@ -987,12 +988,17 @@ export default function Home() {
   const ordersRef = useRef(orders);
   ordersRef.current = orders;
   const pendingNotificationOrderIdRef = useRef<string | null>(null);
+  const pendingEtaExtensionOrderIdRef = useRef<string | null>(null);
   const navigateToOrder = useCallback((orderId: string) => {
     const currentOrders = ordersRef.current;
     const order = currentOrders?.find?.((o: any) => o.id === orderId);
     if (order) {
       setActiveSection('orders');
       setSelectedOrderForTicket(order);
+      if (pendingEtaExtensionOrderIdRef.current === orderId) {
+        setSelectedOrderForEtaExtension(order);
+        pendingEtaExtensionOrderIdRef.current = null;
+      }
     } else {
       pendingNotificationOrderIdRef.current = orderId;
       setActiveSection('orders');
@@ -1008,6 +1014,8 @@ export default function Home() {
   const chatMessageArrayBufferRef = useRef<ArrayBuffer | null>(null);
   const chatMessageBufferRef = useRef<AudioBuffer | null>(null);
   const chatAudioRef = useRef<HTMLAudioElement | null>(null);
+  const overdueAudioArrayBufferRef = useRef<ArrayBuffer | null>(null);
+  const overdueAudioBufferRef = useRef<AudioBuffer | null>(null);
   const chatMessageAudioRef = useRef<HTMLAudioElement | null>(null);
   const wakeLockRef = useRef<any>(null);
   const alarmSourceRef = useRef<AudioBufferSourceNode | OscillatorNode | null>(null);
@@ -1128,14 +1136,6 @@ export default function Home() {
         document.documentElement.classList.add('dark');
       }
 
-      if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.register('/sw.js').then((registration) => {
-          console.log('Service Worker registered');
-        }).catch((error) => {
-          console.error('Service Worker registration failed:', error);
-        });
-      }
-
       const supportsWebAudio = Boolean(window.AudioContext || (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext);
       setOrderAlertAudioState(supportsWebAudio ? 'needs-gesture' : 'unsupported');
 
@@ -1231,6 +1231,9 @@ export default function Home() {
       if (event.data?.type === 'NOTIFICATION_CLICK') {
         const orderId = event.data.orderId;
         if (orderId) {
+          if (event.data.action === 'extend-eta') {
+            pendingEtaExtensionOrderIdRef.current = orderId;
+          }
           navigateToOrder(orderId);
         }
       }
@@ -1256,7 +1259,7 @@ export default function Home() {
         });
         const tx = db.transaction('pending', 'readonly');
         const store = tx.objectStore('pending');
-        const data = await new Promise<{ id: string; value: string } | undefined>((resolve) => {
+        const data = await new Promise<{ id: string; value: string; action?: string } | undefined>((resolve) => {
           const req = store.get('orderId');
           req.onsuccess = () => resolve(req.result);
           req.onerror = () => resolve(undefined);
@@ -1266,6 +1269,9 @@ export default function Home() {
           const cleanTx = db.transaction('pending', 'readwrite');
           cleanTx.objectStore('pending').delete('orderId');
           await new Promise(r => { cleanTx.oncomplete = r; });
+          if (data.action === 'extend-eta') {
+            pendingEtaExtensionOrderIdRef.current = data.value;
+          }
           navigateToOrder(data.value);
         }
       } catch {}
@@ -1281,6 +1287,10 @@ export default function Home() {
     const order = orders.find((o) => o.id === pendingId);
     if (order) {
       setSelectedOrderForTicket(order);
+      if (pendingEtaExtensionOrderIdRef.current === pendingId) {
+        setSelectedOrderForEtaExtension(order);
+        pendingEtaExtensionOrderIdRef.current = null;
+      }
       pendingNotificationOrderIdRef.current = null;
     }
   }, [orders]);
@@ -1905,6 +1915,107 @@ export default function Home() {
             pulseIntervalRef.current = null;
           }
         }, 4000);
+
+        return true;
+      }
+    } catch {
+      // oscilador falló, último recurso: <audio>
+    }
+
+    // 3. Fallback extremo: <audio>
+    try {
+      const audioEl = document.getElementById('restaurant-alert-audio') as HTMLAudioElement | null;
+      if (audioEl) {
+        audioEl.currentTime = 0;
+        await audioEl.play();
+        return true;
+      }
+    } catch {
+      return false;
+    }
+
+    return false;
+  }, [isOrderAlertSoundEnabled]);
+
+  const playOverdueAlert = useCallback(async () => {
+    if (!isOrderAlertSoundEnabled) return false;
+
+    try {
+      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+      if (!AudioCtx) return false;
+
+      if (!audioContextRef.current) {
+        audioContextRef.current = new AudioCtx();
+      }
+      const ctx = audioContextRef.current;
+      if (ctx.state === 'suspended') await ctx.resume();
+
+      // 1. Try dedicated rezagado WAV buffer
+      if (!overdueAudioBufferRef.current) {
+        if (!overdueAudioArrayBufferRef.current) {
+          try {
+            const res = await fetch('/sounds/rezagado.wav');
+            if (res.ok) {
+              overdueAudioArrayBufferRef.current = await res.arrayBuffer();
+            }
+          } catch {}
+        }
+        if (overdueAudioArrayBufferRef.current) {
+          overdueAudioBufferRef.current = await ctx.decodeAudioData(overdueAudioArrayBufferRef.current.slice(0));
+        }
+      }
+      if (overdueAudioBufferRef.current) {
+        const playBuffer = async () => {
+          const source = ctx.createBufferSource();
+          source.buffer = overdueAudioBufferRef.current!;
+          const gain = ctx.createGain();
+          gain.gain.value = 1.0;
+          source.connect(gain);
+          gain.connect(ctx.destination);
+          source.start(0);
+          return source;
+        };
+        const first = await playBuffer();
+        first.onended = () => { void playBuffer(); };
+        return true;
+      }
+    } catch {
+      // WAV falló, seguimos con oscilador
+    }
+
+    // 2. Oscillator fallback (doble tono grave, más largo que el alert normal)
+    try {
+      if (audioContextRef.current) {
+        const ctx = audioContextRef.current;
+        if (ctx.state === 'suspended') await ctx.resume();
+        const osc = ctx.createOscillator();
+        osc.type = 'square';
+        osc.frequency.value = 440;
+
+        const gain = ctx.createGain();
+        gain.gain.value = 0.7;
+
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(0);
+
+        let pulseState = true;
+        if (pulseIntervalRef.current) {
+          clearInterval(pulseIntervalRef.current);
+        }
+        pulseIntervalRef.current = setInterval(() => {
+          pulseState = !pulseState;
+          gain.gain.value = pulseState ? 0.7 : 0.0;
+        }, 550);
+
+        alarmSourceRef.current = osc;
+
+        setTimeout(() => {
+          if (pulseIntervalRef.current) {
+            clearInterval(pulseIntervalRef.current);
+            pulseIntervalRef.current = null;
+          }
+        }, 5000);
 
         return true;
       }
@@ -2639,6 +2750,12 @@ export default function Home() {
       void loadDashboard();
     });
 
+    socket.on('order:overdue', (payload: any) => {
+      pushToast('error', 'Pedido rezagado ⚠️', `Pedido ${payload?.orderReference || ''} lleva ${payload?.minutesOverdue ?? 0} min de retraso. Agrega tiempo o reprograma la entrega.`);
+      void playOverdueAlert();
+      void loadOrdersOnly();
+    });
+
     // Zombie socket detection: si no se reciben eventos en 90s, refrescar datos
     let lastEventTime = Date.now();
     const healthCheckInterval = setInterval(() => {
@@ -2701,6 +2818,15 @@ export default function Home() {
       }
     };
   }, [apiBase, token, sessionUser?.id, sessionUser?.role]);
+
+  // Respaldo anti-inconsistencia: cuando el socket está caído, ningún evento live
+  // llega y el zombie-detection (que requiere socket.connected) tampoco corre.
+  // Este polling refresca las órdenes para que el panel nunca muestre datos viejos.
+  useForegroundPolling(() => {
+    if (token && sessionUser?.role === 'RESTAURANT' && (!socketRef.current || socketRef.current.disconnected)) {
+      void loadOrdersOnly();
+    }
+  });
 
   useEffect(() => {
     if (!isOrderAlertSoundEnabled || orderAlertAudioState === 'unsupported') {

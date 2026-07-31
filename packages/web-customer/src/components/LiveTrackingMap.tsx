@@ -1,10 +1,10 @@
 import React, { useEffect, useRef } from 'react';
 type CustomerOrderDetail = {
   id: string;
-  address: {
-    latitude: number;
-    longitude: number;
-  };
+  address?: {
+    latitude?: number;
+    longitude?: number;
+  } | null;
 };
 
 export default function LiveTrackingMap({
@@ -33,8 +33,8 @@ export default function LiveTrackingMap({
       const google = (window as any).google;
       if (!google || !google.maps) return;
 
-      const lat = order.address.latitude;
-      const lng = order.address.longitude;
+      const lat = order.address?.latitude;
+      const lng = order.address?.longitude;
 
       if (!lat || !lng) return;
 
@@ -111,8 +111,8 @@ export default function LiveTrackingMap({
       infoWindow.open(mapRef.current, driverMarkerRef.current);
 
       // Ajustar cámara para mostrar ambos al inicio
-      const destLat = order.address.latitude;
-      const destLng = order.address.longitude;
+      const destLat = order.address?.latitude;
+      const destLng = order.address?.longitude;
       const bounds = new google.maps.LatLngBounds();
       bounds.extend({ lat: destLat, lng: destLng });
       bounds.extend({ lat, lng });
@@ -142,8 +142,8 @@ export default function LiveTrackingMap({
           requestAnimationFrame(animateMarker);
         } else {
           if (mapRef.current) {
-            const destLat = order.address.latitude;
-            const destLng = order.address.longitude;
+            const destLat = order.address?.latitude;
+            const destLng = order.address?.longitude;
             const bounds = new google.maps.LatLngBounds();
             bounds.extend({ lat: destLat, lng: destLng });
             bounds.extend({ lat: endLat, lng: endLng });

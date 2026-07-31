@@ -1,7 +1,8 @@
-const CACHE_NAME = 'sadel-restaurant-v1';
+const CACHE_NAME = 'sadel-restaurant-v2';
 const PRECACHE_URLS = [
   '/sounds/notifica.wav',
   '/sounds/mensaje.wav',
+  '/sounds/rezagado.wav',
   '/SaDeL.png',
   '/app-icon-192.png',
   '/manifest.json',
@@ -68,6 +69,7 @@ self.addEventListener('notificationclick', function(event) {
   const orderId = event.notification.data?.orderId || event.notification.data?.id || null;
 
   event.waitUntil((async () => {
+    const action = event.notification.data?.action || 'open';
     if (orderId) {
       try {
         const db = await new Promise((resolve, reject) => {
@@ -77,7 +79,7 @@ self.addEventListener('notificationclick', function(event) {
           req.onerror = () => reject(req.error);
         });
         const tx = db.transaction('pending', 'readwrite');
-        tx.objectStore('pending').put({ id: 'orderId', value: orderId });
+        tx.objectStore('pending').put({ id: 'orderId', value: orderId, action });
         await new Promise(r => { tx.oncomplete = r; });
       } catch {}
     }
@@ -90,7 +92,7 @@ self.addEventListener('notificationclick', function(event) {
       for (let i = 0; i < 5; i++) {
         await new Promise(r => setTimeout(r, 600));
         try {
-          targetClient.postMessage({ type: 'NOTIFICATION_CLICK', orderId });
+          targetClient.postMessage({ type: 'NOTIFICATION_CLICK', orderId, action });
           break;
         } catch {}
       }

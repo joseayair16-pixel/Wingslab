@@ -818,6 +818,8 @@ export async function extendOrderPreparationTime({
         preparationDeadlineAt: nextDeadline,
         etaExtendedMinutes: (order.etaExtendedMinutes || 0) + actualAddedMinutes,
         estimatedDeliveryTime: nextEta,
+        overdueAlertLevel: 0,
+        overdueAlertedAt: null,
       },
       select: restaurantOrderWorkflowSelect,
     });
