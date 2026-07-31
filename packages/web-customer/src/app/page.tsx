@@ -33,6 +33,7 @@ import { ChatPanel } from '../components/ChatPanel';
 import { SaDelLogo } from '../components/SaDelLogo';
 import CartDrawer from '../components/CartDrawer';
 import { CompactActiveOrderBanner, buildTimelineSteps, getEtaWindowMinutes } from '../components/CompactActiveOrderBanner';
+import RatingModal from '../components/RatingModal';
 
 const HomeView = dynamic(() => import('../views/HomeView').then(mod => mod.HomeView), { ssr: false });
 const ProfileView = dynamic(() => import('../views/ProfileView').then(mod => mod.ProfileView), { ssr: false });
@@ -5710,138 +5711,68 @@ export default function Home() {
           const isPickupRating = ratingOrder ? (ratingOrder as any)?.fulfillmentType === 'PICKUP' : ratingIsPickup;
           const bizType = ratingOrder?.restaurant?.businessType || ratingBusinessType;
           return (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 px-4 py-6" onClick={(e) => e.stopPropagation()}>
-            <div className="bg-white rounded-2xl border border-black/[0.03] shadow-[0_4px_24px_rgba(0,0,0,0.08)] p-6 w-full max-w-md h-fit max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-              <div className="text-center mb-6">
-                <div className="w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <span className="text-3xl">{isPickupRating ? '🛍️' : '🎉'}</span>
-                </div>
-                <h3 className="text-2xl font-semibold text-neutral-950">{isPickupRating ? '¡Pedido recogido!' : '¡Tu pedido ha llegado!'}</h3>
-                <p className="text-sm text-neutral-500">{isPickupRating ? 'Gracias por tu compra. ¿Nos ayudas a mejorar calificando tu experiencia?' : (bizType && bizType !== 'RESTAURANT' ? '¡Disfruta tu pedido! ¿Nos ayudas a mejorar calificando tu experiencia?' : '¡Buen provecho! ¿Nos ayudas a mejorar calificando tu experiencia?')}</p>
-              </div>
-
-              <div className="space-y-6">
-                {/* Calificación Restaurante */}
-                <div>
-                  <label className="text-sm font-medium text-neutral-700 block mb-2 text-center">{bizType && bizType !== 'RESTAURANT' ? '¿Qué tal estuvo tu pedido?' : '¿Qué tal estuvo la comida?'}</label>
-                  <div className="flex gap-2 justify-center">
-                    {[1, 2, 3, 4, 5].map((star) => (
-                      <button
-                        key={star}
-                        type="button"
-                        onClick={() => setRestaurantRating(star)}
-                        className={`text-3xl transition ${restaurantRating >= star ? 'text-amber-400' : 'text-neutral-200'
-                          }`}
-                      >
-                        ★
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Calificación Repartidor (solo delivery) */}
-                {!isPickupRating && (
-                <div>
-                  <label className="text-sm font-medium text-neutral-700 block mb-2 text-center">¿Qué tal el servicio de entrega?</label>
-                  <div className="flex gap-2 justify-center">
-                    {[1, 2, 3, 4, 5].map((star) => (
-                      <button
-                        key={star}
-                        type="button"
-                        onClick={() => setDriverRatingVal(star)}
-                        className={`text-3xl transition ${driverRatingVal >= star ? 'text-amber-400' : 'text-neutral-200'
-                          }`}
-                      >
-                        ★
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                )}
-
-                {/* Comentarios */}
-                <div>
-                  <label htmlFor="rating-comment" className="text-sm font-medium text-neutral-700 block mb-2">
-                    ¿Algo que quieras agregar?
-                  </label>
-                  <textarea
-                    id="rating-comment"
-                    value={ratingComment}
-                    onChange={(e) => setRatingComment(e.target.value)}
-                    placeholder={bizType && bizType !== 'RESTAURANT' ? 'Cuéntanos qué tal estuvo tu pedido o el servicio...' : 'Cuéntanos qué tal estuvo la comida o el servicio...'}
-                    className="w-full rounded-xl border border-neutral-200 bg-white px-4 py-3 text-neutral-950 outline-none transition focus:border-emerald-300 min-h-[80px] text-sm"
-                  />
-                </div>
-
-                {/* Botones */}
-                <div className="flex gap-3">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (orderToRate) {
-                        try {
-                          localStorage.setItem(`sadel_dismissed_rating_${orderToRate}`, 'true');
-                        } catch (e) {}
-                      }
-                      setIsRatingModalOpen(false);
-                      setOrderToRate(null);
-                      setRestaurantRating(0);
-                      setDriverRatingVal(0);
-                      setRatingComment('');
-                      setRatingIsPickup(false);
-                    }}
-                    className="flex-1 rounded-full border border-neutral-200 bg-white px-4 py-3 text-sm font-semibold text-neutral-700 transition hover:bg-neutral-50"
-                  >
-                    Omitir
-                  </button>
-                  <button
-                    type="button"
-                    onClick={async () => {
-                      if (!orderToRate || isSubmittingRating) return;
-                      setIsSubmittingRating(true);
-                      try {
-                        const result = await submitReview({
-                          apiBase,
-                          storageKey,
-                          orderId: orderToRate,
-                          payload: {
-                            rating: restaurantRating,
-                            ...(ratingComment ? { comment: ratingComment } : {}),
-                            ...(!ratingIsPickup && driverRatingVal > 0 ? {
-                              driverRating: driverRatingVal,
-                              ...(ratingComment ? { driverComment: ratingComment } : {}),
-                            } : {}),
-                          },
-                          getUser: () => sessionUser,
-                          onTokenRefreshed: (newToken) => setToken(newToken),
-                          onSessionExpired: () => clearSession('Tu sesión ha expirado. Por favor, inicia sesión de nuevo.'),
-                        });
-                        if (result.ok) {
-                          setIsRatingModalOpen(false);
-                          setOrderToRate(null);
-                          setRestaurantRating(0);
-                          setDriverRatingVal(0);
-                          setRatingComment('');
-                          setRatingIsPickup(false);
-                          setToastMessage('¡Gracias por tu calificación!');
-                          setTimeout(() => setToastMessage(''), 2000);
-                          return;
-                        }
-                        setToastMessage(result.message || 'No se pudo guardar tu calificación. Intenta de nuevo.');
-                        setTimeout(() => setToastMessage(''), 4000);
-                      } finally {
-                        setIsSubmittingRating(false);
-                      }
-                    }}
-                    disabled={restaurantRating === 0 || isSubmittingRating}
-                    className="flex-1 rounded-full bg-emerald-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-neutral-300"
-                  >
-                    Enviar
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
+            <RatingModal
+              open
+              isPickup={isPickupRating}
+              bizType={bizType}
+              restaurantRating={restaurantRating}
+              onRestaurantRatingChange={setRestaurantRating}
+              driverRating={driverRatingVal}
+              onDriverRatingChange={setDriverRatingVal}
+              comment={ratingComment}
+              onCommentChange={setRatingComment}
+              submitting={isSubmittingRating}
+              onSkip={() => {
+                if (orderToRate) {
+                  try {
+                    localStorage.setItem(`sadel_dismissed_rating_${orderToRate}`, 'true');
+                  } catch (e) {}
+                }
+                setIsRatingModalOpen(false);
+                setOrderToRate(null);
+                setRestaurantRating(0);
+                setDriverRatingVal(0);
+                setRatingComment('');
+                setRatingIsPickup(false);
+              }}
+              onSubmit={async () => {
+                if (!orderToRate || isSubmittingRating) return;
+                setIsSubmittingRating(true);
+                try {
+                  const result = await submitReview({
+                    apiBase,
+                    storageKey,
+                    orderId: orderToRate,
+                    payload: {
+                      rating: restaurantRating,
+                      ...(ratingComment ? { comment: ratingComment } : {}),
+                      ...(!ratingIsPickup && driverRatingVal > 0 ? {
+                        driverRating: driverRatingVal,
+                        ...(ratingComment ? { driverComment: ratingComment } : {}),
+                      } : {}),
+                    },
+                    getUser: () => sessionUser,
+                    onTokenRefreshed: (newToken) => setToken(newToken),
+                    onSessionExpired: () => clearSession('Tu sesión ha expirado. Por favor, inicia sesión de nuevo.'),
+                  });
+                  if (result.ok) {
+                    setIsRatingModalOpen(false);
+                    setOrderToRate(null);
+                    setRestaurantRating(0);
+                    setDriverRatingVal(0);
+                    setRatingComment('');
+                    setRatingIsPickup(false);
+                    setToastMessage('¡Gracias por tu calificación!');
+                    setTimeout(() => setToastMessage(''), 2000);
+                    return;
+                  }
+                  setToastMessage(result.message || 'No se pudo guardar tu calificación. Intenta de nuevo.');
+                  setTimeout(() => setToastMessage(''), 4000);
+                } finally {
+                  setIsSubmittingRating(false);
+                }
+              }}
+            />
           );
         })()}
 
