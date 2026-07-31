@@ -274,7 +274,8 @@ export async function requestJson<T>(params: {
   const timeoutMs = Math.max(0, params.timeoutMs ?? 15_000);
   let lastError: unknown;
   const hasBody = params.options?.body !== undefined;
-  const cacheKey = hasBody ? '' : getCacheKey(params.apiBase, params.path);
+  const useRequestCache = !hasBody && params.options?.cache === 'force-cache';
+  const cacheKey = useRequestCache ? getCacheKey(params.apiBase, params.path) : '';
   let currentToken = params.token;
 
   if (cacheKey) {
@@ -297,7 +298,7 @@ export async function requestJson<T>(params: {
             ...(currentToken ? { authorization: `Bearer ${currentToken}` } : {}),
             ...(params.options?.headers || {}),
           },
-          cache: 'no-store',
+          cache: params.options?.cache ?? 'no-store',
           ...(params.options?.signal ? {} : { signal: controller.signal }),
         });
       } finally {
