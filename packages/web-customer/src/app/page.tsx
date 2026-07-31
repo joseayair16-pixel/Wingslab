@@ -249,6 +249,7 @@ type RestaurantListResponse = {
     page: number;
     limit: number;
     hasMore: boolean;
+    activeCategories?: Array<{ id: string; businessTypes: string[] }>;
   };
 };
 
@@ -1060,6 +1061,7 @@ export default function Home() {
   const [, setLoadingRestaurant] = useState(false);
   const [loadingDetail, setLoadingDetail] = useState(false);
   const [platformCategories, setPlatformCategories] = useState<StoreCategoryItem[]>([]);
+  const [activeCategories, setActiveCategories] = useState<Array<{ id: string; businessTypes: string[] }>>([]);
   const [reordering, setReordering] = useState(false);
   const [socketStatus, setSocketStatus] = useState<'idle' | 'connecting' | 'connected' | 'reconnecting'>('idle');
   const [, setSocketAttempts] = useState(0);
@@ -1991,6 +1993,7 @@ export default function Home() {
         return r.distanceKm <= r.deliveryRadius;
       });
       setRestaurants(restaurantsData.data.items || []);
+      setActiveCategories(restaurantsData.data.activeCategories || []);
       setFeaturedRestaurants(validFeatured);
       setOfferProducts(offersData);
       setSelectedRestaurantId((current) => {
@@ -4964,6 +4967,7 @@ export default function Home() {
             filteredRestaurants={filteredRestaurants}
             formatRegionChipLabel={formatRegionChipLabel}
             platformCategories={platformCategories}
+            activeCategories={activeCategories}
             Panel={Panel}
             EmptyState={EmptyState}
             loadingDashboard={loadingDashboard}

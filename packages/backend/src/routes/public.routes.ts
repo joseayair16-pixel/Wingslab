@@ -250,6 +250,20 @@ export async function registerPublicRoutes(fastify: FastifyInstance): Promise<vo
         return left.distanceKm - right.distanceKm;
       });
 
+    const activeCategoryMap = new Map<string, Set<string>>();
+    for (const r of mapped) {
+      const businessType = (r as any).businessType || 'RESTAURANT';
+      const cats = (r as any).storeCategories || [];
+      for (const c of cats) {
+        if (!activeCategoryMap.has(c.id)) activeCategoryMap.set(c.id, new Set());
+        activeCategoryMap.get(c.id)!.add(businessType);
+      }
+    }
+    const activeCategories = Array.from(activeCategoryMap.entries()).map(([id, businessTypes]) => ({
+      id,
+      businessTypes: Array.from(businessTypes),
+    }));
+
     const total = mapped.length;
     const items = mapped.slice((page - 1) * limit, page * limit);
 
@@ -261,6 +275,7 @@ export async function registerPublicRoutes(fastify: FastifyInstance): Promise<vo
         page,
         limit,
         hasMore: page * limit < total,
+        activeCategories,
       },
     });
   });

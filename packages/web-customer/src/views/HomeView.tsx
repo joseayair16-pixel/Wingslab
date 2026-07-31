@@ -20,6 +20,7 @@ interface HomeViewProps {
   filteredRestaurants: any[];
   formatRegionChipLabel: (region: string) => string;
   platformCategories: StoreCategoryItem[];
+  activeCategories?: Array<{ id: string; businessTypes: string[] }>;
   Panel: React.FC<any>;
   EmptyState: React.FC<any>;
   loadingDashboard: boolean;
@@ -54,6 +55,7 @@ export const HomeView = React.memo(function HomeView({
   filteredRestaurants,
   formatRegionChipLabel,
   platformCategories,
+  activeCategories = [],
   Panel,
   EmptyState,
   loadingDashboard,
@@ -106,6 +108,12 @@ export const HomeView = React.memo(function HomeView({
 
   const categoryBusinessTypes = useMemo(() => {
     const map: Record<string, Set<string>> = {};
+    if (activeCategories.length > 0) {
+      for (const c of activeCategories) {
+        map[c.id] = new Set(c.businessTypes);
+      }
+      return map;
+    }
     for (const r of restaurants) {
       const bt = (r as any).businessType;
       const cats = (r as any).storeCategories;
@@ -117,7 +125,7 @@ export const HomeView = React.memo(function HomeView({
       }
     }
     return map;
-  }, [restaurants]);
+  }, [activeCategories, restaurants]);
 
   const filteredByBusinessType = useMemo(() => {
     return filteredRestaurants.filter((r) => {
