@@ -9170,6 +9170,24 @@ export default function Home() {
                 aria-hidden="true"
               />
               <div className="relative z-10 flex max-h-[92vh] w-full max-w-3xl lg:max-w-6xl flex-col overflow-hidden rounded-[24px] bg-white shadow-[0_32px_100px_rgba(15,15,15,0.28)] transition-all duration-300">
+                {selectedOrderForTicket.status === 'CANCELLED' || (selectedOrderForTicket as any).cancelledBy ? (
+                  <div className="pointer-events-none absolute inset-0 z-30 flex items-center justify-center select-none mix-blend-multiply">
+                    <div className="absolute -rotate-12 translate-x-4 translate-y-3 border-[7px] border-rose-600/15 px-8 py-3 sm:px-16 sm:py-5">
+                      <div className="border-2 border-dashed border-rose-600/15 px-3 py-1.5 text-center sm:px-6 sm:py-2.5">
+                        <span className="text-3xl font-black uppercase leading-none tracking-[0.18em] text-rose-600/15 sm:text-6xl lg:text-7xl">
+                          CANCELADO
+                        </span>
+                      </div>
+                    </div>
+                    <div className="absolute -rotate-12 border-[7px] border-rose-600/55 px-8 py-3 sm:px-16 sm:py-5">
+                      <div className="border-2 border-dashed border-rose-600/55 px-3 py-1.5 text-center sm:px-6 sm:py-2.5">
+                        <span className="text-3xl font-black uppercase leading-none tracking-[0.18em] text-rose-600/60 sm:text-6xl lg:text-7xl">
+                          CANCELADO
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                ) : null}
                 <button
                   type="button"
                   onClick={() => setSelectedOrderForTicket(null)}
