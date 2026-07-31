@@ -76,7 +76,7 @@ self.addEventListener('notificationclick', function (event) {
   );
 });
 
-const CACHE_NAME = 'sadel-customer-v5';
+const CACHE_NAME = 'sadel-customer-v6';
 
 self.addEventListener('install', function () {
   self.skipWaiting();

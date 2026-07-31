@@ -7,6 +7,7 @@ import { AuthUser, readStoredSession, requestJson, submitReview, uploadMediaAsse
 import { io } from 'socket.io-client';
 import LiveTrackingMap from '../../../components/LiveTrackingMap';
 import { AuthModal } from '../../../components/AuthModal';
+import { useForegroundPolling } from '../../../hooks/useForegroundPolling';
 import { SaDelLogo } from '../../../components/SaDelLogo';
 import CartDrawer from '../../../components/CartDrawer';
 type PaymentMethod = 'CASH' | 'TRANSFER';
@@ -766,6 +767,7 @@ export default function RestaurantPage({
   const recentNoticeKeysRef = useRef<string[]>([]);
   const lastActiveOrderStatusRef = useRef<string>('');
   const recentCreatedOrderRef = useRef<{ id: string; orderReference: string; paymentMethod?: string } | null>(null);
+  const loadActiveOrdersRef = useRef<() => void>(() => {});
   const creatingOrderRef = useRef(false);
 
   // Estados para Modal de Repartidor Llegó
@@ -981,6 +983,7 @@ export default function RestaurantPage({
     if (!token || sessionUser?.role !== 'CUSTOMER') {
       setActiveOrderListItems([]);
       setActiveOrderDetailsMap({});
+      loadActiveOrdersRef.current = () => {};
       return;
     }
 
@@ -1093,12 +1096,19 @@ export default function RestaurantPage({
       void loadActiveOrders();
     };
     window.addEventListener('order-updated', handleUpdate);
+    loadActiveOrdersRef.current = loadActiveOrders;
 
     return () => {
       cancelled = true;
       window.removeEventListener('order-updated', handleUpdate);
     };
   }, [apiBase, sessionUser?.role, token]);
+
+  useForegroundPolling(() => {
+    if (token && sessionUser?.role === 'CUSTOMER') {
+      loadActiveOrdersRef.current();
+    }
+  });
 
   useEffect(() => {
     if (!token || !sessionUser || sessionUser.role !== 'CUSTOMER') {

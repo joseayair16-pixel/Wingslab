@@ -22,6 +22,7 @@ import {
   convertImageFileToDataUrl,
 } from '@sadel/shared';
 import { usePushNotifications } from '../hooks/usePushNotifications';
+import { useForegroundPolling } from '../hooks/useForegroundPolling';
 import { useCartStore, type CartItem } from '../store/cartStore';
 import { useChatStore } from '../store/chatStore';
 import dynamic from 'next/dynamic';
@@ -3193,6 +3194,12 @@ export default function Home() {
   useEffect(() => { loadDashboardRef.current = loadDashboard; }, [loadDashboard]);
   const loadOrderDetailRef = useRef(loadOrderDetail);
   useEffect(() => { loadOrderDetailRef.current = loadOrderDetail; }, [loadOrderDetail]);
+
+  useForegroundPolling(() => {
+    if (token && sessionUser?.role === 'CUSTOMER') {
+      void loadDashboardRef.current(true);
+    }
+  });
 
   const sessionUserIdRef = useRef(sessionUser?.id);
   useEffect(() => { sessionUserIdRef.current = sessionUser?.id; }, [sessionUser?.id]);
