@@ -7743,8 +7743,9 @@ export default function Home() {
                         <button
                           type="button"
                           onClick={() => setSelectedStatus('ACTIVE')}
-                          className="flex items-center gap-2 rounded-full bg-sky-500 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-sky-600 md:py-3"
+                          className="relative flex items-center gap-2 rounded-full bg-sky-500 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-sky-600 md:py-3 animate-heartbeat"
                         >
+                          <span aria-hidden="true" className="pointer-events-none absolute -inset-1 -z-10 rounded-full bg-sky-400/40 animate-ping" />
                           <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z" />
                           </svg>
