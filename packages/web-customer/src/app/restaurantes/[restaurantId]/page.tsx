@@ -770,6 +770,7 @@ export default function RestaurantPage({
   const loadActiveOrdersRef = useRef<() => void>(() => {});
   const creatingOrderRef = useRef(false);
   const clientOrderKeyRef = useRef('');
+  const socketRef = useRef<any>(null);
 
   // Clave de idempotencia: se regenera cuando cambia el carrito, pero se mantiene
   // estable entre reintentos del mismo pedido (red caída, doble toque).
@@ -1112,7 +1113,9 @@ export default function RestaurantPage({
   }, [apiBase, sessionUser?.role, token]);
 
   useForegroundPolling(() => {
-    if (token && sessionUser?.role === 'CUSTOMER') {
+    // Solo refresca cuando el socket está caído: el respaldo cubre exactamente
+    // el caso en que el socket no entrega eventos (segundo plano, red inestable).
+    if (token && sessionUser?.role === 'CUSTOMER' && (!socketRef.current || socketRef.current.disconnected)) {
       loadActiveOrdersRef.current();
     }
   });
@@ -1128,6 +1131,7 @@ export default function RestaurantPage({
       autoConnect: true,
       reconnection: true,
     });
+    socketRef.current = socket;
 
     socket.on('connect', () => {
       socket.emit('join-room', sessionUser.id, 'CUSTOMER');
@@ -1397,6 +1401,7 @@ export default function RestaurantPage({
       socket.off('account:suspended');
       socket.emit('leave-room', sessionUser.id, 'CUSTOMER');
       socket.disconnect();
+      socketRef.current = null;
     };
   }, [apiBase, sessionUser?.id, token]);
 

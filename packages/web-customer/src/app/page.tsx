@@ -3196,7 +3196,9 @@ export default function Home() {
   useEffect(() => { loadOrderDetailRef.current = loadOrderDetail; }, [loadOrderDetail]);
 
   useForegroundPolling(() => {
-    if (token && sessionUser?.role === 'CUSTOMER') {
+    // Solo refresca cuando el socket está caído: el respaldo se activa exactamente
+    // cuando el socket no puede entregar eventos (segundo plano, red inestable).
+    if (token && sessionUser?.role === 'CUSTOMER' && (!socketRef.current || socketRef.current.disconnected)) {
       void loadDashboardRef.current(true);
     }
   });
