@@ -258,6 +258,7 @@ export async function requestJson<T>(params: {
   token?: string;
   options?: RequestInit;
   fallbackMessage?: string;
+  timeoutMs?: number;
   retry?: {
     attempts?: number;
     backoffMs?: number;
@@ -270,6 +271,7 @@ export async function requestJson<T>(params: {
 }): Promise<T> {
   const attempts = Math.max(0, params.retry?.attempts ?? 2);
   const backoffMs = Math.max(0, params.retry?.backoffMs || 350);
+  const timeoutMs = Math.max(0, params.timeoutMs ?? 15_000);
   let lastError: unknown;
   const hasBody = params.options?.body !== undefined;
   const cacheKey = hasBody ? '' : getCacheKey(params.apiBase, params.path);
@@ -284,23 +286,39 @@ export async function requestJson<T>(params: {
 
   for (let attempt = 0; attempt <= attempts; attempt += 1) {
     try {
-      const response = await fetch(`${params.apiBase}${params.path}`, {
-        ...params.options,
-        headers: {
-          ...(hasBody ? { 'content-type': 'application/json' } : {}),
-          ...(currentToken ? { authorization: `Bearer ${currentToken}` } : {}),
-          ...(params.options?.headers || {}),
-        },
-        cache: 'no-store',
-      });
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), timeoutMs);
+      let response: Response;
+      try {
+        response = await fetch(`${params.apiBase}${params.path}`, {
+          ...params.options,
+          headers: {
+            ...(hasBody ? { 'content-type': 'application/json' } : {}),
+            ...(currentToken ? { authorization: `Bearer ${currentToken}` } : {}),
+            ...(params.options?.headers || {}),
+          },
+          cache: 'no-store',
+          ...(params.options?.signal ? {} : { signal: controller.signal }),
+        });
+      } finally {
+        clearTimeout(timer);
+      }
 
       if (!response.ok && response.status === 401 && params.refreshConfig && attempt === 0) {
         try {
-          const refreshRes = await fetch(`${params.apiBase}/auth/refresh`, {
-            method: 'POST',
-            headers: { 'content-type': 'application/json' },
-            body: JSON.stringify({ refreshToken: params.refreshConfig.refreshToken }),
-          });
+          const refreshController = new AbortController();
+          const refreshTimer = setTimeout(() => refreshController.abort(), timeoutMs);
+          let refreshRes: Response;
+          try {
+            refreshRes = await fetch(`${params.apiBase}/auth/refresh`, {
+              method: 'POST',
+              headers: { 'content-type': 'application/json' },
+              body: JSON.stringify({ refreshToken: params.refreshConfig.refreshToken }),
+              signal: refreshController.signal,
+            });
+          } finally {
+            clearTimeout(refreshTimer);
+          }
 
           if (refreshRes.ok) {
             const refreshPayload = await refreshRes.json();
@@ -382,6 +400,143 @@ export async function requestJson<T>(params: {
         message: params.fallbackMessage || 'No se pudo completar la solicitud.',
         kind: 'unknown',
       });
+}
+
+export type SubmitReviewPayload = {
+  rating: number;
+  comment?: string;
+  driverRating?: number;
+  driverComment?: string;
+};
+
+export type SubmitReviewResult = {
+  ok: boolean;
+  message?: string;
+};
+
+export async function submitReview(params: {
+  apiBase: string;
+  storageKey: string;
+  orderId: string;
+  payload: SubmitReviewPayload;
+  getUser?: () => AuthUser | null;
+  onTokenRefreshed?: (token: string, refreshToken?: string) => void;
+  onSessionExpired?: () => void;
+  timeoutMs?: number;
+}): Promise<SubmitReviewResult> {
+  const timeoutMs = Math.max(0, params.timeoutMs ?? 15_000);
+  const session = readStoredSession(params.storageKey);
+  const initialToken = session.token;
+  const refreshToken = session.refreshToken;
+
+  if (!initialToken) {
+    params.onSessionExpired?.();
+    return { ok: false, message: 'Tu sesión ha expirado. Inicia sesión de nuevo.' };
+  }
+
+  const doSubmit = (currentToken: string): Promise<Response> => {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    return fetch(`${params.apiBase}/customer/pedidos/${params.orderId}/review`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${currentToken}`,
+      },
+      body: JSON.stringify(params.payload),
+      signal: controller.signal,
+    }).finally(() => clearTimeout(timer));
+  };
+
+  const isTransientHttpStatus = (status: number) => status >= 500 || status === 0;
+
+  let response: Response | null = null;
+  let lastSubmitError = false;
+
+  try {
+    for (let attempt = 0; attempt <= 2; attempt += 1) {
+      const res = await doSubmit(initialToken);
+      if (attempt < 2 && isTransientHttpStatus(res.status)) {
+        await wait(400 * (attempt + 1));
+        continue;
+      }
+      response = res;
+      break;
+    }
+  } catch {
+    lastSubmitError = true;
+  }
+
+  if (lastSubmitError || !response) {
+    return { ok: false, message: 'Error de conexión. Intenta de nuevo.' };
+  }
+
+  if (response.status === 401 && refreshToken) {
+    try {
+      const refreshController = new AbortController();
+      const refreshTimer = setTimeout(() => refreshController.abort(), timeoutMs);
+      let refreshRes: Response;
+      try {
+        refreshRes = await fetch(`${params.apiBase}/auth/refresh`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ refreshToken }),
+          signal: refreshController.signal,
+        });
+      } finally {
+        clearTimeout(refreshTimer);
+      }
+
+      if (refreshRes.ok) {
+        const refreshPayload = (await refreshRes.json()) as {
+          success: boolean;
+          data?: { token: string; refreshToken?: string };
+        };
+        if (refreshPayload.success && refreshPayload.data) {
+          const newToken = refreshPayload.data.token;
+          const newRefreshToken = refreshPayload.data.refreshToken || refreshToken;
+          const user = params.getUser?.() || session.user;
+          if (user) {
+            persistStoredSession({
+              storageKey: params.storageKey,
+              apiBase: params.apiBase,
+              token: newToken,
+              refreshToken: newRefreshToken,
+              user,
+            });
+          }
+          params.onTokenRefreshed?.(newToken, newRefreshToken);
+          response = await doSubmit(newToken);
+        }
+      }
+    } catch {
+      // Refresh failed — fall through to error handling below
+    }
+  }
+
+  let body: { success?: boolean; error?: { message?: string } } | null = null;
+  try {
+    const parsed: unknown = await response.json();
+    if (parsed && typeof parsed === 'object') {
+      body = parsed as { success?: boolean; error?: { message?: string } };
+    }
+  } catch {
+    // Non-JSON body — fall back to generic message
+  }
+
+  if (response.ok && body?.success !== false) {
+    return { ok: true };
+  }
+
+  if (response.status === 401) {
+    params.onSessionExpired?.();
+    return { ok: false, message: 'Tu sesión ha expirado. Inicia sesión de nuevo.' };
+  }
+
+  return {
+    ok: false,
+    message: body?.error?.message || 'No se pudo guardar tu calificación. Intenta de nuevo.',
+  };
 }
 
 export function convertImageFileToDataUrl(
@@ -469,6 +624,7 @@ export async function uploadMediaAsset(params: {
         }),
       },
       fallbackMessage: params.fallbackMessage || 'No se pudo subir la imagen.',
+      timeoutMs: 60_000,
       retry: {
         attempts: 1,
         backoffMs: 400,

@@ -13,6 +13,7 @@ import {
   persistStoredSession,
   readStoredSession,
   requestJson,
+  submitReview,
   uploadMediaAsset,
   getOrderStatusLabel,
   isRestaurant,
@@ -5948,42 +5949,35 @@ export default function Home() {
                     type="button"
                     onClick={async () => {
                       if (!orderToRate) return;
-                      try {
-                        const response = await fetch(`${apiBase}/customer/pedidos/${orderToRate}/review`, {
-                          method: 'POST',
-                          headers: {
-                            'Content-Type': 'application/json',
-                            'Authorization': `Bearer ${token}`,
-                          },
-                          body: JSON.stringify({
-                            rating: restaurantRating,
-                            ...(ratingComment ? { comment: ratingComment } : {}),
-                            ...(!ratingIsPickup && driverRatingVal > 0 ? {
-                              driverRating: driverRatingVal,
-                              ...(ratingComment ? { driverComment: ratingComment } : {}),
-                            } : {}),
-                          }),
-                        });
-                        const data = await response.json();
-                        if (data.success) {
-                          setIsRatingModalOpen(false);
-                          setOrderToRate(null);
-                          setRestaurantRating(0);
-                          setDriverRatingVal(0);
-                          setRatingComment('');
-                          setRatingIsPickup(false);
-                          setToastMessage('¡Gracias por tu calificación!');
-                          setTimeout(() => setToastMessage(''), 2000);
-                          return;
-                        }
-                        const errorMsg = data?.error?.message || 'No se pudo guardar tu calificación. Intenta de nuevo.';
-                        setToastMessage(errorMsg);
-                        setTimeout(() => setToastMessage(''), 4000);
-                      } catch (err) {
-                        console.error('Error submitting review:', err);
-                        setToastMessage('Error de conexión. Intenta de nuevo.');
-                        setTimeout(() => setToastMessage(''), 4000);
+                      const result = await submitReview({
+                        apiBase,
+                        storageKey,
+                        orderId: orderToRate,
+                        payload: {
+                          rating: restaurantRating,
+                          ...(ratingComment ? { comment: ratingComment } : {}),
+                          ...(!ratingIsPickup && driverRatingVal > 0 ? {
+                            driverRating: driverRatingVal,
+                            ...(ratingComment ? { driverComment: ratingComment } : {}),
+                          } : {}),
+                        },
+                        getUser: () => sessionUser,
+                        onTokenRefreshed: (newToken) => setToken(newToken),
+                        onSessionExpired: () => clearSession('Tu sesión ha expirado. Por favor, inicia sesión de nuevo.'),
+                      });
+                      if (result.ok) {
+                        setIsRatingModalOpen(false);
+                        setOrderToRate(null);
+                        setRestaurantRating(0);
+                        setDriverRatingVal(0);
+                        setRatingComment('');
+                        setRatingIsPickup(false);
+                        setToastMessage('¡Gracias por tu calificación!');
+                        setTimeout(() => setToastMessage(''), 2000);
+                        return;
                       }
+                      setToastMessage(result.message || 'No se pudo guardar tu calificación. Intenta de nuevo.');
+                      setTimeout(() => setToastMessage(''), 4000);
                     }}
                     disabled={restaurantRating === 0}
                     className="flex-1 rounded-full bg-emerald-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-neutral-300"

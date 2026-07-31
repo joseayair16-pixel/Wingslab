@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Script from 'next/script';
-import { AuthUser, readStoredSession, requestJson, uploadMediaAsset, convertImageFileToDataUrl, getOrderStatusLabel, isRestaurant, getBusinessArticleCapitalized, getBusinessRef, ApiRequestError } from '@sadel/shared';
+import { AuthUser, readStoredSession, requestJson, submitReview, uploadMediaAsset, convertImageFileToDataUrl, getOrderStatusLabel, isRestaurant, getBusinessArticleCapitalized, getBusinessRef, ApiRequestError } from '@sadel/shared';
 import { io } from 'socket.io-client';
 import LiveTrackingMap from '../../../components/LiveTrackingMap';
 import { AuthModal } from '../../../components/AuthModal';
@@ -3092,26 +3092,22 @@ function triggerHaptic(pattern: number | number[] = 10) {
                     type="button"
                     onClick={async () => {
                       if (!orderToRate) return;
-                      try {
-                        const response = await fetch(`${apiBase}/customer/pedidos/${orderToRate}/review`, {
-                          method: 'POST',
-                          headers: {
-                            'Content-Type': 'application/json',
-                            authorization: `Bearer ${token}`,
-                          },
-                          body: JSON.stringify({
-                            rating: restaurantRating,
-                            ...(isPickupRating ? {} : { driverRating: driverRatingVal || undefined }),
-                            ...(ratingComment ? { comment: ratingComment } : {}),
-                          }),
-                        });
-                        if (response.ok) {
-                          showTransientNotice({ key: 'rating-submitted', title: '¡Gracias!', description: 'Tu calificación nos ayuda a mejorar.', tone: 'success' });
-                        } else {
-                          showTransientNotice({ key: 'rating-error', title: 'Error', description: 'No se pudo guardar tu calificación.', tone: 'danger' });
-                        }
-                      } catch (e) {
-                        showTransientNotice({ key: 'rating-error', title: 'Error', description: 'No se pudo conectar con el servidor.', tone: 'danger' });
+                      const result = await submitReview({
+                        apiBase,
+                        storageKey,
+                        orderId: orderToRate,
+                        payload: {
+                          rating: restaurantRating,
+                          ...(isPickupRating ? {} : { driverRating: driverRatingVal || undefined }),
+                          ...(ratingComment ? { comment: ratingComment } : {}),
+                        },
+                        getUser: () => sessionUser,
+                        onTokenRefreshed: (newToken) => setToken(newToken),
+                      });
+                      if (result.ok) {
+                        showTransientNotice({ key: 'rating-submitted', title: '¡Gracias!', description: 'Tu calificación nos ayuda a mejorar.', tone: 'success' });
+                      } else {
+                        showTransientNotice({ key: 'rating-error', title: 'Error', description: result.message || 'No se pudo guardar tu calificación.', tone: 'danger' });
                       }
                       if (orderToRate) {
                         setActiveOrderListItems((prev) => prev.filter((o) => o.id !== orderToRate));
