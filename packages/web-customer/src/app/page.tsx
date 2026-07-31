@@ -31,6 +31,7 @@ import { RestaurantSearchBar } from '../components/RestaurantSearchBar';
 import { AuthModal } from '../components/AuthModal';
 import { ChatPanel } from '../components/ChatPanel';
 import { SaDelLogo } from '../components/SaDelLogo';
+import { ZonesModal } from '../components/ZonesModal';
 import CartDrawer from '../components/CartDrawer';
 import { CompactActiveOrderBanner, buildTimelineSteps, getEtaWindowMinutes, formatEstimatedArrivalMinutes } from '../components/CompactActiveOrderBanner';
 import RatingModal from '../components/RatingModal';
@@ -845,6 +846,18 @@ export default function Home() {
     orders: CustomerOrderListItem[];
   } | null>(null);
   const [activeZones, setActiveZones] = useState<any[]>([]);
+  const [zonesLoading, setZonesLoading] = useState(false);
+  const [isZonesModalOpen, setIsZonesModalOpen] = useState(false);
+  const [exploringZone, setExploringZone] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        return window.localStorage.getItem('exploringZone') === '1';
+      } catch {}
+    }
+    return false;
+  });
+  const exploringZoneRef = useRef(exploringZone);
+  exploringZoneRef.current = exploringZone;
   const [selectedZoneName, setSelectedZoneName] = useState<string | null>(() => {
     if (typeof window !== 'undefined') {
       try {
@@ -2005,10 +2018,12 @@ export default function Home() {
 
       // Fetch active zones once for the empty state explorer
       if (!activeZones.length) {
+        setZonesLoading(true);
         fetch(`${apiBase}/public/zonas-activas`)
           .then(r => r.json())
           .then(d => { if (d.success) setActiveZones(d.data); })
-          .catch(() => {});
+          .catch(() => {})
+          .finally(() => setZonesLoading(false));
       }
 
       if (callId !== loadDashboardCallIdRef.current) return;
@@ -2149,17 +2164,21 @@ export default function Home() {
     }
   }, [apiBase, restaurantsPage, hasMoreRestaurants, loadingMoreRestaurants]);
 
-  const handleZoneSelect = useCallback((zone: { latitude: number; longitude: number; regionName: string }) => {
-    const loc = { latitude: zone.latitude, longitude: zone.longitude, accuracy: undefined, address: zone.regionName, ts: Date.now() };
+  const handleZoneSelect = useCallback((zone: { latitude?: number; longitude?: number; regionName: string }) => {
+    const lat = zone.latitude ?? 0;
+    const lng = zone.longitude ?? 0;
+    const loc = { latitude: lat, longitude: lng, accuracy: undefined, address: zone.regionName, ts: Date.now() };
     setSelectedZoneName(zone.regionName);
     setLocationSource('manual');
     setLocationDenied(true);
     setUserLocation(loc);
+    setExploringZone(true);
     try {
       localStorage.setItem('locationDenied', '1');
       localStorage.setItem('locationSource', 'manual');
       localStorage.setItem('userLocation', JSON.stringify(loc));
       localStorage.setItem('selectedZoneName', zone.regionName);
+      localStorage.setItem('exploringZone', '1');
     } catch (e) {}
     loadDashboard();
   }, [loadDashboard]);
@@ -2169,11 +2188,13 @@ export default function Home() {
     setLocationSource('gps');
     setLocationDenied(false);
     setUserLocation(null);
+    setExploringZone(false);
     try {
       localStorage.removeItem('locationDenied');
       localStorage.removeItem('locationSource');
       localStorage.removeItem('userLocation');
       localStorage.removeItem('selectedZoneName');
+      localStorage.removeItem('exploringZone');
     } catch (e) {}
 
     // Try GPS immediately to re-acquire location after manual zone override
@@ -2796,7 +2817,7 @@ export default function Home() {
               // ignore permission inspection failures
             }
           }
-          if (permissionGranted || !permissionsSupported) {
+          if ((permissionGranted || !permissionsSupported) && !exploringZoneRef.current) {
             const fresh = await tryUpdateFromGeolocation();
             if (fresh) {
               setUserLocation(fresh as any);
@@ -2850,6 +2871,7 @@ export default function Home() {
 
       watchId = navigator.geolocation.watchPosition(
         (position) => {
+          if (exploringZoneRef.current) return;
           const { latitude, longitude, accuracy } = position.coords;
           if (accuracy > MAX_ACCURACY_M) return;
 
@@ -4348,6 +4370,23 @@ export default function Home() {
             </button>
             <button
               type="button"
+              onClick={() => { setIsZonesModalOpen(true); setIsSideMenuOpen(false); }}
+              className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all active-scale ${
+                exploringZone ? 'bg-sky-50 text-sky-700' : 'text-neutral-600 hover:bg-neutral-50 hover:text-neutral-900'
+              }`}
+            >
+              <svg className={`h-5 w-5 ${exploringZone ? 'text-sky-500' : 'text-neutral-400'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5a2.5 2.5 0 110-5 2.5 2.5 0 010 5z" />
+              </svg>
+              <span>Explorar ciudades</span>
+              {exploringZone && selectedZoneName && (
+                <span className="ml-auto inline-flex max-w-[110px] items-center rounded-full bg-sky-500 px-2 py-0.5 text-[10px] font-bold text-white">
+                  <span className="truncate">{selectedZoneName}</span>
+                </span>
+              )}
+            </button>
+            <button
+              type="button"
               onClick={() => { openDashboardSection('profile'); setIsSideMenuOpen(false); }}
               className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all active-scale ${
                 activeSection === 'profile' ? 'bg-sky-50 text-sky-700' : 'text-neutral-600 hover:bg-neutral-50 hover:text-neutral-900'
@@ -4427,6 +4466,21 @@ export default function Home() {
           </div>
         </aside>
       </div>
+
+      <ZonesModal
+        open={isZonesModalOpen}
+        zones={activeZones}
+        selectedZoneName={selectedZoneName}
+        loading={zonesLoading}
+        onSelectZone={(zone) => {
+          handleZoneSelect(zone);
+        }}
+        onResetZone={() => {
+          handleResetZone();
+          setIsZonesModalOpen(false);
+        }}
+        onClose={() => setIsZonesModalOpen(false)}
+      />
 
       <CartDrawer
         isOpen={isCartOpen}
