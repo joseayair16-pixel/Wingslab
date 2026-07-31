@@ -7,7 +7,7 @@ import { AuthUser, readStoredSession, requestJson, submitReview, uploadMediaAsse
 import { io } from 'socket.io-client';
 import LiveTrackingMap from '../../../components/LiveTrackingMap';
 import { AuthModal } from '../../../components/AuthModal';
-import { CompactActiveOrderBanner, getEtaWindowMinutes } from '../../../components/CompactActiveOrderBanner';
+import { CompactActiveOrderBanner, getEtaWindowMinutes, formatEstimatedArrivalMinutes } from '../../../components/CompactActiveOrderBanner';
 import RatingModal from '../../../components/RatingModal';
 import { useForegroundPolling } from '../../../hooks/useForegroundPolling';
 import { SaDelLogo } from '../../../components/SaDelLogo';
@@ -4973,25 +4973,32 @@ function triggerHaptic(pattern: number | number[] = 10) {
                   </div>
                 )}
 
-                {/* BOTÓN DE CHAT */}
-                {['PENDING', 'CONFIRMED', 'PREPARING', 'READY', 'PICKED_UP', 'IN_TRANSIT', 'DELIVERED'].includes(activeOrderDetailsMap[selectedOrderId].status) && (
-                  <button
-                    onClick={() => {
-                      setIsDetailModalOpen(false);
-                      setIsChatOpen(true);
-                      void loadChatMessages(selectedOrderId!);
-                    }}
-                    className="w-full flex items-center justify-center gap-3 p-4 bg-neutral-900 hover:bg-neutral-800 text-white rounded-2xl font-bold shadow-lg shadow-neutral-900/20 transition-all active:scale-[0.98] active-scale group"
-                  >
-                    <svg className="w-5 h-5 text-white/80 group-hover:text-white transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/></svg>
-                    <span>Contactar Soporte / Tienda</span>
-                    {(unreadMessagesMap[selectedOrderId] || 0) > 0 && (
-                      <span className="ml-2 bg-rose-500 text-white text-xs px-2.5 py-0.5 rounded-full font-bold animate-pulse">
-                        {unreadMessagesMap[selectedOrderId]}
-                      </span>
-                    )}
-                  </button>
-                )}
+                {/* ETA — se muestra mientras el pedido no ha terminado */}
+                {(() => {
+                  const orderDetail = activeOrderDetailsMap[selectedOrderId];
+                  const etaText = formatEstimatedArrivalMinutes(
+                    orderDetail.estimatedDeliveryTime,
+                    orderDetail.status,
+                    Date.now(),
+                    orderDetail.restaurant?.businessType,
+                    orderDetail.fulfillmentType
+                  );
+                  if (!etaText) return null;
+                  return (
+                    <div className="flex items-center gap-3 p-4 bg-white rounded-2xl border border-black/5 shadow-sm">
+                      <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-neutral-900 text-white">
+                        <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <circle cx="12" cy="12" r="8.5" />
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M12 7.5V12l3 2" />
+                        </svg>
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-[10px] font-bold uppercase tracking-widest text-neutral-400">Tiempo estimado</p>
+                        <p className="text-sm font-bold text-neutral-900">{etaText}</p>
+                      </div>
+                    </div>
+                  );
+                })()}
 
                 {/* Ticket unificado */}
                 <div className="bg-white rounded-3xl border border-black/5 shadow-sm p-6 space-y-6">

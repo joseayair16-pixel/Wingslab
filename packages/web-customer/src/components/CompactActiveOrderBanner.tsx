@@ -60,7 +60,7 @@ export function getEtaWindowMinutes(status: string) {
   return { early: 0, late: 0 };
 }
 
-function formatEstimatedArrivalMinutes(
+export function formatEstimatedArrivalMinutes(
   estimatedDeliveryTime: string | undefined,
   status: string,
   currentTimestamp: number,
@@ -72,7 +72,7 @@ function formatEstimatedArrivalMinutes(
     return null;
   }
 
-  if (['DELIVERED', 'CANCELLED', 'REJECTED', 'PENDING', 'DRIVER_ARRIVED', 'PICKED_UP'].includes(status)) {
+  if (['DELIVERED', 'CANCELLED', 'REJECTED', 'DRIVER_ARRIVED', 'PICKED_UP'].includes(status)) {
     return null;
   }
 
