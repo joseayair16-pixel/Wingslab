@@ -2118,6 +2118,45 @@ export default function Home() {
     }
   };
 
+  const billingFetchRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const billingFetchInFlight = useRef(false);
+
+  const fetchBillingSummary = useCallback(async () => {
+    if (!token) return;
+    if (billingFetchInFlight.current) return;
+    if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
+    billingFetchInFlight.current = true;
+    try {
+      const response = await fetch(`${apiBase}/restaurant-panel/facturacion`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await response.json();
+      if (data.success) {
+        setBillingSummary(data.data);
+      }
+    } catch (err) {
+      console.error('[Billing] Error fetching summary:', err);
+    } finally {
+      billingFetchInFlight.current = false;
+    }
+  }, [apiBase, token]);
+
+  const enqueueBillingRefetch = useCallback((immediate = false) => {
+    if (billingFetchRef.current) clearTimeout(billingFetchRef.current);
+    if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
+    const delay = immediate ? 0 : 300;
+    billingFetchRef.current = setTimeout(() => {
+      void fetchBillingSummary();
+    }, delay);
+  }, [fetchBillingSummary]);
+
+  // Refetch billing summary when entering the Balance section
+  useEffect(() => {
+    if (activeSection === 'billing') {
+      enqueueBillingRefetch(true);
+    }
+  }, [activeSection, enqueueBillingRefetch]);
+
   const fetchCurrentPeriodOrders = async () => {
     setLoadingCurrentPeriodOrders(true);
     try {
@@ -2756,6 +2795,10 @@ export default function Home() {
       void loadOrdersOnly();
     });
 
+    socket.on('billing:updated', () => {
+      enqueueBillingRefetch(false);
+    });
+
     // Zombie socket detection: si no se reciben eventos en 90s, refrescar datos
     let lastEventTime = Date.now();
     const healthCheckInterval = setInterval(() => {
@@ -2798,6 +2841,7 @@ export default function Home() {
           void audioContextRef.current.resume();
         }
         loadOrdersOnly();
+        enqueueBillingRefetch(false);
       }
     };
     document.addEventListener('visibilitychange', handleVisibilityChange);
@@ -2806,6 +2850,7 @@ export default function Home() {
       clearInterval(healthCheckInterval);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       socket.off('order_chat:message_received');
+      socket.off('billing:updated');
       // Disconnect socket ONLY when token or sessionUser.id/role changes, not on hot reload re-renders
       if (!token || !sessionUser || sessionUser.role !== 'RESTAURANT') {
         socket.emit('leave-room', sessionUser.id, 'RESTAURANT');
@@ -2823,8 +2868,13 @@ export default function Home() {
   // llega y el zombie-detection (que requiere socket.connected) tampoco corre.
   // Este polling refresca las órdenes para que el panel nunca muestre datos viejos.
   useForegroundPolling(() => {
-    if (token && sessionUser?.role === 'RESTAURANT' && (!socketRef.current || socketRef.current.disconnected)) {
-      void loadOrdersOnly();
+    if (token && sessionUser?.role === 'RESTAURANT') {
+      if (!socketRef.current || socketRef.current.disconnected) {
+        void loadOrdersOnly();
+      }
+      if (activeSection === 'billing') {
+        enqueueBillingRefetch(false);
+      }
     }
   });
 

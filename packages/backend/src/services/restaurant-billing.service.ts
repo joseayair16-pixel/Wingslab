@@ -430,5 +430,28 @@ export async function createBillingSettlement(restaurantId: string) {
     }),
   ]);
 
+  invalidateBillingCache(restaurantId);
+
   return settlement;
+}
+
+// ── in-memory cache (lightweight, self-healing via TTL) ──
+
+const billingCacheTtlMs = 15_000;
+
+const billingCacheMap = new Map<string, { data: unknown; expiresAt: number }>();
+
+export function invalidateBillingCache(restaurantId: string) {
+  billingCacheMap.delete(restaurantId);
+}
+
+export function getCachedBillingSummary(restaurantId: string): unknown | null {
+  const entry = billingCacheMap.get(restaurantId);
+  if (entry && Date.now() < entry.expiresAt) return entry.data;
+  billingCacheMap.delete(restaurantId);
+  return null;
+}
+
+export function setCachedBillingSummary(restaurantId: string, data: unknown) {
+  billingCacheMap.set(restaurantId, { data, expiresAt: Date.now() + billingCacheTtlMs });
 }

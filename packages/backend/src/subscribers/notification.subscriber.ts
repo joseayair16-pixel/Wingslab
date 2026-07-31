@@ -1,6 +1,7 @@
 import { appEvents } from '../utils/events';
 import { emitNotification } from '../services/socket.service';
 import { sendPushNotification } from '../services/notification.service';
+import { invalidateBillingCache } from '../services/restaurant-billing.service';
 import { prisma } from '../config/database';
 import { FastifyInstance } from 'fastify';
 import { logger } from '../utils/logger';
@@ -80,6 +81,18 @@ export const setupNotificationSubscribers = (fastify: FastifyInstance) => {
           'order_status_updated',
           { orderId, status }
         );
+      }
+
+      // Billing summary invalidation: emit refresh signal when order money changes hands
+      if (status === 'DELIVERED' || status === 'COMPLETED') {
+        emitNotification(
+          fastify.io,
+          order.restaurant.userId,
+          'RESTAURANT',
+          'billing:updated',
+          { orderId, status, restaurantId: order.restaurant.id }
+        );
+        invalidateBillingCache(order.restaurant.id);
       }
 
     } catch (error) {

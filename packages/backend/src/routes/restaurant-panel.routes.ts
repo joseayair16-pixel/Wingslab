@@ -5,7 +5,7 @@ import bcryptjs from 'bcryptjs';
 
 import { prisma } from '../config/database';
 import { authenticate, authorize, getAuthenticatedUser } from '../middleware/auth';
-import { buildRestaurantBillingSummary } from '../services/restaurant-billing.service';
+import { buildRestaurantBillingSummary, getCachedBillingSummary, setCachedBillingSummary, invalidateBillingCache, type RestaurantBillingSummary } from '../services/restaurant-billing.service';
 import { encrypt, decrypt } from '../utils/crypto';
 import { emitNotification } from '../services/socket.service';
 import { sendPushNotification } from '../services/notification.service';
@@ -279,7 +279,13 @@ export async function registerRestaurantPanelRoutes(fastify: FastifyInstance): P
       const enforcedStatus = await checkAndEnforceBillingSuspension(ownedRestaurant.id, ownedRestaurant.status);
       ownedRestaurant.status = enforcedStatus as any;
 
-      const billingSummary = await buildRestaurantBillingSummary(ownedRestaurant);
+      const cached = getCachedBillingSummary(ownedRestaurant.id);
+      const billingSummary = cached
+        ? (cached as RestaurantBillingSummary)
+        : await buildRestaurantBillingSummary(ownedRestaurant);
+      if (!cached) {
+        setCachedBillingSummary(ownedRestaurant.id, billingSummary);
+      }
       const recentSettlements = await prisma.restaurantBillingSettlement.findMany({
         where: { restaurantId: ownedRestaurant.id, status: { not: 'REJECTED' } },
         orderBy: { createdAt: 'desc' },
