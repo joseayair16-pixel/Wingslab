@@ -514,17 +514,22 @@ export async function submitReview(params: {
     }
   }
 
-  let body: { success?: boolean; error?: { message?: string } } | null = null;
+  let body: { success?: boolean; error?: { code?: string; message?: string } } | null = null;
   try {
     const parsed: unknown = await response.json();
     if (parsed && typeof parsed === 'object') {
-      body = parsed as { success?: boolean; error?: { message?: string } };
+      body = parsed as { success?: boolean; error?: { code?: string; message?: string } };
     }
   } catch {
     // Non-JSON body — fall back to generic message
   }
 
   if (response.ok && body?.success !== false) {
+    return { ok: true };
+  }
+
+  // Idempotencia: si la reseña ya existe (409), el pedido ya fue calificado con éxito.
+  if (response.status === 409 && body?.error?.code === 'REVIEW_ALREADY_EXISTS') {
     return { ok: true };
   }
 

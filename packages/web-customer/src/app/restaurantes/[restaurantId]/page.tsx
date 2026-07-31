@@ -694,6 +694,7 @@ export default function RestaurantPage({
   const [transferProofName, setTransferProofName] = useState('');
   const [transferProofSource, setTransferProofSource] = useState('');
   const [error, setError] = useState('');
+  const [menuReloadKey, setMenuReloadKey] = useState(0);
   const [deliveryErrorModal, setDeliveryErrorModal] = useState('');
   const [fulfillmentType, setFulfillmentType] = useState<'DELIVERY' | 'PICKUP'>(
     searchParams?.fulfillment === 'PICKUP' ? 'PICKUP' : 'DELIVERY'
@@ -744,6 +745,7 @@ export default function RestaurantPage({
   const [restaurantRating, setRestaurantRating] = useState(0);
   const [driverRatingVal, setDriverRatingVal] = useState(0);
   const [ratingComment, setRatingComment] = useState('');
+  const [isSubmittingRating, setIsSubmittingRating] = useState(false);
   const [pullDistance, setPullDistance] = useState(0);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const touchStartY = useRef(0);
@@ -949,6 +951,8 @@ export default function RestaurantPage({
           apiBase,
           path: `/restaurantes/${params.restaurantId}${getUserLocationQuery()}`,
           fallbackMessage: 'No se pudo cargar el menu del restaurante.',
+          timeoutMs: 10_000,
+          retry: { attempts: 1, backoffMs: 300 },
         });
 
         if (!cancelled) {
@@ -971,7 +975,7 @@ export default function RestaurantPage({
     return () => {
       cancelled = true;
     };
-  }, [apiBase, params.restaurantId]);
+  }, [apiBase, params.restaurantId, menuReloadKey]);
 
   useEffect(() => {
     if (!token || sessionUser?.role !== 'CUSTOMER') {
@@ -3091,40 +3095,45 @@ function triggerHaptic(pattern: number | number[] = 10) {
                   <button
                     type="button"
                     onClick={async () => {
-                      if (!orderToRate) return;
-                      const result = await submitReview({
-                        apiBase,
-                        storageKey,
-                        orderId: orderToRate,
-                        payload: {
-                          rating: restaurantRating,
-                          ...(isPickupRating ? {} : { driverRating: driverRatingVal || undefined }),
-                          ...(ratingComment ? { comment: ratingComment } : {}),
-                        },
-                        getUser: () => sessionUser,
-                        onTokenRefreshed: (newToken) => setToken(newToken),
-                      });
-                      if (result.ok) {
-                        showTransientNotice({ key: 'rating-submitted', title: '¡Gracias!', description: 'Tu calificación nos ayuda a mejorar.', tone: 'success' });
-                      } else {
-                        showTransientNotice({ key: 'rating-error', title: 'Error', description: result.message || 'No se pudo guardar tu calificación.', tone: 'danger' });
-                      }
-                      if (orderToRate) {
-                        setActiveOrderListItems((prev) => prev.filter((o) => o.id !== orderToRate));
-                        setActiveOrderDetailsMap((prev) => {
-                          const next = { ...prev };
-                          delete next[orderToRate];
-                          return next;
+                      if (!orderToRate || isSubmittingRating) return;
+                      setIsSubmittingRating(true);
+                      try {
+                        const result = await submitReview({
+                          apiBase,
+                          storageKey,
+                          orderId: orderToRate,
+                          payload: {
+                            rating: restaurantRating,
+                            ...(isPickupRating ? {} : { driverRating: driverRatingVal || undefined }),
+                            ...(ratingComment ? { comment: ratingComment } : {}),
+                          },
+                          getUser: () => sessionUser,
+                          onTokenRefreshed: (newToken) => setToken(newToken),
                         });
+                        if (result.ok) {
+                          showTransientNotice({ key: 'rating-submitted', title: '¡Gracias!', description: 'Tu calificación nos ayuda a mejorar.', tone: 'success' });
+                        } else {
+                          showTransientNotice({ key: 'rating-error', title: 'Error', description: result.message || 'No se pudo guardar tu calificación.', tone: 'danger' });
+                        }
+                        if (orderToRate) {
+                          setActiveOrderListItems((prev) => prev.filter((o) => o.id !== orderToRate));
+                          setActiveOrderDetailsMap((prev) => {
+                            const next = { ...prev };
+                            delete next[orderToRate];
+                            return next;
+                          });
+                        }
+                        setIsRatingModalOpen(false);
+                        setRestaurantRating(0);
+                        setDriverRatingVal(0);
+                        setRatingComment('');
+                        setRatingIsPickup(false);
+                        setOrderToRate(null);
+                      } finally {
+                        setIsSubmittingRating(false);
                       }
-                      setIsRatingModalOpen(false);
-                      setRestaurantRating(0);
-                      setDriverRatingVal(0);
-                      setRatingComment('');
-                      setRatingIsPickup(false);
-                      setOrderToRate(null);
                     }}
-                    disabled={restaurantRating === 0}
+                    disabled={restaurantRating === 0 || isSubmittingRating}
                     className="flex-1 rounded-full bg-emerald-600 text-sm font-semibold text-white py-3 transition hover:bg-emerald-500 disabled:bg-emerald-200 disabled:cursor-not-allowed"
                   >
                     Enviar calificación
@@ -4238,7 +4247,18 @@ function triggerHaptic(pattern: number | number[] = 10) {
 
       <div className="mx-auto max-w-7xl px-4 py-5 md:px-6 md:py-8">
 
-        {error ? <div className="mt-5"><Callout tone="danger">{error}</Callout></div> : null}
+        {error ? (
+          <div className="mt-5">
+            <Callout tone="danger">{error}</Callout>
+            <button
+              type="button"
+              onClick={() => setMenuReloadKey((k) => k + 1)}
+              className="mt-3 rounded-full bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-500"
+            >
+              Reintentar
+            </button>
+          </div>
+        ) : null}
 
         {loadingRestaurant ? (
           <div className="space-y-6">

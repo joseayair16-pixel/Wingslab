@@ -667,88 +667,106 @@ export async function registerCustomerRoutes(fastify: FastifyInstance): Promise<
           });
         }
 
-        // Check if review already exists for this order
-        const existingReview = await prisma.review.findUnique({
-          where: { orderId: params.data.id },
-        });
+        let review;
+        try {
+          review = await prisma.$transaction(async (tx) => {
+            const existingReview = await tx.review.findUnique({
+              where: { orderId: params.data.id },
+            });
 
-        if (existingReview) {
-          return reply.status(409).send({
-            success: false,
-            error: {
-              code: 'REVIEW_ALREADY_EXISTS',
-              message: 'Ya has calificado este pedido.',
-            },
-          });
-        }
+            if (existingReview) {
+              return { review: existingReview, alreadyExisting: true };
+            }
 
-        const review = await prisma.review.create({
-          data: {
-            customerId: customer.id,
-            restaurantId: order.restaurantId,
-            orderId: params.data.id,
-            driverId: order.driverId,
-            rating: parsed.data.rating,
-            comment: parsed.data.comment,
-            driverRating: parsed.data.driverRating,
-            driverComment: parsed.data.driverComment,
-          },
-        });
+            const createdReview = await tx.review.create({
+              data: {
+                customerId: customer.id,
+                restaurantId: order.restaurantId,
+                orderId: params.data.id,
+                driverId: order.driverId,
+                rating: parsed.data.rating,
+                comment: parsed.data.comment,
+                driverRating: parsed.data.driverRating,
+                driverComment: parsed.data.driverComment,
+              },
+            });
 
-        // Update restaurant rating
-        const allReviews = await prisma.review.findMany({
-          where: { restaurantId: order.restaurantId },
-          select: { rating: true },
-        });
+            const restaurantAgg = await tx.review.aggregate({
+              where: { restaurantId: order.restaurantId },
+              _avg: { rating: true },
+              _count: true,
+            });
 
-        const avgRating = allReviews.reduce((sum, r) => sum + r.rating, 0) / allReviews.length;
+            const avgRating = restaurantAgg._avg.rating ?? 0;
 
-        await prisma.restaurantStats.upsert({
-          where: { restaurantId: order.restaurantId },
-          update: {
-            rating: avgRating,
-            reviewCount: allReviews.length,
-          },
-          create: {
-            restaurantId: order.restaurantId,
-            rating: avgRating,
-            reviewCount: allReviews.length,
-          },
-        });
-
-        // Update driver rating if applicable
-        if (order.driverId && parsed.data.driverRating) {
-          const driverReviews = await prisma.review.findMany({
-            where: { driverId: order.driverId },
-            select: { driverRating: true },
-          });
-
-          const validDriverReviews = driverReviews.filter((r) => r.driverRating !== null) as { driverRating: number }[];
-          
-          if (validDriverReviews.length > 0) {
-            const avgDriverRating = validDriverReviews.reduce((sum, r) => sum + r.driverRating, 0) / validDriverReviews.length;
-
-            await prisma.driverStats.upsert({
-              where: { driverId: order.driverId },
+            await tx.restaurantStats.upsert({
+              where: { restaurantId: order.restaurantId },
               update: {
-                rating: avgDriverRating,
+                rating: avgRating,
+                reviewCount: restaurantAgg._count,
               },
               create: {
-                driverId: order.driverId,
-                rating: avgDriverRating,
+                restaurantId: order.restaurantId,
+                rating: avgRating,
+                reviewCount: restaurantAgg._count,
               },
             });
 
-            await prisma.driver.update({
-              where: { id: order.driverId },
-              data: { rating: avgDriverRating },
+            // Update driver rating if applicable
+            if (order.driverId && parsed.data.driverRating) {
+              const driverAgg = await tx.review.aggregate({
+                where: {
+                  driverId: order.driverId,
+                  driverRating: { not: null },
+                },
+                _avg: { driverRating: true },
+              });
+
+              const avgDriverRating = driverAgg._avg.driverRating;
+
+              if (avgDriverRating !== null) {
+                await tx.driverStats.upsert({
+                  where: { driverId: order.driverId },
+                  update: {
+                    rating: avgDriverRating,
+                  },
+                  create: {
+                    driverId: order.driverId,
+                    rating: avgDriverRating,
+                  },
+                });
+
+                await tx.driver.update({
+                  where: { id: order.driverId },
+                  data: { rating: avgDriverRating },
+                });
+              }
+            }
+
+            return { review: createdReview, alreadyExisting: false };
+          });
+        } catch (createError) {
+          // P2002: otro request concurrente ya creó la reseña (race en orderId @unique).
+          // Se trata como éxito para garantizar idempotencia.
+          if (createError instanceof Prisma.PrismaClientKnownRequestError && createError.code === 'P2002') {
+            const existingReview = await prisma.review.findUnique({
+              where: { orderId: params.data.id },
             });
+            if (existingReview) {
+              return reply.send({
+                success: true,
+                data: existingReview,
+                alreadyExisting: true,
+              });
+            }
           }
+          throw createError;
         }
 
         return reply.send({
           success: true,
-          data: review,
+          data: review.review,
+          alreadyExisting: review.alreadyExisting,
         });
       });
     });
