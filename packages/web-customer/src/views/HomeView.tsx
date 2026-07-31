@@ -44,6 +44,9 @@ interface HomeViewProps {
   onZoneSelect?: (zone: any) => void;
   onResetZone?: () => void;
   onJoinClick?: () => void;
+  hasMoreRestaurants?: boolean;
+  onLoadMoreRestaurants?: () => void;
+  loadingMoreRestaurants?: boolean;
 }
 
 export const HomeView = React.memo(function HomeView({
@@ -79,6 +82,9 @@ export const HomeView = React.memo(function HomeView({
   onZoneSelect,
   onResetZone,
   onJoinClick,
+  hasMoreRestaurants = false,
+  onLoadMoreRestaurants,
+  loadingMoreRestaurants = false,
 }: HomeViewProps) {
   const searchQuery = useStore(state => state.searchQuery);
   const searchType = useStore(state => state.searchType);
@@ -791,6 +797,28 @@ export const HomeView = React.memo(function HomeView({
                 );
               })}
             </div>
+            {hasMoreRestaurants && !isSearching && filteredByBusinessType.length > 0 && (
+              <div className="pt-2 flex justify-center">
+                <button
+                  type="button"
+                  onClick={onLoadMoreRestaurants}
+                  disabled={loadingMoreRestaurants}
+                  className="inline-flex items-center gap-2 rounded-full border border-black/10 bg-white px-6 py-3 text-sm font-bold text-neutral-800 shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:border-sky-500/40 hover:text-sky-600 hover:shadow-[0_8px_24px_rgba(15,15,15,0.06)] active:scale-[0.98] disabled:pointer-events-none disabled:opacity-60"
+                >
+                  {loadingMoreRestaurants ? (
+                    <>
+                      <svg className="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
+                      </svg>
+                      Cargando más…
+                    </>
+                  ) : (
+                    <>Ver más restaurantes</>
+                  )}
+                </button>
+              </div>
+            )}
             </div>
           )
           ) : isSearching ? (

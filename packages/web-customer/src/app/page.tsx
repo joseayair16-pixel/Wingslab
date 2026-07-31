@@ -834,6 +834,16 @@ export default function Home() {
   }
 
   const [restaurants, setRestaurants] = useState<RestaurantSummary[]>([]);
+  const [restaurantsPage, setRestaurantsPage] = useState(1);
+  const [hasMoreRestaurants, setHasMoreRestaurants] = useState(false);
+  const [loadingMoreRestaurants, setLoadingMoreRestaurants] = useState(false);
+  const dashboardCacheRef = useRef<{
+    restaurants: RestaurantSummary[];
+    activeCategories: Array<{ id: string; businessTypes: string[] }>;
+    featured: any[];
+    offers: any[];
+    orders: CustomerOrderListItem[];
+  } | null>(null);
   const [activeZones, setActiveZones] = useState<any[]>([]);
   const [selectedZoneName, setSelectedZoneName] = useState<string | null>(() => {
     if (typeof window !== 'undefined') {
@@ -1803,6 +1813,9 @@ export default function Home() {
     setSelectedCategory('all');
     setOrders([]);
     setRestaurants([]);
+    setRestaurantsPage(1);
+    setHasMoreRestaurants(false);
+    dashboardCacheRef.current = null;
     setSelectedRestaurantId('');
     setSelectedRestaurant(null);
     clearCart();
@@ -1917,6 +1930,17 @@ export default function Home() {
     }
     setError('');
 
+    // Stale-while-revalidate: show the last known dashboard instantly while
+    // the fresh data is fetched in the background.
+    if (dashboardCacheRef.current) {
+      const cached = dashboardCacheRef.current;
+      setRestaurants(cached.restaurants);
+      setActiveCategories(cached.activeCategories);
+      setFeaturedRestaurants(cached.featured);
+      setOfferProducts(cached.offers);
+      setOrders(cached.orders);
+    }
+
     try {
       persistApiBase(storageKey, apiBase);
       // Do not request restaurants from the backend unless we have a valid userLocation.
@@ -1993,6 +2017,8 @@ export default function Home() {
         return r.distanceKm <= r.deliveryRadius;
       });
       setRestaurants(restaurantsData.data.items || []);
+      setRestaurantsPage(restaurantsData.data.page || 1);
+      setHasMoreRestaurants(restaurantsData.data.hasMore);
       setActiveCategories(restaurantsData.data.activeCategories || []);
       setFeaturedRestaurants(validFeatured);
       setOfferProducts(offersData);
@@ -2004,6 +2030,14 @@ export default function Home() {
         return '';
       });
       setOrders(ordersData.data.items);
+
+      dashboardCacheRef.current = {
+        restaurants: restaurantsData.data.items || [],
+        activeCategories: restaurantsData.data.activeCategories || [],
+        featured: validFeatured,
+        offers: offersData,
+        orders: ordersData.data.items,
+      };
 
       // Check for orders that need schedule confirmation from customer
       const pendingScheduleOrder = ordersData.data.items.find(
@@ -2050,14 +2084,23 @@ export default function Home() {
       });
     } catch (requestError) {
       if (callId !== loadDashboardCallIdRef.current) return;
-      setRestaurants([]);
-      setSelectedRestaurantId('');
-      setSelectedRestaurant(null);
-      setOrders([]);
-      setSelectedOrderId('');
-      setSelectedOrder(null);
-      setActiveOrderDetailsMap({});
-      setCarouselIndex(0);
+      if (dashboardCacheRef.current) {
+        const cached = dashboardCacheRef.current;
+        setRestaurants(cached.restaurants);
+        setActiveCategories(cached.activeCategories);
+        setFeaturedRestaurants(cached.featured);
+        setOfferProducts(cached.offers);
+        setOrders(cached.orders);
+      } else {
+        setRestaurants([]);
+        setSelectedRestaurantId('');
+        setSelectedRestaurant(null);
+        setOrders([]);
+        setSelectedOrderId('');
+        setSelectedOrder(null);
+        setActiveOrderDetailsMap({});
+        setCarouselIndex(0);
+      }
 
       if (isAuthRequestError(requestError)) {
         clearSession('Tu sesión ha expirado. Por favor, inicia sesión de nuevo.');
@@ -2076,6 +2119,35 @@ export default function Home() {
   const loadMoreOrders = useCallback(() => {
     setVisibleOrdersCount((prev) => prev + 10);
   }, []);
+
+  const loadMoreRestaurants = useCallback(async () => {
+    const currentLoc = userLocationRef.current;
+    if (!currentLoc || loadingMoreRestaurants || !hasMoreRestaurants) return;
+
+    const dashboardCallIdAtStart = loadDashboardCallIdRef.current;
+    const nextPage = restaurantsPage + 1;
+    setLoadingMoreRestaurants(true);
+    try {
+      const payload = await requestJson<RestaurantListResponse>({
+        apiBase,
+        path: `/restaurantes?page=${nextPage}&limit=24&openOnly=false&latitude=${currentLoc.latitude}&longitude=${currentLoc.longitude}`,
+        fallbackMessage: 'No se pudieron cargar más restaurantes.',
+      });
+      if (payload.success && loadDashboardCallIdRef.current === dashboardCallIdAtStart) {
+        const freshItems = payload.data.items || [];
+        setRestaurants((prev) => {
+          const existing = new Set(prev.map((r) => r.id));
+          return [...prev, ...freshItems.filter((r) => !existing.has(r.id))];
+        });
+        setRestaurantsPage(payload.data.page || nextPage);
+        setHasMoreRestaurants(payload.data.hasMore);
+      }
+    } catch {
+      // Silently ignore load-more failures; the button stays visible to retry.
+    } finally {
+      setLoadingMoreRestaurants(false);
+    }
+  }, [apiBase, restaurantsPage, hasMoreRestaurants, loadingMoreRestaurants]);
 
   const handleZoneSelect = useCallback((zone: { latitude: number; longitude: number; regionName: string }) => {
     const loc = { latitude: zone.latitude, longitude: zone.longitude, accuracy: undefined, address: zone.regionName, ts: Date.now() };
@@ -4991,6 +5063,9 @@ export default function Home() {
             onZoneSelect={handleZoneSelect}
             onResetZone={handleResetZone}
             onJoinClick={() => setIsJoinRestModalOpen(true)}
+            hasMoreRestaurants={hasMoreRestaurants}
+            onLoadMoreRestaurants={loadMoreRestaurants}
+            loadingMoreRestaurants={loadingMoreRestaurants}
           />
         ) : null}
       </div>
