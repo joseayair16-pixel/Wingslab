@@ -1,7 +1,7 @@
 {
   "name": "SaDeL Eats",
   "short_name": "SaDeL",
-  "description": "Pide comida, sigue tu entrega en vivo y repite pedidos sin friccion.",
+  "description": "¡Pídelo por aquí!",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#ffffff",

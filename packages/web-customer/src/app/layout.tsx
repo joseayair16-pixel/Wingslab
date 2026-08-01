@@ -18,7 +18,7 @@ const plusJakartaSans = Plus_Jakarta_Sans({
 
 export const metadata: Metadata = {
   title: 'SaDeL Eats',
-  description: 'Pide comida, sigue tu entrega en vivo y repite pedidos sin friccion.',
+  description: '¡Pídelo por aquí!',
   manifest: '/manifest.json',
   icons: {
     icon: '/app-icon-192.png',

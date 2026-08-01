@@ -4,7 +4,7 @@ export default function manifest(): MetadataRoute.Manifest {
   return {
     name: 'SaDeL Cliente',
     short_name: 'SaDeL',
-    description: 'Pide comida de tus restaurantes locales favoritos.',
+    description: '¡Pídelo por aquí!',
     start_url: '/',
     display: 'standalone',
     background_color: '#ffffff',
