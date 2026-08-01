@@ -1114,8 +1114,19 @@ export default function Home() {
         if (parsed.type === 'pickup_ready' && detailRes.data.fulfillmentType === 'PICKUP') {
           setPickupReadyOrder(detailRes.data);
         } else if (parsed.type === 'driver_arrived') {
-          setArrivedOrder(detailRes.data);
-          setIsDriverArrivedModalOpen(true);
+          // Solo restaurar el modal si el pedido sigue en camino. Si ya fue
+          // entregado o liberado (p. ej. "cliente no salió"), el aviso de
+          // llegada es obsoleto y debe limpiarse para que no reaparezca en
+          // cada recarga.
+          const arrivedStatus = normalizeOrderStatusValue(detailRes.data.status);
+          if (arrivedStatus === 'IN_TRANSIT') {
+            setArrivedOrder(detailRes.data);
+            setIsDriverArrivedModalOpen(true);
+          } else {
+            localStorage.removeItem('sadel_persistent_modal');
+          }
+        } else {
+          localStorage.removeItem('sadel_persistent_modal');
         }
       }).catch(() => {
         localStorage.removeItem('sadel_persistent_modal');
@@ -2236,7 +2247,11 @@ export default function Home() {
       }
     } catch (err) {
       console.error('Error loading profile:', err);
-      clearSession();
+      // Solo cerrar sesión ante un error de autenticación real (401/403);
+      // un fallo transitorio de red o del servidor no debe desloguear al usuario.
+      if (isAuthRequestError(err)) {
+        clearSession();
+      }
     }
   }, [apiBase, token]);
 
@@ -3491,6 +3506,13 @@ export default function Home() {
       setProofFileName('');
       setProofFileSource('');
       setDebtPaymentError('');
+      // Limpiar cualquier modal/apilado que haya quedado detrás del bloqueo
+      // (aviso de suspensión, modal de llegada del repartidor, pickup).
+      setTransientNotice(null);
+      setIsDriverArrivedModalOpen(false);
+      setArrivedOrder(null);
+      setPickupReadyOrder(null);
+      try { localStorage.removeItem('sadel_persistent_modal'); } catch {}
       setToastMessage('Tu cuenta ha sido reactivada. ¡Gracias por liquidar tu saldo!', 'success');
     });
 
@@ -6065,6 +6087,7 @@ export default function Home() {
                     setIsDriverArrivedModalOpen(false);
                     setArrivedOrder(null);
                     localStorage.removeItem('sadel_driver_arrived_order');
+                    localStorage.removeItem('sadel_persistent_modal');
                   }}
                   className="flex-1 rounded-full bg-neutral-950 dark:bg-white text-white dark:text-neutral-950 py-3.5 text-sm font-bold shadow-md transition hover:bg-neutral-800 dark:hover:bg-neutral-100 active:scale-95"
                 >
