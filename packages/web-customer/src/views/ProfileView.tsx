@@ -310,12 +310,15 @@ export const ProfileView = memo(function ProfileView({
             </div>
 
             {isEditingAddress ? (
-              <div className="p-5 md:p-7 space-y-5 bg-white/60">
+              <div className="p-5 md:p-6 space-y-4 bg-white/60">
                 {/* Buscador de Dirección */}
                 <div className="relative">
                   <label className="text-[10px] font-bold uppercase tracking-[0.2em] text-neutral-400 ml-1">Buscar dirección</label>
                   <div className="mt-1.5 flex gap-2">
                     <div className="relative flex-1">
+                      <svg className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35m1.6-4.4a6 6 0 11-12 0 6 6 0 0112 0z" />
+                      </svg>
                       <input
                         type="text"
                         placeholder="Escribe tu calle y número..."
@@ -324,7 +327,7 @@ export const ProfileView = memo(function ProfileView({
                           setAddressSearchQuery(e.target.value);
                           void searchAddress(e.target.value);
                         }}
-                        className="w-full rounded-2xl border border-black/10 bg-white p-3.5 text-sm font-medium focus:border-neutral-900 focus:outline-none focus:ring-1 focus:ring-neutral-900 pr-10 shadow-sm transition-all"
+                        className="w-full rounded-2xl border border-black/10 bg-white py-3 pl-10 pr-10 text-sm font-medium shadow-sm transition-all focus:border-neutral-900 focus:outline-none focus:ring-1 focus:ring-neutral-900"
                       />
                       {isSearchingAddress && (
                         <div className="absolute right-4 top-1/2 -translate-y-1/2">
@@ -335,10 +338,12 @@ export const ProfileView = memo(function ProfileView({
                     <button
                       type="button"
                       onClick={fillProfileAddressWithCurrentLocation}
-                      className="rounded-2xl border border-black/10 bg-neutral-50 px-4 text-sm font-bold text-neutral-700 hover:bg-neutral-100 transition flex items-center gap-2 active:scale-[0.98] shadow-sm"
+                      title="Usar mi ubicación actual"
+                      aria-label="Usar mi ubicación actual"
+                      className="w-12 shrink-0 flex items-center justify-center rounded-2xl border border-black/10 bg-neutral-50 text-neutral-500 shadow-sm transition-all hover:bg-neutral-100 hover:text-neutral-800 active:scale-[0.97]"
                     >
-                      <svg className="h-4.5 w-4.5 text-neutral-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                      <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8zm9 3h-2.09A7 7 0 0 0 13 5.09V3a1 1 0 1 0-2 0v2.09A7 7 0 0 0 5.09 11H3a1 1 0 1 0 0 2h2.09A7 7 0 0 0 11 18.91V21a1 1 0 1 0 2 0v-2.09A7 7 0 0 0 18.91 13H21a1 1 0 1 0 0-2z" />
                       </svg>
                     </button>
                   </div>
@@ -351,7 +356,7 @@ export const ProfileView = memo(function ProfileView({
                           key={index}
                           type="button"
                           onClick={() => selectSuggestion(suggestion)}
-                          className="w-full text-left px-5 py-3.5 text-sm hover:bg-neutral-50 border-b border-black/[0.04] last:border-0 transition-colors"
+                          className="w-full text-left px-5 py-3 text-sm hover:bg-neutral-50 border-b border-black/[0.04] last:border-0 transition-colors"
                         >
                           <p className="font-bold text-neutral-900">{suggestion.name}</p>
                           <p className="text-xs text-neutral-500 mt-1">{suggestion.description}</p>
@@ -362,17 +367,16 @@ export const ProfileView = memo(function ProfileView({
                 </div>
 
                 {/* Mapa */}
-                <div className="flex items-start gap-3 text-[13px] text-orange-800 bg-orange-50 px-4 py-3 rounded-2xl border border-orange-100/50">
-                  <svg className="h-5 w-5 text-orange-500 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <div id="map-address" className="h-[215px] w-full rounded-2xl border border-black/10 shadow-inner overflow-hidden z-0" />
+                <p className="flex items-start gap-1.5 px-1 text-[12px] font-medium text-neutral-500">
+                  <svg className="h-4 w-4 text-orange-500 shrink-0 mt-px" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
-                  <span className="font-medium leading-relaxed">Arrastra el pin en el mapa exactamente donde quieres recibir tu entrega para mayor precisión.</span>
-                </div>
-                
-                <div id="map-address" className="h-[260px] w-full rounded-2xl border border-black/10 shadow-inner overflow-hidden z-0" />
+                  Arrastra el pin para marcar el punto exacto de entrega
+                </p>
 
                 {/* Datos complementarios */}
-                <div className="grid gap-4 md:grid-cols-2 mt-2">
+                <div className="grid gap-3.5 md:grid-cols-2">
                   <div className="md:col-span-2">
                     <Field label="Calle seleccionada" value={profileAddress.street} readOnly placeholder="Selecciona en el mapa o busca arriba" />
                   </div>
