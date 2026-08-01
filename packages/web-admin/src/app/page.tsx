@@ -1728,12 +1728,6 @@ export default function Home() {
     }
   }, [activeSection, isAdminSession, loadPlatformRequests]);
 
-  useEffect(() => {
-    if (activeSection === 'customer-debts' && isAdminSession) {
-      void loadCustomerSettlements();
-    }
-  }, [activeSection, isAdminSession, customerSettlementFilter, loadCustomerSettlements]);
-
   const loadDriverDetail = useCallback(
     async (driverId: string) => {
       if (!driverId) {
@@ -2295,7 +2289,7 @@ export default function Home() {
     }
   }
 
-  async function loadCustomerSettlements() {
+  const loadCustomerSettlements = useCallback(async () => {
     if (!token) return;
     setLoadingCustomerSettlements(true);
     try {
@@ -2317,7 +2311,13 @@ export default function Home() {
     } finally {
       setLoadingCustomerSettlements(false);
     }
-  }
+  }, [apiBase, token, customerSettlementFilter]);
+
+  useEffect(() => {
+    if (activeSection === 'customer-debts' && isAdminSession) {
+      void loadCustomerSettlements();
+    }
+  }, [activeSection, isAdminSession, customerSettlementFilter, loadCustomerSettlements]);
 
   async function updateCustomerSettlementStatus(settlementId: string, status: 'PAID' | 'REJECTED') {
     if (!token) return;
