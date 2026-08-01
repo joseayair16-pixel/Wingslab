@@ -16,8 +16,6 @@ import {
   uploadMediaAsset,
   getOrderStatusLabel,
   isRestaurant,
-  getBusinessArticleCapitalized,
-  getBusinessRef,
   convertImageFileToDataUrl,
 } from '@sadel/shared';
 import { usePushNotifications } from '../hooks/usePushNotifications';
@@ -4306,23 +4304,6 @@ export default function Home() {
             </button>
             <button
               type="button"
-              onClick={() => { setIsZonesModalOpen(true); setIsSideMenuOpen(false); }}
-              className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all active-scale ${
-                exploringZone ? 'bg-sky-50 text-sky-700' : 'text-neutral-600 hover:bg-neutral-50 hover:text-neutral-900'
-              }`}
-            >
-              <svg className={`h-5 w-5 ${exploringZone ? 'text-sky-500' : 'text-neutral-400'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5a2.5 2.5 0 110-5 2.5 2.5 0 010 5z" />
-              </svg>
-              <span>Explorar ciudades</span>
-              {exploringZone && selectedZoneName && (
-                <span className="ml-auto inline-flex max-w-[110px] items-center rounded-full bg-sky-500 px-2 py-0.5 text-[10px] font-bold text-white">
-                  <span className="truncate">{selectedZoneName}</span>
-                </span>
-              )}
-            </button>
-            <button
-              type="button"
               onClick={() => { openDashboardSection('profile'); setIsSideMenuOpen(false); }}
               className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all active-scale ${
                 activeSection === 'profile' ? 'bg-sky-50 text-sky-700' : 'text-neutral-600 hover:bg-neutral-50 hover:text-neutral-900'
@@ -4347,6 +4328,23 @@ export default function Home() {
                 <span>Historial</span>
               </div>
               <span className={`text-[11px] font-medium ${activeSection === 'history' ? 'text-sky-500' : 'text-neutral-400'}`}>{orderStats.total}</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => { setIsZonesModalOpen(true); setIsSideMenuOpen(false); }}
+              className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all active-scale ${
+                exploringZone ? 'bg-sky-50 text-sky-700' : 'text-neutral-600 hover:bg-neutral-50 hover:text-neutral-900'
+              }`}
+            >
+              <svg className={`h-5 w-5 ${exploringZone ? 'text-sky-500' : 'text-neutral-400'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5a2.5 2.5 0 110-5 2.5 2.5 0 010 5z" />
+              </svg>
+              <span>Explorar</span>
+              {exploringZone && selectedZoneName && (
+                <span className="ml-auto inline-flex max-w-[110px] items-center rounded-full bg-sky-500 px-2 py-0.5 text-[10px] font-bold text-white">
+                  <span className="truncate">{selectedZoneName}</span>
+                </span>
+              )}
             </button>
             <button
               type="button"
@@ -7469,34 +7467,6 @@ function formatEstimatedArrivalWindow(estimatedDeliveryTime: string, status: str
   return `Entre ${formatShortTime(start)} y ${formatShortTime(end)}`;
 }
 
-
-function getEtaMessage(order: CustomerOrderDetail | null) {
-  if (!order) return null;
-
-  if (order.etaExtendedMinutes && order.etaExtendedMinutes > 0) {
-    return {
-      type: 'warning' as const,
-      text: `${getBusinessArticleCapitalized(order.restaurant?.businessType)} ${getBusinessRef(order.restaurant?.businessType)} extendió el tiempo de preparación por ${order.etaExtendedMinutes} min para que tu orden quede perfecta.`,
-    };
-  }
-
-  if (['READY', 'PICKED_UP', 'IN_TRANSIT', 'DELIVERED'].includes(order.status)) {
-    const readyTracking = order.tracking?.find(t => t.status === 'READY');
-    if (readyTracking && order.preparationDeadlineAt) {
-      const readyTime = new Date(readyTracking.createdAt).getTime();
-      const deadlineTime = new Date(order.preparationDeadlineAt).getTime();
-      const differenceMinutes = Math.round((deadlineTime - readyTime) / 60000);
-      if (differenceMinutes >= 3) {
-        return {
-          type: 'success' as const,
-          text: `¡Tu comida se preparó súper rápido! Estuvo lista ${differenceMinutes} min antes de lo esperado.`,
-        };
-      }
-    }
-  }
-
-  return null;
-}
 
 function formatShortAddress(address: CustomerOrderListItem['address']) {
   if (!address) return '';

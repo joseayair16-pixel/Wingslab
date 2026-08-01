@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { AuthUser, readStoredSession, requestJson, submitReview, uploadMediaAsset, convertImageFileToDataUrl, getOrderStatusLabel, isRestaurant, getBusinessArticleCapitalized, getBusinessRef, ApiRequestError } from '@sadel/shared';
+import { AuthUser, readStoredSession, requestJson, submitReview, uploadMediaAsset, convertImageFileToDataUrl, getOrderStatusLabel, isRestaurant, ApiRequestError } from '@sadel/shared';
 import { io } from 'socket.io-client';
 import LiveTrackingMap from '../../../components/LiveTrackingMap';
 import { AuthModal } from '../../../components/AuthModal';
@@ -290,6 +290,84 @@ function getUserLocationQuery(): string {
     }
   } catch (e) {}
   return '';
+}
+
+function CarouselOrGrid({
+  isCarousel,
+  children,
+}: {
+  isCarousel: boolean;
+  children: React.ReactNode;
+}) {
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+  const [canLeft, setCanLeft] = useState(false);
+  const [canRight, setCanRight] = useState(false);
+
+  const updateArrows = useCallback(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const tolerance = 4;
+    setCanLeft(el.scrollLeft > tolerance);
+    setCanRight(el.scrollLeft < el.scrollWidth - el.clientWidth - tolerance);
+  }, []);
+
+  useEffect(() => {
+    if (!isCarousel) return;
+    const el = scrollRef.current;
+    if (!el) return;
+    updateArrows();
+    el.addEventListener('scroll', updateArrows, { passive: true });
+    window.addEventListener('resize', updateArrows);
+    return () => {
+      el.removeEventListener('scroll', updateArrows);
+      window.removeEventListener('resize', updateArrows);
+    };
+  }, [isCarousel, updateArrows]);
+
+  if (!isCarousel) {
+    return <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">{children}</div>;
+  }
+
+  const scrollByAmount = (dir: number) => {
+    const el = scrollRef.current;
+    if (!el) return;
+    el.scrollBy({ left: dir * 260, behavior: 'smooth' });
+  };
+
+  return (
+    <div className="relative">
+      <div
+        ref={scrollRef}
+        className="flex gap-3 overflow-x-auto pb-2 scroll-smooth snap-x snap-mandatory [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      >
+        {children}
+        <div className="w-4 shrink-0 sm:w-8" />
+      </div>
+      <div
+        className={`pointer-events-none absolute inset-y-0 right-0 z-10 w-14 bg-gradient-to-l from-[#fafafa] to-transparent transition-opacity duration-300 ${canRight ? 'opacity-100' : 'opacity-0'}`}
+      />
+      <button
+        type="button"
+        aria-label="Ver más productos"
+        onClick={() => scrollByAmount(1)}
+        className={`absolute right-3 top-1/2 z-20 hidden h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-white/95 text-neutral-600 shadow-lg shadow-black/10 ring-1 ring-black/5 backdrop-blur transition-all duration-200 hover:bg-white hover:text-neutral-900 active:scale-90 sm:flex ${canRight ? 'opacity-100' : 'pointer-events-none opacity-0'}`}
+      >
+        <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" />
+        </svg>
+      </button>
+      <button
+        type="button"
+        aria-label="Ver productos anteriores"
+        onClick={() => scrollByAmount(-1)}
+        className={`absolute left-3 top-1/2 z-20 hidden h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-white/95 text-neutral-600 shadow-lg shadow-black/10 ring-1 ring-black/5 backdrop-blur transition-all duration-200 hover:bg-white hover:text-neutral-900 active:scale-90 sm:flex ${canLeft ? 'opacity-100' : 'pointer-events-none opacity-0'}`}
+      >
+        <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 19l-7-7 7-7" />
+        </svg>
+      </button>
+    </div>
+  );
 }
 
 export default function RestaurantPage({
@@ -703,7 +781,7 @@ export default function RestaurantPage({
   const [loadingRestaurant, setLoadingRestaurant] = useState(true);
   const [creatingOrder, setCreatingOrder] = useState(false);
   const [isCartOpen, setIsCartOpen] = useState(false);
-  const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
+  const [isCheckoutOpen, setIsCheckoutOpen] = useState(() => searchParams?.checkout === 'true');
   const [cartJustUpdated, setCartJustUpdated] = useState(false);
   const [transferProofName, setTransferProofName] = useState('');
   const [transferProofSource, setTransferProofSource] = useState('');
@@ -714,20 +792,11 @@ export default function RestaurantPage({
     searchParams?.fulfillment === 'PICKUP' ? 'PICKUP' : 'DELIVERY'
   );
 
-  const autoOpenCheckoutDoneRef = useRef(false);
-
   useEffect(() => {
     if (searchParams?.fulfillment === 'PICKUP') {
       setFulfillmentType('PICKUP');
     }
   }, [searchParams]);
-
-  useEffect(() => {
-    if (searchParams?.checkout === 'true' && !autoOpenCheckoutDoneRef.current && !loadingRestaurant) {
-      autoOpenCheckoutDoneRef.current = true;
-      setIsCheckoutOpen(true);
-    }
-  }, [searchParams, loadingRestaurant]);
 
   useEffect(() => {
     if (searchParams?.product && restaurant) {
@@ -4573,10 +4642,7 @@ function triggerHaptic(pattern: number | number[] = 10) {
                   </div>
 
                   <div className={isPromoCarousel || isLargeCategory ? "relative mt-5" : "mt-5 overflow-hidden"}>
-                    <div className={isPromoCarousel || isLargeCategory
-                      ? "flex gap-3 overflow-x-auto pb-2 scroll-smooth snap-x snap-mandatory [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-                      : "grid gap-4 sm:grid-cols-2 lg:grid-cols-3"
-                    }>
+                    <CarouselOrGrid isCarousel={isPromoCarousel || isLargeCategory}>
                     {category.products.map((product) => {
                       const quantity = getCartQuantity(product.id);
 
@@ -4888,8 +4954,7 @@ function triggerHaptic(pattern: number | number[] = 10) {
                         )
                       );
                     })}
-                      {(isPromoCarousel || isLargeCategory) && <div className="w-4 shrink-0 sm:w-8" />}
-                    </div>
+                    </CarouselOrGrid>
                      
                   </div>
                 </section>
@@ -5944,34 +6009,6 @@ function formatEstimatedArrivalWindow(estimatedDeliveryTime: string, status: str
   return `Entre ${formatShortTime(start)} y ${formatShortTime(end)}`;
 }
 
-
-function getEtaMessage(order: CustomerOrderDetail | null) {
-  if (!order) return null;
-
-  if (order.etaExtendedMinutes && order.etaExtendedMinutes > 0) {
-    return {
-      type: 'warning' as const,
-      text: `${getBusinessArticleCapitalized(order.restaurant?.businessType)} ${getBusinessRef(order.restaurant?.businessType)} extendió el tiempo de preparación por ${order.etaExtendedMinutes} min para que tu orden quede perfecta.`,
-    };
-  }
-
-  if (['READY', 'PICKED_UP', 'IN_TRANSIT', 'DELIVERED'].includes(order.status)) {
-    const readyTracking = order.tracking?.find(t => t.status === 'READY');
-    if (readyTracking && order.preparationDeadlineAt) {
-      const readyTime = new Date(readyTracking.createdAt).getTime();
-      const deadlineTime = new Date(order.preparationDeadlineAt).getTime();
-      const differenceMinutes = Math.round((deadlineTime - readyTime) / 60000);
-      if (differenceMinutes >= 3) {
-        return {
-          type: 'success' as const,
-          text: `¡Tu comida se preparó súper rápido! Estuvo lista ${differenceMinutes} min antes de lo esperado.`,
-        };
-      }
-    }
-  }
-
-  return null;
-}
 
 function buildDetailAddressLabel(address: CustomerOrderDetail['address'] | null | undefined) {
   if (!address) return '';
