@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { memo, useCallback, useEffect, useState } from 'react';
 import {
   ApiResponse,
   AuthResponse,
@@ -19,7 +19,7 @@ interface AuthModalProps {
   apiBase: string;
 }
 
-export function AuthModal({ isOpen, onClose, onSuccess, apiBase }: AuthModalProps) {
+export const AuthModal = memo(function AuthModal({ isOpen, onClose, onSuccess, apiBase }: AuthModalProps) {
   const [authMode, setAuthMode] = useState<AuthMode>('login');
   const [authStep, setAuthStep] = useState<AuthStep>('welcome');
   const [phone, setPhone] = useState('');
@@ -675,7 +675,7 @@ export function AuthModal({ isOpen, onClose, onSuccess, apiBase }: AuthModalProp
       `}</style>
     </div>
   );
-}
+});
 
 function formatPhoneNumber(value: string) {
   const digits = value.replace(/\D/g, '');

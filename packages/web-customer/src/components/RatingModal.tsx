@@ -1,3 +1,5 @@
+import { memo } from 'react';
+
 type RatingModalProps = {
   open: boolean;
   isPickup: boolean;
@@ -13,7 +15,7 @@ type RatingModalProps = {
   onSubmit: () => void;
 };
 
-export default function RatingModal({
+export default memo(function RatingModal({
   open,
   isPickup,
   bizType,
@@ -115,4 +117,4 @@ export default function RatingModal({
       </div>
     </div>
   );
-}
+});

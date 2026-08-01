@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { memo, useState, useEffect } from 'react';
 import { useStore } from '../store';
 
-export function RestaurantSearchBar() {
+export const RestaurantSearchBar = memo(function RestaurantSearchBar() {
   const globalQuery = useStore((state) => state.searchQuery);
   const setGlobalQuery = useStore((state) => state.setSearchQuery);
   const searchType = useStore((state) => state.searchType);
@@ -85,4 +85,4 @@ export function RestaurantSearchBar() {
       )}
     </div>
   );
-}
+});

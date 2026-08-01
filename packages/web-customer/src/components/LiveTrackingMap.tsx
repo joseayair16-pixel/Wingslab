@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { memo, useEffect, useRef } from 'react';
 type CustomerOrderDetail = {
   id: string;
   address?: {
@@ -7,7 +7,7 @@ type CustomerOrderDetail = {
   } | null;
 };
 
-export default function LiveTrackingMap({
+export default memo(function LiveTrackingMap({
   order,
   driverLocation,
 }: {
@@ -157,4 +157,4 @@ export default function LiveTrackingMap({
   }, [driverLocation, order]);
 
   return <div id={`map-tracking-${order?.id}`} className="h-44 w-full rounded-2xl border border-black/[0.05] bg-neutral-50 z-0 animate-scale-up no-invert" />;
-}
+});

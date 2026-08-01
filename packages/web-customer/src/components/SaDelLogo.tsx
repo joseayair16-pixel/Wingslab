@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { memo, useEffect, useState } from 'react';
 
 /**
  * SaDelLogo – Advanced Canvas Processor
@@ -90,7 +90,7 @@ function processLogo(): Promise<{ light: string; dark: string }> {
   return processingPromise;
 }
 
-export function SaDelLogo({ className = '' }: { className?: string }) {
+export const SaDelLogo = memo(function SaDelLogo({ className = '' }: { className?: string }) {
   const [srcs, setSrcs] = useState<{ light: string; dark: string }>({
     light: cachedLightSrc || '/SaDeL.png',
     dark: cachedDarkSrc || '/SaDeL.png',
@@ -110,4 +110,4 @@ export function SaDelLogo({ className = '' }: { className?: string }) {
       <img src={srcs.dark} alt="SaDeL Logo" className={`sadel-logo-dark ${className}`} />
     </>
   );
-}
+});

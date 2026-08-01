@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useRef } from 'react';
+import React, { memo, useEffect, useRef } from 'react';
 import { useChatStore } from '../store/chatStore';
 
 interface ChatPanelProps {
@@ -10,7 +10,7 @@ interface ChatPanelProps {
   onClose: () => void;
 }
 
-export function ChatPanel({ order, token, apiBase, onClose }: ChatPanelProps) {
+export const ChatPanel = memo(function ChatPanel({ order, token, apiBase, onClose }: ChatPanelProps) {
   const chatBottomRef = useRef<HTMLDivElement>(null);
 
   const chatMessages = useChatStore((s) => s.chatMessages);
@@ -131,4 +131,4 @@ export function ChatPanel({ order, token, apiBase, onClose }: ChatPanelProps) {
       </div>
     </div>
   );
-}
+});

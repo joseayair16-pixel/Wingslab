@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo } from 'react';
+import { memo, useMemo } from 'react';
 import { useCartStore, type CartItem } from '../store/cartStore';
 
 function formatCurrency(amount: number) {
@@ -19,7 +19,7 @@ type CartDrawerProps = {
   discountAmount?: number;
 };
 
-export default function CartDrawer({
+export default memo(function CartDrawer({
   isOpen,
   onClose,
   onProceedToCheckout,
@@ -368,4 +368,4 @@ export default function CartDrawer({
       </aside>
     </div>
   );
-}
+});
