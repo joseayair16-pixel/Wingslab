@@ -3551,7 +3551,11 @@ export default function Home() {
                             const remainingNoShow = NO_SHOW_MS - elapsedMs;
                             const safePlaceReady = isTransfer && remainingSafe <= 0;
                             const noShowReady = isCash && remainingNoShow <= 0;
-                            const showTimer = isCash || isTransfer;
+                            // La sección solo aparece el último minuto de espera para
+                            // no presionar al repartidor mientras aún hay tiempo.
+                            const LAST_MINUTE_MS = 60 * 1000;
+                            const showTimer = (isCash || isTransfer) &&
+                              (isTransfer ? remainingSafe <= LAST_MINUTE_MS : remainingNoShow <= LAST_MINUTE_MS);
 
                             if (!showTimer) return null;
 
@@ -5354,16 +5358,27 @@ export default function Home() {
                   Has esperado <strong className="text-neutral-700 dark:text-zinc-300">{waitMin} minutos</strong> sin que el cliente salga.
                   Puedes dejar el pedido en un lugar seguro y marcarlo como entregado.
                 </p>
-                <p className="text-xs text-neutral-400 dark:text-zinc-500 mt-3 leading-relaxed bg-neutral-50 dark:bg-zinc-800/50 rounded-xl px-4 py-3 w-full">
-                  El cliente ya pagó por transferencia. Deja el pedido donde el cliente pueda recogerlo y confirma la ubicación con una foto si es posible.
-                </p>
+                <div className="w-full text-left mt-4 space-y-2.5">
+                  <div className="rounded-2xl border border-sky-200 dark:border-sky-900/30 bg-sky-50/70 dark:bg-sky-950/10 px-4 py-3">
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-sky-600 dark:text-sky-400 mb-1">Para el cliente</p>
+                    <p className="text-xs text-neutral-600 dark:text-zinc-300 leading-relaxed">
+                      El cliente <strong>ya pagó por transferencia</strong>. Deja el pedido donde pueda recogerlo; el pago ya está cubierto.
+                    </p>
+                  </div>
+                  <div className="rounded-2xl border border-emerald-200 dark:border-emerald-900/30 bg-emerald-50/70 dark:bg-emerald-950/10 px-4 py-3">
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-emerald-600 dark:text-emerald-400 mb-1">Para ti (repartidor)</p>
+                    <p className="text-xs text-neutral-600 dark:text-zinc-300 leading-relaxed">
+                      Al dejar el pedido en lugar seguro la entrega cuenta <strong>normalmente</strong>: se te paga el envío y se aplica la comisión habitual como en cualquier entrega.
+                    </p>
+                  </div>
+                </div>
                 <div className="flex gap-3 w-full mt-6">
                   <button
                     type="button"
                     onClick={() => { setSafePlaceConfirmOrderId(null); triggerHaptic(10); }}
                     className="flex-1 py-3.5 rounded-2xl border border-neutral-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-sm font-bold text-neutral-600 dark:text-zinc-400 transition active:scale-[0.97] hover:bg-neutral-50 dark:hover:bg-zinc-700"
                   >
-                    Cancelar
+                    Volver
                   </button>
                   <button
                     type="button"
@@ -5376,7 +5391,7 @@ export default function Home() {
                     disabled={activeActionKey === `${safePlaceConfirmOrderId}:safePlace`}
                     className="flex-1 py-3.5 rounded-2xl bg-amber-500 text-sm font-bold text-white shadow-lg shadow-amber-500/30 transition active:scale-[0.97] hover:bg-amber-600 disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none"
                   >
-                    {activeActionKey === `${safePlaceConfirmOrderId}:safePlace` ? 'Procesando...' : 'Sí, dejar pedido'}
+                    {activeActionKey === `${safePlaceConfirmOrderId}:safePlace` ? 'Procesando...' : 'Liberar pedido'}
                   </button>
                 </div>
               </div>
@@ -5400,17 +5415,27 @@ export default function Home() {
                 <p className="text-sm text-neutral-500 dark:text-zinc-400 mt-2 leading-relaxed">
                   Has esperado <strong className="text-neutral-700 dark:text-zinc-300">{waitMin} minutos</strong> y el cliente no salió a recibir.
                 </p>
-                <p className="text-xs text-neutral-400 dark:text-zinc-500 mt-3 leading-relaxed bg-neutral-50 dark:bg-zinc-800/50 rounded-xl px-4 py-3 w-full">
-                  El pedido se marcará como entregado, se notificará al cliente y{' '}
-                  <strong>se le cobrará el monto total</strong>. Su cuenta quedará suspendida hasta que liquide.
-                </p>
+                <div className="w-full text-left mt-4 space-y-2.5">
+                  <div className="rounded-2xl border border-rose-200 dark:border-rose-900/30 bg-rose-50/70 dark:bg-rose-950/10 px-4 py-3">
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-rose-500 mb-1">Para el cliente</p>
+                    <p className="text-xs text-neutral-600 dark:text-zinc-300 leading-relaxed">
+                      El pedido se marcará como entregado y se <strong>le cobrará el monto total</strong>. Su cuenta quedará suspendida hasta que liquide.
+                    </p>
+                  </div>
+                  <div className="rounded-2xl border border-amber-200 dark:border-amber-900/30 bg-amber-50/70 dark:bg-amber-950/10 px-4 py-3">
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-amber-600 dark:text-amber-400 mb-1">Para ti (repartidor)</p>
+                    <p className="text-xs text-neutral-600 dark:text-zinc-300 leading-relaxed">
+                      Como el pedido es <strong>en efectivo y no cobraste</strong>, este pedido <strong>no genera ni comisión ni ganancia</strong> para ti: no deberás nada y no te pagarán nada por él.
+                    </p>
+                  </div>
+                </div>
                 <div className="flex gap-3 w-full mt-6">
                   <button
                     type="button"
                     onClick={() => { setNoShowConfirmOrderId(null); triggerHaptic(10); }}
                     className="flex-1 py-3.5 rounded-2xl border border-neutral-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-sm font-bold text-neutral-600 dark:text-zinc-400 transition active:scale-[0.97] hover:bg-neutral-50 dark:hover:bg-zinc-700"
                   >
-                    Seguir esperando
+                    Volver
                   </button>
                   <button
                     type="button"
@@ -5423,7 +5448,7 @@ export default function Home() {
                     disabled={activeActionKey === `${noShowConfirmOrderId}:noShow`}
                     className="flex-1 py-3.5 rounded-2xl bg-rose-500 text-sm font-bold text-white shadow-lg shadow-rose-500/30 transition active:scale-[0.97] hover:bg-rose-600 disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none"
                   >
-                    {activeActionKey === `${noShowConfirmOrderId}:noShow` ? 'Procesando...' : 'Sí, liberar pedido'}
+                    {activeActionKey === `${noShowConfirmOrderId}:noShow` ? 'Procesando...' : 'Liberar pedido'}
                   </button>
                 </div>
               </div>
