@@ -384,7 +384,7 @@ export async function createOrderForCustomer({
     },
   });
 
-  if (products.length !== productIds.length) {
+  if (products.length !== new Set(productIds).size) {
     throw new AppError(
       400,
       'INVALID_PRODUCTS',
