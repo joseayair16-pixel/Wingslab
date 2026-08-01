@@ -6020,7 +6020,7 @@ export default function Home() {
         })()}
 
         {/* Modal de Repartidor Llegó — no dismissible */}
-        {isDriverArrivedModalOpen && arrivedOrder && (
+        {isDriverArrivedModalOpen && arrivedOrder && arrivedOrder.status && isActiveOrderStatus(arrivedOrder.status) && (
           <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/70 backdrop-blur-sm px-4 py-6">
             <div
               className="bg-white dark:bg-[#121214] rounded-3xl border border-black/[0.03] dark:border-zinc-800/80 shadow-[0_20px_50px_rgba(0,0,0,0.15)] dark:shadow-[0_20px_50px_rgba(0,0,0,0.4)] p-7 w-full max-w-md h-fit max-h-[90vh] overflow-y-auto relative transition-all"
