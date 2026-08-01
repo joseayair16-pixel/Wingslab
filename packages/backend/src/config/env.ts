@@ -123,6 +123,8 @@ const REQUIRED_ENV_VARS: EnvVar[] = [
   { key: 'CORS_ORIGIN', required: false, secret: false },
   { key: 'VAPID_PUBLIC_KEY', required: false, secret: false },
   { key: 'VAPID_PRIVATE_KEY', required: false, secret: true },
+  { key: 'RATE_LIMIT_MAX', required: false, secret: false },
+  { key: 'RATE_LIMIT_WINDOW_MS', required: false, secret: false },
 ];
 
 export function validateEnvironment(): void {

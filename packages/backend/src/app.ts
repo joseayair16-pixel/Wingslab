@@ -57,6 +57,10 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     logger: NODE_ENV === 'development',
     bodyLimit: 10485760,
     requestTimeout: 30000,
+    // Behind a reverse proxy (Railway/cloud) all requests share the proxy IP.
+    // Trusting the proxy lets request.ip resolve the real client IP so rate
+    // limits apply per user instead of globally across everyone.
+    trustProxy: true,
     serverFactory: (handler) => {
       httpServer.on('request', (req, res) => {
         if (req.url?.startsWith('/socket.io')) {
@@ -113,8 +117,8 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
 
   if (enableRateLimit) {
     await fastify.register(fastifyRateLimit, {
-      max: 100,
-      timeWindow: '1 minute',
+      max: Number(process.env.RATE_LIMIT_MAX || 300),
+      timeWindow: Number(process.env.RATE_LIMIT_WINDOW_MS || 60_000),
       cache: 10000,
       allowList: ['127.0.0.1'],
       redis: getRedis(),
