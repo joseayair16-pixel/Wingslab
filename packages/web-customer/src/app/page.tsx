@@ -1570,6 +1570,13 @@ export default function Home() {
       const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
       if (AudioContextClass && !customerAudioContextRef.current) {
         const context = new AudioContextClass();
+        // Explicitly resume within the same gesture: Chrome can create the
+        // context in a 'suspended' state even inside a gesture handler, which
+        // logs "The AudioContext was not allowed to start". Resuming here (and
+        // the silent oscillator below) unlocks it for later notification sounds.
+        if (context.state === 'suspended') {
+          void context.resume().catch(() => {});
+        }
         customerAudioContextRef.current = context;
 
         // Preload notifica.wav
@@ -3951,8 +3958,8 @@ export default function Home() {
                     >
                       <div className="mt-0.5 text-neutral-400">
                         <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.828 0l-4.243-4.243a8 8 0 1111.314 0x" />
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0x" />
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.828 0l-4.243-4.243a8 8 0 1111.314 0z" />
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
                         </svg>
                       </div>
                       <div className="flex flex-col">

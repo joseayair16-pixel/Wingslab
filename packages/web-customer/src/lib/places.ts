@@ -44,11 +44,14 @@ async function fetchPlacesFromApi(query: string, countryCode: string): Promise<P
         sessionToken: token,
         includedRegionCodes: [countryCode],
       });
-      return (suggestions || []).map((suggestion: any) => ({
-        name: suggestion.placePrediction.text.value,
-        description: suggestion.placePrediction.text.value || '',
-        place_id: suggestion.placePrediction.placeId,
-      }));
+      return (suggestions || []).map((suggestion: any) => {
+        const text = suggestion.placePrediction?.text?.text ?? suggestion.placePrediction?.text?.value ?? '';
+        return {
+          name: text,
+          description: suggestion.placePrediction?.secondaryText?.text ?? '',
+          place_id: suggestion.placePrediction?.placeId ?? '',
+        };
+      });
     } catch {
       // fall through to the classic Places API
     }
@@ -107,7 +110,9 @@ function cachedSubset(query: string): PlacesSuggestion[] | undefined {
     if (!other.startsWith(lower) && !lower.startsWith(other)) continue;
 
     const subset = entry.results.filter(
-      (r) => r.name.toLowerCase().includes(lower) || r.description.toLowerCase().includes(lower)
+      (r) =>
+        (r.name ?? '').toLowerCase().includes(lower) ||
+        (r.description ?? '').toLowerCase().includes(lower)
     );
     if (subset.length === 0) continue;
     if (!best || entry.query.length > best.len) {

@@ -602,6 +602,11 @@ export default function RestaurantPage({
       const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
       if (AudioContextClass && !customerAudioContextRef.current) {
         const context = new AudioContextClass();
+        // Explicitly resume within the same gesture to satisfy Chrome's
+        // autoplay policy (avoids "The AudioContext was not allowed to start").
+        if (context.state === 'suspended') {
+          void context.resume().catch(() => {});
+        }
         customerAudioContextRef.current = context;
 
         fetch('/sounds/notifica.wav')
