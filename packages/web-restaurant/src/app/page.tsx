@@ -27,6 +27,7 @@ import { DashboardSection } from '../components/sections/DashboardSection';
 import { BillingSection } from '../components/sections/BillingSection';
 import { SettingsSection } from '../components/sections/SettingsSection';
 import { FeaturedSection } from '../components/sections/FeaturedSection';
+import { createPlacesSource } from '../lib/places';
 
 type OrderStatus =
   | 'PENDING'
@@ -594,6 +595,7 @@ export default function Home() {
   const autocompleteServiceRef = useRef<any>(null);
   const autocompleteSessionTokenRef = useRef<any>(null);
   const placesServiceRef = useRef<any>(null);
+  const addressSearchSourceRef = useRef<ReturnType<typeof createPlacesSource> | null>(null);
   const [addressSuggestions, setAddressSuggestions] = useState<any[]>([]);
   const [isSearchingAddress, setIsSearchingAddress] = useState(false);
   const [welcomeImage, setWelcomeImage] = useState('https://images.unsplash.com/photo-1552566626-52f8b828add9?auto=format&fit=crop&w=1600&q=80');
@@ -1377,11 +1379,13 @@ export default function Home() {
 
   useEffect(() => {
     if (!storeDraft.address || storeDraft.address.length < 5) {
+      addressSearchSourceRef.current?.cancel();
       setAddressSuggestions([]);
       return;
     }
 
     if (profile && profile.address && storeDraft.address && profile.address.startsWith(storeDraft.address)) {
+      addressSearchSourceRef.current?.cancel();
       setAddressSuggestions([]);
       return;
     }
@@ -1391,45 +1395,16 @@ export default function Home() {
       return;
     }
 
-    const timer = window.setTimeout(async () => {
-      setIsSearchingAddress(true);
-      try {
-        const google = (window as any).google;
-        if (!google || !google.maps || !google.maps.places) {
-          setIsSearchingAddress(false);
-          return;
-        }
+    if (!addressSearchSourceRef.current) {
+      addressSearchSourceRef.current = createPlacesSource({ minLength: 5 });
+    }
 
-        if (!autocompleteSessionTokenRef.current) {
-          autocompleteSessionTokenRef.current = new google.maps.places.AutocompleteSessionToken();
-        }
+    addressSearchSourceRef.current.search(storeDraft.address, {
+      onResults: (suggestions) => setAddressSuggestions(suggestions.map((s) => ({ display_name: s.name, place_id: s.place_id }))),
+      onBusy: setIsSearchingAddress,
+    });
 
-        const { suggestions: predictions } = await google.maps.places.AutocompleteSuggestion.fetchAutocompleteSuggestions({
-          input: storeDraft.address,
-          sessionToken: autocompleteSessionTokenRef.current,
-          includedRegionCodes: ['mx']
-        });
-
-        if (!predictions || predictions.length === 0) {
-          setAddressSuggestions([]);
-          setIsSearchingAddress(false);
-          return;
-        }
-
-        const mappedSuggestions = predictions.map((suggestion: any) => ({
-          display_name: suggestion.placePrediction.text.text,
-          place_id: suggestion.placePrediction.placeId,
-        }));
-
-        setAddressSuggestions(mappedSuggestions);
-        setIsSearchingAddress(false);
-      } catch (err) {
-        console.error('Error searching address:', err);
-        setIsSearchingAddress(false);
-      }
-    }, 500); // 500ms debounce
-
-    return () => window.clearTimeout(timer);
+    return () => addressSearchSourceRef.current?.cancel();
   }, [storeDraft.address]);
 
   function persistSession(nextToken: string, user: AuthUser, nextRefreshToken?: string) {

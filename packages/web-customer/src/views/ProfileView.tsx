@@ -21,7 +21,7 @@ interface ProfileViewProps {
   isEditingAddress: boolean;
   addressSearchQuery: string;
   setAddressSearchQuery: (query: string) => void;
-  searchAddress: (query: string) => Promise<void>;
+  searchAddress: (query: string) => void;
   isSearchingAddress: boolean;
   fillProfileAddressWithCurrentLocation: () => void;
   addressSuggestions: any[];

@@ -2,7 +2,6 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState, useTransition, useDeferredValue } from 'react';
 import { useRouter } from 'next/navigation';
-import Script from 'next/script';
 import { io } from 'socket.io-client';
 import {
   AuthResponse,
@@ -36,6 +35,7 @@ import { ZonesModal } from '../components/ZonesModal';
 import CartDrawer from '../components/CartDrawer';
 import { CompactActiveOrderBanner, buildTimelineSteps, getEtaWindowMinutes, formatEstimatedArrivalMinutes } from '../components/CompactActiveOrderBanner';
 import RatingModal from '../components/RatingModal';
+import { createPlacesSource } from '../lib/places';
 
 const HomeView = dynamic(() => import('../views/HomeView').then(mod => mod.HomeView), { ssr: false });
 const ProfileView = dynamic(() => import('../views/ProfileView').then(mod => mod.ProfileView), { ssr: false });
@@ -548,55 +548,14 @@ export default function Home() {
     setIsEditingAddress(false);
   }
 
-  async function searchAddress(query: string) {
-    if (!query.trim() || query.length < 3) {
-      setAddressSuggestions([]);
-      return;
+  function searchAddress(query: string) {
+    if (!addressSearchSourceRef.current) {
+      addressSearchSourceRef.current = createPlacesSource();
     }
-
-    setIsSearchingAddress(true);
-    
-    if (searchTimeoutRef.current) {
-      clearTimeout(searchTimeoutRef.current);
-    }
-
-    searchTimeoutRef.current = setTimeout(async () => {
-      try {
-        const google = (window as any).google;
-        if (!google || !google.maps || !google.maps.places) {
-          setIsSearchingAddress(false);
-          return;
-        }
-
-        if (!autocompleteSessionTokenRef.current) {
-          autocompleteSessionTokenRef.current = new google.maps.places.AutocompleteSessionToken();
-        }
-
-        const { suggestions: predictions } = await google.maps.places.AutocompleteSuggestion.fetchAutocompleteSuggestions({
-          input: query,
-          sessionToken: autocompleteSessionTokenRef.current,
-          includedRegionCodes: ['mx']
-        });
-
-        if (!predictions || predictions.length === 0) {
-          setAddressSuggestions([]);
-          setIsSearchingAddress(false);
-          return;
-        }
-
-        const mappedSuggestions = predictions.map((suggestion: any) => ({
-          name: suggestion.placePrediction.text.value,
-          description: '',
-          place_id: suggestion.placePrediction.placeId,
-        }));
-
-        setAddressSuggestions(mappedSuggestions);
-        setIsSearchingAddress(false);
-      } catch (err) {
-        console.error('Error searching address:', err);
-        setIsSearchingAddress(false);
-      }
-    }, 500); // 500ms debounce
+    addressSearchSourceRef.current.search(query, {
+      onResults: setAddressSuggestions,
+      onBusy: setIsSearchingAddress,
+    });
   }
 
   function selectSuggestion(suggestion: any) {
@@ -671,55 +630,14 @@ export default function Home() {
     });
   }
 
-  async function searchFallbackAddress(query: string) {
-    if (!query.trim() || query.length < 3) {
-      setFallbackSuggestions([]);
-      return;
+  function searchFallbackAddress(query: string) {
+    if (!fallbackSearchSourceRef.current) {
+      fallbackSearchSourceRef.current = createPlacesSource();
     }
-
-    setIsSearchingFallback(true);
-    
-    if (fallbackSearchTimeoutRef.current) {
-      clearTimeout(fallbackSearchTimeoutRef.current);
-    }
-
-    fallbackSearchTimeoutRef.current = setTimeout(async () => {
-      try {
-        const google = (window as any).google;
-        if (!google || !google.maps || !google.maps.places) {
-          setIsSearchingFallback(false);
-          return;
-        }
-
-        if (!autocompleteSessionTokenRef.current) {
-          autocompleteSessionTokenRef.current = new google.maps.places.AutocompleteSessionToken();
-        }
-
-        const { suggestions: predictions } = await google.maps.places.AutocompleteSuggestion.fetchAutocompleteSuggestions({
-          input: query,
-          sessionToken: autocompleteSessionTokenRef.current,
-          includedRegionCodes: ['mx']
-        });
-
-        if (!predictions || predictions.length === 0) {
-          setFallbackSuggestions([]);
-          setIsSearchingFallback(false);
-          return;
-        }
-
-        const mappedSuggestions = predictions.map((suggestion: any) => ({
-          name: suggestion.placePrediction.text.value,
-          description: '',
-          place_id: suggestion.placePrediction.placeId,
-        }));
-
-        setFallbackSuggestions(mappedSuggestions);
-        setIsSearchingFallback(false);
-      } catch (err) {
-        console.error('Error searching fallback address:', err);
-        setIsSearchingFallback(false);
-      }
-    }, 500);
+    fallbackSearchSourceRef.current.search(query, {
+      onResults: setFallbackSuggestions,
+      onBusy: setIsSearchingFallback,
+    });
   }
 
   function selectFallbackSuggestion(suggestion: any) {
@@ -888,8 +806,9 @@ export default function Home() {
       const raw = typeof window !== 'undefined' ? window.localStorage.getItem('userLocation') : null;
       if (raw) {
         const parsed = JSON.parse(raw);
-        const age = parsed.ts ? Date.now() - parsed.ts : Infinity;
-        if (age < 24 * 60 * 60 * 1000) return parsed;
+        if (typeof parsed?.latitude === 'number' && typeof parsed?.longitude === 'number') {
+          return parsed;
+        }
       }
     } catch {}
     return null;
@@ -1100,7 +1019,7 @@ export default function Home() {
   const [fallbackSearchQuery, setFallbackSearchQuery] = useState('');
   const [fallbackSuggestions, setFallbackSuggestions] = useState<any[]>([]);
   const [isSearchingFallback, setIsSearchingFallback] = useState(false);
-  const fallbackSearchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const fallbackSearchSourceRef = useRef<ReturnType<typeof createPlacesSource> | null>(null);
   const touchStartY = useRef(0);
   const sideMenuRef = useRef<HTMLDivElement | null>(null);
   const cartRef = useRef<HTMLDivElement | null>(null);
@@ -1190,7 +1109,7 @@ export default function Home() {
   const autocompleteServiceRef = useRef<any>(null);
   const placesServiceRef = useRef<any>(null);
   const autocompleteSessionTokenRef = useRef<any>(null);
-  const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const addressSearchSourceRef = useRef<ReturnType<typeof createPlacesSource> | null>(null);
   const addressMarkerRef = useRef<any>(null);
 
   // Estados para rastreo geográfico opcional (Ahorro de datos móviles)
@@ -1955,26 +1874,27 @@ export default function Home() {
       setOrders(cached.orders);
     }
 
+    let loaded = false;
+
     try {
       persistApiBase(storageKey, apiBase);
       // Always read location from the ref so synchronous updates in
       // handleZoneSelect are visible immediately — never rely on the
       // async state closure, which can be stale during zone switching.
       const loc = userLocationRef.current;
-      // Do not request restaurants from the backend unless we have a valid userLocation.
-      // Backend will not filter by distance if coordinates are missing, which can show
-      // restaurants from other cities. We prefer showing no restaurants until the user
-      // grants/updates their location or enters it manually.
-      const restaurantsPromise = loc
-        ? requestJson<RestaurantListResponse>({
-          apiBase,
-          path: `/restaurantes?limit=24&openOnly=false&latitude=${loc.latitude}&longitude=${loc.longitude}`,
-          fallbackMessage: 'No se pudo cargar la oferta de restaurantes.',
-        })
-        : Promise.resolve({
-          success: true,
-          data: { items: [], total: 0, page: 1, limit: 8, hasMore: false },
-        } satisfies RestaurantListResponse);
+      // loadDashboard also runs on mount before GPS has resolved. Loading an
+      // empty dashboard there made the home flash empty states ("no results",
+      // "no activity") on every reload until the real location arrived.
+      // Without a location there is nothing valid to show, so keep the
+      // skeleton alive and let the next load (with a real location) complete.
+      if (!loc) return;
+      loaded = true;
+
+      const restaurantsPromise = requestJson<RestaurantListResponse>({
+        apiBase,
+        path: `/restaurantes?limit=24&openOnly=false&latitude=${loc.latitude}&longitude=${loc.longitude}`,
+        fallbackMessage: 'No se pudo cargar la oferta de restaurantes.',
+      });
 
       const ordersPromise = token
         ? requestJson<PaginatedOrdersResponse>({
@@ -1988,19 +1908,15 @@ export default function Home() {
             data: { items: [], total: 0, page: 1, limit: 15, hasMore: false },
           } satisfies PaginatedOrdersResponse);
 
-      const featuredPromise = loc
-        ? fetch(`${apiBase}/public/featured?latitude=${loc.latitude}&longitude=${loc.longitude}`)
-            .then(r => r.json())
-            .then(d => d.success ? d.data : [])
-            .catch(() => [])
-        : Promise.resolve([]);
+      const featuredPromise = fetch(`${apiBase}/public/featured?latitude=${loc.latitude}&longitude=${loc.longitude}`)
+          .then(r => r.json())
+          .then(d => d.success ? d.data : [])
+          .catch(() => []);
 
-      const offersPromise = loc
-        ? fetch(`${apiBase}/public/ofertas?latitude=${loc.latitude}&longitude=${loc.longitude}`)
-            .then(r => r.json())
-            .then(d => d.success ? d.data : [])
-            .catch(() => [])
-        : Promise.resolve([]);
+      const offersPromise = fetch(`${apiBase}/public/ofertas?latitude=${loc.latitude}&longitude=${loc.longitude}`)
+          .then(r => r.json())
+          .then(d => d.success ? d.data : [])
+          .catch(() => []);
 
       const TIMEOUT_MS = 10_000;
       const withTimeout = <T,>(p: Promise<T>): Promise<T> =>
@@ -2130,7 +2046,7 @@ export default function Home() {
       }
     } finally {
       if (callId !== loadDashboardCallIdRef.current) return;
-      setLoadingDashboard(false);
+      if (loaded) setLoadingDashboard(false);
     }
   }, [apiBase, token, userLocation]);
 
@@ -2191,7 +2107,6 @@ export default function Home() {
     setSelectedZoneName(null);
     setLocationSource('gps');
     setLocationDenied(false);
-    setUserLocation(null);
     setExploringZone(false);
     try {
       localStorage.removeItem('locationDenied');
@@ -2201,7 +2116,8 @@ export default function Home() {
       localStorage.removeItem('exploringZone');
     } catch (e) {}
 
-    // Try GPS immediately to re-acquire location after manual zone override
+    // Keep the current location rendered while GPS re-acquires, otherwise the
+    // location modal flashes for the whole resolution window (up to 10s).
     if (typeof navigator !== 'undefined' && navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
         (position) => {
@@ -2240,12 +2156,15 @@ export default function Home() {
           void tryGeocode();
         },
         () => {
-          // GPS failed — ensure the dashboard doesn't freeze indefinitely
+          // GPS failed after resetting the zone — only now fall back to the
+          // location modal instead of freezing on the zone's restaurants.
+          setUserLocation(null);
           loadDashboard();
         },
         { enableHighAccuracy: false, timeout: 10000, maximumAge: 60000 }
       );
     } else {
+      setUserLocation(null);
       loadDashboard();
     }
   }, [loadDashboard]);
@@ -4053,10 +3972,6 @@ export default function Home() {
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
     >
-      <Script
-        src={`https://maps.googleapis.com/maps/api/js?key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || ''}&libraries=places&loading=async`}
-        strategy="lazyOnload"
-      />
       <div className={`fixed inset-0 z-[9999] bg-white transition-opacity duration-700 pointer-events-none ${isTransitioning ? 'opacity-100' : 'opacity-0'}`} />
       {/* Pull to refresh indicator */}
       <div

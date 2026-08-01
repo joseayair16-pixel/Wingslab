@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import Script from 'next/script';
 import { Inter, Plus_Jakarta_Sans } from 'next/font/google';
 import '../styles/globals.css';
 import ServiceWorkerRegister from './ServiceWorkerRegister';
@@ -54,6 +55,10 @@ export default function RootLayout({
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
       </head>
       <body>
+        <Script
+          src={`https://maps.googleapis.com/maps/api/js?key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || ''}&libraries=places&loading=async`}
+          strategy="lazyOnload"
+        />
         <ServiceWorkerRegister />
         {children}
       </body>

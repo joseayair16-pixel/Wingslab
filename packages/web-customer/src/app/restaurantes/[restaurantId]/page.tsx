@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import Script from 'next/script';
 import { AuthUser, readStoredSession, requestJson, submitReview, uploadMediaAsset, convertImageFileToDataUrl, getOrderStatusLabel, isRestaurant, getBusinessArticleCapitalized, getBusinessRef, ApiRequestError } from '@sadel/shared';
 import { io } from 'socket.io-client';
 import LiveTrackingMap from '../../../components/LiveTrackingMap';
@@ -13,6 +12,7 @@ import { useForegroundPolling } from '../../../hooks/useForegroundPolling';
 import { SaDelLoader } from '../../../components/SaDelLoader';
 import { SaDelLogo } from '../../../components/SaDelLogo';
 import CartDrawer from '../../../components/CartDrawer';
+import { createPlacesSource } from '../../../lib/places';
 type PaymentMethod = 'CASH' | 'TRANSFER';
 type OrderStatus =
   | 'PENDING'
@@ -2556,10 +2556,6 @@ function triggerHaptic(pattern: number | number[] = 10) {
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
     >
-      <Script
-        src={`https://maps.googleapis.com/maps/api/js?key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || ''}&libraries=places&loading=async`}
-        strategy="lazyOnload"
-      />
       {/* Pull to refresh indicator */}
       <div
         className={`fixed top-0 left-0 right-0 z-50 flex justify-center pt-2 pointer-events-none transition-opacity ${pullDistance > 0 || isRefreshing ? 'opacity-100' : 'opacity-0'}`}
@@ -6048,58 +6044,17 @@ function calculateHaversineDistance(lat1: number, lon1: number, lat2: number, lo
 }
 
 let autocompleteSessionToken: any = null;
-let searchTimeout: NodeJS.Timeout | null = null;
 let placesService: any = null;
+let addressSearchSource: ReturnType<typeof createPlacesSource> | null = null;
 
-async function searchAddress(query: string, setAddressSuggestions: (val: any[]) => void, setIsSearchingAddress: (val: boolean) => void) {
-  if (!query.trim() || query.length < 3) {
-    setAddressSuggestions([]);
-    return;
+function searchAddress(query: string, setAddressSuggestions: (val: any[]) => void, setIsSearchingAddress: (val: boolean) => void) {
+  if (!addressSearchSource) {
+    addressSearchSource = createPlacesSource();
   }
-
-  setIsSearchingAddress(true);
-
-  if (searchTimeout) {
-    clearTimeout(searchTimeout);
-  }
-
-  searchTimeout = setTimeout(async () => {
-    try {
-      const google = (window as any).google;
-      if (!google || !google.maps || !google.maps.places) {
-        setIsSearchingAddress(false);
-        return;
-      }
-
-      if (!autocompleteSessionToken) {
-        autocompleteSessionToken = new google.maps.places.AutocompleteSessionToken();
-      }
-
-      const { suggestions: predictions } = await google.maps.places.AutocompleteSuggestion.fetchAutocompleteSuggestions({
-        input: query,
-        sessionToken: autocompleteSessionToken,
-        includedRegionCodes: ['mx']
-      });
-
-      if (!predictions || predictions.length === 0) {
-        setAddressSuggestions([]);
-        setIsSearchingAddress(false);
-        return;
-      }
-
-      const mappedSuggestions = predictions.map((suggestion: any) => ({
-        name: suggestion.placePrediction.text.value,
-        description: '',
-        place_id: suggestion.placePrediction.placeId,
-      }));
-
-      setAddressSuggestions(mappedSuggestions);
-      setIsSearchingAddress(false);
-    } catch (err) {
-      console.error('Error searching address:', err);
-      setIsSearchingAddress(false);
-    }
-  }, 500);
+  addressSearchSource.search(query, {
+    onResults: setAddressSuggestions,
+    onBusy: setIsSearchingAddress,
+  });
 }
 
 function handleSelectSuggestion(
