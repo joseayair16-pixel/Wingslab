@@ -2664,8 +2664,15 @@ export default function Home() {
     }
   };
 
+  const initialDashboardLoadedRef = useRef(false);
+
   useEffect(() => {
-    void loadDashboard(true);
+    if (!initialDashboardLoadedRef.current) {
+      void loadDashboard();
+      initialDashboardLoadedRef.current = true;
+    } else {
+      void loadDashboard(true);
+    }
   }, [loadDashboard, token, sessionUser]);
 
   useEffect(() => {
