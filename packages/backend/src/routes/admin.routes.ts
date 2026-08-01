@@ -3001,15 +3001,27 @@ export async function registerAdminRoutes(fastify: FastifyInstance): Promise<voi
           });
 
           if (body.data.status === 'PAID' && settlement.customer?.isSuspendedByDebt) {
+            // Recompute the total outstanding debt. A customer may owe for more
+            // than one no-show order, so only clear the debt flags and reactivate
+            // the account once EVERY settlement is paid.
+            const remaining = await tx.customerBillingSettlement.aggregate({
+              where: { customerId: settlement.customerId, status: { not: 'PAID' } },
+              _sum: { amount: true },
+            });
+            const remainingDebt = remaining._sum.amount || 0;
+
             await tx.customer.update({
               where: { id: settlement.customerId },
-              data: { isSuspendedByDebt: false, debtAmount: 0 },
+              data: remainingDebt > 0
+                ? { isSuspendedByDebt: true, debtAmount: remainingDebt }
+                : { isSuspendedByDebt: false, debtAmount: 0 },
             });
 
-            // Reactivate only if the user is suspended (either manually by admin
-            // or automatically by this system). Clearing the debt removes the
-            // system suspension, so restoring the account is safe.
-            if (settlement.customer.user.status === 'SUSPENDED') {
+            // Reactivate only when there is no outstanding debt left. If an admin
+            // manually suspended the account for reasons other than this debt, it
+            // should not be automatically reactivated, so we require the debt
+            // suspension flag to be the source before touching the user status.
+            if (remainingDebt === 0 && settlement.customer.user.status === 'SUSPENDED') {
               await tx.user.update({
                 where: { id: settlement.customer.userId },
                 data: { status: 'ACTIVE' },

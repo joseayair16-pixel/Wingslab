@@ -915,7 +915,7 @@ export async function registerCustomerRoutes(fastify: FastifyInstance): Promise<
       const body = z
         .object({
           settlementId: z.string().min(1),
-          paymentProofUrl: z.string().min(1),
+          paymentProofUrl: z.string().url(),
         })
         .safeParse(request.body);
 

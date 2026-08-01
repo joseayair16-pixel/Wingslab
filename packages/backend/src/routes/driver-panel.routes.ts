@@ -1391,21 +1391,36 @@ export async function registerDriverPanelRoutes(fastify: FastifyInstance): Promi
           });
         }
 
-        // Persist the "arrived" state via tracking so frontend can reconstruct it on reload
-        await prisma.orderTracking.create({
-          data: {
-            orderId: order.id,
-            status: order.status, // Remains IN_TRANSIT
-            notes: 'DRIVER_ARRIVED',
-          },
-        });
+        // Only a delivery in transit can be marked as "arrived at the customer".
+        if (order.status !== OrderStatus.IN_TRANSIT) {
+          return reply.status(409).send({
+            success: false,
+            error: {
+              code: 'INVALID_ORDER_STATUS',
+              message: 'Solo puedes notificar tu llegada mientras el pedido esta en camino.',
+            },
+          });
+        }
 
-        // Record when the driver reached the customer's door. This timestamp is the
-        // anchor for the abandoned-delivery thresholds (10min transfer / 15min cash).
-        await prisma.order.update({
-          where: { id: order.id },
-          data: { driverArrivedAtCustomer: new Date() },
-        });
+        // Persist the "arrived" state via tracking so frontend can reconstruct it on reload.
+        // Guarded so repeated taps don't spam tracking rows or reset the arrival timestamp
+        // (which is the anchor for the 10/15 min abandoned-delivery thresholds).
+        if (!order.driverArrivedAtCustomer) {
+          await prisma.orderTracking.create({
+            data: {
+              orderId: order.id,
+              status: order.status, // Remains IN_TRANSIT
+              notes: 'DRIVER_ARRIVED',
+            },
+          });
+
+          // Record when the driver reached the customer's door. This timestamp is the
+          // anchor for the abandoned-delivery thresholds (10min transfer / 15min cash).
+          await prisma.order.update({
+            where: { id: order.id },
+            data: { driverArrivedAtCustomer: new Date() },
+          });
+        }
 
         emitNotification(
           fastify.io,
@@ -1665,79 +1680,117 @@ export async function registerDriverPanelRoutes(fastify: FastifyInstance): Promi
           });
         }
 
-        // 1) Complete the delivery (own transaction: DELIVERED status, driver freed up, stats).
-        const updatedOrder = await updateOrderStatusByDriver({
-          prisma,
-          driverUserId: user.sub,
-          orderId: params.data.id,
-          action: 'no_show',
-          pin: undefined,
-        });
+        // 1) Create the debt + suspend the customer + log a support ticket ATOMICALLY.
+        //    The unique(orderId) constraint serializes concurrent releases: if two
+        //    requests tap "liberar" at once only one creates the settlement and the
+        //    other hits P2002 -> 409. Creating the debt BEFORE marking the order
+        //    delivered guarantees we never end with a delivered-but-unbilled order.
+        let settlementId: string;
+        try {
+          const created = await prisma.$transaction(async (tx) => {
+            const reference = `CUS-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}-${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
 
-        // 2) Create the debt + suspend the customer + log a support ticket.
-        //    Kept as a separate transaction because the order-workflow service
-        //    manages its own transaction; this runs after the delivery settles.
-        //    Bounded retry so a transient DB error doesn't silently leave the
-        //    delivery completed without charging the customer. The unique
-        //    constraint on orderId keeps this idempotent under concurrent calls.
-        const MAX_DEBT_ATTEMPTS = 3;
-        for (let attempt = 1; attempt <= MAX_DEBT_ATTEMPTS; attempt++) {
+            const settlement = await tx.customerBillingSettlement.create({
+              data: {
+                customerId: order.customer.id,
+                reference,
+                orderId: order.id,
+                amount: order.totalAmount,
+                status: 'PENDING',
+                dueDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+                notes: `Pedido no recibido - el repartidor llego y espero 15+ minutos sin respuesta del cliente. Pedido #${order.orderReference}.`,
+              },
+            });
+
+            // debtAmount accumulates: a customer may owe for more than one order.
+            await tx.customer.update({
+              where: { id: order.customer.id },
+              data: { isSuspendedByDebt: true, debtAmount: { increment: order.totalAmount } },
+            });
+
+            await tx.user.update({
+              where: { id: order.customer.user.id },
+              data: { status: 'SUSPENDED' },
+            });
+
+            await tx.supportTicket.create({
+              data: {
+                type: 'ORDER',
+                subject: 'Cliente no salio a recibir pedido',
+                description: [
+                  `Pedido: #${order.orderReference}`,
+                  `Repartidor: ${order.driver?.user?.name || 'N/A'}`,
+                  `Hora de llegada al domicilio: ${arrivedAtCustomer.toISOString()}`,
+                  `Tiempo de espera: 15+ minutos`,
+                  `Monto del pedido: $${order.totalAmount.toFixed(2)}`,
+                  `Restaurante: ${order.restaurant.name}`,
+                  `Referencia de deuda: ${settlement.reference}`,
+                ].join('\n'),
+                status: 'PENDING',
+                customerId: order.customer.id,
+                orderNumber: order.orderReference,
+                storeName: order.restaurant.name,
+              },
+            });
+
+            return settlement;
+          });
+          settlementId = created.id;
+        } catch (debtErr: any) {
+          if (debtErr?.code === 'P2002') {
+            return reply.status(409).send({
+              success: false,
+              error: {
+                code: 'SETTLEMENT_ALREADY_EXISTS',
+                message: 'Este pedido ya genero una deuda. Revisa con soporte.',
+              },
+            });
+          }
+          throw debtErr;
+        }
+
+        // 2) Complete the delivery (DELIVERED status, driver freed up, stats).
+        let updatedOrder: Awaited<ReturnType<typeof updateOrderStatusByDriver>>;
+        try {
+          updatedOrder = await updateOrderStatusByDriver({
+            prisma,
+            driverUserId: user.sub,
+            orderId: params.data.id,
+            action: 'no_show',
+            pin: undefined,
+          });
+        } catch (deliveryErr) {
+          // Compensation: the delivery could not be completed (e.g. the status
+          // changed concurrently). Undo the debt so the customer is not charged
+          // for an order that is not actually released.
           try {
             await prisma.$transaction(async (tx) => {
-              const reference = `CUS-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}-${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
-
-              const settlement = await tx.customerBillingSettlement.create({
-                data: {
-                  customerId: order.customer.id,
-                  reference,
-                  orderId: order.id,
-                  amount: order.totalAmount,
-                  status: 'PENDING',
-                  dueDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-                  notes: `Pedido no recibido - el repartidor llego y espero 15+ minutos sin respuesta del cliente. Pedido #${order.orderReference}.`,
-                },
+              await tx.customerBillingSettlement.delete({ where: { id: settlementId } });
+              const remaining = await tx.customerBillingSettlement.aggregate({
+                where: { customerId: order.customer.id, status: { not: 'PAID' } },
+                _sum: { amount: true },
               });
-
+              const remainingDebt = remaining._sum.amount || 0;
               await tx.customer.update({
                 where: { id: order.customer.id },
-                data: { isSuspendedByDebt: true, debtAmount: order.totalAmount },
+                data: remainingDebt > 0
+                  ? { isSuspendedByDebt: true, debtAmount: remainingDebt }
+                  : { isSuspendedByDebt: false, debtAmount: 0 },
               });
-
-              await tx.user.update({
-                where: { id: order.customer.user.id },
-                data: { status: 'SUSPENDED' },
-              });
-
-              await tx.supportTicket.create({
-                data: {
-                  type: 'ORDER',
-                  subject: 'Cliente no salio a recibir pedido',
-                  description: [
-                    `Pedido: #${order.orderReference}`,
-                    `Repartidor: ${order.driver?.user?.name || 'N/A'}`,
-                    `Hora de llegada al domicilio: ${arrivedAtCustomer.toISOString()}`,
-                    `Tiempo de espera: 15+ minutos`,
-                    `Monto del pedido: $${order.totalAmount.toFixed(2)}`,
-                    `Restaurante: ${order.restaurant.name}`,
-                    `Referencia de deuda: ${settlement.reference}`,
-                  ].join('\n'),
-                  status: 'PENDING',
-                  customerId: order.customer.id,
-                  orderNumber: order.orderReference,
-                  storeName: order.restaurant.name,
-                },
-              });
+              if (remainingDebt === 0) {
+                await tx.user.update({
+                  where: { id: order.customer.user.id },
+                  data: { status: 'ACTIVE' },
+                });
+              }
             });
-            break;
-          } catch (debtErr) {
-            const isLastAttempt = attempt === MAX_DEBT_ATTEMPTS;
+          } catch (compErr) {
             request.log.error(
-              debtErr as any,
-              `[Deuda] Intento ${attempt}/${MAX_DEBT_ATTEMPTS} fallo al crear la deuda del pedido ${order.id}${isLastAttempt ? ' (definitivo)' : ', reintentando'}`
+              compErr as any,
+              '[Deuda] No se pudo revertir la deuda tras fallar la entrega'
             );
-            if (isLastAttempt) break;
-            await new Promise((resolve) => setTimeout(resolve, 250 * attempt));
           }
+          throw deliveryErr;
         }
 
         emitNotification(
