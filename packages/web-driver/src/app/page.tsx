@@ -2030,7 +2030,7 @@ export default function Home() {
   // ==========================================
   if (isCheckingSession) {
     return (
-      <main className="min-h-[100dvh] bg-[#fbf8f1] dark:bg-black font-sans text-neutral-900 dark:text-zinc-100 flex items-center justify-center">
+      <main className="min-h-[100dvh] bg-white dark:bg-black font-sans text-neutral-900 dark:text-zinc-100 flex items-center justify-center">
         <div className="animate-pulse opacity-50">Cargando...</div>
       </main>
     );
@@ -2501,7 +2501,7 @@ export default function Home() {
           />
 
           {/* Drawer Content */}
-          <div className="relative flex w-4/5 max-w-sm flex-col bg-[#fbf8f1] p-6 shadow-2xl dark:bg-zinc-950 dark:border-r dark:border-zinc-900 h-full animate-slideInLeft select-none text-neutral-900 dark:text-zinc-200">
+          <div className="relative flex w-4/5 max-w-sm flex-col bg-white p-6 shadow-2xl dark:bg-zinc-950 dark:border-r dark:border-zinc-900 h-full animate-slideInLeft select-none text-neutral-900 dark:text-zinc-200">
             {/* Header / Profile info (clickable to account settings) */}
             <button
               type="button"
@@ -3560,7 +3560,7 @@ export default function Home() {
                             if (!showTimer) return null;
 
                             return (
-                              <div className="rounded-2xl border border-amber-200 dark:border-amber-900/30 bg-amber-50/60 dark:bg-amber-950/10 px-4 py-3.5 space-y-3">
+                              <div className="rounded-2xl border border-amber-200 dark:border-amber-900/30 bg-white dark:bg-zinc-900 px-4 py-3.5 space-y-3">
                                 <div className="flex items-center justify-between">
                                   <p className="text-[10px] font-bold uppercase tracking-widest text-amber-700 dark:text-amber-400">
                                     Espera sin contacto
@@ -3744,7 +3744,7 @@ export default function Home() {
                             <article
                               key={order.id}
                               onClick={() => setSelectedHistoryOrder(order)}
-                              className="rounded-2xl border border-black/5 bg-[#fbf8f1] p-4 flex justify-between items-center transition cursor-pointer hover:bg-[#f5f0e6] dark:bg-zinc-950 dark:border-zinc-900/60 dark:hover:bg-zinc-900"
+                              className="rounded-2xl border border-black/5 bg-white p-4 flex justify-between items-center transition cursor-pointer hover:bg-neutral-50 dark:bg-zinc-950 dark:border-zinc-900/60 dark:hover:bg-zinc-900"
                             >
                               <div>
                                 <div className="flex items-center gap-2">
@@ -4222,7 +4222,7 @@ export default function Home() {
                               const order = orderRefMap.get(delivery.orderReference);
                               if (order) setSelectedHistoryOrder(order);
                             }}
-                            className="rounded-2xl border border-black/5 bg-[#fbf8f1] p-3.5 flex justify-between items-center cursor-pointer hover:bg-[#f5f0e6] dark:bg-zinc-900/40 dark:border-zinc-900/50 dark:hover:bg-zinc-800/60 transition"
+                            className="rounded-2xl border border-black/5 bg-white p-3.5 flex justify-between items-center cursor-pointer hover:bg-neutral-50 dark:bg-zinc-900/40 dark:border-zinc-900/50 dark:hover:bg-zinc-800/60 transition"
                           >
                             <div className="min-w-0 flex-1 mr-3">
                               {(() => {
@@ -5359,13 +5359,13 @@ export default function Home() {
                   Puedes dejar el pedido en un lugar seguro y marcarlo como entregado.
                 </p>
                 <div className="w-full text-left mt-4 space-y-2.5">
-                  <div className="rounded-2xl border border-sky-200 dark:border-sky-900/30 bg-sky-50/70 dark:bg-sky-950/10 px-4 py-3">
+                  <div className="rounded-2xl border border-sky-200 dark:border-sky-900/30 bg-white dark:bg-zinc-900 px-4 py-3">
                     <p className="text-[10px] font-bold uppercase tracking-widest text-sky-600 dark:text-sky-400 mb-1">Para el cliente</p>
                     <p className="text-xs text-neutral-600 dark:text-zinc-300 leading-relaxed">
                       El cliente <strong>ya pagó por transferencia</strong>. Deja el pedido donde pueda recogerlo; el pago ya está cubierto.
                     </p>
                   </div>
-                  <div className="rounded-2xl border border-emerald-200 dark:border-emerald-900/30 bg-emerald-50/70 dark:bg-emerald-950/10 px-4 py-3">
+                  <div className="rounded-2xl border border-emerald-200 dark:border-emerald-900/30 bg-white dark:bg-zinc-900 px-4 py-3">
                     <p className="text-[10px] font-bold uppercase tracking-widest text-emerald-600 dark:text-emerald-400 mb-1">Para ti (repartidor)</p>
                     <p className="text-xs text-neutral-600 dark:text-zinc-300 leading-relaxed">
                       Al dejar el pedido en lugar seguro la entrega cuenta <strong>normalmente</strong>: se te paga el envío y se aplica la comisión habitual como en cualquier entrega.
@@ -5416,13 +5416,13 @@ export default function Home() {
                   Has esperado <strong className="text-neutral-700 dark:text-zinc-300">{waitMin} minutos</strong> y el cliente no salió a recibir.
                 </p>
                 <div className="w-full text-left mt-4 space-y-2.5">
-                  <div className="rounded-2xl border border-rose-200 dark:border-rose-900/30 bg-rose-50/70 dark:bg-rose-950/10 px-4 py-3">
+                  <div className="rounded-2xl border border-rose-200 dark:border-rose-900/30 bg-white dark:bg-zinc-900 px-4 py-3">
                     <p className="text-[10px] font-bold uppercase tracking-widest text-rose-500 mb-1">Para el cliente</p>
                     <p className="text-xs text-neutral-600 dark:text-zinc-300 leading-relaxed">
                       El pedido se marcará como entregado y se <strong>le cobrará el monto total</strong>. Su cuenta quedará suspendida hasta que liquide.
                     </p>
                   </div>
-                  <div className="rounded-2xl border border-amber-200 dark:border-amber-900/30 bg-amber-50/70 dark:bg-amber-950/10 px-4 py-3">
+                  <div className="rounded-2xl border border-amber-200 dark:border-amber-900/30 bg-white dark:bg-zinc-900 px-4 py-3">
                     <p className="text-[10px] font-bold uppercase tracking-widest text-amber-600 dark:text-amber-400 mb-1">Para ti (repartidor)</p>
                     <p className="text-xs text-neutral-600 dark:text-zinc-300 leading-relaxed">
                       Como el pedido es <strong>en efectivo y no cobraste</strong>, este pedido <strong>no genera ni comisión ni ganancia</strong> para ti: no deberás nada y no te pagarán nada por él.
