@@ -451,6 +451,7 @@ model Order {
   readyAt                 DateTime?
   driverArrivedAt         DateTime?
   driverArrivedAtCustomer DateTime?
+  lastArrivalReminderSentAt DateTime?
   lastPickupAlertedAt     DateTime?
 
   // Multi-order batching

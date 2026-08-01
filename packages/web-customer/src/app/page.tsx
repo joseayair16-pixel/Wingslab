@@ -398,6 +398,7 @@ const liveEvents = [
   'order:eta-updated',
   'order:driver-arrived',
   'order:driver_arrived',
+  'order:arrival-reminder',
   'order:delivered',
   'order:completed',
   'order:cancellation-approved',
@@ -3371,6 +3372,23 @@ export default function Home() {
             }
             if (navigator.vibrate) navigator.vibrate([800, 400, 800, 400, 800]);
           } catch (e) {}
+        } else if (eventName === 'order:arrival-reminder') {
+          try {
+            if (window.localStorage.getItem('customerAlertSoundEnabled') !== 'false') {
+              void playCustomerLlegueSound();
+            }
+            if (navigator.vibrate) navigator.vibrate([300, 100, 300]);
+          } catch (e) {}
+          const matchingOrder = orders.find((o) => o.id === payload.orderId);
+          showTransientNotice({
+            key: `socket-arrival-reminder:${liveEventKey}`,
+            title: '📦 El repartidor ya está en tu puerta',
+            description: `Lleva unos minutos esperándote en tu punto de entrega. Sal a recibir tu pedido${matchingOrder?.orderReference ? ` #${matchingOrder.orderReference}` : ''} para que llegue caliente.`,
+            tone: 'info',
+            requiresAcknowledgement: false,
+            orderReference: matchingOrder?.orderReference,
+            orderId: payload.orderId,
+          });
         } else if ([
           'order:preparing',
           'order:driver-assigned',
@@ -7578,6 +7596,7 @@ const notificationTitleMap: Record<(typeof liveEvents)[number], string> = {
   'order:eta-updated': 'Hora estimada actualizada',
   'order:driver-arrived': '¡Ya llegué!',
   'order:driver_arrived': '¡Ya llegué!',
+  'order:arrival-reminder': 'El repartidor ya está en tu puerta',
   'order:delivered': 'Pedido entregado',
   'order:completed': 'Pedido recogido',
   'order:cancellation-approved': 'Cancelación aprobada',
@@ -7620,6 +7639,10 @@ function buildNotificationMessage(
 
   if (eventName === 'order:driver-arrived' || eventName === 'order:driver_arrived') {
     return 'El repartidor está afuera de tu domicilio con tu pedido.';
+  }
+
+  if (eventName === 'order:arrival-reminder') {
+    return 'El repartidor sigue esperándote en tu punto de entrega. Sal a recibir tu pedido.';
   }
 
   return payload.orderId

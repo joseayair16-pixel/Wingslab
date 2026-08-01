@@ -31,6 +31,7 @@ import { scheduleDriverBillingOverdueCron, processOverdueDriverSettlements } fro
 import { startFeaturedExpirationJob } from './jobs/featured-expiration.job';
 import { startPickupReadyJob } from './jobs/pickup-ready.job';
 import { startCustomerPickupReminderJob } from './jobs/customer-pickup-reminder.job';
+import { startCustomerArrivalReminderJob } from './jobs/customer-arrival-reminder.job';
 import { startOverduePreparationJob } from './jobs/overdue-preparation.job';
 import { startCleanupProofsJob } from './jobs/cleanup-proofs.job';
 
@@ -206,6 +207,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   startFeaturedExpirationJob(fastify);
   startPickupReadyJob(fastify);
   startCustomerPickupReminderJob(fastify);
+  startCustomerArrivalReminderJob(fastify);
   startOverduePreparationJob(fastify);
   startCleanupProofsJob();
 
