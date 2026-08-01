@@ -345,9 +345,6 @@ function CarouselOrGrid({
         {children}
         <div className="w-4 shrink-0 sm:w-8" />
       </div>
-      <div
-        className={`pointer-events-none absolute inset-y-0 right-0 z-10 w-14 bg-gradient-to-l from-[#fafafa] to-transparent transition-opacity duration-300 ${canRight ? 'opacity-100' : 'opacity-0'}`}
-      />
       <button
         type="button"
         aria-label="Ver más productos"
@@ -4665,8 +4662,8 @@ function triggerHaptic(pattern: number | number[] = 10) {
                       isCarousel={isPromoCarousel || isLargeCategory}
                       gridClassName={
                         isStore && !isPromotions && category.products.length <= 4
-                          ? 'grid gap-4 sm:grid-cols-2 lg:grid-cols-2'
-                          : 'grid gap-4 sm:grid-cols-2 lg:grid-cols-3'
+                          ? 'grid grid-cols-2 gap-4 lg:grid-cols-2'
+                          : 'grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3'
                       }
                     >
                     {category.products.map((product) => {
@@ -4733,7 +4730,7 @@ function triggerHaptic(pattern: number | number[] = 10) {
                             </div>
                           </article>
                         ) : isLargeCategory ? (
-                          <article id={product.id} key={product.id} className="w-[44vw] shrink-0 snap-start sm:w-52 overflow-hidden rounded-2xl border border-black/[0.04] bg-white transition-all duration-300 shadow-[0_2px_12px_rgba(0,0,0,0.02)] hover:-translate-y-0.5 hover:shadow-[0_8px_24px_rgba(0,0,0,0.06)]">
+                          <article id={product.id} key={product.id} className="w-[42vw] shrink-0 snap-start sm:w-52 overflow-hidden rounded-2xl border border-black/[0.04] bg-white transition-all duration-300 shadow-[0_2px_12px_rgba(0,0,0,0.02)] hover:-translate-y-0.5 hover:shadow-[0_8px_24px_rgba(0,0,0,0.06)]">
                             <div className="flex h-full flex-col">
                               <div
                                 className="relative aspect-square overflow-hidden bg-neutral-50 cursor-pointer"
