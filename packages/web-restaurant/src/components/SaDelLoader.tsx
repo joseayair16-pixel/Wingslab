@@ -1,6 +1,7 @@
 'use client';
 
 import { memo, useState } from 'react';
+import { SADEL_LOGO_DATA_URI } from './sadelLogoDataUri';
 
 export const SaDelLoader = memo(function SaDelLoader({
   className = '',
@@ -33,7 +34,7 @@ export const SaDelLoader = memo(function SaDelLoader({
         <span className={textClass}>SaDeL</span>
       ) : (
         <img
-          src="/SaDeL.png"
+          src={SADEL_LOGO_DATA_URI}
           alt="SaDeL"
           width={400}
           height={103}
