@@ -1277,6 +1277,7 @@ export async function updateOrderStatusByDriver({
         estimatedDeliveryTime: new Date(),
         ...(shouldMarkCashCompleted ? { paymentStatus: PaymentStatus.COMPLETED } : {}),
         ...(shouldExemptDriverBilling ? { deliveryFee: 0, driverPlatformFee: 0 } : {}),
+        ...(action === 'no_show' ? { noShowReleasedAt: new Date() } : {}),
       },
       select: restaurantOrderWorkflowSelect,
     });

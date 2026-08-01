@@ -452,7 +452,8 @@ model Order {
   driverArrivedAt         DateTime?
   driverArrivedAtCustomer DateTime?
   lastArrivalReminderSentAt DateTime?
-  lastPickupAlertedAt     DateTime?
+  noShowReleasedAt          DateTime?
+  lastPickupAlertedAt       DateTime?
 
   // Multi-order batching
   batchId          String?

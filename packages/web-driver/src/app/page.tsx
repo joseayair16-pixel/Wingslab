@@ -144,6 +144,7 @@ type DriverOrder = {
   paymentMethod?: string;
   cashPaymentConfirmedAt?: string | null;
   driverArrivedAtCustomer?: string | null;
+  noShowReleasedAt?: string | null;
   latitude?: number;
   longitude?: number;
   tracking?: Array<{
@@ -3748,10 +3749,19 @@ export default function Home() {
                             >
                               <div>
                                 <div className="flex items-center gap-2">
-                                  <span className="h-5 w-5 rounded bg-emerald-500 text-white flex items-center justify-center text-[10px] font-bold shrink-0">✓</span>
+                                  {order.noShowReleasedAt ? (
+                                    <span className="h-5 w-5 rounded bg-rose-500 text-white flex items-center justify-center text-[10px] font-bold shrink-0" title="Cliente no salió a recibir">⚠</span>
+                                  ) : (
+                                    <span className="h-5 w-5 rounded bg-emerald-500 text-white flex items-center justify-center text-[10px] font-bold shrink-0">✓</span>
+                                  )}
                                   <span className="text-xs font-black text-neutral-950 dark:text-zinc-50 truncate">
                                     {order.restaurant.name} — {order.customer?.user?.name ?? 'Cliente'} #{order.dailyCounter ?? '?'}
                                   </span>
+                                  {order.noShowReleasedAt && (
+                                    <span className="text-[8px] font-black uppercase tracking-wider text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-900/30 rounded-full px-2 py-0.5 shrink-0">
+                                      Cliente no salió
+                                    </span>
+                                  )}
                                 </div>
                                 <p className="text-[9px] text-neutral-400 dark:text-zinc-500 mt-0.5 font-mono tracking-tight">
                                   {order.orderReference}
@@ -5132,15 +5142,33 @@ export default function Home() {
 
             <div className="flex-1 overflow-y-auto p-5 pt-4 space-y-3">
               {/* Fecha de entrega */}
-              <div className="flex items-center justify-between px-4 py-3 rounded-2xl bg-sky-50/60 dark:bg-sky-950/20 border border-sky-100/80 dark:border-sky-900/40">
-                <span className="text-[9px] font-black uppercase tracking-wider text-sky-600 dark:text-sky-400 flex items-center gap-1.5">
+              <div className={`flex items-center justify-between px-4 py-3 rounded-2xl border ${
+                selectedHistoryOrder.noShowReleasedAt
+                  ? 'bg-rose-50/60 dark:bg-rose-950/20 border-rose-100/80 dark:border-rose-900/40'
+                  : 'bg-sky-50/60 dark:bg-sky-950/20 border-sky-100/80 dark:border-sky-900/40'
+              }`}>
+                <span className={`text-[9px] font-black uppercase tracking-wider flex items-center gap-1.5 ${
+                  selectedHistoryOrder.noShowReleasedAt ? 'text-rose-600 dark:text-rose-400' : 'text-sky-600 dark:text-sky-400'
+                }`}>
                   <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                  Entregado
+                  {selectedHistoryOrder.noShowReleasedAt ? 'Liberado — cliente no salió' : 'Entregado'}
                 </span>
                 <span className="text-xs font-bold text-neutral-800 dark:text-zinc-200">
                   {selectedHistoryOrder.deliveredAt ? formatDate(selectedHistoryOrder.deliveredAt) : '—'}
                 </span>
               </div>
+
+              {selectedHistoryOrder.noShowReleasedAt && (
+                <div className="flex items-start gap-3 px-4 py-3 rounded-2xl bg-amber-50/70 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/30">
+                  <span className="text-base shrink-0 mt-0.5">⚠️</span>
+                  <div>
+                    <p className="text-[11px] font-black text-amber-700 dark:text-amber-400">Pedido liberado con deuda</p>
+                    <p className="text-[10px] text-amber-700/80 dark:text-amber-400/80 mt-0.5 leading-relaxed">
+                      El comensal no salió a recibir. Se le cobró el total del pedido y quedó con saldo pendiente hasta que liquide. Este viaje no genera comisión para ti.
+                    </p>
+                  </div>
+                </div>
+              )}
 
               {/* Restaurante / Tienda */}
               <div className="p-4 rounded-2xl bg-white dark:bg-zinc-900/60 border border-neutral-100 dark:border-zinc-800 shadow-sm">
@@ -5215,7 +5243,9 @@ export default function Home() {
                 </div>
                 <div className="divide-y divide-neutral-100 dark:divide-zinc-800">
                   <div className="flex justify-between items-center px-4 py-3">
-                    <span className="text-[11px] font-bold text-neutral-600 dark:text-zinc-400">Cobrado al Comensal</span>
+                    <span className="text-[11px] font-bold text-neutral-600 dark:text-zinc-400">
+                      {selectedHistoryOrder.noShowReleasedAt ? 'Deuda del Comensal (pendiente)' : 'Cobrado al Comensal'}
+                    </span>
                     <span className="text-sm font-black text-neutral-950 dark:text-zinc-50">
                       {formatCurrency(selectedHistoryOrder.totalAmount || 0)}
                     </span>

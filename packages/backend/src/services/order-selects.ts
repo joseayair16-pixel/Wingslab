@@ -47,6 +47,7 @@ const orderBaseScalarSelect = {
   driverArrivedAt: true,
   driverArrivedAtCustomer: true,
   lastArrivalReminderSentAt: true,
+  noShowReleasedAt: true,
   lastPickupAlertedAt: true,
   batchId: true,
   deliverySequence: true,
