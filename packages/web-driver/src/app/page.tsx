@@ -5241,15 +5241,28 @@ export default function Home() {
                     Resumen Financiero
                   </span>
                 </div>
-                <div className="divide-y divide-neutral-100 dark:divide-zinc-800">
-                  <div className="flex justify-between items-center px-4 py-3">
-                    <span className="text-[11px] font-bold text-neutral-600 dark:text-zinc-400">
-                      {selectedHistoryOrder.noShowReleasedAt ? 'Deuda del Comensal (pendiente)' : 'Cobrado al Comensal'}
-                    </span>
-                    <span className="text-sm font-black text-neutral-950 dark:text-zinc-50">
-                      {formatCurrency(selectedHistoryOrder.totalAmount || 0)}
-                    </span>
-                  </div>
+                  <div className="divide-y divide-neutral-100 dark:divide-zinc-800">
+                  {selectedHistoryOrder.noShowReleasedAt ? (
+                    <>
+                      <div className="flex justify-between items-center px-4 py-3 bg-amber-50/60 dark:bg-amber-950/10">
+                        <span className="text-[11px] font-bold text-amber-700 dark:text-amber-400">Deuda del Comensal (pendiente)</span>
+                        <span className="text-sm font-black text-amber-600 dark:text-amber-400">
+                          {formatCurrency(selectedHistoryOrder.totalAmount || 0)}
+                        </span>
+                      </div>
+                      <div className="flex justify-between items-center px-4 py-3">
+                        <span className="text-[11px] font-bold text-neutral-600 dark:text-zinc-400">Recibido del Comensal</span>
+                        <span className="text-sm font-black text-neutral-950 dark:text-zinc-50">$0.00</span>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="flex justify-between items-center px-4 py-3">
+                      <span className="text-[11px] font-bold text-neutral-600 dark:text-zinc-400">Cobrado al Comensal</span>
+                      <span className="text-sm font-black text-neutral-950 dark:text-zinc-50">
+                        {formatCurrency(selectedHistoryOrder.totalAmount || 0)}
+                      </span>
+                    </div>
+                  )}
                   <div className="flex justify-between items-center px-4 py-3">
                     <span className="text-[11px] font-bold text-neutral-600 dark:text-zinc-400">Pagado al{selectedHistoryOrder.restaurant.businessType && selectedHistoryOrder.restaurant.businessType !== 'RESTAURANT' ? 'a Tienda' : ' Restaurante'}</span>
                     <span className="text-sm font-black text-amber-600 dark:text-amber-400">
