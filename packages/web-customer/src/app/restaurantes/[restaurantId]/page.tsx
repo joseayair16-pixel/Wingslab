@@ -10,6 +10,7 @@ import { AuthModal } from '../../../components/AuthModal';
 import { CompactActiveOrderBanner, getEtaWindowMinutes, formatEstimatedArrivalMinutes } from '../../../components/CompactActiveOrderBanner';
 import RatingModal from '../../../components/RatingModal';
 import { useForegroundPolling } from '../../../hooks/useForegroundPolling';
+import { SaDelLoader } from '../../../components/SaDelLoader';
 import { SaDelLogo } from '../../../components/SaDelLogo';
 import CartDrawer from '../../../components/CartDrawer';
 type PaymentMethod = 'CASH' | 'TRANSFER';
@@ -5228,10 +5229,7 @@ function triggerHaptic(pattern: number | number[] = 10) {
             <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-neutral-50/50">
               {loadingChat ? (
                 <div className="h-full flex items-center justify-center text-neutral-500">
-                  <div className="flex flex-col items-center gap-2">
-                    <div className="w-6 h-6 border-2 border-sky-500 border-t-transparent rounded-full animate-spin"></div>
-                    <p className="text-sm">Cargando chat...</p>
-                  </div>
+                  <SaDelLoader size="sm" label="Cargando chat..." />
                 </div>
               ) : chatMessages.length === 0 ? (
                 <div className="h-full flex flex-col items-center justify-center text-center p-6 text-neutral-400">

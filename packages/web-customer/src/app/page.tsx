@@ -31,6 +31,7 @@ import { RestaurantSearchBar } from '../components/RestaurantSearchBar';
 import { AuthModal } from '../components/AuthModal';
 import { ChatPanel } from '../components/ChatPanel';
 import { SaDelLogo } from '../components/SaDelLogo';
+import { SaDelLoader } from '../components/SaDelLoader';
 import { ZonesModal } from '../components/ZonesModal';
 import CartDrawer from '../components/CartDrawer';
 import { CompactActiveOrderBanner, buildTimelineSteps, getEtaWindowMinutes, formatEstimatedArrivalMinutes } from '../components/CompactActiveOrderBanner';
@@ -3844,7 +3845,7 @@ export default function Home() {
   if (!isAuthChecked || !isLocationChecked) {
     return (
       <div className="min-h-screen bg-[#fafafa] flex items-center justify-center">
-        <div className="text-neutral-500 text-sm font-medium">Cargando...</div>
+        <SaDelLoader />
       </div>
     );
   }
@@ -4655,9 +4656,8 @@ export default function Home() {
                 
                 <div className="divide-y divide-black/[0.03]">
                   {loadingSupportTickets ? (
-                    <div className="py-16 text-center animate-pulse">
-                      <div className="w-10 h-10 border-4 border-neutral-200 border-t-sky-500 rounded-full animate-spin mx-auto mb-4"></div>
-                      <p className="text-sm font-semibold text-neutral-400">Cargando reportes...</p>
+                    <div className="py-16 text-center">
+                      <SaDelLoader size="sm" label="Cargando reportes..." />
                     </div>
                   ) : supportTickets.length === 0 ? (
                     <div className="py-20 text-center px-4">
@@ -5439,8 +5439,7 @@ export default function Home() {
               <div className="px-6 py-6 space-y-6">
                 {loadingDetail ? (
                   <div className="py-16 text-center">
-                    <div className="mx-auto h-8 w-8 animate-spin rounded-full border-4 border-neutral-200 border-t-neutral-900"></div>
-                    <p className="mt-4 text-sm font-medium text-neutral-500">Cargando detalles...</p>
+                    <SaDelLoader size="sm" label="Cargando detalles..." />
                   </div>
                 ) : selectedOrder ? (
                   <div className="space-y-6">

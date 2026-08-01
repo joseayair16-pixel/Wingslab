@@ -709,11 +709,6 @@ export const HomeView = React.memo(function HomeView({
                                 Destacado
                               </span>
                             )}
-                            {primaryCategory && (
-                              <span className="rounded-full bg-white/92 px-3 py-1 text-xs font-semibold text-neutral-900 shadow-sm backdrop-blur-sm">
-                                {primaryCategory.name}
-                              </span>
-                            )}
                             {(restaurant as any).businessType && (restaurant as any).businessType !== 'RESTAURANT' && (
                               <span className="rounded-full bg-violet-500/90 px-3 py-1 text-xs font-bold text-white shadow-sm backdrop-blur-sm">
                                 {businessTypeLabel((restaurant as any).businessType)}
