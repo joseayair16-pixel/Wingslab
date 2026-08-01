@@ -295,9 +295,11 @@ function getUserLocationQuery(): string {
 function CarouselOrGrid({
   isCarousel,
   children,
+  gridClassName = 'grid gap-4 sm:grid-cols-2 lg:grid-cols-3',
 }: {
   isCarousel: boolean;
   children: React.ReactNode;
+  gridClassName?: string;
 }) {
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const [canLeft, setCanLeft] = useState(false);
@@ -325,7 +327,7 @@ function CarouselOrGrid({
   }, [isCarousel, updateArrows]);
 
   if (!isCarousel) {
-    return <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">{children}</div>;
+    return <div className={gridClassName}>{children}</div>;
   }
 
   const scrollByAmount = (dir: number) => {
@@ -894,6 +896,23 @@ export default function RestaurantPage({
   const [customizingQuantity, setCustomizingQuantity] = useState(1);
   const [customizingWeight, setCustomizingWeight] = useState(0);
   const [customizingInstructions, setCustomizingInstructions] = useState('');
+
+  const openProductPreview = (product: PublicRestaurantDetail['categories'][number]['products'][number]) => {
+    const imgs = product.images?.length ? product.images : product.image ? [product.image] : [];
+    if (!imgs.length) return;
+    setPreviewProduct({
+      images: imgs,
+      name: product.name,
+      description: product.description,
+      price: product.price,
+      discountPrice: product.discountPrice,
+      sellBy: product.sellBy,
+      unitPrice: product.unitPrice,
+      id: product.id,
+      optionGroups: product.optionGroups,
+    });
+    setPreviewIndex(0);
+  };
 
   const handleCopyText = (text: string | undefined | null, field: 'account' | 'beneficiary' | 'amount') => {
     if (!text) return;
@@ -4642,7 +4661,14 @@ function triggerHaptic(pattern: number | number[] = 10) {
                   </div>
 
                   <div className={isPromoCarousel || isLargeCategory ? "relative mt-5" : "mt-5 overflow-hidden"}>
-                    <CarouselOrGrid isCarousel={isPromoCarousel || isLargeCategory}>
+                    <CarouselOrGrid
+                      isCarousel={isPromoCarousel || isLargeCategory}
+                      gridClassName={
+                        isStore && !isPromotions && category.products.length <= 4
+                          ? 'grid gap-4 sm:grid-cols-2 lg:grid-cols-2'
+                          : 'grid gap-4 sm:grid-cols-2 lg:grid-cols-3'
+                      }
+                    >
                     {category.products.map((product) => {
                       const quantity = getCartQuantity(product.id);
 
@@ -4711,23 +4737,7 @@ function triggerHaptic(pattern: number | number[] = 10) {
                             <div className="flex h-full flex-col">
                               <div
                                 className="relative aspect-square overflow-hidden bg-neutral-50 cursor-pointer"
-                                onClick={() => {
-                                  const imgs = product.images?.length ? product.images : product.image ? [product.image] : [];
-                                  if (imgs.length) {
-                                    setPreviewProduct({
-                                      images: imgs,
-                                      name: product.name,
-                                      description: product.description,
-                                      price: product.price,
-                                      discountPrice: product.discountPrice,
-                                      sellBy: product.sellBy,
-                                      unitPrice: product.unitPrice,
-                                      id: product.id,
-                                      optionGroups: product.optionGroups,
-                                    });
-                                    setPreviewIndex(0);
-                                  }
-                                }}
+                                onClick={() => openProductPreview(product)}
                               >
                                 {product.image ? (
                                   <img
@@ -4786,7 +4796,10 @@ function triggerHaptic(pattern: number | number[] = 10) {
                         ) : isStore ? (
                           <article id={product.id} key={product.id} className="overflow-hidden rounded-2xl border border-black/[0.04] bg-white transition-all duration-300 shadow-[0_2px_12px_rgba(0,0,0,0.02)] hover:-translate-y-0.5 hover:shadow-[0_8px_24px_rgba(0,0,0,0.06)]">
                             <div className="flex h-full flex-col">
-                              <div className="relative aspect-square overflow-hidden bg-neutral-50">
+                              <div
+                                className="relative aspect-square overflow-hidden bg-neutral-50 cursor-pointer"
+                                onClick={() => openProductPreview(product)}
+                              >
                                 {product.image ? (
                                   <img
                                     src={(product.images?.length ?? 0) > 1 && carouselIndexMap[product.id] ? product.images![carouselIndexMap[product.id]] : product.image}
