@@ -6938,7 +6938,7 @@ export default function Home() {
                       }}
                     />
                     {proofFileSource ? (
-                      <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-3">
+                      <div className="rounded-2xl border border-sky-200 bg-sky-50 p-3">
                         <div className="flex items-center gap-3">
                           <img
                             src={proofFileSource}
@@ -6946,13 +6946,13 @@ export default function Home() {
                             className="h-14 w-14 rounded-xl object-cover border border-black/5 bg-white shrink-0"
                           />
                           <div className="flex-1 min-w-0">
-                            <p className="text-xs font-bold text-emerald-700 truncate">{proofFileName}</p>
-                            <p className="text-[10px] text-emerald-600/70">Comprobante listo para enviar</p>
+                            <p className="text-xs font-bold text-sky-700 truncate">{proofFileName}</p>
+                            <p className="text-[10px] text-sky-600/70">Comprobante listo para enviar</p>
                           </div>
                           <button
                             type="button"
                             onClick={() => { setProofFileName(''); setProofFileSource(''); }}
-                            className="text-xs font-bold text-emerald-700"
+                            className="text-xs font-bold text-sky-700"
                           >
                             Quitar
                           </button>
@@ -6960,7 +6960,7 @@ export default function Home() {
                         <button
                           type="button"
                           onClick={() => setViewingDebtProof(proofFileSource)}
-                          className="mt-2 text-[10px] font-bold text-emerald-700 underline"
+                          className="mt-2 text-[10px] font-bold text-sky-700 underline"
                         >
                           Ver comprobante completo
                         </button>
