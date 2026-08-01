@@ -714,14 +714,20 @@ export default function RestaurantPage({
     searchParams?.fulfillment === 'PICKUP' ? 'PICKUP' : 'DELIVERY'
   );
 
+  const autoOpenCheckoutDoneRef = useRef(false);
+
   useEffect(() => {
-    if (searchParams?.checkout === 'true') {
-      setIsCheckoutOpen(true);
-    }
     if (searchParams?.fulfillment === 'PICKUP') {
       setFulfillmentType('PICKUP');
     }
   }, [searchParams]);
+
+  useEffect(() => {
+    if (searchParams?.checkout === 'true' && !autoOpenCheckoutDoneRef.current && !loadingRestaurant) {
+      autoOpenCheckoutDoneRef.current = true;
+      setIsCheckoutOpen(true);
+    }
+  }, [searchParams, loadingRestaurant]);
 
   useEffect(() => {
     if (searchParams?.product && restaurant) {
@@ -3649,7 +3655,7 @@ function triggerHaptic(pattern: number | number[] = 10) {
                               {locatingAddress ? (
                                 <span className="h-5 w-5 animate-spin rounded-full border-2 border-white/30 border-t-white" />
                               ) : (
-                                <svg className="h-5 w-5 shrink-0" viewBox="0 0 24 24" fill="currentColor">
+                                <svg className="h-5 w-5 shrink-0" viewBox="0 0 24 24" fill="#ef4444">
                                   <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5A2.5 2.5 0 1 1 12 6a2.5 2.5 0 0 1 0 5z" />
                                 </svg>
                               )}
@@ -3681,9 +3687,9 @@ function triggerHaptic(pattern: number | number[] = 10) {
                                   className="flex w-full items-center justify-center gap-2 rounded-2xl border border-neutral-200 bg-white px-4 py-3 text-xs font-bold text-neutral-600 transition-all hover:border-neutral-300 hover:text-neutral-900 active:scale-[0.98] shadow-sm"
                                 >
                                   <svg className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17.593 3.322c1.1.128 1.907 1.077 1.907 2.185V21L12 17.25 4.5 21V5.507c0-1.108.806-2.057 1.907-2.185a48.507 48.507 0 0111.186 0z" />
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" />
                                   </svg>
-                                  Mis direcciones guardadas ({addresses.length})
+                                  Ver direcciones guardadas ({addresses.length})
                                 </button>
                               </div>
                             )}
