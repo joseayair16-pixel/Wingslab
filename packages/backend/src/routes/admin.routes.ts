@@ -2929,5 +2929,142 @@ export async function registerAdminRoutes(fastify: FastifyInstance): Promise<voi
         });
       }
     });
+
+    // ─── DEUDA DE CLIENTES (pedidos no recibidos) ───────────────────────────
+    admin.get('/admin/customer-settlements', async (request, reply) => {
+      const query = z.object({ status: z.string().optional() }).safeParse(request.query);
+      const status = query.success ? query.data.status : undefined;
+      const allowed = ['PENDING', 'IN_REVIEW', 'PAID', 'OVERDUE', 'REJECTED'];
+      const statusFilter = status && allowed.includes(status) ? status : undefined;
+
+      const [settlements, total] = await Promise.all([
+        prisma.customerBillingSettlement.findMany({
+          where: statusFilter ? { status: statusFilter as any } : undefined,
+          orderBy: { createdAt: 'desc' },
+          take: 100,
+          include: {
+            customer: {
+              select: {
+                id: true,
+                user: { select: { id: true, name: true, phone: true, status: true } },
+              },
+            },
+            order: {
+              select: {
+                orderReference: true,
+                totalAmount: true,
+                restaurant: { select: { name: true } },
+              },
+            },
+          },
+        }),
+        prisma.customerBillingSettlement.count({
+          where: statusFilter ? { status: statusFilter as any } : undefined,
+        }),
+      ]);
+
+      return reply.send({ success: true, data: { settlements, total } });
+    });
+
+    admin.patch('/admin/customer-settlements/:id', async (request, reply) => {
+      const params = z.object({ id: z.string().min(1) }).safeParse(request.params);
+      const body = z.object({
+        status: z.enum(['PAID', 'REJECTED', 'IN_REVIEW']),
+      }).safeParse(request.body);
+
+      if (!params.success || !body.success) {
+        return reply.status(400).send({
+          success: false,
+          error: { code: 'INVALID_PAYLOAD', message: 'Datos invalidos.' },
+        });
+      }
+
+      try {
+        const updatedSettlement = await prisma.$transaction(async (tx) => {
+          const settlement = await tx.customerBillingSettlement.update({
+            where: { id: params.data.id },
+            data: {
+              status: body.data.status,
+              settledAt: body.data.status === 'PAID' ? new Date() : undefined,
+              ...(body.data.status === 'REJECTED' ? { paymentProofUrl: null } : {}),
+            },
+            include: {
+              customer: {
+                select: {
+                  id: true,
+                  userId: true,
+                  isSuspendedByDebt: true,
+                  user: { select: { id: true, status: true, name: true } },
+                },
+              },
+            },
+          });
+
+          if (body.data.status === 'PAID' && settlement.customer?.isSuspendedByDebt) {
+            await tx.customer.update({
+              where: { id: settlement.customerId },
+              data: { isSuspendedByDebt: false, debtAmount: 0 },
+            });
+
+            // Reactivate only if the user is suspended (either manually by admin
+            // or automatically by this system). Clearing the debt removes the
+            // system suspension, so restoring the account is safe.
+            if (settlement.customer.user.status === 'SUSPENDED') {
+              await tx.user.update({
+                where: { id: settlement.customer.userId },
+                data: { status: 'ACTIVE' },
+              });
+            }
+          }
+
+          return settlement;
+        });
+
+        // Notify the customer in real-time + push so their app unlocks.
+        const customerUserId = updatedSettlement.customer?.userId;
+        if (customerUserId) {
+          emitNotification(fastify.io, customerUserId, 'CUSTOMER', body.data.status === 'PAID' ? 'debt:paid' : 'debt:rejected', {
+            settlementId: updatedSettlement.id,
+          });
+
+          try {
+            if (body.data.status === 'PAID') {
+              await sendPushNotification(customerUserId, {
+                title: '¡Tu cuenta ha sido reactivada!',
+                body: 'Gracias por liquidar tu saldo pendiente. Ya puedes volver a pedir en SaDeL.',
+                icon: '/SaDeL.png',
+                badge: '/SaDeL.png',
+                vibrate: [500, 100, 500, 100, 800],
+                requireInteraction: true,
+                data: { event: 'debt:paid', url: '/' },
+              });
+            } else if (body.data.status === 'REJECTED') {
+              await sendPushNotification(customerUserId, {
+                title: 'Comprobante no valido',
+                body: 'No pudimos verificar tu comprobante de pago. Sube uno nuevo desde la app para liquidar tu saldo.',
+                icon: '/SaDeL.png',
+                badge: '/SaDeL.png',
+                vibrate: [300, 100, 300],
+                requireInteraction: true,
+                data: { event: 'debt:rejected', url: '/mi-deuda' },
+              });
+            }
+          } catch (pushErr) {
+            request.log.error(pushErr as any, '[Push] Error al notificar estado de deuda');
+          }
+        }
+
+        return reply.send({
+          success: true,
+          message: `Estado actualizado a ${body.data.status}`,
+          data: updatedSettlement,
+        });
+      } catch (error) {
+        return reply.status(500).send({
+          success: false,
+          error: { code: 'UPDATE_ERROR', message: 'No se pudo actualizar el estado de la deuda.' },
+        });
+      }
+    });
   });
 }

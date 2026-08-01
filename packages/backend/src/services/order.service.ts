@@ -81,7 +81,8 @@ function isLocationCapturedRecently(capturedAt?: string | number): boolean {
 }
 
 function validateCustomerLocation(input: OrderInput, customerUserId: string) {
-  const requireLocation = String(process.env.REQUIRE_CUSTOMER_LOCATION_FOR_ORDERS || 'true').toLowerCase() !== 'false';
+  const requireLocation =
+    String(process.env.REQUIRE_CUSTOMER_LOCATION_FOR_ORDERS || 'true').toLowerCase() !== 'false';
   if (!requireLocation) return;
 
   // Si el frontend indica que la ubicación NO está verificada (dirección manual, no GPS),
@@ -204,6 +205,23 @@ export async function createOrderForCustomer({
     throw new AppError(404, 'CUSTOMER_NOT_FOUND', 'No se encontro el perfil del cliente.');
   }
 
+  // Bloqueo por deuda de pedido no recibido (o suspensión manual de la cuenta).
+  if (customer.isSuspendedByDebt && customer.debtAmount > 0) {
+    throw new AppError(
+      403,
+      'CUSTOMER_SUSPENDED_BY_DEBT',
+      'Tienes un saldo pendiente por un pedido no recibido. Liquida tu deuda para volver a pedir.'
+    );
+  }
+
+  if (customer.user.status === 'SUSPENDED') {
+    throw new AppError(
+      403,
+      'ACCOUNT_SUSPENDED',
+      'Tu cuenta ha sido suspendida. Contacta a soporte.'
+    );
+  }
+
   // Idempotencia: si el cliente reintenta con la misma clientOrderKey (red caída,
   // doble toque, timeout con retry), devolvemos el pedido ya creado sin duplicarlo.
   if (input.clientOrderKey) {
@@ -214,7 +232,11 @@ export async function createOrderForCustomer({
 
     if (existingByKey) {
       if (existingByKey.customerId !== customer.id) {
-        throw new AppError(403, 'ORDER_IDEMPOTENCY_FORBIDDEN', 'La clave del pedido no pertenece a este cliente.');
+        throw new AppError(
+          403,
+          'ORDER_IDEMPOTENCY_FORBIDDEN',
+          'La clave del pedido no pertenece a este cliente.'
+        );
       }
       logger.info('Order idempotency hit', {
         orderId: existingByKey.id,
@@ -263,9 +285,12 @@ export async function createOrderForCustomer({
 
     const { latitude, longitude, accuracy, capturedAt } = input.currentLocation;
     const hasValidCoords =
-      Number.isFinite(latitude) && Number.isFinite(longitude) &&
-      latitude >= -90 && latitude <= 90 &&
-      longitude >= -180 && longitude <= 180;
+      Number.isFinite(latitude) &&
+      Number.isFinite(longitude) &&
+      latitude >= -90 &&
+      latitude <= 90 &&
+      longitude >= -180 &&
+      longitude <= 180;
 
     if (!hasValidCoords || !isLocationCapturedRecently(capturedAt)) {
       throw new AppError(
@@ -284,18 +309,16 @@ export async function createOrderForCustomer({
       );
     }
 
-    const restaurantLocation = restaurant.latitude != null && restaurant.longitude != null
-      ? { latitude: restaurant.latitude, longitude: restaurant.longitude }
-      : null;
+    const restaurantLocation =
+      restaurant.latitude != null && restaurant.longitude != null
+        ? { latitude: restaurant.latitude, longitude: restaurant.longitude }
+        : null;
 
     if (restaurantLocation) {
-      const distanceKm = getDistanceInKm(
-        { latitude, longitude },
-        restaurantLocation
-      );
+      const distanceKm = getDistanceInKm({ latitude, longitude }, restaurantLocation);
       const effectiveRadius = restaurant.hasOwnDelivery
-        ? (restaurant.deliveryRadius || 3)
-        : (regionConfig?.deliveryRadius || 20);
+        ? restaurant.deliveryRadius || 3
+        : regionConfig?.deliveryRadius || 20;
       const bufferKm = parseFloat(String(process.env.DELIVERY_RADIUS_BUFFER_KM || '0.1')) || 0.1;
 
       if (distanceKm > effectiveRadius + bufferKm) {
@@ -310,14 +333,17 @@ export async function createOrderForCustomer({
 
   if (!isPickup) {
     const effectiveDeliveryRadius = restaurant.hasOwnDelivery
-      ? (restaurant.deliveryRadius || 3)
-      : (regionConfig?.deliveryRadius || 20);
+      ? restaurant.deliveryRadius || 3
+      : regionConfig?.deliveryRadius || 20;
 
     validateCustomerLocation(input, customerUserId);
 
     // Validar que la dirección de entrega esté dentro del radio del restaurante
     try {
-      if (typeof input.deliveryAddress?.latitude === 'number' && typeof input.deliveryAddress?.longitude === 'number') {
+      if (
+        typeof input.deliveryAddress?.latitude === 'number' &&
+        typeof input.deliveryAddress?.longitude === 'number'
+      ) {
         const customerLocation = {
           latitude: input.deliveryAddress.latitude,
           longitude: input.deliveryAddress.longitude,
@@ -328,10 +354,14 @@ export async function createOrderForCustomer({
           longitude: restaurant.longitude,
         };
 
-        if (typeof restaurantLocation.latitude === 'number' && typeof restaurantLocation.longitude === 'number') {
+        if (
+          typeof restaurantLocation.latitude === 'number' &&
+          typeof restaurantLocation.longitude === 'number'
+        ) {
           const distanceKm = getDistanceInKm(customerLocation, restaurantLocation);
           const maxRadius = effectiveDeliveryRadius;
-          const bufferKm = parseFloat(String(process.env.DELIVERY_RADIUS_BUFFER_KM || '0.1')) || 0.1;
+          const bufferKm =
+            parseFloat(String(process.env.DELIVERY_RADIUS_BUFFER_KM || '0.1')) || 0.1;
           const allowedRadius = maxRadius + bufferKm;
 
           if (distanceKm > allowedRadius) {
@@ -356,11 +386,22 @@ export async function createOrderForCustomer({
       }
     } catch (err) {
       if (err instanceof AppError) throw err;
-      throw new AppError(500, 'DELIVERY_RADIUS_VALIDATION_FAILED', 'Error al validar la distancia de entrega.');
+      throw new AppError(
+        500,
+        'DELIVERY_RADIUS_VALIDATION_FAILED',
+        'Error al validar la distancia de entrega.'
+      );
     }
   }
 
-  if (!isRestaurantOpenNow(restaurant.status, restaurant.isAcceptingOrders, restaurant.isPaused, restaurant.operatingHours)) {
+  if (
+    !isRestaurantOpenNow(
+      restaurant.status,
+      restaurant.isAcceptingOrders,
+      restaurant.isPaused,
+      restaurant.operatingHours
+    )
+  ) {
     throw new AppError(
       409,
       'RESTAURANT_NOT_AVAILABLE',
@@ -505,7 +546,11 @@ export async function createOrderForCustomer({
       const minG = (product as any).minWeightG || 100;
       const maxG = (product as any).maxWeightG || 5000;
       if (weightG < minG || weightG > maxG) {
-        throw new AppError(400, 'WEIGHT_OUT_OF_RANGE', `El peso debe estar entre ${minG}g y ${maxG}g.`);
+        throw new AppError(
+          400,
+          'WEIGHT_OUT_OF_RANGE',
+          `El peso debe estar entre ${minG}g y ${maxG}g.`
+        );
       }
       const unitPricePerKg = product.discountPrice ?? (product as any).unitPrice ?? product.price;
       unitPrice = unitPricePerKg;
@@ -516,9 +561,7 @@ export async function createOrderForCustomer({
       quantity = item.quantity;
     }
 
-    const itemSubtotal = sellBy === 'WEIGHT'
-      ? (unitPrice * weightG!) / 1000
-      : unitPrice * quantity;
+    const itemSubtotal = sellBy === 'WEIGHT' ? (unitPrice * weightG!) / 1000 : unitPrice * quantity;
     calculatedSubtotal += itemSubtotal;
 
     return {
@@ -538,12 +581,16 @@ export async function createOrderForCustomer({
   const serviceFee = restaurant.serviceFee || 0;
   const platformFee = restaurant.platformFeePerOrder || 0;
 
-  const deliveryDistanceKm = !isPickup && restaurant.latitude != null && restaurant.longitude != null && input.deliveryAddress
-    ? getDistanceInKm(
-        { latitude: restaurant.latitude, longitude: restaurant.longitude },
-        { latitude: input.deliveryAddress.latitude, longitude: input.deliveryAddress.longitude },
-      )
-    : null;
+  const deliveryDistanceKm =
+    !isPickup &&
+    restaurant.latitude != null &&
+    restaurant.longitude != null &&
+    input.deliveryAddress
+      ? getDistanceInKm(
+          { latitude: restaurant.latitude, longitude: restaurant.longitude },
+          { latitude: input.deliveryAddress.latitude, longitude: input.deliveryAddress.longitude }
+        )
+      : null;
 
   let deliveryFee = 0;
   if (!isPickup) {
@@ -565,7 +612,11 @@ export async function createOrderForCustomer({
   const { estimatedDeliveryTime } = calculateOrderEta({
     restaurant,
     order: isPickup
-      ? { latitude: restaurant.latitude, longitude: restaurant.longitude, paymentMethod: input.paymentMethod }
+      ? {
+          latitude: restaurant.latitude,
+          longitude: restaurant.longitude,
+          paymentMethod: input.paymentMethod,
+        }
       : {
           latitude: input.deliveryAddress!.latitude,
           longitude: input.deliveryAddress!.longitude,
@@ -592,8 +643,15 @@ export async function createOrderForCustomer({
       const activeOrdersCount = await tx.order.count({
         where: {
           customerId: customer.id,
-          status: { notIn: [OrderStatus.DELIVERED, OrderStatus.COMPLETED, OrderStatus.CANCELLED, OrderStatus.REJECTED] }
-        }
+          status: {
+            notIn: [
+              OrderStatus.DELIVERED,
+              OrderStatus.COMPLETED,
+              OrderStatus.CANCELLED,
+              OrderStatus.REJECTED,
+            ],
+          },
+        },
       });
 
       if (activeOrdersCount >= 2) {
@@ -644,18 +702,24 @@ export async function createOrderForCustomer({
           );
         }
 
-        const verificationTtlDays = parseInt(String(process.env.ADDRESS_VERIFICATION_TTL_DAYS || '7'), 10) || 7;
+        const verificationTtlDays =
+          parseInt(String(process.env.ADDRESS_VERIFICATION_TTL_DAYS || '7'), 10) || 7;
         let verifiedAt = (address as any).locationVerifiedAt;
-        const isVerificationStale = !verifiedAt || (Date.now() - new Date(verifiedAt).getTime()) > verificationTtlDays * 24 * 60 * 60 * 1000;
+        const isVerificationStale =
+          !verifiedAt ||
+          Date.now() - new Date(verifiedAt).getTime() > verificationTtlDays * 24 * 60 * 60 * 1000;
 
         if (isVerificationStale) {
           if (input.paymentMethod === PaymentMethod.CASH) {
             const location = input.currentLocation;
             const hasValidGps =
               location &&
-              Number.isFinite(location.latitude) && Number.isFinite(location.longitude) &&
-              location.latitude >= -90 && location.latitude <= 90 &&
-              location.longitude >= -180 && location.longitude <= 180 &&
+              Number.isFinite(location.latitude) &&
+              Number.isFinite(location.longitude) &&
+              location.latitude >= -90 &&
+              location.latitude <= 90 &&
+              location.longitude >= -180 &&
+              location.longitude <= 180 &&
               isLocationCapturedRecently(location.capturedAt);
 
             if (!hasValidGps) {
@@ -668,7 +732,10 @@ export async function createOrderForCustomer({
 
             const distanceKm = getDistanceInKm(
               { latitude: location.latitude, longitude: location.longitude },
-              { latitude: input.deliveryAddress!.latitude, longitude: input.deliveryAddress!.longitude }
+              {
+                latitude: input.deliveryAddress!.latitude,
+                longitude: input.deliveryAddress!.longitude,
+              }
             );
             if (distanceKm > 1) {
               throw new AppError(
@@ -692,7 +759,10 @@ export async function createOrderForCustomer({
           // For TRANSFER, allow stale address to proceed without re-verification
         }
 
-        if (input.deliveryAddress!.reference && address.reference !== input.deliveryAddress!.reference) {
+        if (
+          input.deliveryAddress!.reference &&
+          address.reference !== input.deliveryAddress!.reference
+        ) {
           await tx.address.update({
             where: { id: address.id },
             data: { reference: input.deliveryAddress!.reference },
@@ -704,9 +774,10 @@ export async function createOrderForCustomer({
         longitude = input.deliveryAddress!.longitude;
       }
 
-      const pickupPin = isPickup && input.paymentMethod === PaymentMethod.TRANSFER
-        ? String(Math.floor(1000 + Math.random() * 9000))
-        : undefined;
+      const pickupPin =
+        isPickup && input.paymentMethod === PaymentMethod.TRANSFER
+          ? String(Math.floor(1000 + Math.random() * 9000))
+          : undefined;
 
       const order = await tx.order.create({
         data: {
@@ -793,7 +864,11 @@ export async function createOrderForCustomer({
   } catch (error) {
     // P2002 en clientOrderKey: un request concurrente ya creó el pedido.
     // Se devuelve el existente para garantizar idempotencia.
-    if (input.clientOrderKey && error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+    if (
+      input.clientOrderKey &&
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === 'P2002'
+    ) {
       const existingByKey = await prisma.order.findUnique({
         where: { clientOrderKey: input.clientOrderKey },
         select: customerCreatedOrderSelect,

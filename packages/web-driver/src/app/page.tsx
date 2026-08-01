@@ -143,6 +143,7 @@ type DriverOrder = {
   driverAssignedAt?: string | null;
   paymentMethod?: string;
   cashPaymentConfirmedAt?: string | null;
+  driverArrivedAtCustomer?: string | null;
   latitude?: number;
   longitude?: number;
   tracking?: Array<{
@@ -261,6 +262,14 @@ const driverActionMap: Record<
   delivered: {
     path: 'entregado',
     label: 'Confirmar entrega',
+  },
+  safePlace: {
+    path: 'dejar-lugar-seguro',
+    label: 'Dejar en un lugar seguro',
+  },
+  noShow: {
+    path: 'cliente-no-salio',
+    label: 'El cliente no salió',
   },
   arrived: {
     path: 'llegue',
@@ -500,6 +509,11 @@ export default function Home() {
   const [showRestaurantContact, setShowRestaurantContact] = useState(false);
   const [selectedOrderDetail, setSelectedOrderDetail] = useState<DriverOrder | null>(null);
   const [tripStartedForOrderId, setTripStartedForOrderId] = useState<string | null>(null);
+
+  // Reloj para la cuenta regresiva de entrega sin contacto (10 min transfer / 15 min cash)
+  const [deliveryClock, setDeliveryClock] = useState<number>(() => Date.now());
+  const [safePlaceConfirmOrderId, setSafePlaceConfirmOrderId] = useState<string | null>(null);
+  const [noShowConfirmOrderId, setNoShowConfirmOrderId] = useState<string | null>(null);
 
   const [socketStatus, setSocketStatus] = useState<'idle' | 'connecting' | 'connected' | 'reconnecting'>('idle');
   const [socketAttempts, setSocketAttempts] = useState(0);
@@ -1774,6 +1788,20 @@ export default function Home() {
       document.removeEventListener('visibilitychange', onVisibilityChange);
     };
   }, [pendingOrders, loadPendingOrders]);
+
+  // Tic cada segundo mientras exista una entrega activa en el domicilio,
+  // para actualizar la cuenta regresiva de "lugar seguro" / "cliente no salió".
+  const hasActiveCustomerArrival = pendingOrders.some(
+    (o) =>
+      o.status === 'IN_TRANSIT' &&
+      (arrivedAtCustomerFor.includes(o.id) || !!o.driverArrivedAtCustomer)
+  );
+  useEffect(() => {
+    if (!hasActiveCustomerArrival) return;
+    setDeliveryClock(Date.now());
+    const id = setInterval(() => setDeliveryClock(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, [hasActiveCustomerArrival]);
 
   async function updateAvailability(nextAvailability: DriverAvailability) {
     setUpdatingAvailability(nextAvailability);
@@ -3513,6 +3541,77 @@ export default function Home() {
                             )}
                           </div>
 
+                          {/* ── Espera sin contacto: lugar seguro / cliente no salió ── */}
+                          {(() => {
+                            const arrivalTime = getCustomerArrivalTime(order);
+                            const elapsedMs = arrivalTime ? deliveryClock - arrivalTime : 0;
+                            const SAFE_PLACE_MS = 10 * 60 * 1000;
+                            const NO_SHOW_MS = 15 * 60 * 1000;
+                            const remainingSafe = SAFE_PLACE_MS - elapsedMs;
+                            const remainingNoShow = NO_SHOW_MS - elapsedMs;
+                            const safePlaceReady = isTransfer && remainingSafe <= 0;
+                            const noShowReady = isCash && remainingNoShow <= 0;
+                            const showTimer = isCash || isTransfer;
+
+                            if (!showTimer) return null;
+
+                            return (
+                              <div className="rounded-2xl border border-amber-200 dark:border-amber-900/30 bg-amber-50/60 dark:bg-amber-950/10 px-4 py-3.5 space-y-3">
+                                <div className="flex items-center justify-between">
+                                  <p className="text-[10px] font-bold uppercase tracking-widest text-amber-700 dark:text-amber-400">
+                                    Espera sin contacto
+                                  </p>
+                                  {arrivalTime ? (
+                                    <span className="text-xs font-black tabular-nums text-amber-800 dark:text-amber-300">
+                                      {isTransfer
+                                        ? `Lugar seguro en ${formatCountdown(remainingSafe)}`
+                                        : `Liberar en ${formatCountdown(remainingNoShow)}`}
+                                    </span>
+                                  ) : null}
+                                </div>
+                                <p className="text-[10px] text-amber-700/70 dark:text-amber-400/70 leading-snug">
+                                  {isTransfer
+                                    ? 'Si el cliente no sale, podrás dejar el pedido en un lugar seguro y marcar la entrega.'
+                                    : 'Si el cliente no sale, podrás liberar el pedido; se le cobrará al cliente.'}
+                                </p>
+
+                                {isTransfer && (
+                                  <button
+                                    type="button"
+                                    id={`btn-${order.id}-safe-place`}
+                                    onClick={() => {
+                                      triggerHaptic([30, 20, 60]);
+                                      setSafePlaceConfirmOrderId(order.id);
+                                    }}
+                                    disabled={!safePlaceReady || activeActionKey !== null}
+                                    className="w-full py-3 rounded-2xl border-2 border-amber-300 dark:border-amber-700/60 bg-white dark:bg-zinc-900 text-amber-800 dark:text-amber-300 text-sm font-black tracking-wide transition active:scale-[0.97] disabled:opacity-35 disabled:cursor-not-allowed"
+                                  >
+                                    {activeActionKey === `${order.id}:safePlace`
+                                      ? <span className="flex items-center justify-center gap-2"><span className="h-4 w-4 rounded-full border-2 border-current border-t-transparent animate-spin" />Procesando...</span>
+                                      : 'Dejar en un lugar seguro'}
+                                  </button>
+                                )}
+
+                                {isCash && (
+                                  <button
+                                    type="button"
+                                    id={`btn-${order.id}-no-show`}
+                                    onClick={() => {
+                                      triggerHaptic([30, 20, 60]);
+                                      setNoShowConfirmOrderId(order.id);
+                                    }}
+                                    disabled={!noShowReady || activeActionKey !== null}
+                                    className="w-full py-3 rounded-2xl border-2 border-rose-300 dark:border-rose-700/60 bg-white dark:bg-zinc-900 text-rose-700 dark:text-rose-400 text-sm font-black tracking-wide transition active:scale-[0.97] disabled:opacity-35 disabled:cursor-not-allowed"
+                                  >
+                                    {activeActionKey === `${order.id}:noShow`
+                                      ? <span className="flex items-center justify-center gap-2"><span className="h-4 w-4 rounded-full border-2 border-current border-t-transparent animate-spin" />Procesando...</span>
+                                      : 'El cliente no salió — Liberar pedido'}
+                                  </button>
+                                )}
+                              </div>
+                            );
+                          })()}
+
                           {!isQueued && (
                           <div className="pt-3">
                             <button
@@ -5239,6 +5338,100 @@ export default function Home() {
         );
       })()}
 
+      {safePlaceConfirmOrderId && (() => {
+        const safeOrder = pendingOrders.find(o => o.id === safePlaceConfirmOrderId);
+        const arrivalTime = safeOrder ? getCustomerArrivalTime(safeOrder) : null;
+        const waitMin = arrivalTime ? Math.floor((Date.now() - arrivalTime) / 60000) : 0;
+        return (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm px-4">
+            <div className="w-full max-w-md rounded-3xl bg-white dark:bg-zinc-900 p-6 shadow-2xl animate-in fade-in zoom-in-95 duration-200">
+              <div className="flex flex-col items-center text-center">
+                <div className="flex h-16 w-16 items-center justify-center rounded-full bg-amber-100 dark:bg-amber-950/30 text-3xl mb-4">
+                  📦
+                </div>
+                <h2 className="text-xl font-black text-neutral-950 dark:text-zinc-50">¿Dejar en un lugar seguro?</h2>
+                <p className="text-sm text-neutral-500 dark:text-zinc-400 mt-2 leading-relaxed">
+                  Has esperado <strong className="text-neutral-700 dark:text-zinc-300">{waitMin} minutos</strong> sin que el cliente salga.
+                  Puedes dejar el pedido en un lugar seguro y marcarlo como entregado.
+                </p>
+                <p className="text-xs text-neutral-400 dark:text-zinc-500 mt-3 leading-relaxed bg-neutral-50 dark:bg-zinc-800/50 rounded-xl px-4 py-3 w-full">
+                  El cliente ya pagó por transferencia. Deja el pedido donde el cliente pueda recogerlo y confirma la ubicación con una foto si es posible.
+                </p>
+                <div className="flex gap-3 w-full mt-6">
+                  <button
+                    type="button"
+                    onClick={() => { setSafePlaceConfirmOrderId(null); triggerHaptic(10); }}
+                    className="flex-1 py-3.5 rounded-2xl border border-neutral-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-sm font-bold text-neutral-600 dark:text-zinc-400 transition active:scale-[0.97] hover:bg-neutral-50 dark:hover:bg-zinc-700"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const orderId = safePlaceConfirmOrderId;
+                      setSafePlaceConfirmOrderId(null);
+                      triggerHaptic([40, 20, 60]);
+                      void runDriverAction(orderId, 'safePlace');
+                    }}
+                    disabled={activeActionKey === `${safePlaceConfirmOrderId}:safePlace`}
+                    className="flex-1 py-3.5 rounded-2xl bg-amber-500 text-sm font-bold text-white shadow-lg shadow-amber-500/30 transition active:scale-[0.97] hover:bg-amber-600 disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none"
+                  >
+                    {activeActionKey === `${safePlaceConfirmOrderId}:safePlace` ? 'Procesando...' : 'Sí, dejar pedido'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {noShowConfirmOrderId && (() => {
+        const noShowOrder = pendingOrders.find(o => o.id === noShowConfirmOrderId);
+        const arrivalTime = noShowOrder ? getCustomerArrivalTime(noShowOrder) : null;
+        const waitMin = arrivalTime ? Math.floor((Date.now() - arrivalTime) / 60000) : 0;
+        return (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm px-4">
+            <div className="w-full max-w-md rounded-3xl bg-white dark:bg-zinc-900 p-6 shadow-2xl animate-in fade-in zoom-in-95 duration-200">
+              <div className="flex flex-col items-center text-center">
+                <div className="flex h-16 w-16 items-center justify-center rounded-full bg-rose-100 dark:bg-rose-950/30 text-3xl mb-4">
+                  ⚠️
+                </div>
+                <h2 className="text-xl font-black text-neutral-950 dark:text-zinc-50">¿Liberar el pedido?</h2>
+                <p className="text-sm text-neutral-500 dark:text-zinc-400 mt-2 leading-relaxed">
+                  Has esperado <strong className="text-neutral-700 dark:text-zinc-300">{waitMin} minutos</strong> y el cliente no salió a recibir.
+                </p>
+                <p className="text-xs text-neutral-400 dark:text-zinc-500 mt-3 leading-relaxed bg-neutral-50 dark:bg-zinc-800/50 rounded-xl px-4 py-3 w-full">
+                  El pedido se marcará como entregado, se notificará al cliente y{' '}
+                  <strong>se le cobrará el monto total</strong>. Su cuenta quedará suspendida hasta que liquide.
+                </p>
+                <div className="flex gap-3 w-full mt-6">
+                  <button
+                    type="button"
+                    onClick={() => { setNoShowConfirmOrderId(null); triggerHaptic(10); }}
+                    className="flex-1 py-3.5 rounded-2xl border border-neutral-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-sm font-bold text-neutral-600 dark:text-zinc-400 transition active:scale-[0.97] hover:bg-neutral-50 dark:hover:bg-zinc-700"
+                  >
+                    Seguir esperando
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const orderId = noShowConfirmOrderId;
+                      setNoShowConfirmOrderId(null);
+                      triggerHaptic([40, 20, 60]);
+                      void runDriverAction(orderId, 'noShow');
+                    }}
+                    disabled={activeActionKey === `${noShowConfirmOrderId}:noShow`}
+                    className="flex-1 py-3.5 rounded-2xl bg-rose-500 text-sm font-bold text-white shadow-lg shadow-rose-500/30 transition active:scale-[0.97] hover:bg-rose-600 disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none"
+                  >
+                    {activeActionKey === `${noShowConfirmOrderId}:noShow` ? 'Procesando...' : 'Sí, liberar pedido'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
     </main>
   );
 }
@@ -5377,6 +5570,27 @@ function formatCurrency(amount: number) {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   }).format(amount);
+}
+
+// Marca de tiempo de llegada al domicilio para la cuenta regresiva.
+// Prioriza el timestamp del backend (order.driverArrivedAtCustomer) y como
+// respaldo usa el tracking "DRIVER_ARRIVED" (sobrevive a recargas).
+function getCustomerArrivalTime(order: DriverOrder): number | null {
+  if (order.driverArrivedAtCustomer) {
+    return new Date(order.driverArrivedAtCustomer).getTime();
+  }
+  const arrivalTracking = order.tracking?.find((t) => t.notes === 'DRIVER_ARRIVED');
+  if (arrivalTracking?.createdAt) {
+    return new Date(arrivalTracking.createdAt).getTime();
+  }
+  return null;
+}
+
+function formatCountdown(ms: number) {
+  const totalSec = Math.max(0, Math.floor(ms / 1000));
+  const m = Math.floor(totalSec / 60);
+  const s = totalSec % 60;
+  return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
 }
 
 function formatDate(date: string) {

@@ -1,4 +1,4 @@
-import { DriverAvailability, UserRole, OrderStatus } from '@prisma/client';
+import { DriverAvailability, UserRole, OrderStatus, PaymentMethod } from '@prisma/client';
 import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import bcryptjs from 'bcryptjs';
@@ -6,13 +6,27 @@ import bcryptjs from 'bcryptjs';
 import { prisma } from '../config/database';
 import { sendAppError } from '../errors/http';
 import { authenticate, authorize, getAuthenticatedUser } from '../middleware/auth';
-import { driverActiveOrderListSelect, driverHistoryOrderListSelect } from '../services/order-selects';
+import {
+  driverActiveOrderListSelect,
+  driverHistoryOrderListSelect,
+} from '../services/order-selects';
 import { emitNotification } from '../services/socket.service';
-import { getDriverScopedOrder, updateOrderStatusByDriver, autoAssignDriver, sweepUnassignedOrdersForRegion, incrementDriverRejection, getDriverRejectionCount } from '../services/order-workflow.service';
+import {
+  getDriverScopedOrder,
+  updateOrderStatusByDriver,
+  autoAssignDriver,
+  sweepUnassignedOrdersForRegion,
+  incrementDriverRejection,
+  getDriverRejectionCount,
+} from '../services/order-workflow.service';
 import { getOrCreateRequestContext } from '../utils/request-context';
 import { sendPushNotification } from '../services/notification.service';
 import { sendWhatsAppOrderDelivered } from '../services/whatsapp.service';
-import { checkDriverSuspension, enforceDriverBillingSuspension, getDriverOverdueDebt } from '../services/driver-billing.service';
+import {
+  checkDriverSuspension,
+  enforceDriverBillingSuspension,
+  getDriverOverdueDebt,
+} from '../services/driver-billing.service';
 import { urlToKey, deleteImages } from '../services/storage.service';
 
 const availabilitySchema = z.object({
@@ -94,7 +108,12 @@ export async function registerDriverPanelRoutes(fastify: FastifyInstance): Promi
         });
       }
 
-      const suspensionCheck = await checkDriverSuspension(prisma, updatedDriver.id, updatedDriver.lastBillingSettledAt, updatedDriver.createdAt);
+      const suspensionCheck = await checkDriverSuspension(
+        prisma,
+        updatedDriver.id,
+        updatedDriver.lastBillingSettledAt,
+        updatedDriver.createdAt
+      );
 
       return reply.send({
         success: true,
@@ -185,7 +204,7 @@ export async function registerDriverPanelRoutes(fastify: FastifyInstance): Promi
         },
         _count: {
           id: true,
-        }
+        },
       });
 
       // 2. Calculate Weekly Earnings (Starting Monday)
@@ -207,7 +226,7 @@ export async function registerDriverPanelRoutes(fastify: FastifyInstance): Promi
         },
         _count: {
           id: true,
-        }
+        },
       });
 
       // 3. Calculate debt split: past period (before most recent Sunday) vs current period
@@ -241,7 +260,12 @@ export async function registerDriverPanelRoutes(fastify: FastifyInstance): Promi
       const currentDebt = currentDebtSum._sum.driverPlatformFee || 0;
       const activeDebt = totalDebtSum._sum.driverPlatformFee || 0;
 
-      const pastDebt = await getDriverOverdueDebt(prisma, driver.id, driver.lastBillingSettledAt, driver.createdAt);
+      const pastDebt = await getDriverOverdueDebt(
+        prisma,
+        driver.id,
+        driver.lastBillingSettledAt,
+        driver.createdAt
+      );
 
       // 4. Get recent settlements
       const recentSettlements = await prisma.driverBillingSettlement.findMany({
@@ -259,7 +283,11 @@ export async function registerDriverPanelRoutes(fastify: FastifyInstance): Promi
       const nextSunday = new Date(mostRecentSunday);
       nextSunday.setDate(nextSunday.getDate() + 7);
       nextCutoffDate = nextSunday.toISOString();
-      nextCutoffLabel = nextSunday.toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'short' });
+      nextCutoffLabel = nextSunday.toLocaleDateString('es-MX', {
+        weekday: 'long',
+        day: 'numeric',
+        month: 'short',
+      });
 
       // If there's current-period debt, the suspension date is next Wednesday
       if (currentDebt > 0) {
@@ -336,7 +364,7 @@ export async function registerDriverPanelRoutes(fastify: FastifyInstance): Promi
           error: {
             code: 'DRIVER_NOT_FOUND',
             message: 'Repartidor no encontrado',
-          }
+          },
         });
       }
 
@@ -354,7 +382,7 @@ export async function registerDriverPanelRoutes(fastify: FastifyInstance): Promi
           driverId: driver.id,
           status: OrderStatus.DELIVERED,
           deliveredAt: { gt: mostRecentSunday },
-          driverPlatformFee: { gt: 0 }
+          driverPlatformFee: { gt: 0 },
         },
         select: {
           id: true,
@@ -375,7 +403,12 @@ export async function registerDriverPanelRoutes(fastify: FastifyInstance): Promi
         select: { periodStart: true, periodEnd: true, amount: true },
       });
 
-      let pastOrders: Array<{ id: string; orderReference: string; deliveredAt: Date | null; driverPlatformFee: number }> = [];
+      let pastOrders: Array<{
+        id: string;
+        orderReference: string;
+        deliveredAt: Date | null;
+        driverPlatformFee: number;
+      }> = [];
       let pastDebt = 0;
 
       if (activeSettlement) {
@@ -423,8 +456,9 @@ export async function registerDriverPanelRoutes(fastify: FastifyInstance): Promi
           pastDebt,
           currentOrders,
           currentDebt: currentOrders.reduce((sum, o) => sum + (o.driverPlatformFee || 0), 0),
-          totalDebt: pastDebt + currentOrders.reduce((sum, o) => sum + (o.driverPlatformFee || 0), 0),
-        }
+          totalDebt:
+            pastDebt + currentOrders.reduce((sum, o) => sum + (o.driverPlatformFee || 0), 0),
+        },
       });
     });
 
@@ -432,12 +466,18 @@ export async function registerDriverPanelRoutes(fastify: FastifyInstance): Promi
       try {
         const user = getAuthenticatedUser(request);
         const driver = await prisma.driver.findUnique({ where: { userId: user.sub } });
-        if (!driver) return reply.status(404).send({ success: false, error: { code: 'DRIVER_NOT_FOUND', message: 'No encontrado' }});
+        if (!driver)
+          return reply
+            .status(404)
+            .send({
+              success: false,
+              error: { code: 'DRIVER_NOT_FOUND', message: 'No encontrado' },
+            });
 
         const settlements = await prisma.driverBillingSettlement.findMany({
           where: { driverId: driver.id },
           orderBy: { createdAt: 'desc' },
-          take: 10
+          take: 10,
         });
 
         return reply.send({ success: true, data: settlements });
@@ -449,11 +489,13 @@ export async function registerDriverPanelRoutes(fastify: FastifyInstance): Promi
     driverPanel.post('/driver-panel/billetera/settlements', async (request, reply) => {
       const user = getAuthenticatedUser(request);
       const payload = z.object({ paymentProofUrl: z.string().url() }).safeParse(request.body);
-      
-      if (!payload.success) return reply.status(400).send({ success: false, error: { code: 'INVALID_PAYLOAD' }});
+
+      if (!payload.success)
+        return reply.status(400).send({ success: false, error: { code: 'INVALID_PAYLOAD' } });
 
       const driver = await prisma.driver.findUnique({ where: { userId: user.sub } });
-      if (!driver) return reply.status(404).send({ success: false, error: { code: 'DRIVER_NOT_FOUND' }});
+      if (!driver)
+        return reply.status(404).send({ success: false, error: { code: 'DRIVER_NOT_FOUND' } });
 
       // Atomic find-or-create using a transaction to prevent race conditions
       const result = await prisma.$transaction(async (tx) => {
@@ -531,7 +573,12 @@ export async function registerDriverPanelRoutes(fastify: FastifyInstance): Promi
       });
 
       if (result.error === 'NO_DEBT') {
-        return reply.status(400).send({ success: false, error: { code: 'NO_DEBT', message: 'No hay deuda del periodo anterior para pagar.' }});
+        return reply
+          .status(400)
+          .send({
+            success: false,
+            error: { code: 'NO_DEBT', message: 'No hay deuda del periodo anterior para pagar.' },
+          });
       }
 
       return reply.send({ success: true, data: result.settlement });
@@ -541,7 +588,8 @@ export async function registerDriverPanelRoutes(fastify: FastifyInstance): Promi
       try {
         const user = getAuthenticatedUser(request);
         const driver = await prisma.driver.findUnique({ where: { userId: user.sub } });
-        if (!driver) return reply.status(404).send({ success: false, error: { code: 'DRIVER_NOT_FOUND' }});
+        if (!driver)
+          return reply.status(404).send({ success: false, error: { code: 'DRIVER_NOT_FOUND' } });
 
         const query = request.query as { periodStart?: string; periodEnd?: string };
         const debtAnchor = driver.lastBillingSettledAt || driver.createdAt;
@@ -580,7 +628,10 @@ export async function registerDriverPanelRoutes(fastify: FastifyInstance): Promi
           success: true,
           data: {
             orders: debtOrders,
-            totalDebt: debtOrders.reduce((sum: number, o: any) => sum + (o.driverPlatformFee || 0), 0),
+            totalDebt: debtOrders.reduce(
+              (sum: number, o: any) => sum + (o.driverPlatformFee || 0),
+              0
+            ),
           },
         });
       } catch (err: any) {
@@ -628,7 +679,7 @@ export async function registerDriverPanelRoutes(fastify: FastifyInstance): Promi
 
       // Target week start
       const targetMonday = new Date(currentMonday);
-      targetMonday.setDate(currentMonday.getDate() - (offset * 7));
+      targetMonday.setDate(currentMonday.getDate() - offset * 7);
 
       // Target week end (Sunday 23:59:59)
       const targetSunday = new Date(targetMonday);
@@ -653,12 +704,42 @@ export async function registerDriverPanelRoutes(fastify: FastifyInstance): Promi
       // Aggregate by day of week (0=Mon, 1=Tue, ..., 6=Sun)
       const days = [
         { label: 'L', date: new Date(targetMonday), earnings: 0, trips: 0 },
-        { label: 'M', date: new Date(targetMonday.getTime() + 86400000 * 1), earnings: 0, trips: 0 },
-        { label: 'X', date: new Date(targetMonday.getTime() + 86400000 * 2), earnings: 0, trips: 0 },
-        { label: 'J', date: new Date(targetMonday.getTime() + 86400000 * 3), earnings: 0, trips: 0 },
-        { label: 'V', date: new Date(targetMonday.getTime() + 86400000 * 4), earnings: 0, trips: 0 },
-        { label: 'S', date: new Date(targetMonday.getTime() + 86400000 * 5), earnings: 0, trips: 0 },
-        { label: 'D', date: new Date(targetMonday.getTime() + 86400000 * 6), earnings: 0, trips: 0 },
+        {
+          label: 'M',
+          date: new Date(targetMonday.getTime() + 86400000 * 1),
+          earnings: 0,
+          trips: 0,
+        },
+        {
+          label: 'X',
+          date: new Date(targetMonday.getTime() + 86400000 * 2),
+          earnings: 0,
+          trips: 0,
+        },
+        {
+          label: 'J',
+          date: new Date(targetMonday.getTime() + 86400000 * 3),
+          earnings: 0,
+          trips: 0,
+        },
+        {
+          label: 'V',
+          date: new Date(targetMonday.getTime() + 86400000 * 4),
+          earnings: 0,
+          trips: 0,
+        },
+        {
+          label: 'S',
+          date: new Date(targetMonday.getTime() + 86400000 * 5),
+          earnings: 0,
+          trips: 0,
+        },
+        {
+          label: 'D',
+          date: new Date(targetMonday.getTime() + 86400000 * 6),
+          earnings: 0,
+          trips: 0,
+        },
       ];
 
       for (const order of orders) {
@@ -676,11 +757,11 @@ export async function registerDriverPanelRoutes(fastify: FastifyInstance): Promi
         data: {
           weekStart: targetMonday,
           weekEnd: targetSunday,
-          chartData: days.map(d => ({
+          chartData: days.map((d) => ({
             label: d.label,
             date: d.date.toISOString(),
             earnings: d.earnings,
-            trips: d.trips
+            trips: d.trips,
           })),
         },
       });
@@ -729,7 +810,12 @@ export async function registerDriverPanelRoutes(fastify: FastifyInstance): Promi
         });
 
         if (freshDriver) {
-          const suspensionCheck = await checkDriverSuspension(prisma, freshDriver.id, freshDriver.lastBillingSettledAt, freshDriver.createdAt);
+          const suspensionCheck = await checkDriverSuspension(
+            prisma,
+            freshDriver.id,
+            freshDriver.lastBillingSettledAt,
+            freshDriver.createdAt
+          );
           if (suspensionCheck.isSuspendedByDebt) {
             return reply.status(403).send({
               success: false,
@@ -761,22 +847,46 @@ export async function registerDriverPanelRoutes(fastify: FastifyInstance): Promi
         // Smart Sweep: Try to rescue any pending orders in this region
         setTimeout(async () => {
           try {
-            const assignedOrders = await sweepUnassignedOrdersForRegion(prisma, updatedDriver.region);
+            const assignedOrders = await sweepUnassignedOrdersForRegion(
+              prisma,
+              updatedDriver.region
+            );
             for (const { order, driver: assignedDriver } of assignedOrders) {
-              emitNotification(fastify.io, assignedDriver.userId, 'DRIVER', 'order:assigned', {
-                orderId: order.id,
-                orderReference: order.orderReference,
-                restaurantName: order.restaurant.name,
-                customerName: order.customer.user.name,
-              }, { orderId: order.id });
-              emitNotification(fastify.io, order.customer.user.id, 'CUSTOMER', 'order:driver-assigned', {
-                orderId: order.id,
-                driverName: assignedDriver.user.name,
-              }, { orderId: order.id });
-              emitNotification(fastify.io, order.restaurant.userId, 'RESTAURANT', 'order:driver-assigned', {
-                orderId: order.id,
-                driverName: assignedDriver.user.name,
-              }, { orderId: order.id });
+              emitNotification(
+                fastify.io,
+                assignedDriver.userId,
+                'DRIVER',
+                'order:assigned',
+                {
+                  orderId: order.id,
+                  orderReference: order.orderReference,
+                  restaurantName: order.restaurant.name,
+                  customerName: order.customer.user.name,
+                },
+                { orderId: order.id }
+              );
+              emitNotification(
+                fastify.io,
+                order.customer.user.id,
+                'CUSTOMER',
+                'order:driver-assigned',
+                {
+                  orderId: order.id,
+                  driverName: assignedDriver.user.name,
+                },
+                { orderId: order.id }
+              );
+              emitNotification(
+                fastify.io,
+                order.restaurant.userId,
+                'RESTAURANT',
+                'order:driver-assigned',
+                {
+                  orderId: order.id,
+                  driverName: assignedDriver.user.name,
+                },
+                { orderId: order.id }
+              );
             }
           } catch (err) {
             console.error('Sweep failed on driver available:', err);
@@ -987,9 +1097,10 @@ export async function registerDriverPanelRoutes(fastify: FastifyInstance): Promi
     ];
 
     for (const routeConfig of driverActions) {
-      const rateLimitConfig = routeConfig.action === 'accept' || routeConfig.action === 'reject'
-        ? { config: { rateLimit: { max: 20, timeWindow: '1 minute' } } }
-        : {};
+      const rateLimitConfig =
+        routeConfig.action === 'accept' || routeConfig.action === 'reject'
+          ? { config: { rateLimit: { max: 20, timeWindow: '1 minute' } } }
+          : {};
       driverPanel.patch(routeConfig.path, rateLimitConfig, async (request, reply) => {
         const params = z.object({ id: z.string().min(1) }).safeParse(request.params);
 
@@ -1026,7 +1137,12 @@ export async function registerDriverPanelRoutes(fastify: FastifyInstance): Promi
               if (currentDriverId) {
                 setTimeout(async () => {
                   try {
-                    const assignResult = await autoAssignDriver(prisma, params.data.id, order.restaurant.userId, currentDriverId);
+                    const assignResult = await autoAssignDriver(
+                      prisma,
+                      params.data.id,
+                      order.restaurant.userId,
+                      currentDriverId
+                    );
                     if (assignResult.success && assignResult.driver && assignResult.order) {
                       const updatedOrder = assignResult.order;
 
@@ -1079,9 +1195,13 @@ export async function registerDriverPanelRoutes(fastify: FastifyInstance): Promi
                         }
                       );
 
-                      request.log.info(`Auto-assigned new driver ${assignResult.driver.id} to order ${params.data.id} after rejection by driver ${currentDriverId} in background.`);
+                      request.log.info(
+                        `Auto-assigned new driver ${assignResult.driver.id} to order ${params.data.id} after rejection by driver ${currentDriverId} in background.`
+                      );
                     } else {
-                      request.log.info(`No immediate backup driver found for order ${params.data.id}. Order will be retried by the sweep cron.`);
+                      request.log.info(
+                        `No immediate backup driver found for order ${params.data.id}. Order will be retried by the sweep cron.`
+                      );
                     }
                   } catch (err) {
                     console.error('Failed to auto-reassign driver on reject in background:', err);
@@ -1093,7 +1213,9 @@ export async function registerDriverPanelRoutes(fastify: FastifyInstance): Promi
             }
           }
 
-          request.log.info(`[DEBUG] Emitiendo ${routeConfig.restaurantEvent} al room RESTAURANT:${order.restaurant.userId} | orderId: ${params.data.id}`);
+          request.log.info(
+            `[DEBUG] Emitiendo ${routeConfig.restaurantEvent} al room RESTAURANT:${order.restaurant.userId} | orderId: ${params.data.id}`
+          );
           emitNotification(
             fastify.io,
             order.restaurant.userId,
@@ -1125,7 +1247,9 @@ export async function registerDriverPanelRoutes(fastify: FastifyInstance): Promi
           );
 
           if (routeConfig.pushTitle && routeConfig.pushBody) {
-            request.log.info(`[Push] Intentando enviar notificacion push al comensal ${order.customer.user.id} para la accion ${routeConfig.action}`);
+            request.log.info(
+              `[Push] Intentando enviar notificacion push al comensal ${order.customer.user.id} para la accion ${routeConfig.action}`
+            );
             try {
               const pushResult = await sendPushNotification(order.customer.user.id, {
                 title: routeConfig.pushTitle,
@@ -1140,9 +1264,14 @@ export async function registerDriverPanelRoutes(fastify: FastifyInstance): Promi
                   url: `/?orderId=${params.data.id}`,
                 },
               });
-              request.log.info(`[Push] Resultado de notificacion push para comensal ${order.customer.user.id}: ${JSON.stringify(pushResult)}`);
+              request.log.info(
+                `[Push] Resultado de notificacion push para comensal ${order.customer.user.id}: ${JSON.stringify(pushResult)}`
+              );
             } catch (pushErr) {
-              request.log.error(pushErr as any, `[Push] Error al enviar notificacion push al comensal ${order.customer.user.id}`);
+              request.log.error(
+                pushErr as any,
+                `[Push] Error al enviar notificacion push al comensal ${order.customer.user.id}`
+              );
             }
           }
           if (routeConfig.action === 'delivered') {
@@ -1175,22 +1304,46 @@ export async function registerDriverPanelRoutes(fastify: FastifyInstance): Promi
               try {
                 const driver = await prisma.driver.findUnique({ where: { userId: user.sub } });
                 if (driver && driver.availability === DriverAvailability.AVAILABLE) {
-                  const assignedOrders = await sweepUnassignedOrdersForRegion(prisma, driver.region);
+                  const assignedOrders = await sweepUnassignedOrdersForRegion(
+                    prisma,
+                    driver.region
+                  );
                   for (const { order: sweptOrder, driver: assignedDriver } of assignedOrders) {
-                    emitNotification(fastify.io, assignedDriver.userId, 'DRIVER', 'order:assigned', {
-                      orderId: sweptOrder.id,
-                      orderReference: sweptOrder.orderReference,
-                      restaurantName: sweptOrder.restaurant.name,
-                      customerName: sweptOrder.customer.user.name,
-                    }, { orderId: sweptOrder.id });
-                    emitNotification(fastify.io, sweptOrder.customer.user.id, 'CUSTOMER', 'order:driver-assigned', {
-                      orderId: sweptOrder.id,
-                      driverName: assignedDriver.user.name,
-                    }, { orderId: sweptOrder.id });
-                    emitNotification(fastify.io, sweptOrder.restaurant.userId, 'RESTAURANT', 'order:driver-assigned', {
-                      orderId: sweptOrder.id,
-                      driverName: assignedDriver.user.name,
-                    }, { orderId: sweptOrder.id });
+                    emitNotification(
+                      fastify.io,
+                      assignedDriver.userId,
+                      'DRIVER',
+                      'order:assigned',
+                      {
+                        orderId: sweptOrder.id,
+                        orderReference: sweptOrder.orderReference,
+                        restaurantName: sweptOrder.restaurant.name,
+                        customerName: sweptOrder.customer.user.name,
+                      },
+                      { orderId: sweptOrder.id }
+                    );
+                    emitNotification(
+                      fastify.io,
+                      sweptOrder.customer.user.id,
+                      'CUSTOMER',
+                      'order:driver-assigned',
+                      {
+                        orderId: sweptOrder.id,
+                        driverName: assignedDriver.user.name,
+                      },
+                      { orderId: sweptOrder.id }
+                    );
+                    emitNotification(
+                      fastify.io,
+                      sweptOrder.restaurant.userId,
+                      'RESTAURANT',
+                      'order:driver-assigned',
+                      {
+                        orderId: sweptOrder.id,
+                        driverName: assignedDriver.user.name,
+                      },
+                      { orderId: sweptOrder.id }
+                    );
                   }
                 }
               } catch (err) {
@@ -1198,7 +1351,6 @@ export async function registerDriverPanelRoutes(fastify: FastifyInstance): Promi
               }
             }, 3000); // Slight delay to ensure the current order status transaction is fully settled
           }
-
 
           return reply.send({
             success: true,
@@ -1248,6 +1400,13 @@ export async function registerDriverPanelRoutes(fastify: FastifyInstance): Promi
           },
         });
 
+        // Record when the driver reached the customer's door. This timestamp is the
+        // anchor for the abandoned-delivery thresholds (10min transfer / 15min cash).
+        await prisma.order.update({
+          where: { id: order.id },
+          data: { driverArrivedAtCustomer: new Date() },
+        });
+
         emitNotification(
           fastify.io,
           order.customer.user.id,
@@ -1279,8 +1438,350 @@ export async function registerDriverPanelRoutes(fastify: FastifyInstance): Promi
 
         return reply.send({
           success: true,
-          data: order,
+          data: await getDriverScopedOrder(prisma, user.sub, params.data.id),
         });
+      } catch (error) {
+        return sendAppError(reply, error);
+      }
+    });
+
+    // ─── DEJAR EN LUGAR SEGURO (abandoned delivery - transfer) ────────────
+    // TRANSFER orders that were already paid: after 10 min without the customer
+    // coming out, the driver may leave the order in a safe place and complete
+    // the delivery (no PIN required - payment already collected).
+    driverPanel.patch('/driver-panel/pedidos/:id/dejar-lugar-seguro', async (request, reply) => {
+      const params = z.object({ id: z.string().min(1) }).safeParse(request.params);
+      if (!params.success) {
+        return reply.status(400).send({
+          success: false,
+          error: {
+            code: 'INVALID_PARAMS',
+            message: params.error.issues[0]?.message || 'Parametros invalidos.',
+          },
+        });
+      }
+
+      const user = getAuthenticatedUser(request);
+      const requestContext = getOrCreateRequestContext(request);
+
+      try {
+        const order = await getDriverScopedOrder(prisma, user.sub, params.data.id);
+        if (!order) {
+          return reply.status(404).send({
+            success: false,
+            error: {
+              code: 'ORDER_NOT_FOUND',
+              message: 'No se encontro el pedido asignado a este repartidor.',
+            },
+          });
+        }
+
+        if (order.status !== OrderStatus.IN_TRANSIT) {
+          return reply.status(409).send({
+            success: false,
+            error: {
+              code: 'INVALID_ORDER_STATUS',
+              message: 'El pedido ya no esta en camino y no puede marcarse como dejado.',
+            },
+          });
+        }
+
+        if (order.paymentMethod !== PaymentMethod.TRANSFER) {
+          return reply.status(409).send({
+            success: false,
+            error: {
+              code: 'INVALID_PAYMENT_METHOD',
+              message: 'Esta opcion solo aplica a pedidos pagados por transferencia.',
+            },
+          });
+        }
+
+        if (!order.driverArrivedAtCustomer) {
+          return reply.status(409).send({
+            success: false,
+            error: {
+              code: 'DRIVER_NOT_ARRIVED',
+              message: 'Debes registrar que llegaste con el cliente antes de continuar.',
+            },
+          });
+        }
+
+        const waitMs = Date.now() - new Date(order.driverArrivedAtCustomer).getTime();
+        const SAFE_PLACE_WAIT_MS = 10 * 60 * 1000;
+        if (waitMs < SAFE_PLACE_WAIT_MS) {
+          const faltaMin = Math.ceil((SAFE_PLACE_WAIT_MS - waitMs) / 60000);
+          return reply.status(409).send({
+            success: false,
+            error: {
+              code: 'ARRIVAL_TIMEOUT_NOT_ELAPSED',
+              message: `Aun no han pasado los 10 minutos. Intenta en ${faltaMin} minuto(s) o confirma la entrega con el cliente.`,
+            },
+          });
+        }
+
+        const updatedOrder = await updateOrderStatusByDriver({
+          prisma,
+          driverUserId: user.sub,
+          orderId: params.data.id,
+          action: 'safe_place',
+          pin: undefined,
+        });
+
+        emitNotification(
+          fastify.io,
+          order.restaurant.userId,
+          'RESTAURANT',
+          'order:delivered',
+          {
+            orderId: params.data.id,
+            status: 'safe_place',
+          },
+          { requestId: requestContext.requestId, orderId: params.data.id }
+        );
+
+        emitNotification(
+          fastify.io,
+          order.customer.user.id,
+          'CUSTOMER',
+          'order:delivered',
+          {
+            orderId: params.data.id,
+            status: 'safe_place',
+          },
+          { requestId: requestContext.requestId, orderId: params.data.id }
+        );
+
+        try {
+          await sendPushNotification(order.customer.user.id, {
+            title: 'Tu pedido fue dejado en un lugar seguro',
+            body: 'El repartidor espero mas de 10 minutos y dejo tu pedido en un lugar seguro. ¡Recogelo cuando puedas!',
+            icon: '/SaDeL.png',
+            badge: '/SaDeL.png',
+            vibrate: [300, 100, 300],
+            requireInteraction: true,
+            data: {
+              orderId: params.data.id,
+              event: 'order:delivered',
+              url: `/?orderId=${params.data.id}`,
+            },
+          });
+        } catch (pushErr) {
+          request.log.error(pushErr as any, '[Push] Error al notificar entrega en lugar seguro');
+        }
+
+        return reply.send({ success: true, data: updatedOrder });
+      } catch (error) {
+        return sendAppError(reply, error);
+      }
+    });
+
+    // ─── CLIENTE NO SALIO - LIBERAR PEDIDO (abandoned delivery - cash) ─────
+    // CASH orders: after 15 min without the customer coming out, the driver may
+    // release the order. The order is marked delivered, a billing settlement is
+    // created for the customer's debt and the customer is suspended until paid.
+    driverPanel.patch('/driver-panel/pedidos/:id/cliente-no-salio', async (request, reply) => {
+      const params = z.object({ id: z.string().min(1) }).safeParse(request.params);
+      if (!params.success) {
+        return reply.status(400).send({
+          success: false,
+          error: {
+            code: 'INVALID_PARAMS',
+            message: params.error.issues[0]?.message || 'Parametros invalidos.',
+          },
+        });
+      }
+
+      const user = getAuthenticatedUser(request);
+      const requestContext = getOrCreateRequestContext(request);
+
+      try {
+        const order = await getDriverScopedOrder(prisma, user.sub, params.data.id);
+        if (!order) {
+          return reply.status(404).send({
+            success: false,
+            error: {
+              code: 'ORDER_NOT_FOUND',
+              message: 'No se encontro el pedido asignado a este repartidor.',
+            },
+          });
+        }
+
+        if (order.status !== OrderStatus.IN_TRANSIT) {
+          return reply.status(409).send({
+            success: false,
+            error: {
+              code: 'INVALID_ORDER_STATUS',
+              message: 'El pedido ya no esta en camino y no puede liberarse.',
+            },
+          });
+        }
+
+        if (order.paymentMethod !== PaymentMethod.CASH) {
+          return reply.status(409).send({
+            success: false,
+            error: {
+              code: 'INVALID_PAYMENT_METHOD',
+              message: 'Esta opcion solo aplica a pedidos pagados en efectivo.',
+            },
+          });
+        }
+
+        if (!order.driverArrivedAtCustomer) {
+          return reply.status(409).send({
+            success: false,
+            error: {
+              code: 'DRIVER_NOT_ARRIVED',
+              message: 'Debes registrar que llegaste con el cliente antes de continuar.',
+            },
+          });
+        }
+
+        const arrivedAtCustomer = order.driverArrivedAtCustomer;
+        const waitMs = Date.now() - new Date(arrivedAtCustomer).getTime();
+        const NO_SHOW_WAIT_MS = 15 * 60 * 1000;
+        if (waitMs < NO_SHOW_WAIT_MS) {
+          const faltaMin = Math.ceil((NO_SHOW_WAIT_MS - waitMs) / 60000);
+          return reply.status(409).send({
+            success: false,
+            error: {
+              code: 'ARRIVAL_TIMEOUT_NOT_ELAPSED',
+              message: `Aun no han pasado los 15 minutos. Intenta en ${faltaMin} minuto(s) o confirma la entrega con el cliente.`,
+            },
+          });
+        }
+
+        // Idempotency guard: never create a second debt for the same order.
+        const existingSettlement = await prisma.customerBillingSettlement.findUnique({
+          where: { orderId: order.id },
+          select: { id: true },
+        });
+        if (existingSettlement) {
+          return reply.status(409).send({
+            success: false,
+            error: {
+              code: 'SETTLEMENT_ALREADY_EXISTS',
+              message: 'Este pedido ya genero una deuda. Revisa con soporte.',
+            },
+          });
+        }
+
+        // 1) Complete the delivery (own transaction: DELIVERED status, driver freed up, stats).
+        const updatedOrder = await updateOrderStatusByDriver({
+          prisma,
+          driverUserId: user.sub,
+          orderId: params.data.id,
+          action: 'no_show',
+          pin: undefined,
+        });
+
+        // 2) Create the debt + suspend the customer + log a support ticket.
+        //    Kept as a separate transaction because the order-workflow service
+        //    manages its own transaction; this runs after the delivery settles.
+        //    Bounded retry so a transient DB error doesn't silently leave the
+        //    delivery completed without charging the customer. The unique
+        //    constraint on orderId keeps this idempotent under concurrent calls.
+        const MAX_DEBT_ATTEMPTS = 3;
+        for (let attempt = 1; attempt <= MAX_DEBT_ATTEMPTS; attempt++) {
+          try {
+            await prisma.$transaction(async (tx) => {
+              const reference = `CUS-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}-${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
+
+              const settlement = await tx.customerBillingSettlement.create({
+                data: {
+                  customerId: order.customer.id,
+                  reference,
+                  orderId: order.id,
+                  amount: order.totalAmount,
+                  status: 'PENDING',
+                  dueDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+                  notes: `Pedido no recibido - el repartidor llego y espero 15+ minutos sin respuesta del cliente. Pedido #${order.orderReference}.`,
+                },
+              });
+
+              await tx.customer.update({
+                where: { id: order.customer.id },
+                data: { isSuspendedByDebt: true, debtAmount: order.totalAmount },
+              });
+
+              await tx.user.update({
+                where: { id: order.customer.user.id },
+                data: { status: 'SUSPENDED' },
+              });
+
+              await tx.supportTicket.create({
+                data: {
+                  type: 'ORDER',
+                  subject: 'Cliente no salio a recibir pedido',
+                  description: [
+                    `Pedido: #${order.orderReference}`,
+                    `Repartidor: ${order.driver?.user?.name || 'N/A'}`,
+                    `Hora de llegada al domicilio: ${arrivedAtCustomer.toISOString()}`,
+                    `Tiempo de espera: 15+ minutos`,
+                    `Monto del pedido: $${order.totalAmount.toFixed(2)}`,
+                    `Restaurante: ${order.restaurant.name}`,
+                    `Referencia de deuda: ${settlement.reference}`,
+                  ].join('\n'),
+                  status: 'PENDING',
+                  customerId: order.customer.id,
+                  orderNumber: order.orderReference,
+                  storeName: order.restaurant.name,
+                },
+              });
+            });
+            break;
+          } catch (debtErr) {
+            const isLastAttempt = attempt === MAX_DEBT_ATTEMPTS;
+            request.log.error(
+              debtErr as any,
+              `[Deuda] Intento ${attempt}/${MAX_DEBT_ATTEMPTS} fallo al crear la deuda del pedido ${order.id}${isLastAttempt ? ' (definitivo)' : ', reintentando'}`
+            );
+            if (isLastAttempt) break;
+            await new Promise((resolve) => setTimeout(resolve, 250 * attempt));
+          }
+        }
+
+        emitNotification(
+          fastify.io,
+          order.restaurant.userId,
+          'RESTAURANT',
+          'order:delivered',
+          {
+            orderId: params.data.id,
+            status: 'no_show',
+          },
+          { requestId: requestContext.requestId, orderId: params.data.id }
+        );
+
+        emitNotification(
+          fastify.io,
+          order.customer.user.id,
+          'CUSTOMER',
+          'account:suspended',
+          {
+            reason: 'unpaid_delivery',
+            orderId: params.data.id,
+          },
+          { requestId: requestContext.requestId, orderId: params.data.id }
+        );
+
+        try {
+          await sendPushNotification(order.customer.user.id, {
+            title: 'No pudimos entregar tu pedido',
+            body: 'El repartidor llego a tu domicilio y espero, pero no saliste a recibirlo. Para volver a pedir en SaDeL, cubre el saldo pendiente en la app.',
+            icon: '/SaDeL.png',
+            badge: '/SaDeL.png',
+            vibrate: [400, 100, 400, 100, 800],
+            requireInteraction: true,
+            data: { orderId: params.data.id, event: 'account:suspended', url: '/mi-deuda' },
+          });
+        } catch (pushErr) {
+          request.log.error(
+            pushErr as any,
+            '[Push] Error al notificar suspension por pedido no recibido'
+          );
+        }
+
+        return reply.send({ success: true, data: updatedOrder });
       } catch (error) {
         return sendAppError(reply, error);
       }
@@ -1365,10 +1866,15 @@ export async function registerDriverPanelRoutes(fastify: FastifyInstance): Promi
             },
           });
           if (!pushResult.success) {
-            console.warn(`[Push] Llegue-restaurante push no enviado a ${order.restaurant.userId}: ${pushResult.reason}`);
+            console.warn(
+              `[Push] Llegue-restaurante push no enviado a ${order.restaurant.userId}: ${pushResult.reason}`
+            );
           }
         } catch (pushErr) {
-          console.error(`[Push] Error al enviar llegue-restaurante a ${order.restaurant.userId}:`, pushErr);
+          console.error(
+            `[Push] Error al enviar llegue-restaurante a ${order.restaurant.userId}:`,
+            pushErr
+          );
         }
 
         return reply.send({
@@ -1388,7 +1894,10 @@ export async function registerDriverPanelRoutes(fastify: FastifyInstance): Promi
       if (!params.success) {
         return reply.status(400).send({
           success: false,
-          error: { code: 'INVALID_PARAMS', message: params.error.issues[0]?.message || 'Parametros invalidos.' },
+          error: {
+            code: 'INVALID_PARAMS',
+            message: params.error.issues[0]?.message || 'Parametros invalidos.',
+          },
         });
       }
 
@@ -1401,21 +1910,30 @@ export async function registerDriverPanelRoutes(fastify: FastifyInstance): Promi
         if (!order) {
           return reply.status(404).send({
             success: false,
-            error: { code: 'ORDER_NOT_FOUND', message: 'No se encontro el pedido asignado a este repartidor.' },
+            error: {
+              code: 'ORDER_NOT_FOUND',
+              message: 'No se encontro el pedido asignado a este repartidor.',
+            },
           });
         }
 
         if (!order.driver) {
           return reply.status(409).send({
             success: false,
-            error: { code: 'NO_DRIVER_ASSIGNED', message: 'No hay repartidor asignado a este pedido.' },
+            error: {
+              code: 'NO_DRIVER_ASSIGNED',
+              message: 'No hay repartidor asignado a este pedido.',
+            },
           });
         }
 
         if (!order.driverArrivedAt) {
           return reply.status(409).send({
             success: false,
-            error: { code: 'DRIVER_NOT_ARRIVED', message: 'Debes llegar al restaurante antes de liberar el pedido.' },
+            error: {
+              code: 'DRIVER_NOT_ARRIVED',
+              message: 'Debes llegar al restaurante antes de liberar el pedido.',
+            },
           });
         }
 
@@ -1432,11 +1950,18 @@ export async function registerDriverPanelRoutes(fastify: FastifyInstance): Promi
           });
         }
 
-        const validStatuses: OrderStatus[] = [OrderStatus.CONFIRMED, OrderStatus.PREPARING, OrderStatus.READY];
+        const validStatuses: OrderStatus[] = [
+          OrderStatus.CONFIRMED,
+          OrderStatus.PREPARING,
+          OrderStatus.READY,
+        ];
         if (!validStatuses.includes(order.status)) {
           return reply.status(409).send({
             success: false,
-            error: { code: 'INVALID_ORDER_STATUS', message: 'El pedido ya fue recogido o entregado y no puede liberarse.' },
+            error: {
+              code: 'INVALID_ORDER_STATUS',
+              message: 'El pedido ya fue recogido o entregado y no puede liberarse.',
+            },
           });
         }
 
@@ -1444,7 +1969,10 @@ export async function registerDriverPanelRoutes(fastify: FastifyInstance): Promi
         if (!driver) {
           return reply.status(409).send({
             success: false,
-            error: { code: 'NO_DRIVER_ASSIGNED', message: 'No hay repartidor asignado a este pedido.' },
+            error: {
+              code: 'NO_DRIVER_ASSIGNED',
+              message: 'No hay repartidor asignado a este pedido.',
+            },
           });
         }
 
@@ -1475,7 +2003,15 @@ export async function registerDriverPanelRoutes(fastify: FastifyInstance): Promi
           const activeOrdersCount = await tx.order.count({
             where: {
               driverId: driver.id,
-              status: { in: [OrderStatus.CONFIRMED, OrderStatus.PREPARING, OrderStatus.READY, OrderStatus.PICKED_UP, OrderStatus.IN_TRANSIT] },
+              status: {
+                in: [
+                  OrderStatus.CONFIRMED,
+                  OrderStatus.PREPARING,
+                  OrderStatus.READY,
+                  OrderStatus.PICKED_UP,
+                  OrderStatus.IN_TRANSIT,
+                ],
+              },
             },
           });
 
@@ -1526,7 +2062,12 @@ export async function registerDriverPanelRoutes(fastify: FastifyInstance): Promi
         // Auto-asignar un nuevo repartidor (excluyendo al que liberó)
         setTimeout(async () => {
           try {
-            const assignResult = await autoAssignDriver(prisma, params.data.id, order.restaurant.userId, driver.id);
+            const assignResult = await autoAssignDriver(
+              prisma,
+              params.data.id,
+              order.restaurant.userId,
+              driver.id
+            );
             if (assignResult.success && assignResult.driver && assignResult.order) {
               const newOrder = assignResult.order;
 
@@ -1580,7 +2121,8 @@ export async function registerDriverPanelRoutes(fastify: FastifyInstance): Promi
                 'order:no-drivers-available',
                 {
                   orderId: params.data.id,
-                  message: 'No hay repartidores disponibles. Puedes solicitar apoyo a otros establecimientos o asumir el reparto.',
+                  message:
+                    'No hay repartidores disponibles. Puedes solicitar apoyo a otros establecimientos o asumir el reparto.',
                 },
                 { requestId: requestContext.requestId, orderId: params.data.id }
               );
@@ -1617,7 +2159,10 @@ export async function registerDriverPanelRoutes(fastify: FastifyInstance): Promi
         if (orders.length === 0) {
           return reply.status(404).send({
             success: false,
-            error: { code: 'NOT_FOUND', message: 'No se encontraron ordenes en este lote para el repartidor.' },
+            error: {
+              code: 'NOT_FOUND',
+              message: 'No se encontraron ordenes en este lote para el repartidor.',
+            },
           });
         }
 
@@ -1637,7 +2182,10 @@ export async function registerDriverPanelRoutes(fastify: FastifyInstance): Promi
               orderIds: orders.map((o) => o.id),
               orderReferences: orders.map((o) => o.orderReference),
             },
-            { requestId: getOrCreateRequestContext(request).requestId, orderId: orders[0]?.id || '' }
+            {
+              requestId: getOrCreateRequestContext(request).requestId,
+              orderId: orders[0]?.id || '',
+            }
           );
         }
 
@@ -1673,7 +2221,9 @@ export async function registerDriverPanelRoutes(fastify: FastifyInstance): Promi
     });
 
     const locationUpdateSchema = z.object({
-      coords: z.array(z.number()).length(2, 'Las coordenadas deben contener exactamente [latitud, longitud]'),
+      coords: z
+        .array(z.number())
+        .length(2, 'Las coordenadas deben contener exactamente [latitud, longitud]'),
     });
 
     driverPanel.post('/driver-panel/ubicacion', async (request, reply) => {
@@ -1758,7 +2308,7 @@ export async function registerDriverPanelRoutes(fastify: FastifyInstance): Promi
     });
 
     driverPanel.get('/driver-panel/historial', async (request, reply) => {
-      const { query } = request as { query: { page?: string, limit?: string } };
+      const { query } = request as { query: { page?: string; limit?: string } };
       const page = parseInt(query.page || '1', 10);
       const limit = parseInt(query.limit || '20', 10);
       const skip = (page - 1) * limit;
@@ -1796,7 +2346,7 @@ export async function registerDriverPanelRoutes(fastify: FastifyInstance): Promi
         success: true,
         data: {
           items: paginatedItems,
-          hasMore
+          hasMore,
         },
       });
     });

@@ -539,7 +539,8 @@ type AdminPortalSection =
   | 'promotions'
   | 'notifications'
   | 'stuck'
-  | 'featured';
+  | 'featured'
+  | 'customer-debts';
 
 const defaultApiBase = '/api';
 const storageKey = 'sadel.admin';
@@ -607,6 +608,14 @@ export default function Home() {
   const [selectedOrder, setSelectedOrder] = useState<OrderDetail | null>(null);
   const [loadingOrderDetail, setLoadingOrderDetail] = useState(false);
   const [ordersAutoRefresh, setOrdersAutoRefresh] = useState(true);
+
+  // Deuda de clientes (pedidos no recibidos)
+  const [customerSettlements, setCustomerSettlements] = useState<any[]>([]);
+  const [customerSettlementsTotal, setCustomerSettlementsTotal] = useState(0);
+  const [customerSettlementFilter, setCustomerSettlementFilter] = useState('');
+  const [loadingCustomerSettlements, setLoadingCustomerSettlements] = useState(false);
+  const [customerSettlementActionLoading, setCustomerSettlementActionLoading] = useState<string | null>(null);
+  const [viewingCustomerProofUrl, setViewingCustomerProofUrl] = useState<string | null>(null);
 
   const [drivers, setDrivers] = useState<DriverItem[]>([]);
   const [driversTotal, setDriversTotal] = useState(0);
@@ -1715,9 +1724,15 @@ export default function Home() {
 
   useEffect(() => {
     if (activeSection === 'requests' && isAdminSession) {
-      loadPlatformRequests();
+      void loadPlatformRequests();
     }
   }, [activeSection, isAdminSession, loadPlatformRequests]);
+
+  useEffect(() => {
+    if (activeSection === 'customer-debts' && isAdminSession) {
+      void loadCustomerSettlements();
+    }
+  }, [activeSection, isAdminSession, customerSettlementFilter, loadCustomerSettlements]);
 
   const loadDriverDetail = useCallback(
     async (driverId: string) => {
@@ -2280,9 +2295,61 @@ export default function Home() {
     }
   }
 
+  async function loadCustomerSettlements() {
+    if (!token) return;
+    setLoadingCustomerSettlements(true);
+    try {
+      const query = customerSettlementFilter
+        ? `?status=${encodeURIComponent(customerSettlementFilter)}`
+        : '';
+      const payload = await requestJson<{ success: true; data: { settlements: any[]; total: number } }>({
+        apiBase,
+        path: `/admin/customer-settlements${query}`,
+        token,
+        fallbackMessage: 'No se pudieron cargar las deudas de clientes.',
+      });
+      if (payload.success) {
+        setCustomerSettlements(payload.data.settlements || []);
+        setCustomerSettlementsTotal(payload.data.total || 0);
+      }
+    } catch (err) {
+      console.error('Failed to load customer settlements:', err);
+    } finally {
+      setLoadingCustomerSettlements(false);
+    }
+  }
+
+  async function updateCustomerSettlementStatus(settlementId: string, status: 'PAID' | 'REJECTED') {
+    if (!token) return;
+    const confirmMsg = status === 'PAID'
+      ? '¿Aprobar este pago? Se reactivará la cuenta del cliente automáticamente.'
+      : '¿Rechazar este comprobante? El cliente podrá subir uno nuevo.';
+    if (!confirm(confirmMsg)) return;
+
+    setCustomerSettlementActionLoading(settlementId);
+    try {
+      const payload = await requestJson<{ success: boolean }>({
+        apiBase,
+        path: `/admin/customer-settlements/${settlementId}`,
+        token,
+        options: {
+          method: 'PATCH',
+          body: JSON.stringify({ status }),
+        },
+        fallbackMessage: 'No se pudo actualizar el estado de la deuda.',
+      });
+      if (payload.success) {
+        await loadCustomerSettlements();
+      }
+    } catch (err) {
+      alert('Error: ' + (err instanceof Error ? err.message : String(err)));
+    } finally {
+      setCustomerSettlementActionLoading(null);
+    }
+  }
+
   async function updateSettlementStatus(settlementId: string, status: 'PAID' | 'REJECTED' | 'REVERT') {
     if (!token || !selectedDriverId) return;
-
     const confirmMsg = status === 'PAID'
       ? '¿Aprobar este pago? Se reactivará la cuenta del repartidor automáticamente.'
       : status === 'REJECTED'
@@ -2501,6 +2568,7 @@ export default function Home() {
     { key: 'users', label: 'Comensales' },
     { key: 'requests', label: 'Solicitudes' },
     { key: 'support', label: 'Soporte' },
+    { key: 'customer-debts', label: 'Deuda de Clientes' },
     { key: 'promotions', label: 'Promociones' },
     { key: 'featured', label: 'Destacados' },
     { key: 'notifications', label: 'Notificaciones' },
@@ -6208,6 +6276,124 @@ export default function Home() {
             {activeSection === 'stuck' ? (
               <StuckOrdersPanel apiBase={apiBase} token={token} />
             ) : null}
+
+            {activeSection === 'customer-debts' ? (
+              <div className="space-y-4">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <h2 className="text-xl font-semibold tracking-[-0.03em] text-neutral-950">Deuda de clientes</h2>
+                    <p className="text-sm text-neutral-500 mt-0.5">
+                      Pedidos no recibidos (cliente no salió). Aprobar el pago reactiva la cuenta del cliente.
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <select
+                      value={customerSettlementFilter}
+                      onChange={(e) => setCustomerSettlementFilter(e.target.value)}
+                      className="rounded-2xl border border-black/10 bg-white px-3 py-2 text-sm font-medium text-neutral-700 focus:outline-none focus:ring-2 focus:ring-neutral-900/10"
+                    >
+                      <option value="">Todos los estados</option>
+                      <option value="PENDING">Pendiente</option>
+                      <option value="IN_REVIEW">En revisión</option>
+                      <option value="PAID">Pagado</option>
+                      <option value="REJECTED">Rechazado</option>
+                    </select>
+                    <button
+                      type="button"
+                      onClick={() => void loadCustomerSettlements()}
+                      className="rounded-2xl border border-black/10 bg-white px-4 py-2 text-sm font-semibold text-neutral-700 transition hover:bg-neutral-50"
+                    >
+                      Actualizar
+                    </button>
+                  </div>
+                </div>
+
+                {loadingCustomerSettlements ? (
+                  <div className="rounded-[28px] border border-dashed border-black/10 bg-white/40 p-10 text-center text-sm text-neutral-500">
+                    Cargando...
+                  </div>
+                ) : customerSettlements.length === 0 ? (
+                  <div className="rounded-[28px] border border-dashed border-black/10 bg-white/40 p-10 text-center">
+                    <span className="text-3xl block mb-3">💳</span>
+                    <h4 className="text-sm font-bold text-neutral-800">Sin deudas</h4>
+                    <p className="text-xs text-neutral-500 mt-1">No hay deudas de clientes en este estado.</p>
+                  </div>
+                ) : (
+                  <div className="grid gap-3">
+                    {customerSettlements.map((s: any) => (
+                      <div key={s.id} className="rounded-[24px] border border-black/5 bg-white p-5 shadow-sm">
+                        <div className="flex flex-wrap items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="text-sm font-bold text-neutral-950">
+                                {s.customer?.user?.name || 'Cliente'}
+                              </span>
+                              <span className={`rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider ${
+                                s.status === 'PENDING'
+                                  ? 'bg-amber-50 text-amber-700 border border-amber-200'
+                                  : s.status === 'IN_REVIEW'
+                                    ? 'bg-sky-50 text-sky-700 border border-sky-200'
+                                    : s.status === 'PAID'
+                                      ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                      : 'bg-rose-50 text-rose-700 border border-rose-200'
+                              }`}>
+                                {s.status === 'PENDING' ? 'Pendiente' : s.status === 'IN_REVIEW' ? 'En revisión' : s.status === 'PAID' ? 'Pagado' : 'Rechazado'}
+                              </span>
+                            </div>
+                            <p className="text-xs text-neutral-500 mt-1">
+                              {s.order?.restaurant?.name || '—'} · Pedido{' '}
+                              <span className="font-mono">{s.order?.orderReference || s.reference}</span>
+                            </p>
+                            {s.customer?.user?.phone && (
+                              <p className="text-xs text-neutral-400 mt-0.5">📞 {s.customer.user.phone}</p>
+                            )}
+                            {s.paymentProofUrl ? (
+                              <button
+                                type="button"
+                                onClick={() => setViewingCustomerProofUrl(s.paymentProofUrl)}
+                                className="mt-2 text-xs font-semibold text-sky-600 underline"
+                              >
+                                Ver comprobante
+                              </button>
+                            ) : null}
+                          </div>
+                          <div className="text-right shrink-0">
+                            <p className="text-lg font-black text-neutral-950">
+                              {new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(s.amount)}
+                            </p>
+                            <div className="mt-2 flex gap-2">
+                              {s.status === 'IN_REVIEW' && (
+                                <>
+                                  <button
+                                    type="button"
+                                    disabled={customerSettlementActionLoading === s.id}
+                                    onClick={() => void updateCustomerSettlementStatus(s.id, 'PAID')}
+                                    className="rounded-xl bg-emerald-500 px-3 py-2 text-xs font-bold text-white transition hover:bg-emerald-600 disabled:opacity-50"
+                                  >
+                                    Aprobar pago
+                                  </button>
+                                  <button
+                                    type="button"
+                                    disabled={customerSettlementActionLoading === s.id}
+                                    onClick={() => void updateCustomerSettlementStatus(s.id, 'REJECTED')}
+                                    className="rounded-xl border border-rose-200 bg-white px-3 py-2 text-xs font-bold text-rose-600 transition hover:bg-rose-50 disabled:opacity-50"
+                                  >
+                                    Rechazar
+                                  </button>
+                                </>
+                              )}
+                              {s.status === 'PENDING' && (
+                                <span className="text-[10px] text-neutral-400 font-medium">Sin comprobante</span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ) : null}
           </div>
         </div>
       </div>
@@ -7033,6 +7219,52 @@ export default function Home() {
           </div>
         </div>
       )}
+
+      {viewingCustomerProofUrl && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 px-4 py-6 backdrop-blur-sm">
+          <div className="relative flex max-h-full w-full max-w-4xl flex-col overflow-hidden rounded-[32px] bg-white shadow-2xl animate-scale-up">
+            <div className="flex items-center justify-between border-b border-black/5 bg-neutral-50/50 px-6 py-4">
+              <div>
+                <h3 className="text-xl font-bold tracking-tight text-neutral-950">Comprobante de Pago</h3>
+                <p className="mt-1 text-xs text-neutral-500">Comprobante subido por el cliente para liquidar su deuda.</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setViewingCustomerProofUrl(null)}
+                className="flex h-9 w-9 items-center justify-center rounded-full bg-white border border-black/5 text-neutral-500 hover:bg-neutral-100 transition shadow-sm"
+              >
+                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+              </button>
+            </div>
+            <div className="relative flex flex-1 items-center justify-center overflow-auto bg-neutral-100/50 p-6 min-h-[40vh]">
+              <img
+                src={viewingCustomerProofUrl}
+                alt="Comprobante de pago del cliente"
+                className="max-h-[65vh] w-auto max-w-full rounded-xl object-contain shadow-md border border-black/5"
+              />
+            </div>
+            <div className="flex items-center justify-end gap-3 border-t border-black/5 bg-white px-6 py-4">
+              <button
+                type="button"
+                onClick={() => setViewingCustomerProofUrl(null)}
+                className="rounded-full px-5 py-2.5 text-sm font-semibold text-neutral-600 hover:bg-neutral-100 transition"
+              >
+                Cerrar
+              </button>
+              <a
+                href={viewingCustomerProofUrl}
+                download="Comprobante-cliente.jpg"
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-2 rounded-full bg-neutral-950 px-6 py-2.5 text-sm font-bold text-white transition hover:bg-neutral-800 shadow-lg shadow-neutral-900/20 active:scale-95"
+              >
+                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+                Descargar Imagen
+              </a>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -7137,6 +7369,16 @@ function AdminNavIcon({ kind }: { kind: AdminPortalSection }) {
         <circle cx="12" cy="12" r="9" strokeWidth={1.7} />
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M12 7v5l3 3" />
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M12 8V4m0 0l-2 2m2-2l2 2" />
+      </svg>
+    );
+  }
+
+  if (kind === 'customer-debts') {
+    return (
+      <svg className="h-5 w-5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+        <rect x="3" y="6" width="18" height="13" rx="2" strokeWidth={1.7} />
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M3 10h18" />
+        <circle cx="8" cy="14" r="1" fill="currentColor" />
       </svg>
     );
   }

@@ -272,6 +272,27 @@ type TransientNotice = {
   orderReference?: string;
 };
 
+type DebtInfo = {
+  hasDebt: boolean;
+  isSuspendedByDebt: boolean;
+  debtAmount: number;
+  settlement: {
+    id: string;
+    reference: string;
+    amount: number;
+    status: 'PENDING' | 'IN_REVIEW' | 'PAID' | 'OVERDUE' | 'REJECTED';
+    paymentProofUrl?: string | null;
+    createdAt?: string;
+    dueDate?: string | null;
+    order?: {
+      orderReference: string;
+      totalAmount: number;
+      createdAt?: string;
+      restaurant?: { name: string };
+    } | null;
+  } | null;
+};
+
 type CheckoutForm = {
   street: string;
   number: string;
@@ -418,6 +439,14 @@ export default function Home() {
   const [showPromoModal, setShowPromoModal] = useState(false);
   const [promoImageUrl, setPromoImageUrl] = useState('');
   const [showAuthModal, setShowAuthModal] = useState(false);
+
+  // Deuda por pedido no recibido (cliente no salió a recibir)
+  const [debtData, setDebtData] = useState<DebtInfo | null>(null);
+  const [debtBank, setDebtBank] = useState<{ bankName: string; bankAccount: string; bankBeneficiary: string } | null>(null);
+  const [proofFileName, setProofFileName] = useState('');
+  const [proofFileSource, setProofFileSource] = useState('');
+  const [submittingDebtPayment, setSubmittingDebtPayment] = useState(false);
+  const [debtPaymentError, setDebtPaymentError] = useState('');
 
   const setToastMessage = useCallback((msg: string | ((prev: string) => string), type: 'success' | 'error' | 'info' = 'success') => {
     if (typeof msg === 'function') {
@@ -1239,6 +1268,15 @@ export default function Home() {
       setIsAuthChecked(true);
     }
   }, []);
+
+  // Checar deuda por pedido no recibido cuando la sesión está activa
+  const debtCheckedRef = useRef(false);
+  useEffect(() => {
+    if (!isAuthChecked || !token || !sessionUser?.role) return;
+    if (debtCheckedRef.current) return;
+    debtCheckedRef.current = true;
+    void checkCustomerDebt();
+  }, [isAuthChecked, token, sessionUser, checkCustomerDebt]);
 
   useEffect(() => {
     async function fetchPlatformCategories() {
@@ -3413,6 +3451,26 @@ export default function Home() {
         requiresAcknowledgement: true,
         dismissible: false,
       });
+      // Si la suspensión viene de un pedido no recibido, mostrar la deuda y el flujo de pago
+      if (payload.reason === 'unpaid_delivery') {
+        void checkCustomerDebt();
+      }
+    });
+
+    socket.on('debt:paid', () => {
+      setDebtData(null);
+      setProofFileName('');
+      setProofFileSource('');
+      setDebtPaymentError('');
+      setToastMessage('Tu cuenta ha sido reactivada. ¡Gracias por liquidar tu saldo!', 'success');
+    });
+
+    socket.on('debt:rejected', () => {
+      void checkCustomerDebt();
+      setDebtPaymentError('');
+      setProofFileName('');
+      setProofFileSource('');
+      setToastMessage('Tu comprobante no fue válido. Sube uno nuevo para liquidar tu saldo.', 'error');
     });
 
     socket.on('order_chat:message_received', (payload: any) => {
@@ -3445,6 +3503,8 @@ export default function Home() {
       }
       socket.off('order_chat:message_received');
       socket.off('account:suspended');
+      socket.off('debt:paid');
+      socket.off('debt:rejected');
       socket.emit('leave-room', sessionUserIdRef.current, 'CUSTOMER');
       socket.disconnect();
       socketRef.current = null;
@@ -3632,6 +3692,33 @@ export default function Home() {
   }
 
 
+
+  async function checkCustomerDebt() {
+    if (!token || !sessionUser?.role) return;
+    try {
+      const [debtRes, settingsRes] = await Promise.all([
+        requestJson<{ success: true; data: DebtInfo }>({
+          apiBase,
+          path: '/customer/deuda',
+          token,
+        }),
+        requestJson<{
+          success: true;
+          data: { adminBankName: string; adminBankAccount: string; adminBankBeneficiary: string };
+        }>({ apiBase, path: '/settings' }),
+      ]);
+      if (debtRes.success && debtRes.data) {
+        setDebtData(debtRes.data);
+        setDebtBank({
+          bankName: settingsRes?.data?.adminBankName || 'Banco del Centro',
+          bankAccount: settingsRes?.data?.adminBankAccount || '',
+          bankBeneficiary: settingsRes?.data?.adminBankBeneficiary || 'Administrador SaDeL',
+        });
+      }
+    } catch (e) {
+      console.error('Failed to check customer debt:', e);
+    }
+  }
 
   function showTransientNotice({
     key,
@@ -6676,6 +6763,178 @@ export default function Home() {
       <audio id="customer-alert-audio" src="/sounds/notifica.wav" preload="auto"></audio>
       <audio id="chat-message-audio" src="/sounds/mensaje.wav" preload="auto"></audio>
       <audio id="customer-llegue-audio" src="/sounds/llegue.wav" preload="auto"></audio>
+
+      {debtData?.hasDebt && debtData.settlement && (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/70 backdrop-blur-sm px-4 overflow-y-auto py-8">
+          <div className="w-full max-w-md rounded-[32px] bg-white p-6 shadow-2xl animate-in fade-in zoom-in-95 duration-200 my-auto">
+            <div className="flex flex-col items-center text-center">
+              <div className="flex h-16 w-16 items-center justify-center rounded-full bg-amber-100 text-3xl mb-4">
+                🔒
+              </div>
+              <h2 className="text-xl font-black text-neutral-950">Saldo pendiente</h2>
+              <p className="text-sm text-neutral-500 mt-2 leading-relaxed">
+                Un repartidor llegó a tu domicilio con tu pedido y esperó, pero no pudimos
+                contactarte. Para volver a pedir en SaDeL necesitas cubrir el costo del pedido.
+              </p>
+            </div>
+
+            {/* Detalle del pedido */}
+            <div className="mt-5 rounded-2xl border border-black/5 bg-neutral-50 p-4 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-bold uppercase tracking-widest text-neutral-400">Pedido</span>
+                <span className="text-[10px] font-bold uppercase tracking-widest text-neutral-400">
+                  {debtData.settlement.reference}
+                </span>
+              </div>
+              {debtData.settlement.order?.restaurant?.name && (
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-semibold text-neutral-600">Restaurante</span>
+                  <span className="text-sm font-semibold text-neutral-950">{debtData.settlement.order.restaurant.name}</span>
+                </div>
+              )}
+              {debtData.settlement.order?.orderReference && (
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-semibold text-neutral-600">Referencia</span>
+                  <span className="text-sm font-semibold text-neutral-950">{debtData.settlement.order.orderReference}</span>
+                </div>
+              )}
+              <div className="flex items-center justify-between pt-2 border-t border-black/5">
+                <span className="text-sm font-bold text-neutral-600">Total a liquidar</span>
+                <span className="text-xl font-black text-neutral-950">
+                  {new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(debtData.settlement.amount)}
+                </span>
+              </div>
+            </div>
+
+            {/* Estado */}
+            <div className="mt-4">
+              {debtData.settlement.status === 'IN_REVIEW' ? (
+                <div className="rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3.5 flex items-center gap-3">
+                  <span className="h-4 w-4 rounded-full border-2 border-sky-500 border-t-transparent animate-spin shrink-0" />
+                  <p className="text-xs font-bold text-sky-700">
+                    Tu comprobante está en revisión. Te avisaremos cuando sea aprobado.
+                  </p>
+                </div>
+              ) : (
+                <>
+                  <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3.5">
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-amber-600">Datos para transferir</p>
+                    <div className="mt-2 space-y-1">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs text-neutral-500">Banco</span>
+                        <span className="text-xs font-bold text-neutral-900">{debtBank?.bankName || '—'}</span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs text-neutral-500">Cuenta</span>
+                        <span className="text-xs font-bold text-neutral-900">{debtBank?.bankAccount || '—'}</span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs text-neutral-500">Beneficiario</span>
+                        <span className="text-xs font-bold text-neutral-900">{debtBank?.bankBeneficiary || '—'}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="mt-4">
+                    <input
+                      type="file"
+                      accept="image/*"
+                      id="debt-proof-input"
+                      className="hidden"
+                      onChange={async (e) => {
+                        const file = e.target.files?.[0];
+                        if (!file) return;
+                        setDebtPaymentError('');
+                        try {
+                          const source = await convertImageFileToDataUrl(file, 900, 900, 0.7);
+                          setProofFileName(file.name);
+                          setProofFileSource(source);
+                        } catch {
+                          setDebtPaymentError('No se pudo leer el archivo. Intenta con otra imagen.');
+                        }
+                      }}
+                    />
+                    {proofFileSource ? (
+                      <div className="flex items-center gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3">
+                        <span className="text-xl">✅</span>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-bold text-emerald-700 truncate">{proofFileName}</p>
+                          <p className="text-[10px] text-emerald-600/70">Comprobante listo para enviar</p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => { setProofFileName(''); setProofFileSource(''); }}
+                          className="text-xs font-bold text-emerald-700"
+                        >
+                          Quitar
+                        </button>
+                      </div>
+                    ) : (
+                      <label
+                        htmlFor="debt-proof-input"
+                        className="flex w-full cursor-pointer items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-neutral-300 bg-white px-4 py-4 text-sm font-bold text-neutral-600 transition hover:border-neutral-400 active:scale-[0.98]"
+                      >
+                        📎 Subir comprobante de pago
+                      </label>
+                    )}
+
+                    {debtPaymentError && (
+                      <p className="text-xs font-bold text-rose-600 mt-2 text-center">{debtPaymentError}</p>
+                    )}
+
+                    <button
+                      type="button"
+                      disabled={!proofFileSource || submittingDebtPayment}
+                      onClick={async () => {
+                        if (!proofFileSource || !debtData?.settlement) return;
+                        setSubmittingDebtPayment(true);
+                        setDebtPaymentError('');
+                        try {
+                          const uploaded = await uploadMediaAsset({
+                            apiBase,
+                            token: token || '',
+                            kind: 'payment-proof',
+                            source: proofFileSource,
+                            fileName: proofFileName || 'comprobante-deuda.jpg',
+                            fallbackMessage: 'No se pudo subir el comprobante.',
+                            fallbackToSource: true,
+                          });
+                          await requestJson<{ success: true; data: unknown }>({
+                            apiBase,
+                            path: '/customer/deuda/pagar',
+                            token: token || '',
+                            options: {
+                              method: 'POST',
+                              body: JSON.stringify({
+                                settlementId: debtData.settlement.id,
+                                paymentProofUrl: uploaded.url,
+                              }),
+                            },
+                            fallbackMessage: 'No se pudo enviar el comprobante.',
+                          });
+                          setProofFileName('');
+                          setProofFileSource('');
+                          await checkCustomerDebt();
+                          setToastMessage('Comprobante enviado. ¡Gracias! Quedará en revisión.', 'success');
+                        } catch (err: any) {
+                          setDebtPaymentError(err?.message || 'Ocurrió un error. Intenta de nuevo.');
+                        } finally {
+                          setSubmittingDebtPayment(false);
+                        }
+                      }}
+                      className="w-full py-4 rounded-2xl bg-neutral-950 text-white text-sm font-black tracking-wide transition active:scale-[0.97] disabled:opacity-40 disabled:cursor-not-allowed mt-3"
+                    >
+                      {submittingDebtPayment
+                        ? <span className="flex items-center justify-center gap-2"><span className="h-4 w-4 rounded-full border-2 border-white border-t-transparent animate-spin" />Enviando...</span>
+                        : 'Enviar comprobante de pago'}
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       <AuthModal
         isOpen={showAuthModal}

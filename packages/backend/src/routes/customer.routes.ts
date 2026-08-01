@@ -9,7 +9,10 @@ import { buildApartmentWhere, normalizeOptionalAddressText } from '../utils/addr
 import { urlToKey, deleteImages } from '../services/storage.service';
 
 const updatePreferencesSchema = z.object({
-  deliveryPreference: z.enum(['NO_DOORBELL', 'CALL_ON_ARRIVAL', 'PREFER_WHATSAPP', 'HONK_ON_ARRIVAL', 'BEWARE_OF_DOG']).nullable().optional(),
+  deliveryPreference: z
+    .enum(['NO_DOORBELL', 'CALL_ON_ARRIVAL', 'PREFER_WHATSAPP', 'HONK_ON_ARRIVAL', 'BEWARE_OF_DOG'])
+    .nullable()
+    .optional(),
   whatsappNotifications: z.boolean().optional(),
 });
 
@@ -119,7 +122,7 @@ export async function registerCustomerRoutes(fastify: FastifyInstance): Promise<
     });
 
     // ============== Addresses Routes ==============
-    
+
     customerPanel.get('/customer/addresses', async (request, reply) => {
       const user = getAuthenticatedUser(request);
       const customer = await prisma.customer.findUnique({
@@ -207,13 +210,26 @@ export async function registerCustomerRoutes(fastify: FastifyInstance): Promise<
       const parsed = createAddressSchema.safeParse(request.body);
 
       if (!parsed.success) {
-        return reply.status(400).send({ success: false, error: { code: 'INVALID_PAYLOAD', message: parsed.error.issues[0]?.message || 'Datos inválidos.' } });
+        return reply
+          .status(400)
+          .send({
+            success: false,
+            error: {
+              code: 'INVALID_PAYLOAD',
+              message: parsed.error.issues[0]?.message || 'Datos inválidos.',
+            },
+          });
       }
 
       const user = getAuthenticatedUser(request);
       const customer = await prisma.customer.findUnique({ where: { userId: user.sub } });
       if (!customer) {
-        return reply.status(404).send({ success: false, error: { code: 'CUSTOMER_NOT_FOUND', message: 'No se encontró el perfil del cliente.' } });
+        return reply
+          .status(404)
+          .send({
+            success: false,
+            error: { code: 'CUSTOMER_NOT_FOUND', message: 'No se encontró el perfil del cliente.' },
+          });
       }
 
       const addressData = {
@@ -467,15 +483,21 @@ export async function registerCustomerRoutes(fastify: FastifyInstance): Promise<
 
       const user = getAuthenticatedUser(request);
 
-      const currentUser = 'profilePhoto' in parsed.data
-        ? await prisma.user.findUnique({ where: { id: user.sub }, select: { profilePhoto: true } })
-        : null;
+      const currentUser =
+        'profilePhoto' in parsed.data
+          ? await prisma.user.findUnique({
+              where: { id: user.sub },
+              select: { profilePhoto: true },
+            })
+          : null;
 
       if (parsed.data.phone) {
         const normalized = parsed.data.phone.replace(/\D/g, '').slice(-10);
         const existingUser = await prisma.user.findFirst({
           where: {
-            phone: { in: [parsed.data.phone.trim(), normalized, `+52${normalized}`, `+521${normalized}`] },
+            phone: {
+              in: [parsed.data.phone.trim(), normalized, `+52${normalized}`, `+521${normalized}`],
+            },
             role: UserRole.CUSTOMER,
             id: { not: user.sub },
           },
@@ -519,255 +541,440 @@ export async function registerCustomerRoutes(fastify: FastifyInstance): Promise<
       });
     });
 
-      const createTicketSchema = z.object({
-        type: z.enum(['APP', 'ORDER']),
-        subject: z.string().optional(),
-        description: z.string().min(1),
-        storeName: z.string().optional(),
-        orderNumber: z.string().optional(),
-      });
+    const createTicketSchema = z.object({
+      type: z.enum(['APP', 'ORDER']),
+      subject: z.string().optional(),
+      description: z.string().min(1),
+      storeName: z.string().optional(),
+      orderNumber: z.string().optional(),
+    });
 
-      customerPanel.post('/customer/support/tickets', async (request, reply) => {
-        const parsed = createTicketSchema.safeParse(request.body);
+    customerPanel.post('/customer/support/tickets', async (request, reply) => {
+      const parsed = createTicketSchema.safeParse(request.body);
 
-        if (!parsed.success) {
-          return reply.status(400).send({
-            success: false,
-            error: {
-              code: 'INVALID_PAYLOAD',
-              message: parsed.error.issues[0]?.message || 'Datos inválidos.',
-            },
-          });
-        }
-
-        const user = getAuthenticatedUser(request);
-        const customer = await prisma.customer.findUnique({
-          where: { userId: user.sub },
-        });
-
-        if (!customer) {
-          return reply.status(404).send({
-            success: false,
-            error: {
-              code: 'CUSTOMER_NOT_FOUND',
-              message: 'No se encontró el perfil del cliente.',
-            },
-          });
-        }
-
-        const ticket = await prisma.supportTicket.create({
-          data: {
-            ...parsed.data,
-            customerId: customer.id,
+      if (!parsed.success) {
+        return reply.status(400).send({
+          success: false,
+          error: {
+            code: 'INVALID_PAYLOAD',
+            message: parsed.error.issues[0]?.message || 'Datos inválidos.',
           },
         });
+      }
 
-        return reply.send({
-          success: true,
-          data: ticket,
-        });
+      const user = getAuthenticatedUser(request);
+      const customer = await prisma.customer.findUnique({
+        where: { userId: user.sub },
       });
 
-      customerPanel.get('/customer/support/tickets', async (request, reply) => {
-        const user = getAuthenticatedUser(request);
-        const customer = await prisma.customer.findUnique({
-          where: { userId: user.sub },
+      if (!customer) {
+        return reply.status(404).send({
+          success: false,
+          error: {
+            code: 'CUSTOMER_NOT_FOUND',
+            message: 'No se encontró el perfil del cliente.',
+          },
         });
+      }
 
-        if (!customer) {
-          return reply.status(404).send({
-            success: false,
-            error: {
-              code: 'CUSTOMER_NOT_FOUND',
-              message: 'No se encontró el perfil del cliente.',
-            },
-          });
-        }
-
-        const tickets = await prisma.supportTicket.findMany({
-          where: { customerId: customer.id },
-          orderBy: { createdAt: 'desc' },
-        });
-
-        return reply.send({
-          success: true,
-          data: tickets,
-        });
+      const ticket = await prisma.supportTicket.create({
+        data: {
+          ...parsed.data,
+          customerId: customer.id,
+        },
       });
 
-      // ============== Reviews Routes ==============
-      const createReviewSchema = z.object({
-        rating: z.number().min(1).max(5),
-        comment: z.string().optional(),
-        driverRating: z.number().min(1).max(5).optional(),
-        driverComment: z.string().optional(),
+      return reply.send({
+        success: true,
+        data: ticket,
+      });
+    });
+
+    customerPanel.get('/customer/support/tickets', async (request, reply) => {
+      const user = getAuthenticatedUser(request);
+      const customer = await prisma.customer.findUnique({
+        where: { userId: user.sub },
       });
 
-      customerPanel.post('/customer/pedidos/:id/review', async (request, reply) => {
-        const params = z.object({ id: z.string().min(1) }).safeParse(request.params);
-        const parsed = createReviewSchema.safeParse(request.body);
-
-        if (!params.success || !parsed.success) {
-          return reply.status(400).send({
-            success: false,
-            error: {
-              code: 'INVALID_PAYLOAD',
-              message: 'Datos o parámetros inválidos.',
-            },
-          });
-        }
-
-        const user = getAuthenticatedUser(request);
-        const customer = await prisma.customer.findUnique({
-          where: { userId: user.sub },
+      if (!customer) {
+        return reply.status(404).send({
+          success: false,
+          error: {
+            code: 'CUSTOMER_NOT_FOUND',
+            message: 'No se encontró el perfil del cliente.',
+          },
         });
+      }
 
-        if (!customer) {
-          return reply.status(404).send({
-            success: false,
-            error: {
-              code: 'CUSTOMER_NOT_FOUND',
-              message: 'No se encontró el perfil del cliente.',
-            },
-          });
-        }
+      const tickets = await prisma.supportTicket.findMany({
+        where: { customerId: customer.id },
+        orderBy: { createdAt: 'desc' },
+      });
 
-        const order = await prisma.order.findUnique({
-          where: { id: params.data.id },
-          select: { restaurantId: true, customerId: true, status: true, driverId: true },
+      return reply.send({
+        success: true,
+        data: tickets,
+      });
+    });
+
+    // ============== Reviews Routes ==============
+    const createReviewSchema = z.object({
+      rating: z.number().min(1).max(5),
+      comment: z.string().optional(),
+      driverRating: z.number().min(1).max(5).optional(),
+      driverComment: z.string().optional(),
+    });
+
+    customerPanel.post('/customer/pedidos/:id/review', async (request, reply) => {
+      const params = z.object({ id: z.string().min(1) }).safeParse(request.params);
+      const parsed = createReviewSchema.safeParse(request.body);
+
+      if (!params.success || !parsed.success) {
+        return reply.status(400).send({
+          success: false,
+          error: {
+            code: 'INVALID_PAYLOAD',
+            message: 'Datos o parámetros inválidos.',
+          },
         });
+      }
 
-        if (!order) {
-          return reply.status(404).send({
-            success: false,
-            error: {
-              code: 'ORDER_NOT_FOUND',
-              message: 'No se encontró el pedido.',
+      const user = getAuthenticatedUser(request);
+      const customer = await prisma.customer.findUnique({
+        where: { userId: user.sub },
+      });
+
+      if (!customer) {
+        return reply.status(404).send({
+          success: false,
+          error: {
+            code: 'CUSTOMER_NOT_FOUND',
+            message: 'No se encontró el perfil del cliente.',
+          },
+        });
+      }
+
+      const order = await prisma.order.findUnique({
+        where: { id: params.data.id },
+        select: { restaurantId: true, customerId: true, status: true, driverId: true },
+      });
+
+      if (!order) {
+        return reply.status(404).send({
+          success: false,
+          error: {
+            code: 'ORDER_NOT_FOUND',
+            message: 'No se encontró el pedido.',
+          },
+        });
+      }
+
+      if (order.customerId !== customer.id) {
+        return reply.status(403).send({
+          success: false,
+          error: {
+            code: 'FORBIDDEN',
+            message: 'No tienes permiso para calificar este pedido.',
+          },
+        });
+      }
+
+      if (
+        order.status !== 'DELIVERED' &&
+        order.status !== 'COMPLETED' &&
+        order.status !== 'PICKED_UP'
+      ) {
+        return reply.status(400).send({
+          success: false,
+          error: {
+            code: 'INVALID_ORDER_STATUS',
+            message: 'Solo puedes calificar pedidos finalizados.',
+          },
+        });
+      }
+
+      let review;
+      try {
+        review = await prisma.$transaction(async (tx) => {
+          const existingReview = await tx.review.findUnique({
+            where: { orderId: params.data.id },
+          });
+
+          if (existingReview) {
+            return { review: existingReview, alreadyExisting: true };
+          }
+
+          const createdReview = await tx.review.create({
+            data: {
+              customerId: customer.id,
+              restaurantId: order.restaurantId,
+              orderId: params.data.id,
+              driverId: order.driverId,
+              rating: parsed.data.rating,
+              comment: parsed.data.comment,
+              driverRating: parsed.data.driverRating,
+              driverComment: parsed.data.driverComment,
             },
           });
-        }
 
-        if (order.customerId !== customer.id) {
-          return reply.status(403).send({
-            success: false,
-            error: {
-              code: 'FORBIDDEN',
-              message: 'No tienes permiso para calificar este pedido.',
+          const restaurantAgg = await tx.review.aggregate({
+            where: { restaurantId: order.restaurantId },
+            _avg: { rating: true },
+            _count: true,
+          });
+
+          const avgRating = restaurantAgg._avg.rating ?? 0;
+
+          await tx.restaurantStats.upsert({
+            where: { restaurantId: order.restaurantId },
+            update: {
+              rating: avgRating,
+              reviewCount: restaurantAgg._count,
+            },
+            create: {
+              restaurantId: order.restaurantId,
+              rating: avgRating,
+              reviewCount: restaurantAgg._count,
             },
           });
-        }
 
-        if (order.status !== 'DELIVERED' && order.status !== 'COMPLETED' && order.status !== 'PICKED_UP') {
-          return reply.status(400).send({
-            success: false,
-            error: {
-              code: 'INVALID_ORDER_STATUS',
-              message: 'Solo puedes calificar pedidos finalizados.',
-            },
-          });
-        }
-
-        let review;
-        try {
-          review = await prisma.$transaction(async (tx) => {
-            const existingReview = await tx.review.findUnique({
-              where: { orderId: params.data.id },
-            });
-
-            if (existingReview) {
-              return { review: existingReview, alreadyExisting: true };
-            }
-
-            const createdReview = await tx.review.create({
-              data: {
-                customerId: customer.id,
-                restaurantId: order.restaurantId,
-                orderId: params.data.id,
+          // Update driver rating if applicable
+          if (order.driverId && parsed.data.driverRating) {
+            const driverAgg = await tx.review.aggregate({
+              where: {
                 driverId: order.driverId,
-                rating: parsed.data.rating,
-                comment: parsed.data.comment,
-                driverRating: parsed.data.driverRating,
-                driverComment: parsed.data.driverComment,
+                driverRating: { not: null },
               },
+              _avg: { driverRating: true },
             });
 
-            const restaurantAgg = await tx.review.aggregate({
-              where: { restaurantId: order.restaurantId },
-              _avg: { rating: true },
-              _count: true,
-            });
+            const avgDriverRating = driverAgg._avg.driverRating;
 
-            const avgRating = restaurantAgg._avg.rating ?? 0;
-
-            await tx.restaurantStats.upsert({
-              where: { restaurantId: order.restaurantId },
-              update: {
-                rating: avgRating,
-                reviewCount: restaurantAgg._count,
-              },
-              create: {
-                restaurantId: order.restaurantId,
-                rating: avgRating,
-                reviewCount: restaurantAgg._count,
-              },
-            });
-
-            // Update driver rating if applicable
-            if (order.driverId && parsed.data.driverRating) {
-              const driverAgg = await tx.review.aggregate({
-                where: {
-                  driverId: order.driverId,
-                  driverRating: { not: null },
+            if (avgDriverRating !== null) {
+              await tx.driverStats.upsert({
+                where: { driverId: order.driverId },
+                update: {
+                  rating: avgDriverRating,
                 },
-                _avg: { driverRating: true },
+                create: {
+                  driverId: order.driverId,
+                  rating: avgDriverRating,
+                },
               });
 
-              const avgDriverRating = driverAgg._avg.driverRating;
-
-              if (avgDriverRating !== null) {
-                await tx.driverStats.upsert({
-                  where: { driverId: order.driverId },
-                  update: {
-                    rating: avgDriverRating,
-                  },
-                  create: {
-                    driverId: order.driverId,
-                    rating: avgDriverRating,
-                  },
-                });
-
-                await tx.driver.update({
-                  where: { id: order.driverId },
-                  data: { rating: avgDriverRating },
-                });
-              }
-            }
-
-            return { review: createdReview, alreadyExisting: false };
-          });
-        } catch (createError) {
-          // P2002: otro request concurrente ya creó la reseña (race en orderId @unique).
-          // Se trata como éxito para garantizar idempotencia.
-          if (createError instanceof Prisma.PrismaClientKnownRequestError && createError.code === 'P2002') {
-            const existingReview = await prisma.review.findUnique({
-              where: { orderId: params.data.id },
-            });
-            if (existingReview) {
-              return reply.send({
-                success: true,
-                data: existingReview,
-                alreadyExisting: true,
+              await tx.driver.update({
+                where: { id: order.driverId },
+                data: { rating: avgDriverRating },
               });
             }
           }
-          throw createError;
-        }
 
-        return reply.send({
-          success: true,
-          data: review.review,
-          alreadyExisting: review.alreadyExisting,
+          return { review: createdReview, alreadyExisting: false };
         });
+      } catch (createError) {
+        // P2002: otro request concurrente ya creó la reseña (race en orderId @unique).
+        // Se trata como éxito para garantizar idempotencia.
+        if (
+          createError instanceof Prisma.PrismaClientKnownRequestError &&
+          createError.code === 'P2002'
+        ) {
+          const existingReview = await prisma.review.findUnique({
+            where: { orderId: params.data.id },
+          });
+          if (existingReview) {
+            return reply.send({
+              success: true,
+              data: existingReview,
+              alreadyExisting: true,
+            });
+          }
+        }
+        throw createError;
+      }
+
+      return reply.send({
+        success: true,
+        data: review.review,
+        alreadyExisting: review.alreadyExisting,
       });
     });
+
+    // ─── DEUDA POR PEDIDO NO RECIBIDO ───────────────────────────────────────
+    // Si el repartidor llego, espero 15+ min y el cliente no salio, se genera una
+    // deuda (CustomerBillingSettlement) y la cuenta queda suspendida hasta pagar.
+    customerPanel.get('/customer/deuda', async (request, reply) => {
+      const user = getAuthenticatedUser(request);
+      const customer = await prisma.customer.findUnique({
+        where: { userId: user.sub },
+        select: { id: true, isSuspendedByDebt: true, debtAmount: true },
+      });
+
+      if (!customer) {
+        return reply.status(404).send({
+          success: false,
+          error: { code: 'CUSTOMER_NOT_FOUND', message: 'No se encontro el perfil del cliente.' },
+        });
+      }
+
+      const settlement = await prisma.customerBillingSettlement.findFirst({
+        where: {
+          customerId: customer.id,
+          status: { in: ['PENDING', 'IN_REVIEW', 'REJECTED'] },
+        },
+        orderBy: { createdAt: 'desc' },
+        select: {
+          id: true,
+          reference: true,
+          amount: true,
+          status: true,
+          paymentProofUrl: true,
+          createdAt: true,
+          dueDate: true,
+          order: {
+            select: {
+              orderReference: true,
+              totalAmount: true,
+              createdAt: true,
+              restaurant: { select: { name: true } },
+            },
+          },
+        },
+      });
+
+      return reply.send({
+        success: true,
+        data: {
+          hasDebt: customer.isSuspendedByDebt && customer.debtAmount > 0,
+          isSuspendedByDebt: customer.isSuspendedByDebt,
+          debtAmount: customer.debtAmount,
+          settlement,
+        },
+      });
+    });
+
+    customerPanel.get('/customer/deuda/detalles', async (request, reply) => {
+      const user = getAuthenticatedUser(request);
+      const customer = await prisma.customer.findUnique({
+        where: { userId: user.sub },
+        select: { id: true },
+      });
+      if (!customer) {
+        return reply.status(404).send({
+          success: false,
+          error: { code: 'CUSTOMER_NOT_FOUND', message: 'No se encontro el perfil del cliente.' },
+        });
+      }
+
+      const settlement = await prisma.customerBillingSettlement.findFirst({
+        where: {
+          customerId: customer.id,
+          status: { in: ['PENDING', 'IN_REVIEW', 'REJECTED'] },
+        },
+        orderBy: { createdAt: 'desc' },
+        select: {
+          id: true,
+          reference: true,
+          amount: true,
+          status: true,
+          paymentProofUrl: true,
+          createdAt: true,
+          dueDate: true,
+          notes: true,
+          order: {
+            select: {
+              orderReference: true,
+              subtotal: true,
+              taxAmount: true,
+              serviceFee: true,
+              deliveryFee: true,
+              totalAmount: true,
+              createdAt: true,
+              restaurant: { select: { name: true } },
+              items: {
+                select: {
+                  quantity: true,
+                  unitPrice: true,
+                  subtotal: true,
+                  product: { select: { name: true } },
+                  options: { select: { name: true, price: true } },
+                },
+              },
+            },
+          },
+        },
+      });
+
+      if (!settlement) {
+        return reply.send({ success: true, data: null });
+      }
+
+      return reply.send({ success: true, data: settlement });
+    });
+
+    customerPanel.post('/customer/deuda/pagar', async (request, reply) => {
+      const body = z
+        .object({
+          settlementId: z.string().min(1),
+          paymentProofUrl: z.string().min(1),
+        })
+        .safeParse(request.body);
+
+      if (!body.success) {
+        return reply.status(400).send({
+          success: false,
+          error: {
+            code: 'INVALID_PARAMS',
+            message: body.error.issues[0]?.message || 'Parametros invalidos.',
+          },
+        });
+      }
+
+      const user = getAuthenticatedUser(request);
+      const customer = await prisma.customer.findUnique({
+        where: { userId: user.sub },
+        select: { id: true },
+      });
+      if (!customer) {
+        return reply.status(404).send({
+          success: false,
+          error: { code: 'CUSTOMER_NOT_FOUND', message: 'No se encontro el perfil del cliente.' },
+        });
+      }
+
+      const settlement = await prisma.customerBillingSettlement.findFirst({
+        where: { id: body.data.settlementId, customerId: customer.id },
+      });
+
+      if (!settlement) {
+        return reply.status(404).send({
+          success: false,
+          error: { code: 'SETTLEMENT_NOT_FOUND', message: 'No se encontro la deuda.' },
+        });
+      }
+
+      if (settlement.status === 'IN_REVIEW') {
+        return reply.status(409).send({
+          success: false,
+          error: { code: 'ALREADY_IN_REVIEW', message: 'Tu comprobante ya esta en revision.' },
+        });
+      }
+
+      if (settlement.status === 'PAID') {
+        return reply.status(409).send({
+          success: false,
+          error: { code: 'ALREADY_PAID', message: 'Esta deuda ya fue liquidada.' },
+        });
+      }
+
+      const updated = await prisma.customerBillingSettlement.update({
+        where: { id: settlement.id },
+        data: {
+          status: 'IN_REVIEW',
+          paymentProofUrl: body.data.paymentProofUrl,
+        },
+      });
+
+      return reply.send({ success: true, data: updated });
+    });
+  });
 }

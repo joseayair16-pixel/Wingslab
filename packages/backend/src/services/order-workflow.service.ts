@@ -13,7 +13,13 @@ import {
   restaurantOrderWorkflowSelect,
   restaurantScopedOrderSelect,
 } from './order-selects';
-import { getDistanceInKm, isRestaurant, getBusinessRef, getBusinessArticleCapitalized, getStatusLabel } from '../utils/restaurant';
+import {
+  getDistanceInKm,
+  isRestaurant,
+  getBusinessRef,
+  getBusinessArticleCapitalized,
+  getStatusLabel,
+} from '../utils/restaurant';
 import { getRedis } from '../config/redis';
 import { logger } from '../utils/logger';
 import { appEvents } from '../utils/events';
@@ -57,12 +63,17 @@ type RescheduleDeliveryParams = WorkflowParams & {
 type DriverOrderActionParams = WorkflowParams & {
   driverUserId: string;
   orderId: string;
-  action: 'accept' | 'reject' | 'picked_up' | 'in_transit' | 'delivered';
+  action: 'accept' | 'reject' | 'picked_up' | 'in_transit' | 'delivered' | 'safe_place' | 'no_show';
   pin?: string;
 };
 
 const restaurantStatusTransitions: Record<OrderStatus, OrderStatus[]> = {
-  PENDING: [OrderStatus.CONFIRMED, OrderStatus.PREPARING, OrderStatus.REJECTED, OrderStatus.CANCELLED],
+  PENDING: [
+    OrderStatus.CONFIRMED,
+    OrderStatus.PREPARING,
+    OrderStatus.REJECTED,
+    OrderStatus.CANCELLED,
+  ],
   CONFIRMED: [OrderStatus.PREPARING, OrderStatus.READY, OrderStatus.CANCELLED],
   PREPARING: [OrderStatus.READY, OrderStatus.CANCELLED],
   READY: [OrderStatus.COMPLETED],
@@ -97,7 +108,12 @@ export async function enqueueRestaurantOrder(
     const position = await redis.zrank(key, orderId);
     // If this is the only order in queue, mark it as active now
     if (position === 0) {
-      await redis.set(`restaurant:queue:active:${orderId}`, Date.now().toString(), 'EX', QUEUE_ACTIVE_TTL);
+      await redis.set(
+        `restaurant:queue:active:${orderId}`,
+        Date.now().toString(),
+        'EX',
+        QUEUE_ACTIVE_TTL
+      );
     }
     return { position: position !== null ? position + 1 : queueLength, queueLength };
   } catch (err) {
@@ -120,7 +136,12 @@ export async function dequeueRestaurantOrder(
     const nextOrder = await redis.zrange(key, 0, 0);
     if (nextOrder.length > 0) {
       const nextOrderId = nextOrder[0];
-      await redis.set(`restaurant:queue:active:${nextOrderId}`, Date.now().toString(), 'EX', QUEUE_ACTIVE_TTL);
+      await redis.set(
+        `restaurant:queue:active:${nextOrderId}`,
+        Date.now().toString(),
+        'EX',
+        QUEUE_ACTIVE_TTL
+      );
       return { nextOrderId, queueLength };
     }
     return { nextOrderId: null, queueLength };
@@ -251,7 +272,11 @@ function clamp(value: number, min: number, max: number) {
 function calculatePickedUpEta(order: {
   latitude: number | null;
   longitude: number | null;
-  restaurant: { latitude?: number | null; longitude?: number | null; maxDeliveryTime?: number | null };
+  restaurant: {
+    latitude?: number | null;
+    longitude?: number | null;
+    maxDeliveryTime?: number | null;
+  };
 }) {
   const minutes = estimateDeliveryTravelMinutes(order.restaurant, order);
   return new Date(Date.now() + minutes * 60 * 1000);
@@ -260,13 +285,24 @@ function calculatePickedUpEta(order: {
 function calculateInTransitEta(order: {
   latitude: number | null;
   longitude: number | null;
-  restaurant: { latitude?: number | null; longitude?: number | null; maxDeliveryTime?: number | null };
+  restaurant: {
+    latitude?: number | null;
+    longitude?: number | null;
+    maxDeliveryTime?: number | null;
+  };
 }) {
-  const minutes = clamp(Math.round(estimateDeliveryTravelMinutes(order.restaurant, order) * 0.65), 5, 18);
+  const minutes = clamp(
+    Math.round(estimateDeliveryTravelMinutes(order.restaurant, order) * 0.65),
+    5,
+    18
+  );
   return new Date(Date.now() + minutes * 60 * 1000);
 }
 
-export function canRestaurantTransitionTo(currentStatus: OrderStatus, nextStatus: OrderStatus): boolean {
+export function canRestaurantTransitionTo(
+  currentStatus: OrderStatus,
+  nextStatus: OrderStatus
+): boolean {
   return restaurantStatusTransitions[currentStatus].includes(nextStatus);
 }
 
@@ -341,7 +377,8 @@ export async function updateOrderStatusByRestaurant({
 
     const now = new Date();
     const eta =
-      (nextStatus === OrderStatus.CONFIRMED || nextStatus === OrderStatus.PREPARING) && preparationTimeMinutes
+      (nextStatus === OrderStatus.CONFIRMED || nextStatus === OrderStatus.PREPARING) &&
+      preparationTimeMinutes
         ? calculateOrderEta({
             restaurant: order.restaurant,
             order,
@@ -366,10 +403,12 @@ export async function updateOrderStatusByRestaurant({
       data: {
         status: nextStatus,
         ...(isAccepting ? { noDriversAvailable: false } : {}),
-        ...(isCancelling ? {
-          cancellationReason: cancellationReason ?? null,
-          cancelledBy: cancelledBy ?? null,
-        } : {}),
+        ...(isCancelling
+          ? {
+              cancellationReason: cancellationReason ?? null,
+              cancelledBy: cancelledBy ?? null,
+            }
+          : {}),
         ...(isAccepting && scheduledDeliveryAt
           ? (() => {
               const travelMinutes = estimateDeliveryTravelMinutes(order.restaurant, order);
@@ -396,27 +435,36 @@ export async function updateOrderStatusByRestaurant({
               estimatedDeliveryTime: eta.estimatedDeliveryTime,
             }
           : {}),
-        ...(nextStatus === OrderStatus.COMPLETED ? {
-          completedAt: now,
-          ...(order.paymentMethod === PaymentMethod.CASH ? { paymentStatus: PaymentStatus.COMPLETED, cashPaymentConfirmedAt: now } : {}),
-        } : {}),
-        ...(nextStatus === OrderStatus.READY ? { 
-          readyAt: now,
-          ...(order.fulfillmentType !== 'PICKUP' ? { pickedUpAt: null } : {}),
-          ...(order.fulfillmentType !== 'PICKUP' && order.paymentMethod === PaymentMethod.TRANSFER
-            ? (() => {
-                const samePin = Math.floor(1000 + Math.random() * 9000).toString();
-                return { handoverPin: samePin, deliveryPin: samePin };
-              })()
-            : {}),
-          ...(readyEstimatedDeliveryTime ? { estimatedDeliveryTime: readyEstimatedDeliveryTime } : {}),
-        } : {}),
+        ...(nextStatus === OrderStatus.COMPLETED
+          ? {
+              completedAt: now,
+              ...(order.paymentMethod === PaymentMethod.CASH
+                ? { paymentStatus: PaymentStatus.COMPLETED, cashPaymentConfirmedAt: now }
+                : {}),
+            }
+          : {}),
+        ...(nextStatus === OrderStatus.READY
+          ? {
+              readyAt: now,
+              ...(order.fulfillmentType !== 'PICKUP' ? { pickedUpAt: null } : {}),
+              ...(order.fulfillmentType !== 'PICKUP' &&
+              order.paymentMethod === PaymentMethod.TRANSFER
+                ? (() => {
+                    const samePin = Math.floor(1000 + Math.random() * 9000).toString();
+                    return { handoverPin: samePin, deliveryPin: samePin };
+                  })()
+                : {}),
+              ...(readyEstimatedDeliveryTime
+                ? { estimatedDeliveryTime: readyEstimatedDeliveryTime }
+                : {}),
+            }
+          : {}),
         ...(order.paymentMethod === PaymentMethod.TRANSFER
           ? nextStatus === OrderStatus.CONFIRMED
             ? { paymentStatus: PaymentStatus.COMPLETED }
             : nextStatus === OrderStatus.REJECTED
-            ? { paymentStatus: PaymentStatus.FAILED }
-            : {}
+              ? { paymentStatus: PaymentStatus.FAILED }
+              : {}
           : {}),
       },
       select: restaurantOrderWorkflowSelect,
@@ -430,8 +478,8 @@ export async function updateOrderStatusByRestaurant({
           eta && preparationTimeMinutes
             ? `${trackingNote} ETA actualizada con ${preparationTimeMinutes} min de preparacion y ${eta.travelMinutes} min estimados de trayecto.`
             : nextStatus === OrderStatus.READY && readyEstimatedDeliveryTime
-            ? `${trackingNote} El pedido está listo. Se recalculó ETA de entrega para dentro de ${Math.round((readyEstimatedDeliveryTime.getTime() - now.getTime()) / 60000)} min de trayecto.`
-            : trackingNote,
+              ? `${trackingNote} El pedido está listo. Se recalculó ETA de entrega para dentro de ${Math.round((readyEstimatedDeliveryTime.getTime() - now.getTime()) / 60000)} min de trayecto.`
+              : trackingNote,
       },
     });
 
@@ -472,19 +520,35 @@ export async function requestOrderCancellation(
   });
 
   if (!order) {
-    throw createDomainError(404, 'ORDER_NOT_FOUND', 'No se encontró el pedido o no se puede cancelar.');
+    throw createDomainError(
+      404,
+      'ORDER_NOT_FOUND',
+      'No se encontró el pedido o no se puede cancelar.'
+    );
   }
 
   if (order.cancellationRejectedAt) {
-    throw createDomainError(409, 'CANCELLATION_ALREADY_REJECTED', 'El restaurante ya rechazó tu solicitud de cancelación. No puedes volver a solicitarla.');
+    throw createDomainError(
+      409,
+      'CANCELLATION_ALREADY_REJECTED',
+      'El restaurante ya rechazó tu solicitud de cancelación. No puedes volver a solicitarla.'
+    );
   }
 
   if (order.cancellationRequestedAt) {
-    throw createDomainError(409, 'CANCELLATION_ALREADY_REQUESTED', 'Ya hay una solicitud de cancelación activa.');
+    throw createDomainError(
+      409,
+      'CANCELLATION_ALREADY_REQUESTED',
+      'Ya hay una solicitud de cancelación activa.'
+    );
   }
 
   if ((order.cancellationRequestCount ?? 0) >= 1) {
-    throw createDomainError(409, 'MAX_CANCELLATION_REQUESTS', 'Ya solicitaste cancelación una vez. No puedes volver a solicitarla.');
+    throw createDomainError(
+      409,
+      'MAX_CANCELLATION_REQUESTS',
+      'Ya solicitaste cancelación una vez. No puedes volver a solicitarla.'
+    );
   }
 
   const now = new Date();
@@ -500,7 +564,11 @@ export async function requestOrderCancellation(
   return { restaurantUserId: order.restaurant.userId };
 }
 
-export async function retractCancellationRequest(prisma: PrismaClient, orderId: string, customerUserId: string) {
+export async function retractCancellationRequest(
+  prisma: PrismaClient,
+  orderId: string,
+  customerUserId: string
+) {
   const order = await prisma.order.findFirst({
     where: {
       id: orderId,
@@ -510,7 +578,11 @@ export async function retractCancellationRequest(prisma: PrismaClient, orderId: 
   });
 
   if (!order) {
-    throw createDomainError(404, 'NO_CANCELLATION_REQUEST', 'No hay una solicitud de cancelación activa.');
+    throw createDomainError(
+      404,
+      'NO_CANCELLATION_REQUEST',
+      'No hay una solicitud de cancelación activa.'
+    );
   }
 
   await prisma.order.update({
@@ -539,7 +611,11 @@ export async function respondToCancellationRequest(
   });
 
   if (!order) {
-    throw createDomainError(404, 'NO_CANCELLATION_REQUEST', 'No hay una solicitud de cancelación activa.');
+    throw createDomainError(
+      404,
+      'NO_CANCELLATION_REQUEST',
+      'No hay una solicitud de cancelación activa.'
+    );
   }
 
   if (approve) {
@@ -618,7 +694,11 @@ export async function cancelOrderByRestaurant(
     });
 
     if (!order) {
-      throw createDomainError(404, 'ORDER_NOT_FOUND', 'No se encontró el pedido o ya no se puede cancelar.');
+      throw createDomainError(
+        404,
+        'ORDER_NOT_FOUND',
+        'No se encontró el pedido o ya no se puede cancelar.'
+      );
     }
 
     await tx.order.update({
@@ -726,7 +806,7 @@ export async function assignDriverToOrder({
         region: order.restaurant.region,
         status: DriverStatus.ACTIVE,
         availability: {
-          in: [DriverAvailability.AVAILABLE, DriverAvailability.BUSY]
+          in: [DriverAvailability.AVAILABLE, DriverAvailability.BUSY],
         },
       },
       include: {
@@ -803,11 +883,11 @@ export async function extendOrderPreparationTime({
   const currentEta = new Date(order.estimatedDeliveryTime);
 
   const nextDeadline = new Date(effectiveDeadline.getTime() + additionalMinutes * 60 * 1000);
-  
+
   // Calculamos el tiempo real que se está desplazando la fecha límite original
   const actualAddedMs = nextDeadline.getTime() - currentDeadline.getTime();
   const actualAddedMinutes = Math.round(actualAddedMs / 60000);
-  
+
   const nextEta = new Date(currentEta.getTime() + actualAddedMs);
 
   const updatedOrder = await prisma.$transaction(async (tx) => {
@@ -935,7 +1015,11 @@ export async function updateOrderStatusByDriver({
   const order = await getDriverScopedOrder(prisma, driverUserId, orderId);
 
   if (!order || !order.driver) {
-    throw createDomainError(404, 'ORDER_NOT_FOUND', 'No se encontro el pedido asignado al repartidor.');
+    throw createDomainError(
+      404,
+      'ORDER_NOT_FOUND',
+      'No se encontro el pedido asignado al repartidor.'
+    );
   }
 
   const driver = order.driver;
@@ -954,7 +1038,15 @@ export async function updateOrderStatusByDriver({
       where: {
         driverId: driver.id,
         isAcceptedByDriver: true,
-        status: { in: [OrderStatus.CONFIRMED, OrderStatus.PREPARING, OrderStatus.READY, OrderStatus.PICKED_UP, OrderStatus.IN_TRANSIT] },
+        status: {
+          in: [
+            OrderStatus.CONFIRMED,
+            OrderStatus.PREPARING,
+            OrderStatus.READY,
+            OrderStatus.PICKED_UP,
+            OrderStatus.IN_TRANSIT,
+          ],
+        },
       },
     });
 
@@ -1131,6 +1223,8 @@ export async function updateOrderStatusByDriver({
     });
   }
 
+  const isNoContactRelease = action === 'safe_place' || action === 'no_show';
+
   return prisma.$transaction(async (tx) => {
     const currentOrder = await tx.order.findUnique({
       where: { id: order.id },
@@ -1145,13 +1239,34 @@ export async function updateOrderStatusByDriver({
       );
     }
 
-    if (currentOrder.paymentMethod !== PaymentMethod.CASH && (currentOrder.deliveryPin || currentOrder.handoverPin) && currentOrder.deliveryPin !== pin && currentOrder.handoverPin !== pin) {
+    // Normal deliveries require the customer's PIN for non-cash orders.
+    // The no-contact release actions (safe_place / no_show) skip the PIN: the
+    // transfer was already paid or the cash order is turned into a debt.
+    if (
+      !isNoContactRelease &&
+      currentOrder.paymentMethod !== PaymentMethod.CASH &&
+      (currentOrder.deliveryPin || currentOrder.handoverPin) &&
+      currentOrder.deliveryPin !== pin &&
+      currentOrder.handoverPin !== pin
+    ) {
       throw createDomainError(
         403,
         'INVALID_DELIVERY_PIN',
         'El PIN de entrega proporcionado por el cliente es incorrecto.'
       );
     }
+
+    // CASH payments are marked completed only on a normal handover. On a
+    // "cliente no salió" release the money was never collected, so the order
+    // keeps its unpaid status and a CustomerBillingSettlement is created instead.
+    const shouldMarkCashCompleted =
+      currentOrder.paymentMethod === PaymentMethod.CASH && action === 'delivered';
+
+    // On a "cliente no salió" release the driver never collected the cash, so the
+    // order must generate NOTHING for the driver: no delivery earnings and no
+    // platform commission owed. Zeroing both fields keeps it out of the driver's
+    // wallet earnings, settlement revenue and debt/suspension aggregations.
+    const shouldExemptDriverBilling = action === 'no_show';
 
     const updatedOrder = await tx.order.update({
       where: { id: order.id },
@@ -1160,7 +1275,8 @@ export async function updateOrderStatusByDriver({
         deliveredAt: new Date(),
         actualDeliveryTime: new Date(),
         estimatedDeliveryTime: new Date(),
-        ...(currentOrder.paymentMethod === PaymentMethod.CASH ? { paymentStatus: PaymentStatus.COMPLETED } : {}),
+        ...(shouldMarkCashCompleted ? { paymentStatus: PaymentStatus.COMPLETED } : {}),
+        ...(shouldExemptDriverBilling ? { deliveryFee: 0, driverPlatformFee: 0 } : {}),
       },
       select: restaurantOrderWorkflowSelect,
     });
@@ -1169,7 +1285,15 @@ export async function updateOrderStatusByDriver({
       where: {
         driverId: driver.id,
         id: { not: order.id },
-        status: { in: [OrderStatus.CONFIRMED, OrderStatus.PREPARING, OrderStatus.READY, OrderStatus.PICKED_UP, OrderStatus.IN_TRANSIT] },
+        status: {
+          in: [
+            OrderStatus.CONFIRMED,
+            OrderStatus.PREPARING,
+            OrderStatus.READY,
+            OrderStatus.PICKED_UP,
+            OrderStatus.IN_TRANSIT,
+          ],
+        },
       },
     });
 
@@ -1237,11 +1361,18 @@ export async function updateOrderStatusByDriver({
       });
     }
 
+    const deliveryTrackingNote =
+      action === 'safe_place'
+        ? 'Pedido dejado en un lugar seguro por el repartidor (sin contacto con el cliente).'
+        : action === 'no_show'
+          ? 'Cliente no salio a recibir. Pedido liberado por el repartidor.'
+          : 'Pedido entregado al cliente.';
+
     await tx.orderTracking.create({
       data: {
         orderId: order.id,
         status: OrderStatus.DELIVERED,
-        notes: 'Pedido entregado al cliente.',
+        notes: deliveryTrackingNote,
       },
     });
 
@@ -1293,7 +1424,11 @@ export async function handoverOrderFromRestaurant({
   }
 
   if (order.status !== OrderStatus.READY) {
-    throw createDomainError(409, 'INVALID_ORDER_TRANSITION', 'El pedido no esta listo para entregar.');
+    throw createDomainError(
+      409,
+      'INVALID_ORDER_TRANSITION',
+      'El pedido no esta listo para entregar.'
+    );
   }
 
   if (order.handoverPin) {
@@ -1318,7 +1453,11 @@ export async function handoverOrderFromRestaurant({
           newPin,
         });
 
-        throw createDomainError(403, 'PIN_RESET', 'PIN agotado. Se generó un nuevo PIN. Pídelo al repartidor.');
+        throw createDomainError(
+          403,
+          'PIN_RESET',
+          'PIN agotado. Se generó un nuevo PIN. Pídelo al repartidor.'
+        );
       }
 
       await prisma.order.update({
@@ -1342,7 +1481,9 @@ export async function handoverOrderFromRestaurant({
         status: OrderStatus.PICKED_UP,
         pickedUpAt: new Date(),
         estimatedDeliveryTime: calculatePickedUpEta(order as any),
-        ...(order.paymentMethod === PaymentMethod.CASH ? { paymentStatus: PaymentStatus.COMPLETED } : {}),
+        ...(order.paymentMethod === PaymentMethod.CASH
+          ? { paymentStatus: PaymentStatus.COMPLETED }
+          : {}),
       },
       select: restaurantOrderWorkflowSelect,
     });
@@ -1392,16 +1533,28 @@ export async function completePickupByRestaurant({
   }
 
   if (order.status !== OrderStatus.READY) {
-    throw createDomainError(409, 'INVALID_ORDER_TRANSITION', 'El pedido no esta listo para recoger.');
+    throw createDomainError(
+      409,
+      'INVALID_ORDER_TRANSITION',
+      'El pedido no esta listo para recoger.'
+    );
   }
 
   if (order.fulfillmentType !== 'PICKUP') {
-    throw createDomainError(400, 'INVALID_FULFILLMENT_TYPE', 'Solo pedidos para recoger en sucursal pueden marcarse como recogidos.');
+    throw createDomainError(
+      400,
+      'INVALID_FULFILLMENT_TYPE',
+      'Solo pedidos para recoger en sucursal pueden marcarse como recogidos.'
+    );
   }
 
   if (order.paymentMethod === PaymentMethod.TRANSFER) {
     if (!order.pickupPin) {
-      throw createDomainError(400, 'NO_PICKUP_PIN', 'Este pedido no tiene un PIN de recoleccion asignado.');
+      throw createDomainError(
+        400,
+        'NO_PICKUP_PIN',
+        'Este pedido no tiene un PIN de recoleccion asignado.'
+      );
     }
 
     // Auto-migrate old alphanumeric PINs (A3ZS) to numeric-only
@@ -1423,7 +1576,11 @@ export async function completePickupByRestaurant({
         newPin,
       });
 
-      throw createDomainError(403, 'PIN_RESET', 'PIN actualizado a formato numerico. Pidelo al cliente.');
+      throw createDomainError(
+        403,
+        'PIN_RESET',
+        'PIN actualizado a formato numerico. Pidelo al cliente.'
+      );
     }
 
     if (!pin || pin.trim() === '' || pin !== order.pickupPin) {
@@ -1447,7 +1604,11 @@ export async function completePickupByRestaurant({
           newPin,
         });
 
-        throw createDomainError(403, 'PIN_RESET', 'PIN agotado. Se genero un nuevo PIN. Pidelo al cliente.');
+        throw createDomainError(
+          403,
+          'PIN_RESET',
+          'PIN agotado. Se genero un nuevo PIN. Pidelo al cliente.'
+        );
       }
 
       await prisma.order.update({
@@ -1470,7 +1631,9 @@ export async function completePickupByRestaurant({
       data: {
         status: OrderStatus.COMPLETED,
         completedAt: new Date(),
-        ...(order.paymentMethod === PaymentMethod.CASH ? { paymentStatus: PaymentStatus.COMPLETED } : {}),
+        ...(order.paymentMethod === PaymentMethod.CASH
+          ? { paymentStatus: PaymentStatus.COMPLETED }
+          : {}),
       },
       select: restaurantOrderWorkflowSelect,
     });
@@ -1560,7 +1723,15 @@ export async function getAvailableDriversForRestaurant(
       },
       orders: {
         where: {
-          status: { in: [OrderStatus.CONFIRMED, OrderStatus.PREPARING, OrderStatus.READY, OrderStatus.PICKED_UP, OrderStatus.IN_TRANSIT] },
+          status: {
+            in: [
+              OrderStatus.CONFIRMED,
+              OrderStatus.PREPARING,
+              OrderStatus.READY,
+              OrderStatus.PICKED_UP,
+              OrderStatus.IN_TRANSIT,
+            ],
+          },
         },
         select: {
           id: true,
@@ -1587,7 +1758,7 @@ export async function getAvailableDriversForRestaurant(
 
     // Si esta OCUPADO, verificamos las condiciones de apilamiento:
     const activeOrders = driver.orders;
-    
+
     // 1. Maximo 3 pedidos (ya tiene 1 o 2 activos, si le sumamos este serian 3)
     // This check is now handled by autoAssignDriver
 
@@ -1599,22 +1770,35 @@ export async function getAvailableDriversForRestaurant(
     // 2. Proximidad y Compatibilidad de Ruta (Cross-Restaurant Smart Stacking)
     // Para apilar, al menos UNO de los pedidos actuales debe ser compatible con el nuevo pedido.
     // Compatibilidad significa: restaurante a <= 1 km Y destino a <= 2.5 km.
-    if (targetOrder?.latitude && targetOrder?.longitude && restaurant.latitude && restaurant.longitude && activeOrders.length > 0) {
+    if (
+      targetOrder?.latitude &&
+      targetOrder?.longitude &&
+      restaurant.latitude &&
+      restaurant.longitude &&
+      activeOrders.length > 0
+    ) {
       let isCompatibleRoute = false;
 
       for (const existingOrder of activeOrders) {
-        if (existingOrder.latitude && existingOrder.longitude && existingOrder.restaurant?.latitude && existingOrder.restaurant?.longitude) {
-          
+        if (
+          existingOrder.latitude &&
+          existingOrder.longitude &&
+          existingOrder.restaurant?.latitude &&
+          existingOrder.restaurant?.longitude
+        ) {
           const restaurantDistance = getDistanceInKm(
             { latitude: restaurant.latitude, longitude: restaurant.longitude },
-            { latitude: existingOrder.restaurant.latitude, longitude: existingOrder.restaurant.longitude }
+            {
+              latitude: existingOrder.restaurant.latitude,
+              longitude: existingOrder.restaurant.longitude,
+            }
           );
 
           const customerDistance = getDistanceInKm(
             { latitude: targetOrder.latitude, longitude: targetOrder.longitude },
             { latitude: existingOrder.latitude, longitude: existingOrder.longitude }
           );
-          
+
           if (restaurantDistance <= 1 && customerDistance <= 2.5) {
             isCompatibleRoute = true;
             break;
@@ -1653,7 +1837,12 @@ export async function autoAssignDriver(
   }
   const excludeDriverIdsArray = Array.from(excludeIds);
 
-  const tryAssign = async (drivers: { id: string; userId: string; user: { name: string } }[]): Promise<{ driver: { id: string; userId: string; user: { name: string } }; order: any } | null> => {
+  const tryAssign = async (
+    drivers: { id: string; userId: string; user: { name: string } }[]
+  ): Promise<{
+    driver: { id: string; userId: string; user: { name: string } };
+    order: any;
+  } | null> => {
     for (const candidate of drivers) {
       const activeAcceptedCount = await prisma.order.count({
         where: {
@@ -1679,7 +1868,14 @@ export async function autoAssignDriver(
             id: { not: orderId },
             status: { in: ['CONFIRMED', 'PREPARING', 'READY', 'PICKED_UP', 'IN_TRANSIT'] as any },
           },
-          select: { id: true, batchId: true, restaurantId: true, latitude: true, longitude: true, status: true },
+          select: {
+            id: true,
+            batchId: true,
+            restaurantId: true,
+            latitude: true,
+            longitude: true,
+            status: true,
+          },
         });
 
         if (existingOrders.length > 0) {
@@ -1690,23 +1886,37 @@ export async function autoAssignDriver(
 
           if (newOrderData) {
             const sameRestaurantOrders = existingOrders.filter(
-              (o) => o.restaurantId === newOrderData.restaurantId
-              // Solo agrupar si el driver aún no ha recogido (está esperando en el restaurante)
-              && (o.status === 'CONFIRMED' || o.status === 'PREPARING')
+              (o) =>
+                o.restaurantId === newOrderData.restaurantId &&
+                // Solo agrupar si el driver aún no ha recogido (está esperando en el restaurante)
+                (o.status === 'CONFIRMED' || o.status === 'PREPARING')
             );
-            const allOrders = [...sameRestaurantOrders, { id: orderId, ...newOrderData, batchId: null, status: '' }];
+            const allOrders = [
+              ...sameRestaurantOrders,
+              { id: orderId, ...newOrderData, batchId: null, status: '' },
+            ];
             if (allOrders.length >= 2) {
               const { createOrJoinBatch } = await import('../services/batch.service');
               const batchOrders = sameRestaurantOrders
                 .filter((o) => o.latitude != null && o.longitude != null)
-                .map((o) => ({ id: o.id, batchId: o.batchId || null, latitude: o.latitude!, longitude: o.longitude!, restaurantId: o.restaurantId }));
-              if (batchOrders.length > 0 && newOrderData.latitude != null && newOrderData.longitude != null) {
+                .map((o) => ({
+                  id: o.id,
+                  batchId: o.batchId || null,
+                  latitude: o.latitude!,
+                  longitude: o.longitude!,
+                  restaurantId: o.restaurantId,
+                }));
+              if (
+                batchOrders.length > 0 &&
+                newOrderData.latitude != null &&
+                newOrderData.longitude != null
+              ) {
                 await createOrJoinBatch(
                   prisma as any,
                   orderId,
                   batchOrders,
                   newOrderData.latitude,
-                  newOrderData.longitude,
+                  newOrderData.longitude
                 );
               }
             }
@@ -1756,22 +1966,31 @@ export async function autoAssignDriver(
   };
 
   const strictResult = await tryAssign(
-    await getAvailableDriversForRestaurant(prisma, restaurantUserId, orderId, excludeDriverIdsArray, false)
+    await getAvailableDriversForRestaurant(
+      prisma,
+      restaurantUserId,
+      orderId,
+      excludeDriverIdsArray,
+      false
+    )
   );
   if (strictResult) return { success: true as const, ...strictResult };
 
   const relaxedResult = await tryAssign(
-    await getAvailableDriversForRestaurant(prisma, restaurantUserId, orderId, excludeDriverIdsArray, true)
+    await getAvailableDriversForRestaurant(
+      prisma,
+      restaurantUserId,
+      orderId,
+      excludeDriverIdsArray,
+      true
+    )
   );
   if (relaxedResult) return { success: true as const, ...relaxedResult };
 
   return { success: false as const };
 }
 
-export async function sweepUnassignedOrdersForRegion(
-  prisma: PrismaClient,
-  region: string
-) {
+export async function sweepUnassignedOrdersForRegion(prisma: PrismaClient, region: string) {
   const jitTarget = new Date(Date.now() + 8 * 60 * 1000);
   const unassignedOrders = await prisma.order.findMany({
     where: {
@@ -1788,7 +2007,7 @@ export async function sweepUnassignedOrdersForRegion(
       ],
     },
     orderBy: { createdAt: 'asc' },
-    select: { id: true, restaurant: { select: { userId: true } } }
+    select: { id: true, restaurant: { select: { userId: true } } },
   });
 
   const assignedOrders = [];
@@ -1800,15 +2019,15 @@ export async function sweepUnassignedOrdersForRegion(
         const updatedOrder = await prisma.order.update({
           where: { id: order.id },
           data: { noDriversAvailable: false },
-          include: { 
-            restaurant: true, 
-            customer: { include: { user: true } } 
-          }
+          include: {
+            restaurant: true,
+            customer: { include: { user: true } },
+          },
         });
-        
+
         assignedOrders.push({
           order: updatedOrder,
-          driver: assignResult.driver
+          driver: assignResult.driver,
         });
       }
     } catch (err) {

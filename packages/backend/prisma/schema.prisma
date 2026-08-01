@@ -12,16 +12,16 @@ datasource db {
 
 // ============== Users ==============
 model User {
-  id       String     @id @default(cuid())
-  email    String     @unique
-  password String
-  phone    String
-  name     String
-  lastName String?
-  dateOfBirth DateTime?
-  role     UserRole
-  region   String
-  status   UserStatus @default(ACTIVE)
+  id           String     @id @default(cuid())
+  email        String     @unique
+  password     String
+  phone        String
+  name         String
+  lastName     String?
+  dateOfBirth  DateTime?
+  role         UserRole
+  region       String
+  status       UserStatus @default(ACTIVE)
   profilePhoto String?
 
   // Relations
@@ -36,10 +36,10 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  @@unique([phone, role])
   @@index([region])
   @@index([role])
   @@index([role, status])
-  @@unique([phone, role])
 }
 
 enum UserRole {
@@ -166,8 +166,8 @@ model RestaurantBillingSettlement {
   notes            String?
   paymentProofUrl  String?
 
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([restaurantId])
   @@index([settledAt])
@@ -191,10 +191,32 @@ model DriverBillingSettlement {
   notes            String?
   paymentProofUrl  String?
 
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([driverId])
+  @@index([status])
+}
+
+model CustomerBillingSettlement {
+  id              String                  @id @default(cuid())
+  customerId      String
+  customer        Customer                @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  reference       String                  @unique
+  orderId         String?
+  order           Order?                  @relation(fields: [orderId], references: [id])
+  amount          Float
+  status          BillingSettlementStatus @default(PENDING)
+  notes           String?
+  paymentProofUrl String?
+  dueDate         DateTime?
+  settledAt       DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([orderId])
+  @@index([customerId])
   @@index([status])
 }
 
@@ -251,17 +273,17 @@ model Product {
   categoryId String
   category   MenuCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
 
-  name            String
-  description     String
-  price           Float
-  discountPrice   Float?
+  name          String
+  description   String
+  price         Float
+  discountPrice Float?
 
-  sellBy          String  @default("UNIT") // "UNIT" | "WEIGHT"
-  unitPrice       Float?                   // precio por kg cuando sellBy=WEIGHT
-  minWeightG      Int?    @default(100)    // gramos mínimos
-  maxWeightG      Int?    @default(5000)   // gramos máximos
-  stepWeightG     Int?    @default(100)    // incremento en gramos
-  weightPresets   String?                  // JSON array ej. "[100,200,300,500,1000]"
+  sellBy        String  @default("UNIT") // "UNIT" | "WEIGHT"
+  unitPrice     Float? // precio por kg cuando sellBy=WEIGHT
+  minWeightG    Int?    @default(100) // gramos mínimos
+  maxWeightG    Int?    @default(5000) // gramos máximos
+  stepWeightG   Int?    @default(100) // incremento en gramos
+  weightPresets String? // JSON array ej. "[100,200,300,500,1000]"
 
   image           String?
   images          String[] @default([])
@@ -295,15 +317,20 @@ model Customer {
   rating      Float @default(0)
   totalOrders Int   @default(0)
 
-  // Preferencias de entrega
-  deliveryPreference DeliveryPreference?
-  whatsappNotifications Boolean @default(false)
+  // Deuda por pedidos no recibidos (cliente no salió a recibir)
+  isSuspendedByDebt Boolean @default(false)
+  debtAmount        Float   @default(0)
 
-  addresses      Address[]
-  orders         Order[]
-  favorites      FavoriteRestaurant[]
-  reviews        Review[]
-  supportTickets SupportTicket[]
+  // Preferencias de entrega
+  deliveryPreference    DeliveryPreference?
+  whatsappNotifications Boolean             @default(false)
+
+  addresses          Address[]
+  orders             Order[]
+  favorites          FavoriteRestaurant[]
+  reviews            Review[]
+  supportTickets     SupportTicket[]
+  billingSettlements CustomerBillingSettlement[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -315,20 +342,20 @@ model Address {
   customerId String
   customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
 
-  street       String
-  number       String
-  apartment    String?
-  neighborhood String
-  city         String
-  state        String
-  zipCode      String
-  country      String
-  reference    String?
-  latitude     Float
-  longitude    Float
+  street             String
+  number             String
+  apartment          String?
+  neighborhood       String
+  city               String
+  state              String
+  zipCode            String
+  country            String
+  reference          String?
+  latitude           Float
+  longitude          Float
   locationVerifiedAt DateTime?
-  isDefault    Boolean @default(false)
-  isActive     Boolean @default(true)
+  isDefault          Boolean   @default(false)
+  isActive           Boolean   @default(true)
 
   orders Order[]
 
@@ -350,10 +377,10 @@ model Order {
   customerId String
   customer   Customer @relation(fields: [customerId], references: [id])
 
-  driverId String?
-  driver   Driver? @relation(fields: [driverId], references: [id])
-  driverAssignedAt DateTime?
-  isAcceptedByDriver Boolean @default(false)
+  driverId           String?
+  driver             Driver?   @relation(fields: [driverId], references: [id])
+  driverAssignedAt   DateTime?
+  isAcceptedByDriver Boolean   @default(false)
 
   supportRestaurantId   String?
   supportRestaurant     Restaurant? @relation("SupportRestaurant", fields: [supportRestaurantId], references: [id])
@@ -370,50 +397,50 @@ model Order {
   latitude  Float?
   longitude Float?
 
-  pickupReadyAt       DateTime?
-  nearlyReadySentAt   DateTime?
-  completedAt         DateTime?
-  pickupPin           String?
+  pickupReadyAt     DateTime?
+  nearlyReadySentAt DateTime?
+  completedAt       DateTime?
+  pickupPin         String?
 
-  items       OrderItem[]
-  subtotal    Float
-  taxAmount   Float
-  serviceFee  Float      @default(0)
-  platformFee Float       @default(0)
-  driverPlatformFee Float @default(0)
-  deliveryFee Float
+  items              OrderItem[]
+  subtotal           Float
+  taxAmount          Float
+  serviceFee         Float       @default(0)
+  platformFee        Float       @default(0)
+  driverPlatformFee  Float       @default(0)
+  deliveryFee        Float
   deliveryDistanceKm Float?
-  totalAmount Float
+  totalAmount        Float
 
   status          OrderStatus   @default(PENDING)
   paymentMethod   PaymentMethod
   paymentStatus   PaymentStatus @default(PENDING)
   paymentProofUrl String?
 
-  estimatedDeliveryTime DateTime
-  scheduledDeliveryAt              DateTime?
+  estimatedDeliveryTime               DateTime
+  scheduledDeliveryAt                 DateTime?
   scheduledDeliveryCustomerAcceptedAt DateTime?
-  deliveredByRestaurant            Boolean  @default(false)
-  actualDeliveryTime    DateTime?
-  preparationTimeMinutes Int?
-  preparationStartedAt   DateTime?
-  preparationDeadlineAt  DateTime?
-  etaExtendedMinutes     Int       @default(0)
+  deliveredByRestaurant               Boolean   @default(false)
+  actualDeliveryTime                  DateTime?
+  preparationTimeMinutes              Int?
+  preparationStartedAt                DateTime?
+  preparationDeadlineAt               DateTime?
+  etaExtendedMinutes                  Int       @default(0)
 
-  notes       String?
-  handoverPin          String?
-  handoverPinAttempts  Int      @default(0)
-  handoverPinUpdatedAt DateTime?
-  deliveryPin          String?
+  notes                  String?
+  handoverPin            String?
+  handoverPinAttempts    Int                 @default(0)
+  handoverPinUpdatedAt   DateTime?
+  deliveryPin            String?
   cashPaymentConfirmedAt DateTime?
-  deliveryPreference DeliveryPreference?
+  deliveryPreference     DeliveryPreference?
 
   // Cancellation flow
   cancellationRequestedAt  DateTime?
   cancellationReason       String?
   cancelledBy              String?
   cancellationRejectedAt   DateTime?
-  cancellationRequestCount Int      @default(0)
+  cancellationRequestCount Int       @default(0)
 
   // Real-time tracking
   pickedUpAt  DateTime?
@@ -421,26 +448,28 @@ model Order {
   deliveredAt DateTime?
 
   // Driver pickup tracking
-  readyAt               DateTime?
-  driverArrivedAt       DateTime?
-  lastPickupAlertedAt   DateTime?
+  readyAt                 DateTime?
+  driverArrivedAt         DateTime?
+  driverArrivedAtCustomer DateTime?
+  lastPickupAlertedAt     DateTime?
 
   // Multi-order batching
-  batchId           String?
-  deliverySequence  Int?
+  batchId          String?
+  deliverySequence Int?
 
   // Stuck delivery escalation
-  stuckAlertLevel   Int      @default(0)
-  stuckAlertedAt    DateTime?
+  stuckAlertLevel Int       @default(0)
+  stuckAlertedAt  DateTime?
 
   // Overdue preparation escalation (restaurant pressure)
-  overdueAlertLevel   Int      @default(0)
-  overdueAlertedAt    DateTime?
+  overdueAlertLevel Int       @default(0)
+  overdueAlertedAt  DateTime?
 
-  transactions Transaction[]
-  tracking     OrderTracking[]
-  review       Review?
-  messages      OrderMessage[]
+  transactions               Transaction[]
+  tracking                   OrderTracking[]
+  review                     Review?
+  messages                   OrderMessage[]
+  customerBillingSettlements CustomerBillingSettlement[]
 
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
@@ -515,9 +544,9 @@ model OrderItem {
   specialInstructions String?
 
   sellBy  String @default("UNIT") // "UNIT" | "WEIGHT" — snapshot al momento de ordenar
-  weightG Int?                    // gramos solicitados (solo si sellBy=WEIGHT)
+  weightG Int? // gramos solicitados (solo si sellBy=WEIGHT)
 
-  options             OrderItemOption[]
+  options OrderItemOption[]
 
   createdAt DateTime @default(now())
 
@@ -563,9 +592,9 @@ model Driver {
 
   bankAccount String? // JSON stored
 
-  currentLatitude  Float?
-  currentLongitude Float?
-  platformFeePerOrder Float @default(0)
+  currentLatitude      Float?
+  currentLongitude     Float?
+  platformFeePerOrder  Float     @default(0)
   lastBillingSettledAt DateTime?
 
   orders      Order[]
@@ -736,11 +765,11 @@ model Region {
   taxRate         Float @default(0.08)
 
   // Dynamic delivery pricing (optional per zone)
-  pricingModel String @default("fixed")  // "fixed" | "distance"
-  baseRate       Float  @default(20)     // price for first km
-  perKmRate      Float  @default(8)      // price per extra km
-  minDeliveryFee Float  @default(15)     // minimum fee
-  maxDeliveryFee Float  @default(150)    // safety cap
+  pricingModel   String @default("fixed") // "fixed" | "distance"
+  baseRate       Float  @default(20) // price for first km
+  perKmRate      Float  @default(8) // price per extra km
+  minDeliveryFee Float  @default(15) // minimum fee
+  maxDeliveryFee Float  @default(150) // safety cap
 
   supportedPayments String[] // JSON array of payment methods
   isActive          Boolean  @default(true)
@@ -844,13 +873,13 @@ model ProductOptionGroup {
   id           String          @id @default(cuid())
   productId    String
   product      Product         @relation(fields: [productId], references: [id], onDelete: Cascade)
-  name         String          // e.g. "Elige tus 2 ingredientes", "Extras"
+  name         String // e.g. "Elige tus 2 ingredientes", "Extras"
   minSelection Int             @default(0)
   maxSelection Int             @default(1)
   options      ProductOption[]
 
-  createdAt    DateTime        @default(now())
-  updatedAt    DateTime        @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([productId])
 }
@@ -860,29 +889,29 @@ model ProductOption {
   id          String             @id @default(cuid())
   groupId     String
   group       ProductOptionGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
-  name        String             // e.g. "Nutella", "Fresa", "Orilla de Queso"
+  name        String // e.g. "Nutella", "Fresa", "Orilla de Queso"
   price       Float              @default(0) // Extra price
   isAvailable Boolean            @default(true)
 
   orderItemOptions OrderItemOption[]
 
-  createdAt   DateTime           @default(now())
-  updatedAt   DateTime           @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([groupId])
 }
 
 // ============== Order Item Options ==============
 model OrderItemOption {
-  id          String        @id @default(cuid())
+  id          String         @id @default(cuid())
   orderItemId String
-  orderItem   OrderItem     @relation(fields: [orderItemId], references: [id], onDelete: Cascade)
+  orderItem   OrderItem      @relation(fields: [orderItemId], references: [id], onDelete: Cascade)
   optionId    String?
   option      ProductOption? @relation(fields: [optionId], references: [id], onDelete: SetNull)
-  name        String        // Snapshot of the option name
-  price       Float         // Snapshot of the option price
+  name        String // Snapshot of the option name
+  price       Float // Snapshot of the option price
 
-  createdAt   DateTime      @default(now())
+  createdAt DateTime @default(now())
 
   @@index([orderItemId])
   @@index([optionId])
@@ -907,13 +936,13 @@ model OrderMessage {
 
 // ============== Store Platform Categories ==============
 model StoreCategory {
-  id          String   @id @default(cuid())
-  name        String
-  icon        String   // Emoji or URL
-  color       String?  // Tailwind class or hex color
-  keywords    String[] // Palabras clave para compatibilidad hacia atras / busqueda
-  isActive    Boolean  @default(true)
-  order       Int      @default(0)
+  id       String   @id @default(cuid())
+  name     String
+  icon     String // Emoji or URL
+  color    String? // Tailwind class or hex color
+  keywords String[] // Palabras clave para compatibilidad hacia atras / busqueda
+  isActive Boolean  @default(true)
+  order    Int      @default(0)
 
   restaurants RestaurantStoreCategory[]
 
@@ -925,7 +954,7 @@ model RestaurantStoreCategory {
   restaurantId String
   categoryId   String
 
-  restaurant Restaurant  @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  restaurant Restaurant    @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
   category   StoreCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
 
   assignedAt DateTime @default(now())
@@ -937,13 +966,13 @@ model RestaurantStoreCategory {
 // ============== Platform Requests (Restaurant & Driver Affiliation) ==============
 model PlatformRequest {
   id           String   @id @default(cuid())
-  type         String   // "RESTAURANT" | "DRIVER"
-  ownerName    String   // Owner name for restaurant, or applicant name for driver
-  businessName String?  // Business name for restaurant, null for driver
-  giro         String?  // Giro for restaurant, null for driver
+  type         String // "RESTAURANT" | "DRIVER"
+  ownerName    String // Owner name for restaurant, or applicant name for driver
+  businessName String? // Business name for restaurant, null for driver
+  giro         String? // Giro for restaurant, null for driver
   whatsapp     String
   location     String
-  motorcycle   String?  // "SI" | "NO" (for drivers)
+  motorcycle   String? // "SI" | "NO" (for drivers)
   status       String   @default("PENDING") // "PENDING" | "APPROVED" | "REJECTED"
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
@@ -955,14 +984,14 @@ model PlatformRequest {
 // ============== Audit Logs (Security & Accountability) ==============
 model AuditLog {
   id        String   @id @default(cuid())
-  userId    String?  // Usuario que ejecutó la acción
-  userEmail String?  // Snapshot del correo del usuario
-  action    String   // ej. "UPDATE_BANK_ACCOUNT", "CANCEL_ORDER"
-  entity    String   // Tabla afectada (ej. "Restaurant", "Order")
-  entityId  String   // ID del registro afectado
-  oldValue  String?  // Valor anterior en formato JSON string (opcional)
-  newValue  String?  // Valor nuevo en formato JSON string (opcional)
-  ipAddress String?  // IP del cliente (opcional)
+  userId    String? // Usuario que ejecutó la acción
+  userEmail String? // Snapshot del correo del usuario
+  action    String // ej. "UPDATE_BANK_ACCOUNT", "CANCEL_ORDER"
+  entity    String // Tabla afectada (ej. "Restaurant", "Order")
+  entityId  String // ID del registro afectado
+  oldValue  String? // Valor anterior en formato JSON string (opcional)
+  newValue  String? // Valor nuevo en formato JSON string (opcional)
+  ipAddress String? // IP del cliente (opcional)
   createdAt DateTime @default(now())
 
   @@index([entity, entityId])
@@ -972,20 +1001,20 @@ model AuditLog {
 
 // ============== Promotional Modals (Regional & Global) ==============
 model Promotion {
-  id          String   @id @default(cuid())
-  title       String
-  imageUrl    String
-  targetUrl   String?
-  isActive    Boolean  @default(true)
-  regions     String[] // Ej. ["CDMX", "GDL"]. Si está vacío, aplica a TODAS.
-  targetRole  String   @default("ALL") // "ALL", "CUSTOMER", "RESTAURANT", "DRIVER"
-  
-  startDate   DateTime? // Cuándo empieza
-  endDate     DateTime? // Cuándo termina
+  id         String   @id @default(cuid())
+  title      String
+  imageUrl   String
+  targetUrl  String?
+  isActive   Boolean  @default(true)
+  regions    String[] // Ej. ["CDMX", "GDL"]. Si está vacío, aplica a TODAS.
+  targetRole String   @default("ALL") // "ALL", "CUSTOMER", "RESTAURANT", "DRIVER"
 
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  
+  startDate DateTime? // Cuándo empieza
+  endDate   DateTime? // Cuándo termina
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
   @@index([isActive])
 }
 
@@ -998,21 +1027,21 @@ enum FeaturedPurchaseStatus {
 }
 
 model FeaturedPurchase {
-  id             String                  @id @default(cuid())
-  restaurantId   String
-  restaurant     Restaurant              @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
-  daysRequested  Int
-  totalPrice     Float
-  status         FeaturedPurchaseStatus  @default(PENDING)
-  paymentProof   String?                 // URL del comprobante de pago
-  adminNotes     String?
-  startDate      DateTime?               // Cuándo empieza a ser destacado
-  endDate        DateTime?               // Cuándo termina
-  reviewedBy     String?                 // Admin ID
-  reviewedAt     DateTime?
+  id            String                 @id @default(cuid())
+  restaurantId  String
+  restaurant    Restaurant             @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  daysRequested Int
+  totalPrice    Float
+  status        FeaturedPurchaseStatus @default(PENDING)
+  paymentProof  String? // URL del comprobante de pago
+  adminNotes    String?
+  startDate     DateTime? // Cuándo empieza a ser destacado
+  endDate       DateTime? // Cuándo termina
+  reviewedBy    String? // Admin ID
+  reviewedAt    DateTime?
 
-  createdAt      DateTime                @default(now())
-  updatedAt      DateTime                @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([restaurantId])
   @@index([status])
