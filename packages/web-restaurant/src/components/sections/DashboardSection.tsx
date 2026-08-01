@@ -479,9 +479,6 @@ export const DashboardSection = React.memo(function DashboardSection({
           ) : null}
         </div>
         <div className="relative mt-4 flex flex-wrap gap-2 border-t border-black/5 pt-4">
-          <ProfileBadge tone="amber" label="En cocina ahora" detail={`${activeOrders.filter((o: any) => ['PENDING','CONFIRMED','PREPARING'].includes(o.status)).length} pedidos`} />
-          <ProfileBadge tone="violet" label="Ingreso proyectado" detail={formatCurrency(projectedRevenue)} />
-          <ProfileBadge tone="sky" label="Catálogo activo" detail={`${availableProductsCount} de ${products.length} disponibles`} />
           {drivers.length > 0 && (
             <ProfileBadge tone="emerald" label="Repartidores" detail={`${drivers.length} disponible${drivers.length !== 1 ? 's' : ''}`} />
           )}
