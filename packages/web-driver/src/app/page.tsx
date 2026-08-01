@@ -5415,19 +5415,12 @@ export default function Home() {
                 <p className="text-sm text-neutral-500 dark:text-zinc-400 mt-2 leading-relaxed">
                   Has esperado <strong className="text-neutral-700 dark:text-zinc-300">{waitMin} minutos</strong> y el cliente no salió a recibir.
                 </p>
-                <div className="w-full text-left mt-4 space-y-2.5">
-                  <div className="rounded-2xl border border-rose-200 dark:border-rose-900/30 bg-white dark:bg-zinc-900 px-4 py-3">
-                    <p className="text-[10px] font-bold uppercase tracking-widest text-rose-500 mb-1">Para el cliente</p>
-                    <p className="text-xs text-neutral-600 dark:text-zinc-300 leading-relaxed">
-                      El pedido se marcará como entregado y se <strong>le cobrará el monto total</strong>. Su cuenta quedará suspendida hasta que liquide.
-                    </p>
-                  </div>
-                  <div className="rounded-2xl border border-amber-200 dark:border-amber-900/30 bg-white dark:bg-zinc-900 px-4 py-3">
-                    <p className="text-[10px] font-bold uppercase tracking-widest text-amber-600 dark:text-amber-400 mb-1">Para ti (repartidor)</p>
-                    <p className="text-xs text-neutral-600 dark:text-zinc-300 leading-relaxed">
-                      Como el pedido es <strong>en efectivo y no cobraste</strong>, este pedido <strong>no genera ni comisión ni ganancia</strong> para ti: no deberás nada y no te pagarán nada por él.
-                    </p>
-                  </div>
+                <div className="w-full text-left mt-4 rounded-2xl border border-amber-200 dark:border-amber-900/30 bg-white dark:bg-zinc-900 px-4 py-3">
+                  <p className="text-xs text-neutral-600 dark:text-zinc-300 leading-relaxed">
+                    Asegúrate de haber intentado contactar al cliente. Al liberar el pedido{' '}
+                    <strong>podrás disponer de él</strong> y deberás{' '}
+                    <strong>contactar a soporte</strong> para la devolución o ajuste del pedido.
+                  </p>
                 </div>
                 <div className="flex gap-3 w-full mt-6">
                   <button
