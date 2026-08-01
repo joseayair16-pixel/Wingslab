@@ -2253,7 +2253,7 @@ export default function Home() {
 
   return (
     <main
-      className={`min-h-[100dvh] bg-[#f5f1e8] text-neutral-900 transition-colors duration-300 dark:bg-black dark:text-zinc-300 font-sans antialiased select-none overflow-x-hidden ${activeTab === 'active' ? 'pb-20' : ''}`}
+      className={`min-h-[100dvh] bg-white text-neutral-900 transition-colors duration-300 dark:bg-black dark:text-zinc-300 font-sans antialiased select-none overflow-x-hidden ${activeTab === 'active' ? 'pb-20' : ''}`}
       onTouchStart={handleTouchStart}
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
@@ -4663,7 +4663,7 @@ export default function Home() {
           PANTALLA DE BLOQUEO POR DEUDA (FULL SCREEN)
           ========================================== */}
       {driverProfile?.isSuspendedByDebt && !hideSuspensionOverlay && (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-[#f5f1e8] dark:bg-black p-6">
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-white dark:bg-black p-6">
           <div className="w-full max-w-md mx-auto text-center">
             <div className="rounded-[32px] bg-rose-600/95 p-8 text-white shadow-2xl backdrop-blur-md shadow-rose-900/50 border border-rose-500">
               <span className="text-5xl mb-4 block">🛑</span>
