@@ -448,6 +448,7 @@ export default function Home() {
   const [proofFileSource, setProofFileSource] = useState('');
   const [submittingDebtPayment, setSubmittingDebtPayment] = useState(false);
   const [debtPaymentError, setDebtPaymentError] = useState('');
+  const [copiedDebtField, setCopiedDebtField] = useState<'account' | 'beneficiary' | null>(null);
 
   const setToastMessage = useCallback((msg: string | ((prev: string) => string), type: 'success' | 'error' | 'info' = 'success') => {
     if (typeof msg === 'function') {
@@ -2048,6 +2049,11 @@ export default function Home() {
            normalizeOrderStatusValue(order.status) === 'COMPLETED')
       );
       if (unratedOrder) {
+        // Si hay una deuda activa (p. ej. pedido liberado porque el cliente no
+        // salió), no abrir el modal de calificación: el overlay de deuda debe
+        // ser lo que el cliente vea para ponerse al corriente.
+        const currentDebt = await checkCustomerDebt();
+        if (currentDebt?.hasDebt) return;
         try { localStorage.setItem(`sadel_prompted_rating_${unratedOrder.id}`, 'true'); } catch {}
         setOrderToRate(unratedOrder.id);
         setRatingBusinessType((unratedOrder as any).restaurant?.businessType || null);
@@ -3208,7 +3214,7 @@ export default function Home() {
     });
 
     for (const eventName of liveEvents) {
-      socket.on(eventName, (payload: { orderId?: string; status?: string; driverName?: string }) => {
+      socket.on(eventName, async (payload: { orderId?: string; status?: string; driverName?: string }) => {
         const liveEventKey = buildLiveEventKey(eventName, payload);
 
         if (seenLiveEventKeysRef.current.includes(liveEventKey)) {
@@ -3257,6 +3263,10 @@ export default function Home() {
               void playCustomerLlegueSound();
             }
           } catch (e) {}
+          // Si el pedido fue liberado porque el cliente no salió (deuda activa),
+          // no mostrar calificación; el overlay de deuda es lo que corresponde.
+          const currentDebt = await checkCustomerDebt();
+          if (currentDebt?.hasDebt) return;
           setOrderToRate(payload.orderId);
           const ratedOrder = orders.find((o: any) => o.id === payload.orderId);
           setRatingBusinessType((ratedOrder as any)?.restaurant?.businessType || null);
@@ -3711,8 +3721,8 @@ export default function Home() {
 
 
 
-  async function checkCustomerDebt() {
-    if (!token || !sessionUser?.role) return;
+  async function checkCustomerDebt(): Promise<DebtInfo | null> {
+    if (!token || !sessionUser?.role) return null;
     try {
       const [debtRes, settingsRes] = await Promise.all([
         requestJson<{ success: true; data: DebtInfo }>({
@@ -3732,9 +3742,12 @@ export default function Home() {
           bankAccount: settingsRes?.data?.adminBankAccount || '',
           bankBeneficiary: settingsRes?.data?.adminBankBeneficiary || 'Administrador SaDeL',
         });
+        return debtRes.data;
       }
+      return null;
     } catch (e) {
       console.error('Failed to check customer debt:', e);
+      return null;
     }
   }
 
@@ -6787,12 +6800,16 @@ export default function Home() {
           <div className="w-full max-w-md rounded-[32px] bg-white p-6 shadow-2xl animate-in fade-in zoom-in-95 duration-200 my-auto">
             <div className="flex flex-col items-center text-center">
               <div className="flex h-16 w-16 items-center justify-center rounded-full bg-amber-100 text-3xl mb-4">
-                🔒
+                🙏
               </div>
-              <h2 className="text-xl font-black text-neutral-950">Saldo pendiente</h2>
+              <h2 className="text-xl font-black text-neutral-950">No pudimos entregarte tu pedido</h2>
               <p className="text-sm text-neutral-500 mt-2 leading-relaxed">
-                Un repartidor llegó a tu domicilio con tu pedido y esperó, pero no pudimos
-                contactarte. Para volver a pedir en SaDeL necesitas cubrir el costo del pedido.
+                El repartidor llegó a tu domicilio y te esperó, pero no saliste a recibirlo. El pedido
+                quedó registrado como no recibido, por lo que <strong className="text-neutral-700">tienes un saldo pendiente</strong> por este pedido.
+              </p>
+              <p className="text-xs text-neutral-400 mt-3 leading-relaxed bg-neutral-50 rounded-xl px-4 py-3">
+                Para seguir usando SaDeL, solo necesitas cubrir el costo de este pedido. Una vez pagado,
+                tu cuenta se reactiva al instante. 💙
               </p>
             </div>
 
@@ -6835,20 +6852,67 @@ export default function Home() {
                 </div>
               ) : (
                 <>
-                  <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3.5">
-                    <p className="text-[10px] font-bold uppercase tracking-widest text-amber-600">Datos para transferir</p>
-                    <div className="mt-2 space-y-1">
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs text-neutral-500">Banco</span>
-                        <span className="text-xs font-bold text-neutral-900">{debtBank?.bankName || '—'}</span>
+                  <div className="rounded-2xl border border-sky-300 bg-white p-4">
+                    <p className="text-xs font-semibold text-neutral-500 mb-3 flex items-center gap-1.5">
+                      <svg className="h-4 w-4 text-sky-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M2.25 21h19.5m-18-18v18m10.5-18v18m6-13.5V21M6.75 6.75h.75m-.75 3h.75m-.75 3h.75m3-6h.75m-.75 3h.75m-.75 3h.75M6.75 21v-3.375c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21M3 3h12m-.75 4.5H21m-3.75 3.75h.008v.008h-.008v-.008zm0 3h.008v.008h-.008v-.008zm0 3h.008v.008h-.008v-.008z" /></svg>
+                      Transferencia bancaria
+                    </p>
+                    <div className="rounded-xl bg-neutral-50 px-4 py-3 text-center mb-3">
+                      <p className="text-[11px] text-neutral-500 font-medium">Monto exacto a transferir</p>
+                      <p className="text-xl font-extrabold text-neutral-900 mt-0.5">
+                        {new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(debtData.settlement.amount)}
+                      </p>
+                    </div>
+                    <div className="space-y-2.5 text-sm">
+                      <div className="flex items-center justify-between border-b border-neutral-100 pb-2">
+                        <span className="text-neutral-500 text-[13px]">Banco</span>
+                        <span className="font-semibold text-neutral-900">{debtBank?.bankName || '—'}</span>
+                      </div>
+                      <div className="flex items-center justify-between border-b border-neutral-100 pb-2">
+                        <span className="text-neutral-500 text-[13px]">Cuenta</span>
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono font-semibold text-neutral-900 select-all">{debtBank?.bankAccount || '—'}</span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (!debtBank?.bankAccount) return;
+                              navigator.clipboard?.writeText(debtBank.bankAccount).catch(() => {});
+                              setCopiedDebtField('account');
+                              setTimeout(() => setCopiedDebtField(null), 1500);
+                            }}
+                            className="flex h-7 w-7 items-center justify-center rounded-lg text-neutral-400 hover:bg-neutral-100 hover:text-neutral-600 active:scale-90 transition-all relative"
+                            title="Copiar"
+                          >
+                            {copiedDebtField === 'account' ? (
+                              <svg className="h-3.5 w-3.5 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+                            ) : (
+                              <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}><rect x="9" y="9" width="13" height="13" rx="2" ry="2" /><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1" /></svg>
+                            )}
+                          </button>
+                        </div>
                       </div>
                       <div className="flex items-center justify-between">
-                        <span className="text-xs text-neutral-500">Cuenta</span>
-                        <span className="text-xs font-bold text-neutral-900">{debtBank?.bankAccount || '—'}</span>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs text-neutral-500">Beneficiario</span>
-                        <span className="text-xs font-bold text-neutral-900">{debtBank?.bankBeneficiary || '—'}</span>
+                        <span className="text-neutral-500 text-[13px]">Beneficiario</span>
+                        <div className="flex items-center gap-2">
+                          <span className="font-semibold text-neutral-900">{debtBank?.bankBeneficiary || '—'}</span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (!debtBank?.bankBeneficiary) return;
+                              navigator.clipboard?.writeText(debtBank.bankBeneficiary).catch(() => {});
+                              setCopiedDebtField('beneficiary');
+                              setTimeout(() => setCopiedDebtField(null), 1500);
+                            }}
+                            className="flex h-7 w-7 items-center justify-center rounded-lg text-neutral-400 hover:bg-neutral-100 hover:text-neutral-600 active:scale-90 transition-all relative"
+                            title="Copiar"
+                          >
+                            {copiedDebtField === 'beneficiary' ? (
+                              <svg className="h-3.5 w-3.5 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+                            ) : (
+                              <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}><rect x="9" y="9" width="13" height="13" rx="2" ry="2" /><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1" /></svg>
+                            )}
+                          </button>
+                        </div>
                       </div>
                     </div>
                   </div>
