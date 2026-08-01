@@ -449,6 +449,7 @@ export default function Home() {
   const [submittingDebtPayment, setSubmittingDebtPayment] = useState(false);
   const [debtPaymentError, setDebtPaymentError] = useState('');
   const [copiedDebtField, setCopiedDebtField] = useState<'account' | 'beneficiary' | null>(null);
+  const [viewingDebtProof, setViewingDebtProof] = useState<string | null>(null);
 
   const setToastMessage = useCallback((msg: string | ((prev: string) => string), type: 'success' | 'error' | 'info' = 'success') => {
     if (typeof msg === 'function') {
@@ -6937,18 +6938,31 @@ export default function Home() {
                       }}
                     />
                     {proofFileSource ? (
-                      <div className="flex items-center gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3">
-                        <span className="text-xl">✅</span>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-xs font-bold text-emerald-700 truncate">{proofFileName}</p>
-                          <p className="text-[10px] text-emerald-600/70">Comprobante listo para enviar</p>
+                      <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-3">
+                        <div className="flex items-center gap-3">
+                          <img
+                            src={proofFileSource}
+                            alt="Vista previa del comprobante"
+                            className="h-14 w-14 rounded-xl object-cover border border-black/5 bg-white shrink-0"
+                          />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs font-bold text-emerald-700 truncate">{proofFileName}</p>
+                            <p className="text-[10px] text-emerald-600/70">Comprobante listo para enviar</p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => { setProofFileName(''); setProofFileSource(''); }}
+                            className="text-xs font-bold text-emerald-700"
+                          >
+                            Quitar
+                          </button>
                         </div>
                         <button
                           type="button"
-                          onClick={() => { setProofFileName(''); setProofFileSource(''); }}
-                          className="text-xs font-bold text-emerald-700"
+                          onClick={() => setViewingDebtProof(proofFileSource)}
+                          className="mt-2 text-[10px] font-bold text-emerald-700 underline"
                         >
-                          Quitar
+                          Ver comprobante completo
                         </button>
                       </div>
                     ) : (
@@ -7015,6 +7029,28 @@ export default function Home() {
               )}
             </div>
           </div>
+        </div>
+      )}
+
+      {viewingDebtProof && (
+        <div
+          className="fixed inset-0 z-[130] flex items-center justify-center bg-black/85 backdrop-blur-sm p-4"
+          onClick={() => setViewingDebtProof(null)}
+        >
+          <button
+            type="button"
+            onClick={() => setViewingDebtProof(null)}
+            className="absolute top-4 right-4 h-9 w-9 rounded-full bg-white/10 text-white text-lg flex items-center justify-center hover:bg-white/20 transition-colors"
+            aria-label="Cerrar"
+          >
+            ✕
+          </button>
+          <img
+            src={viewingDebtProof}
+            alt="Comprobante de pago"
+            className="max-h-[85vh] max-w-full rounded-2xl object-contain shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          />
         </div>
       )}
 
