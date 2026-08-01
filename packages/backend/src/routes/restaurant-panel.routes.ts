@@ -1377,6 +1377,10 @@ export async function registerRestaurantPanelRoutes(fastify: FastifyInstance): P
         data: {
           isAcceptingOrders: parsed.data.isAcceptingOrders,
           ...(parsed.data.isPaused !== undefined ? { isPaused: parsed.data.isPaused } : {}),
+          // Track who changed the operational state: clearing stale auto-close markers on reopen.
+          ...(parsed.data.isAcceptingOrders
+            ? { statusChangedAt: null, statusChangedBy: null, statusReason: null }
+            : { statusChangedAt: new Date(), statusChangedBy: 'OWNER' }),
         },
       });
 

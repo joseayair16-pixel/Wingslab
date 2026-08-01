@@ -110,6 +110,8 @@ export const DashboardSection = React.memo(function DashboardSection({
     && timeSinceOpened > QUIET_WARN_MS
     && todayOrders.length > 0;
 
+  const wasAutoPausedByInactivity = !isBusinessOpen && profile?.statusChangedBy === 'SYSTEM_ORDER_TIMEOUT_INACTIVITY';
+
   const projectedRevenue = useMemo(() => {
     const today = new Date();
     const currentYear = today.getFullYear();
@@ -315,6 +317,26 @@ export const DashboardSection = React.memo(function DashboardSection({
 
   return (
     <div className="space-y-3 md:space-y-5">
+      {wasAutoPausedByInactivity && (
+        <div className="flex flex-col gap-3 rounded-[20px] border border-sky-200 bg-gradient-to-r from-sky-50 to-blue-50/60 px-5 py-4 shadow-[0_4px_16px_rgba(14,165,233,0.08)] sm:flex-row sm:items-center">
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-sky-100 text-xl text-sky-600">☕</span>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-bold text-sky-900">Hicimos una pausa en tu negocio</p>
+            <p className="mt-0.5 text-xs leading-relaxed text-sky-700">
+              Un pedido no se respondió a tiempo y se canceló automáticamente, así que nadie más tendrá que esperar mientras estás fuera. Cuando estés listo, vuelve a abrir tu negocio.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onToggleOperational}
+            disabled={updatingOperationalStatus}
+            className="shrink-0 rounded-full bg-sky-600 px-4 py-2.5 text-sm font-semibold text-white shadow-[0_4px_14px_rgba(14,165,233,0.35)] transition-all duration-200 hover:bg-sky-700 active:scale-95 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            🚀 Reabrir ahora
+          </button>
+        </div>
+      )}
+
       {hasAlerts && (
         <div className="flex flex-col gap-2">
           {stalePendingOrders.length > 0 && (

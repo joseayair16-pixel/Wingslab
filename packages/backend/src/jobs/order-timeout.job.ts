@@ -252,6 +252,60 @@ async function rejectExpiredOrder(fastify: FastifyInstance, order: any) {
       logger.error(`[OrderTimeoutJob] Fallo al enviar push notification al comensal ${order.customer.user.id}`, pushErr);
     }
 
+    // ── Auto-close the business after losing an order to inactivity ──
+    const businessType = order.restaurant.businessType;
+    const businessRef = isStore(businessType) ? 'tienda' : 'restaurante';
+    try {
+      const closeResult = await prisma.restaurant.updateMany({
+        where: { id: order.restaurant.id, isAcceptingOrders: true },
+        data: {
+          isAcceptingOrders: false,
+          statusChangedAt: new Date(),
+          statusChangedBy: 'SYSTEM_ORDER_TIMEOUT_INACTIVITY',
+          statusReason: 'Hicimos una pausa porque un pedido no se respondió a tiempo. Puedes volver a abrir cuando quieras.',
+        },
+      });
+
+      if (closeResult.count === 0) {
+        logger.info(`[OrderTimeoutJob] ${order.restaurant.id} ya estaba cerrado o volvió a abrir; no se envía aviso de pausa.`);
+        return;
+      }
+
+      emitNotification(
+        fastify.io,
+        order.restaurant.userId,
+        'RESTAURANT',
+        'restaurant:auto_closed_inactivity',
+        { reason: 'order_timeout_inactivity' },
+        {
+          requestId: crypto.randomBytes(8).toString('hex'),
+          orderId: order.id,
+        }
+      );
+
+      try {
+        await sendPushNotification(order.restaurant.userId, {
+          title: 'Hicimos una pausa ☕',
+          body: `Un pedido no se respondió a tiempo y se canceló automáticamente. Pusimos tu ${businessRef} en pausa para que nadie más tenga que esperar. Cuando estés listo, vuelve a abrirlo cuando quieras.`,
+          icon: '/SaDeL.png',
+          badge: '/SaDeL.png',
+          vibrate: [500, 200, 500],
+          requireInteraction: true,
+          tag: `auto-closed-inactivity-${order.restaurant.id}`,
+          data: {
+            url: '/',
+            event: 'restaurant:auto_closed_inactivity',
+          },
+        });
+      } catch (pushErr) {
+        logger.error(`[OrderTimeoutJob] Fallo al enviar push de pausa por inactividad a ${order.restaurant.userId}`, pushErr);
+      }
+
+      logger.info(`[OrderTimeoutJob] ${businessType === 'RESTAURANT' ? 'Restaurante' : 'Tienda'} ${order.restaurant.id} auto-cerrado por inactividad en el pedido ${order.id}.`);
+    } catch (closeErr) {
+      logger.error(`[OrderTimeoutJob] Error cerrando ${order.restaurant.id} por inactividad:`, closeErr);
+    }
+
     logger.info(`[OrderTimeoutJob] Pedido ${order.id} auto-rechazado exitosamente.`);
   } catch (err) {
     logger.error(`[OrderTimeoutJob] Error rechazando pedido ${order.id}:`, err);

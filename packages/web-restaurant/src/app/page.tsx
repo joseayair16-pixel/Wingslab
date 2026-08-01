@@ -2765,6 +2765,11 @@ export default function Home() {
       void loadDashboard();
     });
 
+    socket.on('restaurant:auto_closed_inactivity', () => {
+      pushToast('info', 'Hicimos una pausa ☕', 'Un pedido no se respondió a tiempo y se canceló. Pusimos tu negocio en pausa para que nadie más tenga que esperar. Reabre cuando quieras.');
+      void loadDashboard();
+    });
+
     socket.on('order:overdue', (payload: any) => {
       pushToast('error', 'Pedido rezagado ⚠️', `Pedido ${payload?.orderReference || ''} lleva ${payload?.minutesOverdue ?? 0} min de retraso. Agrega tiempo o reprograma la entrega.`);
       void playOverdueAlert();

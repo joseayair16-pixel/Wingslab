@@ -216,7 +216,12 @@ export function startRestaurantHoursJob(fastify: FastifyInstance) {
               
               await prisma.restaurant.update({
                 where: { id: restaurant.id },
-                data: { isAcceptingOrders: false },
+                data: {
+                  isAcceptingOrders: false,
+                  statusChangedAt: new Date(),
+                  statusChangedBy: 'SYSTEM_CLOSING_HOURS',
+                  statusReason: 'Cerrado automáticamente fuera del horario de atención.',
+                },
               });
 
               emitNotification(fastify.io, restaurant.userId, 'RESTAURANT', 'restaurant:auto_closed', {}, {});
