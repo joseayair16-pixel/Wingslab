@@ -2129,9 +2129,7 @@ export default function Home() {
       }
     } finally {
       if (callId !== loadDashboardCallIdRef.current) return;
-      if (!silent) {
-        setLoadingDashboard(false);
-      }
+      setLoadingDashboard(false);
     }
   }, [apiBase, token, userLocation]);
 
