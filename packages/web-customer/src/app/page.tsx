@@ -7027,6 +7027,14 @@ export default function Home() {
                   </div>
                 </>
               )}
+
+              <button
+                type="button"
+                onClick={() => clearSession('Sesión cerrada.')}
+                className="mt-4 w-full py-3 rounded-2xl border border-black/5 bg-neutral-50 text-sm font-bold text-neutral-600 hover:bg-neutral-100 transition active:scale-[0.98]"
+              >
+                Cerrar sesión
+              </button>
             </div>
           </div>
         </div>
