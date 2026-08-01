@@ -771,6 +771,7 @@ export default function RestaurantPage({
   const [addressSearchQuery, setAddressSearchQuery] = useState('');
   const [addressSuggestions, setAddressSuggestions] = useState<any[]>([]);
   const [isSearchingAddress, setIsSearchingAddress] = useState(false);
+  const [locatingAddress, setLocatingAddress] = useState(false);
   const cartRef = useRef<HTMLDivElement | null>(null);
   const checkoutRef = useRef<HTMLDivElement | null>(null);
   const checkoutMapRef = useRef<any>(null);
@@ -2047,7 +2048,7 @@ function triggerHaptic(pattern: number | number[] = 10) {
       return;
     }
 
-    setIsSearchingAddress(true);
+    setLocatingAddress(true);
     setError('');
     
     navigator.geolocation.getCurrentPosition(
@@ -2121,12 +2122,12 @@ function triggerHaptic(pattern: number | number[] = 10) {
           setAddressSearchQuery('Ubicación GPS');
           setNewAddressStep('details');
         } finally {
-          setIsSearchingAddress(false);
+          setLocatingAddress(false);
         }
       },
       (err) => {
         console.error('Error getting geolocation:', err);
-        setIsSearchingAddress(false);
+        setLocatingAddress(false);
         setError('No pudimos acceder a tu ubicación. Por favor busca tu dirección manualmente.');
       },
       { enableHighAccuracy: true, timeout: 10000 }
@@ -3343,7 +3344,7 @@ function triggerHaptic(pattern: number | number[] = 10) {
                         </span>
                       ) : (
                         <span className="rounded-full bg-amber-100 px-2.5 py-0.5 text-[10px] font-bold text-amber-700 ring-1 ring-amber-300/50">
-                          <svg className="h-3 w-3 inline-block align-text-bottom" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13.5 21v-7.5a.75.75 0 01.75-.75h3a.75.75 0 01.75.75V21m-4.5 0H2.36m11.14 0H18m0 0h3.64m-1.39 0V9.349m-16.5 11.65V9.35m0 0a3.001 3.001 0 003.75-.615A2.993 2.993 0 009.75 9.75c.896 0 1.7-.393 2.25-1.016a2.993 2.993 0 002.25 1.016c.896 0 1.7-.393 2.25-1.016a3.001 3.001 0 003.75.614m-16.5 0a3.004 3.004 0 01-.621-4.72L4.318 3.44A1.5 1.5 0 015.378 3h13.243a1.5 1.5 0 011.06.44l1.19 1.189a3 3 0 01-.621 4.72m-13.5 8.65h3.75a.75.75 0 00.75-.75V13.5a.75.75 0 00-.75-.75H6.75a.75.75 0 00-.75.75v3.75c0 .415.336.75.75.75z" /></svg> Envío
+                          <span className="text-[10px] inline-block align-text-bottom leading-none">🛵</span> Envío
                         </span>
                       )}
                     </div>
@@ -3490,7 +3491,11 @@ function triggerHaptic(pattern: number | number[] = 10) {
                                       setShowMapForAddress(addr.id);
                                     }
                                   }}
-                                  className="mt-2 flex items-center gap-1 text-[11px] font-semibold transition-colors"
+                                  className={`mt-2.5 inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[11px] font-bold transition-all active:scale-95 ${
+                                    showMapForAddress === addr.id
+                                      ? 'border-sky-500 bg-sky-500 text-white shadow-sm shadow-sky-500/30 hover:bg-sky-600'
+                                      : 'border-sky-200 bg-sky-50 text-sky-600 hover:border-sky-300 hover:bg-sky-100'
+                                  }`}
                                 >
                                   <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 6.75V15m6-6v8.25m.503 3.498l4.875-2.437c.381-.19.622-.58.622-1.006V4.82c0-.836-.88-1.38-1.628-1.006l-3.869 1.934c-.317.159-.69.159-1.006 0L9.503 3.252a1.125 1.125 0 00-1.006 0L3.622 5.689C3.24 5.88 3 6.27 3 6.695V19.18c0 .836.88 1.38 1.628 1.006l3.869-1.934c.317-.159.69-.159 1.006 0l4.994 2.497c.317.158.69.158 1.006 0z" /></svg>
                                   {showMapForAddress === addr.id ? 'Ocultar mapa' : 'Ver en mapa'}
@@ -3638,15 +3643,21 @@ function triggerHaptic(pattern: number | number[] = 10) {
                             <button
                               type="button"
                               onClick={() => void fillCheckoutWithCurrentLocation()}
-                              disabled={isSearchingAddress}
-                              className="flex w-full items-center justify-center gap-2 rounded-2xl border border-sky-100 bg-sky-50/50 px-4 py-3.5 text-sm font-semibold text-sky-600 transition hover:bg-sky-50 disabled:opacity-50 shadow-sm"
+                              disabled={locatingAddress}
+                              className="flex w-full items-center justify-center gap-2.5 rounded-2xl bg-sky-500 px-4 py-4 text-sm font-bold text-white shadow-lg shadow-sky-500/30 transition hover:bg-sky-600 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-70 disabled:shadow-none"
                             >
-                              <span>🛰️</span>
-                              <span>Usar mi ubicación actual (GPS)</span>
+                              {locatingAddress ? (
+                                <span className="h-5 w-5 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+                              ) : (
+                                <svg className="h-5 w-5 shrink-0" viewBox="0 0 24 24" fill="currentColor">
+                                  <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5A2.5 2.5 0 1 1 12 6a2.5 2.5 0 0 1 0 5z" />
+                                </svg>
+                              )}
+                              <span>{locatingAddress ? 'Obteniendo tu ubicación...' : 'Usar mi ubicación actual'}</span>
                             </button>
 
                             {addresses.length > 0 && (
-                              <div className="flex justify-end pt-1">
+                              <div className="pt-1">
                                 <button
                                   type="button"
                                   onClick={() => {
@@ -3667,9 +3678,12 @@ function triggerHaptic(pattern: number | number[] = 10) {
                                       }));
                                     }
                                   }}
-                                  className="text-xs font-bold text-neutral-500 hover:text-neutral-800 transition-colors"
+                                  className="flex w-full items-center justify-center gap-2 rounded-2xl border border-neutral-200 bg-white px-4 py-3 text-xs font-bold text-neutral-600 transition-all hover:border-neutral-300 hover:text-neutral-900 active:scale-[0.98] shadow-sm"
                                 >
-                                  Cancelar
+                                  <svg className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17.593 3.322c1.1.128 1.907 1.077 1.907 2.185V21L12 17.25 4.5 21V5.507c0-1.108.806-2.057 1.907-2.185a48.507 48.507 0 0111.186 0z" />
+                                  </svg>
+                                  Mis direcciones guardadas ({addresses.length})
                                 </button>
                               </div>
                             )}
@@ -3781,7 +3795,7 @@ function triggerHaptic(pattern: number | number[] = 10) {
                   <div className="rounded-[22px] border border-black/[0.04] bg-white p-4 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
                     <div className="flex items-center justify-between border-b border-black/[0.03] pb-2.5 mb-3.5">
                       <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-neutral-400 flex items-center gap-1.5">
-                        <span><svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h3.75M9 15h3.75M9 18h3.75m3 .75H18a2.25 2.25 0 002.25-2.25V6.108c0-1.135-.845-2.098-1.976-2.192a48.424 48.424 0 00-1.123-.08m-5.801 0c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 00.75-.75 2.25 2.25 0 00-.1-.664m-5.8 0A2.251 2.251 0 0113.5 2.25H15a2.25 2.25 0 012.15 1.586m-5.8 0c-.376.023-.75.05-1.124.08C9.095 4.01 8.25 4.973 8.25 6.108V8.25m0 0H4.875c-.621 0-1.125.504-1.125 1.125v11.25c0 .621.504 1.125 1.125 1.125h9.75c.621 0 1.125-.504 1.125-1.125V9.375c0-.621-.504-1.125-1.125-1.125H8.25zM6.75 12h.008v.008H6.75V12zm0 3h.008v.008H6.75V15zm0 3h.008v.008H6.75V18z" /></svg></span> Detalles del pedido
+                        <span><svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M2.25 8.25h19.5M2.25 9h19.5m-16.5 5.25h6m-6 2.25h3m-3.75 3h15a2.25 2.25 0 002.25-2.25V6.75A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25v10.5A2.25 2.25 0 004.5 19.5zm15-8.25h.008v.008h-.008v-.008zm0 2.25h.008v.008h-.008v-.008zm0 2.25h.008v.008h-.008v-.008z" /></svg></span> Método de pago
                       </p>
                       <span className="rounded-full bg-sky-50 px-2 py-0.5 text-[9px] font-bold text-sky-600">
                         Paso 3

@@ -211,7 +211,7 @@ export const HomeView = React.memo(function HomeView({
                     setSelectedCategory('all');
                   }}
                    className={`relative rounded-lg md:rounded-xl transition-all active:scale-[0.97] max-w-[80px] md:max-w-[100px] ${
-                    isActive ? 'ring-2 ring-accent ring-offset-2' : 'opacity-40 grayscale hover:opacity-70 hover:grayscale-[50%]'
+                    isActive ? '' : 'opacity-40 grayscale hover:opacity-70 hover:grayscale-[50%]'
                   }`}
                 >
                   <Image
