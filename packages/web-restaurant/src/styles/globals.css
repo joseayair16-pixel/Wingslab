@@ -123,6 +123,32 @@ html.dark [class*="blue-"] {
   animation: sadel-breathe 1.6s ease-in-out infinite;
 }
 
+/* SaDel Loader indeterminate progress bar */
+@keyframes sadel-progress {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(300%);
+  }
+}
+
+.animate-sadel-progress {
+  animation: sadel-progress 1.2s ease-in-out infinite;
+}
+
+/* Keep the loader logo legible in dark mode */
+html.dark .sadel-loader-logo {
+  filter: invert(1) hue-rotate(180deg) saturate(1.54) !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-sadel-breathe,
+  .animate-sadel-progress {
+    animation: none;
+  }
+}
+
 
 /* SaDelLogo Display Logic - Shows the precise Canvas-generated version */
 html.dark .sadel-logo-light { display: none !important; }

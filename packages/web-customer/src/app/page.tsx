@@ -3843,11 +3843,7 @@ export default function Home() {
   }
 
   if (!isAuthChecked || !isLocationChecked) {
-    return (
-      <div className="min-h-screen bg-[#fafafa] flex items-center justify-center">
-        <SaDelLoader />
-      </div>
-    );
+    return <SaDelLoader fullScreen className="bg-[#fafafa]" />;
   }
 
   // Removed mandatory AuthGate early return to support guest browsing
