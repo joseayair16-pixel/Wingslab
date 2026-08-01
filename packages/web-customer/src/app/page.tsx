@@ -6799,8 +6799,8 @@ export default function Home() {
         <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/70 backdrop-blur-sm px-4 overflow-y-auto py-8">
           <div className="w-full max-w-md rounded-[32px] bg-white p-6 shadow-2xl animate-in fade-in zoom-in-95 duration-200 my-auto">
             <div className="flex flex-col items-center text-center">
-              <div className="flex h-16 w-16 items-center justify-center rounded-full bg-amber-100 text-3xl mb-4">
-                🙏
+              <div className="mb-4">
+                <SaDelLogo className="h-12 w-auto object-contain" />
               </div>
               <h2 className="text-xl font-black text-neutral-950">No pudimos entregarte tu pedido</h2>
               <p className="text-sm text-neutral-500 mt-2 leading-relaxed">
