@@ -499,7 +499,7 @@ export async function registerPublicRoutes(fastify: FastifyInstance): Promise<vo
           ? await resolveNearestZone({ latitude, longitude })
           : region ?? null;
 
-      const promotions = await (prisma as any).promotion.findMany({
+      const promotions = await prisma.promotion.findMany({
         where: {
           isActive: true,
           OR: [
@@ -518,7 +518,7 @@ export async function registerPublicRoutes(fastify: FastifyInstance): Promise<vo
         orderBy: { createdAt: 'desc' }
       });
 
-      const filteredPromotions = promotions.filter((p: any) => {
+      const filteredPromotions = promotions.filter((p) => {
         if (role && p.targetRole && p.targetRole !== 'ALL' && p.targetRole !== role) return false;
 
         if (p.regions && p.regions.length > 0 && (!resolvedRegion || !p.regions.includes(resolvedRegion))) return false;
@@ -583,14 +583,12 @@ export async function registerPublicRoutes(fastify: FastifyInstance): Promise<vo
       : [];
     const regionRadiusByCode = new Map(regions.map((r) => [r.code, r.deliveryRadius]));
 
-    const zoneRestaurants = restaurants
-      .filter((r) => r.region && r.latitude !== null && r.longitude !== null)
-      .map((r) => ({
-        region: r.region as string,
-        latitude: r.latitude as number,
-        longitude: r.longitude as number,
-        radiusKm: r.hasOwnDelivery ? r.deliveryRadius : (regionRadiusByCode.get(r.region as string) ?? 20),
-      }));
+    const zoneRestaurants = restaurants.map((r) => ({
+      region: r.region,
+      latitude: r.latitude,
+      longitude: r.longitude,
+      radiusKm: r.hasOwnDelivery ? r.deliveryRadius : (regionRadiusByCode.get(r.region) ?? 20),
+    }));
 
     zoneRestaurantCache = { at: now, restaurants: zoneRestaurants };
     return zoneRestaurantCache.restaurants;

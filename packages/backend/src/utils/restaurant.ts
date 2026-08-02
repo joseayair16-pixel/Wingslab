@@ -115,14 +115,13 @@ export function resolveZoneFromNearestRestaurant(
       latitude: restaurant.latitude,
       longitude: restaurant.longitude,
     });
-    if (distance < bestDistance) {
+    if (distance <= restaurant.radiusKm && distance < bestDistance) {
       best = restaurant;
       bestDistance = distance;
     }
   }
 
-  if (!best) return null;
-  return bestDistance <= best.radiusKm ? best.region : null;
+  return best?.region ?? null;
 }
 
 export function isRestaurant(businessType?: string): boolean {

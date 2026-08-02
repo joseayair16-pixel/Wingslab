@@ -105,4 +105,12 @@ describe('resolveZoneFromNearestRestaurant', () => {
     const result = resolveZoneFromNearestRestaurant({ latitude: 19.76, longitude: -101.14 }, [morelia, puruaran]);
     expect(result).toBeNull();
   });
+
+  it('elige un restaurante mas lejano con radio mayor cuando el mas cercano no cubre al usuario', () => {
+    // Restaurante A a ~4 km (radio 2 km, no cubre), restaurante B a ~8 km (radio 20 km, si cubre).
+    const small: ZoneRestaurant = { region: 'zona-a', latitude: 19.7, longitude: -101.16, radiusKm: 2 };
+    const large: ZoneRestaurant = { region: 'zona-b', latitude: 19.78, longitude: -101.14, radiusKm: 20 };
+    const result = resolveZoneFromNearestRestaurant({ latitude: 19.735, longitude: -101.155 }, [small, large]);
+    expect(result).toBe('zona-b');
+  });
 });
