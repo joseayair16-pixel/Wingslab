@@ -74,3 +74,4 @@ test-time.js
 packages/backend/scratch-*
 packages/backend/src/check_transfer_db.*
 .env*
+.vercel
