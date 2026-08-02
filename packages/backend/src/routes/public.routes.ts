@@ -528,6 +528,52 @@ export async function registerPublicRoutes(fastify: FastifyInstance): Promise<vo
     }
   });
 
+  const getBillboardsQuerySchema = z.object({
+    region: z.string().optional(),
+  });
+
+  fastify.get('/public/billboards', async (request, reply) => {
+    const parsed = getBillboardsQuerySchema.safeParse(request.query);
+    if (!parsed.success) {
+      return reply.status(400).send({
+        success: false,
+        error: { code: 'INVALID_QUERY', message: 'Query inválida.' },
+      });
+    }
+
+    const { region } = parsed.data;
+    const now = new Date();
+
+    try {
+      const regionFilter = region
+        ? { OR: [{ regions: { isEmpty: true } }, { regions: { has: region } }] }
+        : { regions: { isEmpty: true } };
+
+      const billboards = await prisma.billboard.findMany({
+        where: {
+          isActive: true,
+          AND: [
+            { OR: [{ startDate: null }, { startDate: { lte: now } }] },
+            { OR: [{ endDate: null }, { endDate: { gte: now } }] },
+            regionFilter,
+          ],
+        },
+        orderBy: [{ sortIndex: 'asc' }, { createdAt: 'desc' }],
+        take: 8,
+      });
+
+      return reply.send({
+        success: true,
+        data: billboards,
+      });
+    } catch (error) {
+      return reply.status(500).send({
+        success: false,
+        error: { message: 'Error al obtener billboards.' },
+      });
+    }
+  });
+
   fastify.get('/public/featured', async (request, reply) => {
     try {
       const querySchema = z.object({

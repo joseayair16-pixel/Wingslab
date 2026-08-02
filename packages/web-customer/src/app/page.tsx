@@ -31,6 +31,7 @@ import { SaDelLogo } from '../components/SaDelLogo';
 import { SaDelLoader } from '../components/SaDelLoader';
 import { ZonesModal } from '../components/ZonesModal';
 import CartDrawer from '../components/CartDrawer';
+import { type Billboard } from '../components/BillboardCarousel';
 import { CompactActiveOrderBanner, buildTimelineSteps, getEtaWindowMinutes, formatEstimatedArrivalMinutes } from '../components/CompactActiveOrderBanner';
 import RatingModal from '../components/RatingModal';
 import { createPlacesSource } from '../lib/places';
@@ -439,6 +440,7 @@ export default function Home() {
   const toastMessage = toastData.message;
   const [showPromoModal, setShowPromoModal] = useState(false);
   const [promoImageUrl, setPromoImageUrl] = useState('');
+  const [billboards, setBillboards] = useState<Billboard[]>([]);
   const [showAuthModal, setShowAuthModal] = useState(false);
 
   // Deuda por pedido no recibido (cliente no salió a recibir)
@@ -1093,6 +1095,28 @@ export default function Home() {
     fetchPromotions();
     return () => controller.abort();
   }, [apiBase, sessionUser?.role, userZone]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    const fetchBillboards = async () => {
+      try {
+        const params = new URLSearchParams();
+        if (userZone) params.set('region', userZone);
+        const query = params.toString() ? `?${params.toString()}` : '';
+        const response = await fetch(`${apiBase}/public/billboards${query}`, { signal: controller.signal });
+        const data = await response.json();
+        if (data.success && Array.isArray(data.data)) {
+          setBillboards(data.data);
+        }
+      } catch (error) {
+        if ((error as any)?.name === 'AbortError') return;
+        console.error('Error fetching billboards', error);
+      }
+    };
+
+    fetchBillboards();
+    return () => controller.abort();
+  }, [apiBase, userZone]);
 
   // Restore persistent modals after page reload
   useEffect(() => {
@@ -5198,6 +5222,7 @@ export default function Home() {
             hasMoreRestaurants={hasMoreRestaurants}
             onLoadMoreRestaurants={loadMoreRestaurants}
             loadingMoreRestaurants={loadingMoreRestaurants}
+            billboards={billboards}
           />
         ) : null}
       </div>

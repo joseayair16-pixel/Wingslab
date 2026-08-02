@@ -2679,6 +2679,73 @@ export async function registerAdminRoutes(fastify: FastifyInstance): Promise<voi
       }
     });
 
+    const createBillboardSchema = z.object({
+      imageUrl: z.string().url('Debe ser una URL válida'),
+      linkUrl: z.string().url('Debe ser una URL válida').optional().nullable(),
+      isActive: z.boolean().default(true),
+      regions: z.array(z.string()).default([]),
+      sortIndex: z.number().int().default(0),
+      startDate: z.string().optional().nullable().transform(val => val ? new Date(val) : null),
+      endDate: z.string().optional().nullable().transform(val => val ? new Date(val) : null),
+    });
+
+    admin.get('/admin/billboards', async (request, reply) => {
+      try {
+        const billboards = await prisma.billboard.findMany({
+          orderBy: [{ sortIndex: 'asc' }, { createdAt: 'desc' }],
+        });
+        return reply.send({ success: true, data: billboards });
+      } catch (err) {
+        return reply.status(500).send({ success: false, error: { message: 'Error interno' } });
+      }
+    });
+
+    admin.post('/admin/billboards', async (request, reply) => {
+      const parsed = createBillboardSchema.safeParse(request.body);
+      if (!parsed.success) {
+        return reply.status(400).send({
+          success: false,
+          error: { code: 'INVALID_BODY', message: parsed.error.issues[0]?.message }
+        });
+      }
+      try {
+        const billboard = await prisma.billboard.create({ data: parsed.data });
+        return reply.send({ success: true, data: billboard });
+      } catch (err) {
+        return reply.status(500).send({ success: false, error: { message: 'Error interno' } });
+      }
+    });
+
+    admin.patch('/admin/billboards/:id', async (request, reply) => {
+      const params = z.object({ id: z.string() }).safeParse(request.params);
+      if (!params.success) return reply.status(400).send({ success: false });
+
+      const parsed = createBillboardSchema.partial().safeParse(request.body);
+      if (!parsed.success) return reply.status(400).send({ success: false });
+
+      try {
+        const billboard = await prisma.billboard.update({
+          where: { id: params.data.id },
+          data: parsed.data,
+        });
+        return reply.send({ success: true, data: billboard });
+      } catch (err) {
+        return reply.status(500).send({ success: false, error: { message: 'Error interno' } });
+      }
+    });
+
+    admin.delete('/admin/billboards/:id', async (request, reply) => {
+      const params = z.object({ id: z.string() }).safeParse(request.params);
+      if (!params.success) return reply.status(400).send({ success: false });
+
+      try {
+        await prisma.billboard.delete({ where: { id: params.data.id } });
+        return reply.send({ success: true });
+      } catch (err) {
+        return reply.status(500).send({ success: false, error: { message: 'Error interno' } });
+      }
+    });
+
     const broadcastNotificationSchema = z.object({
       title: z.string().min(1),
       body: z.string().min(1),

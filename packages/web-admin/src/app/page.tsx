@@ -537,6 +537,7 @@ type AdminPortalSection =
   | 'requests'
   | 'orders'
   | 'promotions'
+  | 'billboards'
   | 'notifications'
   | 'stuck'
   | 'featured'
@@ -720,6 +721,13 @@ export default function Home() {
   const [isPromoModalOpen, setIsPromoModalOpen] = useState(false);
   const [editingPromo, setEditingPromo] = useState<any | null>(null);
   const [promoForm, setPromoForm] = useState({ title: '', imageUrl: '', targetUrl: '', isActive: true, regions: [] as string[], targetRole: 'ALL' });
+
+  // Billboards (Uber Eats style banners) State
+  const [billboards, setBillboards] = useState<any[]>([]);
+  const [loadingBillboards, setLoadingBillboards] = useState(false);
+  const [isBillboardModalOpen, setIsBillboardModalOpen] = useState(false);
+  const [editingBillboard, setEditingBillboard] = useState<any | null>(null);
+  const [billboardForm, setBillboardForm] = useState({ imageUrl: '', linkUrl: '', isActive: true, regions: [] as string[], sortIndex: 0 });
 
   // Notifications State
   const [notificationForm, setNotificationForm] = useState({ title: '', body: '', targetRole: 'ALL', targetRegion: '' });
@@ -1684,6 +1692,117 @@ export default function Home() {
     }
   }, [activeSection, isAdminSession, loadPromotions]);
 
+  const loadBillboards = useCallback(async () => {
+    setLoadingBillboards(true);
+    try {
+      const payload = await requestJson<{ success: boolean, data: any[] }>({
+        apiBase,
+        path: '/admin/billboards',
+        token,
+        fallbackMessage: 'Error cargando billboards.',
+      });
+      if (payload.success) setBillboards(payload.data);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoadingBillboards(false);
+    }
+  }, [apiBase, token]);
+
+  const saveBillboard = async () => {
+    try {
+      const isEdit = !!editingBillboard?.id;
+      const url = isEdit ? `/admin/billboards/${editingBillboard.id}` : '/admin/billboards';
+      const method = isEdit ? 'PATCH' : 'POST';
+
+      const payload = await requestJson<{ success: boolean, data: any }>({
+        apiBase,
+        path: url,
+        token,
+        options: {
+          method,
+          body: JSON.stringify({ ...billboardForm, linkUrl: billboardForm.linkUrl || null }),
+        },
+        fallbackMessage: 'Error guardando billboard.',
+      });
+      if (payload.success) {
+        setIsBillboardModalOpen(false);
+        loadBillboards();
+      }
+    } catch (e: any) {
+      alert(e.message);
+    }
+  };
+
+  const deleteBillboard = async (id: string) => {
+    if (!confirm('¿Estás seguro de eliminar este banner?')) return;
+    try {
+      await requestJson({
+        apiBase,
+        path: `/admin/billboards/${id}`,
+        token,
+        options: { method: 'DELETE' },
+        fallbackMessage: 'Error eliminando banner.',
+      });
+      loadBillboards();
+    } catch (e: any) {
+      alert(e.message);
+    }
+  };
+
+  const toggleBillboardActive = async (billboard: any) => {
+    try {
+      await requestJson({
+        apiBase,
+        path: `/admin/billboards/${billboard.id}`,
+        token,
+        options: {
+          method: 'PATCH',
+          body: JSON.stringify({ isActive: !billboard.isActive }),
+        },
+        fallbackMessage: 'Error actualizando banner.',
+      });
+      loadBillboards();
+    } catch (e: any) {
+      alert(e.message);
+    }
+  };
+
+  const moveBillboard = async (billboard: any, direction: -1 | 1) => {
+    const sorted = [...billboards].sort((a, b) => a.sortIndex - b.sortIndex);
+    const index = sorted.findIndex((b) => b.id === billboard.id);
+    const swapIndex = index + direction;
+    if (index === -1 || swapIndex < 0 || swapIndex >= sorted.length) return;
+    const target = sorted[swapIndex];
+    const aIndex = billboard.sortIndex ?? index;
+    const bIndex = target.sortIndex ?? swapIndex;
+    try {
+      await requestJson({
+        apiBase,
+        path: `/admin/billboards/${billboard.id}`,
+        token,
+        options: { method: 'PATCH', body: JSON.stringify({ sortIndex: bIndex }) },
+        fallbackMessage: 'Error reordenando banner.',
+      });
+      await requestJson({
+        apiBase,
+        path: `/admin/billboards/${target.id}`,
+        token,
+        options: { method: 'PATCH', body: JSON.stringify({ sortIndex: aIndex }) },
+        fallbackMessage: 'Error reordenando banner.',
+      });
+      loadBillboards();
+    } catch (e: any) {
+      alert(e.message);
+    }
+  };
+
+  useEffect(() => {
+    if (activeSection === 'billboards' && isAdminSession) {
+      loadBillboards();
+    }
+  }, [activeSection, isAdminSession, loadBillboards]);
+
   const loadFeaturedRequests = useCallback(async () => {
     setLoadingFeatured(true);
     try {
@@ -2570,6 +2689,7 @@ export default function Home() {
     { key: 'support', label: 'Soporte' },
     { key: 'customer-debts', label: 'Deuda de Clientes' },
     { key: 'promotions', label: 'Promociones' },
+    { key: 'billboards', label: 'Publicidad' },
     { key: 'featured', label: 'Destacados' },
     { key: 'notifications', label: 'Notificaciones' },
     { key: 'stuck', label: 'Entregas Atascadas' },
@@ -5421,6 +5541,190 @@ export default function Home() {
               </div>
             ) : null}
 
+            {activeSection === 'billboards' ? (
+              <div className="flex flex-col gap-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <h2 className="text-3xl font-black tracking-tight text-neutral-900">
+                      Publicidad (Billboards)
+                    </h2>
+                    <p className="mt-1 text-base text-neutral-500">
+                      Banners a ancho completo estilo Uber Eats (960×408). Se muestran en el carrusel del home del comensal.
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => { setEditingBillboard(null); setBillboardForm({ imageUrl: '', linkUrl: '', isActive: true, regions: [], sortIndex: billboards.length }); setIsBillboardModalOpen(true); }}
+                    className="flex items-center justify-center gap-2 rounded-2xl bg-black px-6 py-3.5 text-sm font-semibold text-white shadow-[0_8px_16px_rgba(0,0,0,0.15)] transition-all hover:scale-[1.02] active:scale-[0.98]"
+                  >
+                    + Nuevo Billboard
+                  </button>
+                </div>
+
+                <div className="flex items-center gap-2 rounded-2xl border border-black/5 bg-white px-4 py-3 text-xs text-neutral-500">
+                  <svg className="h-4 w-4 shrink-0 text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M4 4l5.586 5.586a2 2 0 012.828 0L19 11.757V19a2 2 0 01-2 2H7a2 2 0 01-2-2V7L4 4z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M9.5 4h10v10" />
+                  </svg>
+                  El carrusel se inserta en la lista de restaurantes/tiendas: si hay 10 o menos se coloca en medio; si hay más de 10, a un cuarto.
+                </div>
+
+                <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+                  {loadingBillboards ? (
+                    <div className="col-span-full py-12 text-center text-sm font-medium text-neutral-500">
+                      Cargando billboards...
+                    </div>
+                  ) : billboards.length === 0 ? (
+                    <div className="col-span-full rounded-3xl border border-dashed border-black/10 bg-white/50 px-6 py-16 text-center">
+                      <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-neutral-100 text-3xl">
+                        📣
+                      </div>
+                      <h3 className="text-lg font-bold text-neutral-900">Sin billboards</h3>
+                      <p className="mt-2 text-sm text-neutral-500">
+                        Sube tu primer banner publicitario para mostrarlo en el home de los comensales.
+                      </p>
+                    </div>
+                  ) : (
+                    [...billboards]
+                      .sort((a, b) => a.sortIndex - b.sortIndex)
+                      .map((billboard, index) => (
+                        <div key={billboard.id} className="group relative overflow-hidden rounded-[24px] border border-black/5 bg-white shadow-sm transition-all hover:shadow-lg">
+                          <div className="relative w-full overflow-hidden bg-neutral-100" style={{ aspectRatio: '2.35 / 1' }}>
+                            <img src={billboard.imageUrl} alt={billboard.imageUrl} className="h-full w-full object-cover" />
+                            <div className="absolute top-3 right-3 flex gap-2">
+                              <span className={`rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider shadow-sm backdrop-blur ${billboard.isActive ? 'bg-green-500/90 text-white' : 'bg-neutral-500/90 text-white'}`}>
+                                {billboard.isActive ? 'Activo' : 'Inactivo'}
+                              </span>
+                            </div>
+                          </div>
+                          <div className="p-5">
+                            <div className="flex items-center gap-2">
+                              <span className="rounded-full bg-neutral-100 px-2.5 py-0.5 text-[10px] font-bold text-neutral-500">#{billboard.sortIndex}</span>
+                              {billboard.linkUrl ? (
+                                <span className="rounded-full bg-sky-50 px-2.5 py-0.5 text-[10px] font-bold text-sky-600">🔗 Cliclable</span>
+                              ) : (
+                                <span className="rounded-full bg-neutral-50 px-2.5 py-0.5 text-[10px] font-bold text-neutral-400">Solo imagen</span>
+                              )}
+                            </div>
+                            <p className="mt-1 text-xs text-neutral-500 line-clamp-1 break-all">
+                              {billboard.linkUrl || 'Sin enlace'}
+                            </p>
+                            <p className="mt-1 text-xs text-neutral-500">
+                              {billboard.regions.length > 0 ? `Zonas: ${billboard.regions.join(', ')}` : 'Todas las zonas (Global)'}
+                            </p>
+                            <div className="mt-4 flex gap-2">
+                              <button
+                                onClick={() => { setEditingBillboard(billboard); setBillboardForm({ imageUrl: billboard.imageUrl, linkUrl: billboard.linkUrl || '', isActive: billboard.isActive, regions: billboard.regions || [], sortIndex: billboard.sortIndex ?? index }); setIsBillboardModalOpen(true); }}
+                                className="flex-1 rounded-xl bg-neutral-100 py-2.5 text-sm font-semibold text-neutral-700 transition-colors hover:bg-neutral-200"
+                              >
+                                Editar
+                              </button>
+                              <button
+                                onClick={() => toggleBillboardActive(billboard)}
+                                className="flex-1 rounded-xl bg-neutral-100 py-2.5 text-sm font-semibold text-neutral-700 transition-colors hover:bg-neutral-200"
+                              >
+                                {billboard.isActive ? 'Desactivar' : 'Activar'}
+                              </button>
+                              <button
+                                onClick={() => deleteBillboard(billboard.id)}
+                                className="rounded-xl bg-red-50 px-4 py-2.5 text-sm font-semibold text-red-600 transition-colors hover:bg-red-100"
+                              >
+                                Eliminar
+                              </button>
+                            </div>
+                            <div className="mt-2 flex items-center gap-2">
+                              <button
+                                onClick={() => moveBillboard(billboard, -1)}
+                                disabled={index === 0}
+                                className="flex-1 rounded-xl border border-black/5 py-2 text-sm font-semibold text-neutral-500 transition-colors hover:bg-neutral-50 disabled:opacity-40"
+                              >
+                                ↑ Subir
+                              </button>
+                              <button
+                                onClick={() => moveBillboard(billboard, 1)}
+                                disabled={index === billboards.length - 1}
+                                className="flex-1 rounded-xl border border-black/5 py-2 text-sm font-semibold text-neutral-500 transition-colors hover:bg-neutral-50 disabled:opacity-40"
+                              >
+                                ↓ Bajar
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      ))
+                  )}
+                </div>
+
+                {/* Modal Formulario Billboard */}
+                {isBillboardModalOpen && (
+                  <div className="fixed inset-0 z-[100] flex items-center justify-center px-4">
+                    <div className="absolute inset-0 bg-neutral-900/40 backdrop-blur-sm" onClick={() => setIsBillboardModalOpen(false)}></div>
+                    <div className="relative w-full max-w-lg overflow-hidden rounded-[32px] bg-white shadow-2xl animate-in zoom-in-95 duration-200">
+                      <div className="border-b border-black/5 px-8 py-6 flex justify-between items-center bg-neutral-50/50">
+                        <h3 className="text-xl font-bold text-neutral-900">
+                          {editingBillboard ? 'Editar Billboard' : 'Nuevo Billboard'}
+                        </h3>
+                        <button onClick={() => setIsBillboardModalOpen(false)} className="rounded-full p-2 bg-neutral-200/50 text-neutral-500 hover:text-black">
+                          ✕
+                        </button>
+                      </div>
+                      <div className="p-8 space-y-5 max-h-[70vh] overflow-y-auto">
+                        <div>
+                          <ImageUploadField
+                            label="Imagen del Billboard (960×408, ratio 2.35:1)"
+                            placeholder="URL de la imagen o subir..."
+                            value={billboardForm.imageUrl}
+                            onChange={(val) => setBillboardForm({ ...billboardForm, imageUrl: val })}
+                            apiBase={apiBase}
+                            token={token!}
+                            maxWidth={1920}
+                            maxHeight={816}
+                            fileNamePrefix="billboard"
+                          />
+                          <p className="mt-2 text-xs text-neutral-400">
+                            Formato exacto Uber Eats: 960×408px. Se recorta automáticamente con object-cover.
+                          </p>
+                        </div>
+                        <div>
+                          <label className="text-xs font-bold uppercase tracking-widest text-neutral-500">Enlace (opcional)</label>
+                          <input type="text" value={billboardForm.linkUrl} onChange={(e) => setBillboardForm({ ...billboardForm, linkUrl: e.target.value })} className="mt-2 w-full rounded-2xl border border-black/10 bg-neutral-50 px-4 py-3.5 text-sm focus:border-black focus:ring-1 focus:ring-black" placeholder="https://... o ruta interna (/restaurantes/...) — vacío = no clicable" />
+                          <p className="mt-2 text-xs text-neutral-400">Si se deja vacío, el banner no será clicable.</p>
+                        </div>
+                        <div>
+                          <label className="text-xs font-bold uppercase tracking-widest text-neutral-500">Zonas Asignadas</label>
+                          <p className="mb-2 text-xs text-neutral-400">Si no seleccionas ninguna, será Global.</p>
+                          <div className="flex flex-wrap gap-2">
+                            {regions.map((region) => (
+                              <button
+                                key={region.code}
+                                type="button"
+                                onClick={() => {
+                                  const current = billboardForm.regions || [];
+                                  setBillboardForm({
+                                    ...billboardForm,
+                                    regions: current.includes(region.code) ? current.filter((r) => r !== region.code) : [...current, region.code],
+                                  });
+                                }}
+                                className={`rounded-xl px-4 py-2 text-xs font-bold transition-all ${billboardForm.regions?.includes(region.code) ? 'bg-black text-white shadow-md' : 'bg-neutral-100 text-neutral-500 hover:bg-neutral-200'}`}
+                              >
+                                {region.name}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-3 mt-2">
+                          <input type="checkbox" id="isActiveBillboard" checked={billboardForm.isActive} onChange={(e) => setBillboardForm({ ...billboardForm, isActive: e.target.checked })} className="h-5 w-5 rounded border-black/20 text-black focus:ring-black" />
+                          <label htmlFor="isActiveBillboard" className="text-sm font-semibold text-neutral-700">Billboard Activo</label>
+                        </div>
+                      </div>
+                      <div className="border-t border-black/5 bg-neutral-50/50 p-6 flex justify-end gap-3">
+                        <button onClick={() => setIsBillboardModalOpen(false)} className="rounded-xl px-5 py-3 text-sm font-semibold text-neutral-600 hover:bg-neutral-200">Cancelar</button>
+                        <button onClick={saveBillboard} disabled={!billboardForm.imageUrl} className="rounded-xl bg-black px-8 py-3 text-sm font-bold text-white shadow-md hover:bg-neutral-800 disabled:opacity-50">Guardar</button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : null}
+
             {activeSection === 'featured' ? (
               <div className="flex flex-col gap-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
                 <div className="flex items-start justify-between">
@@ -7346,6 +7650,15 @@ function AdminNavIcon({ kind }: { kind: AdminPortalSection }) {
     );
   }
 
+  if (kind === 'billboards') {
+    return (
+      <svg className="h-5 w-5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+        <rect x="2" y="6" width="20" height="12" rx="2" strokeWidth={1.7} />
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M12 6v12" />
+      </svg>
+    );
+  }
+
   if (kind === 'notifications') {
     return (
       <svg className="h-5 w-5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor">
@@ -8126,6 +8439,9 @@ function ImageUploadField({
   placeholder,
   apiBase,
   token,
+  maxWidth = 800,
+  maxHeight = 800,
+  fileNamePrefix = 'promo',
 }: {
   label: string;
   value: string;
@@ -8133,6 +8449,9 @@ function ImageUploadField({
   placeholder: string;
   apiBase: string;
   token: string;
+  maxWidth?: number;
+  maxHeight?: number;
+  fileNamePrefix?: string;
 }) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isUploading, setIsUploading] = useState(false);
@@ -8148,14 +8467,14 @@ function ImageUploadField({
 
     setIsUploading(true);
     try {
-      const compressedBase64 = await convertImageFileToDataUrl(file, 800, 800, 0.8);
+      const compressedBase64 = await convertImageFileToDataUrl(file, maxWidth, maxHeight, 0.85);
       
       const uploadResult = await uploadMediaAsset({
         apiBase,
         token,
         kind: 'site-image',
         source: compressedBase64,
-        fileName: `promo-${Date.now()}.jpg`,
+        fileName: `${fileNamePrefix}-${Date.now()}.jpg`,
         fallbackToSource: true,
       });
 

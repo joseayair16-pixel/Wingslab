@@ -1020,6 +1020,25 @@ model Promotion {
   @@index([isActive])
 }
 
+// ============== Homepage Billboards (Uber Eats style, full-width banner carousel) ==============
+model Billboard {
+  id        String   @id @default(cuid())
+  imageUrl  String // Banner 960x408 (ratio 2.35:1) tal como Uber Eats Homepage Billboard
+  linkUrl   String? // Destino al hacer clic. Si es null, el banner no es clicable.
+  isActive  Boolean  @default(true)
+  regions   String[] // Ej. ["michoacan-morelia"]. Si está vacío, aplica a TODAS.
+  sortIndex Int      @default(0) // Orden de aparición en el carrusel
+
+  startDate DateTime? // Cuándo empieza
+  endDate   DateTime? // Cuándo termina
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([isActive])
+  @@index([sortIndex])
+}
+
 // ============== Featured Purchases (Monetización por visibilidad) ==============
 enum FeaturedPurchaseStatus {
   PENDING

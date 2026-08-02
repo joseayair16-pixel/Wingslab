@@ -2,6 +2,7 @@ import Image from 'next/image';
 import React, { useMemo, useState } from 'react';
 import { useStore } from '../store';
 import { StoreCategoryItem } from '../app/page';
+import { BillboardCarousel, type Billboard } from '../components/BillboardCarousel';
 
 const businessTypeLabel = (type: string): string => {
   return type === 'STORE' ? 'Tienda' : 'Restaurante';
@@ -47,6 +48,7 @@ interface HomeViewProps {
   hasMoreRestaurants?: boolean;
   onLoadMoreRestaurants?: () => void;
   loadingMoreRestaurants?: boolean;
+  billboards?: Billboard[];
 }
 
 export const HomeView = React.memo(function HomeView({
@@ -85,6 +87,7 @@ export const HomeView = React.memo(function HomeView({
   hasMoreRestaurants = false,
   onLoadMoreRestaurants,
   loadingMoreRestaurants = false,
+  billboards = [],
 }: HomeViewProps) {
   const searchQuery = useStore(state => state.searchQuery);
   const searchType = useStore(state => state.searchType);
@@ -164,6 +167,45 @@ export const HomeView = React.memo(function HomeView({
     : businessTypeFilter === 'stores'
       ? 'Tiendas disponibles'
       : 'Restaurantes y tiendas';
+
+  // ── Billboard placement logic (Uber Eats style) ──────────────────────────
+  // Visible only with the base tabs (Todos / Restaurantes / Tiendas) and no
+  // other active filter: no category, no search, no "filtrar por" chips.
+  const isBillboardFilterBlocked =
+    selectedCategory !== 'all' ||
+    isSearching ||
+    filterOpenNow ||
+    filterFreeDelivery ||
+    filterPromotions ||
+    filterBestRated;
+
+  const visibleBillboards = !isBillboardFilterBlocked ? billboards : [];
+
+  // Position within the grid:
+  //   n <= 10  -> middle (10 -> after the 5th)
+  //   n >  10  -> quarter (16 -> after the 4th)
+  const billboardInsertIndex = useMemo(() => {
+    const n = filteredByBusinessType.length;
+    if (visibleBillboards.length === 0 || n === 0) return -1;
+    if (n <= 10) return Math.ceil(n / 2);
+    return Math.floor(n / 4);
+  }, [filteredByBusinessType.length, visibleBillboards.length]);
+
+  // When the computed position lands beyond the last item (e.g. n=1 -> pos 1),
+  // clamp the in-grid insertion and render the carousel after the grid instead.
+  const billboardAfterGrid =
+    billboardInsertIndex > 0 &&
+    billboardInsertIndex >= filteredByBusinessType.length;
+
+  const handleBillboardNavigate = React.useCallback((url: string) => {
+    if (url.startsWith('http://') || url.startsWith('https://')) {
+      window.open(url, '_blank', 'noopener,noreferrer');
+    } else if (url.startsWith('/')) {
+      router.push(url);
+    } else if (url) {
+      router.push(`/restaurantes/${url}`);
+    }
+  }, [router]);
 
   const highlightText = (text: string, highlight: string) => {
     if (!highlight.trim()) {
@@ -654,12 +696,17 @@ export const HomeView = React.memo(function HomeView({
             /* ──────── RESTAURANT / TIENDA SEARCH LAYOUT (Full Cards) ──────── */
             <div className="space-y-6">
             <div className="grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-              {filteredByBusinessType.map((restaurant) => {
+              {filteredByBusinessType.map((restaurant, index) => {
                 const primaryCategory = restaurant.storeCategories?.[0];
 
                 return (
+                  <React.Fragment key={restaurant.id}>
+                  {index === billboardInsertIndex && !billboardAfterGrid && visibleBillboards.length > 0 && (
+                    <div className="col-span-full">
+                      <BillboardCarousel billboards={visibleBillboards} onNavigate={handleBillboardNavigate} />
+                    </div>
+                  )}
                   <div
-                    key={restaurant.id}
                     className={`group relative overflow-hidden rounded-[30px] border text-left transition-all duration-300 ease-out ${
                       restaurant.isOpen
                         ? 'border-black/5 bg-white hover:-translate-y-1 hover:border-black/10 hover:shadow-[0_24px_60px_rgba(15,15,15,0.08)]'
@@ -789,9 +836,15 @@ export const HomeView = React.memo(function HomeView({
                       </div>
                     </div>
                   </div>
+                  </React.Fragment>
                 );
               })}
             </div>
+            {billboardAfterGrid && visibleBillboards.length > 0 && (
+              <div className="mt-5">
+                <BillboardCarousel billboards={visibleBillboards} onNavigate={handleBillboardNavigate} />
+              </div>
+            )}
             {hasMoreRestaurants && !isSearching && filteredByBusinessType.length > 0 && (
               <div className="pt-2 flex justify-center">
                 <button
