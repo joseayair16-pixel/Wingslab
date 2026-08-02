@@ -1101,7 +1101,13 @@ export default function Home() {
     const fetchBillboards = async () => {
       try {
         const params = new URLSearchParams();
-        if (userZone) params.set('region', userZone);
+        const loc = userLocation;
+        if (loc && typeof loc.latitude === 'number' && typeof loc.longitude === 'number') {
+          params.set('latitude', loc.latitude.toString());
+          params.set('longitude', loc.longitude.toString());
+        } else if (userZone) {
+          params.set('region', userZone);
+        }
         const query = params.toString() ? `?${params.toString()}` : '';
         const response = await fetch(`${apiBase}/public/billboards${query}`, { signal: controller.signal });
         const data = await response.json();
@@ -1116,7 +1122,7 @@ export default function Home() {
 
     fetchBillboards();
     return () => controller.abort();
-  }, [apiBase, userZone]);
+  }, [apiBase, userLocation, userZone]);
 
   // Restore persistent modals after page reload
   useEffect(() => {

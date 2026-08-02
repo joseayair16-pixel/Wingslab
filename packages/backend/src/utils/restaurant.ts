@@ -86,6 +86,43 @@ function toRadians(value: number): number {
   return (value * Math.PI) / 180;
 }
 
+export interface ZoneCentroid {
+  code: string;
+  latitude: number;
+  longitude: number;
+  radiusKm: number;
+}
+
+/**
+ * Returns the zone code whose centroid is nearest to the given coordinates,
+ * but only when that distance is within the zone's delivery radius. When the
+ * user is far away from every active zone (or there are no zones), it returns
+ * null so callers can fall back to global-only content.
+ */
+export function resolveZoneFromCentroids(
+  coordinates: { latitude: number; longitude: number },
+  zones: ZoneCentroid[]
+): string | null {
+  if (zones.length === 0) return null;
+
+  let best: ZoneCentroid | null = null;
+  let bestDistance = Infinity;
+
+  for (const zone of zones) {
+    const distance = getDistanceInKm(coordinates, {
+      latitude: zone.latitude,
+      longitude: zone.longitude,
+    });
+    if (distance < bestDistance) {
+      best = zone;
+      bestDistance = distance;
+    }
+  }
+
+  if (!best) return null;
+  return bestDistance <= best.radiusKm ? best.code : null;
+}
+
 export function isRestaurant(businessType?: string): boolean {
   return !businessType || businessType === BusinessType.RESTAURANT;
 }

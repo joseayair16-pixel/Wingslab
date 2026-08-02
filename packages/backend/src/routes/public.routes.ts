@@ -3,7 +3,7 @@ import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 
 import { prisma } from '../config/database';
-import { getDistanceInKm, isRestaurantOpenNow, getNextOpenTime } from '../utils/restaurant';
+import { getDistanceInKm, isRestaurantOpenNow, getNextOpenTime, resolveZoneFromCentroids } from '../utils/restaurant';
 import { createPlatformRequest } from '../utils/platform-requests';
 import { decrypt } from '../utils/crypto';
 
@@ -530,7 +530,77 @@ export async function registerPublicRoutes(fastify: FastifyInstance): Promise<vo
 
   const getBillboardsQuerySchema = z.object({
     region: z.string().optional(),
+    latitude: z.coerce.number().min(-90).max(90).optional(),
+    longitude: z.coerce.number().min(-180).max(180).optional(),
   });
+
+  /**
+   * Cached active-zone centroids. Built once and refreshed after ZONE_CACHE_TTL_MS
+   * so billboard requests don't hammer the DB on every call while still picking up
+   * new zones within a minute.
+   */
+  let zoneCentroidCache: {
+    at: number;
+    zones: { code: string; latitude: number; longitude: number; radiusKm: number }[];
+  } | null = null;
+  const ZONE_CACHE_TTL_MS = 60_000;
+
+  async function getZoneCentroids() {
+    const now = Date.now();
+    if (zoneCentroidCache && now - zoneCentroidCache.at < ZONE_CACHE_TTL_MS) {
+      return zoneCentroidCache.zones;
+    }
+
+    const restaurants = await prisma.restaurant.findMany({
+      where: {
+        status: RestaurantStatus.ACTIVE,
+        region: { not: '' },
+      },
+      select: { region: true, latitude: true, longitude: true },
+    });
+
+    const grouped = new Map<string, { latitudes: number[]; longitudes: number[] }>();
+    for (const r of restaurants) {
+      if (!r.region || r.latitude === null || r.longitude === null) continue;
+      const entry = grouped.get(r.region) || { latitudes: [], longitudes: [] };
+      entry.latitudes.push(r.latitude);
+      entry.longitudes.push(r.longitude);
+      grouped.set(r.region, entry);
+    }
+
+    if (grouped.size === 0) {
+      zoneCentroidCache = { at: now, zones: [] };
+      return zoneCentroidCache.zones;
+    }
+
+    const regions = await prisma.region.findMany({
+      where: { code: { in: Array.from(grouped.keys()) } },
+    });
+    const radiusByCode = new Map(regions.map((r) => [r.code, r.deliveryRadius]));
+
+    const zones = Array.from(grouped.entries()).map(([code, coords]) => ({
+      code,
+      latitude: coords.latitudes.reduce((a, b) => a + b, 0) / coords.latitudes.length,
+      longitude: coords.longitudes.reduce((a, b) => a + b, 0) / coords.longitudes.length,
+      radiusKm: radiusByCode.get(code) ?? 20,
+    }));
+
+    zoneCentroidCache = { at: now, zones };
+    return zones;
+  }
+
+  /**
+   * Resolves the active zone nearest to the given coordinates using cached
+   * zone centroids. Returns the zone code when the user is close enough to a
+   * zone with at least one active restaurant; otherwise null.
+   */
+  async function resolveNearestZone(params: {
+    latitude: number;
+    longitude: number;
+  }): Promise<string | null> {
+    const zones = await getZoneCentroids();
+    return resolveZoneFromCentroids(params, zones);
+  }
 
   fastify.get('/public/billboards', async (request, reply) => {
     const parsed = getBillboardsQuerySchema.safeParse(request.query);
@@ -541,12 +611,19 @@ export async function registerPublicRoutes(fastify: FastifyInstance): Promise<vo
       });
     }
 
-    const { region } = parsed.data;
+    const { region, latitude, longitude } = parsed.data;
     const now = new Date();
 
     try {
-      const regionFilter = region
-        ? { OR: [{ regions: { isEmpty: true } }, { regions: { has: region } }] }
+      // Precedence: explicit coordinates (dynamic, user is wherever their GPS
+      // says) > explicit region param > global-only billboards.
+      const resolvedRegion =
+        latitude !== undefined && longitude !== undefined
+          ? await resolveNearestZone({ latitude, longitude })
+          : region ?? null;
+
+      const regionFilter = resolvedRegion
+        ? { OR: [{ regions: { isEmpty: true } }, { regions: { has: resolvedRegion } }] }
         : { regions: { isEmpty: true } };
 
       const billboards = await prisma.billboard.findMany({
