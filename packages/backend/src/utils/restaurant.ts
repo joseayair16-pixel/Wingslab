@@ -86,41 +86,43 @@ function toRadians(value: number): number {
   return (value * Math.PI) / 180;
 }
 
-export interface ZoneCentroid {
-  code: string;
+export interface ZoneRestaurant {
+  region: string;
   latitude: number;
   longitude: number;
   radiusKm: number;
 }
 
 /**
- * Returns the zone code whose centroid is nearest to the given coordinates,
- * but only when that distance is within the zone's delivery radius. When the
- * user is far away from every active zone (or there are no zones), it returns
- * null so callers can fall back to global-only content.
+ * Returns the region of the active restaurant nearest to the given
+ * coordinates, but only when the user is within that restaurant's effective
+ * delivery radius. When no restaurant is close enough (or there are no active
+ * restaurants), it returns null so callers can fall back to global-only
+ * content. The zone follows the restaurants that can actually serve the user
+ * instead of a static zone centroid.
  */
-export function resolveZoneFromCentroids(
+export function resolveZoneFromNearestRestaurant(
   coordinates: { latitude: number; longitude: number },
-  zones: ZoneCentroid[]
+  restaurants: ZoneRestaurant[]
 ): string | null {
-  if (zones.length === 0) return null;
+  if (restaurants.length === 0) return null;
 
-  let best: ZoneCentroid | null = null;
+  let best: ZoneRestaurant | null = null;
   let bestDistance = Infinity;
 
-  for (const zone of zones) {
+  for (const restaurant of restaurants) {
     const distance = getDistanceInKm(coordinates, {
-      latitude: zone.latitude,
-      longitude: zone.longitude,
+      latitude: restaurant.latitude,
+      longitude: restaurant.longitude,
     });
     if (distance < bestDistance) {
-      best = zone;
+      best = restaurant;
       bestDistance = distance;
     }
   }
 
   if (!best) return null;
-  return bestDistance <= best.radiusKm ? best.code : null;
+  return bestDistance <= best.radiusKm ? best.region : null;
 }
 
 export function isRestaurant(businessType?: string): boolean {

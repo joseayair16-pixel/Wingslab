@@ -3,7 +3,7 @@ import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 
 import { prisma } from '../config/database';
-import { getDistanceInKm, isRestaurantOpenNow, getNextOpenTime, resolveZoneFromCentroids } from '../utils/restaurant';
+import { getDistanceInKm, isRestaurantOpenNow, getNextOpenTime, resolveZoneFromNearestRestaurant } from '../utils/restaurant';
 import { createPlatformRequest } from '../utils/platform-requests';
 import { decrypt } from '../utils/crypto';
 
@@ -474,6 +474,8 @@ export async function registerPublicRoutes(fastify: FastifyInstance): Promise<vo
   const getPromotionsQuerySchema = z.object({
     region: z.string().optional(),
     role: z.string().optional(),
+    latitude: z.coerce.number().min(-90).max(90).optional(),
+    longitude: z.coerce.number().min(-180).max(180).optional(),
   });
 
   fastify.get('/public/promotions', async (request, reply) => {
@@ -485,10 +487,18 @@ export async function registerPublicRoutes(fastify: FastifyInstance): Promise<vo
       });
     }
 
-    const { region, role } = parsed.data;
+    const { region, role, latitude, longitude } = parsed.data;
     const now = new Date();
 
     try {
+      // Same dynamic zone resolution as billboards: explicit coordinates win
+      // (the user is wherever their GPS says), then the explicit region param,
+      // then global-only content.
+      const resolvedRegion =
+        latitude !== undefined && longitude !== undefined
+          ? await resolveNearestZone({ latitude, longitude })
+          : region ?? null;
+
       const promotions = await (prisma as any).promotion.findMany({
         where: {
           isActive: true,
@@ -511,7 +521,7 @@ export async function registerPublicRoutes(fastify: FastifyInstance): Promise<vo
       const filteredPromotions = promotions.filter((p: any) => {
         if (role && p.targetRole && p.targetRole !== 'ALL' && p.targetRole !== role) return false;
 
-        if (p.regions && p.regions.length > 0 && (!region || !p.regions.includes(region))) return false;
+        if (p.regions && p.regions.length > 0 && (!resolvedRegion || !p.regions.includes(resolvedRegion))) return false;
 
         return true;
       });
@@ -535,20 +545,22 @@ export async function registerPublicRoutes(fastify: FastifyInstance): Promise<vo
   });
 
   /**
-   * Cached active-zone centroids. Built once and refreshed after ZONE_CACHE_TTL_MS
-   * so billboard requests don't hammer the DB on every call while still picking up
-   * new zones within a minute.
+   * Cached active restaurants that define serviceable zones, with their
+   * effective delivery radius (own delivery, or the region's fallback radius).
+   * Built once and refreshed after ZONE_CACHE_TTL_MS so billboard requests
+   * don't hammer the DB on every call while still picking up new restaurants
+   * within a minute.
    */
-  let zoneCentroidCache: {
+  let zoneRestaurantCache: {
     at: number;
-    zones: { code: string; latitude: number; longitude: number; radiusKm: number }[];
+    restaurants: { region: string; latitude: number; longitude: number; radiusKm: number }[];
   } | null = null;
   const ZONE_CACHE_TTL_MS = 60_000;
 
-  async function getZoneCentroids() {
+  async function getActiveZoneRestaurants() {
     const now = Date.now();
-    if (zoneCentroidCache && now - zoneCentroidCache.at < ZONE_CACHE_TTL_MS) {
-      return zoneCentroidCache.zones;
+    if (zoneRestaurantCache && now - zoneRestaurantCache.at < ZONE_CACHE_TTL_MS) {
+      return zoneRestaurantCache.restaurants;
     }
 
     const restaurants = await prisma.restaurant.findMany({
@@ -556,50 +568,45 @@ export async function registerPublicRoutes(fastify: FastifyInstance): Promise<vo
         status: RestaurantStatus.ACTIVE,
         region: { not: '' },
       },
-      select: { region: true, latitude: true, longitude: true },
+      select: {
+        region: true,
+        latitude: true,
+        longitude: true,
+        hasOwnDelivery: true,
+        deliveryRadius: true,
+      },
     });
 
-    const grouped = new Map<string, { latitudes: number[]; longitudes: number[] }>();
-    for (const r of restaurants) {
-      if (!r.region || r.latitude === null || r.longitude === null) continue;
-      const entry = grouped.get(r.region) || { latitudes: [], longitudes: [] };
-      entry.latitudes.push(r.latitude);
-      entry.longitudes.push(r.longitude);
-      grouped.set(r.region, entry);
-    }
+    const regionCodes = Array.from(new Set(restaurants.map((r) => r.region).filter(Boolean)));
+    const regions = regionCodes.length
+      ? await prisma.region.findMany({ where: { code: { in: regionCodes } } })
+      : [];
+    const regionRadiusByCode = new Map(regions.map((r) => [r.code, r.deliveryRadius]));
 
-    if (grouped.size === 0) {
-      zoneCentroidCache = { at: now, zones: [] };
-      return zoneCentroidCache.zones;
-    }
+    const zoneRestaurants = restaurants
+      .filter((r) => r.region && r.latitude !== null && r.longitude !== null)
+      .map((r) => ({
+        region: r.region as string,
+        latitude: r.latitude as number,
+        longitude: r.longitude as number,
+        radiusKm: r.hasOwnDelivery ? r.deliveryRadius : (regionRadiusByCode.get(r.region as string) ?? 20),
+      }));
 
-    const regions = await prisma.region.findMany({
-      where: { code: { in: Array.from(grouped.keys()) } },
-    });
-    const radiusByCode = new Map(regions.map((r) => [r.code, r.deliveryRadius]));
-
-    const zones = Array.from(grouped.entries()).map(([code, coords]) => ({
-      code,
-      latitude: coords.latitudes.reduce((a, b) => a + b, 0) / coords.latitudes.length,
-      longitude: coords.longitudes.reduce((a, b) => a + b, 0) / coords.longitudes.length,
-      radiusKm: radiusByCode.get(code) ?? 20,
-    }));
-
-    zoneCentroidCache = { at: now, zones };
-    return zones;
+    zoneRestaurantCache = { at: now, restaurants: zoneRestaurants };
+    return zoneRestaurantCache.restaurants;
   }
 
   /**
-   * Resolves the active zone nearest to the given coordinates using cached
-   * zone centroids. Returns the zone code when the user is close enough to a
-   * zone with at least one active restaurant; otherwise null.
+   * Resolves the zone nearest to the given coordinates using cached active
+   * restaurants. Returns the zone code when the user is within the delivery
+   * radius of at least one active restaurant; otherwise null.
    */
   async function resolveNearestZone(params: {
     latitude: number;
     longitude: number;
   }): Promise<string | null> {
-    const zones = await getZoneCentroids();
-    return resolveZoneFromCentroids(params, zones);
+    const restaurants = await getActiveZoneRestaurants();
+    return resolveZoneFromNearestRestaurant(params, restaurants);
   }
 
   fastify.get('/public/billboards', async (request, reply) => {

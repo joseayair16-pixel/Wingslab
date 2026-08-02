@@ -1065,7 +1065,12 @@ export default function Home() {
       try {
         const params = new URLSearchParams();
         if (sessionUser?.role) params.set('role', sessionUser.role);
-        if (userZone) params.set('region', userZone);
+        if (userLocation && typeof userLocation.latitude === 'number' && typeof userLocation.longitude === 'number') {
+          params.set('latitude', userLocation.latitude.toString());
+          params.set('longitude', userLocation.longitude.toString());
+        } else if (userZone) {
+          params.set('region', userZone);
+        }
         const query = params.toString() ? `?${params.toString()}` : '';
         const response = await fetch(`${apiBase}/public/promotions${query}`, { signal: controller.signal });
         const data = await response.json();
@@ -1094,7 +1099,7 @@ export default function Home() {
 
     fetchPromotions();
     return () => controller.abort();
-  }, [apiBase, sessionUser?.role, userZone]);
+  }, [apiBase, sessionUser?.role, userLocation, userZone]);
 
   useEffect(() => {
     const controller = new AbortController();

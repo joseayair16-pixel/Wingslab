@@ -1,6 +1,6 @@
 import { RestaurantStatus } from '@prisma/client';
 
-import { getDistanceInKm, isRestaurantOpenNow, resolveZoneFromCentroids, ZoneCentroid } from './restaurant';
+import { getDistanceInKm, isRestaurantOpenNow, resolveZoneFromNearestRestaurant, ZoneRestaurant } from './restaurant';
 
 describe('restaurant utils', () => {
   it('detecta restaurante abierto con horario valido', () => {
@@ -74,35 +74,35 @@ describe('restaurant utils', () => {
   });
 });
 
-describe('resolveZoneFromCentroids', () => {
-  const morelia: ZoneCentroid = { code: 'michoacan-morelia', latitude: 19.7025, longitude: -101.1924, radiusKm: 20 };
-  const puruaran: ZoneCentroid = { code: 'michoacan-puruaran', latitude: 19.4108, longitude: -102.5164, radiusKm: 20 };
+describe('resolveZoneFromNearestRestaurant', () => {
+  const morelia: ZoneRestaurant = { region: 'michoacan-morelia', latitude: 19.7036972, longitude: -101.1660205, radiusKm: 5 };
+  const puruaran: ZoneRestaurant = { region: 'michoacan-puruaran', latitude: 19.0955686, longitude: -101.5231974, radiusKm: 3 };
 
-  it('asigna la zona mas cercana cuando el usuario esta dentro del radio', () => {
-    const result = resolveZoneFromCentroids({ latitude: 19.71, longitude: -101.2 }, [morelia, puruaran]);
+  it('asigna la zona del restaurante mas cercano cuando el usuario esta dentro de su radio', () => {
+    // A ~2 km del restaurante de Morelia.
+    const result = resolveZoneFromNearestRestaurant({ latitude: 19.72, longitude: -101.175 }, [morelia, puruaran]);
     expect(result).toBe('michoacan-morelia');
   });
 
-  it('asigna la otra zona cuando el usuario esta cerca de ella', () => {
-    const result = resolveZoneFromCentroids({ latitude: 19.42, longitude: -102.5 }, [morelia, puruaran]);
+  it('asigna la zona del otro restaurante cuando esta mas cerca de el', () => {
+    const result = resolveZoneFromNearestRestaurant({ latitude: 19.11, longitude: -101.52 }, [morelia, puruaran]);
     expect(result).toBe('michoacan-puruaran');
   });
 
-  it('devuelve null cuando el usuario esta lejos de todas las zonas', () => {
-    // Ciudad de Mexico (aprox. 19.43, -99.13) esta fuera del radio de ambas.
-    const result = resolveZoneFromCentroids({ latitude: 19.4326, longitude: -99.1332 }, [morelia, puruaran]);
+  it('devuelve null cuando el usuario esta fuera del radio de todos los restaurantes', () => {
+    // CDMX: lejos de todos los radios.
+    const result = resolveZoneFromNearestRestaurant({ latitude: 19.4326, longitude: -99.1332 }, [morelia, puruaran]);
     expect(result).toBeNull();
   });
 
-  it('devuelve null cuando no hay zonas activas', () => {
-    const result = resolveZoneFromCentroids({ latitude: 19.7025, longitude: -101.1924 }, []);
+  it('devuelve null cuando no hay restaurantes activos', () => {
+    const result = resolveZoneFromNearestRestaurant({ latitude: 19.7036972, longitude: -101.1660205 }, []);
     expect(result).toBeNull();
   });
 
-  it('respeta el radio de entrega configurado por zona', () => {
-    // Zona con radio pequeno: el usuario dentro del centroide pero fuera del radio.
-    const tinyZone: ZoneCentroid = { code: 'zona-tiny', latitude: 19.7025, longitude: -101.1924, radiusKm: 1 };
-    const result = resolveZoneFromCentroids({ latitude: 19.80, longitude: -101.1924 }, [tinyZone]);
+  it('respeta el radio de entrega del restaurante (no el de la zona)', () => {
+    // A 7 km del restaurante de Morelia (radio 5 km) -> fuera.
+    const result = resolveZoneFromNearestRestaurant({ latitude: 19.76, longitude: -101.14 }, [morelia, puruaran]);
     expect(result).toBeNull();
   });
 });
