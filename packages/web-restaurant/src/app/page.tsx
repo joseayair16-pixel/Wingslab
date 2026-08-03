@@ -75,6 +75,7 @@ type RestaurantProfile = {
   deliveryPerKmRate?: number | null;
   deliveryMinFee?: number | null;
   deliveryMaxFee?: number | null;
+  maxCashOrder?: number | null;
   hasOwnDelivery: boolean;
   minDeliveryTime: number;
   maxDeliveryTime: number;
@@ -325,6 +326,7 @@ type StoreProfileDraft = {
   deliveryPerKmRate: string;
   deliveryMinFee: string;
   deliveryMaxFee: string;
+  maxCashOrder: string;
   storeCategories: string[];
   enableTicketPrinting: boolean;
   whatsappNotifications: boolean;
@@ -885,6 +887,7 @@ export default function Home() {
     deliveryPerKmRate: '',
     deliveryMinFee: '',
     deliveryMaxFee: '',
+    maxCashOrder: '',
     storeCategories: [],
     enableTicketPrinting: true,
     whatsappNotifications: false,
@@ -1591,6 +1594,7 @@ export default function Home() {
         deliveryPerKmRate: '',
         deliveryMinFee: '',
         deliveryMaxFee: '',
+        maxCashOrder: '',
         storeCategories: [],
         enableTicketPrinting: true,
     whatsappNotifications: false,
@@ -2426,6 +2430,7 @@ export default function Home() {
         deliveryPerKmRate: profileData.data.deliveryPerKmRate != null ? String(profileData.data.deliveryPerKmRate) : '',
         deliveryMinFee: profileData.data.deliveryMinFee != null ? String(profileData.data.deliveryMinFee) : '',
         deliveryMaxFee: profileData.data.deliveryMaxFee != null ? String(profileData.data.deliveryMaxFee) : '',
+        maxCashOrder: profileData.data.maxCashOrder != null ? String(profileData.data.maxCashOrder) : '',
         storeCategories: profileData.data.storeCategories?.map(sc => sc.category.id) || [],
         enableTicketPrinting: profileData.data.enableTicketPrinting ?? true,
         whatsappNotifications: profileData.data.whatsappNotifications ?? false,
@@ -3546,6 +3551,9 @@ export default function Home() {
         deliveryMaxFee: storeDraft.hasOwnDelivery && storeDraft.deliveryMaxFee.trim()
           ? Number(storeDraft.deliveryMaxFee)
           : 150,
+        maxCashOrder: storeDraft.maxCashOrder.trim()
+          ? Number(storeDraft.maxCashOrder)
+          : 500,
         storeCategories: storeDraft.storeCategories,
         enableTicketPrinting: storeDraft.enableTicketPrinting,
         instagram: storeDraft.instagram.trim() || null,
@@ -3598,6 +3606,7 @@ export default function Home() {
         deliveryPerKmRate: payload.data.deliveryPerKmRate != null ? String(payload.data.deliveryPerKmRate) : '',
         deliveryMinFee: payload.data.deliveryMinFee != null ? String(payload.data.deliveryMinFee) : '',
         deliveryMaxFee: payload.data.deliveryMaxFee != null ? String(payload.data.deliveryMaxFee) : '',
+        maxCashOrder: payload.data.maxCashOrder != null ? String(payload.data.maxCashOrder) : '',
         storeCategories: payload.data.storeCategories?.map((sc: any) => sc.category.id) || [],
         enableTicketPrinting: payload.data.enableTicketPrinting ?? true,
         whatsappNotifications: payload.data.whatsappNotifications ?? false,

@@ -48,6 +48,7 @@ export interface Restaurant {
   deliveryPerKmRate?: number;
   deliveryMinFee?: number;
   deliveryMaxFee?: number;
+  maxCashOrder?: number;
   minDeliveryTime: number;
   maxDeliveryTime: number;
   operatingHours: OperatingHours[];

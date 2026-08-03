@@ -4,6 +4,7 @@ import { customerCreatedOrderSelect } from './order-selects';
 import { isRestaurantOpenNow } from '../utils/restaurant';
 import { getDistanceInKm } from '../utils/restaurant';
 import { calculateDistanceDeliveryFee } from '../utils/delivery-pricing';
+import { resolveMaxCashOrder } from '../utils/cash-policy';
 import { logger } from '../utils/logger';
 import { buildApartmentWhere } from '../utils/address';
 import { calculateOrderEta } from '../utils/order-eta';
@@ -640,13 +641,13 @@ export async function createOrderForCustomer({
     isPickup,
   });
 
-  // Seguridad: Límite de Monto para Pago en Efectivo
-  const MAX_CASH_AMOUNT = 500;
-  if (input.paymentMethod === PaymentMethod.CASH && totalAmount > MAX_CASH_AMOUNT) {
+  // Seguridad: Límite de Monto para Pago en Efectivo (configurable por restaurante)
+  const maxCashAmount = resolveMaxCashOrder(restaurant.maxCashOrder);
+  if (input.paymentMethod === PaymentMethod.CASH && totalAmount > maxCashAmount) {
     throw new AppError(
       400,
       'CASH_LIMIT_EXCEEDED',
-      `Los pedidos mayores a $${MAX_CASH_AMOUNT} no se pueden pagar en efectivo. Por favor usa transferencia.`
+      `Los pedidos mayores a $${maxCashAmount} no se pueden pagar en efectivo. Por favor usa transferencia.`
     );
   }
 

@@ -50,6 +50,7 @@ const createRestaurantSchema = z.object({
   deliveryPerKmRate: z.number().nonnegative().optional(),
   deliveryMinFee: z.number().nonnegative().optional(),
   deliveryMaxFee: z.number().nonnegative().optional(),
+  maxCashOrder: z.number().positive().optional(),
   minDeliveryTime: z.number().int().positive().default(30),
   maxDeliveryTime: z.number().int().positive().default(60),
   billingCycle: z.nativeEnum(BillingCycle).default(BillingCycle.WEEKLY),

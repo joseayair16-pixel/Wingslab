@@ -98,6 +98,7 @@ model Restaurant {
   deliveryMaxFee          Float            @default(150) // safety cap
   minDeliveryTime         Int              @default(30)
   maxDeliveryTime         Int              @default(60)
+  maxCashOrder            Float            @default(500) // max amount payable in cash
   contactPhone            String
   email                   String
   transferBankName        String?

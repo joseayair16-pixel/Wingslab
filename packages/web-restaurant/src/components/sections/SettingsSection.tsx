@@ -659,8 +659,21 @@ export const SettingsSection = React.memo(function SettingsSection({
             {activeSettingsTab === 'pagos' && (
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="sm:col-span-2 rounded-[18px] border border-sky-100 bg-sky-50 p-4 text-sm text-sky-700">
+                  <p className="font-semibold mb-0.5">Pago en efectivo</p>
+                  <p className="text-sky-700/80">Define el monto máximo que tus clientes pueden pagar en efectivo. Por encima de este monto deberán pagar con transferencia.</p>
+                </div>
+                <div className="sm:col-span-2">
+                  <Field
+                    label="Monto máximo para pago en efectivo ($)"
+                    value={storeDraft.maxCashOrder}
+                    onChange={(value: string) => setStoreDraft((c: any) => ({ ...c, maxCashOrder: value }))}
+                    placeholder="500"
+                    type="number"
+                  />
+                </div>
+                <div className="sm:col-span-2 rounded-[18px] border border-emerald-100 bg-emerald-50 p-4 text-sm text-emerald-800">
                   <p className="font-semibold mb-0.5">Cuenta para recibir transferencias</p>
-                  <p className="text-sky-700/80">Estos datos se mostrarán al cliente cuando elija pagar con transferencia bancaria en tu restaurante.</p>
+                  <p className="text-emerald-700/80">Estos datos se mostrarán al cliente cuando elija pagar con transferencia bancaria en tu restaurante.</p>
                 </div>
                 <Field
                   label="Banco"

@@ -56,6 +56,7 @@ type PublicRestaurantDetail = {
   serviceFee?: number | null;
   deliveryFee?: number | null;
   effectiveDeliveryFee?: number | null;
+  maxCashOrder?: number | null;
   pricingModel?: string | null;
   baseRate?: number | null;
   perKmRate?: number | null;
@@ -2313,8 +2314,8 @@ function triggerHaptic(pattern: number | number[] = 10) {
         return;
       }
 
-      // 3. Límite de Monto para Pago en Efectivo
-      const MAX_CASH_AMOUNT = 500; // Limit for cash orders
+      // 3. Límite de Monto para Pago en Efectivo (configurado por el restaurante)
+      const MAX_CASH_AMOUNT = restaurant?.maxCashOrder && restaurant.maxCashOrder > 0 ? restaurant.maxCashOrder : 500;
       if (normalizedCheckoutForm.paymentMethod === 'CASH' && orderTotal > MAX_CASH_AMOUNT) {
         setShowMaxCashModal(true);
         setCreatingOrder(false);
@@ -4241,7 +4242,7 @@ function triggerHaptic(pattern: number | number[] = 10) {
               Monto Excedido
             </h3>
             <p className="mt-3 text-center text-sm leading-relaxed text-neutral-600">
-              Por seguridad de los repartidores, los pedidos mayores a <span className="font-semibold text-neutral-900">$500</span> no pueden pagarse en efectivo.
+              Por seguridad de los repartidores, los pedidos mayores a <span className="font-semibold text-neutral-900">${restaurant?.maxCashOrder && restaurant.maxCashOrder > 0 ? restaurant.maxCashOrder : 500}</span> no pueden pagarse en efectivo.
             </p>
             <div className="mt-6 flex flex-col gap-3">
               <button

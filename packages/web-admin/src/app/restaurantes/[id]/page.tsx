@@ -100,6 +100,7 @@ type RestaurantDetail = {
   deliveryPerKmRate?: number | null;
   deliveryMinFee?: number | null;
   deliveryMaxFee?: number | null;
+  maxCashOrder?: number | null;
   effectiveDeliveryFee?: number | null;
   billingCycle: BillingCycle;
   platformFeePerOrder: number;
@@ -152,6 +153,7 @@ type RestaurantEditForm = {
   deliveryPerKmRate: string;
   deliveryMinFee: string;
   deliveryMaxFee: string;
+  maxCashOrder: string;
   minDeliveryTime: string;
   maxDeliveryTime: string;
   billingCycle: BillingCycle;
@@ -287,6 +289,7 @@ export default function RestaurantDetailPage() {
             deliveryPerKmRate: editForm.hasOwnDelivery ? parseOptionalNumber(editForm.deliveryPerKmRate) ?? 8 : undefined,
             deliveryMinFee: editForm.hasOwnDelivery ? parseOptionalNumber(editForm.deliveryMinFee) ?? 15 : undefined,
             deliveryMaxFee: editForm.hasOwnDelivery ? parseOptionalNumber(editForm.deliveryMaxFee) ?? 150 : undefined,
+            maxCashOrder: parseOptionalNumber(editForm.maxCashOrder) ?? 500,
             minDeliveryTime: parseRequiredInteger(editForm.minDeliveryTime),
             maxDeliveryTime: parseRequiredInteger(editForm.maxDeliveryTime),
             billingCycle: editForm.billingCycle,
@@ -923,6 +926,17 @@ export default function RestaurantDetailPage() {
                         configurada en admin.
                       </div>
                     )}
+
+                    <div className="md:max-w-xs">
+                      <Field
+                        label="Monto máximo pago en efectivo"
+                        value={editForm.maxCashOrder}
+                        onChange={(value) =>
+                          setEditForm((current) => (current ? { ...current, maxCashOrder: value } : current))
+                        }
+                        placeholder="500"
+                      />
+                    </div>
 
                     <label className="grid gap-1.5 text-sm">
                       <span className="font-semibold tracking-tight text-neutral-800">Descripcion</span>
@@ -1641,6 +1655,7 @@ function createEditFormState(restaurant: RestaurantDetail): RestaurantEditForm {
     deliveryPerKmRate: restaurant.deliveryPerKmRate != null ? String(restaurant.deliveryPerKmRate) : '',
     deliveryMinFee: restaurant.deliveryMinFee != null ? String(restaurant.deliveryMinFee) : '',
     deliveryMaxFee: restaurant.deliveryMaxFee != null ? String(restaurant.deliveryMaxFee) : '',
+    maxCashOrder: restaurant.maxCashOrder != null ? String(restaurant.maxCashOrder) : '',
     minDeliveryTime: restaurant.minDeliveryTime.toString(),
     maxDeliveryTime: restaurant.maxDeliveryTime.toString(),
     billingCycle: restaurant.billingCycle,
