@@ -38,7 +38,6 @@ import { createPlacesSource } from '../lib/places';
 
 const HomeView = dynamic(() => import('../views/HomeView').then(mod => mod.HomeView), { ssr: false });
 const ProfileView = dynamic(() => import('../views/ProfileView').then(mod => mod.ProfileView), { ssr: false });
-const CheckoutView = dynamic(() => import('../views/CheckoutView').then(mod => mod.CheckoutView), { ssr: false });
 const OrdersView = dynamic(() => import('../views/OrdersView').then(mod => mod.OrdersView), { ssr: false });
 
 type OrderStatus =
@@ -325,7 +324,7 @@ export type CustomerProfileAddress = {
   isDefault?: boolean;
 };
 
-type DashboardSection = 'home' | 'profile' | 'history' | 'support' | 'checkout';
+type DashboardSection = 'home' | 'profile' | 'history' | 'support';
 export type StoreCategoryItem = {
   id: string;
   name: string;
@@ -3774,12 +3773,9 @@ export default function Home() {
   }
 
   function openDashboardSection(section: DashboardSection) {
-    if (!isAuthenticated && (section === 'profile' || section === 'history' || section === 'support' || section === 'checkout')) {
+    if (!isAuthenticated && (section === 'profile' || section === 'history' || section === 'support')) {
       setShowAuthModal(true);
       return;
-    }
-    if (section === 'checkout' && cartRestaurantId && cartRestaurantId !== selectedRestaurantId) {
-      setSelectedRestaurantId(cartRestaurantId);
     }
     setActiveSection(section);
     setIsSideMenuOpen(false);
@@ -4667,31 +4663,6 @@ export default function Home() {
 
         {error ? <div className="mt-4"><Callout tone="danger">{error}</Callout></div> : null}
         {/* authMessage visual suppressed by request */}
-        {activeSection === 'checkout' ? (
-          <CheckoutView
-            openDashboardSection={openDashboardSection}
-            addresses={addresses}
-            selectedCheckoutAddressId={selectedCheckoutAddressId}
-            setSelectedCheckoutAddressId={setSelectedCheckoutAddressId}
-            fulfillmentType={fulfillmentType}
-            setFulfillmentType={setFulfillmentType}
-            paymentMethod={paymentMethod}
-            setPaymentMethod={setPaymentMethod}
-            paymentProofUrl={paymentProofUrl}
-            setPaymentProofUrl={setPaymentProofUrl}
-            paymentProofUploading={paymentProofUploading}
-            handlePaymentProofUpload={handlePaymentProofUpload}
-            cart={cart}
-            cartSubtotal={cartSubtotal}
-            cartServiceFee={cartServiceFee}
-            cartTotal={cartTotal}
-            selectedRestaurant={selectedRestaurant}
-            orderNotes={orderNotes}
-            setOrderNotes={setOrderNotes}
-            handlePlaceOrder={handlePlaceOrder}
-            formatCurrency={formatCurrency}
-          />
-        ) : null}
         {activeSection === 'profile' ? (
           <ProfileView 
             sessionUser={sessionUser}
@@ -5252,8 +5223,8 @@ export default function Home() {
         ) : null}
       </div>
 
-      {activeSection !== 'checkout' && (
-          <footer className="border-t border-black/5 bg-[#fafaf9] py-10 mt-12">
+      {(
+        <footer className="border-t border-black/5 bg-[#fafaf9] py-10 mt-12">
             <div className="mx-auto max-w-7xl px-4 md:px-6">
               <div className="grid grid-cols-1 md:grid-cols-12 gap-8 mb-8">
                 

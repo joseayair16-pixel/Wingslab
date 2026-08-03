@@ -16,7 +16,6 @@ type CartDrawerProps = {
   isRestaurantOpen?: boolean;
   overrideDeliveryFee?: number;
   overrideServiceFee?: number;
-  discountAmount?: number;
 };
 
 export default memo(function CartDrawer({
@@ -28,7 +27,6 @@ export default memo(function CartDrawer({
   isRestaurantOpen = true,
   overrideDeliveryFee,
   overrideServiceFee,
-  discountAmount = 0,
 }: CartDrawerProps) {
   const cart = useCartStore(state => state.items);
   const updateCartItem = useCartStore(state => state.updateItem);
@@ -52,7 +50,7 @@ export default memo(function CartDrawer({
     [cart]
   );
 
-  const orderTotal = Math.max(0, cartSubtotal - discountAmount + serviceFee + (fulfillmentType === 'PICKUP' ? 0 : deliveryFee));
+  const orderTotal = Math.max(0, cartSubtotal + serviceFee + (fulfillmentType === 'PICKUP' ? 0 : deliveryFee));
 
   if (!isOpen) return null;
 
@@ -238,14 +236,6 @@ export default memo(function CartDrawer({
                     </span>
                     <span className="font-medium text-neutral-700">{formatCurrency(cartSubtotal)}</span>
                   </div>
-                  {discountAmount > 0 && (
-                    <div className="flex items-center justify-between text-emerald-600">
-                      <span className="flex items-center gap-1">
-                        <span className="text-[10px]"><svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9.568 3H5.25A2.25 2.25 0 003 5.25v4.318c0 .597.237 1.17.659 1.591l9.581 9.581c.699.699 1.78.872 2.607.33a18.095 18.095 0 005.223-5.223c.542-.827.369-1.908-.33-2.607L11.16 3.66A2.25 2.25 0 009.568 3z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M6 6h.008v.008H6V6z" /></svg></span> Descuento
-                      </span>
-                      <span className="font-semibold">-{formatCurrency(discountAmount)}</span>
-                    </div>
-                  )}
                   {fulfillmentType !== 'PICKUP' && (
                   <div className="flex items-center justify-between text-neutral-500">
                     <span className="flex items-center gap-1">

@@ -3537,7 +3537,7 @@ export default function Home() {
             : null,
         deliveryRadius: storeDraft.deliveryRadius.trim()
           ? Number(storeDraft.deliveryRadius)
-          : null,
+          : 3,
         deliveryPricingModel: storeDraft.hasOwnDelivery ? storeDraft.deliveryPricingModel : 'fixed',
         deliveryBaseRate: storeDraft.hasOwnDelivery && storeDraft.deliveryBaseRate.trim()
           ? Number(storeDraft.deliveryBaseRate)
