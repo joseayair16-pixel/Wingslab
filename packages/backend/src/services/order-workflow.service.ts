@@ -1930,8 +1930,8 @@ export async function autoAssignDriver(
       void sendPushNotification(candidate.userId, {
         title: '🛵 Nuevo pedido asignado',
         body: `${assignedOrder.restaurant.name} — Gana $${Number(assignedOrder.deliveryFee || 0).toFixed(2)} · ${Number(assignedOrder.deliveryDistanceKm || 0).toFixed(1)} km`,
-        icon: '/SaDeL.png',
-        badge: '/SaDeL.png',
+        icon: '/app-icon-192.png',
+        badge: '/badge.png',
         vibrate: [500, 200, 500, 200, 500],
         requireInteraction: true,
         sound: '/sounds/notifica.wav',
@@ -1948,8 +1948,8 @@ export async function autoAssignDriver(
         void sendPushNotification(candidate.userId, {
           title: 'Pedido listo para recoger',
           body: `El pedido de ${assignedOrder.restaurant.name} está listo. Pasa a recogerlo.`,
-          icon: '/SaDeL.png',
-          badge: '/SaDeL.png',
+          icon: '/app-icon-192.png',
+          badge: '/badge.png',
           vibrate: [500, 200, 500],
           requireInteraction: true,
           tag: `order-ready-${assignedOrder.id}`,

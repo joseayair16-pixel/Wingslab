@@ -160,8 +160,8 @@ export function startRestaurantHoursJob(fastify: FastifyInstance) {
               await sendPushNotification(restaurant.userId, {
                 title: '¡Es hora de abrir! ⏰',
                 body: 'Tu horario de apertura ha llegado. Por favor abre tu restaurante en la app para recibir pedidos.',
-                icon: '/SaDeL.png',
-                badge: '/SaDeL.png',
+                icon: '/app-icon-192.png',
+                badge: '/badge.png',
                 tag: `open-reminder-${restaurant.id}`,
                 requireInteraction: true,
                 data: {
@@ -179,8 +179,8 @@ export function startRestaurantHoursJob(fastify: FastifyInstance) {
               await sendPushNotification(restaurant.userId, {
                 title: '¡Apertura Tardía! ⚠️',
                 body: 'Ya pasaron 15 minutos de tu hora de apertura. Tienes clientes esperando.',
-                icon: '/SaDeL.png',
-                badge: '/SaDeL.png',
+                icon: '/app-icon-192.png',
+                badge: '/badge.png',
                 vibrate: [500, 200, 500],
                 tag: `late-open-${restaurant.id}`,
                 requireInteraction: true,
@@ -233,8 +233,8 @@ export function startRestaurantHoursJob(fastify: FastifyInstance) {
               await sendPushNotification(restaurant.userId, {
                 title: 'Restaurante Cerrado Automáticamente 💤',
                 body: bodyMsg,
-                icon: '/SaDeL.png',
-                badge: '/SaDeL.png',
+                icon: '/app-icon-192.png',
+                badge: '/badge.png',
               }).catch(() => {});
             }
           }

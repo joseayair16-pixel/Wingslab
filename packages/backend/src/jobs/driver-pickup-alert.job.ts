@@ -58,8 +58,8 @@ export function startDriverPickupAlertJob(fastify: FastifyInstance) {
           await sendPushNotification(order.driver.userId, {
             title: alertTitle,
             body: alertBody,
-            icon: '/SaDeL.png',
-            badge: '/SaDeL.png',
+            icon: '/app-icon-192.png',
+            badge: '/badge.png',
             vibrate: [1000, 300, 1000, 300, 1000],
             requireInteraction: true,
             data: {

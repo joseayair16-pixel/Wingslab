@@ -1,3 +1,46 @@
+const CACHE_NAME = 'sadel-customer-v7';
+
+// App shell mínimo para que la PWA instalada abra aunque no haya red
+// (la navegación sigue siendo network-first; esto solo garantiza un arranque offline).
+const PRECACHE_URLS = [
+  '/',
+  '/manifest.json',
+  '/app-icon-192.png',
+  '/app-icon-512.png',
+  '/SaDeL.png',
+  '/badge.png',
+];
+
+self.addEventListener('install', function (event) {
+  event.waitUntil(
+    caches.open(CACHE_NAME).then(function (cache) {
+      return Promise.allSettled(
+        PRECACHE_URLS.map(function (url) {
+          return cache.add(url).catch(function () {});
+        })
+      );
+    })
+  );
+  self.skipWaiting();
+});
+
+self.addEventListener('activate', function (event) {
+  event.waitUntil(
+    Promise.all([
+      clients.claim(),
+      caches.keys().then(function (cacheNames) {
+        return Promise.all(
+          cacheNames.map(function (cacheName) {
+            if (cacheName !== CACHE_NAME) {
+              return caches.delete(cacheName);
+            }
+          })
+        );
+      })
+    ])
+  );
+});
+
 self.addEventListener('push', function (event) {
   let data;
   try {
@@ -9,8 +52,8 @@ self.addEventListener('push', function (event) {
   const title = data.title || 'Nueva notificación de SaDeL';
   const options = {
     body: data.body || 'Tienes un nuevo mensaje sobre tu pedido.',
-    icon: data.icon || '/SaDeL.png',
-    badge: data.badge || '/SaDeL.png',
+    icon: data.icon || '/app-icon-192.png',
+    badge: data.badge || '/badge.png',
     vibrate: data.vibrate || [500, 250, 500, 250, 500],
     sound: data.sound || undefined,
     requireInteraction: data.requireInteraction !== undefined ? data.requireInteraction : true,
@@ -46,7 +89,7 @@ self.addEventListener('notificationclick', function (event) {
   const urlToOpen = new URL(relativePath, self.location.origin).href;
 
   event.waitUntil(
-    clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windowClients) => {
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then(function (windowClients) {
       let matchingClient = null;
 
       for (let i = 0; i < windowClients.length; i++) {
@@ -76,26 +119,17 @@ self.addEventListener('notificationclick', function (event) {
   );
 });
 
-const CACHE_NAME = 'sadel-customer-v6';
-
-self.addEventListener('install', function () {
-  self.skipWaiting();
-});
-
-self.addEventListener('activate', function (event) {
+// Cuando el navegador rota/expira la suscripción push (ocurre a veces en iOS/Android),
+// avisamos a la app para que se vuelva a suscribir con un endpoint nuevo.
+self.addEventListener('pushsubscriptionchange', function (event) {
   event.waitUntil(
-    Promise.all([
-      clients.claim(),
-      caches.keys().then(function (cacheNames) {
-        return Promise.all(
-          cacheNames.map(function (cacheName) {
-            if (cacheName !== CACHE_NAME) {
-              return caches.delete(cacheName);
-            }
-          })
-        );
-      })
-    ])
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then(function (windowClients) {
+      return Promise.all(
+        windowClients.map(function (client) {
+          return client.postMessage({ type: 'PUSH_SUBSCRIPTION_CHANGED' });
+        })
+      );
+    })
   );
 });
 
@@ -112,7 +146,10 @@ self.addEventListener('fetch', function (event) {
       fetch(event.request).then(function (networkResponse) {
         return networkResponse;
       }).catch(function () {
-        return caches.match(event.request);
+        return caches.match(event.request).then(function (cached) {
+          if (cached) return cached;
+          return caches.match('/');
+        });
       })
     );
     return;

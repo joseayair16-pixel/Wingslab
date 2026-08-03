@@ -13,6 +13,7 @@ interface ProfileViewProps {
   isSubscribed: boolean;
   subscribePush: () => Promise<void>;
   unsubscribePush: () => Promise<void>;
+  pushSupportIssue?: string | null;
   setEditName: (name: string) => void;
   editLastName: string;
   setEditLastName: (lastName: string) => void;
@@ -53,6 +54,7 @@ export const ProfileView = memo(function ProfileView({
   isSubscribed,
   subscribePush,
   unsubscribePush,
+  pushSupportIssue,
   setEditName,
   editLastName,
   setEditLastName,
@@ -554,15 +556,22 @@ export const ProfileView = memo(function ProfileView({
                 </div>
               </div>
               <div className="px-6 py-5 flex items-center justify-between hover:bg-neutral-50/50 cursor-pointer group transition-colors" onClick={() => {
+                if (pushSupportIssue) {
+                  setToastMessage(pushSupportIssue);
+                  return;
+                }
                 if (isSubscribed) {
                   void unsubscribePush();
                 } else {
-                  void subscribePush().then(() => setToastMessage('Notificaciones activadas')).catch(() => setToastMessage('No se pudo activar'));
+                  void subscribePush().then(() => setToastMessage('Notificaciones activadas')).catch((err) => setToastMessage(err?.message || 'No se pudo activar'));
                 }
               }}>
                 <div className="flex flex-col pr-6">
                   <p className="text-[15px] font-bold text-neutral-900">Notificaciones Push</p>
                   <p className="text-[13px] text-neutral-500 mt-1 leading-relaxed">Recibe alertas vitales aunque la aplicación esté cerrada.</p>
+                  {pushSupportIssue ? (
+                    <p className="text-[12px] text-amber-600 mt-1 leading-relaxed">{pushSupportIssue}</p>
+                  ) : null}
                 </div>
                 <div className={`relative inline-flex h-7 w-12 shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent transition-colors duration-300 ease-out focus:outline-none shadow-inner ${isSubscribed ? 'bg-sky-500' : 'bg-neutral-200'}`}>
                   <span aria-hidden="true" className={`pointer-events-none inline-block h-5 w-5 rounded-full bg-white shadow-[0_2px_4px_rgba(0,0,0,0.1)] ring-0 transition-transform duration-300 ease-out ${isSubscribed ? 'translate-x-5' : 'translate-x-0'}`} />

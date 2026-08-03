@@ -251,8 +251,8 @@ export const registerAdminOrdersRoutes = async (fastify: FastifyInstance) => {
             await sendPushNotification(order.driver.userId, {
               title: 'Pedido cancelado por el administrador',
               body: `El pedido de ${order.restaurant?.name || 'tu zona'} fue cancelado por un administrador. Motivo: ${reason}`,
-              icon: '/SaDeL.png',
-              badge: '/SaDeL.png',
+              icon: '/app-icon-192.png',
+              badge: '/badge.png',
               vibrate: [600, 200, 600, 200, 600],
               requireInteraction: true,
               tag: `order-cancelled-${id}`,

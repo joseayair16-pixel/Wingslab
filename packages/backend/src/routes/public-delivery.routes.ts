@@ -233,8 +233,8 @@ export async function registerPublicDeliveryRoutes(fastify: FastifyInstance): Pr
         const pushResult = await sendPushNotification(order.customer.user.id, {
           title: '¡Pedido entregado! 🎉',
           body: 'Tu pedido ha sido entregado exitosamente. ¡Que lo disfrutes!',
-          icon: '/SaDeL.png',
-          badge: '/SaDeL.png',
+          icon: '/app-icon-192.png',
+          badge: '/badge.png',
           vibrate: [1000, 500, 1000, 500, 1000],
           requireInteraction: true,
           data: {
@@ -358,8 +358,8 @@ export async function registerPublicDeliveryRoutes(fastify: FastifyInstance): Pr
         const pushResult = await sendPushNotification(order.customer.user.id, {
           title: '¡Tu repartidor ha llegado! 🛵',
           body: 'El repartidor ya está en tu domicilio con tu pedido. ¡Sal a recibirlo!',
-          icon: '/SaDeL.png',
-          badge: '/SaDeL.png',
+          icon: '/app-icon-192.png',
+          badge: '/badge.png',
           vibrate: [100, 50, 100, 50, 100],
           requireInteraction: true,
           data: {

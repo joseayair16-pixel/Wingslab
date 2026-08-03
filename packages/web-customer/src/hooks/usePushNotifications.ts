@@ -25,12 +25,41 @@ async function fetchVapidKey(): Promise<string> {
   return vapidKeyPromise;
 }
 
+function isIosDevice(): boolean {
+  if (typeof window === 'undefined') return false;
+  const ua = navigator.userAgent;
+  const iOS = /iPhone|iPad|iPod/i.test(ua);
+  const iPadOS13 = navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1;
+  return iOS || iPadOS13;
+}
+
+// Web Push en iOS solo existe desde 16.4. Esto devuelve el motivo de no soporte,
+// o null si las notificaciones push sí están disponibles en este dispositivo.
+function getPushSupportIssue(): string | null {
+  if (typeof window === 'undefined') return null;
+  if (!('Notification' in window) || !('serviceWorker' in navigator)) {
+    return 'Este navegador no soporta notificaciones push.';
+  }
+  if (!isIosDevice()) return null;
+
+  const match = /OS (\d+)(?:[_.](\d+))?/.exec(navigator.userAgent);
+  if (!match) return null;
+  const major = parseInt(match[1], 10);
+  const minor = match[2] ? parseInt(match[2], 10) : 0;
+  if (major > 16 || (major === 16 && minor >= 4)) return null;
+  return 'Tu iPhone necesita iOS 16.4 o superior para recibir notificaciones. Actualiza iOS e inténtalo de nuevo.';
+}
+
 export const usePushNotifications = () => {
   const [isSubscribed, setIsSubscribed] = useState(false);
   const [subscription, setSubscription] = useState<PushSubscription | null>(null);
   const [permission, setPermission] = useState<NotificationPermission>('default');
+  // Estado (no valor en render) para evitar mismatch de hidratación: en SSR es null,
+  // y se calcula del lado del cliente tras montar.
+  const [pushSupportIssue, setPushSupportIssue] = useState<string | null>(null);
 
   useEffect(() => {
+    setPushSupportIssue(getPushSupportIssue());
     if (typeof window !== 'undefined' && 'Notification' in window) {
       setPermission(Notification.permission);
       
@@ -49,6 +78,13 @@ export const usePushNotifications = () => {
     try {
       if (typeof window === 'undefined' || !('Notification' in window)) {
         return;
+      }
+
+      // Apple y Chrome exigen que el primer permiso se pida desde un gesto del
+      // usuario. Si este método se llama sin gesto (p. ej. al cargar la página),
+      // el permiso 'default' se ignora en silencio y la suscripción nunca ocurre.
+      if (pushSupportIssue) {
+        throw new Error(pushSupportIssue);
       }
 
       if (Notification.permission === 'default') {
@@ -117,7 +153,22 @@ export const usePushNotifications = () => {
     }
   };
 
-  return { isSubscribed, permission, subscribe, unsubscribe };
+  // Cuando el navegador rota la suscripción push (pushsubscriptionchange), el service
+  // worker nos avisa para volver a suscribirnos con un endpoint nuevo. El permiso ya
+  // fue concedido antes, así que esto no requiere gesto del usuario.
+  useEffect(() => {
+    if (typeof window === 'undefined' || !('serviceWorker' in navigator)) return;
+
+    const onMessage = (event: MessageEvent) => {
+      if (event.data?.type === 'PUSH_SUBSCRIPTION_CHANGED') {
+        subscribe().catch(() => {});
+      }
+    };
+    navigator.serviceWorker.addEventListener('message', onMessage);
+    return () => navigator.serviceWorker.removeEventListener('message', onMessage);
+  }, [subscribe]);
+
+  return { isSubscribed, permission, pushSupportIssue, subscribe, unsubscribe };
 };
 
 function urlBase64ToUint8Array(base64String: string) {

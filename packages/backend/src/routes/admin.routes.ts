@@ -3117,8 +3117,8 @@ export async function registerAdminRoutes(fastify: FastifyInstance): Promise<voi
               await sendPushNotification(customerUserId, {
                 title: '¡Tu cuenta ha sido reactivada!',
                 body: 'Gracias por liquidar tu saldo pendiente. Ya puedes volver a pedir en SaDeL.',
-                icon: '/SaDeL.png',
-                badge: '/SaDeL.png',
+                icon: '/app-icon-192.png',
+                badge: '/badge.png',
                 vibrate: [500, 100, 500, 100, 800],
                 requireInteraction: true,
                 data: { event: 'debt:paid', url: '/' },
@@ -3127,8 +3127,8 @@ export async function registerAdminRoutes(fastify: FastifyInstance): Promise<voi
               await sendPushNotification(customerUserId, {
                 title: 'Comprobante no valido',
                 body: 'No pudimos verificar tu comprobante de pago. Sube uno nuevo desde la app para liquidar tu saldo.',
-                icon: '/SaDeL.png',
-                badge: '/SaDeL.png',
+                icon: '/app-icon-192.png',
+                badge: '/badge.png',
                 vibrate: [300, 100, 300],
                 requireInteraction: true,
                 data: { event: 'debt:rejected', url: '/mi-deuda' },

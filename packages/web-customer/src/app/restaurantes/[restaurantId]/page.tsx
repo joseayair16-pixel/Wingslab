@@ -3083,7 +3083,7 @@ function triggerHaptic(pattern: number | number[] = 10) {
               </div>
 
               {/* Footer con Sumatorias */}
-              <div className="border-t border-black/5 dark:border-zinc-800 bg-white/95 dark:bg-neutral-900/95 backdrop-blur px-6 py-4 flex flex-col sm:flex-row items-center justify-between gap-4 sticky bottom-0 z-10">
+              <div className="border-t border-black/5 dark:border-zinc-800 bg-white/95 dark:bg-neutral-900/95 backdrop-blur px-6 py-4 flex flex-col sm:flex-row items-center justify-between gap-4 sticky bottom-0 z-10 pb-[calc(1rem+env(safe-area-inset-bottom))]">
                 {/* Selector de Cantidad */}
                 <div className="flex items-center gap-2 rounded-full border border-black/5 dark:border-zinc-800 bg-neutral-50 dark:bg-neutral-950 px-3 py-1.5 shadow-sm">
                   <button
@@ -4093,7 +4093,7 @@ function triggerHaptic(pattern: number | number[] = 10) {
                   )}
                 </div>
 
-                <div className="sticky bottom-0 z-10 border-t border-black/[0.04] bg-white/95 px-4 pb-6 pt-4 backdrop-blur-xl sm:px-5 shadow-[0_-12px_30px_-8px_rgba(0,0,0,0.08)]">
+                <div className="sticky bottom-0 z-10 border-t border-black/[0.04] bg-white/95 px-4 pt-4 pb-[calc(1.5rem+env(safe-area-inset-bottom))] backdrop-blur-xl sm:px-5 shadow-[0_-12px_30px_-8px_rgba(0,0,0,0.08)]">
                   {/* Validation Warning Callout (Animated and Professional) */}
                   {checkoutValidationMessage && token && (
                     <div className="mb-3.5 flex justify-center animate-in slide-in-from-bottom-2 fade-in duration-300">
@@ -5400,7 +5400,7 @@ function triggerHaptic(pattern: number | number[] = 10) {
 
       {/* Floating Checkout Button */}
       {cart.length > 0 && !isCartOpen && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[45] w-[calc(100%-2rem)] max-w-sm pointer-events-auto">
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[45] w-[calc(100%-2rem)] max-w-sm pointer-events-auto pb-[env(safe-area-inset-bottom)]">
           <button
             type="button"
             onClick={() => setIsCartOpen(true)}

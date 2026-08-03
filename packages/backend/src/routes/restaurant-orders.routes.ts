@@ -376,8 +376,8 @@ export async function registerRestaurantOrderRoutes(fastify: FastifyInstance): P
               const pushResult = await sendPushNotification(order.customer.user.id, {
                 title: `📅 ${ref} propuso una fecha de entrega`,
                 body: `${ref} programó tu pedido para el ${formattedDate} a las ${formattedTime}. Ingresa para confirmar o cancelar.`,
-                icon: '/SaDeL.png',
-                badge: '/SaDeL.png',
+                icon: '/app-icon-192.png',
+                badge: '/badge.png',
                 vibrate: [500, 200, 500, 200, 500],
                 requireInteraction: true,
                 tag: `schedule-proposal-${params.data.id}`,
@@ -418,8 +418,8 @@ export async function registerRestaurantOrderRoutes(fastify: FastifyInstance): P
               const pushResult = await sendPushNotification(order.customer.user.id, {
                 title: config.pushTitle,
                 body,
-                icon: '/SaDeL.png',
-                badge: '/SaDeL.png',
+                icon: '/app-icon-192.png',
+                badge: '/badge.png',
                 vibrate: config.pushVibrate,
                 requireInteraction: config.pushRequireInteraction,
                 data: {
@@ -457,8 +457,8 @@ export async function registerRestaurantOrderRoutes(fastify: FastifyInstance): P
                 const pushResult = await sendPushNotification(order.driver.user.id, {
                   title: 'Pedido listo para recoger',
                   body: `El pedido de ${order.restaurant.name} está listo. Pasa a recogerlo a ${getBusinessRef(order.restaurant?.businessType)}.`,
-                  icon: '/SaDeL.png',
-                  badge: '/SaDeL.png',
+                  icon: '/app-icon-192.png',
+                  badge: '/badge.png',
                   vibrate: [500, 200, 500],
                   requireInteraction: true,
                   tag: `order-ready-${params.data.id}`,
@@ -838,8 +838,8 @@ export async function registerRestaurantOrderRoutes(fastify: FastifyInstance): P
           await sendPushNotification(order.driver.userId, {
             title: '🛵 Nuevo pedido asignado',
             body: `${order.restaurant.name} — Gana $${Number(order.deliveryFee || 0).toFixed(2)} · ${Number(order.deliveryDistanceKm || 0).toFixed(1)} km`,
-            icon: '/SaDeL.png',
-            badge: '/SaDeL.png',
+            icon: '/app-icon-192.png',
+            badge: '/badge.png',
             vibrate: [500, 200, 500, 200, 500],
             requireInteraction: true,
             sound: '/sounds/notifica.wav',
@@ -987,8 +987,8 @@ export async function registerRestaurantOrderRoutes(fastify: FastifyInstance): P
           const pushResult = await sendPushNotification(updatedOrder.customer.user.id, {
             title: '¡Tu pedido va en camino!',
             body: `${getBusinessArticleCapitalized(order.restaurant?.businessType)} ${getBusinessRef(order.restaurant?.businessType)} ha enviado tu pedido y va hacia tu dirección.`,
-            icon: '/SaDeL.png',
-            badge: '/SaDeL.png',
+            icon: '/app-icon-192.png',
+            badge: '/badge.png',
             vibrate: [300, 100, 300, 100, 300], // 3 pulses
             requireInteraction: false,
             data: {
@@ -1464,8 +1464,8 @@ export async function registerRestaurantOrderRoutes(fastify: FastifyInstance): P
           const pushResult = await sendPushNotification(updatedOrder.customer.user.id, {
             title: '¡Pedido entregado! 🎉',
             body: 'Tu pedido ha sido entregado exitosamente. ¡Que lo disfrutes!',
-            icon: '/SaDeL.png',
-            badge: '/SaDeL.png',
+            icon: '/app-icon-192.png',
+            badge: '/badge.png',
             vibrate: [1000, 500, 1000, 500, 1000], // 3 long pulses
             requireInteraction: true,
             data: {
@@ -2108,8 +2108,8 @@ export async function registerRestaurantOrderRoutes(fastify: FastifyInstance): P
             await sendPushNotification(driverUserId, {
               title: 'Pedido cancelado — Liberado de la entrega',
               body: 'El cliente canceló el pedido. Ya no es necesario que realices la entrega.',
-              icon: '/SaDeL.png',
-              badge: '/SaDeL.png',
+              icon: '/app-icon-192.png',
+              badge: '/badge.png',
               vibrate: [600, 200, 600, 200, 600],
               requireInteraction: true,
               tag: `order-cancelled-${params.data.id}`,
@@ -2183,8 +2183,8 @@ export async function registerRestaurantOrderRoutes(fastify: FastifyInstance): P
           await sendPushNotification(customerUserId, {
             title: 'Pedido cancelado por el restaurante',
             body: `Motivo: ${parsed.data.reason}`,
-            icon: '/SaDeL.png',
-            badge: '/SaDeL.png',
+            icon: '/app-icon-192.png',
+            badge: '/badge.png',
             vibrate: [800, 200, 800],
             requireInteraction: true,
             data: {
@@ -2212,8 +2212,8 @@ export async function registerRestaurantOrderRoutes(fastify: FastifyInstance): P
             await sendPushNotification(driverUserId, {
               title: 'Pedido cancelado por el restaurante',
               body: `El restaurante canceló el pedido. Motivo: ${parsed.data.reason}`,
-              icon: '/SaDeL.png',
-              badge: '/SaDeL.png',
+              icon: '/app-icon-192.png',
+              badge: '/badge.png',
               vibrate: [600, 200, 600, 200, 600],
               requireInteraction: true,
               tag: `order-cancelled-${params.data.id}`,

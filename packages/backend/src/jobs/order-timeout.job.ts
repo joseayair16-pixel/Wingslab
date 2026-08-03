@@ -69,8 +69,8 @@ export function startOrderTimeoutJob(fastify: FastifyInstance) {
                 await sendPushNotification(driverUserId, {
                   title: 'Pedido cancelado — Liberado de la entrega',
                   body: 'El cliente canceló el pedido por falta de respuesta del restaurante. Ya no es necesario que realices la entrega.',
-                  icon: '/SaDeL.png',
-                  badge: '/SaDeL.png',
+                  icon: '/app-icon-192.png',
+                  badge: '/badge.png',
                   vibrate: [600, 200, 600, 200, 600],
                   requireInteraction: true,
                   tag: `order-cancelled-${cr.id}`,
@@ -238,8 +238,8 @@ async function rejectExpiredOrder(fastify: FastifyInstance, order: any) {
       await sendPushNotification(order.customer.user.id, {
         title: 'Pedido no aceptado a tiempo 😔',
         body: `El ${businessRef} no pudo atender tu solicitud a tiempo y el pedido fue cancelado. ¡Intenta con otro ${businessRef} o más tarde!`,
-        icon: '/SaDeL.png',
-        badge: '/SaDeL.png',
+        icon: '/app-icon-192.png',
+        badge: '/badge.png',
         vibrate: [800, 200, 800],
         requireInteraction: true,
         data: {
@@ -287,8 +287,8 @@ async function rejectExpiredOrder(fastify: FastifyInstance, order: any) {
         await sendPushNotification(order.restaurant.userId, {
           title: 'Hicimos una pausa ☕',
           body: `Un pedido no se respondió a tiempo y se canceló automáticamente. Pusimos tu ${businessRef} en pausa para que nadie más tenga que esperar. Cuando estés listo, vuelve a abrirlo cuando quieras.`,
-          icon: '/SaDeL.png',
-          badge: '/SaDeL.png',
+          icon: '/app-icon-192.png',
+          badge: '/badge.png',
           vibrate: [500, 200, 500],
           requireInteraction: true,
           tag: `auto-closed-inactivity-${order.restaurant.id}`,

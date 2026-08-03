@@ -1254,8 +1254,8 @@ export async function registerDriverPanelRoutes(fastify: FastifyInstance): Promi
               const pushResult = await sendPushNotification(order.customer.user.id, {
                 title: routeConfig.pushTitle,
                 body: routeConfig.pushBody,
-                icon: '/SaDeL.png',
-                badge: '/SaDeL.png',
+                icon: '/app-icon-192.png',
+                badge: '/badge.png',
                 vibrate: routeConfig.pushVibrate,
                 requireInteraction: routeConfig.pushRequireInteraction,
                 data: {
@@ -1440,8 +1440,8 @@ export async function registerDriverPanelRoutes(fastify: FastifyInstance): Promi
         await sendPushNotification(order.customer.user.id, {
           title: '¡Ya llegué!',
           body: 'El repartidor está afuera de tu domicilio con tu pedido.',
-          icon: '/SaDeL.png',
-          badge: '/SaDeL.png',
+          icon: '/app-icon-192.png',
+          badge: '/badge.png',
           vibrate: [400, 100, 400, 100, 400, 100, 800], // custom warning pattern
           requireInteraction: true,
           data: {
@@ -1570,8 +1570,8 @@ export async function registerDriverPanelRoutes(fastify: FastifyInstance): Promi
           await sendPushNotification(order.customer.user.id, {
             title: 'Tu pedido fue dejado en un lugar seguro',
             body: 'El repartidor espero mas de 10 minutos y dejo tu pedido en un lugar seguro. ¡Recogelo cuando puedas!',
-            icon: '/SaDeL.png',
-            badge: '/SaDeL.png',
+            icon: '/app-icon-192.png',
+            badge: '/badge.png',
             vibrate: [300, 100, 300],
             requireInteraction: true,
             data: {
@@ -1821,8 +1821,8 @@ export async function registerDriverPanelRoutes(fastify: FastifyInstance): Promi
           await sendPushNotification(order.customer.user.id, {
             title: 'No pudimos entregar tu pedido',
             body: 'El repartidor llego a tu domicilio y espero, pero no saliste a recibirlo. Para volver a pedir en SaDeL, cubre el saldo pendiente en la app.',
-            icon: '/SaDeL.png',
-            badge: '/SaDeL.png',
+            icon: '/app-icon-192.png',
+            badge: '/badge.png',
             vibrate: [400, 100, 400, 100, 800],
             requireInteraction: true,
             data: { orderId: params.data.id, event: 'account:suspended', url: '/mi-deuda' },
@@ -1907,8 +1907,8 @@ export async function registerDriverPanelRoutes(fastify: FastifyInstance): Promi
           const pushResult = await sendPushNotification(order.restaurant.userId, {
             title: '🛵 Repartidor en el Establecimiento',
             body: `${order.driver?.user?.name || 'El repartidor'} ha llegado a tu local por el pedido #${order.dailyCounter || order.orderReference.slice(-6)}.`,
-            icon: '/SaDeL.png',
-            badge: '/SaDeL.png',
+            icon: '/app-icon-192.png',
+            badge: '/badge.png',
             tag: `driver-arrived-${order.id}`,
             vibrate: [300, 100, 300, 100, 300],
             requireInteraction: true,

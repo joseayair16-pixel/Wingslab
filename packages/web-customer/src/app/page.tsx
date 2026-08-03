@@ -1003,7 +1003,7 @@ export default function Home() {
   const customerLlegueBufferRef = useRef<AudioBuffer | null>(null);
   const chatMessageBufferRef = useRef<AudioBuffer | null>(null);
   const hasCustomerInteractedRef = useRef(false);
-  const { isSubscribed, permission: pushPermission, subscribe: subscribePush, unsubscribe: unsubscribePush } = usePushNotifications();
+  const { isSubscribed, permission: pushPermission, pushSupportIssue, subscribe: subscribePush, unsubscribe: unsubscribePush } = usePushNotifications();
   const selectedOrderIdRef = useRef(selectedOrderId);
 
   useEffect(() => {
@@ -2978,9 +2978,13 @@ export default function Home() {
 
   useEffect(() => {
     if (token && sessionUser && !hasAttemptedPushSyncRef.current) {
-      if (pushPermission === 'default' || pushPermission === 'granted') {
+      // Solo se restablece la suscripción cuando el permiso YA fue concedido en una
+      // sesión anterior. El primer permiso (estado 'default') debe pedirse desde un
+      // gesto del usuario (toggle en el perfil); pedirlo al cargar la página es
+      // ignorado en silencio por iOS y Chrome.
+      if (pushPermission === 'granted') {
         hasAttemptedPushSyncRef.current = true;
-        subscribePush(token).catch(err => console.error('[Push] Error al suscribir:', err));
+        subscribePush(token).catch(err => console.error('[Push] Error al restablecer suscripción:', err));
       }
     }
   }, [token, sessionUser, pushPermission, subscribePush]);
@@ -2995,6 +2999,12 @@ export default function Home() {
       if (orderId) {
         setSelectedOrderId(orderId);
         setActiveSection('home');
+        window.history.replaceState({}, '', window.location.pathname);
+      }
+      // Atajos de la PWA (manifest shortcuts): abrir la sección correspondiente
+      const tab = params.get('tab');
+      if (tab === 'pedidos') {
+        setActiveSection('history');
         window.history.replaceState({}, '', window.location.pathname);
       }
     };
@@ -4208,7 +4218,7 @@ export default function Home() {
       ) : null}
 
       {toastMessage ? (
-        <div className={`fixed bottom-6 left-1/2 -translate-x-1/2 z-50 rounded-2xl border px-5 py-3 text-sm shadow-[0_4px_16px_rgba(0,0,0,0.08)] flex items-center gap-2 ${
+        <div className={`fixed bottom-6 left-1/2 -translate-x-1/2 z-50 rounded-2xl border px-5 py-3 text-sm shadow-[0_4px_16px_rgba(0,0,0,0.08)] flex items-center gap-2 pb-[calc(0.75rem+env(safe-area-inset-bottom))] ${
           toastData.type === 'error' 
             ? 'border-red-200 bg-red-50 text-red-700' 
             : toastData.type === 'info'
@@ -4674,6 +4684,7 @@ export default function Home() {
             isSubscribed={isSubscribed}
             subscribePush={subscribePush}
             unsubscribePush={unsubscribePush}
+            pushSupportIssue={pushSupportIssue}
             setEditName={setEditName}
             editLastName={editLastName}
             setEditLastName={setEditLastName}
@@ -6670,7 +6681,7 @@ export default function Home() {
 
       {/* Floating Checkout Button */}
       {cart.length > 0 && !isCartOpen && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[45] w-[calc(100%-2rem)] max-w-sm pointer-events-auto">
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[45] w-[calc(100%-2rem)] max-w-sm pointer-events-auto pb-[env(safe-area-inset-bottom)]">
           <button
             type="button"
             onClick={() => setIsCartOpen(true)}

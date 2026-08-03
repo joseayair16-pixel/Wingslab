@@ -221,7 +221,7 @@ export default memo(function CartDrawer({
 
           {/* ── Summary Footer ── */}
           {cart.length ? (
-            <div className="sticky bottom-0 z-10 border-t border-black/[0.04] bg-white/90 px-4 pb-3 pt-3 backdrop-blur-xl sm:px-5">
+            <div className="sticky bottom-0 z-10 border-t border-black/[0.04] bg-white/90 px-4 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] backdrop-blur-xl sm:px-5">
               <div className="rounded-2xl bg-gradient-to-b from-neutral-50 to-neutral-100/60 p-3 ring-1 ring-black/[0.04]">
                 <div className="space-y-1.5 text-xs">
                   <div className="flex items-center justify-between text-neutral-500">

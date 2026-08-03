@@ -160,8 +160,8 @@ export async function registerOrderRoutes(fastify: FastifyInstance): Promise<voi
         void sendPushNotification(order.restaurant.userId, {
           title: '¡Nuevo Pedido Recibido!',
           body: `Pedido ${order.orderReference} — Ingreso: $${restaurantEarnings.toFixed(2)}.`,
-          icon: '/SaDeL.png',
-          badge: '/SaDeL.png',
+          icon: '/app-icon-192.png',
+          badge: '/badge.png',
           vibrate: [500, 200, 500, 200, 500],
           requireInteraction: true,
           sound: '/sounds/notifica.wav',
@@ -532,8 +532,8 @@ export async function registerOrderRoutes(fastify: FastifyInstance): Promise<voi
           await sendPushNotification(order.customer.user.id, {
             title: '¡Fecha confirmada! ✅',
             body: `Tu pedido llegará el ${formattedDate} a las ${formattedTime}. ${ref} ya está preparándolo.`,
-            icon: '/SaDeL.png',
-            badge: '/SaDeL.png',
+            icon: '/app-icon-192.png',
+            badge: '/badge.png',
             vibrate: [300, 100, 300],
             requireInteraction: false,
             tag: `schedule-accepted-${order.id}`,
@@ -643,8 +643,8 @@ export async function registerOrderRoutes(fastify: FastifyInstance): Promise<voi
           await sendPushNotification(order.customer.user.id, {
             title: 'Pedido cancelado ❌',
             body: 'Cancelaste el pedido porque no aceptaste la fecha de entrega programada.',
-            icon: '/SaDeL.png',
-            badge: '/SaDeL.png',
+            icon: '/app-icon-192.png',
+            badge: '/badge.png',
             vibrate: [300, 100, 300],
             requireInteraction: false,
             data: {

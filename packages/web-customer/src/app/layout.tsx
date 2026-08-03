@@ -3,6 +3,8 @@ import Script from 'next/script';
 import { Inter, Plus_Jakarta_Sans } from 'next/font/google';
 import '../styles/globals.css';
 import ServiceWorkerRegister from './ServiceWorkerRegister';
+import InstallAppButton from '../components/InstallAppButton';
+import SplashScreen from '../components/SplashScreen';
 
 const inter = Inter({
   subsets: ['latin'],
@@ -65,6 +67,8 @@ export default function RootLayout({
           strategy="lazyOnload"
         />
         <ServiceWorkerRegister />
+        <InstallAppButton />
+        <SplashScreen />
         {children}
       </body>
     </html>
