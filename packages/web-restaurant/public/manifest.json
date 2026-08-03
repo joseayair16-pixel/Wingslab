@@ -1,8 +1,10 @@
 {
+  "id": "/",
   "name": "SaDeL Restaurant",
   "short_name": "SaDeL Rest",
   "description": "Opera pedidos, menu y despacho desde el panel de restaurante de SaDeL.",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
   "background_color": "#ffffff",
   "theme_color": "#161616",
@@ -10,12 +12,20 @@
     {
       "src": "/app-icon-192.png",
       "sizes": "192x192",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any"
     },
     {
       "src": "/app-icon-512.png",
       "sizes": "512x512",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/app-icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
     }
   ]
 }

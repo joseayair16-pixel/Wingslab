@@ -24,6 +24,34 @@ body {
   font-family: 'Avenir Next', 'Segoe UI', 'Helvetica Neue', sans-serif;
 }
 
+/* SaDel Loader breathing animation */
+@keyframes sadel-breathe {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(0.92);
+    opacity: 0.7;
+  }
+}
+
+.animate-sadel-breathe {
+  animation: sadel-breathe 1.6s ease-in-out infinite;
+}
+
+/* Keep the loader logo legible in dark mode */
+html.dark .sadel-loader-logo {
+  filter: invert(1) hue-rotate(180deg) saturate(1.54) !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-sadel-breathe {
+    animation: none;
+  }
+}
+
 html.dark .sadel-logo-light { display: none !important; }
 html:not(.dark) .sadel-logo-dark { display: none !important; }
 html.dark:not(.pure-dark) .sadel-logo-dark {

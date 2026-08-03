@@ -1,6 +1,8 @@
 import type { Metadata } from 'next';
 import '../styles/globals.css';
 import ServiceWorkerRegister from './ServiceWorkerRegister';
+import InstallAppButton from '../components/InstallAppButton';
+import SplashScreen from '../components/SplashScreen';
 
 export const metadata: Metadata = {
   title: 'SaDeL Driver',
@@ -33,6 +35,8 @@ export default function RootLayout({
       </head>
       <body>
         <ServiceWorkerRegister />
+        <InstallAppButton />
+        <SplashScreen />
         {children}
       </body>
     </html>

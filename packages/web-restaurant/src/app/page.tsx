@@ -27,6 +27,7 @@ import { DashboardSection } from '../components/sections/DashboardSection';
 import { BillingSection } from '../components/sections/BillingSection';
 import { SettingsSection } from '../components/sections/SettingsSection';
 import { FeaturedSection } from '../components/sections/FeaturedSection';
+import PushEnableBanner from '../components/PushEnableBanner';
 import { createPlacesSource } from '../lib/places';
 
 type OrderStatus =
@@ -1214,7 +1215,11 @@ export default function Home() {
   }, [activeSection, checkingAuth]);
 
   useEffect(() => {
-    if (token) {
+    // Solo se restablece la suscripción cuando el permiso YA fue concedido en una
+    // sesión anterior. El primer permiso (estado 'default') debe pedirse desde un
+    // gesto del usuario (banner "Activar notificaciones"); pedirlo al cargar la
+    // página es ignorado en silencio por iOS y Chrome.
+    if (token && typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
       void subscribeToPush(token);
     }
   }, [token]);
@@ -4790,6 +4795,11 @@ export default function Home() {
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
     >
+      <PushEnableBanner
+        visible={Boolean(token)}
+        onEnable={() => subscribeToPush(token || '')}
+      />
+
       {/* Toast notifications */}
       {toasts.length > 0 && (
         <div className="fixed top-4 right-4 z-[200] flex flex-col gap-2 max-w-sm">

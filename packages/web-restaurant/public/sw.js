@@ -1,10 +1,13 @@
-const CACHE_NAME = 'sadel-restaurant-v2';
+const CACHE_NAME = 'sadel-restaurant-v3';
 const PRECACHE_URLS = [
+  '/',
   '/sounds/notifica.wav',
   '/sounds/mensaje.wav',
   '/sounds/rezagado.wav',
   '/SaDeL.png',
   '/app-icon-192.png',
+  '/app-icon-512.png',
+  '/badge.png',
   '/manifest.json',
 ];
 
@@ -12,7 +15,11 @@ self.addEventListener('install', function (event) {
   self.skipWaiting();
   event.waitUntil(
     caches.open(CACHE_NAME).then(function (cache) {
-      return cache.addAll(PRECACHE_URLS).catch(function () {});
+      return Promise.allSettled(
+        PRECACHE_URLS.map(function (url) {
+          return cache.add(url).catch(function () {});
+        })
+      );
     })
   );
 });
@@ -45,8 +52,8 @@ self.addEventListener('push', function (event) {
   const title = data.title || 'Nuevo Pedido';
   const options = {
     body: data.body || 'Tienes un nuevo pedido pendiente.',
-    icon: data.icon || '/SaDeL.png',
-    badge: data.badge || '/SaDeL.png',
+    icon: data.icon || '/app-icon-192.png',
+    badge: data.badge || '/badge.png',
     vibrate: data.vibrate || [500, 250, 500, 250, 500],
     sound: data.sound || undefined,
     requireInteraction: data.requireInteraction !== undefined ? data.requireInteraction : true,
@@ -102,10 +109,37 @@ self.addEventListener('notificationclick', function(event) {
   })());
 });
 
+self.addEventListener('pushsubscriptionchange', function (event) {
+  event.waitUntil(
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then(function (windowClients) {
+      return Promise.all(
+        windowClients.map(function (client) {
+          return client.postMessage({ type: 'PUSH_SUBSCRIPTION_CHANGED' });
+        })
+      );
+    })
+  );
+});
+
 self.addEventListener('fetch', function (event) {
   if (event.request.method !== 'GET') return;
 
   const url = new URL(event.request.url);
+
+  // Navigation (HTML): network-first, fallback a la app shell cacheada
+  if (event.request.mode === 'navigate') {
+    event.respondWith(
+      fetch(event.request).then(function (networkResponse) {
+        return networkResponse;
+      }).catch(function () {
+        return caches.match(event.request).then(function (cached) {
+          if (cached) return cached;
+          return caches.match('/');
+        });
+      })
+    );
+    return;
+  }
 
   if (url.pathname.startsWith('/sounds/')) {
     event.respondWith(

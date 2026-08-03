@@ -9,8 +9,8 @@ self.addEventListener('push', function (event) {
   const title = data.title || 'Nueva Asignación';
   const options = {
     body: data.body || 'Tienes una nueva orden asignada.',
-    icon: data.icon || '/SaDeL.png',
-    badge: data.badge || '/SaDeL.png',
+    icon: data.icon || '/app-icon-192.png',
+    badge: data.badge || '/badge.png',
     vibrate: data.vibrate || [500, 100, 500, 100, 500],
     requireInteraction: data.requireInteraction !== undefined ? data.requireInteraction : true,
     data: data.data || {},
@@ -66,19 +66,28 @@ self.addEventListener('notificationclick', function(event) {
   );
 });
 
-const CACHE_NAME = 'sadel-driver-v2';
+const CACHE_NAME = 'sadel-driver-v3';
 const PRECACHE_URLS = [
+  '/',
   '/sounds/notifica.wav',
   '/sounds/mensaje.wav',
   '/icon.svg',
   '/sadel-icon.svg',
+  '/app-icon-192.png',
+  '/app-icon-512.png',
+  '/badge.png',
+  '/manifest.json',
 ];
 
 self.addEventListener('install', function(event) {
   self.skipWaiting();
   event.waitUntil(
     caches.open(CACHE_NAME).then(function(cache) {
-      return cache.addAll(PRECACHE_URLS);
+      return Promise.allSettled(
+        PRECACHE_URLS.map(function (url) {
+          return cache.add(url).catch(function () {});
+        })
+      );
     })
   );
 });
@@ -106,8 +115,8 @@ self.addEventListener('message', function(event) {
     const orderId = event.data.data?.orderId || 'unknown';
     const options = {
       body: event.data.body || 'Tienes una nueva orden asignada.',
-      icon: '/SaDeL.png',
-      badge: '/SaDeL.png',
+      icon: '/app-icon-192.png',
+      badge: '/badge.png',
       vibrate: [500, 100, 500, 100, 500],
       tag: 'driver-assignment-' + orderId,
       silent: false,
@@ -121,6 +130,22 @@ self.addEventListener('message', function(event) {
 // Cache-first para todos los sonidos bajo /sounds/
 self.addEventListener('fetch', function(event) {
   const url = new URL(event.request.url);
+
+  // Navigation (HTML): network-first, fallback a la app shell cacheada
+  if (event.request.mode === 'navigate') {
+    event.respondWith(
+      fetch(event.request).then(function (networkResponse) {
+        return networkResponse;
+      }).catch(function () {
+        return caches.match(event.request).then(function (cached) {
+          if (cached) return cached;
+          return caches.match('/');
+        });
+      })
+    );
+    return;
+  }
+
   if (url.pathname.startsWith('/sounds/') && url.pathname.endsWith('.wav')) {
     event.respondWith(
       caches.match(event.request).then(function(cached) {
@@ -128,4 +153,17 @@ self.addEventListener('fetch', function(event) {
       })
     );
   }
+});
+
+// Cuando el navegador rota la suscripción push, avisamos a la app para re-suscribir
+self.addEventListener('pushsubscriptionchange', function (event) {
+  event.waitUntil(
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then(function (windowClients) {
+      return Promise.all(
+        windowClients.map(function (client) {
+          return client.postMessage({ type: 'PUSH_SUBSCRIPTION_CHANGED' });
+        })
+      );
+    })
+  );
 });

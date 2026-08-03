@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { SaDelLogo } from '../components/SaDelLogo';
 import { IncomingOrderModal } from '../components/IncomingOrderModal';
+import PushEnableBanner from '../components/PushEnableBanner';
 import { io } from 'socket.io-client';
 import {
   AuthResponse,
@@ -1406,7 +1407,15 @@ export default function Home() {
   }, [apiBase]);
 
   useEffect(() => {
-    if (token && sessionUser && sessionUser.role === 'DRIVER') {
+    // Solo se restablece la suscripción cuando el permiso YA fue concedido en una
+    // sesión anterior. El primer permiso (estado 'default') debe pedirse desde un
+    // gesto del usuario (banner "Activar notificaciones"); pedirlo al cargar la
+    // página es ignorado en silencio por iOS y Chrome.
+    if (
+      token && sessionUser && sessionUser.role === 'DRIVER' &&
+      typeof window !== 'undefined' && 'Notification' in window &&
+      Notification.permission === 'granted'
+    ) {
       void subscribeToPush(token);
     }
   }, [token, sessionUser, subscribeToPush]);
@@ -2260,6 +2269,11 @@ export default function Home() {
       onTouchEnd={handleTouchEnd}
       onClick={warmupAudioContext}
     >
+      <PushEnableBanner
+        visible={Boolean(token && sessionUser && sessionUser.role === 'DRIVER')}
+        onEnable={() => subscribeToPush(token || '')}
+      />
+
       {/* BARRA DE CONEXIÓN PERDIDA */}
         {!isOnline && (
           <div className="sticky top-0 z-[9999] bg-gradient-to-r from-rose-600 to-rose-500 dark:from-rose-800 dark:to-rose-700 text-white shadow-lg">
@@ -4626,7 +4640,7 @@ export default function Home() {
           BOTÓN FLOTANTE DE CONEXIÓN
           ========================================== */}
       {activeTab === 'active' && (
-        <div className="fixed bottom-8 left-0 right-0 flex justify-center px-6 z-40 pointer-events-none">
+        <div className="fixed bottom-[calc(2rem+env(safe-area-inset-bottom))] left-0 right-0 flex justify-center px-6 z-40 pointer-events-none">
           <button
             type="button"
             onClick={() => {

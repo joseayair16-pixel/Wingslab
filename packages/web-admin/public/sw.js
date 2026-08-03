@@ -1,9 +1,12 @@
-const CACHE_NAME = 'sadel-admin-v2';
+const CACHE_NAME = 'sadel-admin-v3';
 const PRECACHE_URLS = [
+  '/',
   '/sounds/notifica.wav',
   '/sounds/mensaje.wav',
   '/SaDeL.png',
   '/app-icon-192.png',
+  '/app-icon-512.png',
+  '/badge.png',
   '/manifest.json',
 ];
 
@@ -11,7 +14,11 @@ self.addEventListener('install', function (event) {
   self.skipWaiting();
   event.waitUntil(
     caches.open(CACHE_NAME).then(function (cache) {
-      return cache.addAll(PRECACHE_URLS).catch(function () {});
+      return Promise.allSettled(
+        PRECACHE_URLS.map(function (url) {
+          return cache.add(url).catch(function () {});
+        })
+      );
     })
   );
 });
@@ -44,8 +51,8 @@ self.addEventListener('push', function (event) {
   const title = data.title || 'Nueva notificación de SaDeL';
   const options = {
     body: data.body || 'Tienes un nuevo mensaje sobre tu pedido.',
-    icon: data.icon || '/SaDeL.png',
-    badge: data.badge || '/SaDeL.png',
+    icon: data.icon || '/app-icon-192.png',
+    badge: data.badge || '/badge.png',
     vibrate: data.vibrate || [500, 250, 500, 250, 500],
     sound: data.sound || undefined,
     requireInteraction: data.requireInteraction !== undefined ? data.requireInteraction : true,
@@ -112,6 +119,21 @@ self.addEventListener('fetch', function (event) {
 
   const url = new URL(event.request.url);
 
+  // Navigation (HTML): network-first, fallback a la app shell cacheada
+  if (event.request.mode === 'navigate') {
+    event.respondWith(
+      fetch(event.request).then(function (networkResponse) {
+        return networkResponse;
+      }).catch(function () {
+        return caches.match(event.request).then(function (cached) {
+          if (cached) return cached;
+          return caches.match('/');
+        });
+      })
+    );
+    return;
+  }
+
   if (url.pathname.startsWith('/sounds/')) {
     event.respondWith(
       caches.match(event.request).then(function (cached) {
@@ -128,4 +150,17 @@ self.addEventListener('fetch', function (event) {
       })
     );
   }
+});
+
+// Cuando el navegador rota la suscripción push, avisamos a la app para re-suscribir
+self.addEventListener('pushsubscriptionchange', function (event) {
+  event.waitUntil(
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then(function (windowClients) {
+      return Promise.all(
+        windowClients.map(function (client) {
+          return client.postMessage({ type: 'PUSH_SUBSCRIPTION_CHANGED' });
+        })
+      );
+    })
+  );
 });
