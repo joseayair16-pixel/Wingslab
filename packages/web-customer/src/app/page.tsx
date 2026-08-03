@@ -4441,24 +4441,25 @@ export default function Home() {
               <button
                 type="button"
                 onClick={() => { setShowAuthModal(true); setIsSideMenuOpen(false); }}
-                className="group relative w-full overflow-hidden rounded-2xl bg-gradient-to-b from-sky-500 to-blue-700 p-[1px] text-left shadow-[0_8px_24px_rgba(14,165,233,0.25)] transition-all duration-200 hover:shadow-[0_12px_32px_rgba(14,165,233,0.35)] hover:brightness-110 active:scale-[0.98]"
+                className="group relative w-full overflow-hidden rounded-2xl bg-white dark:bg-[#1c1c1f] p-[1px] text-left shadow-[0_8px_24px_rgba(2,132,199,0.12)] ring-1 ring-sky-500/40 dark:ring-sky-400/30 transition-all duration-200 hover:shadow-[0_12px_32px_rgba(2,132,199,0.22)] hover:ring-sky-500/60 dark:hover:ring-sky-400/50 active:scale-[0.98]"
               >
-                <div className="relative flex items-center gap-3 rounded-2xl bg-gradient-to-r from-blue-950 via-sky-900 to-blue-950 p-4">
+                <div className="relative flex items-center gap-3 rounded-2xl p-4">
+                  <div className="absolute inset-0 rounded-2xl bg-gradient-to-r from-sky-500/[0.06] via-transparent to-sky-500/[0.06] dark:from-sky-400/[0.08] dark:to-sky-400/[0.08]" />
                   <div className="relative z-10 flex-1">
                     <div className="flex items-center gap-2">
-                      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-white/15 ring-1 ring-white/20">
-                        <svg className="h-4 w-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-sky-500/10 ring-1 ring-sky-500/25 dark:bg-sky-400/10 dark:ring-sky-400/25">
+                        <svg className="h-4 w-4 text-sky-600 dark:text-sky-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
                         </svg>
                       </div>
-                      <p className="text-sm font-semibold text-white">Iniciar sesión</p>
+                      <p className="text-sm font-semibold text-neutral-900 dark:text-white">Iniciar sesión</p>
                     </div>
-                    <p className="mt-1.5 text-[11px] text-sky-200/70 font-medium leading-relaxed">
+                    <p className="mt-1.5 text-[11px] font-medium leading-relaxed text-neutral-500 dark:text-neutral-400">
                       Accede para ver tus pedidos y guardar tus favoritos.
                     </p>
                   </div>
-                  <div className="relative z-10 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/10 ring-1 ring-white/20 transition-transform duration-200 group-hover:translate-x-0.5 group-active:translate-x-1">
-                    <svg className="h-4 w-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <div className="relative z-10 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-sky-500/10 ring-1 ring-sky-500/25 dark:bg-sky-400/10 dark:ring-sky-400/25 transition-transform duration-200 group-hover:translate-x-0.5 group-active:translate-x-1">
+                    <svg className="h-4 w-4 text-sky-600 dark:text-sky-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                     </svg>
                   </div>

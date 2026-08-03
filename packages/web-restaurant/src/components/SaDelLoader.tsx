@@ -1,7 +1,7 @@
 'use client';
 
 import { memo, useState } from 'react';
-import { SADEL_LOGO_DATA_URI } from './sadelLogoDataUri';
+import { SaDelLogo } from './SaDelLogo';
 
 export const SaDelLoader = memo(function SaDelLoader({
   className = '',
@@ -33,11 +33,7 @@ export const SaDelLoader = memo(function SaDelLoader({
       {logoFailed ? (
         <span className={textClass}>SaDeL</span>
       ) : (
-        <img
-          src={SADEL_LOGO_DATA_URI}
-          alt="SaDeL"
-          width={400}
-          height={103}
+        <SaDelLogo
           onError={() => setLogoFailed(true)}
           className="sadel-loader-logo animate-sadel-breathe select-none pointer-events-none"
           style={{ height: logoHeight, width: 'auto' }}

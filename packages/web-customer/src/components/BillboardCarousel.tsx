@@ -67,7 +67,7 @@ export const BillboardCarousel = memo(function BillboardCarousel({
       >
         {billboards.map((billboard) => {
           const inner = (
-            <div className="relative h-full w-full overflow-hidden">
+            <div className="relative h-full w-full overflow-hidden rounded-2xl">
               <Image
                 src={billboard.imageUrl}
                 alt="Banner publicitario"
