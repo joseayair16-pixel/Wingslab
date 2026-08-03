@@ -153,11 +153,6 @@ html.dark.pure-dark {
   animation: sadel-progress 1.2s ease-in-out infinite;
 }
 
-/* Keep the loader logo legible in dark mode */
-html.dark .sadel-loader-logo {
-  filter: invert(1) hue-rotate(180deg) saturate(1.54);
-}
-
 @media (prefers-reduced-motion: reduce) {
   .animate-sadel-breathe,
   .animate-sadel-progress {

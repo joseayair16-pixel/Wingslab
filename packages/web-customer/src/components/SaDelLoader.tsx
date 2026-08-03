@@ -16,7 +16,7 @@ export const SaDelLoader = memo(function SaDelLoader({
 }) {
   const [logoFailed, setLogoFailed] = useState(false);
 
-  const logoHeight = size === 'sm' ? 28 : size === 'lg' ? 64 : 44;
+  const logoHeightClass = size === 'sm' ? 'h-7' : size === 'lg' ? 'h-16' : 'h-11';
   const textClass =
     size === 'sm'
       ? 'text-xl font-black tracking-tight text-neutral-900'
@@ -29,14 +29,15 @@ export const SaDelLoader = memo(function SaDelLoader({
       className={`flex flex-col items-center justify-center gap-5 ${
         fullScreen ? 'min-h-[100dvh] w-full' : ''
       } ${className}`}
+      role={fullScreen ? 'status' : undefined}
+      aria-live="polite"
     >
       {logoFailed ? (
         <span className={textClass}>SaDeL</span>
       ) : (
         <SaDelLogo
           onError={() => setLogoFailed(true)}
-          className="sadel-loader-logo animate-sadel-breathe select-none pointer-events-none"
-          style={{ height: logoHeight, width: 'auto' }}
+          className={`sadel-loader-logo animate-sadel-breathe select-none pointer-events-none ${logoHeightClass} w-auto`}
         />
       )}
       {label ? (

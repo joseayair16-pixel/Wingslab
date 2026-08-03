@@ -41,11 +41,6 @@ body {
   animation: sadel-breathe 1.6s ease-in-out infinite;
 }
 
-/* Keep the loader logo legible in dark mode */
-html.dark .sadel-loader-logo {
-  filter: invert(1) hue-rotate(180deg) saturate(1.54) !important;
-}
-
 @media (prefers-reduced-motion: reduce) {
   .animate-sadel-breathe {
     animation: none;

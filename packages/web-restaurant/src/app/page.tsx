@@ -4711,7 +4711,7 @@ export default function Home() {
   ];
 
   if (checkingAuth) {
-    return <SaDelLoader fullScreen className="bg-white dark:bg-neutral-900" />;
+    return <SaDelLoader fullScreen className="bg-white" />;
   }
 
 

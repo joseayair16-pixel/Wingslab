@@ -90,7 +90,7 @@ function processLogo(): Promise<{ light: string; dark: string }> {
   return processingPromise;
 }
 
-export function SaDelLogo({ className = '' }: { className?: string }) {
+export function SaDelLogo({ className = '', style, onError }: { className?: string; style?: React.CSSProperties; onError?: () => void }) {
   const [srcs, setSrcs] = useState<{ light: string; dark: string }>({
     light: cachedLightSrc || '/SaDeL.png',
     dark: cachedDarkSrc || '/SaDeL.png',
@@ -106,8 +106,8 @@ export function SaDelLogo({ className = '' }: { className?: string }) {
 
   return (
     <>
-      <img src={srcs.light} alt="SaDeL Logo" className={`sadel-logo-light ${className}`} />
-      <img src={srcs.dark} alt="SaDeL Logo" className={`sadel-logo-dark ${className}`} />
+      <img src={srcs.light} alt="SaDeL Logo" className={`sadel-logo-light ${className}`} style={style} onError={onError} />
+      <img src={srcs.dark} alt="SaDeL Logo" className={`sadel-logo-dark ${className}`} style={style} onError={onError} />
     </>
   );
 }
