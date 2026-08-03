@@ -4253,8 +4253,8 @@ export default function Home() {
                   className="max-sm:absolute max-sm:left-1/2 max-sm:-translate-x-1/2 min-w-0 text-left"
                 >
                   <SaDelLogo className="h-7 w-auto object-contain md:h-8" />
-                  <p className="truncate text-[8px] font-bold uppercase tracking-[0.26em] text-neutral-400 dark:text-neutral-500 md:text-[9px] mt-0.5 leading-none">
-                    Un click de distancia
+                  <p className="truncate text-[8px] font-bold uppercase tracking-[0.12em] text-neutral-400 dark:text-neutral-500 md:text-[9px] mt-0.5 leading-none">
+                    ¡Pídelo por aquí!
                   </p>
                 </button>
               </div>
@@ -4441,25 +4441,27 @@ export default function Home() {
               <button
                 type="button"
                 onClick={() => { setShowAuthModal(true); setIsSideMenuOpen(false); }}
-                className="group relative w-full overflow-hidden rounded-2xl bg-gradient-to-b from-neutral-900 to-neutral-950 p-4 text-left shadow-[0_8px_24px_rgba(0,0,0,0.12)] transition-all duration-200 hover:shadow-[0_12px_32px_rgba(0,0,0,0.18)] active:scale-[0.98]"
+                className="group relative w-full overflow-hidden rounded-2xl bg-gradient-to-b from-sky-500 to-blue-700 p-[1px] text-left shadow-[0_8px_24px_rgba(14,165,233,0.25)] transition-all duration-200 hover:shadow-[0_12px_32px_rgba(14,165,233,0.35)] hover:brightness-110 active:scale-[0.98]"
               >
-                <div className="relative z-10">
-                  <div className="flex items-center gap-2">
-                    <div className="flex h-8 w-8 items-center justify-center rounded-full bg-white/10">
-                      <svg className="h-4 w-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                      </svg>
+                <div className="relative flex items-center gap-3 rounded-2xl bg-gradient-to-r from-blue-950 via-sky-900 to-blue-950 p-4">
+                  <div className="relative z-10 flex-1">
+                    <div className="flex items-center gap-2">
+                      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-white/15 ring-1 ring-white/20">
+                        <svg className="h-4 w-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                        </svg>
+                      </div>
+                      <p className="text-sm font-semibold text-white">Iniciar sesión</p>
                     </div>
-                    <p className="text-sm font-semibold text-white">Iniciar sesión</p>
+                    <p className="mt-1.5 text-[11px] text-sky-200/70 font-medium leading-relaxed">
+                      Accede para ver tus pedidos y guardar tus favoritos.
+                    </p>
                   </div>
-                  <p className="mt-1.5 text-[11px] text-white/50 font-medium leading-relaxed">
-                    Accede para ver tus pedidos y guardar tus favoritos.
-                  </p>
-                </div>
-                <div className="absolute right-3 top-1/2 -translate-y-1/2 text-white/20 transition-transform duration-200 group-hover:translate-x-0.5">
-                  <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                  </svg>
+                  <div className="relative z-10 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/10 ring-1 ring-white/20 transition-transform duration-200 group-hover:translate-x-0.5 group-active:translate-x-1">
+                    <svg className="h-4 w-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                    </svg>
+                  </div>
                 </div>
               </button>
             </div>

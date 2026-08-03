@@ -365,7 +365,7 @@ export const AuthModal = memo(function AuthModal({ isOpen, onClose, onSuccess, a
           <div className="text-center pt-2">
             <SaDelLogo className="mx-auto h-12 w-auto object-contain" />
             <p className="mt-1.5 text-[11px] uppercase tracking-[0.2em] text-neutral-400 font-semibold">
-              Un click de distancia
+              ¡Pídelo por aquí!
             </p>
           </div>
 

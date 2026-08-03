@@ -4,10 +4,6 @@ import { useStore } from '../store';
 import { StoreCategoryItem } from '../app/page';
 import { BillboardCarousel, type Billboard } from '../components/BillboardCarousel';
 
-const businessTypeLabel = (type: string): string => {
-  return type === 'STORE' ? 'Tienda' : 'Restaurante';
-};
-
 const isRestaurantType = (type?: string | null) => !type || type === 'RESTAURANT';
 
 type BusinessTypeTab = 'restaurants' | 'stores' | 'all';
@@ -756,15 +752,11 @@ export const HomeView = React.memo(function HomeView({
                                 Destacado
                               </span>
                             )}
-                            {(restaurant as any).businessType && (restaurant as any).businessType !== 'RESTAURANT' && (
-                              <span className="rounded-full bg-violet-500/90 px-3 py-1 text-xs font-bold text-white shadow-sm backdrop-blur-sm">
-                                {businessTypeLabel((restaurant as any).businessType)}
-                              </span>
-                            )}
                           </div>
                           {restaurant.hasPromotions && (
-                            <span className="rounded-full bg-rose-500/95 px-3 py-1 text-xs font-bold text-white shadow-sm backdrop-blur-sm">
-                              🔥 Ofertas
+                            <span className="inline-flex items-center gap-1.5 rounded-full border border-white/40 bg-white/85 px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-rose-600 shadow-sm backdrop-blur-md">
+                              <svg className="h-3 w-3 fill-rose-500" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" /></svg>
+                              Ofertas disponibles
                             </span>
                           )}
                         </div>

@@ -2714,8 +2714,8 @@ function triggerHaptic(pattern: number | number[] = 10) {
                   className="min-w-0 text-left"
                 >
                   <SaDelLogo className="h-7 w-auto object-contain md:h-8" />
-                  <p className="truncate text-[8px] font-bold uppercase tracking-[0.26em] text-neutral-400 dark:text-neutral-500 md:text-[9px] mt-0.5 leading-none">
-                    Un click de distancia
+                  <p className="truncate text-[8px] font-bold uppercase tracking-[0.12em] text-neutral-400 dark:text-neutral-500 md:text-[9px] mt-0.5 leading-none">
+                    ¡Pídelo por aquí!
                   </p>
                 </button>
               </div>
