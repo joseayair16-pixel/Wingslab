@@ -81,7 +81,6 @@ export const DashboardSection = React.memo(function DashboardSection({
   }, [orders]);
 
   const PENDING_WARN_MS = 3 * 60 * 1000;
-  const QUIET_WARN_MS = 20 * 60 * 1000;
 
   const stalePendingOrders = useMemo(() => activeOrders.filter((o: any) => {
     if (o.status !== 'PENDING') return false;
@@ -97,18 +96,6 @@ export const DashboardSection = React.memo(function DashboardSection({
     const ms = getPreparationRemainingMs(o, kitchenClockNow);
     return typeof ms === 'number' && ms <= 0;
   }), [activeOrders, kitchenClockNow, profile, getPreparationRemainingMs]);
-
-  const lastOrderTime = useMemo(() => {
-    if (orders.length === 0) return null;
-    return Math.max(...orders.map((o: any) => new Date(o.createdAt).getTime()));
-  }, [orders]);
-  const timeSinceLastOrder = lastOrderTime !== null ? kitchenClockNow - lastOrderTime : Infinity;
-  const timeSinceOpened = sessionOpenedAt !== null ? kitchenClockNow - sessionOpenedAt : Infinity;
-  const isQuiet = isBusinessOpen && !isBusinessPaused
-    && lastOrderTime !== null
-    && timeSinceLastOrder > QUIET_WARN_MS
-    && timeSinceOpened > QUIET_WARN_MS
-    && todayOrders.length > 0;
 
   const wasAutoPausedByInactivity = !isBusinessOpen && profile?.statusChangedBy === 'SYSTEM_ORDER_TIMEOUT_INACTIVITY';
 
@@ -313,7 +300,7 @@ export const DashboardSection = React.memo(function DashboardSection({
     },
   ], [acceptanceRate, rejectedOrdersCount, completionRate, completedOrdersCount, totalResolvedOrders, unresolvedOrdersCount, averageProductsPerOrder]);
 
-  const hasAlerts = stalePendingOrders.length > 0 || overdueKitchenOrders.length > 0 || isQuiet;
+  const hasAlerts = stalePendingOrders.length > 0 || overdueKitchenOrders.length > 0;
 
   return (
     <div className="space-y-3 md:space-y-5">
@@ -376,17 +363,6 @@ export const DashboardSection = React.memo(function DashboardSection({
                 <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-orange-500" />
               </span>
             </button>
-          )}
-          {isQuiet && stalePendingOrders.length === 0 && overdueKitchenOrders.length === 0 && (
-            <div className="flex items-center gap-3 rounded-[20px] border border-sky-200 bg-gradient-to-r from-sky-50 to-blue-50/50 px-5 py-3.5 shadow-[0_4px_16px_rgba(14,165,233,0.08)]">
-              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-sky-100 text-sky-600">
-                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-              </span>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-semibold text-sky-900">Sin actividad en los últimos 20 minutos</p>
-                <p className="text-xs text-sky-600 mt-0.5">El negocio está abierto · Revisa tu visibilidad en la app</p>
-              </div>
-            </div>
           )}
         </div>
       )}
