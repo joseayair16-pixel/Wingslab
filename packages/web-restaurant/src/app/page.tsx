@@ -688,7 +688,7 @@ export default function Home() {
   const [showHelpModal, setShowHelpModal] = useState(false);
   const [showClosePromptModal, setShowClosePromptModal] = useState(false);
   const [extendingHours, setExtendingHours] = useState(false);
-  const [activeHelpTab, setActiveHelpTab] = useState<'simulator' | 'faqs' | 'transfers' | 'support'>('simulator');
+  const [activeHelpTab, setActiveHelpTab] = useState<'simulator' | 'faqs' | 'transfers' | 'support' | 'notifications'>('simulator');
   const [supportSubject, setSupportSubject] = useState('');
   const [supportMessage, setSupportMessage] = useState('');
   const [supportCategory, setSupportCategory] = useState('SYSTEM');
@@ -11173,6 +11173,22 @@ export default function Home() {
                   {/* Left Navigation Tabs (Desktop) / Horizontal Tabs (Mobile) */}
                   <div className="shrink-0 border-b md:border-b-0 md:border-r border-black/5 bg-[#faf8f5]/80 p-4 md:w-60 overflow-x-auto md:overflow-x-visible md:overflow-y-auto scrollbar-none flex md:flex-col gap-2 flex-row">
                     
+                    {/* Tab Button 0: Notificaciones */}
+                    <button
+                      type="button"
+                      onClick={() => setActiveHelpTab('notifications')}
+                      className={`flex items-center gap-3 rounded-2xl px-4 py-3.5 text-left text-sm font-semibold transition-all duration-200 shrink-0 whitespace-nowrap ${
+                        activeHelpTab === 'notifications'
+                          ? 'bg-gradient-to-r from-sky-600 to-blue-600 text-white shadow-md shadow-blue-600/10 ring-1 ring-sky-500/20'
+                          : 'text-neutral-600 hover:bg-sky-50/70 hover:text-sky-700'
+                      }`}
+                    >
+                      <svg className="h-5 w-5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75v-.7V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0" />
+                      </svg>
+                      Notificaciones
+                    </button>
+
                     {/* Tab Button 1: Simulador */}
                     <button
                       type="button"
@@ -11245,6 +11261,129 @@ export default function Home() {
                   {/* Right Content Area */}
                   <div className="flex-1 overflow-y-auto p-6 md:p-8 min-h-0 bg-[#fafaf9]/20">
                     
+                    {/* Tab 0: Notifications */}
+                    {activeHelpTab === 'notifications' && (
+                      <div className="space-y-6 animate-fade-in">
+                        {/* Banner principal llamativo */}
+                        <div className="relative overflow-hidden rounded-[28px] bg-gradient-to-br from-sky-600 via-blue-600 to-indigo-600 p-6 sm:p-8 text-white shadow-[0_16px_40px_-12px_rgba(37,99,235,0.45)]">
+                          <div className="absolute -right-10 -top-10 h-40 w-40 rounded-full bg-white/10" />
+                          <div className="absolute -bottom-16 -left-8 h-44 w-44 rounded-full bg-white/5" />
+                          <div className="relative">
+                            <span className="inline-flex items-center gap-1.5 rounded-full bg-white/15 px-3 py-1 text-[10px] font-bold uppercase tracking-widest backdrop-blur">
+                              <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                              </svg>
+                              No te pierdas ningún pedido
+                            </span>
+                            <h3 className="mt-3 text-xl sm:text-2xl font-bold leading-tight">
+                              Las alertas de nuevos pedidos llegan aunque cierres la app
+                            </h3>
+                            <p className="mt-2 max-w-xl text-sm sm:text-base text-sky-100 leading-relaxed">
+                              Configura tu teléfono <strong className="text-white">una sola vez</strong> y recibe cada
+                              pedido con sonido de alarma, sin importar la plataforma.
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* Tarjetas por plataforma */}
+                        <div className="grid gap-5 sm:grid-cols-2">
+                          {/* Android */}
+                          <div className="rounded-[28px] border border-emerald-100 bg-white p-5 sm:p-6 flex flex-col shadow-[0_8px_24px_-12px_rgba(16,185,129,0.15)]">
+                            <div className="flex items-center gap-3">
+                              <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-600">
+                                <svg className="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8}>
+                                  <path strokeLinecap="round" strokeLinejoin="round" d="M9.75 3.104v5.714a2.25 2.25 0 01-.659 1.591L5 14.5M9.75 3.104c-.251.023-.501.05-.75.082m.75-.082a24.301 24.301 0 014.5 0m0 0v5.714c0 .597.237 1.17.659 1.591L19.8 15.3M16.5 8.963V5.25m.75 14.634a48.465 48.465 0 01-6 0m6 0c-.706.214-1.44.348-2.25.435m6 0a24.24 24.24 0 003.75-.435M9.75 21a1.5 1.5 0 003 0V9.75a1.5 1.5 0 00-3 0V21z" />
+                                </svg>
+                              </div>
+                              <div>
+                                <h4 className="text-base font-bold text-neutral-950">Android</h4>
+                                <span className="text-xs font-semibold text-emerald-600">Samsung, Xiaomi, Motorola, etc.</span>
+                              </div>
+                            </div>
+
+                            <ol className="mt-5 space-y-3 text-sm">
+                              <li className="flex items-start gap-3">
+                                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-[11px] font-bold text-emerald-700">1</span>
+                                <span className="leading-relaxed text-neutral-700">
+                                  <strong className="text-neutral-900">Instala la app</strong> tocando el botón "Instalar" que aparece en la parte inferior (o menú ⋮ → "Agregar a pantalla de inicio").
+                                </span>
+                              </li>
+                              <li className="flex items-start gap-3">
+                                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-[11px] font-bold text-emerald-700">2</span>
+                                <span className="leading-relaxed text-neutral-700">
+                                  <strong className="text-neutral-900">Activa las notificaciones</strong> en el perfil del portal (pestaña "Notificaciones Push").
+                                </span>
+                              </li>
+                              <li className="flex items-start gap-3">
+                                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-[11px] font-bold text-emerald-700">3</span>
+                                <span className="leading-relaxed text-neutral-700">
+                                  <strong className="text-neutral-900">Excluye SaDeL del ahorro de batería:</strong> Ajustes del teléfono → Batería → Optimización de batería → busca SaDeL → "Sin restricciones". <em className="text-emerald-700 font-medium">Esto evita que el teléfono "mate" la app y retrase los pedidos.</em>
+                                </span>
+                              </li>
+                              <li className="flex items-start gap-3">
+                                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-[11px] font-bold text-emerald-700">4</span>
+                                <span className="leading-relaxed text-neutral-700">
+                                  <strong className="text-neutral-900">Ponle sonido de alarma:</strong> Ajustes → Notificaciones → SaDeL → Sonido → elige un tono fuerte (ej. "Alarma"). Así el "Nuevo pedido" se escucha aunque estés lejos del teléfono.
+                                </span>
+                              </li>
+                            </ol>
+                          </div>
+
+                          {/* iPhone / iOS */}
+                          <div className="rounded-[28px] border border-neutral-200/80 bg-white p-5 sm:p-6 flex flex-col shadow-[0_8px_24px_-12px_rgba(0,0,0,0.12)]">
+                            <div className="flex items-center gap-3">
+                              <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-neutral-900 text-white">
+                                <svg className="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8}>
+                                  <rect x="7" y="2.75" width="10" height="18.5" rx="2.75" />
+                                  <path strokeLinecap="round" d="M10.5 18.5h3" />
+                                </svg>
+                              </div>
+                              <div>
+                                <h4 className="text-base font-bold text-neutral-950">iPhone (iOS)</h4>
+                                <span className="text-xs font-semibold text-neutral-500">Requiere iOS 16.4 o superior</span>
+                              </div>
+                            </div>
+
+                            <ol className="mt-5 space-y-3 text-sm">
+                              <li className="flex items-start gap-3">
+                                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-neutral-100 text-[11px] font-bold text-neutral-700">1</span>
+                                <span className="leading-relaxed text-neutral-700">
+                                  <strong className="text-neutral-900">Instala a pantalla de inicio</strong> (obligatorio para recibir pedidos): botón Compartir → "Añadir a pantalla de inicio". Desde Safari normal <em className="font-medium text-neutral-500">no</em> llegan notificaciones.
+                                </span>
+                              </li>
+                              <li className="flex items-start gap-3">
+                                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-neutral-100 text-[11px] font-bold text-neutral-700">2</span>
+                                <span className="leading-relaxed text-neutral-700">
+                                  <strong className="text-neutral-900">Activa las notificaciones</strong> en el perfil del portal.
+                                </span>
+                              </li>
+                              <li className="flex items-start gap-3">
+                                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-neutral-100 text-[11px] font-bold text-neutral-700">3</span>
+                                <span className="leading-relaxed text-neutral-700">
+                                  <strong className="text-neutral-900">Revisa los ajustes del iPhone:</strong> Ajustes → Notificaciones → SaDeL → permitir notificaciones y sonido.
+                                </span>
+                              </li>
+                              <li className="flex items-start gap-3">
+                                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-neutral-100 text-[11px] font-bold text-neutral-700">4</span>
+                                <span className="leading-relaxed text-neutral-700">
+                                  <strong className="text-neutral-900">Evita "No molestar" o un "Foco" activo</strong> durante horario de servicio, o el iPhone retendrá las alertas.
+                                </span>
+                              </li>
+                            </ol>
+                          </div>
+                        </div>
+
+                        {/* Nota de cierre */}
+                        <div className="rounded-[24px] border border-sky-100 bg-sky-50/70 p-5 text-sm leading-relaxed text-sky-900">
+                          <p className="font-semibold">💡 ¿Quieres probar si tu teléfono está bien configurado?</p>
+                          <p className="mt-1 text-sky-800/90">
+                            Abre la pestaña <strong>Simulador de Pedidos</strong> y activa un pedido de prueba: si suena la
+                            alerta con la app cerrada, todo está listo. Si no llega, revisa los pasos de tu plataforma arriba.
+                          </p>
+                        </div>
+                      </div>
+                    )}
+
                     {/* Tab 1: Simulator */}
                     {activeHelpTab === 'simulator' && (
                       <div className="space-y-6 animate-fade-in">
