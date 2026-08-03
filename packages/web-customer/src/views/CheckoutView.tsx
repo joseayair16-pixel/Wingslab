@@ -48,6 +48,7 @@ export function CheckoutView({
   formatCurrency,
 }: CheckoutViewProps) {
   const isPickup = fulfillmentType === 'PICKUP';
+  const deliveryFee = isPickup ? 0 : (selectedRestaurant?.effectiveDeliveryFee || 0);
 
   return (
     <div className="mt-1 space-y-6 max-w-5xl mx-auto px-4 md:px-0">
@@ -341,7 +342,7 @@ export function CheckoutView({
               </div>
               <div className="flex justify-between">
                 <span>Costo de envío</span>
-                <span className="font-semibold text-neutral-900">{formatCurrency(selectedRestaurant?.effectiveDeliveryFee || 0)}</span>
+                <span className="font-semibold text-neutral-900">{formatCurrency(deliveryFee)}</span>
               </div>
             </div>
 
@@ -359,7 +360,7 @@ export function CheckoutView({
             <div className="border-t border-black/5 pt-4 flex justify-between items-center mb-6">
               <span className="font-semibold text-neutral-900">Total</span>
               <span className="text-2xl font-semibold text-neutral-900">
-                {formatCurrency(cartTotal + (selectedRestaurant?.effectiveDeliveryFee || 0))}
+                {formatCurrency(cartTotal + deliveryFee)}
               </span>
             </div>
 

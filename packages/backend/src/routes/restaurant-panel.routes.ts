@@ -24,6 +24,11 @@ const restaurantProfileSchema = z.object({
   hasOwnDelivery: z.boolean().optional(),
   deliveryFee: z.number().nonnegative().nullable().optional(),
   deliveryRadius: z.number().nonnegative().optional(),
+  deliveryPricingModel: z.enum(['fixed', 'distance']).optional(),
+  deliveryBaseRate: z.number().nonnegative().optional(),
+  deliveryPerKmRate: z.number().nonnegative().optional(),
+  deliveryMinFee: z.number().nonnegative().optional(),
+  deliveryMaxFee: z.number().nonnegative().optional(),
   minDeliveryTime: z.number().int().positive().optional(),
   maxDeliveryTime: z.number().int().positive().optional(),
   contactPhone: z.string().min(8, 'El telefono de contacto es obligatorio.').optional(),
@@ -542,10 +547,15 @@ export async function registerRestaurantPanelRoutes(fastify: FastifyInstance): P
       }
 
       const nextHasOwnDelivery = restData.hasOwnDelivery ?? ownedRestaurant.hasOwnDelivery;
-      const updateData = {
+      const updateData: Record<string, unknown> = {
         ...restData,
         deliveryFee: nextHasOwnDelivery ? restData.deliveryFee : null,
       };
+      if (nextHasOwnDelivery !== undefined) {
+        updateData.deliveryPricingModel = nextHasOwnDelivery
+          ? (restData.deliveryPricingModel ?? ownedRestaurant.deliveryPricingModel ?? 'fixed')
+          : 'fixed';
+      }
 
       const updatedRestaurant = await prisma.$transaction(async (tx) => {
         const updated = await tx.restaurant.update({

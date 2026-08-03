@@ -825,7 +825,6 @@ export default function Home() {
   const cartItems = useCartStore(state => state.items);
   const cartRestaurantId = useCartStore(state => state.restaurantId);
   const cartServiceFeeVal = useCartStore(state => state.serviceFee);
-  const cartDeliveryFeeVal = useCartStore(state => state.deliveryFee);
   const clearCart = useCartStore(state => state.clearCart);
   const updateCartItem = useCartStore(state => state.updateItem);
   const [mounted, setMounted] = useState(false);
@@ -1828,8 +1827,7 @@ export default function Home() {
     [cart]
   );
   const cartServiceFee = cart.length ? cartServiceFeeVal : 0;
-  const cartDeliveryFee = cart.length ? (cartDeliveryFeeVal || 0) : 0;
-  const cartTotal = cartSubtotal + cartServiceFee + cartDeliveryFee;
+  const cartTotal = cartSubtotal + cartServiceFee;
 
   function clearSession(message?: string) {
     setToken('');
@@ -2709,9 +2707,22 @@ export default function Home() {
     setError('');
 
     try {
+      const query = new URLSearchParams();
+      const storedLoc = typeof window !== 'undefined' ? window.localStorage.getItem('userLocation') : null;
+      if (storedLoc) {
+        try {
+          const loc = JSON.parse(storedLoc);
+          if (loc && typeof loc.latitude === 'number' && typeof loc.longitude === 'number' && isFinite(loc.latitude) && isFinite(loc.longitude)) {
+            query.set('latitude', loc.latitude.toString());
+            query.set('longitude', loc.longitude.toString());
+          }
+        } catch {}
+      }
+      const queryString = query.toString() ? `?${query.toString()}` : '';
+
       const payload = await requestJson<{ success: true; data: PublicRestaurantDetail }>({
         apiBase,
-        path: `/restaurantes/${restaurantId}`,
+        path: `/restaurantes/${restaurantId}${queryString}`,
         fallbackMessage: 'No se pudo cargar el menu del restaurante.',
       });
 

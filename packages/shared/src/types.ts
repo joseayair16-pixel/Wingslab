@@ -43,6 +43,11 @@ export interface Restaurant {
   status: RestaurantStatus;
   hasOwnDelivery: boolean;
   deliveryFee?: number;
+  deliveryPricingModel?: 'fixed' | 'distance';
+  deliveryBaseRate?: number;
+  deliveryPerKmRate?: number;
+  deliveryMinFee?: number;
+  deliveryMaxFee?: number;
   minDeliveryTime: number;
   maxDeliveryTime: number;
   operatingHours: OperatingHours[];

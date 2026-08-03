@@ -95,6 +95,11 @@ type RestaurantDetail = {
   serviceFee?: number | null;
   hasOwnDelivery: boolean;
   deliveryFee?: number | null;
+  deliveryPricingModel?: string | null;
+  deliveryBaseRate?: number | null;
+  deliveryPerKmRate?: number | null;
+  deliveryMinFee?: number | null;
+  deliveryMaxFee?: number | null;
   effectiveDeliveryFee?: number | null;
   billingCycle: BillingCycle;
   platformFeePerOrder: number;
@@ -142,6 +147,11 @@ type RestaurantEditForm = {
   serviceFee: string;
   hasOwnDelivery: boolean;
   deliveryFee: string;
+  deliveryPricingModel: 'fixed' | 'distance';
+  deliveryBaseRate: string;
+  deliveryPerKmRate: string;
+  deliveryMinFee: string;
+  deliveryMaxFee: string;
   minDeliveryTime: string;
   maxDeliveryTime: string;
   billingCycle: BillingCycle;
@@ -272,6 +282,11 @@ export default function RestaurantDetailPage() {
             })(),
             hasOwnDelivery: editForm.hasOwnDelivery,
             deliveryFee: editForm.hasOwnDelivery ? parseOptionalNumber(editForm.deliveryFee) : undefined,
+            deliveryPricingModel: editForm.hasOwnDelivery ? editForm.deliveryPricingModel : 'fixed',
+            deliveryBaseRate: editForm.hasOwnDelivery ? parseOptionalNumber(editForm.deliveryBaseRate) ?? 20 : undefined,
+            deliveryPerKmRate: editForm.hasOwnDelivery ? parseOptionalNumber(editForm.deliveryPerKmRate) ?? 8 : undefined,
+            deliveryMinFee: editForm.hasOwnDelivery ? parseOptionalNumber(editForm.deliveryMinFee) ?? 15 : undefined,
+            deliveryMaxFee: editForm.hasOwnDelivery ? parseOptionalNumber(editForm.deliveryMaxFee) ?? 150 : undefined,
             minDeliveryTime: parseRequiredInteger(editForm.minDeliveryTime),
             maxDeliveryTime: parseRequiredInteger(editForm.maxDeliveryTime),
             billingCycle: editForm.billingCycle,
@@ -830,16 +845,78 @@ export default function RestaurantDetailPage() {
                     </label>
 
                     {editForm.hasOwnDelivery ? (
-                      <div className="md:max-w-xs">
-                        <Field
-                          label="Tarifa delivery"
-                          value={editForm.deliveryFee}
-                          onChange={(value) =>
-                            setEditForm((current) => (current ? { ...current, deliveryFee: value } : current))
-                          }
-                          placeholder="35"
-                        />
-                      </div>
+                      <>
+                        <div>
+                          <span className="font-semibold tracking-tight text-neutral-800">Tipo de tarifa</span>
+                          <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setEditForm((current) => (current ? { ...current, deliveryPricingModel: 'fixed' } : current))
+                              }
+                              className={`rounded-2xl border px-4 py-3 text-left text-sm transition-all ${editForm.deliveryPricingModel !== 'distance' ? 'border-sky-400 bg-sky-50 ring-4 ring-sky-400/15' : 'border-black/10 bg-white hover:border-black/20'}`}
+                            >
+                              <span className={`font-bold ${editForm.deliveryPricingModel !== 'distance' ? 'text-sky-700' : 'text-neutral-900'}`}>Tarifa fija</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setEditForm((current) => (current ? { ...current, deliveryPricingModel: 'distance' } : current))
+                              }
+                              className={`rounded-2xl border px-4 py-3 text-left text-sm transition-all ${editForm.deliveryPricingModel === 'distance' ? 'border-sky-400 bg-sky-50 ring-4 ring-sky-400/15' : 'border-black/10 bg-white hover:border-black/20'}`}
+                            >
+                              <span className={`font-bold ${editForm.deliveryPricingModel === 'distance' ? 'text-sky-700' : 'text-neutral-900'}`}>Tarifa dinámica por distancia</span>
+                            </button>
+                          </div>
+                        </div>
+                        {editForm.deliveryPricingModel === 'distance' ? (
+                          <div className="grid gap-4 md:grid-cols-2">
+                            <Field
+                              label="Tarifa base (1er km)"
+                              value={editForm.deliveryBaseRate}
+                              onChange={(value) =>
+                                setEditForm((current) => (current ? { ...current, deliveryBaseRate: value } : current))
+                              }
+                              placeholder="20"
+                            />
+                            <Field
+                              label="Por km adicional"
+                              value={editForm.deliveryPerKmRate}
+                              onChange={(value) =>
+                                setEditForm((current) => (current ? { ...current, deliveryPerKmRate: value } : current))
+                              }
+                              placeholder="8"
+                            />
+                            <Field
+                              label="Tarifa mínima"
+                              value={editForm.deliveryMinFee}
+                              onChange={(value) =>
+                                setEditForm((current) => (current ? { ...current, deliveryMinFee: value } : current))
+                              }
+                              placeholder="15"
+                            />
+                            <Field
+                              label="Tarifa máxima"
+                              value={editForm.deliveryMaxFee}
+                              onChange={(value) =>
+                                setEditForm((current) => (current ? { ...current, deliveryMaxFee: value } : current))
+                              }
+                              placeholder="150"
+                            />
+                          </div>
+                        ) : (
+                          <div className="md:max-w-xs">
+                            <Field
+                              label="Tarifa delivery"
+                              value={editForm.deliveryFee}
+                              onChange={(value) =>
+                                setEditForm((current) => (current ? { ...current, deliveryFee: value } : current))
+                              }
+                              placeholder="35"
+                            />
+                          </div>
+                        )}
+                      </>
                     ) : (
                       <div className="rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm leading-6 text-emerald-800">
                         Este restaurante usa repartidores SaDeL. La tarifa visible para cliente se toma desde la region
@@ -1559,6 +1636,11 @@ function createEditFormState(restaurant: RestaurantDetail): RestaurantEditForm {
     serviceFee: restaurant.serviceFee?.toString() || '0',
     hasOwnDelivery: restaurant.hasOwnDelivery,
     deliveryFee: restaurant.deliveryFee?.toString() || '',
+    deliveryPricingModel: restaurant.deliveryPricingModel === 'distance' ? 'distance' : 'fixed',
+    deliveryBaseRate: restaurant.deliveryBaseRate != null ? String(restaurant.deliveryBaseRate) : '',
+    deliveryPerKmRate: restaurant.deliveryPerKmRate != null ? String(restaurant.deliveryPerKmRate) : '',
+    deliveryMinFee: restaurant.deliveryMinFee != null ? String(restaurant.deliveryMinFee) : '',
+    deliveryMaxFee: restaurant.deliveryMaxFee != null ? String(restaurant.deliveryMaxFee) : '',
     minDeliveryTime: restaurant.minDeliveryTime.toString(),
     maxDeliveryTime: restaurant.maxDeliveryTime.toString(),
     billingCycle: restaurant.billingCycle,

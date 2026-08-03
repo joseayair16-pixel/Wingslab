@@ -1853,7 +1853,6 @@ export default function RestaurantPage({
   const deliveryFee = useMemo(() => {
     if (fulfillmentType === 'PICKUP') return 0;
     if (!restaurant) return 0;
-    if (restaurant.hasOwnDelivery) return toMoney(restaurant.deliveryFee);
     if (
       typeof distanceKm === 'number' &&
       restaurant.pricingModel === 'distance' &&
@@ -1866,6 +1865,7 @@ export default function RestaurantPage({
       if (typeof restaurant.maxDeliveryFee === 'number') fee = Math.min(fee, restaurant.maxDeliveryFee);
       return Math.round(fee * 100) / 100;
     }
+    if (restaurant.hasOwnDelivery) return toMoney(restaurant.deliveryFee);
     return toMoney(restaurant.effectiveDeliveryFee);
   }, [restaurant, distanceKm, fulfillmentType]);
 

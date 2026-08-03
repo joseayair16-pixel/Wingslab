@@ -47,9 +47,14 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="es" className={`${inter.variable} ${plusJakartaSans.variable} light`} style={{ colorScheme: 'light' }}>
+    <html lang="es" className={`${inter.variable} ${plusJakartaSans.variable}`} suppressHydrationWarning>
       <head>
-        <meta name="color-scheme" content="light" />
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){try{var d=document.documentElement;var isDark=localStorage.getItem('darkMode')==='true';if(isDark){d.classList.add('dark');}else{d.classList.remove('dark');}}catch(e){}})();`,
+          }}
+        />
+        <meta name="color-scheme" content="light dark" />
         <meta name="theme-color" content="#fafafa" />
         <link rel="preconnect" href="https://maps.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />

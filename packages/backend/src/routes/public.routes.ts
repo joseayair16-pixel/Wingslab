@@ -4,6 +4,7 @@ import { z } from 'zod';
 
 import { prisma } from '../config/database';
 import { getDistanceInKm, isRestaurantOpenNow, getNextOpenTime, resolveZoneFromNearestRestaurant } from '../utils/restaurant';
+import { calculateDistanceDeliveryFee } from '../utils/delivery-pricing';
 import { createPlatformRequest } from '../utils/platform-requests';
 import { decrypt } from '../utils/crypto';
 
@@ -20,6 +21,70 @@ const listRestaurantsQuerySchema = z.object({
   openOnly: z.preprocess((val) => val !== 'false' && val !== false, z.boolean()),
   searchType: z.enum(['restaurant', 'product']).optional(),
 });
+
+type RegionDeliveryConfig = {
+  baseDeliveryFee?: number | null;
+  deliveryRadius?: number | null;
+  pricingModel?: string | null;
+  baseRate?: number | null;
+  perKmRate?: number | null;
+  minDeliveryFee?: number | null;
+  maxDeliveryFee?: number | null;
+};
+
+type OwnDeliveryRestaurant = {
+  hasOwnDelivery: boolean;
+  deliveryFee?: number | null;
+  deliveryPricingModel?: string | null;
+  deliveryBaseRate?: number | null;
+  deliveryPerKmRate?: number | null;
+  deliveryMinFee?: number | null;
+  deliveryMaxFee?: number | null;
+};
+
+function resolveDeliveryPricing(
+  restaurant: OwnDeliveryRestaurant,
+  regionConfig: RegionDeliveryConfig | null | undefined,
+  distanceKm: number | null
+) {
+  if (restaurant.hasOwnDelivery) {
+    const pricingModel = restaurant.deliveryPricingModel || 'fixed';
+    const distanceFee = calculateDistanceDeliveryFee({
+      pricingModel,
+      distanceKm,
+      baseRate: restaurant.deliveryBaseRate,
+      perKmRate: restaurant.deliveryPerKmRate,
+      minDeliveryFee: restaurant.deliveryMinFee,
+      maxDeliveryFee: restaurant.deliveryMaxFee,
+    });
+    return {
+      pricingModel,
+      baseRate: restaurant.deliveryBaseRate ?? null,
+      perKmRate: restaurant.deliveryPerKmRate ?? null,
+      minDeliveryFee: restaurant.deliveryMinFee ?? null,
+      maxDeliveryFee: restaurant.deliveryMaxFee ?? null,
+      effectiveDeliveryFee: distanceFee !== null ? distanceFee : (restaurant.deliveryFee || 0),
+    };
+  }
+
+  const pricingModel = regionConfig?.pricingModel || 'fixed';
+  const distanceFee = calculateDistanceDeliveryFee({
+    pricingModel,
+    distanceKm,
+    baseRate: regionConfig?.baseRate,
+    perKmRate: regionConfig?.perKmRate,
+    minDeliveryFee: regionConfig?.minDeliveryFee,
+    maxDeliveryFee: regionConfig?.maxDeliveryFee,
+  });
+  return {
+    pricingModel,
+    baseRate: regionConfig?.baseRate ?? null,
+    perKmRate: regionConfig?.perKmRate ?? null,
+    minDeliveryFee: regionConfig?.minDeliveryFee ?? null,
+    maxDeliveryFee: regionConfig?.maxDeliveryFee ?? null,
+    effectiveDeliveryFee: distanceFee !== null ? distanceFee : (regionConfig?.baseDeliveryFee || 0),
+  };
+}
 
 export async function registerPublicRoutes(fastify: FastifyInstance): Promise<void> {
   fastify.get('/restaurantes', async (request, reply) => {
@@ -200,22 +265,7 @@ export async function registerPublicRoutes(fastify: FastifyInstance): Promise<vo
           serviceFee: restaurant.serviceFee,
           deliveryFee: restaurant.deliveryFee,
           deliveryRadius: restaurant.hasOwnDelivery ? restaurant.deliveryRadius : (regionConfig?.deliveryRadius || 20),
-          pricingModel: restaurant.hasOwnDelivery ? 'fixed' : (regionConfig?.pricingModel || 'fixed'),
-          baseRate: restaurant.hasOwnDelivery ? null : (regionConfig?.baseRate || null),
-          perKmRate: restaurant.hasOwnDelivery ? null : (regionConfig?.perKmRate || null),
-          minDeliveryFee: restaurant.hasOwnDelivery ? null : (regionConfig?.minDeliveryFee || null),
-          maxDeliveryFee: restaurant.hasOwnDelivery ? null : (regionConfig?.maxDeliveryFee || null),
-          effectiveDeliveryFee: (() => {
-            if (restaurant.hasOwnDelivery) return restaurant.deliveryFee || 0;
-            if (regionConfig?.pricingModel === 'distance' && distanceKm !== null && regionConfig) {
-              const extraKm = Math.max(0, distanceKm - 1);
-              let fee = regionConfig.baseRate + extraKm * regionConfig.perKmRate;
-              fee = Math.max(fee, regionConfig.minDeliveryFee);
-              fee = Math.min(fee, regionConfig.maxDeliveryFee);
-              return Math.round(fee * 100) / 100;
-            }
-            return regionConfig?.baseDeliveryFee || 0;
-          })(),
+          ...resolveDeliveryPricing(restaurant, regionConfig, distanceKm),
           minDeliveryTime: restaurant.minDeliveryTime,
           maxDeliveryTime: restaurant.maxDeliveryTime,
           distanceKm,
@@ -386,22 +436,7 @@ export async function registerPublicRoutes(fastify: FastifyInstance): Promise<vo
         nextOpenTime: !isOpen && !restaurant.isPaused ? getNextOpenTime(restaurant.operatingHours) : null,
         serviceFee: restaurant.serviceFee,
         deliveryRadius: restaurant.hasOwnDelivery ? restaurant.deliveryRadius : (regionConfig?.deliveryRadius || 20),
-        pricingModel: restaurant.hasOwnDelivery ? 'fixed' : (regionConfig?.pricingModel || 'fixed'),
-        baseRate: restaurant.hasOwnDelivery ? null : (regionConfig?.baseRate || null),
-        perKmRate: restaurant.hasOwnDelivery ? null : (regionConfig?.perKmRate || null),
-        minDeliveryFee: restaurant.hasOwnDelivery ? null : (regionConfig?.minDeliveryFee || null),
-        maxDeliveryFee: restaurant.hasOwnDelivery ? null : (regionConfig?.maxDeliveryFee || null),
-        effectiveDeliveryFee: (() => {
-          if (restaurant.hasOwnDelivery) return restaurant.deliveryFee || 0;
-          if (regionConfig?.pricingModel === 'distance' && distanceKm !== null && regionConfig) {
-            const extraKm = Math.max(0, distanceKm - 1);
-            let fee = regionConfig.baseRate + extraKm * regionConfig.perKmRate;
-            fee = Math.max(fee, regionConfig.minDeliveryFee);
-            fee = Math.min(fee, regionConfig.maxDeliveryFee);
-            return Math.round(fee * 100) / 100;
-          }
-          return regionConfig?.baseDeliveryFee || 0;
-        })(),
+        ...resolveDeliveryPricing(restaurant, regionConfig, distanceKm),
         distanceKm,
         categories: restaurant.categories?.filter((category) => category.products?.length > 0) || [],
         storeCategories: restaurant.storeCategories?.map(sc => sc.category) || [],

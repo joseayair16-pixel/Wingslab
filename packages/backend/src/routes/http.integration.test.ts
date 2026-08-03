@@ -1491,6 +1491,71 @@ describe('http integration contracts', () => {
     expect(detailBody.data.effectiveDeliveryFee).toBe(25);
   });
 
+  it('calcula la tarifa dinamica por distancia en el detalle publico de un restaurante con envio propio', async () => {
+    jest.spyOn(prisma.restaurant, 'findMany').mockResolvedValue([] as never);
+    jest.spyOn(prisma.region, 'findMany').mockResolvedValue([] as never);
+    jest.spyOn(prisma.region, 'findUnique').mockResolvedValue(null as never);
+    jest.spyOn(prisma.product, 'findMany').mockResolvedValue([] as never);
+    jest.spyOn(prisma.restaurant, 'findFirst').mockResolvedValue({
+      id: 'restaurant-own-delivery',
+      userId: 'restaurant-user-own',
+      name: 'Pizza Norte',
+      description: 'Pizzas artesanales',
+      address: 'Insurgentes 200',
+      latitude: 19.4,
+      longitude: -99.1,
+      region: 'cdmx-norte',
+      status: 'ACTIVE',
+      logo: null,
+      coverImage: null,
+      serviceFee: 5,
+      hasOwnDelivery: true,
+      deliveryFee: 35,
+      deliveryRadius: 15,
+      deliveryPricingModel: 'distance',
+      deliveryBaseRate: 20,
+      deliveryPerKmRate: 8,
+      deliveryMinFee: 15,
+      deliveryMaxFee: 100,
+      minDeliveryTime: 20,
+      maxDeliveryTime: 40,
+      contactPhone: '+5215520202020',
+      email: 'pizza@example.com',
+      billingCycle: 'WEEKLY',
+      platformFeeRate: 0,
+      lastBillingSettledAt: null,
+      billingContactEmail: 'pizza@example.com',
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      operatingHours: [],
+      categories: [],
+    } as never);
+
+    const detailResponse = await app.inject({
+      method: 'GET',
+      url: '/restaurantes/restaurant-own-delivery?latitude=19.4&longitude=-99.0',
+    });
+
+    const detailBody = parseJson<{
+      success: boolean;
+      data: {
+        id: string;
+        pricingModel: string;
+        effectiveDeliveryFee: number;
+        distanceKm: number;
+      };
+    }>(detailResponse.body);
+
+    expect(detailResponse.statusCode).toBe(200);
+    expect(detailBody.data.id).toBe('restaurant-own-delivery');
+    expect(detailBody.data.pricingModel).toBe('distance');
+    expect(detailBody.data.distanceKm).toBeGreaterThan(1);
+    const expectedFee = Math.round((20 + Math.max(0, detailBody.data.distanceKm - 1) * 8) * 100) / 100;
+    expect(detailBody.data.effectiveDeliveryFee).toBe(expectedFee);
+    expect(detailBody.data.effectiveDeliveryFee).toBeGreaterThan(20);
+    expect(detailBody.data.effectiveDeliveryFee).toBeLessThanOrEqual(100);
+  });
+
   it('permite al restaurante guardar portada como data URL', async () => {
     const token = await createToken({
       sub: 'restaurant-user-9',

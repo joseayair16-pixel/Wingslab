@@ -29,6 +29,11 @@ export const CreateRestaurantSchema = z.object({
   email: z.string().email('Invalid email address'),
   hasOwnDelivery: z.boolean(),
   deliveryFee: z.number().positive('Delivery fee must be positive').optional(),
+  deliveryPricingModel: z.enum(['fixed', 'distance']).optional(),
+  deliveryBaseRate: z.number().nonnegative().optional(),
+  deliveryPerKmRate: z.number().nonnegative().optional(),
+  deliveryMinFee: z.number().nonnegative().optional(),
+  deliveryMaxFee: z.number().nonnegative().optional(),
   region: z.string().min(1, 'Region is required'),
 });
 

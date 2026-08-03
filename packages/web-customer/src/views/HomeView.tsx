@@ -408,7 +408,7 @@ export const HomeView = React.memo(function HomeView({
                           <span className="text-[10px] font-medium text-neutral-400 line-through">${product.price.toFixed(2)}</span>
                         </div>
                         <div className="mt-0.5">
-                          <span className="text-[9px] font-bold text-emerald-600 bg-emerald-50 rounded-full px-1.5 py-0.5">Ahorras ${product.savings.toFixed(2)}</span>
+                          <span className="text-[9px] font-bold text-sky-600 bg-sky-50 rounded-full px-1.5 py-0.5">Ahorras ${product.savings.toFixed(2)}</span>
                         </div>
                       </div>
                     </button>

@@ -90,6 +90,12 @@ model Restaurant {
   hasOwnDelivery          Boolean          @default(false)
   deliveryFee             Float?
   deliveryRadius          Float            @default(3)
+  // Dynamic delivery pricing (optional per restaurant when own delivery is enabled)
+  deliveryPricingModel    String           @default("fixed") // "fixed" | "distance"
+  deliveryBaseRate        Float            @default(20) // price for first km
+  deliveryPerKmRate       Float            @default(8) // price per extra km
+  deliveryMinFee          Float            @default(15) // minimum fee
+  deliveryMaxFee          Float            @default(150) // safety cap
   minDeliveryTime         Int              @default(30)
   maxDeliveryTime         Int              @default(60)
   contactPhone            String

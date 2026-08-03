@@ -70,6 +70,11 @@ type RestaurantProfile = {
   coverImage?: string | null;
   deliveryFee?: number | null;
   deliveryRadius?: number | null;
+  deliveryPricingModel?: string | null;
+  deliveryBaseRate?: number | null;
+  deliveryPerKmRate?: number | null;
+  deliveryMinFee?: number | null;
+  deliveryMaxFee?: number | null;
   hasOwnDelivery: boolean;
   minDeliveryTime: number;
   maxDeliveryTime: number;
@@ -315,6 +320,11 @@ type StoreProfileDraft = {
   maxDeliveryTime: string;
   deliveryFee: string;
   deliveryRadius: string;
+  deliveryPricingModel: 'fixed' | 'distance';
+  deliveryBaseRate: string;
+  deliveryPerKmRate: string;
+  deliveryMinFee: string;
+  deliveryMaxFee: string;
   storeCategories: string[];
   enableTicketPrinting: boolean;
   whatsappNotifications: boolean;
@@ -870,6 +880,11 @@ export default function Home() {
     maxDeliveryTime: '',
     deliveryFee: '',
     deliveryRadius: '',
+    deliveryPricingModel: 'fixed',
+    deliveryBaseRate: '',
+    deliveryPerKmRate: '',
+    deliveryMinFee: '',
+    deliveryMaxFee: '',
     storeCategories: [],
     enableTicketPrinting: true,
     whatsappNotifications: false,
@@ -1566,13 +1581,18 @@ export default function Home() {
       email: '',
       logo: '',
       coverImage: '',
-      hasOwnDelivery: false,
-      minDeliveryTime: '',
-      maxDeliveryTime: '',
-      deliveryFee: '',
-      deliveryRadius: '',
-      storeCategories: [],
-    enableTicketPrinting: true,
+        hasOwnDelivery: false,
+        minDeliveryTime: '',
+        maxDeliveryTime: '',
+        deliveryFee: '',
+        deliveryRadius: '',
+        deliveryPricingModel: 'fixed',
+        deliveryBaseRate: '',
+        deliveryPerKmRate: '',
+        deliveryMinFee: '',
+        deliveryMaxFee: '',
+        storeCategories: [],
+        enableTicketPrinting: true,
     whatsappNotifications: false,
       instagram: '',
       facebook: '',
@@ -2401,6 +2421,11 @@ export default function Home() {
         maxDeliveryTime: String(profileData.data.maxDeliveryTime || ''),
         deliveryFee: profileData.data.deliveryFee?.toString() || '',
         deliveryRadius: profileData.data.deliveryRadius?.toString() || '',
+        deliveryPricingModel: profileData.data.deliveryPricingModel === 'distance' ? 'distance' : 'fixed',
+        deliveryBaseRate: profileData.data.deliveryBaseRate != null ? String(profileData.data.deliveryBaseRate) : '',
+        deliveryPerKmRate: profileData.data.deliveryPerKmRate != null ? String(profileData.data.deliveryPerKmRate) : '',
+        deliveryMinFee: profileData.data.deliveryMinFee != null ? String(profileData.data.deliveryMinFee) : '',
+        deliveryMaxFee: profileData.data.deliveryMaxFee != null ? String(profileData.data.deliveryMaxFee) : '',
         storeCategories: profileData.data.storeCategories?.map(sc => sc.category.id) || [],
         enableTicketPrinting: profileData.data.enableTicketPrinting ?? true,
         whatsappNotifications: profileData.data.whatsappNotifications ?? false,
@@ -3508,6 +3533,19 @@ export default function Home() {
         deliveryRadius: storeDraft.deliveryRadius.trim()
           ? Number(storeDraft.deliveryRadius)
           : null,
+        deliveryPricingModel: storeDraft.hasOwnDelivery ? storeDraft.deliveryPricingModel : 'fixed',
+        deliveryBaseRate: storeDraft.hasOwnDelivery && storeDraft.deliveryBaseRate.trim()
+          ? Number(storeDraft.deliveryBaseRate)
+          : 20,
+        deliveryPerKmRate: storeDraft.hasOwnDelivery && storeDraft.deliveryPerKmRate.trim()
+          ? Number(storeDraft.deliveryPerKmRate)
+          : 8,
+        deliveryMinFee: storeDraft.hasOwnDelivery && storeDraft.deliveryMinFee.trim()
+          ? Number(storeDraft.deliveryMinFee)
+          : 15,
+        deliveryMaxFee: storeDraft.hasOwnDelivery && storeDraft.deliveryMaxFee.trim()
+          ? Number(storeDraft.deliveryMaxFee)
+          : 150,
         storeCategories: storeDraft.storeCategories,
         enableTicketPrinting: storeDraft.enableTicketPrinting,
         instagram: storeDraft.instagram.trim() || null,
@@ -3555,6 +3593,11 @@ export default function Home() {
         maxDeliveryTime: String(payload.data.maxDeliveryTime || ''),
         deliveryFee: typeof payload.data.deliveryFee === 'number' ? String(payload.data.deliveryFee) : '',
         deliveryRadius: typeof payload.data.deliveryRadius === 'number' ? String(payload.data.deliveryRadius) : '',
+        deliveryPricingModel: payload.data.deliveryPricingModel === 'distance' ? 'distance' : 'fixed',
+        deliveryBaseRate: payload.data.deliveryBaseRate != null ? String(payload.data.deliveryBaseRate) : '',
+        deliveryPerKmRate: payload.data.deliveryPerKmRate != null ? String(payload.data.deliveryPerKmRate) : '',
+        deliveryMinFee: payload.data.deliveryMinFee != null ? String(payload.data.deliveryMinFee) : '',
+        deliveryMaxFee: payload.data.deliveryMaxFee != null ? String(payload.data.deliveryMaxFee) : '',
         storeCategories: payload.data.storeCategories?.map((sc: any) => sc.category.id) || [],
         enableTicketPrinting: payload.data.enableTicketPrinting ?? true,
         whatsappNotifications: payload.data.whatsappNotifications ?? false,
@@ -7401,20 +7444,6 @@ export default function Home() {
                     type="password"
                   />
 
-                  <details className="group">
-                    <summary className="cursor-pointer text-xs font-semibold text-neutral-400 transition hover:text-neutral-600">
-                      Configuración avanzada
-                    </summary>
-                    <div className="mt-3">
-                      <Field
-                        label="API base URL"
-                        value={apiBase}
-                        onChange={setApiBase}
-                        placeholder="/api"
-                      />
-                    </div>
-                  </details>
-
                   <button
                     type="button"
                     onClick={() => {
@@ -8677,9 +8706,11 @@ export default function Home() {
                               </svg>
                               <span>
                                 <span className="font-bold text-neutral-900">Entrega:</span>{' '}
-                                {storeDraft.deliveryFee.trim()
-                                  ? formatCurrency(Number(storeDraft.deliveryFee))
-                                  : 'Sin costo'}
+                                {storeDraft.hasOwnDelivery && storeDraft.deliveryPricingModel === 'distance'
+                                  ? 'Por distancia'
+                                  : storeDraft.deliveryFee.trim()
+                                    ? formatCurrency(Number(storeDraft.deliveryFee))
+                                    : 'Sin costo'}
                               </span>
                             </div>
 

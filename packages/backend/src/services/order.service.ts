@@ -3,6 +3,7 @@ import { AppError } from '../errors/app-error';
 import { customerCreatedOrderSelect } from './order-selects';
 import { isRestaurantOpenNow } from '../utils/restaurant';
 import { getDistanceInKm } from '../utils/restaurant';
+import { calculateDistanceDeliveryFee } from '../utils/delivery-pricing';
 import { logger } from '../utils/logger';
 import { buildApartmentWhere } from '../utils/address';
 import { calculateOrderEta } from '../utils/order-eta';
@@ -595,12 +596,25 @@ export async function createOrderForCustomer({
   let deliveryFee = 0;
   if (!isPickup) {
     if (restaurant.hasOwnDelivery) {
-      deliveryFee = restaurant.deliveryFee || 0;
+      const distanceFee = calculateDistanceDeliveryFee({
+        pricingModel: (restaurant as any).deliveryPricingModel,
+        distanceKm: deliveryDistanceKm,
+        baseRate: (restaurant as any).deliveryBaseRate,
+        perKmRate: (restaurant as any).deliveryPerKmRate,
+        minDeliveryFee: (restaurant as any).deliveryMinFee,
+        maxDeliveryFee: (restaurant as any).deliveryMaxFee,
+      });
+      deliveryFee = distanceFee !== null ? distanceFee : (restaurant.deliveryFee || 0);
     } else if (region?.pricingModel === 'distance' && deliveryDistanceKm !== null) {
-      const extraKm = Math.max(0, deliveryDistanceKm - 1);
-      deliveryFee = Math.round((region.baseRate + extraKm * region.perKmRate) * 100) / 100;
-      deliveryFee = Math.max(deliveryFee, region.minDeliveryFee);
-      deliveryFee = Math.min(deliveryFee, region.maxDeliveryFee);
+      const distanceFee = calculateDistanceDeliveryFee({
+        pricingModel: region.pricingModel,
+        distanceKm: deliveryDistanceKm,
+        baseRate: region.baseRate,
+        perKmRate: region.perKmRate,
+        minDeliveryFee: region.minDeliveryFee,
+        maxDeliveryFee: region.maxDeliveryFee,
+      });
+      deliveryFee = distanceFee !== null ? distanceFee : (region?.baseDeliveryFee || 0);
     } else {
       deliveryFee = region?.baseDeliveryFee || 0;
     }

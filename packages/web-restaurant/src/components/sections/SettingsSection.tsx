@@ -453,13 +453,70 @@ export const SettingsSection = React.memo(function SettingsSection({
                 </div>
 
                 {storeDraft.hasOwnDelivery ? (
-                  <Field
-                    label="Costo de envío ($)"
-                    value={storeDraft.deliveryFee}
-                    onChange={(value: string) => setStoreDraft((c: any) => ({ ...c, deliveryFee: value }))}
-                    placeholder="35"
-                    type="number"
-                  />
+                  <>
+                    <div className="sm:col-span-2">
+                      <span className="text-[12px] font-bold uppercase tracking-[0.1em] text-neutral-600">Tipo de tarifa</span>
+                      <div className="mt-2 grid gap-3 sm:grid-cols-2">
+                        <button
+                          type="button"
+                          onClick={() => setStoreDraft((c: any) => ({ ...c, deliveryPricingModel: 'fixed' }))}
+                          className={`group flex flex-col gap-1 rounded-[18px] border px-5 py-4 text-left transition-all duration-200 ${storeDraft.deliveryPricingModel !== 'distance' ? 'border-sky-400 bg-sky-50/70 ring-4 ring-sky-400/15' : 'border-black/5 bg-white hover:border-black/15'}`}
+                        >
+                          <span className={`text-sm font-bold ${storeDraft.deliveryPricingModel !== 'distance' ? 'text-sky-700' : 'text-neutral-900'}`}>Tarifa fija</span>
+                          <span className="text-xs font-medium leading-relaxed text-neutral-500">El mismo costo para todos tus clientes, sin importar la distancia.</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setStoreDraft((c: any) => ({ ...c, deliveryPricingModel: 'distance' }))}
+                          className={`group flex flex-col gap-1 rounded-[18px] border px-5 py-4 text-left transition-all duration-200 ${storeDraft.deliveryPricingModel === 'distance' ? 'border-sky-400 bg-sky-50/70 ring-4 ring-sky-400/15' : 'border-black/5 bg-white hover:border-black/15'}`}
+                        >
+                          <span className={`text-sm font-bold ${storeDraft.deliveryPricingModel === 'distance' ? 'text-sky-700' : 'text-neutral-900'}`}>Tarifa dinámica por distancia</span>
+                          <span className="text-xs font-medium leading-relaxed text-neutral-500">El costo sube según los kilómetros que recorra tu repartidor.</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    {storeDraft.deliveryPricingModel === 'distance' ? (
+                      <>
+                        <Field
+                          label="Tarifa base (1er km) ($)"
+                          value={storeDraft.deliveryBaseRate}
+                          onChange={(value: string) => setStoreDraft((c: any) => ({ ...c, deliveryBaseRate: value }))}
+                          placeholder="20"
+                          type="number"
+                        />
+                        <Field
+                          label="Por km adicional ($)"
+                          value={storeDraft.deliveryPerKmRate}
+                          onChange={(value: string) => setStoreDraft((c: any) => ({ ...c, deliveryPerKmRate: value }))}
+                          placeholder="8"
+                          type="number"
+                        />
+                        <Field
+                          label="Tarifa mínima ($)"
+                          value={storeDraft.deliveryMinFee}
+                          onChange={(value: string) => setStoreDraft((c: any) => ({ ...c, deliveryMinFee: value }))}
+                          placeholder="15"
+                          type="number"
+                        />
+                        <Field
+                          label="Tarifa máxima ($)"
+                          value={storeDraft.deliveryMaxFee}
+                          onChange={(value: string) => setStoreDraft((c: any) => ({ ...c, deliveryMaxFee: value }))}
+                          placeholder="150"
+                          type="number"
+                        />
+                      </>
+                    ) : (
+                      <Field
+                        label="Costo de envío ($)"
+                        value={storeDraft.deliveryFee}
+                        onChange={(value: string) => setStoreDraft((c: any) => ({ ...c, deliveryFee: value }))}
+                        placeholder="35"
+                        type="number"
+                      />
+                    )}
+                  </>
                 ) : (
                   <div className="rounded-[16px] border border-black/5 bg-neutral-50 p-3.5 text-sm text-neutral-600">
                     <p className="font-semibold text-neutral-800 text-xs uppercase tracking-wider mb-1">Costo de envío</p>
@@ -487,7 +544,11 @@ export const SettingsSection = React.memo(function SettingsSection({
                       {(profile as RestaurantProfile | null)?.isAcceptingOrders ? 'Aceptando pedidos' : 'No aceptando pedidos'}
                     </span>
                   </div>
-                  <p>Modalidad: <span className="font-medium text-neutral-800">{storeDraft.hasOwnDelivery ? 'Entrega propia' : 'Repartidores SaDeL'}</span></p>
+                  <p>Modalidad: <span className="font-medium text-neutral-800">{storeDraft.hasOwnDelivery ? 'Entrega propia' : 'Repartidores SaDeL'}</span>
+                    {storeDraft.hasOwnDelivery ? (
+                      <> · Tarifa: <span className="font-medium text-neutral-800">{storeDraft.deliveryPricingModel === 'distance' ? 'Dinámica por distancia' : 'Fija'}</span></>
+                    ) : null}
+                  </p>
                 </div>
                 <div className="sm:col-span-2 flex justify-end">
                   <button
