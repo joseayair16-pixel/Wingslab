@@ -54,16 +54,16 @@ export default function SplashScreen() {
   return (
     <div
       aria-hidden="true"
-      className={`fixed inset-0 z-[10000] flex flex-col items-center justify-center bg-[#fafaf9] transition-opacity duration-300 ${
+      className={`sadel-splash fixed inset-0 z-[10000] flex flex-col items-center justify-center bg-[#fafaf9] transition-opacity duration-300 ${
         phase === 'fading' ? 'pointer-events-none opacity-0' : 'opacity-100'
       }`}
     >
       <SaDelLogo
         className="sadel-loader-logo animate-sadel-breathe select-none pointer-events-none h-[68px] w-auto"
       />
-      <p className="mt-4 text-lg font-bold tracking-[-0.02em] text-neutral-800">SaDeL</p>
-      <div className="mt-4 h-1 w-16 overflow-hidden rounded-full bg-neutral-200">
-        <div className="h-full w-full rounded-full bg-sky-500 animate-pulse" />
+      <p className="sadel-splash-title mt-4 text-lg font-bold tracking-[-0.02em] text-neutral-800">SaDeL</p>
+      <div className="sadel-splash-track mt-4 h-1 w-16 overflow-hidden rounded-full bg-neutral-200">
+        <div className="sadel-splash-fill h-full w-full rounded-full bg-sky-500 animate-pulse" />
       </div>
     </div>
   );

@@ -153,6 +153,28 @@ html.dark .sadel-logo-dark {
   filter: invert(1) hue-rotate(180deg) saturate(1.54) !important;
 }
 
+/* Splash a pantalla completa: modo oscuro autocontenido.
+   El invert global del <html> no alcanza de forma fiable a los elementos
+   position:fixed en Safari/iOS, así que el splash se oscurece por sí mismo
+   y contra-invierte cuando el truco global está activo. */
+html.dark .sadel-splash {
+  background-color: #09090a;
+  color: #fafaf9;
+}
+html.dark .sadel-splash .sadel-splash-title {
+  color: #fafaf9;
+}
+html.dark .sadel-splash .sadel-splash-track {
+  background-color: rgba(255, 255, 255, 0.14);
+}
+html.dark:not(.pure-dark) .sadel-splash {
+  filter: invert(1) hue-rotate(180deg) saturate(1.54);
+}
+html.dark:not(.pure-dark) .sadel-splash .sadel-logo-light,
+html.dark:not(.pure-dark) .sadel-splash .sadel-logo-dark {
+  filter: none !important;
+}
+
 /* ===== iOS / Safari Hardening ===== */
 * {
   -webkit-tap-highlight-color: transparent;

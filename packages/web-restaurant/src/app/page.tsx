@@ -1147,7 +1147,11 @@ export default function Home() {
     setCheckingAuth(false);
 
     if (typeof window !== 'undefined') {
-      const isDark = window.localStorage.getItem('darkMode') === 'true';
+      // Elección explícita del usuario > preferencia del sistema.
+      const darkPref = window.localStorage.getItem('darkMode');
+      const isDark = darkPref === null
+        ? window.matchMedia('(prefers-color-scheme: dark)').matches
+        : darkPref === 'true';
 
       const savedSection = window.localStorage.getItem('restaurantActiveSection');
       if (savedSection) {
@@ -1156,6 +1160,8 @@ export default function Home() {
       setIsDarkMode(isDark);
       if (isDark) {
         document.documentElement.classList.add('dark');
+      } else {
+        document.documentElement.classList.remove('dark');
       }
 
       const supportsWebAudio = Boolean(window.AudioContext || (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext);

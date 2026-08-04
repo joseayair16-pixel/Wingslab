@@ -897,7 +897,11 @@ export default function Home() {
     const savedSession = readStoredSession(storageKey);
 
     if (typeof window !== 'undefined') {
-      const isDark = window.localStorage.getItem('darkMode') === 'true';
+      // Elección explícita del usuario > preferencia del sistema.
+      const darkPref = window.localStorage.getItem('darkMode');
+      const isDark = darkPref === null
+        ? window.matchMedia('(prefers-color-scheme: dark)').matches
+        : darkPref === 'true';
       setDarkMode(isDark);
       if (isDark) {
         document.documentElement.classList.add('dark');
