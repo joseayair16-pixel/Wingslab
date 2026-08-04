@@ -3247,7 +3247,7 @@ export default function Home() {
     }
 
     setSocketStatus('connecting');
-    const socket = io('https://sadel-production.up.railway.app', {
+    const socket = io(process.env.NEXT_PUBLIC_SOCKET_URL || 'https://sadel-production.up.railway.app', {
       path: '/socket.io',
       transports: ['websocket', 'polling'],
       autoConnect: true,

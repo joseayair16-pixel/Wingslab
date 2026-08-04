@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 
-const API_URL = 'https://sadel-production.up.railway.app';
+const API_URL = '/api';
 
 let cachedVapidKey: string | null = null;
 let vapidKeyPromise: Promise<string> | null = null;

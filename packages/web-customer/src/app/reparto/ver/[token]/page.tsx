@@ -77,7 +77,7 @@ export default function DeliveryTicketPage({ params }: PageProps) {
     setIsMounted(true);
   }, []);
 
-  const apiBase = 'https://sadel-production.up.railway.app';
+  const apiBase = '/api';
 
   const triggerHaptic = (pattern: number[]) => {
     if (typeof window !== 'undefined' && window.navigator && window.navigator.vibrate) {
