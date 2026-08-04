@@ -16,6 +16,7 @@ import { registerRestaurantPanelRoutes } from './restaurant-panel.routes';
 import { registerUploadRoutes } from './uploads.routes';
 import { registerPublicDeliveryRoutes } from './public-delivery.routes';
 import { registerOrderChatRoutes } from './order-chat.routes';
+import { registerWhatsAppWebhookRoutes } from './whatsapp-webhook.routes';
 import { registerAdminCategoriesRoutes } from './admin-categories.routes';
 import { registerAdminOrdersRoutes } from './admin-orders.routes';
 
@@ -44,4 +45,5 @@ export const setupRoutes = async (fastify: FastifyInstance) => {
   await registerUploadRoutes(fastify);
   await registerCustomerRoutes(fastify);
   await registerPublicDeliveryRoutes(fastify);
+  await fastify.register(registerWhatsAppWebhookRoutes);
 };
