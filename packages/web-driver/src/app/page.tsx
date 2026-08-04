@@ -334,6 +334,10 @@ export default function Home() {
 
   // UI States
   const [activeTab, setActiveTab] = useState<'active' | 'history' | 'wallet' | 'profile'>('active');
+  useEffect(() => {
+    // Informa al banner de instalación si el FAB de conexión ocupa la parte baja.
+    window.dispatchEvent(new CustomEvent('sadel:bottom-cta', { detail: activeTab === 'active' }));
+  }, [activeTab]);
   useEffect(() => { activeTabRef.current = activeTab; }, [activeTab]);
   const [walletData, setWalletData] = useState<WalletData | null>(null);
   const [walletWeekOffset, setWalletWeekOffset] = useState(0);

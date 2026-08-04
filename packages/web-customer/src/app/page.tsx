@@ -829,6 +829,9 @@ export default function Home() {
   const [mounted, setMounted] = useState(false);
   useEffect(() => { setMounted(true); }, []);
   const cart: CartItem[] = mounted ? cartItems : [];
+  useEffect(() => {
+    window.dispatchEvent(new CustomEvent('sadel:bottom-cta', { detail: cart.length > 0 }));
+  }, [cart.length]);
   const [, setCheckoutForm] = useState<CheckoutForm>(defaultCheckoutForm);
   const [selectedCheckoutAddressId, setSelectedCheckoutAddressId] = useState('');
   const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number; address: string; accuracy?: number; ts?: number } | null>(() => {
