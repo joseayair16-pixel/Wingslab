@@ -31,7 +31,7 @@ export default function PrivacyPage() {
           
           <div className="border-b border-black/5 pb-4">
             <h1 className="text-3xl font-extrabold tracking-tight text-neutral-950 md:text-4xl">Aviso de Privacidad Integral</h1>
-            <p className="text-xs text-neutral-400 font-semibold mt-2 font-mono">Última actualización: 15 de junio de 2026</p>
+            <p className="text-xs text-neutral-400 font-semibold mt-2 font-mono">Última actualización: 5 de agosto de 2026</p>
           </div>
 
           <div className="space-y-6 text-sm text-neutral-600 leading-relaxed font-medium">
@@ -123,6 +123,7 @@ export default function PrivacyPage() {
               <ul className="list-disc list-inside mt-1 space-y-1">
                 <li><strong>Con el Restaurante Preparador:</strong> Transmisión del nombre de pila del cliente, especificaciones del platillo y número de orden para fines de empaque.</li>
                 <li><strong>Con el Socio Repartidor:</strong> Transmisión del nombre de pila del cliente, dirección exacta de entrega, geolocalización de destino y teléfono de contacto temporal para asegurar el arribo y entrega segura del pedido.</li>
+                <li><strong>Con Meta Platforms, Inc. (proveedor de la API de WhatsApp Business):</strong> Cuando un usuario solicita un código de verificación (OTP) o cuando un establecimiento activa las notificaciones de pedido por WhatsApp, SaDeL transmite el número telefónico del destinatario y el contenido del mensaje a Meta Platforms, Inc. con la única finalidad de entregar dichos mensajes a través de WhatsApp. Meta actúa como procesador de datos bajo las condiciones de su propia política de privacidad.</li>
               </ul>
               <p className="font-bold text-neutral-900 mt-2">
                 No comercializamos, vendemos ni transferimos sus datos personales a agencias de marketing o terceros sin su consentimiento previo.

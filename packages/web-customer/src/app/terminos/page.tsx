@@ -90,13 +90,13 @@ export default function TermsPage() {
                 <div>
                   <h3 className="text-xs font-bold text-neutral-800 uppercase tracking-wider">A. Cancelaciones por el Usuario:</h3>
                   <p>
-                    Una vez que el pedido ha sido aceptado por el Establecimiento Aliado y ha comenzado su preparación, **no se admiten cancelaciones ni se realizarán reembolsos** al Usuario.
+                    Una vez que el pedido ha sido aceptado por el Establecimiento Aliado y ha comenzado su preparación, no se admiten cancelaciones ni se realizarán reembolsos al Usuario.
                   </p>
                 </div>
                 <div>
                   <h3 className="text-xs font-bold text-neutral-800 uppercase tracking-wider">B. Pedidos no entregados por ausencia del cliente:</h3>
                   <p>
-                    Si el Socio Repartidor arriba a la ubicación de entrega señalada por el Usuario y éste no responde o no está disponible tras un tiempo de espera de 10 (diez) minutos y habiendo realizado al menos 2 intentos de contacto telefónico/chat, el pedido se marcará como &quot;Entregado con Incidencia&quot;. En este caso, **no habrá reembolso alguno** y el cobro de la orden se ejecutará en su totalidad.
+                    Si el Socio Repartidor arriba a la ubicación de entrega señalada por el Usuario y éste no responde o no está disponible tras un tiempo de espera de 10 (diez) minutos y habiendo realizado al menos 2 intentos de contacto telefónico/chat, el pedido se marcará como &quot;Entregado con Incidencia&quot;. En este caso, no habrá reembolso alguno y el cobro de la orden se ejecutará en su totalidad.
                   </p>
                 </div>
                 <div>
@@ -128,7 +128,7 @@ export default function TermsPage() {
             <section className="space-y-2">
               <h2 className="text-base font-bold text-neutral-950 uppercase tracking-wide">8. Jurisdicción y legislación aplicable</h2>
               <p>
-                Para la interpretación, cumplimiento y resolución de cualquier controversia derivada de los presentes Términos, las partes se someten expresamente a las leyes federales de los Estados Unidos Mexicanos y a los tribunales de la ciudad de **Morelia, Michoacán de Ocampo**, renunciando expresamente a cualquier otro fuero o jurisdicción que pudiera corresponderles por razón de sus domicilios presentes o futuros.
+                Para la interpretación, cumplimiento y resolución de cualquier controversia derivada de los presentes Términos, las partes se someten expresamente a las leyes federales de los Estados Unidos Mexicanos y a los tribunales de la ciudad de Morelia, Michoacán de Ocampo, renunciando expresamente a cualquier otro fuero o jurisdicción que pudiera corresponderles por razón de sus domicilios presentes o futuros.
               </p>
             </section>
 
