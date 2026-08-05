@@ -1,10 +1,23 @@
 const WHATSAPP_API_KEY = process.env.WHATSAPP_API_KEY || '';
 const WHATSAPP_API_URL = process.env.WHATSAPP_API_URL || '';
+const WHATSAPP_API_TOKEN = process.env.WHATSAPP_API_TOKEN || '';
+const WHATSAPP_PHONE_NUMBER_ID = process.env.WHATSAPP_PHONE_NUMBER_ID || '';
+const WHATSAPP_API_VERSION = process.env.WHATSAPP_API_VERSION || 'v25.0';
+
+const NEW_ORDER_TEMPLATE = 'sadel_new_order';
+const TEMPLATE_LANGUAGE = 'es_MX';
 
 type SendMessageParams = {
   to: string;
   body: string;
 };
+
+function toE164(raw: string): string {
+  const digits = raw.replace(/\D/g, '');
+  if (digits.length === 10) return `+52${digits}`;
+  if (digits.length === 12 && digits.startsWith('52')) return `+${digits}`;
+  return `+${digits}`;
+}
 
 async function sendViaApi(params: SendMessageParams): Promise<boolean> {
   if (!WHATSAPP_API_KEY || !WHATSAPP_API_URL) return false;
@@ -26,30 +39,75 @@ async function sendViaApi(params: SendMessageParams): Promise<boolean> {
   }
 }
 
+async function sendTemplateViaCloudApi(params: {
+  to: string;
+  templateName: string;
+  bodyParameters: string[];
+}): Promise<boolean> {
+  if (!WHATSAPP_API_TOKEN || !WHATSAPP_PHONE_NUMBER_ID) return false;
+  try {
+    const response = await fetch(
+      `https://graph.facebook.com/${WHATSAPP_API_VERSION}/${WHATSAPP_PHONE_NUMBER_ID}/messages`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${WHATSAPP_API_TOKEN}`,
+        },
+        body: JSON.stringify({
+          messaging_product: 'whatsapp',
+          recipient_type: 'individual',
+          to: toE164(params.to),
+          type: 'template',
+          template: {
+            name: params.templateName,
+            language: { code: TEMPLATE_LANGUAGE },
+            components: [
+              {
+                type: 'body',
+                parameters: params.bodyParameters.map((text) => ({ type: 'text', text })),
+              },
+            ],
+          },
+        }),
+      }
+    );
+    if (!response.ok) {
+      console.error('[WhatsApp Cloud API]', response.status, await response.text());
+      return false;
+    }
+    return true;
+  } catch (error) {
+    console.error('[WhatsApp Cloud API] Exception', error);
+    return false;
+  }
+}
+
 export async function sendWhatsAppNewOrder(params: {
   restaurantPhone: string;
-  restaurantName: string;
-  orderReference: string;
-  orderId: string;
-  customerName: string;
-  totalAmount: number;
+  orderNumber: number;
   panelUrl: string;
 }) {
+  const sent = await sendTemplateViaCloudApi({
+    to: params.restaurantPhone,
+    templateName: NEW_ORDER_TEMPLATE,
+    bodyParameters: [String(params.orderNumber), params.panelUrl],
+  });
+
+  if (sent) return;
+
   const message = `🆕 *Nuevo Pedido Recibido*
-Restaurante: ${params.restaurantName}
-Cliente: ${params.customerName}
-Referencia: #${params.orderReference}
-Total: $${params.totalAmount.toFixed(2)}
+Folio: #${params.orderNumber}
 
 Revisa el pedido aquí:
 ${params.panelUrl}`;
 
-  const sent = await sendViaApi({
+  const legacySent = await sendViaApi({
     to: params.restaurantPhone,
     body: message,
   });
 
-  if (!sent) {
+  if (!legacySent) {
     console.log('[WhatsApp Service] Envía manualmente:\n' + message);
   }
 }

@@ -180,17 +180,14 @@ export async function registerOrderRoutes(fastify: FastifyInstance): Promise<voi
           try {
             const restaurant = await prisma.restaurant.findUnique({
               where: { id: order.restaurant.id },
-              select: { contactPhone: true, whatsappNotifications: true, name: true },
+              select: { contactPhone: true, whatsappNotifications: true },
             });
             if (restaurant?.whatsappNotifications && restaurant?.contactPhone) {
+              const panelBase = process.env.RESTAURANT_PANEL_URL || process.env.WEBAPP_URL || '';
               void sendWhatsAppNewOrder({
                 restaurantPhone: restaurant.contactPhone,
-                restaurantName: restaurant.name,
-                orderReference: order.orderReference,
-                orderId: order.id,
-                customerName: order.customer?.user?.name || 'Cliente',
-                totalAmount: order.totalAmount,
-                panelUrl: `${process.env.WEBAPP_URL || ''}/?orderId=${order.id}`,
+                orderNumber: order.dailyCounter ?? 0,
+                panelUrl: `${panelBase}/?orderId=${order.id}`,
               });
             }
           } catch {}
