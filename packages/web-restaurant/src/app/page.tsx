@@ -253,6 +253,7 @@ type RestaurantBillingSummary = {
   deliveredRevenue: number;
   serviceFeeRevenue: number;
   platformFeeRevenue: number;
+  whatsappFeeRevenue: number;
   deliveredOrders: number;
   platformFeeRate: number;
   serviceFee: number;
@@ -272,6 +273,7 @@ type RestaurantBillingSummary = {
     periodEnd: string;
     serviceFeeTotal: number;
     platformFeeTotal: number;
+    whatsappFeeTotal: number;
     paymentProofUrl?: string | null;
     createdAt: string;
     updatedAt?: string | null;

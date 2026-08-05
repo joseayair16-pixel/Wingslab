@@ -527,6 +527,7 @@ describe('http integration contracts', () => {
             deliveredRevenue: 0,
             serviceFeeRevenue: 0,
             platformFeeRevenue: 0,
+            whatsappFeeRevenue: 0,
             deliveredOrders: 0,
             platformFeeRate: 0,
             serviceFee: 0,

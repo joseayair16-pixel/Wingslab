@@ -69,6 +69,7 @@ type RestaurantBillingSummary = {
   deliveredRevenue: number;
   serviceFeeRevenue: number;
   platformFeeRevenue: number;
+  whatsappFeeRevenue: number;
   deliveredOrders: number;
   platformFeeRate: number;
   billingCycle: BillingCycle;
@@ -3770,7 +3771,7 @@ export default function Home() {
                             </div>
                           )}
 
-                          {restaurant.billingSummary && (restaurant.billingSummary.pastDebt > 0 || restaurant.billingSummary.serviceFeeRevenue + restaurant.billingSummary.platformFeeRevenue > 0) && (
+                          {restaurant.billingSummary && (restaurant.billingSummary.pastDebt > 0 || restaurant.billingSummary.serviceFeeRevenue + restaurant.billingSummary.platformFeeRevenue + restaurant.billingSummary.whatsappFeeRevenue > 0) && (
                             <div className="relative mt-4 rounded-xl bg-gradient-to-br from-amber-50 to-orange-50/50 p-3 ring-1 ring-amber-500/10 space-y-2">
                               {restaurant.billingSummary.pastDebt > 0 && (
                                 <div>
@@ -3778,10 +3779,10 @@ export default function Home() {
                                   <p className="text-sm font-semibold text-amber-700">{formatCurrency(restaurant.billingSummary.pastDebt)}</p>
                                 </div>
                               )}
-                              {restaurant.billingSummary.serviceFeeRevenue + restaurant.billingSummary.platformFeeRevenue > 0 && (
+                              {restaurant.billingSummary.serviceFeeRevenue + restaurant.billingSummary.platformFeeRevenue + restaurant.billingSummary.whatsappFeeRevenue > 0 && (
                                 <div>
                                   <p className="text-[10px] font-bold uppercase tracking-wider text-amber-600/80">Deuda Acumulada</p>
-                                  <p className="text-sm font-semibold text-amber-700">{formatCurrency(restaurant.billingSummary.serviceFeeRevenue + restaurant.billingSummary.platformFeeRevenue)}</p>
+                                  <p className="text-sm font-semibold text-amber-700">{formatCurrency(restaurant.billingSummary.serviceFeeRevenue + restaurant.billingSummary.platformFeeRevenue + restaurant.billingSummary.whatsappFeeRevenue)}</p>
                                 </div>
                               )}
                             </div>

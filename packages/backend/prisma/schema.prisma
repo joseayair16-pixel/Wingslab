@@ -168,6 +168,7 @@ model RestaurantBillingSettlement {
   amount           Float
   serviceFeeTotal  Float                   @default(0)
   platformFeeTotal Float                   @default(0)
+  whatsappFeeTotal Float                   @default(0)
   status           BillingSettlementStatus @default(PENDING)
   reference        String                  @unique
   notes            String?
@@ -415,6 +416,7 @@ model Order {
   serviceFee         Float       @default(0)
   platformFee        Float       @default(0)
   driverPlatformFee  Float       @default(0)
+  whatsappFee        Float       @default(0)
   deliveryFee        Float
   deliveryDistanceKm Float?
   totalAmount        Float

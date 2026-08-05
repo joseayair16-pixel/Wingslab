@@ -34,6 +34,7 @@ type RestaurantBillingSummary = {
   deliveredRevenue: number;
   serviceFeeRevenue: number;
   platformFeeRevenue: number;
+  whatsappFeeRevenue: number;
   deliveredOrders: number;
   platformFeePerOrder: number;
   platformFeeRate: number;
@@ -56,6 +57,7 @@ type RestaurantSettlement = {
   amount: number;
   serviceFeeTotal: number;
   platformFeeTotal: number;
+  whatsappFeeTotal: number;
   status: 'PENDING' | 'IN_REVIEW' | 'PAID' | 'OVERDUE';
   reference: string;
   notes?: string | null;
@@ -479,6 +481,9 @@ export default function RestaurantDetailPage() {
       `Pedidos entregados: ${billing.deliveredOrders}`,
       `Ingreso entregado: ${formatCurrency(billing.deliveredRevenue)}`,
       `Servicio cobrado a clientes: ${formatCurrency(billing.serviceFeeRevenue)}`,
+      ...(billing.whatsappFeeRevenue > 0
+        ? [`Notificaciones WhatsApp: ${formatCurrency(billing.whatsappFeeRevenue)}`]
+        : []),
       `Deuda actual: ${formatCurrency(billing.currentDebt)}`,
       `Siguiente corte: ${formatDateOnly(billing.nextChargeDate)}`,
       '',
@@ -984,7 +989,7 @@ export default function RestaurantDetailPage() {
                         </p>
                       </div>
                       <span className="rounded-full bg-white px-3 py-1.5 text-xs font-semibold text-neutral-700 shadow-sm">
-                        {formatCurrency(restaurant.billingSummary.serviceFeeRevenue + restaurant.billingSummary.platformFeeRevenue)}
+                        {formatCurrency(restaurant.billingSummary.serviceFeeRevenue + restaurant.billingSummary.platformFeeRevenue + restaurant.billingSummary.whatsappFeeRevenue)}
                       </span>
                     </div>
 
@@ -998,7 +1003,7 @@ export default function RestaurantDetailPage() {
                       <div className="flex items-center justify-between rounded-2xl bg-sky-50/50 px-4 py-2.5 ring-1 ring-sky-200/40">
                         <span className="text-[13px] font-medium text-neutral-500">Deuda acumulada</span>
                         <span className="text-[14px] font-semibold tracking-tight text-neutral-900">
-                          {formatCurrency(restaurant.billingSummary.serviceFeeRevenue + restaurant.billingSummary.platformFeeRevenue)}
+                          {formatCurrency(restaurant.billingSummary.serviceFeeRevenue + restaurant.billingSummary.platformFeeRevenue + restaurant.billingSummary.whatsappFeeRevenue)}
                         </span>
                       </div>
                     </div>
@@ -1020,6 +1025,12 @@ export default function RestaurantDetailPage() {
                         label="Comisión de plataforma"
                         value={formatCurrency(restaurant.billingSummary.platformFeeRevenue)}
                       />
+                      {restaurant.billingSummary.whatsappFeeRevenue > 0 && (
+                        <InfoRow
+                          label="Notificaciones WhatsApp"
+                          value={formatCurrency(restaurant.billingSummary.whatsappFeeRevenue)}
+                        />
+                      )}
                       <InfoRow
                         label="Siguiente corte"
                         value={formatDateOnly(restaurant.billingSummary.nextChargeDate)}
@@ -1084,7 +1095,7 @@ export default function RestaurantDetailPage() {
                                 {formatCurrency(settlement.amount)}
                               </span>
                               <p className="mt-1 text-[10px] text-neutral-500">
-                                Serv: {formatCurrency(settlement.serviceFeeTotal)} | Plat: {formatCurrency(settlement.platformFeeTotal)}
+                                Serv: {formatCurrency(settlement.serviceFeeTotal)} | Plat: {formatCurrency(settlement.platformFeeTotal)}{(settlement.whatsappFeeTotal ?? 0) > 0 ? ` | WhatsApp: ${formatCurrency(settlement.whatsappFeeTotal ?? 0)}` : ''}
                               </p>
                             </div>
                           </div>

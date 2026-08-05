@@ -9,6 +9,8 @@ import { logger } from '../utils/logger';
 import { buildApartmentWhere } from '../utils/address';
 import { calculateOrderEta } from '../utils/order-eta';
 
+const WHATSAPP_NOTIFICATION_FEE = 1;
+
 type OrderInput = {
   restaurantId: string;
   clientOrderKey?: string;
@@ -582,6 +584,8 @@ export async function createOrderForCustomer({
   const taxAmount = 0;
   const serviceFee = restaurant.serviceFee || 0;
   const platformFee = restaurant.platformFeePerOrder || 0;
+  const whatsappFee =
+    restaurant.whatsappNotifications && restaurant.contactPhone ? WHATSAPP_NOTIFICATION_FEE : 0;
 
   const deliveryDistanceKm =
     !isPickup &&
@@ -811,6 +815,7 @@ export async function createOrderForCustomer({
           taxAmount,
           serviceFee,
           platformFee,
+          whatsappFee,
           deliveryFee,
           deliveryDistanceKm,
           totalAmount,

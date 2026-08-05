@@ -3,9 +3,10 @@ import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import bcryptjs from 'bcryptjs';
 
+import crypto from 'node:crypto';
 import { prisma } from '../config/database';
 import { getRedis } from '../config/redis';
-import { sendSmsOtp } from '../services/sms.service';
+import { deliverOtp } from '../services/otp-delivery.service';
 import {
   createRefreshToken,
   validateAndRotateRefreshToken,
@@ -13,9 +14,26 @@ import {
 
 const authIntentSchema = z.enum(['register', 'recovery']);
 
+const OTP_TTL_SECONDS = 300; // Validez del código: 5 minutos
+const OTP_MAX_ATTEMPTS = 5; // Intentos de verificación antes de invalidar el código
+const OTP_RESEND_PER_HOUR = 5; // Tope de reenvíos por teléfono en 1 hora (control de costo)
+
 function generateRandomOtp(): string {
-  const crypto = require('node:crypto');
   return crypto.randomInt(100000, 999999).toString();
+}
+
+// Comparación en tiempo constante para evitar "timing attacks"
+function codesMatch(a: string, b: string): boolean {
+  const bufA = Buffer.from(a);
+  const bufB = Buffer.from(b);
+  if (bufA.length !== bufB.length) return false;
+  return crypto.timingSafeEqual(bufA, bufB);
+}
+
+// El correo solo se acepta de verdad si viene de un usuario; los dominios
+// sintéticos (@sadel.local) no sirven para entregar código.
+function isRealEmail(email?: string | null): boolean {
+  return Boolean(email && email.includes('@') && !email.endsWith('@sadel.local'));
 }
 
 function normalizePhone(phone: string): string {
@@ -48,6 +66,8 @@ const sendCodeSchema = z.object({
     .refine((value) => value.length === 10, 'El telefono debe tener 10 digitos.'),
   intent: authIntentSchema,
   role: z.nativeEnum(UserRole).optional(),
+  email: z.string().email('Correo invalido.').optional(),
+  channel: z.enum(['email', 'sms']).optional(),
 });
 
 const verifyCodeSchema = z.object({
@@ -64,6 +84,7 @@ const verifyCodeSchema = z.object({
   role: z.nativeEnum(UserRole).optional(),
   region: z.string().min(1, 'La region es obligatoria.').optional(),
   intent: authIntentSchema,
+  email: z.string().email('Correo invalido.').optional(),
 });
 
 const loginSchema = z.object({
@@ -177,7 +198,7 @@ export async function registerAuthRoutes(fastify: FastifyInstance): Promise<void
         },
         ...(parsed.data.role ? { role: parsed.data.role } : {}),
       },
-      select: { id: true },
+      select: { id: true, email: true },
     });
 
     if (parsed.data.intent === 'register' && existingUser) {
@@ -215,20 +236,66 @@ export async function registerAuthRoutes(fastify: FastifyInstance): Promise<void
       });
     }
 
+    // Tope de reenvíos por teléfono en 1 hora (control de costo/abuso)
+    const sentKey = `otp_sent:${parsed.data.phone}`;
+    const sentCount = await redis.get(sentKey);
+    if (sentCount && parseInt(sentCount, 10) >= OTP_RESEND_PER_HOUR) {
+      return reply.status(429).send({
+        success: false,
+        error: {
+          code: 'OTP_RESEND_LIMIT',
+          message: 'Has alcanzado el límite de códigos por hora. Intenta más tarde.',
+        },
+      });
+    }
+
     const code = generateRandomOtp();
 
-    // Guardar en Redis por 5 minutos (300 segundos)
-    await redis.set(redisKey, code, 'EX', 300);
+    // El correo se usa SOLO como canal de entrega; la identidad es el teléfono.
+    // En registro se toma del payload; en recuperación del correo guardado.
+    const email =
+      (parsed.data.intent === 'register' && isRealEmail(parsed.data.email))
+        ? parsed.data.email
+        : (parsed.data.intent === 'recovery' && existingUser && isRealEmail(existingUser.email))
+          ? existingUser.email
+          : undefined;
 
-    // Enviar código vía servicio SMS
-    await sendSmsOtp(parsed.data.phone, code);
+    // Guardar en Redis: código + intent + correo de entrega (5 minutos)
+    await redis.set(
+      redisKey,
+      JSON.stringify({ code, intent: parsed.data.intent, email: email ?? null }),
+      'EX',
+      OTP_TTL_SECONDS,
+    );
+
+    // Registrar envío para el tope horario
+    await redis.multi().incr(sentKey).expire(sentKey, 60 * 60).exec();
+
+    const delivery = await deliverOtp({
+      phone: parsed.data.phone,
+      email,
+      code,
+      preferred: parsed.data.channel,
+    });
+
+    // Si no hubo canal real de entrega (en producción), no fingir éxito
+    if (!delivery.ok) {
+      return reply.status(503).send({
+        success: false,
+        error: {
+          code: 'DELIVERY_FAILED',
+          message: 'No se pudo enviar el código. Intenta más tarde.',
+        },
+      });
+    }
 
     return reply.send({
       success: true,
       data: {
         phone: parsed.data.phone,
-        expiresInSeconds: 300,
-        mockCode: code,
+        channel: delivery.channel,
+        expiresInSeconds: OTP_TTL_SECONDS,
+        ...(delivery.channel === 'mock' && delivery.mockCode ? { mockCode: delivery.mockCode } : {}),
       },
     });
   });
@@ -258,9 +325,56 @@ export async function registerAuthRoutes(fastify: FastifyInstance): Promise<void
 
       const redis = getRedis();
       const redisKey = `otp:${parsed.data.phone}`;
-      const savedCode = await redis.get(redisKey);
+      const raw = await redis.get(redisKey);
 
-      if (!savedCode || savedCode !== parsed.data.code) {
+      let otpRecord: { code: string; intent: string; email?: string | null } | null = null;
+      if (raw) {
+        try {
+          otpRecord = JSON.parse(raw);
+        } catch {
+          otpRecord = null;
+        }
+      }
+
+      if (!otpRecord) {
+        return reply.status(400).send({
+          success: false,
+          error: {
+            code: 'INVALID_CODE',
+            message: 'El codigo es invalido o ya expiro.',
+          },
+        });
+      }
+
+      // El código queda atado al intent que lo solicitó (register/recovery)
+      if (otpRecord.intent !== parsed.data.intent) {
+        return reply.status(400).send({
+          success: false,
+          error: {
+            code: 'INVALID_CODE',
+            message: 'El codigo es invalido o ya expiro.',
+          },
+        });
+      }
+
+      // Límite de intentos por teléfono antes de invalidar el código
+      const attemptsKey = `otp_attempts:${parsed.data.phone}`;
+      const attempts = parseInt((await redis.get(attemptsKey)) || '0', 10);
+      if (attempts >= OTP_MAX_ATTEMPTS) {
+        await redis.del(redisKey);
+        return reply.status(429).send({
+          success: false,
+          error: {
+            code: 'TOO_MANY_ATTEMPTS',
+            message: 'Demasiados intentos. Solicita un codigo nuevo.',
+          },
+        });
+      }
+
+      // Comparación en tiempo constante
+      if (!codesMatch(otpRecord.code, parsed.data.code)) {
+        await redis.incr(attemptsKey);
+        await redis.expire(attemptsKey, OTP_TTL_SECONDS);
         return reply.status(400).send({
           success: false,
           error: {
@@ -271,6 +385,7 @@ export async function registerAuthRoutes(fastify: FastifyInstance): Promise<void
       }
 
       await redis.del(redisKey);
+      await redis.del(attemptsKey);
 
     if (parsed.data.intent === 'register' && !parsed.data.password) {
       const registerToken = await reply.jwtSign({
@@ -278,6 +393,7 @@ export async function registerAuthRoutes(fastify: FastifyInstance): Promise<void
         name: parsed.data.name,
         lastName: parsed.data.lastName,
         dateOfBirth: parsed.data.dateOfBirth,
+        email: isRealEmail(otpRecord.email) ? otpRecord.email : undefined,
         intent: 'register_confirm',
       }, { expiresIn: '15m' });
 
@@ -316,9 +432,33 @@ export async function registerAuthRoutes(fastify: FastifyInstance): Promise<void
       const name = parsed.data.name || `Usuario ${parsed.data.phone.slice(-4)}`;
       const hashedPassword = await bcryptjs.hash(parsed.data.password!, 10);
 
+      // Fuente de verdad: el correo con el que se entregó el código (del OTP de Redis).
+      // Se le pasa al frontend en el registro para que quede guardado en la cuenta.
+      const email = isRealEmail(otpRecord.email)
+        ? otpRecord.email!
+        : isRealEmail(parsed.data.email)
+          ? parsed.data.email!
+          : `${parsed.data.phone}@sadel.local`;
+
+      if (isRealEmail(email)) {
+        const emailExists = await prisma.user.findUnique({
+          where: { email },
+          select: { id: true },
+        });
+        if (emailExists) {
+          return reply.status(409).send({
+            success: false,
+            error: {
+              code: 'EMAIL_ALREADY_REGISTERED',
+              message: 'Este correo ya tiene una cuenta registrada.',
+            },
+          });
+        }
+      }
+
       const createdUser = await prisma.user.create({
         data: {
-          email: `${parsed.data.phone}@sadel.local`,
+          email,
           password: hashedPassword,
           phone: parsed.data.phone,
           name,
@@ -828,6 +968,7 @@ export async function registerAuthRoutes(fastify: FastifyInstance): Promise<void
         name?: string;
         lastName?: string;
         dateOfBirth?: string;
+        email?: string;
         intent?: string;
       };
 
@@ -859,9 +1000,29 @@ export async function registerAuthRoutes(fastify: FastifyInstance): Promise<void
       const name = decoded.name || `Usuario ${decoded.phone.slice(-4)}`;
       const hashedPassword = await bcryptjs.hash(parsed.data.password, 10);
 
+      const email = isRealEmail(decoded.email)
+        ? decoded.email!
+        : `${decoded.phone}@sadel.local`;
+
+      if (isRealEmail(email)) {
+        const emailExists = await prisma.user.findUnique({
+          where: { email },
+          select: { id: true },
+        });
+        if (emailExists) {
+          return reply.status(409).send({
+            success: false,
+            error: {
+              code: 'EMAIL_ALREADY_REGISTERED',
+              message: 'Este correo ya tiene una cuenta registrada.',
+            },
+          });
+        }
+      }
+
       const createdUser = await prisma.user.create({
         data: {
-          email: `${decoded.phone}@sadel.local`,
+          email,
           password: hashedPassword,
           phone: decoded.phone,
           name,

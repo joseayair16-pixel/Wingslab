@@ -19,6 +19,7 @@ export type RestaurantBillingSummary = {
   deliveredRevenue: number;
   serviceFeeRevenue: number;
   platformFeeRevenue: number;
+  whatsappFeeRevenue: number;
   deliveredOrders: number;
   platformFeeRate: number;
   serviceFee: number;
@@ -98,6 +99,7 @@ export async function buildRestaurantBillingSummary(seed: BillingSeed, cutEnd?: 
     },
     _sum: {
       totalAmount: true,
+      whatsappFee: true,
     },
     _count: {
       id: true,
@@ -108,6 +110,7 @@ export async function buildRestaurantBillingSummary(seed: BillingSeed, cutEnd?: 
   const deliveredOrders = aggregate._count.id;
   const serviceFeeRevenue = (seed.serviceFee || 0) * deliveredOrders;
   const platformFeeRevenue = (seed.platformFeePerOrder || 0) * deliveredOrders;
+  const whatsappFeeRevenue = aggregate._sum.whatsappFee || 0;
   
   // Calculate existing unpaid settlements debt
   const unpaidSettlements = await prisma.restaurantBillingSettlement.aggregate({
@@ -119,7 +122,7 @@ export async function buildRestaurantBillingSummary(seed: BillingSeed, cutEnd?: 
   });
   const pastDebt = unpaidSettlements._sum.amount || 0;
 
-  const currentDebt = roundCurrency(serviceFeeRevenue + platformFeeRevenue + pastDebt);
+  const currentDebt = roundCurrency(serviceFeeRevenue + platformFeeRevenue + whatsappFeeRevenue + pastDebt);
  
   const { start: cycleStart, end: cycleEnd } = getFixedCycleDates(seed.billingCycle);
 
@@ -129,6 +132,7 @@ export async function buildRestaurantBillingSummary(seed: BillingSeed, cutEnd?: 
     deliveredRevenue: roundCurrency(deliveredRevenue),
     serviceFeeRevenue: roundCurrency(serviceFeeRevenue),
     platformFeeRevenue: roundCurrency(platformFeeRevenue),
+    whatsappFeeRevenue: roundCurrency(whatsappFeeRevenue),
     deliveredOrders,
     platformFeeRate: seed.platformFeeRate,
     serviceFee: seed.serviceFee,
@@ -304,7 +308,7 @@ export async function buildRestaurantOverview() {
       summaries.reduce((sum, summary) => sum + summary.pastDebt, 0)
     ),
     totalAccruedDebt: roundCurrency(
-      summaries.reduce((sum, summary) => sum + summary.serviceFeeRevenue + summary.platformFeeRevenue, 0)
+      summaries.reduce((sum, summary) => sum + summary.serviceFeeRevenue + summary.platformFeeRevenue + summary.whatsappFeeRevenue, 0)
     ),
   };
 }
@@ -375,7 +379,7 @@ export async function createBillingSettlement(restaurantId: string) {
   const summary = await buildRestaurantBillingSummary(restaurant, periodEnd);
 
   // Skip creating a settlement for empty periods (no orders, no debt)
-  const newDebt = summary.serviceFeeRevenue + summary.platformFeeRevenue;
+  const newDebt = summary.serviceFeeRevenue + summary.platformFeeRevenue + summary.whatsappFeeRevenue;
   if (summary.deliveredOrders === 0 && newDebt === 0) {
     // Just update lastBillingSettledAt to mark the period as processed
     // so future periods start from here
@@ -409,16 +413,18 @@ export async function createBillingSettlement(restaurantId: string) {
         dueDate,
         deliveredOrders: summary.deliveredOrders,
         deliveredRevenue: summary.deliveredRevenue,
-        amount: summary.serviceFeeRevenue + summary.platformFeeRevenue,
+        amount: summary.serviceFeeRevenue + summary.platformFeeRevenue + summary.whatsappFeeRevenue,
         serviceFeeTotal: summary.serviceFeeRevenue,
         platformFeeTotal: summary.platformFeeRevenue,
+        whatsappFeeTotal: summary.whatsappFeeRevenue,
         status: 'PENDING',
         reference,
       },
       update: {
-        amount: summary.serviceFeeRevenue + summary.platformFeeRevenue,
+        amount: summary.serviceFeeRevenue + summary.platformFeeRevenue + summary.whatsappFeeRevenue,
         serviceFeeTotal: summary.serviceFeeRevenue,
         platformFeeTotal: summary.platformFeeRevenue,
+        whatsappFeeTotal: summary.whatsappFeeRevenue,
         deliveredOrders: summary.deliveredOrders,
         deliveredRevenue: summary.deliveredRevenue,
         status: 'PENDING',

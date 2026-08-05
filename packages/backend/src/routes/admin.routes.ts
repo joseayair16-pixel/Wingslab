@@ -1838,6 +1838,7 @@ export async function registerAdminRoutes(fastify: FastifyInstance): Promise<voi
             amount: billingSummary.currentDebt,
             serviceFeeTotal: billingSummary.serviceFeeRevenue,
             platformFeeTotal: billingSummary.platformFeeRevenue,
+            whatsappFeeTotal: billingSummary.whatsappFeeRevenue,
             status: 'PENDING',
             reference,
             notes: parsed.data.notes,

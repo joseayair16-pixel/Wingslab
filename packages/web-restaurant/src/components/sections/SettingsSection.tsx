@@ -132,6 +132,28 @@ export const SettingsSection = React.memo(function SettingsSection({
   ToggleField,
 }: SettingsSectionProps) {
   const currentSettingsTab = settingsTabs.find((t: any) => t.key === activeSettingsTab) ?? settingsTabs[0];
+  const [showWhatsappConfirm, setShowWhatsappConfirm] = React.useState(false);
+
+  const applyWhatsappNotifications = async (checked: boolean) => {
+    setStoreDraft((c: any) => ({ ...c, whatsappNotifications: checked }));
+    if (!token) return;
+    try {
+      const payload = await requestJson<SuccessResponse<RestaurantProfile>>({
+        apiBase,
+        path: '/restaurant-panel/perfil',
+        token,
+        options: {
+          method: 'PATCH',
+          body: JSON.stringify({ whatsappNotifications: checked }),
+        },
+        fallbackMessage: 'Error al actualizar',
+      });
+      setProfile(payload.data);
+    } catch (e) {
+      setStoreDraft((c: any) => ({ ...c, whatsappNotifications: !checked }));
+      pushToast('error', 'Error', 'No se pudo actualizar la configuración.');
+    }
+  };
   return (
     <div className="flex flex-col gap-6 w-full max-w-[1400px] mx-auto min-w-0">
         {/* Cabecera Premium */}
@@ -784,28 +806,14 @@ export const SettingsSection = React.memo(function SettingsSection({
                 />
                 <ToggleField
                   label="Notificaciones por WhatsApp"
-                  description="Recibe un mensaje en WhatsApp cuando llegue un pedido nuevo. Configura tu número en el perfil."
+                  description="Recibe un mensaje en WhatsApp cuando llegue un pedido nuevo (costo $1 MXN por pedido). Configura tu número en el perfil."
                   checked={!!storeDraft.whatsappNotifications}
                   onChange={async (checked: boolean) => {
-                    setStoreDraft((c: any) => ({ ...c, whatsappNotifications: checked }));
-                    if (token) {
-                      try {
-                        const payload = await requestJson<SuccessResponse<RestaurantProfile>>({
-                          apiBase,
-                          path: '/restaurant-panel/perfil',
-                          token,
-                          options: {
-                            method: 'PATCH',
-                            body: JSON.stringify({ whatsappNotifications: checked }),
-                          },
-                          fallbackMessage: 'Error al actualizar',
-                        });
-                        setProfile(payload.data);
-                      } catch (e) {
-                        setStoreDraft((c: any) => ({ ...c, whatsappNotifications: !checked }));
-                        pushToast('error', 'Error', 'No se pudo actualizar la configuración.');
-                      }
+                    if (checked) {
+                      setShowWhatsappConfirm(true);
+                      return;
                     }
+                    await applyWhatsappNotifications(false);
                   }}
                 />
                 {orderAlertAudioState === 'unsupported' && (
@@ -870,6 +878,44 @@ export const SettingsSection = React.memo(function SettingsSection({
           </div>
         </div>
       </div>
+      {showWhatsappConfirm && (
+        <div className="fixed inset-0 z-[95] flex items-center justify-center bg-black/60 px-4 py-5 backdrop-blur-sm animate-fade-in"
+          onClick={() => setShowWhatsappConfirm(false)}>
+          <div className="relative w-full max-w-md rounded-[28px] bg-white p-6 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}>
+            <button onClick={() => setShowWhatsappConfirm(false)}
+              className="absolute top-4 right-4 flex h-8 w-8 items-center justify-center rounded-full bg-neutral-100 text-neutral-500 hover:bg-neutral-200 hover:text-neutral-700 transition-colors">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+            <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-100 text-emerald-600">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
+            </div>
+            <h3 className="text-lg font-bold text-neutral-900">Activar notificaciones por WhatsApp</h3>
+            <p className="mt-2 text-sm leading-relaxed text-neutral-600">
+              Recibirás un mensaje a tu WhatsApp cuando a tu negocio llegue un pedido nuevo.
+            </p>
+            <div className="mt-4 rounded-2xl border border-emerald-100 bg-emerald-50 p-4">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-semibold text-neutral-800">Costo por pedido</span>
+                <span className="text-sm font-bold text-neutral-900">$1.00 MXN</span>
+              </div>
+              <p className="mt-1 text-xs text-neutral-500">
+                Este cargo se suma a tu tarifa de uso y aparecerá en tu liquidación semanal. Solo se cobra cuando se envía el mensaje de un pedido.
+              </p>
+            </div>
+            <div className="mt-6 flex flex-col gap-2">
+              <button onClick={async () => { setShowWhatsappConfirm(false); await applyWhatsappNotifications(true); }}
+                className="w-full rounded-xl bg-emerald-600 py-3 text-sm font-semibold text-white hover:bg-emerald-700 transition-colors">
+                Aceptar y activar
+              </button>
+              <button onClick={() => setShowWhatsappConfirm(false)}
+                className="w-full rounded-xl border border-black/10 bg-white py-3 text-sm font-semibold text-neutral-700 hover:bg-neutral-50 transition-colors">
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 });

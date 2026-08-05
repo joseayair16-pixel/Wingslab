@@ -159,7 +159,7 @@ export const BillingSection = React.memo(function BillingSection({
           <p className="mt-1 text-sm text-neutral-500">Comisión acumulada de pedidos entregados esta semana</p>
 
           <div className="mt-8 flex items-baseline gap-2">
-            <span className="text-5xl font-black tracking-tight text-neutral-950">${((billingSummary?.serviceFeeRevenue ?? 0) + (billingSummary?.platformFeeRevenue ?? 0)).toFixed(2)}</span>
+            <span className="text-5xl font-black tracking-tight text-neutral-950">${((billingSummary?.serviceFeeRevenue ?? 0) + (billingSummary?.platformFeeRevenue ?? 0) + (billingSummary?.whatsappFeeRevenue ?? 0)).toFixed(2)}</span>
             <span className="text-sm font-bold text-neutral-400 uppercase">MXN</span>
           </div>
 
@@ -201,6 +201,17 @@ export const BillingSection = React.memo(function BillingSection({
                 ${(billingSummary?.platformFeeRevenue ?? 0).toFixed(2)} MXN
               </span>
             </div>
+            {(billingSummary?.whatsappFeeRevenue ?? 0) > 0 && (
+              <div className="flex items-center justify-between text-sm">
+                <div className="flex items-center gap-2">
+                  <span className="text-neutral-500 font-medium">Notificaciones WhatsApp</span>
+                  <span className="text-[11px] font-semibold text-neutral-400 bg-neutral-100/80 rounded-md px-2 py-0.5">$1.00 c/u</span>
+                </div>
+                <span className="font-semibold text-neutral-950 bg-neutral-50 border border-black/5 rounded-lg px-2.5 py-1">
+                  ${(billingSummary?.whatsappFeeRevenue ?? 0).toFixed(2)} MXN
+                </span>
+              </div>
+            )}
             <div className="flex items-center justify-between text-xs text-neutral-400 pt-1 border-t border-black/5">
               <span>{billingSummary?.deliveredOrders ?? 0} pedido{(billingSummary?.deliveredOrders ?? 0) !== 1 ? 's' : ''} en este período</span>
             </div>
@@ -311,7 +322,7 @@ export const BillingSection = React.memo(function BillingSection({
                     <div className="text-right">
                       <p className="text-xl font-black text-neutral-950">${(settlement.amount ?? 0).toFixed(2)} MXN</p>
                       <p className="text-[10px] text-neutral-500 font-semibold mt-0.5">
-                        Servicio: ${(settlement.serviceFeeTotal ?? 0).toFixed(2)} | Plataforma: ${(settlement.platformFeeTotal ?? 0).toFixed(2)}
+                        Servicio: ${(settlement.serviceFeeTotal ?? 0).toFixed(2)} | Plataforma: ${(settlement.platformFeeTotal ?? 0).toFixed(2)}{(settlement as any).whatsappFeeTotal ? ` | WhatsApp: ${(settlement as any).whatsappFeeTotal.toFixed(2)}` : ''}
                       </p>
                     </div>
 
