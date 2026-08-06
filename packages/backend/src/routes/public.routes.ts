@@ -487,6 +487,7 @@ export async function registerPublicRoutes(fastify: FastifyInstance): Promise<vo
           promoModalImage: settingsMap['promoModalImage'] || "",
           restaurantPromoModalEnabled: settingsMap['restaurantPromoModalEnabled'] === 'true',
           restaurantPromoModalImage: settingsMap['restaurantPromoModalImage'] || "",
+          customerThankYouWhatsappEnabled: settingsMap['customerThankYouWhatsappEnabled'] === 'true',
         },
       });
     } catch (error) {
@@ -502,6 +503,7 @@ export async function registerPublicRoutes(fastify: FastifyInstance): Promise<vo
           promoModalImage: "",
           restaurantPromoModalEnabled: false,
           restaurantPromoModalImage: "",
+          customerThankYouWhatsappEnabled: false,
         }
       });
     }
