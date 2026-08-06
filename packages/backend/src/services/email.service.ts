@@ -18,6 +18,11 @@ function getTransporter(): Transporter | null {
       port: SMTP_PORT,
       secure: SMTP_PORT === 465,
       auth: { user: SMTP_USER, pass: SMTP_PASSWORD },
+      // En entornos donde la salida SMTP está bloqueada (p. ej. Railway), falla
+      // rápido y deja que el flujo caiga al siguiente canal en vez de colgar.
+      connectionTimeout: 10000,
+      greetingTimeout: 10000,
+      socketTimeout: 15000,
     });
   }
   return transporter;
