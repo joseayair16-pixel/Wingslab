@@ -5479,13 +5479,11 @@ export default function Home() {
 
                   <div className="mt-8 space-y-4">
                     <div>
-                      <input
-                        type="text"
-                        maxLength={4}
+                      <SegmentedOtp
                         value={phoneChangeOtp}
-                        onChange={(e) => setPhoneChangeOtp(e.target.value.replace(/\D/g, ''))}
-                        className="w-full text-center tracking-[1em] font-mono text-3xl rounded-2xl border border-black/10 bg-neutral-50 px-4 py-4 focus:border-accent focus:ring-1 focus:ring-accent focus:outline-none"
-                        placeholder="••••"
+                        onChange={setPhoneChangeOtp}
+                        length={4}
+                        disabled={isSendingOtp}
                       />
                       {otpError && (
                         <p className="text-red-500 text-xs font-semibold mt-2 text-center">{otpError}</p>
@@ -7331,6 +7329,80 @@ function formatPhoneNumber(value: string) {
   return `(${digits.slice(0, 2)}) ${digits.slice(2, 6)}-${digits.slice(6, 10)}`;
 }
 
+function SegmentedOtp({
+  value,
+  onChange,
+  length = 4,
+  disabled = false,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  length?: number;
+  disabled?: boolean;
+}) {
+  const refs = useRef<(HTMLInputElement | null)[]>([]);
+  const digits = value.split('').slice(0, length);
+
+  function handleChange(index: number, char: string) {
+    const clean = char.replace(/\D/g, '').slice(0, 1);
+    const arr = Array.from({ length }, (_, i) => digits[i] || '');
+    arr[index] = clean;
+    onChange(arr.join(''));
+    if (clean && index < length - 1) refs.current[index + 1]?.focus();
+  }
+
+  function handleKeyDown(index: number, event: React.KeyboardEvent<HTMLInputElement>) {
+    const arr = Array.from({ length }, (_, i) => digits[i] || '');
+    if (event.key === 'Backspace') {
+      event.preventDefault();
+      if (arr[index]) {
+        arr[index] = '';
+        onChange(arr.join(''));
+      } else if (index > 0) {
+        arr[index - 1] = '';
+        onChange(arr.join(''));
+        refs.current[index - 1]?.focus();
+      }
+    } else if (event.key === 'ArrowLeft' && index > 0) {
+      refs.current[index - 1]?.focus();
+    } else if (event.key === 'ArrowRight' && index < length - 1) {
+      refs.current[index + 1]?.focus();
+    }
+  }
+
+  return (
+    <div
+      className="flex justify-between gap-2"
+      onPaste={(event) => {
+        const text = event.clipboardData.getData('text').replace(/\D/g, '').slice(0, length);
+        if (text) {
+          event.preventDefault();
+          onChange(text);
+          refs.current[Math.min(text.length, length - 1)]?.focus();
+        }
+      }}
+    >
+      {Array.from({ length }).map((_, index) => (
+        <input
+          key={index}
+          ref={(el) => {
+            refs.current[index] = el;
+          }}
+          value={digits[index] || ''}
+          inputMode="numeric"
+          autoComplete="one-time-code"
+          maxLength={1}
+          placeholder="•"
+          aria-label={`Dígito ${index + 1}`}
+          disabled={disabled}
+          onChange={(event) => handleChange(index, event.target.value)}
+          onKeyDown={(event) => handleKeyDown(index, event)}
+          className="h-14 w-full max-w-[52px] rounded-2xl border border-black/[0.08] bg-white text-center text-xl font-bold tabular-nums text-neutral-950 outline-none transition-all duration-200 placeholder:text-neutral-300 focus:border-accent focus:ring-2 focus:ring-accent/20 disabled:opacity-60"
+        />
+      ))}
+    </div>
+  );
+}
 function Field({
   label,
   value,
