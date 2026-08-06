@@ -10,7 +10,7 @@ import {
 import { SaDelLogo } from './SaDelLogo';
 
 type AuthMode = 'login' | 'register' | 'recovery';
-type AuthStep = 'welcome' | 'details' | 'contact' | 'request' | 'verify' | 'new-password';
+type AuthStep = 'welcome' | 'details' | 'contact' | 'request' | 'verify' | 'create-password' | 'new-password';
 type OtpChannel = 'email' | 'sms';
 
 interface AuthModalProps {
@@ -25,7 +25,8 @@ export const AuthModal = memo(function AuthModal({ isOpen, onClose, onSuccess, a
   const [authStep, setAuthStep] = useState<AuthStep>('welcome');
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
-  const [fullName, setFullName] = useState('');
+  const [name, setName] = useState('');
+  const [lastName, setLastName] = useState('');
   const [dobDay, setDobDay] = useState(15);
   const [dobMonth, setDobMonth] = useState(6);
   const [dobYear, setDobYear] = useState(1990);
@@ -35,6 +36,7 @@ export const AuthModal = memo(function AuthModal({ isOpen, onClose, onSuccess, a
   const [channel, setChannel] = useState<OtpChannel>('email');
   const [phoneExists, setPhoneExists] = useState<boolean | null>(null);
   const [resetToken, setResetToken] = useState('');
+  const [registerToken, setRegisterToken] = useState('');
   const [countdown, setCountdown] = useState(60);
   
   const [sendingCode, setSendingCode] = useState(false);
@@ -69,7 +71,8 @@ export const AuthModal = memo(function AuthModal({ isOpen, onClose, onSuccess, a
       setAuthStep('welcome');
       setPhone('');
       setEmail('');
-      setFullName('');
+      setName('');
+      setLastName('');
       setDobDay(15);
       setDobMonth(6);
       setDobYear(1990);
@@ -78,6 +81,7 @@ export const AuthModal = memo(function AuthModal({ isOpen, onClose, onSuccess, a
       setOtpCode('');
       setChannel('email');
       setResetToken('');
+      setRegisterToken('');
       setCountdown(60);
       setPhoneExists(null);
       setError('');
@@ -265,10 +269,6 @@ export const AuthModal = memo(function AuthModal({ isOpen, onClose, onSuccess, a
     setAuthMessage('');
 
     try {
-      const parts = fullName.trim().split(/\s+/).filter(Boolean);
-      const firstName = parts[0] || undefined;
-      const lastNames = parts.slice(1).join(' ') || undefined;
-
       const payload = await requestJson<any>({
         apiBase,
         path: '/auth/verificar-codigo',
@@ -278,10 +278,9 @@ export const AuthModal = memo(function AuthModal({ isOpen, onClose, onSuccess, a
             phone: phone.trim(),
             code: otpCode,
             email: email.trim(),
-            name: firstName,
-            lastName: lastNames,
+            name: name.trim(),
+            lastName: lastName.trim() || undefined,
             dateOfBirth: `${dobYear}-${String(dobMonth).padStart(2, '0')}-${String(dobDay).padStart(2, '0')}`,
-            password: authMode === 'register' ? password.trim() : undefined,
             intent: authMode === 'recovery' ? 'recovery' : 'register',
             role: 'CUSTOMER',
           }),
@@ -296,6 +295,50 @@ export const AuthModal = memo(function AuthModal({ isOpen, onClose, onSuccess, a
         return;
       }
 
+      if (payload.data.registerToken) {
+        setRegisterToken(payload.data.registerToken);
+        setAuthMessage(payload.data.message || 'Código verificado. Ahora crea tu contraseña.');
+        setAuthStep('create-password');
+        return;
+      }
+
+      if (payload.data.user?.role === 'CUSTOMER') {
+        persistStoredSession({
+          storageKey: 'sadel.customer',
+          apiBase,
+          token: payload.data.token,
+          user: payload.data.user,
+        });
+
+        onSuccess(payload.data.token, payload.data.user);
+        return;
+      }
+
+      throw new Error('No se pudo completar el registro.');
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : 'No se pudo verificar el código.');
+    } finally {
+      setVerifyingCode(false);
+    }
+  }
+
+  async function completeRegistration() {
+    setVerifyingCode(true);
+    setError('');
+    setAuthMessage('');
+
+    try {
+      const payload = await requestJson<AuthResponse>({
+        apiBase,
+        path: '/auth/complete-register',
+        token: registerToken,
+        options: {
+          method: 'POST',
+          body: JSON.stringify({ password: password.trim() }),
+        },
+        fallbackMessage: 'No se pudo crear la cuenta.',
+      });
+
       if (payload.data.user.role !== 'CUSTOMER') {
         throw new Error('La cuenta autenticada no pertenece a un cliente.');
       }
@@ -309,7 +352,7 @@ export const AuthModal = memo(function AuthModal({ isOpen, onClose, onSuccess, a
 
       onSuccess(payload.data.token, payload.data.user);
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : 'No se pudo verificar el código.');
+      setError(requestError instanceof Error ? requestError.message : 'No se pudo crear la cuenta.');
     } finally {
       setVerifyingCode(false);
     }
@@ -358,13 +401,17 @@ export const AuthModal = memo(function AuthModal({ isOpen, onClose, onSuccess, a
           ? 'Crear cuenta'
           : authStep === 'contact'
           ? 'Datos de contacto'
-          : 'Verificar tu identidad',
+          : authStep === 'verify'
+          ? 'Verificar tu identidad'
+          : 'Crea tu contraseña',
       subtitle:
         authStep === 'details'
           ? 'Cuéntanos quién eres para empezar.'
           : authStep === 'contact'
             ? 'Recibe tu código de verificación.'
-            : 'Ingresa el código que te enviamos.',
+            : authStep === 'verify'
+              ? 'Ingresa el código que te enviamos.'
+              : 'Elige una contraseña para tu cuenta.',
       cta: sendingCode ? 'Enviando código...' : 'Enviar código',
       submit: verifyingCode ? 'Creando cuenta...' : 'Crear cuenta',
     }
@@ -386,7 +433,8 @@ export const AuthModal = memo(function AuthModal({ isOpen, onClose, onSuccess, a
     setError('');
     setAuthMessage('');
     if (authMode === 'register') {
-      if (authStep === 'verify') setAuthStep('contact');
+      if (authStep === 'create-password') setAuthStep('verify');
+      else if (authStep === 'verify') setAuthStep('contact');
       else if (authStep === 'contact') setAuthStep('details');
       else setAuthStep('welcome');
     } else if (authMode === 'recovery') {
@@ -592,10 +640,16 @@ export const AuthModal = memo(function AuthModal({ isOpen, onClose, onSuccess, a
                       {authStep === 'details' ? (
                         <div className="space-y-4">
                           <Field
-                            label="Nombre completo"
-                            value={fullName}
-                            onChange={setFullName}
-                            placeholder="Tu nombre y apellido"
+                            label="Nombre(s)"
+                            value={name}
+                            onChange={setName}
+                            placeholder="Escribe tu nombre"
+                          />
+                          <Field
+                            label="Apellidos"
+                            value={lastName}
+                            onChange={setLastName}
+                            placeholder="Escribe tus apellidos"
                           />
                           <WheelDatePicker
                             day={dobDay}
@@ -603,33 +657,16 @@ export const AuthModal = memo(function AuthModal({ isOpen, onClose, onSuccess, a
                             year={dobYear}
                             onChange={handleDobChange}
                           />
-                          <Field
-                            label="Contraseña"
-                            value={password}
-                            onChange={setPassword}
-                            placeholder="Al menos 6 caracteres"
-                            type="password"
-                          />
-                          <Field
-                            label="Confirmar contraseña"
-                            value={confirmPassword}
-                            onChange={setConfirmPassword}
-                            placeholder="Repite tu contraseña"
-                            type="password"
-                          />
-                          {password && confirmPassword && password !== confirmPassword && (
-                            <p className="text-[11px] font-semibold text-rose-500 px-1">Las contraseñas no coinciden.</p>
-                          )}
                           <button
                             type="button"
                             onClick={() => {
                               setAuthStep('contact');
                               setError('');
                             }}
-                            disabled={!fullName.trim() || password.length < 6 || password !== confirmPassword}
+                            disabled={!name.trim() || !lastName.trim()}
                             className="mt-3 w-full rounded-2xl bg-[#0a0a0a] py-3.5 text-sm font-semibold text-[#ffffff] transition-all duration-200 hover:bg-[#262626] hover:shadow-[0_8px_24px_rgba(10,10,10,0.12)] disabled:cursor-not-allowed disabled:bg-neutral-100 disabled:text-neutral-400 disabled:shadow-none active:scale-[0.98]"
                           >
-                            Registrarme
+                            Continuar
                           </button>
                         </div>
                       ) : authStep === 'contact' ? (
@@ -670,6 +707,34 @@ export const AuthModal = memo(function AuthModal({ isOpen, onClose, onSuccess, a
                             </button>
                           </div>
                         </div>
+                      ) : authStep === 'create-password' ? (
+                        <div className="space-y-4">
+                          <Field
+                            label="Contraseña"
+                            value={password}
+                            onChange={setPassword}
+                            placeholder="Al menos 6 caracteres"
+                            type="password"
+                          />
+                          <Field
+                            label="Confirmar contraseña"
+                            value={confirmPassword}
+                            onChange={setConfirmPassword}
+                            placeholder="Repite tu contraseña"
+                            type="password"
+                          />
+                          {password && confirmPassword && password !== confirmPassword && (
+                            <p className="text-[11px] font-semibold text-rose-500 px-1">Las contraseñas no coinciden.</p>
+                          )}
+                          <button
+                            type="button"
+                            onClick={completeRegistration}
+                            disabled={verifyingCode || password.length < 6 || password !== confirmPassword}
+                            className="mt-3 w-full rounded-2xl bg-[#0a0a0a] py-3.5 text-sm font-semibold text-[#ffffff] transition-all duration-200 hover:bg-[#262626] hover:shadow-[0_8px_24px_rgba(10,10,10,0.12)] disabled:cursor-not-allowed disabled:bg-neutral-100 disabled:text-neutral-400 disabled:shadow-none active:scale-[0.98]"
+                          >
+                            {verifyingCode ? 'Creando cuenta...' : 'Crear cuenta'}
+                          </button>
+                        </div>
                       ) : (
                         <div className="space-y-5">
                           <div className="rounded-2xl bg-neutral-50/80 p-4 border border-black/[0.04]">
@@ -707,7 +772,7 @@ export const AuthModal = memo(function AuthModal({ isOpen, onClose, onSuccess, a
                             disabled={verifyingCode || otpCode.trim().length !== 6}
                             className="w-full rounded-2xl bg-[#0a0a0a] py-3.5 text-sm font-semibold text-[#ffffff] transition-all duration-200 hover:bg-[#262626] hover:shadow-[0_8px_24px_rgba(10,10,10,0.12)] disabled:cursor-not-allowed disabled:bg-neutral-100 disabled:text-neutral-400 disabled:shadow-none active:scale-[0.98] active-scale"
                           >
-                            {verifyingCode ? 'Creando cuenta...' : 'Verificar y crear cuenta'}
+                            {verifyingCode ? 'Verificando...' : 'Verificar código'}
                           </button>
                         </div>
                       )}
