@@ -30,6 +30,7 @@ function isPasswordHash(password: string): boolean {
 
 const PHONE_CHANGE_OTP_TTL_SECONDS = 300; // Validez del código: 5 minutos
 const PHONE_CHANGE_OTP_MAX_ATTEMPTS = 5; // Intentos de verificación antes de invalidar el código
+const PHONE_CHANGE_RESEND_PER_HOUR = 5; // Tope de envíos de código por hora (control de costo/abuso)
 
 function generateRandomOtp(): string {
   return crypto.randomInt(100000, 999999).toString();
@@ -509,81 +510,133 @@ export async function registerCustomerRoutes(fastify: FastifyInstance): Promise<
       });
     });
 
-    customerPanel.post('/customer/profile/phone/send', async (request, reply) => {
-      const parsed = z.object({ phone: z.string().min(10) }).safeParse(request.body);
+    customerPanel.post(
+      '/customer/profile/phone/send',
+      { config: { rateLimit: { max: 5, timeWindow: '1 hour' } } },
+      async (request, reply) => {
+        const parsed = z
+          .object({ phone: z.string().min(10), currentPassword: z.string().min(1) })
+          .safeParse(request.body);
 
-      if (!parsed.success) {
-        return reply.status(400).send({
-          success: false,
-          error: {
-            code: 'INVALID_PAYLOAD',
-            message: 'Teléfono inválido.',
+        if (!parsed.success) {
+          return reply.status(400).send({
+            success: false,
+            error: {
+              code: 'INVALID_PAYLOAD',
+              message: 'Teléfono o contraseña inválidos.',
+            },
+          });
+        }
+
+        const user = getAuthenticatedUser(request);
+
+        // Seguridad: exigir la contraseña actual antes de permitir pedir un SMS
+        // de cambio de teléfono (evita que una sesión robada reasigne la cuenta).
+        const account = await prisma.user.findUnique({
+          where: { id: user.sub },
+          select: { password: true },
+        });
+
+        if (!account) {
+          return reply.status(404).send({
+            success: false,
+            error: {
+              code: 'USER_NOT_FOUND',
+              message: 'No se encontró la cuenta del usuario.',
+            },
+          });
+        }
+
+        const passwordMatches = isPasswordHash(account.password)
+          ? await bcryptjs.compare(parsed.data.currentPassword, account.password)
+          : account.password === parsed.data.currentPassword;
+
+        if (!passwordMatches) {
+          return reply.status(409).send({
+            success: false,
+            error: {
+              code: 'INVALID_CURRENT_PASSWORD',
+              message: 'La contraseña actual no es correcta.',
+            },
+          });
+        }
+
+        const normalized = parsed.data.phone.replace(/\D/g, '').slice(-10);
+
+        if (normalized.length !== 10) {
+          return reply.status(400).send({
+            success: false,
+            error: {
+              code: 'INVALID_PHONE',
+              message: 'Ingresa un teléfono de 10 dígitos.',
+            },
+          });
+        }
+
+        // Tope de reenvíos por hora por usuario (control de costo/abuso)
+        const redis = getRedis();
+        const sentKey = `otp_change_sent:${user.sub}`;
+        const sentCount = parseInt((await redis.get(sentKey)) || '0', 10);
+        if (sentCount >= PHONE_CHANGE_RESEND_PER_HOUR) {
+          return reply.status(429).send({
+            success: false,
+            error: {
+              code: 'OTP_RESEND_LIMIT',
+              message: 'Has alcanzado el límite de códigos por hora. Intenta más tarde.',
+            },
+          });
+        }
+
+        const existingUser = await prisma.user.findFirst({
+          where: {
+            phone: {
+              in: [parsed.data.phone.trim(), normalized, `+52${normalized}`, `+521${normalized}`],
+            },
+            role: UserRole.CUSTOMER,
+            id: { not: user.sub },
+          },
+          select: { id: true },
+        });
+
+        if (existingUser) {
+          return reply.status(409).send({
+            success: false,
+            error: {
+              code: 'PHONE_IN_USE',
+              message: 'El teléfono ya está registrado por otro usuario.',
+            },
+          });
+        }
+
+        const code = generateRandomOtp();
+        const redisKey = `otp_change:${user.sub}`;
+        await redis.set(redisKey, JSON.stringify({ code, phone: normalized }), 'EX', PHONE_CHANGE_OTP_TTL_SECONDS);
+        await redis.multi().incr(sentKey).expire(sentKey, 60 * 60).exec();
+
+        const delivery = await deliverOtp({ phone: normalized, code, preferred: 'sms' });
+
+        if (!delivery.ok) {
+          await redis.del(redisKey);
+          return reply.status(503).send({
+            success: false,
+            error: {
+              code: 'DELIVERY_FAILED',
+              message: 'No se pudo enviar el código por SMS. Intenta más tarde.',
+            },
+          });
+        }
+
+        return reply.send({
+          success: true,
+          data: {
+            phone: normalized,
+            channel: delivery.channel,
+            expiresInSeconds: PHONE_CHANGE_OTP_TTL_SECONDS,
+            ...(delivery.channel === 'mock' && delivery.mockCode ? { mockCode: delivery.mockCode } : {}),
           },
         });
-      }
-
-      const user = getAuthenticatedUser(request);
-      const normalized = parsed.data.phone.replace(/\D/g, '').slice(-10);
-
-      if (normalized.length !== 10) {
-        return reply.status(400).send({
-          success: false,
-          error: {
-            code: 'INVALID_PHONE',
-            message: 'Ingresa un teléfono de 10 dígitos.',
-          },
-        });
-      }
-
-      const existingUser = await prisma.user.findFirst({
-        where: {
-          phone: {
-            in: [parsed.data.phone.trim(), normalized, `+52${normalized}`, `+521${normalized}`],
-          },
-          role: UserRole.CUSTOMER,
-          id: { not: user.sub },
-        },
-        select: { id: true },
-      });
-
-      if (existingUser) {
-        return reply.status(409).send({
-          success: false,
-          error: {
-            code: 'PHONE_IN_USE',
-            message: 'El teléfono ya está registrado por otro usuario.',
-          },
-        });
-      }
-
-      const code = generateRandomOtp();
-      const redis = getRedis();
-      const redisKey = `otp_change:${user.sub}`;
-      await redis.set(redisKey, JSON.stringify({ code, phone: normalized }), 'EX', PHONE_CHANGE_OTP_TTL_SECONDS);
-
-      const delivery = await deliverOtp({ phone: normalized, code, preferred: 'sms' });
-
-      if (!delivery.ok) {
-        await redis.del(redisKey);
-        return reply.status(503).send({
-          success: false,
-          error: {
-            code: 'DELIVERY_FAILED',
-            message: 'No se pudo enviar el código por SMS. Intenta más tarde.',
-          },
-        });
-      }
-
-      return reply.send({
-        success: true,
-        data: {
-          phone: normalized,
-          channel: delivery.channel,
-          expiresInSeconds: PHONE_CHANGE_OTP_TTL_SECONDS,
-          ...(delivery.channel === 'mock' && delivery.mockCode ? { mockCode: delivery.mockCode } : {}),
-        },
-      });
-    });
+      },
+    );
 
     customerPanel.patch('/customer/profile', async (request, reply) => {
       const profileSchema = z.object({

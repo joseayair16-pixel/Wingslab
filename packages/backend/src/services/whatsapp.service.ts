@@ -44,7 +44,16 @@ async function sendTemplateViaCloudApi(params: {
   templateName: string;
   bodyParameters: string[];
 }): Promise<boolean> {
-  if (!WHATSAPP_API_TOKEN || !WHATSAPP_PHONE_NUMBER_ID) return false;
+  if (!WHATSAPP_API_TOKEN || !WHATSAPP_PHONE_NUMBER_ID) {
+    console.error(
+      '[WhatsApp Cloud API] No configurado: define WHATSAPP_API_TOKEN y WHATSAPP_PHONE_NUMBER_ID en el entorno.',
+    );
+    return false;
+  }
+  if (params.bodyParameters.some((p) => !p || /\{\{\d\}\}/.test(p))) {
+    console.error('[WhatsApp Cloud API] Parámetros de plantilla inválidos/vacíos.', params.bodyParameters);
+    return false;
+  }
   try {
     const response = await fetch(
       `https://graph.facebook.com/${WHATSAPP_API_VERSION}/${WHATSAPP_PHONE_NUMBER_ID}/messages`,
@@ -83,18 +92,30 @@ async function sendTemplateViaCloudApi(params: {
   }
 }
 
+export interface WhatsAppSendResult {
+  sent: boolean;
+  channel: 'template' | 'legacy' | 'manual';
+  error?: string;
+}
+
 export async function sendWhatsAppNewOrder(params: {
   restaurantPhone: string;
   orderNumber: number;
   panelUrl: string;
-}) {
+}): Promise<WhatsAppSendResult> {
+  if (!/^https?:\/\//i.test(params.panelUrl)) {
+    console.error(
+      '[WhatsApp] panelUrl inválido. Revisa RESTAURANT_PANEL_URL / WEBAPP_URL en el entorno.',
+    );
+  }
+
   const sent = await sendTemplateViaCloudApi({
     to: params.restaurantPhone,
     templateName: NEW_ORDER_TEMPLATE,
     bodyParameters: [String(params.orderNumber), params.panelUrl],
   });
 
-  if (sent) return;
+  if (sent) return { sent: true, channel: 'template' };
 
   const message = `🆕 *Nuevo Pedido Recibido*
 Folio: #${params.orderNumber}
@@ -107,9 +128,10 @@ ${params.panelUrl}`;
     body: message,
   });
 
-  if (!legacySent) {
-    console.log('[WhatsApp Service] Envía manualmente:\n' + message);
-  }
+  if (legacySent) return { sent: true, channel: 'legacy' };
+
+  console.log('[WhatsApp Service] No se pudo enviar automáticamente. Envía manualmente:\n' + message);
+  return { sent: false, channel: 'manual' };
 }
 
 export async function sendWhatsAppOrderDelivered(params: {

@@ -183,11 +183,12 @@ export async function registerOrderRoutes(fastify: FastifyInstance): Promise<voi
               select: { contactPhone: true, whatsappNotifications: true },
             });
             if (restaurant?.whatsappNotifications && restaurant?.contactPhone) {
-              const panelBase = process.env.RESTAURANT_PANEL_URL || process.env.WEBAPP_URL || '';
+              const panelBase = (process.env.RESTAURANT_PANEL_URL || process.env.WEBAPP_URL || '').replace(/\/+$/, '');
+              const panelUrl = panelBase ? `${panelBase}/?orderId=${order.id}` : '';
               void sendWhatsAppNewOrder({
                 restaurantPhone: restaurant.contactPhone,
                 orderNumber: order.dailyCounter ?? 0,
-                panelUrl: `${panelBase}/?orderId=${order.id}`,
+                panelUrl,
               });
             }
           } catch {}

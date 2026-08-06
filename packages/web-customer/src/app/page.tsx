@@ -489,6 +489,7 @@ export default function Home() {
   const [editName, setEditName] = useState('');
   const [editLastName, setEditLastName] = useState('');
   const [editPhone, setEditPhone] = useState('');
+  const [editPassword, setEditPassword] = useState('');
   const [isVerifyingPhoneChange, setIsVerifyingPhoneChange] = useState(false);
   const [phoneChangeOtp, setPhoneChangeOtp] = useState('');
   const [newPhoneToVerify, setNewPhoneToVerify] = useState('');
@@ -2343,7 +2344,12 @@ export default function Home() {
         setTimeout(() => setToastMessage(''), 2000);
         return;
       }
-      
+      if (!editPassword.trim()) {
+        setToastMessage('Ingresa tu contraseña actual para verificar tu número');
+        setTimeout(() => setToastMessage(''), 2500);
+        return;
+      }
+
       setNewPhoneToVerify(editPhone);
       setIsSendingOtp(true);
 
@@ -2354,7 +2360,7 @@ export default function Home() {
           token,
           options: {
             method: 'POST',
-            body: JSON.stringify({ phone: editPhone }),
+            body: JSON.stringify({ phone: editPhone, currentPassword: editPassword }),
           },
           fallbackMessage: 'No se pudo enviar el código.',
         });
@@ -2432,6 +2438,7 @@ export default function Home() {
 
       if (payload.success) {
         setPhoneChangeMockCode('');
+        setEditPassword('');
         setToastMessage('Número verificado y perfil actualizado');
         setTimeout(() => setToastMessage(''), 2000);
         setIsVerifyingPhoneChange(false);
@@ -5440,7 +5447,10 @@ export default function Home() {
                     </div>
                     <button
                       type="button"
-                      onClick={() => setIsEditingProfile(false)}
+                      onClick={() => {
+                        setIsEditingProfile(false);
+                        setEditPassword('');
+                      }}
                       className="rounded-full bg-neutral-100 hover:bg-neutral-200 px-4 py-1.5 text-sm font-semibold text-neutral-700 transition-all active-scale"
                     >
                       Cerrar
@@ -5476,6 +5486,16 @@ export default function Home() {
                         onChange={(e) => setEditPhone(e.target.value)}
                         className="mt-1.5 w-full rounded-2xl border border-black/10 bg-neutral-50 px-4 py-3 text-sm focus:border-accent focus:ring-1 focus:ring-accent focus:outline-none"
                         placeholder="Tu teléfono"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs font-semibold text-neutral-500 uppercase tracking-wider">Contraseña actual</label>
+                      <input
+                        type="password"
+                        value={editPassword}
+                        onChange={(e) => setEditPassword(e.target.value)}
+                        className="mt-1.5 w-full rounded-2xl border border-black/10 bg-neutral-50 px-4 py-3 text-sm focus:border-accent focus:ring-1 focus:ring-accent focus:outline-none"
+                        placeholder="Necesaria si cambias tu teléfono"
                       />
                     </div>
 
