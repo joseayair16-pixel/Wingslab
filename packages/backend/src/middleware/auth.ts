@@ -87,7 +87,21 @@ export async function authenticate(request: FastifyRequest, reply: FastifyReply)
       }
     }
 
-    if (status && status !== 'ACTIVE' && status !== 'SUSPENDED') {
+    if (status === null) {
+      // El usuario ya no existe en la BD (fue eliminado). La sesión ya no es válida.
+      const requestContext = getOrCreateRequestContext(request);
+      recordErrorMetric('UNAUTHORIZED');
+      return reply.status(401).send({
+        success: false,
+        meta: { requestId: requestContext.requestId },
+        error: {
+          code: 'UNAUTHORIZED',
+          message: 'Tu sesión ya no es válida. Inicia sesión nuevamente.',
+        },
+      });
+    }
+
+    if (status !== 'ACTIVE' && status !== 'SUSPENDED') {
       const requestContext = getOrCreateRequestContext(request);
       recordErrorMetric('UNAUTHORIZED');
       return reply.status(403).send({
