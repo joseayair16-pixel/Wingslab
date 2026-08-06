@@ -17,7 +17,7 @@ interface BillboardCarouselProps {
 
 // Uber Eats Homepage Billboard full-width: 960x408 (ratio ~2.35:1).
 const BILLBOARD_RATIO = 960 / 408;
-const AUTOPLAY_INTERVAL_MS = 7000;
+const AUTOPLAY_INTERVAL_MS = 5000;
 
 export const BillboardCarousel = memo(function BillboardCarousel({
   billboards,
@@ -25,6 +25,7 @@ export const BillboardCarousel = memo(function BillboardCarousel({
 }: BillboardCarouselProps) {
   const [index, setIndex] = useState(0);
   const scrollRef = useRef<HTMLDivElement | null>(null);
+  const prevIndexRef = useRef(0);
 
   const count = billboards.length;
 
@@ -32,9 +33,12 @@ export const BillboardCarousel = memo(function BillboardCarousel({
   useEffect(() => {
     if (count > 0 && index >= count) {
       setIndex(count - 1);
+      prevIndexRef.current = count - 1;
     }
   }, [count, index]);
 
+  // Infinite autoplay: every 5 seconds advance to the next slide and loop back
+  // to the first one after the last.
   useEffect(() => {
     if (count <= 1) return;
     const timer = setInterval(() => {
@@ -46,14 +50,24 @@ export const BillboardCarousel = memo(function BillboardCarousel({
   useEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
-    el.scrollTo({ left: index * el.clientWidth, behavior: 'smooth' });
-  }, [index]);
+    // Jump instantly when wrapping from the last slide back to the first,
+    // so the loop restarts cleanly instead of scrolling backwards.
+    const wrapped = prevIndexRef.current === count - 1 && index === 0;
+    el.scrollTo({
+      left: index * el.clientWidth,
+      behavior: wrapped ? 'auto' : 'smooth',
+    });
+    prevIndexRef.current = index;
+  }, [index, count]);
 
   const handleScroll = () => {
     const el = scrollRef.current;
     if (!el) return;
     const next = Math.round(el.scrollLeft / el.clientWidth);
-    if (next !== index) setIndex(next);
+    if (next !== index) {
+      setIndex(next);
+      prevIndexRef.current = next;
+    }
   };
 
   if (count === 0) return null;
