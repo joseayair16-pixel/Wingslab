@@ -3,6 +3,7 @@ import { prisma } from '../config/database';
 import { sendWhatsAppThankYou } from '../services/whatsapp.service';
 
 const THANK_YOU_DELAY_MS = 5 * 60 * 1000; // 5+ minutes after delivery
+const THANK_YOU_WINDOW_MS = 7 * 24 * 60 * 60 * 1000; // only retry deliveries up to 7 days old
 const BATCH_SIZE = 30;
 
 async function isThankYouEnabled(): Promise<boolean> {
@@ -19,7 +20,7 @@ async function processThankYouMessages() {
   const orders = await prisma.order.findMany({
     where: {
       status: { in: ['DELIVERED', 'COMPLETED'] },
-      deliveredAt: { lte: cutoff },
+      deliveredAt: { lte: cutoff, gte: new Date(Date.now() - THANK_YOU_WINDOW_MS) },
       whatsappThankYouSentAt: null,
       whatsappThankYouSkippedAt: null,
     },
@@ -33,30 +34,31 @@ async function processThankYouMessages() {
   });
 
   for (const order of orders) {
-    const processedAt = new Date();
     if (!enabled || !order.customer.user.phone) {
       // Toggle OFF or no phone → the customer will never receive it.
       await prisma.order.update({
         where: { id: order.id },
-        data: { whatsappThankYouSkippedAt: processedAt },
+        data: { whatsappThankYouSkippedAt: new Date() },
       });
       continue;
     }
 
     try {
-      await sendWhatsAppThankYou({
+      const result = await sendWhatsAppThankYou({
         customerPhone: order.customer.user.phone,
         customerName: order.customer.user.name,
         orderReference: order.orderReference,
       });
+      if (result.sent) {
+        await prisma.order.update({
+          where: { id: order.id },
+          data: { whatsappThankYouSentAt: new Date() },
+        });
+      }
+      // If the template is still pending/not approved, leave the order unmarked
+      // so it is retried once the template becomes available.
     } catch (error) {
       console.error(`[ThankYouMessages] Error order ${order.id}:`, error);
-    } finally {
-      // Processed exactly once: mark sent after the attempt to avoid retries/floods.
-      await prisma.order.update({
-        where: { id: order.id },
-        data: { whatsappThankYouSentAt: processedAt },
-      });
     }
   }
 }
