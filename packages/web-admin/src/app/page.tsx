@@ -692,6 +692,7 @@ export default function Home() {
   const [promoModalImage, setPromoModalImage] = useState('');
   const [restaurantPromoModalEnabled, setRestaurantPromoModalEnabled] = useState(false);
   const [restaurantPromoModalImage, setRestaurantPromoModalImage] = useState('');
+  const [customerThankYouWhatsappEnabled, setCustomerThankYouWhatsappEnabled] = useState(false);
   const [isSavingBrandSettings, setIsSavingBrandSettings] = useState(false);
 
   // Platform Requests (Affiliations) State
@@ -759,6 +760,7 @@ export default function Home() {
           setPromoModalImage(data.data.promoModalImage || '');
           setRestaurantPromoModalEnabled(data.data.restaurantPromoModalEnabled || false);
           setRestaurantPromoModalImage(data.data.restaurantPromoModalImage || '');
+          setCustomerThankYouWhatsappEnabled(data.data.customerThankYouWhatsappEnabled === true);
         }
       } catch (error) {
         console.error('Error fetching settings:', error);
@@ -802,6 +804,29 @@ export default function Home() {
       setIsSavingBrandSettings(false);
     }
   }
+
+  const toggleThankYouWhatsapp = async () => {
+    try {
+      const next = !customerThankYouWhatsappEnabled;
+      const response = await fetch(`${apiBase}/admin/settings`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({ customerThankYouWhatsappEnabled: next }),
+      });
+      const data = await response.json();
+      if (data.success) {
+        setCustomerThankYouWhatsappEnabled(next);
+      } else {
+        setError(data.error?.message || 'No se pudo actualizar el ajuste.');
+      }
+    } catch (error) {
+      console.error('Error toggling thank-you WhatsApp:', error);
+      setError('No se pudo actualizar el ajuste.');
+    }
+  };
 
   async function saveCategory(category: Partial<StoreCategoryItem>) {
     try {
@@ -5567,6 +5592,22 @@ export default function Home() {
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M9.5 4h10v10" />
                   </svg>
                   El carrusel se inserta en la lista de restaurantes/tiendas: si hay 10 o menos se coloca en medio; si hay más de 10, a un cuarto.
+                </div>
+
+                <div className="flex items-center justify-between rounded-[24px] border border-black/5 bg-white px-6 py-5 shadow-[0_8px_30px_rgb(0,0,0,0.04)]">
+                  <div className="flex flex-col pr-6">
+                    <p className="text-[15px] font-bold text-neutral-900">Agradecimiento por WhatsApp al comensal</p>
+                    <p className="text-[13px] text-neutral-500 mt-1 leading-relaxed">
+                      Cuando esté activo, cada cliente recibe por WhatsApp un agradecimiento ~5 minutos después de que su pedido sea entregado. Los pedidos entregados mientras está apagado no lo reciben.
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => toggleThankYouWhatsapp()}
+                    aria-pressed={customerThankYouWhatsappEnabled}
+                    className={`relative inline-flex h-7 w-12 shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent transition-colors duration-300 ease-out focus:outline-none shadow-inner ${customerThankYouWhatsappEnabled ? 'bg-sky-500' : 'bg-neutral-200'}`}
+                  >
+                    <span aria-hidden="true" className={`pointer-events-none inline-block h-5 w-5 rounded-full bg-white shadow-[0_2px_4px_rgba(0,0,0,0.1)] ring-0 transition-transform duration-300 ease-out ${customerThankYouWhatsappEnabled ? 'translate-x-5' : 'translate-x-0'}`} />
+                  </button>
                 </div>
 
                 <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">

@@ -34,6 +34,8 @@ import { startCustomerPickupReminderJob } from './jobs/customer-pickup-reminder.
 import { startCustomerArrivalReminderJob } from './jobs/customer-arrival-reminder.job';
 import { startOverduePreparationJob } from './jobs/overdue-preparation.job';
 import { startCleanupProofsJob } from './jobs/cleanup-proofs.job';
+import { startPaymentRemindersJob } from './jobs/payment-reminders.job';
+import { startThankYouMessagesJob } from './jobs/thank-you-messages.job';
 
 type BuildAppOptions = {
   enableRateLimit?: boolean;
@@ -195,6 +197,8 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
 
   startBillingJob();
   startBillingOverdueJob();
+  startPaymentRemindersJob();
+  startThankYouMessagesJob();
 
   const cutoffStartup = startDriverBillingCutoffJob();
   scheduleDriverBillingOverdueCron();

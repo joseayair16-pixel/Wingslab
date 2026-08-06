@@ -1,5 +1,36 @@
 import cron from 'node-cron';
 import { prisma } from '../config/database';
+import { sendWhatsAppPaymentSuspended } from '../services/whatsapp.service';
+
+function buildBalanceUrl(): string {
+  const base = (process.env.RESTAURANT_PANEL_URL || process.env.WEBAPP_URL || '').replace(/\/+$/, '');
+  return base ? `${base}/?section=billing` : '';
+}
+
+async function sendSuspensionWhatsApp(settlement: {
+  id: string;
+  reference: string;
+  restaurant: { name: string; contactPhone: string | null };
+}) {
+  const phone = settlement.restaurant.contactPhone;
+  if (!phone) return;
+  try {
+    const result = await sendWhatsAppPaymentSuspended({
+      restaurantPhone: phone,
+      restaurantName: settlement.restaurant.name,
+      reference: settlement.reference,
+      balanceUrl: buildBalanceUrl(),
+    });
+    if (result.sent) {
+      await prisma.restaurantBillingSettlement.update({
+        where: { id: settlement.id },
+        data: { suspendedReminderSentAt: new Date() },
+      });
+    }
+  } catch (error) {
+    console.error(`[BillingOverdueJob] WhatsApp suspension ${settlement.reference}:`, error);
+  }
+}
 
 async function processOverdueSettlements() {
   console.log('[BillingOverdueJob] Starting overdue settlements check...');
@@ -17,7 +48,7 @@ async function processOverdueSettlements() {
         id: true,
         reference: true,
         restaurantId: true,
-        restaurant: { select: { name: true, status: true } },
+        restaurant: { select: { name: true, status: true, contactPhone: true } },
       },
     });
 
@@ -48,6 +79,7 @@ async function processOverdueSettlements() {
               },
             });
             console.log(`[BillingOverdueJob] Suspended restaurant ${settlement.restaurant.name} (${settlement.restaurantId}).`);
+            await sendSuspensionWhatsApp(settlement);
           }
         });
       } catch (error) {
@@ -62,7 +94,7 @@ async function processOverdueSettlements() {
         id: true,
         reference: true,
         restaurantId: true,
-        restaurant: { select: { name: true, status: true } },
+        restaurant: { select: { name: true, status: true, contactPhone: true } },
       },
     });
 
@@ -90,6 +122,7 @@ async function processOverdueSettlements() {
               },
             });
             console.log(`[BillingOverdueJob] (Repair) Suspended restaurant ${settlement.restaurant.name} (${settlement.restaurantId}).`);
+            await sendSuspensionWhatsApp(settlement);
           }
         });
       } catch (error) {

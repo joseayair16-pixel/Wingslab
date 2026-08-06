@@ -5,6 +5,9 @@ const WHATSAPP_PHONE_NUMBER_ID = process.env.WHATSAPP_PHONE_NUMBER_ID || '';
 const WHATSAPP_API_VERSION = process.env.WHATSAPP_API_VERSION || 'v25.0';
 
 const NEW_ORDER_TEMPLATE = 'sadel_new_order';
+const PAYMENT_REMINDER_TEMPLATE = 'sadel_pago_recordatorio';
+const PAYMENT_SUSPENDED_TEMPLATE = 'sadel_cuenta_suspendida';
+const THANK_YOU_TEMPLATE = 'sadel_gracias_comensal';
 const TEMPLATE_LANGUAGE = 'es_MX';
 
 type SendMessageParams = {
@@ -154,4 +157,87 @@ ${params.customerName}, tu pedido #${params.orderReference} de *${params.restaur
   if (!sent) {
     console.log('[WhatsApp Service] Envía manualmente:\n' + message);
   }
+}
+
+export async function sendWhatsAppPaymentReminder(params: {
+  restaurantPhone: string;
+  restaurantName: string;
+  reference: string;
+  balanceUrl: string;
+}): Promise<WhatsAppSendResult> {
+  if (!/^https?:\/\//i.test(params.balanceUrl)) {
+    console.error('[WhatsApp] balanceUrl inválido. Revisa RESTAURANT_PANEL_URL en el entorno.');
+  }
+
+  const sent = await sendTemplateViaCloudApi({
+    to: params.restaurantPhone,
+    templateName: PAYMENT_REMINDER_TEMPLATE,
+    bodyParameters: [params.restaurantName, params.reference, params.balanceUrl],
+  });
+
+  if (sent) return { sent: true, channel: 'template' };
+
+  const message = `💳 *Recordatorio de pago*
+
+Hola ${params.restaurantName}, te recordamos amablemente que el corte *${params.reference}* sigue pendiente.
+
+Realiza tu pago para evitar restricciones en tu cuenta. Puedes liquidar y subir tu comprobante aquí:
+${params.balanceUrl}`;
+
+  console.log('[WhatsApp Service] No se pudo enviar automáticamente. Envía manualmente:\n' + message);
+  return { sent: false, channel: 'manual' };
+}
+
+export async function sendWhatsAppPaymentSuspended(params: {
+  restaurantPhone: string;
+  restaurantName: string;
+  reference: string;
+  balanceUrl: string;
+}): Promise<WhatsAppSendResult> {
+  if (!/^https?:\/\//i.test(params.balanceUrl)) {
+    console.error('[WhatsApp] balanceUrl inválido. Revisa RESTAURANT_PANEL_URL en el entorno.');
+  }
+
+  const sent = await sendTemplateViaCloudApi({
+    to: params.restaurantPhone,
+    templateName: PAYMENT_SUSPENDED_TEMPLATE,
+    bodyParameters: [params.restaurantName, params.reference, params.balanceUrl],
+  });
+
+  if (sent) return { sent: true, channel: 'template' };
+
+  const message = `🚫 *Cuenta suspendida temporalmente*
+
+Hola ${params.restaurantName}, tu cuenta por el momento no puede recibir pedidos.
+
+Una vez que liquides el saldo del corte *${params.reference}* tendrás acceso total con normalidad.
+
+Paga o sube tu comprobante aquí:
+${params.balanceUrl}`;
+
+  console.log('[WhatsApp Service] No se pudo enviar automáticamente. Envía manualmente:\n' + message);
+  return { sent: false, channel: 'manual' };
+}
+
+export async function sendWhatsAppThankYou(params: {
+  customerPhone: string;
+  customerName: string;
+  orderReference: string;
+}): Promise<WhatsAppSendResult> {
+  const sent = await sendTemplateViaCloudApi({
+    to: params.customerPhone,
+    templateName: THANK_YOU_TEMPLATE,
+    bodyParameters: [params.customerName, params.orderReference],
+  });
+
+  if (sent) return { sent: true, channel: 'template' };
+
+  const message = `🎉 *¡Gracias por tu pedido!*
+
+Hola ${params.customerName}, gracias por tu compra #${params.orderReference} con SaDeL.
+
+Esperamos que hayas tenido una buena experiencia y gracias por confiar en nosotros. ¡Te esperamos de vuelta! 😊`;
+
+  console.log('[WhatsApp Service] No se pudo enviar automáticamente. Envía manualmente:\n' + message);
+  return { sent: false, channel: 'manual' };
 }

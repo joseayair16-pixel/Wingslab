@@ -2104,6 +2104,7 @@ export async function registerAdminRoutes(fastify: FastifyInstance): Promise<voi
         promoModalImage: z.string().url('URL invalida.').optional().or(z.literal('')),
         restaurantPromoModalEnabled: z.boolean().optional(),
         restaurantPromoModalImage: z.string().url('URL invalida.').optional().or(z.literal('')),
+        customerThankYouWhatsappEnabled: z.boolean().optional(),
       }).safeParse(request.body);
 
       if (!body.success) {
@@ -2196,6 +2197,15 @@ export async function registerAdminRoutes(fastify: FastifyInstance): Promise<voi
               where: { key: 'restaurantPromoModalImage' },
               update: { value: body.data.restaurantPromoModalImage },
               create: { key: 'restaurantPromoModalImage', value: body.data.restaurantPromoModalImage },
+            })
+          );
+        }
+        if (body.data.customerThankYouWhatsappEnabled !== undefined) {
+          promises.push(
+            prisma.systemSetting.upsert({
+              where: { key: 'customerThankYouWhatsappEnabled' },
+              update: { value: body.data.customerThankYouWhatsappEnabled ? 'true' : 'false' },
+              create: { key: 'customerThankYouWhatsappEnabled', value: body.data.customerThankYouWhatsappEnabled ? 'true' : 'false' },
             })
           );
         }

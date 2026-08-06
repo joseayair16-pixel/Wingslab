@@ -173,6 +173,8 @@ model RestaurantBillingSettlement {
   reference        String                  @unique
   notes            String?
   paymentProofUrl  String?
+  reminderSentAt   DateTime?
+  suspendedReminderSentAt DateTime?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -455,6 +457,10 @@ model Order {
   pickedUpAt  DateTime?
   inTransitAt DateTime?
   deliveredAt DateTime?
+
+  // Thank-you WhatsApp (5+ min after delivery, gated by admin toggle)
+  whatsappThankYouSentAt   DateTime?
+  whatsappThankYouSkippedAt DateTime?
 
   // Driver pickup tracking
   readyAt                 DateTime?

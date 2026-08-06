@@ -1239,6 +1239,12 @@ export default function Home() {
     const checkUrlForOrderId = () => {
       const params = new URLSearchParams(window.location.search);
       const orderId = params.get('orderId');
+      const section = params.get('section');
+      if (section === 'billing') {
+        window.history.replaceState({}, '', window.location.pathname);
+        setActiveSection('billing');
+        window.localStorage.setItem('restaurantActiveSection', 'billing');
+      }
       if (orderId) {
         window.history.replaceState({}, '', window.location.pathname);
         navigateToOrder(orderId);
