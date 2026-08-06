@@ -173,7 +173,7 @@ export async function registerAuthRoutes(fastify: FastifyInstance): Promise<void
     {
       config: {
         rateLimit: {
-          max: 3, // Máximo 3 intentos por IP
+          max: 10, // Máximo 10 intentos por IP
           timeWindow: '15 minutes', // En una ventana de 15 minutos
         },
       },
