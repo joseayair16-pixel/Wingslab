@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useState } from 'react';
+import { memo, useEffect, useRef, useState } from 'react';
 import {
   ApiResponse,
   AuthResponse,
@@ -10,7 +10,8 @@ import {
 import { SaDelLogo } from './SaDelLogo';
 
 type AuthMode = 'login' | 'register' | 'recovery';
-type AuthStep = 'welcome' | 'request' | 'verify' | 'new-password';
+type AuthStep = 'welcome' | 'details' | 'contact' | 'request' | 'verify' | 'new-password';
+type OtpChannel = 'email' | 'sms';
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -23,15 +24,16 @@ export const AuthModal = memo(function AuthModal({ isOpen, onClose, onSuccess, a
   const [authMode, setAuthMode] = useState<AuthMode>('login');
   const [authStep, setAuthStep] = useState<AuthStep>('welcome');
   const [phone, setPhone] = useState('');
+  const [email, setEmail] = useState('');
   const [name, setName] = useState('');
   const [lastName, setLastName] = useState('');
   const [dateOfBirth, setDateOfBirth] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [otpCode, setOtpCode] = useState('');
+  const [channel, setChannel] = useState<OtpChannel>('email');
   const [phoneExists, setPhoneExists] = useState<boolean | null>(null);
   const [resetToken, setResetToken] = useState('');
-  const [registerToken, setRegisterToken] = useState('');
   const [countdown, setCountdown] = useState(60);
   
   const [sendingCode, setSendingCode] = useState(false);
@@ -65,14 +67,15 @@ export const AuthModal = memo(function AuthModal({ isOpen, onClose, onSuccess, a
       setAuthMode('login');
       setAuthStep('welcome');
       setPhone('');
+      setEmail('');
       setName('');
       setLastName('');
       setDateOfBirth('');
       setPassword('');
       setConfirmPassword('');
       setOtpCode('');
+      setChannel('email');
       setResetToken('');
-      setRegisterToken('');
       setCountdown(60);
       setPhoneExists(null);
       setError('');
@@ -89,10 +92,32 @@ export const AuthModal = memo(function AuthModal({ isOpen, onClose, onSuccess, a
     setAuthMessage('');
 
     if (authMode === 'register' && authStep === 'verify') {
-      setAuthStep('request');
+      setAuthStep('contact');
       setOtpCode('');
       setMockCode('');
     }
+  }
+
+  function handleEmailChange(value: string) {
+    setEmail(value.trim());
+    setError('');
+    setAuthMessage('');
+    setPhoneExists(null);
+  }
+
+  const emailIsValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
+
+  async function checkEmailExists(target: string): Promise<boolean> {
+    const payload = await requestJson<ApiResponse<{ exists: boolean }>>({
+      apiBase,
+      path: '/auth/check-email',
+      options: {
+        method: 'POST',
+        body: JSON.stringify({ email: target.trim(), role: 'CUSTOMER' }),
+      },
+      fallbackMessage: 'No se pudo validar el correo.',
+    });
+    return Boolean(payload.data?.exists);
   }
 
   async function checkPhoneExists(nextPhone: string): Promise<boolean> {
@@ -149,22 +174,28 @@ export const AuthModal = memo(function AuthModal({ isOpen, onClose, onSuccess, a
     }
   }
 
-  async function sendCode() {
+  async function sendCode(selectedChannel: OtpChannel) {
     setSendingCode(true);
     setError('');
     setAuthMessage('');
     setMockCode('');
 
     try {
-      const exists = await checkPhoneExists(phone.trim());
-      
       if (authMode === 'register') {
+        const exists = emailIsValid && (await checkEmailExists(email));
         if (exists) {
+          setError('Este correo ya tiene una cuenta registrada.');
+          setSendingCode(false);
+          return;
+        }
+        const phoneTaken = await checkPhoneExists(phone.trim());
+        if (phoneTaken) {
           setError('Este teléfono ya tiene una cuenta registrada.');
           setSendingCode(false);
           return;
         }
       } else if (authMode === 'recovery') {
+        const exists = await checkPhoneExists(phone.trim());
         if (!exists) {
           setError('Este número no tiene ninguna cuenta registrada.');
           setSendingCode(false);
@@ -179,16 +210,23 @@ export const AuthModal = memo(function AuthModal({ isOpen, onClose, onSuccess, a
           method: 'POST',
           body: JSON.stringify({
             phone: phone.trim(),
+            email: authMode === 'register' ? email.trim() || undefined : undefined,
             intent: authMode === 'recovery' ? 'recovery' : 'register',
             role: 'CUSTOMER',
+            channel: selectedChannel,
           }),
         },
         fallbackMessage: 'No se pudo enviar el código.',
       });
 
+      setChannel(selectedChannel);
       setMockCode(payload.data.mockCode || '');
-      setAuthMessage(`Código enviado a ${payload.data.phone}.`);
-      setCountdown(60);
+      setAuthMessage(
+        selectedChannel === 'email'
+          ? `Enviamos un código a ${email.trim()}.`
+          : `Enviamos un código por SMS a ${formatPhoneNumber(phone)}.`,
+      );
+      setCountdown(authMode === 'register' ? (payload.data.expiresInSeconds ?? 300) : 60);
       setAuthStep('verify');
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : 'No se pudo enviar el código.');
@@ -211,9 +249,12 @@ export const AuthModal = memo(function AuthModal({ isOpen, onClose, onSuccess, a
           body: JSON.stringify({
             phone: phone.trim(),
             code: otpCode,
+            email: email.trim(),
             name: name.trim() || undefined,
             lastName: lastName.trim() || undefined,
             dateOfBirth: dateOfBirth || undefined,
+            // En registro sin contraseña se genera una segura al azar en el cliente
+            password: authMode === 'register' ? deriveRandomPassword() : undefined,
             intent: authMode === 'recovery' ? 'recovery' : 'register',
             role: 'CUSTOMER',
           }),
@@ -223,13 +264,6 @@ export const AuthModal = memo(function AuthModal({ isOpen, onClose, onSuccess, a
 
       if (authMode === 'recovery') {
         setResetToken(payload.data.resetToken);
-        setAuthMessage(payload.data.message || 'Código verificado.');
-        setAuthStep('new-password');
-        return;
-      }
-
-      if (authMode === 'register') {
-        setRegisterToken(payload.data.registerToken);
         setAuthMessage(payload.data.message || 'Código verificado.');
         setAuthStep('new-password');
         return;
@@ -249,40 +283,6 @@ export const AuthModal = memo(function AuthModal({ isOpen, onClose, onSuccess, a
       onSuccess(payload.data.token, payload.data.user);
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : 'No se pudo verificar el código.');
-    } finally {
-      setVerifyingCode(false);
-    }
-  }
-
-  async function handleCompleteRegister() {
-    setVerifyingCode(true);
-    setError('');
-    setAuthMessage('');
-
-    try {
-      const payload = await requestJson<AuthResponse>({
-        apiBase,
-        path: '/auth/complete-register',
-        token: registerToken,
-        options: {
-          method: 'POST',
-          body: JSON.stringify({
-            password: password.trim(),
-          }),
-        },
-        fallbackMessage: 'No se pudo crear la cuenta.',
-      });
-
-      persistStoredSession({
-        storageKey: 'sadel.customer',
-        apiBase,
-        token: payload.data.token,
-        user: payload.data.user,
-      });
-
-      onSuccess(payload.data.token, payload.data.user);
-    } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : 'No se pudo crear la cuenta.');
     } finally {
       setVerifyingCode(false);
     }
@@ -326,8 +326,18 @@ export const AuthModal = memo(function AuthModal({ isOpen, onClose, onSuccess, a
 
   const modeCopy = authMode === 'register'
     ? {
-      title: 'Crear cuenta',
-      subtitle: 'Completa tus datos para registrarte.',
+      title:
+        authStep === 'details'
+          ? 'Crear cuenta'
+          : authStep === 'contact'
+          ? 'Datos de contacto'
+          : 'Verificar tu identidad',
+      subtitle:
+        authStep === 'details'
+          ? 'Cuéntanos quién eres para empezar.'
+          : authStep === 'contact'
+            ? 'Recibe tu código de verificación.'
+            : 'Ingresa el código que te enviamos.',
       cta: sendingCode ? 'Enviando código...' : 'Enviar código',
       submit: verifyingCode ? 'Creando cuenta...' : 'Crear cuenta',
     }
@@ -344,6 +354,21 @@ export const AuthModal = memo(function AuthModal({ isOpen, onClose, onSuccess, a
       cta: 'Iniciar sesión',
       submit: verifyingCode ? 'Ingresando...' : 'Entrar',
     };
+
+  function goBack() {
+    setError('');
+    setAuthMessage('');
+    if (authMode === 'register') {
+      if (authStep === 'verify') setAuthStep('contact');
+      else if (authStep === 'contact') setAuthStep('details');
+      else setAuthStep('welcome');
+    } else if (authMode === 'recovery') {
+      if (authStep === 'verify') setAuthStep('request');
+      else setAuthStep('welcome');
+    } else {
+      setAuthStep('welcome');
+    }
+  }
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-md p-4 max-sm:p-0 max-sm:items-end animate-[fadeIn_0.2s_ease-out]">
@@ -392,7 +417,7 @@ export const AuthModal = memo(function AuthModal({ isOpen, onClose, onSuccess, a
                     type="button"
                     onClick={() => {
                       setAuthMode('register');
-                      setAuthStep('request');
+                      setAuthStep('details');
                     }}
                     className="w-full rounded-2xl border border-black/[0.08] bg-white py-3.5 text-sm font-semibold text-[#171717] transition-all duration-200 hover:bg-neutral-50 hover:shadow-[0_8px_24px_rgba(0,0,0,0.06)] active:scale-[0.98] shadow-sm"
                   >
@@ -460,7 +485,7 @@ export const AuthModal = memo(function AuthModal({ isOpen, onClose, onSuccess, a
                           />
                           <button
                             type="button"
-                            onClick={sendCode}
+                            onClick={() => sendCode('sms')}
                             disabled={sendingCode || phone.length !== 10}
                             className="mt-3 w-full rounded-2xl bg-[#0a0a0a] py-3.5 text-sm font-semibold text-[#ffffff] transition-all duration-200 hover:bg-[#262626] hover:shadow-[0_8px_24px_rgba(10,10,10,0.12)] disabled:cursor-not-allowed disabled:bg-neutral-100 disabled:text-neutral-400 disabled:shadow-none active:scale-[0.98]"
                           >
@@ -519,8 +544,8 @@ export const AuthModal = memo(function AuthModal({ isOpen, onClose, onSuccess, a
                     </>
                   ) : (
                     <>
-                      {authStep === 'request' ? (
-                        <>
+                      {authStep === 'details' ? (
+                        <div className="space-y-4">
                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 min-w-0">
                             <Field
                               label="Nombre(s)"
@@ -542,6 +567,27 @@ export const AuthModal = memo(function AuthModal({ isOpen, onClose, onSuccess, a
                             placeholder="DD/MM/AAAA"
                             type="date"
                           />
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setAuthStep('contact');
+                              setError('');
+                            }}
+                            disabled={!name.trim() || !lastName.trim() || !dateOfBirth}
+                            className="mt-3 w-full rounded-2xl bg-[#0a0a0a] py-3.5 text-sm font-semibold text-[#ffffff] transition-all duration-200 hover:bg-[#262626] hover:shadow-[0_8px_24px_rgba(10,10,10,0.12)] disabled:cursor-not-allowed disabled:bg-neutral-100 disabled:text-neutral-400 disabled:shadow-none active:scale-[0.98]"
+                          >
+                            Registrarme
+                          </button>
+                        </div>
+                      ) : authStep === 'contact' ? (
+                        <div className="space-y-4">
+                          <Field
+                            label="Correo electrónico"
+                            value={email}
+                            onChange={handleEmailChange}
+                            placeholder="tucorreo@ejemplo.com"
+                            type="email"
+                          />
                           <Field
                             label="Teléfono (10 dígitos)"
                             value={phone}
@@ -552,37 +598,48 @@ export const AuthModal = memo(function AuthModal({ isOpen, onClose, onSuccess, a
                           {phoneExists === true && (
                             <Callout tone="danger">Este teléfono ya tiene una cuenta registrada.</Callout>
                           )}
-
-                          <button
-                            type="button"
-                            onClick={sendCode}
-                            disabled={sendingCode || !name.trim() || !lastName.trim() || !dateOfBirth || phone.length !== 10 || phoneExists === true}
-                            className="mt-3 w-full rounded-2xl bg-[#0a0a0a] py-3.5 text-sm font-semibold text-[#ffffff] transition-all duration-200 hover:bg-[#262626] hover:shadow-[0_8px_24px_rgba(10,10,10,0.12)] disabled:cursor-not-allowed disabled:bg-neutral-100 disabled:text-neutral-400 disabled:shadow-none active:scale-[0.98]"
-                          >
-                            {sendingCode ? 'Enviando código...' : 'Enviar código'}
-                          </button>
-                        </>
-                      ) : authStep === 'verify' ? (
+                          <div className="grid gap-3 pt-1">
+                            <button
+                              type="button"
+                              onClick={() => sendCode('email')}
+                              disabled={sendingCode || !emailIsValid || phone.length !== 10}
+                              className="w-full rounded-2xl bg-[#0a0a0a] py-3.5 text-sm font-semibold text-[#ffffff] transition-all duration-200 hover:bg-[#262626] hover:shadow-[0_8px_24px_rgba(10,10,10,0.12)] disabled:cursor-not-allowed disabled:bg-neutral-100 disabled:text-neutral-400 disabled:shadow-none active:scale-[0.98]"
+                            >
+                              {sendingCode ? 'Enviando código...' : 'Recibir código a mi correo'}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => sendCode('sms')}
+                              disabled={sendingCode || phone.length !== 10}
+                              className="w-full rounded-2xl border border-black/[0.08] bg-white py-3.5 text-sm font-semibold text-[#171717] transition-all duration-200 hover:bg-neutral-50 hover:shadow-[0_8px_24px_rgba(0,0,0,0.06)] active:scale-[0.98] disabled:cursor-not-allowed disabled:bg-neutral-100 disabled:text-neutral-400 disabled:border-transparent disabled:shadow-none"
+                            >
+                              {sendingCode ? 'Enviando código...' : 'Recibir código vía SMS'}
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
                         <div className="space-y-5">
                           <div className="rounded-2xl bg-neutral-50/80 p-4 border border-black/[0.04]">
                             <p className="text-sm text-neutral-600 leading-relaxed">
-                              Ingresa el código que enviamos a <strong className="text-neutral-900">{formatPhoneNumber(phone)}</strong>
+                              Enviamos tu código a{' '}
+                              <strong className="text-neutral-900">
+                                {channel === 'email' ? email : formatPhoneNumber(phone)}
+                              </strong>
                             </p>
+                            <p className="text-xs text-neutral-400 mt-1">El código vence en 5 minutos.</p>
                           </div>
-                          <Field
-                            label="Código de verificación"
-                            value={otpCode}
-                            onChange={setOtpCode}
-                            placeholder="123456"
-                          />
-                          
-                          <div className="flex items-center justify-between text-xs text-neutral-500 px-1">
+                          <OtpInput value={otpCode} onChange={setOtpCode} disabled={verifyingCode} />
+
+                          <div className="flex items-center justify-center text-xs text-neutral-500">
                             {countdown > 0 ? (
-                              <span>Reenviar en <strong className="text-neutral-700">{countdown}s</strong></span>
+                              <span>
+                                ¿No te llegó? Reenviar en{' '}
+                                <span className="tabular-nums font-bold text-neutral-700">{formatCountdown(countdown)}</span>
+                              </span>
                             ) : (
                               <button
                                 type="button"
-                                onClick={sendCode}
+                                onClick={() => sendCode(channel)}
                                 disabled={sendingCode}
                                 className="font-semibold text-sky-600 hover:text-sky-700 transition-colors"
                               >
@@ -597,39 +654,7 @@ export const AuthModal = memo(function AuthModal({ isOpen, onClose, onSuccess, a
                             disabled={verifyingCode || otpCode.trim().length !== 6}
                             className="w-full rounded-2xl bg-[#0a0a0a] py-3.5 text-sm font-semibold text-[#ffffff] transition-all duration-200 hover:bg-[#262626] hover:shadow-[0_8px_24px_rgba(10,10,10,0.12)] disabled:cursor-not-allowed disabled:bg-neutral-100 disabled:text-neutral-400 disabled:shadow-none active:scale-[0.98] active-scale"
                           >
-                            {verifyingCode ? 'Verificando...' : 'Verificar código'}
-                          </button>
-                        </div>
-                      ) : (
-                        <div className="space-y-5">
-                          <div className="rounded-2xl bg-neutral-50/80 p-4 border border-black/[0.04]">
-                            <p className="text-sm font-semibold text-neutral-800">Crea tu contraseña</p>
-                            <p className="text-xs text-neutral-500 mt-1 leading-relaxed">Elige una contraseña segura para acceder más rápido en el futuro.</p>
-                          </div>
-                          <Field
-                            label="Contraseña"
-                            value={password}
-                            onChange={setPassword}
-                            placeholder="Al menos 6 caracteres"
-                            type="password"
-                          />
-                          <Field
-                            label="Confirmar contraseña"
-                            value={confirmPassword}
-                            onChange={setConfirmPassword}
-                            placeholder="Repite tu contraseña"
-                            type="password"
-                          />
-                          {password && confirmPassword && password !== confirmPassword && (
-                            <p className="text-[11px] font-semibold text-rose-500 px-1">Las contraseñas no coinciden.</p>
-                          )}
-                          <button
-                            type="button"
-                            onClick={handleCompleteRegister}
-                            disabled={verifyingCode || password.length < 6 || password !== confirmPassword}
-                            className="w-full rounded-2xl bg-[#0a0a0a] py-3.5 text-sm font-semibold text-[#ffffff] transition-all duration-200 hover:bg-[#262626] hover:shadow-[0_8px_24px_rgba(10,10,10,0.12)] disabled:cursor-not-allowed disabled:bg-neutral-100 disabled:text-neutral-400 disabled:shadow-none active:scale-[0.98] active-scale"
-                          >
-                            {verifyingCode ? 'Creando cuenta...' : 'Crear cuenta'}
+                            {verifyingCode ? 'Creando cuenta...' : 'Verificar y crear cuenta'}
                           </button>
                         </div>
                       )}
@@ -638,11 +663,7 @@ export const AuthModal = memo(function AuthModal({ isOpen, onClose, onSuccess, a
 
                   <button
                     type="button"
-                    onClick={() => {
-                      setAuthStep('welcome');
-                      setError('');
-                      setAuthMessage('');
-                    }}
+                    onClick={goBack}
                     className="mt-2 text-center text-xs font-semibold text-neutral-400 hover:text-neutral-900 transition-colors duration-200"
                   >
                     ← Atrás
@@ -713,6 +734,91 @@ function Field({
         className={`rounded-2xl border border-black/[0.08] bg-white px-4 text-sm text-neutral-950 outline-none transition-all duration-200 placeholder:text-neutral-400 shadow-[0_1px_2px_rgba(0,0,0,0.02)] focus:border-black/20 focus:shadow-[0_4px_12px_rgba(0,0,0,0.04)] focus:ring-2 focus:ring-black/[0.04] h-12 py-3 ${type === 'date' ? 'appearance-none' : ''}`}
       />
     </label>
+  );
+}
+
+function formatCountdown(seconds: number) {
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+}
+
+function deriveRandomPassword() {
+  const buffer = new Uint8Array(24);
+  crypto.getRandomValues(buffer);
+  return Array.from(buffer, (byte) => byte.toString(16).padStart(2, '0')).join('');
+}
+
+function OtpInput({
+  value,
+  onChange,
+  disabled,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  disabled?: boolean;
+}) {
+  const refs = useRef<(HTMLInputElement | null)[]>([]);
+  const digits = value.split('').slice(0, 6);
+
+  function handleChange(index: number, char: string) {
+    const clean = char.replace(/\D/g, '').slice(0, 1);
+    const arr = Array.from({ length: 6 }, (_, i) => digits[i] || '');
+    arr[index] = clean;
+    onChange(arr.join(''));
+    if (clean && index < 5) refs.current[index + 1]?.focus();
+  }
+
+  function handleKeyDown(index: number, event: React.KeyboardEvent<HTMLInputElement>) {
+    const arr = Array.from({ length: 6 }, (_, i) => digits[i] || '');
+    if (event.key === 'Backspace') {
+      event.preventDefault();
+      if (arr[index]) {
+        arr[index] = '';
+        onChange(arr.join(''));
+      } else if (index > 0) {
+        arr[index - 1] = '';
+        onChange(arr.join(''));
+        refs.current[index - 1]?.focus();
+      }
+    } else if (event.key === 'ArrowLeft' && index > 0) {
+      refs.current[index - 1]?.focus();
+    } else if (event.key === 'ArrowRight' && index < 5) {
+      refs.current[index + 1]?.focus();
+    }
+  }
+
+  return (
+    <div
+      className="flex justify-between gap-2"
+      onPaste={(event) => {
+        const text = event.clipboardData.getData('text').replace(/\D/g, '').slice(0, 6);
+        if (text) {
+          event.preventDefault();
+          onChange(text);
+          refs.current[Math.min(text.length, 5)]?.focus();
+        }
+      }}
+    >
+      {Array.from({ length: 6 }).map((_, index) => (
+        <input
+          key={index}
+          ref={(el) => {
+            refs.current[index] = el;
+          }}
+          value={digits[index] || ''}
+          inputMode="numeric"
+          autoComplete="one-time-code"
+          maxLength={1}
+          placeholder="•"
+          aria-label={`Digito ${index + 1}`}
+          disabled={disabled}
+          onChange={(event) => handleChange(index, event.target.value)}
+          onKeyDown={(event) => handleKeyDown(index, event)}
+          className="h-14 w-full max-w-[52px] rounded-2xl border border-black/[0.08] bg-white text-center text-xl font-bold tabular-nums text-neutral-950 outline-none transition-all duration-200 placeholder:text-neutral-300 focus:border-sky-400 focus:ring-2 focus:ring-sky-500/20 disabled:opacity-60"
+        />
+      ))}
+    </div>
   );
 }
 

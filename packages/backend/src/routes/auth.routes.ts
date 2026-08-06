@@ -456,18 +456,33 @@ export async function registerAuthRoutes(fastify: FastifyInstance): Promise<void
         }
       }
 
-      const createdUser = await prisma.user.create({
-        data: {
-          email,
-          password: hashedPassword,
-          phone: parsed.data.phone,
-          name,
-          lastName: parsed.data.lastName || null,
-          dateOfBirth: parsed.data.dateOfBirth ? new Date(parsed.data.dateOfBirth) : null,
-          role,
-          region,
-        },
-      });
+      let createdUser;
+      try {
+        createdUser = await prisma.user.create({
+          data: {
+            email,
+            password: hashedPassword,
+            phone: parsed.data.phone,
+            name,
+            lastName: parsed.data.lastName || null,
+            dateOfBirth: parsed.data.dateOfBirth ? new Date(parsed.data.dateOfBirth) : null,
+            role,
+            region,
+          },
+        });
+      } catch (err) {
+        // Race de registro simultáneo: violación de unicidad (email o phone)
+        if (err && (err as { code?: string }).code === 'P2002') {
+          return reply.status(409).send({
+            success: false,
+            error: {
+              code: 'ACCOUNT_CONFLICT',
+              message: 'Ese telefono o correo ya tiene una cuenta registrada.',
+            },
+          });
+        }
+        throw err;
+      }
 
       await createRelatedProfile(createdUser.id, role);
       user = await prisma.user.findUniqueOrThrow({
@@ -586,7 +601,7 @@ export async function registerAuthRoutes(fastify: FastifyInstance): Promise<void
     });
   });
 
-  fastify.post('/auth/check-phone', async (request, reply) => {
+  fastify.post('/auth/check-phone', { config: { rateLimit: { max: 30, timeWindow: '15 minutes' } } }, async (request, reply) => {
     const parsed = checkPhoneSchema.safeParse(request.body);
 
     if (!parsed.success) {
@@ -618,7 +633,38 @@ export async function registerAuthRoutes(fastify: FastifyInstance): Promise<void
     });
   });
 
-  fastify.post('/auth/login', async (request, reply) => {
+  fastify.post('/auth/check-email', { config: { rateLimit: { max: 30, timeWindow: '15 minutes' } } }, async (request, reply) => {
+    const parsed = z.object({
+      email: z.string().email('Correo invalido.'),
+      role: z.nativeEnum(UserRole).optional(),
+    }).safeParse(request.body);
+
+    if (!parsed.success) {
+      return reply.status(400).send({
+        success: false,
+        error: {
+          code: 'INVALID_PAYLOAD',
+          message: parsed.error.issues[0]?.message || 'Datos invalidos.',
+        },
+      });
+    }
+
+    const email = parsed.data.email.trim().toLowerCase();
+    const user = await prisma.user.findUnique({
+      where: { email },
+      select: { id: true, email: true },
+    });
+
+    return reply.send({
+      success: true,
+      data: {
+        exists: !!user,
+        email,
+      },
+    });
+  });
+
+  fastify.post('/auth/login', { config: { rateLimit: { max: 10, timeWindow: '15 minutes' } } }, async (request, reply) => {
     const parsed = loginSchema.safeParse(request.body);
 
     if (!parsed.success) {
@@ -679,7 +725,7 @@ export async function registerAuthRoutes(fastify: FastifyInstance): Promise<void
     });
   });
 
-  fastify.post('/auth/restaurant-login', async (request, reply) => {
+  fastify.post('/auth/restaurant-login', { config: { rateLimit: { max: 10, timeWindow: '15 minutes' } } }, async (request, reply) => {
     const parsed = loginSchema.safeParse(request.body);
 
     if (!parsed.success) {
@@ -741,7 +787,7 @@ export async function registerAuthRoutes(fastify: FastifyInstance): Promise<void
     });
   });
 
-  fastify.post('/auth/admin-login', async (request, reply) => {
+  fastify.post('/auth/admin-login', { config: { rateLimit: { max: 10, timeWindow: '15 minutes' } } }, async (request, reply) => {
     const parsed = loginSchema.safeParse(request.body);
 
     if (!parsed.success) {
@@ -802,7 +848,7 @@ export async function registerAuthRoutes(fastify: FastifyInstance): Promise<void
     });
   });
 
-  fastify.post('/auth/driver-login', async (request, reply) => {
+  fastify.post('/auth/driver-login', { config: { rateLimit: { max: 10, timeWindow: '15 minutes' } } }, async (request, reply) => {
     const parsed = loginSchema.safeParse(request.body);
 
     if (!parsed.success) {
@@ -1020,18 +1066,33 @@ export async function registerAuthRoutes(fastify: FastifyInstance): Promise<void
         }
       }
 
-      const createdUser = await prisma.user.create({
-        data: {
-          email,
-          password: hashedPassword,
-          phone: decoded.phone,
-          name,
-          lastName: decoded.lastName || null,
-          dateOfBirth: decoded.dateOfBirth ? new Date(decoded.dateOfBirth) : null,
-          role,
-          region,
-        },
-      });
+      let createdUser;
+      try {
+        createdUser = await prisma.user.create({
+          data: {
+            email,
+            password: hashedPassword,
+            phone: decoded.phone,
+            name,
+            lastName: decoded.lastName || null,
+            dateOfBirth: decoded.dateOfBirth ? new Date(decoded.dateOfBirth) : null,
+            role,
+            region,
+          },
+        });
+      } catch (err) {
+        // Race de registro simultáneo: violación de unicidad (email o phone)
+        if (err && (err as { code?: string }).code === 'P2002') {
+          return reply.status(409).send({
+            success: false,
+            error: {
+              code: 'ACCOUNT_CONFLICT',
+              message: 'Ese telefono o correo ya tiene una cuenta registrada.',
+            },
+          });
+        }
+        throw err;
+      }
 
       await createRelatedProfile(createdUser.id, role);
 
