@@ -27,9 +27,9 @@ export const AuthModal = memo(function AuthModal({ isOpen, onClose, onSuccess, a
   const [email, setEmail] = useState('');
   const [name, setName] = useState('');
   const [lastName, setLastName] = useState('');
-  const [dobDay, setDobDay] = useState(15);
-  const [dobMonth, setDobMonth] = useState(6);
-  const [dobYear, setDobYear] = useState(1990);
+  const [dobDay, setDobDay] = useState(new Date().getDate());
+  const [dobMonth, setDobMonth] = useState(new Date().getMonth() + 1);
+  const [dobYear, setDobYear] = useState(new Date().getFullYear());
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [otpCode, setOtpCode] = useState('');
@@ -73,9 +73,9 @@ export const AuthModal = memo(function AuthModal({ isOpen, onClose, onSuccess, a
       setEmail('');
       setName('');
       setLastName('');
-      setDobDay(15);
-      setDobMonth(6);
-      setDobYear(1990);
+      setDobDay(new Date().getDate());
+      setDobMonth(new Date().getMonth() + 1);
+      setDobYear(new Date().getFullYear());
       setPassword('');
       setConfirmPassword('');
       setOtpCode('');
@@ -93,7 +93,11 @@ export const AuthModal = memo(function AuthModal({ isOpen, onClose, onSuccess, a
   const handleDobChange = useCallback((next: { day?: number; month?: number; year?: number }) => {
     const month = next.month ?? dobMonth;
     const year = next.year ?? dobYear;
-    const maxDay = daysInMonth(year, month);
+    const now = new Date();
+    const maxDay =
+      year === now.getFullYear() && month === now.getMonth() + 1
+        ? now.getDate()
+        : daysInMonth(year, month);
     setDobDay(Math.min(next.day ?? dobDay, maxDay));
     setDobMonth(month);
     setDobYear(year);
@@ -876,13 +880,20 @@ function WheelDatePicker({
   year: number;
   onChange: (next: { day?: number; month?: number; year?: number }) => void;
 }) {
-  const currentYear = new Date().getFullYear();
+  const now = new Date();
+  const currentYear = now.getFullYear();
+  const currentMonth = now.getMonth() + 1;
+  const currentDay = now.getDate();
   const years = useMemo(
     () => Array.from({ length: currentYear - 1950 + 1 }, (_, i) => 1950 + i),
     [currentYear],
   );
-  const months = useMemo(() => Array.from({ length: 12 }, (_, i) => i + 1), []);
-  const maxDay = daysInMonth(year, month);
+  const months = useMemo(
+    () => Array.from({ length: year === currentYear ? currentMonth : 12 }, (_, i) => i + 1),
+    [year, currentYear, currentMonth],
+  );
+  const isCurrentMonth = year === currentYear && month === currentMonth;
+  const maxDay = isCurrentMonth ? Math.min(daysInMonth(year, month), currentDay) : daysInMonth(year, month);
   const days = useMemo(() => Array.from({ length: maxDay }, (_, i) => i + 1), [maxDay]);
   // Seguridad: el día nunca puede rebasar el máximo del mes/año seleccionado.
   const safeDay = Math.min(day, maxDay);
