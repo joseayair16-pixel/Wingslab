@@ -4021,7 +4021,7 @@ export default function Home() {
           </div>
 
           <div className="text-center">
-            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-[#f0f0f0] text-neutral-600">
+            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-red-50 text-red-600">
               <svg className="h-7 w-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.828 0l-4.243-4.243a8 8 0 1111.314 0z" />
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
@@ -6402,8 +6402,9 @@ export default function Home() {
               <img
                 src={promoImageUrl}
                 alt="Promoción Especial"
-                loading="lazy" decoding="async"
-                className="w-auto h-auto max-w-[90vw] sm:max-w-md max-h-[85vh] object-contain rounded-2xl md:rounded-3xl shadow-[0_20px_50px_rgba(0,0,0,0.3)]"
+                loading="eager" decoding="sync" fetchPriority="high"
+                style={{ imageRendering: 'auto' }}
+                className="w-auto h-auto max-w-[90vw] max-h-[85vh] object-contain rounded-2xl md:rounded-3xl shadow-[0_20px_50px_rgba(0,0,0,0.3)]"
               />
             </div>
           </div>
