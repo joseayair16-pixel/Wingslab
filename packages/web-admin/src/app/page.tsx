@@ -1355,10 +1355,13 @@ export default function Home() {
   }, [activeSection, isAdminSession, loadTickets]);
 
   useEffect(() => {
-    if (activeSection === 'categories' && isAdminSession) {
+    if (
+      isAdminSession &&
+      (activeSection === 'categories' || (activeSection === 'settings' && settingsTab === 'categories'))
+    ) {
       loadStoreCategories();
     }
-  }, [activeSection, isAdminSession, loadStoreCategories]);
+  }, [activeSection, settingsTab, isAdminSession, loadStoreCategories]);
 
   const loadDashboardStats = useCallback(async () => {
     setLoadingDashboard(true);
