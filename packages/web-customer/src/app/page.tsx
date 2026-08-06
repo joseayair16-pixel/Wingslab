@@ -4,6 +4,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState, useTransition
 import { useRouter } from 'next/navigation';
 import { io } from 'socket.io-client';
 import {
+  ApiRequestError,
   AuthResponse,
   AuthUser,
   clearStoredSession,
@@ -12,6 +13,7 @@ import {
   persistStoredSession,
   readStoredSession,
   requestJson,
+  setGlobalSessionExpiredHandler,
   submitReview,
   uploadMediaAsset,
   getOrderStatusLabel,
@@ -1314,8 +1316,14 @@ export default function Home() {
               dismissible: false,
             });
           }
-        }).catch(() => {
-          // Silently ignore — the auth middleware will block API calls anyway
+        }).catch((err) => {
+          // Si la sesión ya no es válida (usuario eliminado o token inválido),
+          // cerrar sesión para no dejar al usuario "dentro" de una cuenta inexistente.
+          const apiError = err as ApiRequestError;
+          const userDeleted = apiError?.status === 404 && apiError?.code === 'USER_NOT_FOUND';
+          if (isAuthRequestError(err) || userDeleted) {
+            clearSession('Tu cuenta ya no es válida. Inicia sesión nuevamente.');
+          }
         });
       }
     } catch (e) {
@@ -1877,6 +1885,19 @@ export default function Home() {
       user,
     });
   }
+
+  // Cualquier respuesta 401 del API (sesión inválida, usuario eliminado, etc.)
+  // cierra la sesión de forma global, sin importar qué llamada la disparó.
+  const clearSessionRef = useRef(clearSession);
+  useEffect(() => {
+    clearSessionRef.current = clearSession;
+  });
+  useEffect(() => {
+    setGlobalSessionExpiredHandler(() => {
+      clearSessionRef.current('Tu sesión ha expirado. Por favor, inicia sesión de nuevo.');
+    });
+    return () => setGlobalSessionExpiredHandler(null);
+  }, []);
 
   // Sync userLocation to a ref to prevent GPS fluctuations from triggering/aborting the search effect
   const userLocationRef = useRef(userLocation);

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { AuthUser, readStoredSession, requestJson, submitReview, uploadMediaAsset, convertImageFileToDataUrl, getOrderStatusLabel, isRestaurant, ApiRequestError } from '@sadel/shared';
+import { AuthUser, clearStoredSession, readStoredSession, requestJson, submitReview, uploadMediaAsset, convertImageFileToDataUrl, getOrderStatusLabel, isRestaurant, ApiRequestError, isAuthRequestError, setGlobalSessionExpiredHandler } from '@sadel/shared';
 import { io } from 'socket.io-client';
 import LiveTrackingMap from '../../../components/LiveTrackingMap';
 import { AuthModal } from '../../../components/AuthModal';
@@ -1033,7 +1033,16 @@ export default function RestaurantPage({
               dismissible: false,
             });
           }
-        }).catch(() => {});
+        }).catch((err) => {
+          const apiError = err as ApiRequestError;
+          const userDeleted = apiError?.status === 404 && apiError?.code === 'USER_NOT_FOUND';
+          if (isAuthRequestError(err) || userDeleted) {
+            clearStoredSession(storageKey);
+            setToken('');
+            setSessionUser(null);
+            setShowAuthModal(true);
+          }
+        });
       }
 
       setIsAuthReady(true);
@@ -1041,6 +1050,18 @@ export default function RestaurantPage({
       console.error('Error during restaurant customer session initialization:', e);
       setIsAuthReady(true);
     }
+  }, []);
+
+  // Cualquier 401 del API cierra la sesión globalmente (usuario eliminado, token inválido, etc.)
+  useEffect(() => {
+    setGlobalSessionExpiredHandler(() => {
+      clearStoredSession(storageKey);
+      setToken('');
+      setSessionUser(null);
+      setShowAuthModal(true);
+    });
+    return () => setGlobalSessionExpiredHandler(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {

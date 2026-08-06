@@ -160,6 +160,22 @@ export function isAuthRequestError(error: unknown): error is ApiRequestError {
   return error instanceof ApiRequestError && (error.kind === 'auth' || error.kind === 'forbidden');
 }
 
+// Global hook so any authenticated request can force the app to log out when
+// the server rejects the session (e.g. the user was deleted from the DB).
+let sessionExpiredHandler: (() => void) | null = null;
+
+export function setGlobalSessionExpiredHandler(handler: (() => void) | null): void {
+  sessionExpiredHandler = handler;
+}
+
+function notifySessionExpired(): void {
+  try {
+    sessionExpiredHandler?.();
+  } catch (error) {
+    console.error('Error en manejador global de sesión expirada:', error);
+  }
+}
+
 export function getRequestErrorMessage(
   error: unknown,
   fallback = 'No se pudo completar la solicitud.'
@@ -342,6 +358,10 @@ export async function requestJson<T>(params: {
       const payload = rawBody ? (JSON.parse(rawBody) as T | ApiErrorResponse) : null;
 
       if (!response.ok) {
+        if (response.status === 401) {
+          // Session no longer valid (e.g. user deleted): notify the app to log out.
+          notifySessionExpired();
+        }
         const fallback = params.fallbackMessage || 'No se pudo completar la solicitud.';
         const classification = classifyResponseError(response.status);
 
