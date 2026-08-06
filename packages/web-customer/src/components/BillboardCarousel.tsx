@@ -1,5 +1,5 @@
 import Image from 'next/image';
-import React, { memo, useEffect, useRef, useState } from 'react';
+import React, { memo, useCallback, useEffect, useRef, useState } from 'react';
 
 export interface Billboard {
   id: string;
@@ -25,9 +25,25 @@ export const BillboardCarousel = memo(function BillboardCarousel({
 }: BillboardCarouselProps) {
   const [index, setIndex] = useState(0);
   const scrollRef = useRef<HTMLDivElement | null>(null);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const prevIndexRef = useRef(0);
 
   const count = billboards.length;
+
+  const stopAutoplay = useCallback(() => {
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+  }, []);
+
+  const startAutoplay = useCallback(() => {
+    stopAutoplay();
+    if (count <= 1) return;
+    timerRef.current = setInterval(() => {
+      setIndex((prev) => (prev + 1) % count);
+    }, AUTOPLAY_INTERVAL_MS);
+  }, [count, stopAutoplay]);
 
   // Keep the active index in bounds if the list shrinks (e.g. zone change).
   useEffect(() => {
@@ -37,21 +53,18 @@ export const BillboardCarousel = memo(function BillboardCarousel({
     }
   }, [count, index]);
 
-  // Infinite autoplay: every 5 seconds advance to the next slide and loop back
-  // to the first one after the last.
+  // Infinite autoplay: advance every 5 seconds and loop back to the first
+  // slide after the last one.
   useEffect(() => {
-    if (count <= 1) return;
-    const timer = setInterval(() => {
-      setIndex((prev) => (prev + 1) % count);
-    }, AUTOPLAY_INTERVAL_MS);
-    return () => clearInterval(timer);
-  }, [count]);
+    startAutoplay();
+    return stopAutoplay;
+  }, [startAutoplay, stopAutoplay]);
 
+  // Move the active slide into view. The wrap-around (last -> first) jumps
+  // instantly so the loop restarts cleanly instead of scrolling backwards.
   useEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
-    // Jump instantly when wrapping from the last slide back to the first,
-    // so the loop restarts cleanly instead of scrolling backwards.
     const wrapped = prevIndexRef.current === count - 1 && index === 0;
     el.scrollTo({
       left: index * el.clientWidth,
@@ -60,20 +73,38 @@ export const BillboardCarousel = memo(function BillboardCarousel({
     prevIndexRef.current = index;
   }, [index, count]);
 
-  const handleScroll = () => {
+  const handleScroll = (event: React.UIEvent<HTMLDivElement>) => {
+    // Autoplay scrolls are programmatic (isTrusted === false); ignoring them
+    // prevents the smooth animation from fighting the interval. Only real
+    // user swipes update the active index.
+    if (!event.isTrusted) return;
     const el = scrollRef.current;
     if (!el) return;
     const next = Math.round(el.scrollLeft / el.clientWidth);
     if (next !== index) {
       setIndex(next);
       prevIndexRef.current = next;
+      startAutoplay();
     }
+  };
+
+  const goTo = (i: number) => {
+    setIndex(i);
+    prevIndexRef.current = i;
+    startAutoplay();
   };
 
   if (count === 0) return null;
 
   return (
-    <div className="w-full select-none">
+    <div
+      className="w-full select-none"
+      onMouseEnter={stopAutoplay}
+      onMouseLeave={startAutoplay}
+      onPointerDown={stopAutoplay}
+      onPointerUp={startAutoplay}
+      onPointerCancel={startAutoplay}
+    >
       <div
         ref={scrollRef}
         onScroll={handleScroll}
@@ -122,7 +153,7 @@ export const BillboardCarousel = memo(function BillboardCarousel({
             <button
               key={billboard.id}
               type="button"
-              onClick={() => setIndex(i)}
+              onClick={() => goTo(i)}
               aria-label={`Ir al banner ${i + 1}`}
               className={`h-1.5 rounded-full transition-all duration-300 ${
                 i === index ? 'w-6 bg-neutral-900' : 'w-1.5 bg-neutral-300'
