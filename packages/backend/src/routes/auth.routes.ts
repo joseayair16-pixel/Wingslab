@@ -16,7 +16,7 @@ const authIntentSchema = z.enum(['register', 'recovery']);
 
 const OTP_TTL_SECONDS = 300; // Validez del código: 5 minutos
 const OTP_MAX_ATTEMPTS = 5; // Intentos de verificación antes de invalidar el código
-const OTP_RESEND_PER_HOUR = 5; // Tope de reenvíos por teléfono en 1 hora (control de costo)
+const OTP_RESEND_PER_HOUR = 30; // Tope de reenvíos por teléfono en 1 hora (control de costo)
 
 function generateRandomOtp(): string {
   return crypto.randomInt(100000, 999999).toString();
@@ -170,14 +170,6 @@ async function createRelatedProfile(userId: string, role: UserRole): Promise<Adm
 export async function registerAuthRoutes(fastify: FastifyInstance): Promise<void> {
   fastify.post(
     '/auth/enviar-codigo',
-    {
-      config: {
-        rateLimit: {
-          max: 10, // Máximo 10 intentos por IP
-          timeWindow: '15 minutes', // En una ventana de 15 minutos
-        },
-      },
-    },
     async (request, reply) => {
       const parsed = sendCodeSchema.safeParse(request.body);
 
