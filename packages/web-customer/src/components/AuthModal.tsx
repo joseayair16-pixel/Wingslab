@@ -1,4 +1,4 @@
-import { memo, useEffect, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ApiResponse,
   AuthResponse,
@@ -25,9 +25,10 @@ export const AuthModal = memo(function AuthModal({ isOpen, onClose, onSuccess, a
   const [authStep, setAuthStep] = useState<AuthStep>('welcome');
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
-  const [name, setName] = useState('');
-  const [lastName, setLastName] = useState('');
-  const [dateOfBirth, setDateOfBirth] = useState('');
+  const [fullName, setFullName] = useState('');
+  const [dobDay, setDobDay] = useState(15);
+  const [dobMonth, setDobMonth] = useState(6);
+  const [dobYear, setDobYear] = useState(1990);
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [otpCode, setOtpCode] = useState('');
@@ -68,9 +69,10 @@ export const AuthModal = memo(function AuthModal({ isOpen, onClose, onSuccess, a
       setAuthStep('welcome');
       setPhone('');
       setEmail('');
-      setName('');
-      setLastName('');
-      setDateOfBirth('');
+      setFullName('');
+      setDobDay(15);
+      setDobMonth(6);
+      setDobYear(1990);
       setPassword('');
       setConfirmPassword('');
       setOtpCode('');
@@ -83,6 +85,15 @@ export const AuthModal = memo(function AuthModal({ isOpen, onClose, onSuccess, a
       setMockCode('');
     }
   }, [isOpen]);
+
+  const handleDobChange = useCallback((next: { day?: number; month?: number; year?: number }) => {
+    const month = next.month ?? dobMonth;
+    const year = next.year ?? dobYear;
+    const maxDay = daysInMonth(year, month);
+    setDobDay(Math.min(next.day ?? dobDay, maxDay));
+    setDobMonth(month);
+    setDobYear(year);
+  }, [dobDay, dobMonth, dobYear]);
 
   function handlePhoneChange(value: string) {
     const nextPhone = value.replace(/\D/g, '').slice(-10);
@@ -254,6 +265,10 @@ export const AuthModal = memo(function AuthModal({ isOpen, onClose, onSuccess, a
     setAuthMessage('');
 
     try {
+      const parts = fullName.trim().split(/\s+/).filter(Boolean);
+      const firstName = parts[0] || undefined;
+      const lastNames = parts.slice(1).join(' ') || undefined;
+
       const payload = await requestJson<any>({
         apiBase,
         path: '/auth/verificar-codigo',
@@ -263,11 +278,10 @@ export const AuthModal = memo(function AuthModal({ isOpen, onClose, onSuccess, a
             phone: phone.trim(),
             code: otpCode,
             email: email.trim(),
-            name: name.trim() || undefined,
-            lastName: lastName.trim() || undefined,
-            dateOfBirth: dateOfBirth || undefined,
-            // En registro sin contraseña se genera una segura al azar en el cliente
-            password: authMode === 'register' ? deriveRandomPassword() : undefined,
+            name: firstName,
+            lastName: lastNames,
+            dateOfBirth: `${dobYear}-${String(dobMonth).padStart(2, '0')}-${String(dobDay).padStart(2, '0')}`,
+            password: authMode === 'register' ? password.trim() : undefined,
             intent: authMode === 'recovery' ? 'recovery' : 'register',
             role: 'CUSTOMER',
           }),
@@ -506,16 +520,34 @@ export const AuthModal = memo(function AuthModal({ isOpen, onClose, onSuccess, a
                           </button>
                         </>
                       ) : authStep === 'verify' ? (
-                        <div className="space-y-4">
-                          <p className="text-xs text-neutral-600 bg-neutral-50 rounded-2xl p-3 border border-black/5">
-                            Ingresa el código OTP enviado a tu número para verificar.
-                          </p>
-                          <Field
-                            label="Código OTP"
-                            value={otpCode}
-                            onChange={setOtpCode}
-                            placeholder="123456"
-                          />
+                        <div className="space-y-5">
+                          <div className="rounded-2xl bg-neutral-50/80 p-4 border border-black/[0.04]">
+                            <p className="text-sm text-neutral-600 leading-relaxed">
+                              Enviamos tu código a{' '}
+                              <strong className="text-neutral-900">{formatPhoneNumber(phone)}</strong>
+                            </p>
+                            <p className="text-xs text-neutral-400 mt-1">El código vence en 5 minutos.</p>
+                          </div>
+                          <OtpInput value={otpCode} onChange={setOtpCode} disabled={verifyingCode} />
+
+                          <div className="flex items-center justify-center text-xs text-neutral-500">
+                            {countdown > 0 ? (
+                              <span>
+                                ¿No te llegó? Reenviar en{' '}
+                                <span className="tabular-nums font-bold text-neutral-700">{formatCountdown(countdown)}</span>
+                              </span>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => sendCode('sms')}
+                                disabled={sendingCode}
+                                className="font-semibold text-sky-600 hover:text-sky-700 transition-colors"
+                              >
+                                Volver a enviar código
+                              </button>
+                            )}
+                          </div>
+
                           <button
                             type="button"
                             onClick={verifyCode}
@@ -559,34 +591,42 @@ export const AuthModal = memo(function AuthModal({ isOpen, onClose, onSuccess, a
                     <>
                       {authStep === 'details' ? (
                         <div className="space-y-4">
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 min-w-0">
-                            <Field
-                              label="Nombre(s)"
-                              value={name}
-                              onChange={setName}
-                              placeholder="Juan"
-                            />
-                            <Field
-                              label="Apellidos"
-                              value={lastName}
-                              onChange={setLastName}
-                              placeholder="Pérez"
-                            />
-                          </div>
                           <Field
-                            label="Fecha de nacimiento"
-                            value={dateOfBirth}
-                            onChange={setDateOfBirth}
-                            placeholder="DD/MM/AAAA"
-                            type="date"
+                            label="Nombre completo"
+                            value={fullName}
+                            onChange={setFullName}
+                            placeholder="Tu nombre y apellido"
                           />
+                          <WheelDatePicker
+                            day={dobDay}
+                            month={dobMonth}
+                            year={dobYear}
+                            onChange={handleDobChange}
+                          />
+                          <Field
+                            label="Contraseña"
+                            value={password}
+                            onChange={setPassword}
+                            placeholder="Al menos 6 caracteres"
+                            type="password"
+                          />
+                          <Field
+                            label="Confirmar contraseña"
+                            value={confirmPassword}
+                            onChange={setConfirmPassword}
+                            placeholder="Repite tu contraseña"
+                            type="password"
+                          />
+                          {password && confirmPassword && password !== confirmPassword && (
+                            <p className="text-[11px] font-semibold text-rose-500 px-1">Las contraseñas no coinciden.</p>
+                          )}
                           <button
                             type="button"
                             onClick={() => {
                               setAuthStep('contact');
                               setError('');
                             }}
-                            disabled={!name.trim() || !lastName.trim() || !dateOfBirth}
+                            disabled={!fullName.trim() || password.length < 6 || password !== confirmPassword}
                             className="mt-3 w-full rounded-2xl bg-[#0a0a0a] py-3.5 text-sm font-semibold text-[#ffffff] transition-all duration-200 hover:bg-[#262626] hover:shadow-[0_8px_24px_rgba(10,10,10,0.12)] disabled:cursor-not-allowed disabled:bg-neutral-100 disabled:text-neutral-400 disabled:shadow-none active:scale-[0.98]"
                           >
                             Registrarme
@@ -756,10 +796,108 @@ function formatCountdown(seconds: number) {
   return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
 }
 
-function deriveRandomPassword() {
-  const buffer = new Uint8Array(24);
-  crypto.getRandomValues(buffer);
-  return Array.from(buffer, (byte) => byte.toString(16).padStart(2, '0')).join('');
+function daysInMonth(year: number, month: number): number {
+  return new Date(year, month, 0).getDate();
+}
+
+function WheelDatePicker({
+  day,
+  month,
+  year,
+  onChange,
+}: {
+  day: number;
+  month: number;
+  year: number;
+  onChange: (next: { day?: number; month?: number; year?: number }) => void;
+}) {
+  const currentYear = new Date().getFullYear();
+  const years = useMemo(
+    () => Array.from({ length: currentYear - 1950 + 1 }, (_, i) => 1950 + i),
+    [currentYear],
+  );
+  const months = useMemo(() => Array.from({ length: 12 }, (_, i) => i + 1), []);
+  const maxDay = daysInMonth(year, month);
+  const days = useMemo(() => Array.from({ length: maxDay }, (_, i) => i + 1), [maxDay]);
+  // Seguridad: el día nunca puede rebasar el máximo del mes/año seleccionado.
+  const safeDay = Math.min(day, maxDay);
+
+  const columns: { label: string; items: number[]; value: number; onPick: (v: number) => void; flex: string }[] = [
+    { label: 'Día', items: days, value: safeDay, onPick: (v) => onChange({ day: v }), flex: 'flex-[0.7]' },
+    { label: 'Mes', items: months, value: month, onPick: (v) => onChange({ month: v }), flex: 'flex-[0.8]' },
+    { label: 'Año', items: years, value: year, onPick: (v) => onChange({ year: v }), flex: 'flex-1' },
+  ];
+
+  return (
+    <div className="grid gap-1.5">
+      <span className="text-xs text-neutral-600 font-medium">Fecha de nacimiento</span>
+      <div className="flex gap-1.5">
+        {columns.map((col) => (
+          <div key={col.label} className={`${col.flex} min-w-0`}>
+            <p className="mb-1 text-center text-[10px] font-bold uppercase tracking-[0.14em] text-neutral-400">
+              {col.label}
+            </p>
+            <WheelColumn items={col.items} value={col.value} onPick={col.onPick} />
+          </div>
+        ))}
+      </div>
+      <style>{`
+        .wheel-scroll::-webkit-scrollbar { display: none; }
+        .wheel-scroll { scrollbar-width: none; -ms-overflow-style: none; }
+      `}</style>
+    </div>
+  );
+}
+
+function WheelColumn({
+  items,
+  value,
+  onPick,
+}: {
+  items: number[];
+  value: number;
+  onPick: (v: number) => void;
+}) {
+  const ITEM = 44;
+  const HEIGHT = ITEM * 3;
+  const ref = useRef<HTMLDivElement | null>(null);
+  const index = Math.max(0, items.indexOf(value));
+
+  useEffect(() => {
+    if (ref.current) ref.current.scrollTop = index * ITEM;
+  }, [index]);
+
+  function handleScroll(event: React.UIEvent<HTMLDivElement>) {
+    const el = event.currentTarget;
+    const idx = Math.round(el.scrollTop / ITEM);
+    const clamped = Math.max(0, Math.min(items.length - 1, idx));
+    const picked = items[clamped];
+    if (picked !== value) onPick(picked);
+  }
+
+  return (
+    <div className="relative overflow-hidden rounded-2xl" style={{ height: HEIGHT }}>
+      <div className="pointer-events-none absolute inset-x-0 top-1/2 -translate-y-1/2 border-y border-black/[0.06] bg-black/[0.03]" style={{ height: ITEM }} />
+      <div
+        ref={ref}
+        onScroll={handleScroll}
+        className="wheel-scroll h-full snap-y snap-mandatory overflow-y-scroll overscroll-contain"
+        style={{ scrollSnapType: 'y mandatory' }}
+      >
+        <div style={{ height: ITEM }} />
+        {items.map((it) => (
+          <div
+            key={it}
+            className={`flex items-center justify-center text-[17px] font-semibold tabular-nums transition-colors duration-150 ${it === value ? 'text-neutral-900' : 'text-neutral-300'}`}
+            style={{ height: ITEM }}
+          >
+            {String(it).padStart(2, '0')}
+          </div>
+        ))}
+        <div style={{ height: ITEM }} />
+      </div>
+    </div>
+  );
 }
 
 function OtpInput({
