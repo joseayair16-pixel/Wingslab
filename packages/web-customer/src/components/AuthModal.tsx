@@ -229,7 +229,20 @@ export const AuthModal = memo(function AuthModal({ isOpen, onClose, onSuccess, a
       setCountdown(authMode === 'register' ? (payload.data.expiresInSeconds ?? 300) : 60);
       setAuthStep('verify');
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : 'No se pudo enviar el código.');
+      const message = requestError instanceof Error ? requestError.message : '';
+      const awaitingCooldown = /espera 60 segundos/.test(message);
+      if (awaitingCooldown) {
+        setChannel(selectedChannel);
+        setCountdown(authMode === 'register' ? 300 : 60);
+        setAuthMessage(
+          selectedChannel === 'email'
+            ? `Ya se envió un código a ${email.trim()} hace unos segundos. Usa el que recibiste.`
+            : 'Ya se envió un código por SMS hace unos segundos. Usa el que recibiste.',
+        );
+        setAuthStep('verify');
+      } else {
+        setError(message || 'No se pudo enviar el código.');
+      }
     } finally {
       setSendingCode(false);
     }
