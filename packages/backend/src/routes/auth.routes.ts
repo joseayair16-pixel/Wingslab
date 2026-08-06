@@ -224,18 +224,6 @@ export async function registerAuthRoutes(fastify: FastifyInstance): Promise<void
     const redis = getRedis();
     const redisKey = `otp:${parsed.data.phone}`;
 
-    // Validar si el OTP fue pedido hace menos de 60 segundos (TTL > 240 segundos)
-    const ttl = await redis.ttl(redisKey);
-    if (ttl > 240) {
-      return reply.status(429).send({
-        success: false,
-        error: {
-          code: 'TOO_MANY_REQUESTS',
-          message: 'Por favor espera 60 segundos antes de solicitar otro código.',
-        },
-      });
-    }
-
     // Tope de reenvíos por teléfono en 1 hora (control de costo/abuso)
     const sentKey = `otp_sent:${parsed.data.phone}`;
     const sentCount = await redis.get(sentKey);
@@ -249,8 +237,6 @@ export async function registerAuthRoutes(fastify: FastifyInstance): Promise<void
       });
     }
 
-    const code = generateRandomOtp();
-
     // El correo se usa SOLO como canal de entrega; la identidad es el teléfono.
     // En registro se toma del payload; en recuperación del correo guardado.
     const email =
@@ -259,6 +245,56 @@ export async function registerAuthRoutes(fastify: FastifyInstance): Promise<void
         : (parsed.data.intent === 'recovery' && existingUser && isRealEmail(existingUser.email))
           ? existingUser.email
           : undefined;
+
+    // Si ya existe un código activo con el MISMO intent, se lo reentregamos al
+    // usuario (mismo código, mismo canal solicitado). Así el clic de "recibir
+    // código" siempre entrega un código en lugar de bloquear con 429.
+    const rawExisting = await redis.get(redisKey);
+    let existingRecord: { code: string; intent: string; email?: string | null } | null = null;
+    if (rawExisting) {
+      try {
+        existingRecord = JSON.parse(rawExisting);
+      } catch {
+        existingRecord = null;
+      }
+    }
+
+    if (existingRecord && existingRecord.intent === parsed.data.intent) {
+      const remainingTtl = Math.max(await redis.ttl(redisKey), 1);
+      const resendDelivery = await deliverOtp({
+        phone: parsed.data.phone,
+        email,
+        code: existingRecord.code,
+        preferred: parsed.data.channel,
+      });
+
+      if (!resendDelivery.ok) {
+        return reply.status(503).send({
+          success: false,
+          error: {
+            code: 'DELIVERY_FAILED',
+            message: 'No se pudo enviar el código. Intenta más tarde.',
+          },
+        });
+      }
+
+      await redis.multi().incr(sentKey).expire(sentKey, 60 * 60).exec();
+
+      return reply.send({
+        success: true,
+        data: {
+          phone: parsed.data.phone,
+          channel: resendDelivery.channel,
+          expiresInSeconds: remainingTtl,
+          resent: true,
+          ...(resendDelivery.channel === 'mock' && resendDelivery.mockCode
+            ? { mockCode: resendDelivery.mockCode }
+            : {}),
+        },
+      });
+    }
+
+    const code = generateRandomOtp();
 
     // Guardar en Redis: código + intent + correo de entrega (5 minutos)
     await redis.set(
@@ -280,6 +316,8 @@ export async function registerAuthRoutes(fastify: FastifyInstance): Promise<void
 
     // Si no hubo canal real de entrega (en producción), no fingir éxito
     if (!delivery.ok) {
+      // Borrar el OTP para no dejar un código "fantasma" que bloquee reintentos
+      await redis.del(redisKey);
       return reply.status(503).send({
         success: false,
         error: {
