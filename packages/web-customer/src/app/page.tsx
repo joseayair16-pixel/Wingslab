@@ -494,6 +494,7 @@ export default function Home() {
   const [newPhoneToVerify, setNewPhoneToVerify] = useState('');
   const [isSendingOtp, setIsSendingOtp] = useState(false);
   const [otpError, setOtpError] = useState('');
+  const [phoneChangeMockCode, setPhoneChangeMockCode] = useState('');
   const [isEditingAddress, setIsEditingAddress] = useState(false);
   const [addressSearchQuery, setAddressSearchQuery] = useState('');
   const [addressSuggestions, setAddressSuggestions] = useState<any[]>([]);
@@ -2345,13 +2346,33 @@ export default function Home() {
       
       setNewPhoneToVerify(editPhone);
       setIsSendingOtp(true);
-      
-      setTimeout(() => {
-        setIsSendingOtp(false);
-        setIsVerifyingPhoneChange(true);
+
+      try {
+        const res = await requestJson<{ success: boolean; data: any }>({
+          apiBase,
+          path: '/customer/profile/phone/send',
+          token,
+          options: {
+            method: 'POST',
+            body: JSON.stringify({ phone: editPhone }),
+          },
+          fallbackMessage: 'No se pudo enviar el código.',
+        });
+
+        setPhoneChangeMockCode(res.data?.mockCode || '');
         setPhoneChangeOtp('');
         setOtpError('');
-      }, 1000);
+        setIsVerifyingPhoneChange(true);
+        setToastMessage('Código enviado por SMS');
+        setTimeout(() => setToastMessage(''), 2000);
+      } catch (err) {
+        setOtpError('');
+        setIsVerifyingPhoneChange(false);
+        setToastMessage(err instanceof Error ? err.message : 'No se pudo enviar el código.');
+        setTimeout(() => setToastMessage(''), 3000);
+      } finally {
+        setIsSendingOtp(false);
+      }
       return;
     }
 
@@ -2382,42 +2403,47 @@ export default function Home() {
   }
 
   async function handleVerifyPhoneChange() {
-    if (phoneChangeOtp.length < 4) {
-      setOtpError('Ingresa el código completo');
+    if (phoneChangeOtp.length < 6) {
+      setOtpError('Ingresa el código completo (6 dígitos)');
       return;
     }
     
     setOtpError('');
     setIsSendingOtp(true);
     
-    setTimeout(async () => {
-      try {
-        const payload = await requestJson<{ success: boolean; data: any }>({
-          apiBase,
-          path: '/customer/profile',
-          options: {
-            method: 'PATCH',
-            headers: { 'Authorization': `Bearer ${token}` },
-            body: JSON.stringify({ name: editName, lastName: editLastName, phone: newPhoneToVerify }),
-          },
-        });
+    try {
+      const payload = await requestJson<{ success: boolean; data: any }>({
+        apiBase,
+        path: '/customer/profile',
+        token,
+        options: {
+          method: 'PATCH',
+          body: JSON.stringify({
+            name: editName,
+            lastName: editLastName,
+            phone: newPhoneToVerify,
+            phoneChangeCode: phoneChangeOtp,
+          }),
+        },
+        fallbackMessage: 'No se pudo verificar el código.',
+      });
 
-        setIsSendingOtp(false);
+      setIsSendingOtp(false);
 
-        if (payload.success) {
-          setToastMessage('Número verificado y perfil actualizado');
-          setTimeout(() => setToastMessage(''), 2000);
-          setIsVerifyingPhoneChange(false);
-          setIsEditingProfile(false);
-          if (sessionUser) {
-            persistSession(token, { ...sessionUser, name: editName, lastName: editLastName, phone: newPhoneToVerify });
-          }
+      if (payload.success) {
+        setPhoneChangeMockCode('');
+        setToastMessage('Número verificado y perfil actualizado');
+        setTimeout(() => setToastMessage(''), 2000);
+        setIsVerifyingPhoneChange(false);
+        setIsEditingProfile(false);
+        if (sessionUser) {
+          persistSession(token, { ...sessionUser, name: editName, lastName: editLastName, phone: newPhoneToVerify });
         }
-      } catch (err) {
-        setIsSendingOtp(false);
-        setOtpError('Código incorrecto o expirado');
       }
-    }, 1500);
+    } catch (err) {
+      setIsSendingOtp(false);
+      setOtpError(err instanceof Error ? err.message : 'Código incorrecto o expirado');
+    }
   }
 
   async function updatePreferences(preferences: { deliveryPreference: string | null }) {
@@ -5473,7 +5499,7 @@ export default function Home() {
                     </div>
                     <h3 className="text-2xl font-semibold tracking-[-0.04em] text-neutral-950">Verifica tu número</h3>
                     <p className="mt-2 text-sm text-neutral-600 leading-relaxed">
-                      Por tu seguridad, hemos enviado un código de 4 dígitos por WhatsApp al número <span className="font-semibold text-neutral-900">{newPhoneToVerify}</span>.
+                      Por tu seguridad, hemos enviado un código de 6 dígitos por SMS al número <span className="font-semibold text-neutral-900">{newPhoneToVerify}</span>.
                     </p>
                   </div>
 
@@ -5482,9 +5508,14 @@ export default function Home() {
                       <SegmentedOtp
                         value={phoneChangeOtp}
                         onChange={setPhoneChangeOtp}
-                        length={4}
+                        length={6}
                         disabled={isSendingOtp}
                       />
+                      {phoneChangeMockCode && (
+                        <p className="rounded-2xl border border-sky-100 bg-sky-50 px-4 py-3 text-xs font-semibold leading-relaxed text-sky-700 mt-2 text-center">
+                          Código de prueba: <span className="font-mono tracking-widest">{phoneChangeMockCode}</span>
+                        </p>
+                      )}
                       {otpError && (
                         <p className="text-red-500 text-xs font-semibold mt-2 text-center">{otpError}</p>
                       )}
@@ -5494,7 +5525,7 @@ export default function Home() {
                       <button
                         type="button"
                         onClick={handleVerifyPhoneChange}
-                        disabled={isSendingOtp || phoneChangeOtp.length < 4}
+                        disabled={isSendingOtp || phoneChangeOtp.length < 6}
                         className="w-full rounded-full bg-neutral-950 py-3.5 text-sm font-semibold text-white transition hover:bg-neutral-900 disabled:opacity-50 flex justify-center active-scale"
                       >
                         {isSendingOtp ? 'Verificando...' : 'Verificar y Actualizar'}
@@ -5504,6 +5535,7 @@ export default function Home() {
                         onClick={() => {
                           setIsVerifyingPhoneChange(false);
                           setPhoneChangeOtp('');
+                          setPhoneChangeMockCode('');
                         }}
                         className="w-full rounded-full bg-neutral-100 py-3 text-sm font-semibold text-neutral-700 transition hover:bg-neutral-200 active-scale"
                       >
