@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { SaDelLogo } from './SaDelLogo';
 
 type Phase = 'visible' | 'fading' | 'gone';
@@ -12,6 +12,8 @@ export default function SplashScreen() {
   const [mounted, setMounted] = useState(false);
   const [isStandalone, setIsStandalone] = useState(false);
   const [phase, setPhase] = useState<Phase>('visible');
+  const logoWrapRef = useRef<HTMLDivElement>(null);
+  const [barWidth, setBarWidth] = useState<number | null>(null);
 
   useEffect(() => {
     setMounted(true);
@@ -41,6 +43,19 @@ export default function SplashScreen() {
     };
   }, []);
 
+  // La barra de carga toma el ancho real del logo una vez que la imagen se dibuja.
+  useEffect(() => {
+    if (!isStandalone) return;
+    const measure = () => {
+      if (logoWrapRef.current) {
+        setBarWidth(logoWrapRef.current.offsetWidth);
+      }
+    };
+    measure();
+    const retry = setTimeout(measure, 400);
+    return () => clearTimeout(retry);
+  }, [isStandalone]);
+
   useEffect(() => {
     if (phase === 'fading') {
       const timer = setTimeout(() => setPhase('gone'), 350);
@@ -58,11 +73,15 @@ export default function SplashScreen() {
         phase === 'fading' ? 'pointer-events-none opacity-0' : 'opacity-100'
       }`}
     >
-      <SaDelLogo
-        className="sadel-loader-logo animate-sadel-breathe select-none pointer-events-none h-[68px] w-auto"
-      />
-      <p className="sadel-splash-title mt-4 text-lg font-bold tracking-[-0.02em] text-neutral-800">SaDeL</p>
-      <div className="sadel-splash-track mt-4 h-1 w-16 overflow-hidden rounded-full bg-neutral-200">
+      <div ref={logoWrapRef} className="w-auto">
+        <SaDelLogo
+          className="sadel-loader-logo animate-sadel-breathe select-none pointer-events-none h-[68px] w-auto"
+        />
+      </div>
+      <div
+        className="sadel-splash-track mt-4 h-1 overflow-hidden rounded-full bg-neutral-200"
+        style={barWidth ? { width: barWidth } : undefined}
+      >
         <div className="sadel-splash-fill h-full w-full rounded-full bg-sky-500 animate-pulse" />
       </div>
     </div>
