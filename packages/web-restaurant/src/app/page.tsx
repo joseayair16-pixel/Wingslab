@@ -7855,8 +7855,9 @@ export default function Home() {
                           const hasOwnDelivery = order.restaurant?.hasOwnDelivery ?? profile?.hasOwnDelivery ?? false;
                           const isSupported = order.notes?.includes('[ApoyoId:');
                           const actionButtons = isHelper
-                            // La entrega de apoyo la completa el repartidor vía QR (reparto express).
-                            ? []
+                            // Se conserva el flujo manual del apoyo (iniciar entrega / marcar entregado);
+                            // el QR de express es la vía principal que usa el repartidor aliado.
+                            ? (order.status === 'READY' ? ['iniciarEntrega'] : order.status === 'IN_TRANSIT' ? ['delivered'] : [])
                             : (isSupported ? [] : getRestaurantActions(order, hasOwnDelivery));
                           const selectedDriverId = selectedDriverByOrder[order.id] || '';
                           const canAssignDriver =
