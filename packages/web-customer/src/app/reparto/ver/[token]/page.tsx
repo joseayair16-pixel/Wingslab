@@ -14,6 +14,7 @@ interface DeliveryTicketData {
   orderReference: string;
   status: string;
   totalAmount: number;
+  deliveryFee?: number;
   paymentMethod: string;
   deliveryAddress: {
     street: string;
@@ -29,10 +30,14 @@ interface DeliveryTicketData {
   };
   notes?: string | null;
   handoverPin?: string | null;
+  isSupportDelivery?: boolean;
   restaurant: {
     name: string;
     phone: string;
     businessType?: string;
+    address?: string | null;
+    latitude?: number | null;
+    longitude?: number | null;
   };
   customer: {
     name: string;
@@ -44,6 +49,7 @@ interface ScannedDelivery {
   token: string;
   data: DeliveryTicketData;
   arrived: boolean;
+  pickedUp: boolean;
   delivered: boolean;
   scannedAt: number;
   deliveredAt?: number;
@@ -157,12 +163,17 @@ export default function DeliveryTicketPage({ params }: PageProps) {
           ? localStorage.getItem(`sadel_arrived_${token}`) === 'true'
           : false;
 
+        const isPickedUp = typeof window !== 'undefined' 
+          ? localStorage.getItem(`sadel_pickedup_${token}`) === 'true'
+          : false;
+
         const isDelivered = fetchedTicket.status === 'DELIVERED';
 
         const updatedDelivery: ScannedDelivery = {
           token,
           data: fetchedTicket,
           arrived: isArrived,
+          pickedUp: isPickedUp,
           delivered: isDelivered,
           scannedAt: existingIndex >= 0 ? currentList[existingIndex].scannedAt : Date.now(),
           deliveredAt: isDelivered 
@@ -251,6 +262,7 @@ export default function DeliveryTicketPage({ params }: PageProps) {
   const activeDelivery = deliveries.find(d => d.token === selectedToken);
   const currentTicket = activeDelivery ? activeDelivery.data : null;
   const currentArrived = activeDelivery ? activeDelivery.arrived : false;
+  const currentPickedUp = activeDelivery ? activeDelivery.pickedUp : false;
   const currentDelivered = activeDelivery ? activeDelivery.delivered : false;
 
   // Notificar llegada genérico para un token
@@ -303,6 +315,55 @@ export default function DeliveryTicketPage({ params }: PageProps) {
   const handleLlegue = async () => {
     if (!selectedToken) return;
     await handleLlegueForToken(selectedToken);
+  };
+
+  // Confirmar recogida en el restaurante origen (solo pedidos de apoyo a red)
+  const handleLlegueRestauranteForToken = async (targetToken: string) => {
+    if (notifying) return;
+
+    try {
+      setNotifying(true);
+      triggerHaptic([40, 60, 40]);
+
+      const response = await fetch(`${apiBase}/public/delivery-ticket/${targetToken}/llegue-restaurante`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok || !data.success) {
+        throw new Error(data.error?.message || 'Error al confirmar la recogida.');
+      }
+
+      setDeliveries(prev => {
+        const newList = prev.map(item => {
+          if (item.token === targetToken) {
+            return { ...item, pickedUp: true };
+          }
+          return item;
+        });
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('sadel_scanned_deliveries', JSON.stringify(newList));
+          localStorage.setItem(`sadel_pickedup_${targetToken}`, 'true');
+        }
+        return newList;
+      });
+
+      triggerHaptic([100, 50, 150]);
+    } catch (err: any) {
+      console.error(err);
+      setLlegueError(err.message || 'No se pudo confirmar la recogida del pedido.');
+      triggerHaptic([300, 100]);
+    } finally {
+      setNotifying(false);
+    }
+  };
+
+  const handleLlegueRestaurante = async () => {
+    if (!selectedToken) return;
+    await handleLlegueRestauranteForToken(selectedToken);
   };
 
   // Mostrar modal de confirmación antes de entregar (desde detalle)
@@ -688,7 +749,7 @@ export default function DeliveryTicketPage({ params }: PageProps) {
                         {/* Fila de detalles: Restaurante y Estado */}
                         <div className="flex items-center justify-between mt-3.5 pt-3 border-t border-black/[0.03] dark:border-white/[0.03]">
                           <span className={`text-[10px] font-bold tracking-wide truncate ${textTertiary}`}>
-                            🏪 {deliv.data.restaurant.name}
+                            {deliv.data.isSupportDelivery ? `🛒 Recoger en: ${deliv.data.restaurant.name}` : `🏪 ${deliv.data.restaurant.name}`}
                           </span>
                           
                           <span className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full ${
@@ -697,7 +758,9 @@ export default function DeliveryTicketPage({ params }: PageProps) {
                               : darkMode ? 'bg-zinc-800 text-zinc-400' : 'bg-neutral-100 text-neutral-500'
                           }`}>
                             <span className={`h-1.5 w-1.5 rounded-full ${deliv.arrived ? 'bg-emerald-400' : 'bg-zinc-400'}`} />
-                            {deliv.arrived ? 'En destino' : 'En camino'}
+                            {deliv.data.isSupportDelivery && !deliv.pickedUp
+                              ? 'En recogida'
+                              : deliv.arrived ? 'En destino' : 'En camino'}
                           </span>
                         </div>
                       </div>
@@ -776,7 +839,25 @@ export default function DeliveryTicketPage({ params }: PageProps) {
                         <div className="flex-1" />
 
                         {/* Acción Principal: Llegué o Entregar */}
-                        {!deliv.arrived ? (
+                        {deliv.data.isSupportDelivery && !deliv.pickedUp ? (
+                          <button
+                            type="button"
+                            disabled={notifying}
+                            onClick={(e) => { e.stopPropagation(); void handleLlegueRestauranteForToken(deliv.token); }}
+                            className={`flex items-center justify-center gap-1.5 rounded-2xl py-2.5 px-4 text-xs font-bold transition-all active:scale-95 active-scale disabled:opacity-50 border shadow-sm ${
+                              darkMode 
+                                ? 'bg-sky-400/10 text-sky-300 border-sky-400/20 hover:bg-sky-400/20' 
+                                : 'bg-sky-50 text-sky-500 border-sky-200 hover:bg-sky-100'
+                            }`}
+                          >
+                            {notifying ? (
+                              <div className={`h-3.5 w-3.5 animate-spin rounded-full border-2 ${darkMode ? 'border-sky-300/40 border-t-sky-300' : 'border-sky-400/30 border-t-sky-500'}`} />
+                            ) : (
+                              <span className="text-sm">🛒</span>
+                            )}
+                            <span>¡Llegué al restaurante!</span>
+                          </button>
+                        ) : !deliv.arrived ? (
                           <button
                             type="button"
                             disabled={notifying}
@@ -972,6 +1053,141 @@ export default function DeliveryTicketPage({ params }: PageProps) {
             </button>
           )}
         </div>
+      </div>
+    );
+  }
+
+  // ══════════════════════════════════════
+  // FASE 1 (SOLO APOYO A RED): DIRÍGETE AL RESTAURANTE ORIGEN A RECOGER
+  // ══════════════════════════════════════
+  if (currentTicket.isSupportDelivery && !currentPickedUp) {
+    const pickupName = currentTicket.restaurant.name;
+    const pickupAddress = currentTicket.restaurant.address || 'Restaurante origen';
+    const pickupMapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(pickupAddress)}`;
+    const pickupWazeUrl = currentTicket.restaurant.latitude && currentTicket.restaurant.longitude
+      ? `https://waze.com/ul?ll=${currentTicket.restaurant.latitude},${currentTicket.restaurant.longitude}&navigate=yes`
+      : null;
+    const isCashPickup = currentTicket.paymentMethod === 'CASH';
+
+    return (
+      <div className={`min-h-[100dvh] font-sans antialiased pb-12 transition-colors duration-300 ${bg} ${textPrimary}`}>
+        <header className={`sticky top-0 z-50 border-b backdrop-blur-md transition-all duration-300 ${
+          darkMode ? 'bg-[#09090b]/90 border-zinc-800/60' : 'bg-white/90 border-black/[0.04]'
+        }`}>
+          <div className="mx-auto flex max-w-lg items-center justify-between px-4 py-3">
+            <div className="flex items-center gap-2">
+              <span className={`flex h-7 w-7 items-center justify-center rounded-xl shadow-sm ${
+                darkMode ? 'bg-sky-400/10 text-sky-300' : 'bg-sky-50 text-sky-500'
+              }`}>
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 18.75a1.5 1.5 0 0 1-3 0 1.5 1.5 0 0 1 3 0ZM18.75 18.75a1.5 1.5 0 0 1-3 0 1.5 1.5 0 0 1 3 0ZM6.75 18.75h10.5m-10.5-6h7.5L18 18.75m-6.75-6V8.25h5.25L18.75 12" />
+                </svg>
+              </span>
+              <span className={`text-[12px] font-extrabold uppercase tracking-widest ${darkMode ? 'text-zinc-200' : 'text-neutral-800'}`}>SaDeL Express</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => { triggerHaptic([20]); setSelectedToken(null); }}
+              className={`rounded-xl px-3 py-2 text-[11px] font-bold transition active:scale-95 active-scale border ${
+                darkMode ? 'bg-zinc-900 border-zinc-800 text-zinc-300 hover:bg-zinc-800' : 'bg-white border-black/[0.06] text-neutral-700 hover:bg-neutral-50'
+              }`}
+            >
+              Volver
+            </button>
+          </div>
+        </header>
+
+        <main className="mx-auto max-w-lg px-4 pb-20">
+          <div className="mt-4 flex items-center gap-2">
+            <span className={`text-[10px] font-black uppercase tracking-widest ${textTertiary}`}>Fase 1 de 2</span>
+            <div className="flex-1 h-1.5 rounded-full bg-black/10 dark:bg-white/10 overflow-hidden">
+              <div className="h-full w-1/2 bg-sky-400 rounded-full" />
+            </div>
+          </div>
+
+          <div className={`mt-3 rounded-[28px] p-6 text-white shadow-[0_12px_40px_rgba(0,0,0,0.1)] ${
+            darkMode ? 'bg-gradient-to-br from-sky-700 to-sky-900' : 'bg-gradient-to-br from-sky-400 to-sky-600'
+          }`}>
+            <p className="text-[10px] font-bold uppercase tracking-wider opacity-80">Recogida</p>
+            <h1 className="text-2xl font-black tracking-tight mt-1">Dirígete al restaurante</h1>
+            <p className="text-sm font-semibold mt-3 flex items-center gap-2">
+              <span className="text-lg">🏪</span> {pickupName}
+            </p>
+            <p className="text-xs mt-1 opacity-90">{pickupAddress}</p>
+          </div>
+
+          <div className={`mt-3 rounded-[28px] border p-5 shadow-[0_4px_24px_rgba(0,0,0,0.015)] ${cardBg} ${cardBorder}`}>
+            <p className={`text-[10px] font-black uppercase tracking-widest ${textTertiary}`}>Cobro en la recogida</p>
+            {isCashPickup ? (
+              <p className={`mt-2 text-xs leading-relaxed ${textSecondary}`}>
+                El comensal paga en <strong className={textPrimary}>efectivo el total</strong> al entregar. Aquí solo recoges el pedido.
+              </p>
+            ) : (
+              <p className={`mt-2 text-xs leading-relaxed ${textSecondary}`}>
+                El comensal ya pagó en línea (incluido el envío). Al recoger el pedido, el restaurante te entrega en efectivo el envío:
+                <strong className={textPrimary}> ${currentTicket.deliveryFee ? `$${currentTicket.deliveryFee.toFixed(2)}` : 'la tarifa de envío'}</strong>.
+              </p>
+            )}
+          </div>
+
+          {/* Mapa de la recogida */}
+          <div className={`mt-3 rounded-[28px] border p-5 shadow-[0_4px_24px_rgba(0,0,0,0.015)] ${cardBg} ${cardBorder}`}>
+            <div className="flex flex-col sm:flex-row gap-2.5">
+              <a
+                href={pickupMapsUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={() => triggerHaptic([30])}
+                className={`flex-1 flex items-center justify-center gap-1.5 rounded-2xl border py-3 text-xs font-bold transition active:scale-95 active-scale shadow-sm ${
+                  darkMode ? 'bg-zinc-900 border-zinc-800 text-zinc-200 hover:bg-zinc-800' : 'bg-white border-black/[0.08] text-neutral-800 hover:bg-neutral-50'
+                }`}
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 6.75 3 9v11.25l6-2.25m0-11.25 6 2.25m-6-2.25V20.25m6-11.25 6-2.25V18l-6 2.25m0-11.25V20.25" />
+                </svg>
+                Google Maps
+              </a>
+              {pickupWazeUrl && (
+                <a
+                  href={pickupWazeUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={() => triggerHaptic([30])}
+                  className={`flex-1 flex items-center justify-center gap-1.5 rounded-2xl border py-3 text-xs font-bold transition active:scale-95 active-scale shadow-sm ${
+                    darkMode ? 'bg-zinc-900 border-zinc-800 text-zinc-200 hover:bg-zinc-800' : 'bg-white border-black/[0.08] text-neutral-800 hover:bg-neutral-50'
+                  }`}
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 12 3.269 3.125A59.769 59.769 0 0 1 21.485 12 59.768 59.768 0 0 1 3.27 20.875L5.999 12Zm0 0h7.5" />
+                  </svg>
+                  Waze
+                </a>
+              )}
+            </div>
+          </div>
+
+          {llegueError && (
+            <div className={`mt-3 rounded-2xl px-4 py-3 text-xs font-semibold border ${darkMode ? 'bg-red-950/20 border-red-900/40 text-red-400' : 'bg-red-50 border-red-200/60 text-red-600'}`}>
+              {llegueError}
+            </div>
+          )}
+
+          <button
+            type="button"
+            disabled={notifying}
+            onClick={() => { triggerHaptic([40]); void handleLlegueRestaurante(); }}
+            className="mt-6 w-full flex items-center justify-center gap-2 rounded-2xl bg-sky-600 py-4 text-sm font-black uppercase tracking-wider text-white hover:bg-sky-500 active:scale-[0.98] active-scale disabled:opacity-50 shadow-[0_8px_24px_0_rgba(14,165,233,0.3)] transition-all"
+          >
+            {notifying ? (
+              <div className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" />
+            ) : (
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="3" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M14.857 17.082a23.848 23.848 0 0 0 5.454-1.31A8.967 8.967 0 0 1 18 9.75V9A6 6 0 0 0 6 9v.75a8.967 8.967 0 0 1-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 0 1-5.714 0m5.714 0a3 3 0 1 1-5.714 0" />
+              </svg>
+            )}
+            ¡Llegué al restaurante!
+          </button>
+        </main>
       </div>
     );
   }

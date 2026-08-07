@@ -5434,6 +5434,15 @@ export default function Home() {
                       pushToast('success', 'Éxito', 'Has aceptado la solicitud de apoyo.');
                       setSupportRequestsQueue((current) => current.slice(1));
                       void loadOrdersOnly();
+
+                      // Mostrar el QR de entrega inmediatamente (igual que reparto propio/express)
+                      if (data.data?.deliveryToken?.token) {
+                        setActiveQrCodeData({
+                          token: data.data.deliveryToken.token,
+                          orderReference: data.data.orderReference || '',
+                          id: supportRequestsQueue[0].orderId,
+                        });
+                      }
                     } else {
                       pushToast('error', 'Error', data.error?.message || 'No se pudo aceptar la solicitud.');
                     }
@@ -7846,7 +7855,8 @@ export default function Home() {
                           const hasOwnDelivery = order.restaurant?.hasOwnDelivery ?? profile?.hasOwnDelivery ?? false;
                           const isSupported = order.notes?.includes('[ApoyoId:');
                           const actionButtons = isHelper
-                            ? (order.status === 'READY' ? ['iniciarEntrega'] : order.status === 'IN_TRANSIT' ? ['delivered'] : [])
+                            // La entrega de apoyo la completa el repartidor vía QR (reparto express).
+                            ? []
                             : (isSupported ? [] : getRestaurantActions(order, hasOwnDelivery));
                           const selectedDriverId = selectedDriverByOrder[order.id] || '';
                           const canAssignDriver =
@@ -8391,6 +8401,36 @@ export default function Home() {
                                   ) : null}
 
                                   {order.status === 'IN_TRANSIT' && (hasOwnDelivery || !order.driver) && (
+                                    <button
+                                      type="button"
+                                      onClick={async () => {
+                                        try {
+                                          const response = await fetch(`${apiBase}/restaurant-panel/pedidos/${order.id}/delivery-token`, {
+                                            headers: {
+                                              Authorization: `Bearer ${token}`,
+                                            },
+                                          });
+                                          const res = await response.json();
+                                          if (res.success && res.data) {
+                                            setActiveQrCodeData({
+                                              token: res.data.token,
+                                              orderReference: res.data.orderReference,
+                                              id: order.id,
+                                            });
+                                          } else {
+                                            pushToast('error', 'Error', 'No se encontró un reparto activo para este pedido.');
+                                          }
+                                        } catch (err) {
+                                          pushToast('error', 'Error de red', 'No se pudo conectar con el servidor.');
+                                        }
+                                      }}
+                                      className="w-full sm:w-auto justify-center rounded-full bg-amber-500 px-5 py-2.5 sm:py-2 text-sm font-semibold text-white shadow-sm hover:bg-amber-600 transition flex items-center gap-2"
+                                    >
+                                      <span>🛵 Ver QR de reparto</span>
+                                    </button>
+                                  )}
+
+                                  {isHelper && isSupported && !['DELIVERED', 'COMPLETED', 'REJECTED', 'CANCELLED', 'PENDING'].includes(order.status) && (
                                     <button
                                       type="button"
                                       onClick={async () => {

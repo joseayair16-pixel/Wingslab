@@ -1825,9 +1825,15 @@ export async function autoAssignDriver(
 ) {
   const orderType = await prisma.order.findUnique({
     where: { id: orderId },
-    select: { fulfillmentType: true },
+    select: { fulfillmentType: true, supportRestaurantId: true },
   });
   if (orderType?.fulfillmentType === 'PICKUP') {
+    return { success: false as const };
+  }
+
+  // Un pedido ya tomado por un restaurante aliado (apoyo a red) no debe
+  // reasignarse a un repartidor de la plataforma.
+  if (orderType?.supportRestaurantId) {
     return { success: false as const };
   }
 
@@ -1997,6 +2003,8 @@ export async function sweepUnassignedOrdersForRegion(prisma: PrismaClient, regio
   const unassignedOrders = await prisma.order.findMany({
     where: {
       driverId: null,
+      supportRestaurantId: null,
+      isSupportRequested: false,
       fulfillmentType: 'DELIVERY',
       status: { in: [OrderStatus.CONFIRMED, OrderStatus.PREPARING, OrderStatus.READY] },
       restaurant: {

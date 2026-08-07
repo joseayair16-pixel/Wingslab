@@ -148,7 +148,13 @@ export async function registerRestaurantOrderRoutes(fastify: FastifyInstance): P
           });
         }
 
-        if (order.restaurant.userId !== user.sub) {
+        // El token solo lo puede obtener el restaurante origen o el restaurante aliado que
+        // aceptó la solicitud de apoyo (para mostrar el QR de entrega a su repartidor).
+        const myRestaurant = await prisma.restaurant.findUnique({ where: { userId: user.sub } });
+        const isOriginOwner = order.restaurant.userId === user.sub;
+        const isSupportOwner = Boolean(myRestaurant && order.supportRestaurantId === myRestaurant.id);
+
+        if (!isOriginOwner && !isSupportOwner) {
           return reply.status(403).send({
             success: false,
             error: { code: 'FORBIDDEN', message: 'No tienes permiso para ver este pedido.' },
@@ -800,6 +806,21 @@ export async function registerRestaurantOrderRoutes(fastify: FastifyInstance): P
       const requestContext = getOrCreateRequestContext(request);
 
       try {
+        const targetOrder = await prisma.order.findUnique({
+          where: { id: params.data.id },
+          select: { supportRestaurantId: true },
+        });
+
+        if (targetOrder?.supportRestaurantId) {
+          return reply.status(400).send({
+            success: false,
+            error: {
+              code: 'ALREADY_SUPPORTED',
+              message: 'Este pedido ya fue aceptado por un restaurante aliado y no puede asignarse a un repartidor.',
+            },
+          });
+        }
+
         const order = await assignDriverToOrder({
           prisma,
           restaurantUserId: user.sub,
@@ -1602,6 +1623,16 @@ export async function registerRestaurantOrderRoutes(fastify: FastifyInstance): P
           });
         }
 
+        if (order.supportRestaurantId) {
+          return reply.status(400).send({
+            success: false,
+            error: {
+              code: 'ALREADY_SUPPORTED',
+              message: 'Este pedido ya fue aceptado por un restaurante aliado.',
+            },
+          });
+        }
+
         const originLat = order.restaurant.latitude;
         const originLng = order.restaurant.longitude;
 
@@ -1804,16 +1835,48 @@ export async function registerRestaurantOrderRoutes(fastify: FastifyInstance): P
           });
         }
 
-        // Marcar el pedido como tomado por apoyo
+        if (order.supportRestaurantId) {
+          return reply.status(409).send({
+            success: false,
+            error: {
+              code: 'ALREADY_SUPPORTED',
+              message: 'Este pedido ya fue aceptado por otro restaurante aliado.',
+            },
+          });
+        }
+
+        // Marcar el pedido como tomado por apoyo (actualización atómica para evitar
+        // que dos restaurantes acepten el mismo pedido de forma concurrente).
         const existingNotes = order.notes ? order.notes + ' | ' : '';
         const newNotes = existingNotes + `[Apoyo por: ${supportRestaurant.name}] [ApoyoId: ${supportRestaurant.id}]`;
 
-        const updatedOrder = await prisma.order.update({
-          where: { id: order.id },
+        const acceptedCount = await prisma.order.updateMany({
+          where: {
+            id: order.id,
+            status: OrderStatus.READY,
+            driverId: null,
+            supportRestaurantId: null,
+          },
           data: {
             supportRestaurantId: supportRestaurant.id,
             notes: newNotes,
+            isSupportRequested: false,
+            noDriversAvailable: false,
           },
+        });
+
+        if (acceptedCount.count === 0) {
+          return reply.status(409).send({
+            success: false,
+            error: {
+              code: 'ALREADY_SUPPORTED',
+              message: 'Este pedido ya fue aceptado por otro restaurante aliado o ya no está disponible.',
+            },
+          });
+        }
+
+        const updatedOrder = await prisma.order.findUniqueOrThrow({
+          where: { id: order.id },
           include: {
             customer: {
               include: {
@@ -1840,9 +1903,37 @@ export async function registerRestaurantOrderRoutes(fastify: FastifyInstance): P
           }
         );
 
+        // Generar un token de reparto seguro de un solo uso para que el restaurante aliado
+        // genere el QR de entrega (mismo mecanismo del reparto propio/express).
+        const crypto = require('node:crypto');
+        const { hashToken } = require('../utils/crypto');
+        const supportTokenStr = crypto.randomBytes(32).toString('hex');
+        const supportHashedToken = hashToken(supportTokenStr);
+        const supportTokenExpiresAt = new Date();
+        supportTokenExpiresAt.setHours(supportTokenExpiresAt.getHours() + 3); // Vence en 3 horas
+
+        const supportDToken = await (prisma as any).deliveryToken.upsert({
+          where: { orderId: order.id },
+          update: {
+            token: supportHashedToken,
+            expiresAt: supportTokenExpiresAt,
+          },
+          create: {
+            orderId: order.id,
+            token: supportHashedToken,
+            expiresAt: supportTokenExpiresAt,
+          },
+        });
+
         return reply.send({
           success: true,
-          data: updatedOrder,
+          data: {
+            ...updatedOrder,
+            deliveryToken: {
+              token: supportTokenStr, // Token en texto plano para el QR
+              expiresAt: supportDToken.expiresAt,
+            },
+          },
         });
       } catch (error) {
         return sendAppError(reply, error);

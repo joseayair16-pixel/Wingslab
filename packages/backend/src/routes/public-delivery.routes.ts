@@ -43,6 +43,9 @@ export async function registerPublicDeliveryRoutes(fastify: FastifyInstance): Pr
                   name: true,
                   contactPhone: true,
                   businessType: true,
+                  address: true,
+                  latitude: true,
+                  longitude: true,
                 },
               },
               address: true,
@@ -50,6 +53,7 @@ export async function registerPublicDeliveryRoutes(fastify: FastifyInstance): Pr
                 include: {
                   user: {
                     select: {
+                      id: true,
                       name: true,
                       phone: true,
                     },
@@ -84,14 +88,19 @@ export async function registerPublicDeliveryRoutes(fastify: FastifyInstance): Pr
           orderReference: dToken.order.orderReference,
           status: dToken.order.status,
           totalAmount: dToken.order.totalAmount,
+          deliveryFee: dToken.order.deliveryFee,
           paymentMethod: dToken.order.paymentMethod,
           deliveryAddress: dToken.order.address,
           notes: dToken.order.notes,
           handoverPin: dToken.order.handoverPin,
+          isSupportDelivery: Boolean(dToken.order.supportRestaurantId),
           restaurant: {
             name: dToken.order.restaurant.name,
             phone: dToken.order.restaurant.contactPhone,
             businessType: dToken.order.restaurant.businessType,
+            address: dToken.order.restaurant.address,
+            latitude: dToken.order.restaurant.latitude,
+            longitude: dToken.order.restaurant.longitude,
           },
           customer: {
             name: dToken.order.customer.user.name,
@@ -376,6 +385,121 @@ export async function registerPublicDeliveryRoutes(fastify: FastifyInstance): Pr
       return reply.send({
         success: true,
         message: 'Llegada notificada exitosamente al comensal.',
+      });
+    } catch (error) {
+      return sendAppError(reply, error);
+    }
+  });
+
+  fastify.post('/public/delivery-ticket/:token/llegue-restaurante', async (request, reply) => {
+    const params = z.object({ token: z.string().min(1) }).safeParse(request.params);
+
+    if (!params.success) {
+      return reply.status(400).send({
+        success: false,
+        error: { code: 'INVALID_PARAMS', message: 'Token invalido.' },
+      });
+    }
+
+    try {
+      const { hashToken } = require('../utils/crypto');
+      const hashedToken = hashToken(params.data.token);
+      const dToken = await (prisma as any).deliveryToken.findFirst({
+        where: {
+          OR: [
+            { token: hashedToken },
+            { token: params.data.token }
+          ]
+        },
+        include: {
+          order: {
+            include: {
+              restaurant: true,
+              supportRestaurant: { select: { id: true, name: true } },
+              customer: { include: { user: true } },
+            },
+          },
+        },
+      }) as any;
+
+      if (!dToken) {
+        return reply.status(404).send({
+          success: false,
+          error: { code: 'TOKEN_NOT_FOUND', message: 'El enlace de reparto no existe o ya fue completado.' },
+        });
+      }
+
+      if (new Date() > dToken.expiresAt) {
+        await (prisma as any).deliveryToken.delete({ where: { id: dToken.id } });
+        return reply.status(410).send({
+          success: false,
+          error: { code: 'TOKEN_EXPIRED', message: 'El enlace de reparto ha expirado.' },
+        });
+      }
+
+      const order = dToken.order;
+
+      // Este avance de estado solo aplica a entregas de apoyo a red: el repartidor del
+      // restaurante aliado llega al restaurante origen a recoger el pedido.
+      if (order.supportRestaurantId) {
+        if (order.status === OrderStatus.READY) {
+          await prisma.order.update({
+            where: { id: order.id },
+            data: {
+              status: OrderStatus.IN_TRANSIT,
+              inTransitAt: new Date(),
+            },
+          });
+
+          // Registrar evento de tracking
+          await prisma.orderTracking.create({
+            data: {
+              orderId: order.id,
+              status: OrderStatus.IN_TRANSIT,
+              notes: 'SUPPORT_PICKED_UP',
+            },
+          });
+
+          // Notificar al restaurante origen que ya recogieron su pedido
+          emitNotification(
+            fastify.io,
+            order.restaurant.userId,
+            'RESTAURANT',
+            'order:support-picked-up',
+            {
+              orderId: order.id,
+              orderReference: order.orderReference,
+              status: 'IN_TRANSIT',
+              supportRestaurantName: order.supportRestaurant?.name,
+              message: `El repartidor de ${order.supportRestaurant?.name || 'tu aliado'} recogió el pedido. Va en camino a entregarlo.`,
+            },
+            {
+              orderId: order.id,
+            }
+          );
+
+          // Notificar al comensal que la entrega va en camino
+          emitNotification(
+            fastify.io,
+            order.customer.user.id,
+            'CUSTOMER',
+            'order:in-transit',
+            {
+              orderId: order.id,
+              status: 'IN_TRANSIT',
+              message: `Tu pedido va en camino (entregado por restaurante aliado${order.supportRestaurant?.name ? `: ${order.supportRestaurant.name}` : ''}).`,
+            },
+            {
+              orderId: order.id,
+            }
+          );
+        }
+        // Si ya estaba IN_TRANSIT, el avance es idempotente: no se vuelve a notificar.
+      }
+
+      return reply.send({
+        success: true,
+        message: 'Recogida confirmada en el restaurante.',
       });
     } catch (error) {
       return sendAppError(reply, error);
