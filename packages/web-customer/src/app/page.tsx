@@ -27,20 +27,20 @@ import { useChatStore } from '../store/chatStore';
 import dynamic from 'next/dynamic';
 import { useStore } from '../store';
 import { RestaurantSearchBar } from '../components/RestaurantSearchBar';
-import { AuthModal } from '../components/AuthModal';
-import { ChatPanel } from '../components/ChatPanel';
 import { SaDelLogo } from '../components/SaDelLogo';
 import { SaDelLoader } from '../components/SaDelLoader';
-import { ZonesModal } from '../components/ZonesModal';
-import CartDrawer from '../components/CartDrawer';
-import { type Billboard } from '../components/BillboardCarousel';
 import { CompactActiveOrderBanner, buildTimelineSteps, getEtaWindowMinutes, formatEstimatedArrivalMinutes } from '../components/CompactActiveOrderBanner';
-import RatingModal from '../components/RatingModal';
+import { type Billboard } from '../components/BillboardCarousel';
 import { createPlacesSource } from '../lib/places';
 
 const HomeView = dynamic(() => import('../views/HomeView').then(mod => mod.HomeView), { ssr: false });
 const ProfileView = dynamic(() => import('../views/ProfileView').then(mod => mod.ProfileView), { ssr: false });
 const OrdersView = dynamic(() => import('../views/OrdersView').then(mod => mod.OrdersView), { ssr: false });
+const CartDrawer = dynamic(() => import('../components/CartDrawer').then(mod => mod.default), { ssr: false });
+const ChatPanel = dynamic(() => import('../components/ChatPanel').then(mod => mod.ChatPanel), { ssr: false });
+const AuthModal = dynamic(() => import('../components/AuthModal').then(mod => mod.AuthModal), { ssr: false });
+const ZonesModal = dynamic(() => import('../components/ZonesModal').then(mod => mod.ZonesModal), { ssr: false });
+const RatingModal = dynamic(() => import('../components/RatingModal').then(mod => mod.default), { ssr: false });
 
 type OrderStatus =
   | 'PENDING'
