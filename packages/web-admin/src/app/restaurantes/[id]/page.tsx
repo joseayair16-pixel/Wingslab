@@ -301,7 +301,7 @@ export default function RestaurantDetailPage() {
             })(),
             platformFeeRate: (() => {
               const val = parseRequiredDecimal(editForm.platformFeeRate);
-              return val > 1 ? val / 100 : val;
+              return val > 0 ? val / 100 : 0;
             })(),
             billingContactEmail: editForm.billingContactEmail.trim() || undefined,
             businessType: editForm.businessType || undefined,
@@ -818,7 +818,15 @@ export default function RestaurantDetailPage() {
                         label="Tarifa de uso (Fija / Pesos)"
                         value={editForm.platformFeePerOrder}
                         onChange={(value) =>
-                          setEditForm((current) => (current ? { ...current, platformFeePerOrder: value } : current))
+                          setEditForm((current) =>
+                            current
+                              ? {
+                                  ...current,
+                                  platformFeePerOrder: value,
+                                  ...(value.trim() ? { platformFeeRate: '' } : {}),
+                                }
+                              : current
+                          )
                         }
                         placeholder="15.00"
                       />
@@ -826,10 +834,22 @@ export default function RestaurantDetailPage() {
                         label="Tarifa de uso (Porcentaje)"
                         value={editForm.platformFeeRate}
                         onChange={(value) =>
-                          setEditForm((current) => (current ? { ...current, platformFeeRate: value } : current))
+                          setEditForm((current) =>
+                            current
+                              ? {
+                                  ...current,
+                                  platformFeeRate: value,
+                                  ...(value.trim() ? { platformFeePerOrder: '' } : {}),
+                                }
+                              : current
+                          )
                         }
-                        placeholder="0.12 o 12"
+                        placeholder="5 = 5%"
                       />
+                      <p className="text-xs leading-5 text-neutral-500">
+                        Tarifas de uso mutuamente excluyentes: el porcentaje se calcula solo sobre el
+                        subtotal neto de los productos (sin envío ni tarifa de servicio).
+                      </p>
                       <Field
                         label="Correo de facturacion"
                         value={editForm.billingContactEmail}
@@ -1675,7 +1695,7 @@ function createEditFormState(restaurant: RestaurantDetail): RestaurantEditForm {
     maxDeliveryTime: restaurant.maxDeliveryTime.toString(),
     billingCycle: restaurant.billingCycle,
     platformFeePerOrder: restaurant.platformFeePerOrder.toString(),
-    platformFeeRate: restaurant.platformFeeRate.toString(),
+    platformFeeRate: restaurant.platformFeeRate > 0 ? String(Math.round(restaurant.platformFeeRate * 100)) : '',
     billingContactEmail: restaurant.billingContactEmail || restaurant.email,
     businessType: restaurant.businessType,
   };

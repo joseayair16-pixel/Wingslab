@@ -100,6 +100,7 @@ export async function buildRestaurantBillingSummary(seed: BillingSeed, cutEnd?: 
     _sum: {
       totalAmount: true,
       whatsappFee: true,
+      platformFee: true,
     },
     _count: {
       id: true,
@@ -109,7 +110,9 @@ export async function buildRestaurantBillingSummary(seed: BillingSeed, cutEnd?: 
   const deliveredRevenue = aggregate._sum.totalAmount || 0;
   const deliveredOrders = aggregate._count.id;
   const serviceFeeRevenue = (seed.serviceFee || 0) * deliveredOrders;
-  const platformFeeRevenue = (seed.platformFeePerOrder || 0) * deliveredOrders;
+  // La comision de la plataforma se suma desde el fee real guardado por pedido
+  // (tarifa fija o porcentaje sobre el subtotal neto), no se recalcula de la config.
+  const platformFeeRevenue = aggregate._sum.platformFee || 0;
   const whatsappFeeRevenue = aggregate._sum.whatsappFee || 0;
   
   // Calculate existing unpaid settlements debt

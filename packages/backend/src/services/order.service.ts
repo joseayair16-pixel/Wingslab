@@ -583,7 +583,14 @@ export async function createOrderForCustomer({
   const subtotal = calculatedSubtotal;
   const taxAmount = 0;
   const serviceFee = restaurant.serviceFee || 0;
-  const platformFee = restaurant.platformFeePerOrder || 0;
+  // Tarifa de uso de la app: tarifa fija por pedido O porcentaje del subtotal neto de productos.
+  // Son mutuamente excluyentes: si hay porcentaje (>0), se usa ese; si no, la tarifa fija.
+  // El porcentaje NUNCA incluye envío ni tarifa de servicio, solo el importe de los productos.
+  const platformFeeRate = (restaurant.platformFeeRate as number) || 0;
+  const platformFee =
+    platformFeeRate > 0
+      ? Math.round(subtotal * platformFeeRate * 100) / 100
+      : restaurant.platformFeePerOrder || 0;
   const whatsappFee =
     restaurant.whatsappNotifications && restaurant.contactPhone ? WHATSAPP_NOTIFICATION_FEE : 0;
 

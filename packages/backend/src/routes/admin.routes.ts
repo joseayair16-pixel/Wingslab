@@ -1708,20 +1708,15 @@ export async function registerAdminRoutes(fastify: FastifyInstance): Promise<voi
           });
         }
 
-        // WORKAROUND: Since frontend is stuck on old build, intercept platformFeeRate
-        // If the user entered a number > 0 in the frontend's Tarifa de uso (platformFeeRate),
-        // we assume they meant a fixed fee in pesos (platformFeePerOrder).
+        // Tarifas de uso de la app: mutuamente excluyentes.
+        // - Si se configura un porcentaje (>0), se aplica sobre el subtotal neto de productos
+        //   y se desactiva la tarifa fija por pedido.
+        // - Si el porcentaje es 0, se mantiene la tarifa fija por pedido (comportamiento historico).
         if (restaurantData.platformFeeRate !== undefined) {
-          // If the transform previously divided it by 100, restore the original value by multiplying by 100
-          // For example, if they entered 3, transform made it 0.03. We want 3.
-          // Wait, if they entered 0.03, it means they might have typed 0.03, but they said they typed 3.
-          // Let's just override platformFeePerOrder and reset platformFeeRate.
-          const originalValue = restaurantData.platformFeeRate > 0 && restaurantData.platformFeeRate <= 1 
-            ? restaurantData.platformFeeRate * 100 
-            : restaurantData.platformFeeRate;
-          
-          if (originalValue > 0) {
-            restaurantData.platformFeePerOrder = originalValue;
+          const rate = restaurantData.platformFeeRate;
+          if (rate > 0) {
+            restaurantData.platformFeePerOrder = 0;
+          } else {
             restaurantData.platformFeeRate = 0;
           }
         }
