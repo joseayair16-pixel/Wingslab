@@ -1365,6 +1365,129 @@ export async function registerAdminRoutes(fastify: FastifyInstance): Promise<voi
       });
     });
 
+    admin.delete('/admin/regiones/:code', async (request, reply) => {
+      const params = z
+        .object({
+          code: z.string().min(1, 'El codigo de region es obligatorio.'),
+        })
+        .safeParse(request.params);
+
+      if (!params.success) {
+        return reply.status(400).send({
+          success: false,
+          error: {
+            code: 'INVALID_PARAMS',
+            message: 'Codigo de region invalido.',
+          },
+        });
+      }
+
+      const code = normalizeRegionCode(params.data.code);
+
+      if (!code) {
+        return reply.status(400).send({
+          success: false,
+          error: {
+            code: 'INVALID_REGION_CODE',
+            message: 'No se pudo generar un codigo valido para la zona.',
+          },
+        });
+      }
+
+      const region = await prisma.region.findUnique({
+        where: { code },
+        select: { id: true, code: true, name: true, city: true, state: true },
+      });
+
+      if (!region) {
+        return reply.status(404).send({
+          success: false,
+          error: {
+            code: 'REGION_NOT_FOUND',
+            message: 'No se encontro la zona.',
+          },
+        });
+      }
+
+      const [
+        restaurantCount,
+        driverCount,
+        memberCount,
+        dailyStatsCount,
+        promotionCount,
+        billboardCount,
+      ] = await Promise.all([
+        prisma.restaurant.count({ where: { region: code } }),
+        prisma.driver.count({ where: { region: code } }),
+        prisma.user.count({ where: { region: code, role: { not: UserRole.ADMIN } } }),
+        prisma.dailyStats.count({ where: { region: code } }),
+        prisma.promotion.count({ where: { regions: { has: code } } }),
+        prisma.billboard.count({ where: { regions: { has: code } } }),
+      ]);
+
+      const blockMessage =
+        restaurantCount > 0
+          ? `No se puede eliminar la zona porque ${restaurantCount} restaurante(s) la usan. Reasigna esos restaurantes a otra zona primero.`
+          : driverCount > 0
+            ? `No se puede eliminar la zona porque ${driverCount} repartidor(es) la usan. Reasigna esos repartidores a otra zona primero.`
+            : memberCount > 0
+              ? `No se puede eliminar la zona porque ${memberCount} cliente(s) la usan. Reasigna esos clientes a otra zona primero.`
+              : dailyStatsCount > 0
+                ? 'No se puede eliminar la zona porque existen pedidos o historial vinculados a ella.'
+                : null;
+
+      if (blockMessage) {
+        return reply.status(409).send({
+          success: false,
+          error: {
+            code: 'REGION_IN_USE',
+            message: blockMessage,
+          },
+        });
+      }
+
+      await prisma.$transaction(async (tx) => {
+        if (promotionCount > 0) {
+          const promotions = await tx.promotion.findMany({
+            where: { regions: { has: code } },
+            select: { id: true, regions: true },
+          });
+          await Promise.all(
+            promotions.map((promotion) =>
+              tx.promotion.update({
+                where: { id: promotion.id },
+                data: { regions: promotion.regions.filter((item) => item !== code) },
+              })
+            )
+          );
+        }
+
+        if (billboardCount > 0) {
+          const billboards = await tx.billboard.findMany({
+            where: { regions: { has: code } },
+            select: { id: true, regions: true },
+          });
+          await Promise.all(
+            billboards.map((billboard) =>
+              tx.billboard.update({
+                where: { id: billboard.id },
+                data: { regions: billboard.regions.filter((item) => item !== code) },
+              })
+            )
+          );
+        }
+
+        await tx.region.delete({
+          where: { code },
+        });
+      });
+
+      return reply.send({
+        success: true,
+        data: region,
+      });
+    });
+
     admin.get('/admin/restaurantes/:id', async (request, reply) => {
       const params = z
         .object({

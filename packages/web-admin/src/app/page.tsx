@@ -560,6 +560,7 @@ export default function Home() {
   const [loadingRegions, setLoadingRegions] = useState(false);
   const [verifyingCode, setVerifyingCode] = useState(false);
   const [savingRegion, setSavingRegion] = useState(false);
+  const [deletingRegion, setDeletingRegion] = useState(false);
   const [error, setError] = useState('');
   const [authMessage, setAuthMessage] = useState('');
   const [storeCategories, setStoreCategories] = useState<StoreCategoryItem[]>([]);
@@ -2141,6 +2142,48 @@ export default function Home() {
       );
     } finally {
       setSavingRegion(false);
+    }
+  }
+
+  async function deleteRegion() {
+    if (!selectedRegion) {
+      return;
+    }
+
+    const region = selectedRegion;
+
+    if (!window.confirm(`¿Eliminar la zona "${region.name}" permanentemente?\n\nSe desactivara de todas las promociones y banners asociados. Esta accion no se puede deshacer.`)) {
+      return;
+    }
+
+    setDeletingRegion(true);
+    setError('');
+    setAuthMessage('');
+
+    try {
+      await requestJson<{ success: true; data: RegionItem }>({
+        apiBase,
+        path: `/admin/regiones/${region.code}`,
+        token,
+        options: {
+          method: 'DELETE',
+        },
+        fallbackMessage: 'No se pudo eliminar la zona.',
+      });
+
+      setRegions((current) => current.filter((item) => item.code !== region.code));
+      setSelectedRegionCode('');
+      setSelectedRegion(null);
+      setRegionForm(null);
+      setAuthMessage(`Zona "${region.name}" eliminada.`);
+    } catch (requestError) {
+      setError(
+        requestError instanceof Error
+          ? requestError.message
+          : 'No se pudo eliminar la zona.'
+      );
+    } finally {
+      setDeletingRegion(false);
     }
   }
 
@@ -6392,6 +6435,16 @@ export default function Home() {
                           >
                             Restablecer
                           </button>
+                          {selectedRegion && (
+                            <button
+                              type="button"
+                              disabled={deletingRegion || savingRegion}
+                              onClick={deleteRegion}
+                              className="rounded-full bg-red-50 border border-red-100 px-4 py-3 text-sm font-semibold text-red-700 transition hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                              {deletingRegion ? 'Eliminando...' : 'Eliminar zona'}
+                            </button>
+                          )}
                         </div>
                       </form>
                     ) : (
