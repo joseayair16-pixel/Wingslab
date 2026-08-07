@@ -7004,17 +7004,17 @@ export default function Home() {
                               <div className="sm:col-span-3">
                                 <label className="grid gap-1.5 text-xs font-bold text-neutral-800">
                                   <span>Mínimo</span>
-                                  <input
-                                    type="number"
-                                    min="0"
+                                  <EditableNumberInput
+                                    integer
+                                    min={0}
                                     value={group.minSelection}
-                                    onChange={(e) => {
+                                    onCommit={(v) => {
                                       setProductDraft((current) => {
                                         const nextGroups = [...(current.optionGroups || [])];
                                         if (nextGroups[groupIdx]) {
                                           nextGroups[groupIdx] = {
                                             ...nextGroups[groupIdx],
-                                            minSelection: Math.max(0, parseInt(e.target.value) || 0)
+                                            minSelection: v,
                                           };
                                         }
                                         return { ...current, optionGroups: nextGroups };
@@ -7027,17 +7027,17 @@ export default function Home() {
                               <div className="sm:col-span-3">
                                 <label className="grid gap-1.5 text-xs font-bold text-neutral-800">
                                   <span>Máximo</span>
-                                  <input
-                                    type="number"
-                                    min="1"
+                                  <EditableNumberInput
+                                    integer
+                                    min={1}
                                     value={group.maxSelection}
-                                    onChange={(e) => {
+                                    onCommit={(v) => {
                                       setProductDraft((current) => {
                                         const nextGroups = [...(current.optionGroups || [])];
                                         if (nextGroups[groupIdx]) {
                                           nextGroups[groupIdx] = {
                                             ...nextGroups[groupIdx],
-                                            maxSelection: Math.max(1, parseInt(e.target.value) || 1)
+                                            maxSelection: v,
                                           };
                                         }
                                         return { ...current, optionGroups: nextGroups };
@@ -7093,17 +7093,15 @@ export default function Home() {
                                     />
                                     <div className="relative w-28 shrink-0">
                                       <span className="absolute left-3 top-2.5 text-xs font-bold text-sky-400">$</span>
-                                      <input
-                                        type="number"
-                                        min="0"
+                                      <EditableNumberInput
+                                        min={0}
                                         step="any"
-                                        required
                                         value={opt.price}
-                                        onChange={(e) => {
+                                        onCommit={(v) => {
                                           setProductDraft((current) => {
                                             const nextGroups = [...(current.optionGroups || [])];
                                             if (nextGroups[groupIdx]?.options[optIdx]) {
-                                              nextGroups[groupIdx].options[optIdx].price = Math.max(0, parseFloat(e.target.value) || 0);
+                                              nextGroups[groupIdx].options[optIdx].price = v;
                                             }
                                             return { ...current, optionGroups: nextGroups };
                                           });
@@ -12158,6 +12156,55 @@ function Field({
         className="block w-full min-w-0 rounded-[18px] border border-black/5 bg-neutral-100/50 px-5 py-3.5 text-[15px] font-medium text-neutral-950 shadow-inner outline-none transition-all duration-300 placeholder:text-neutral-400 hover:bg-neutral-100/80 focus:border-sky-400 focus:bg-white focus:ring-4 focus:ring-sky-400/20 focus:shadow-md"
       />
     </label>
+  );
+}
+
+function EditableNumberInput({
+  value,
+  onCommit,
+  min,
+  integer = false,
+  step,
+  placeholder,
+  className,
+}: {
+  value: number;
+  onCommit: (value: number) => void;
+  min?: number;
+  integer?: boolean;
+  step?: string;
+  placeholder?: string;
+  className?: string;
+}) {
+  const [text, setText] = useState<string>(String(value));
+
+  useEffect(() => {
+    setText(String(value));
+  }, [value]);
+
+  function commit() {
+    const parsed = integer ? parseInt(text, 10) : parseFloat(text);
+    let next = Number.isFinite(parsed) ? parsed : 0;
+    if (min !== undefined && next < min) next = min;
+    setText(String(next));
+    onCommit(next);
+  }
+
+  return (
+    <input
+      type="number"
+      min={min}
+      step={step}
+      inputMode="numeric"
+      value={text}
+      onChange={(event) => setText(event.target.value)}
+      onBlur={commit}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+      }}
+      placeholder={placeholder}
+      className={className}
+    />
   );
 }
 
