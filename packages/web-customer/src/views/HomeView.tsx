@@ -877,7 +877,7 @@ export const HomeView = React.memo(function HomeView({
                 ? 'No hay restaurantes que coincidan con los filtros seleccionados.'
                 : 'No hay resultados que coincidan con los filtros seleccionados. Intenta ajustar los filtros.'
             } />
-          ) : businessTypeFilter === 'all' && activeZones.length > 0 ? (
+          ) : activeZones.length > 0 ? (
             <div className="space-y-5">
               <div className="relative overflow-hidden rounded-[32px] border border-black/[0.04] bg-gradient-to-br from-white to-neutral-50/80 px-6 py-10 text-center shadow-[0_2px_20px_rgba(0,0,0,0.03)]">
                 <div className="absolute -right-12 -top-12 h-40 w-40 rounded-full bg-sky-400/5 blur-3xl" />
@@ -900,7 +900,7 @@ export const HomeView = React.memo(function HomeView({
                       className="group relative inline-flex items-center gap-2 overflow-hidden rounded-full border border-white/50 bg-white/70 px-4 py-2.5 text-sm font-bold text-neutral-800 shadow-[0_2px_12px_rgba(0,0,0,0.04)] backdrop-blur-xl transition-all duration-300 hover:-translate-y-0.5 hover:shadow-[0_8px_24px_rgba(0,0,0,0.08)] active:scale-[0.97]"
                     >
                       <span className="relative z-10 flex items-center gap-1.5">
-                        <svg className="h-4 w-4 text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+                        <svg className="h-4 w-4 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
                           <path strokeLinecap="round" strokeLinejoin="round" d="M15 10.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
                           <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1 1 15 0Z" />
                         </svg>
