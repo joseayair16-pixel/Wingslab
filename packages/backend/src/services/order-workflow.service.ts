@@ -25,6 +25,7 @@ import { logger } from '../utils/logger';
 import { appEvents } from '../utils/events';
 import { calculateOrderEta, estimateDeliveryTravelMinutes } from '../utils/order-eta';
 import { sendPushNotification } from './notification.service';
+import { sendWhatsAppDriverDemand } from './whatsapp.service';
 
 type WorkflowParams = {
   prisma: PrismaClient;
@@ -2012,6 +2013,7 @@ export async function sweepUnassignedOrdersForRegion(prisma: PrismaClient, regio
   });
 
   const assignedOrders = [];
+  let pendingCount = 0;
 
   for (const order of unassignedOrders) {
     try {
@@ -2030,11 +2032,101 @@ export async function sweepUnassignedOrdersForRegion(prisma: PrismaClient, regio
           order: updatedOrder,
           driver: assignResult.driver,
         });
+      } else {
+        pendingCount += 1;
       }
     } catch (err) {
+      pendingCount += 1;
       logger.error(`Sweep failed for order ${order.id}`, err);
     }
   }
 
+  // Si quedan pedidos de entrega sin repartidor, invita (vía WhatsApp) a los
+  // repartidores activos pero OFFLINE de la zona a conectarse. Controlado por
+  // WHATSAPP_DRIVER_DEMAND_ENABLED y DRIVER_DEMAND_THRESHOLD.
+  if (pendingCount > 0) {
+    try {
+      await notifyOfflineDriversOfDemand(prisma, region, pendingCount);
+    } catch (err) {
+      logger.error(`[DriverDemand] Fallo al notificar demanda en zona ${region}`, err);
+    }
+  }
+
   return assignedOrders;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Aviso de demanda a repartidores (reclutamiento por WhatsApp en horas pico)
+// ─────────────────────────────────────────────────────────────────────────────
+// Cuando hay pedidos de entrega esperando sin repartidor suficiente en una zona,
+// se invita (vía plantilla WhatsApp) a los repartidores ACTIVOS pero OFFLINE de esa
+// zona a conectarse para tomar entregas. Controlado por WHATSAPP_DRIVER_DEMAND_ENABLED
+// y con cooldown por repartidor para no spamear.
+const demandCooldownMs = 3 * 60 * 60 * 1000; // 3 horas por repartidor
+const driverDemandNotifiedAt = new Map<string, number>();
+
+function isDriverDemandEnabled(): boolean {
+  return String(process.env.WHATSAPP_DRIVER_DEMAND_ENABLED || '').toLowerCase() === 'true';
+}
+
+function getDriverAppUrl(): string {
+  const base = process.env.DRIVER_APP_URL || process.env.WEBAPP_URL || process.env.RESTAURANT_PANEL_URL || '';
+  return base.replace(/\/+$/, '') || '';
+}
+
+export async function notifyOfflineDriversOfDemand(
+  prisma: PrismaClient,
+  region: string,
+  pendingCount: number
+): Promise<number> {
+  if (!isDriverDemandEnabled()) return 0;
+  if (!pendingCount || pendingCount <= 0) return 0;
+
+  // Umbral mínimo de pedidos sin repartidor para disparar el aviso.
+  const threshold =
+    parseInt(String(process.env.DRIVER_DEMAND_THRESHOLD || '2'), 10) || 2;
+  if (pendingCount < threshold) return 0;
+
+  const appUrl = getDriverAppUrl();
+  if (!appUrl) {
+    logger.warn('[DriverDemand] Falta DRIVER_APP_URL/WEBAPP_URL. Aviso omitido.');
+    return 0;
+  }
+
+  const offlineDrivers = await prisma.driver.findMany({
+    where: {
+      region,
+      status: DriverStatus.ACTIVE,
+      availability: DriverAvailability.OFFLINE,
+      user: { status: 'ACTIVE' as any },
+    },
+    select: { id: true, user: { select: { phone: true, name: true } } },
+  });
+
+  let sentCount = 0;
+  const now = Date.now();
+
+  for (const driver of offlineDrivers) {
+    const phone = driver.user?.phone;
+    if (!phone) continue;
+
+    const lastSent = driverDemandNotifiedAt.get(driver.id) || 0;
+    if (now - lastSent < demandCooldownMs) continue;
+
+    const result = await sendWhatsAppDriverDemand({
+      driverPhone: phone,
+      pendingCount,
+      appUrl,
+    });
+
+    if (result.sent) {
+      driverDemandNotifiedAt.set(driver.id, now);
+      sentCount += 1;
+      logger.info(`[DriverDemand] Aviso enviado a repartidor ${driver.id} (zona ${region}).`);
+    } else {
+      logger.warn(`[DriverDemand] No se envió a repartidor ${driver.id} (zona ${region}).`);
+    }
+  }
+
+  return sentCount;
 }

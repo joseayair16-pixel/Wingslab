@@ -8,6 +8,7 @@ const NEW_ORDER_TEMPLATE = 'sadel_new_order';
 const PAYMENT_REMINDER_TEMPLATE = 'sadel_pago_recordatorio';
 const PAYMENT_SUSPENDED_TEMPLATE = 'sadel_cuenta_suspendida';
 const THANK_YOU_TEMPLATE = 'sadel_gracias_comensal';
+const DRIVER_DEMAND_TEMPLATE = 'sadel_aviso_demanda_repartidores';
 const TEMPLATE_LANGUAGE = 'es_MX';
 
 type SendMessageParams = {
@@ -216,6 +217,26 @@ Paga o sube tu comprobante aquí:
 ${params.balanceUrl}`;
 
   console.log('[WhatsApp Service] No se pudo enviar automáticamente. Envía manualmente:\n' + message);
+  return { sent: false, channel: 'manual' };
+}
+
+export async function sendWhatsAppDriverDemand(params: {
+  driverPhone: string;
+  pendingCount: number;
+  appUrl: string;
+}): Promise<WhatsAppSendResult> {
+  const sent = await sendTemplateViaCloudApi({
+    to: params.driverPhone,
+    templateName: DRIVER_DEMAND_TEMPLATE,
+    bodyParameters: [String(params.pendingCount), params.appUrl],
+  });
+
+  if (sent) return { sent: true, channel: 'template' };
+
+  console.log(
+    `[WhatsApp] No se pudo enviar el aviso de demanda (template ${DRIVER_DEMAND_TEMPLATE}) a ${params.driverPhone}.` +
+      '\nRevisa que el template esté aprobado en Meta y que WHATSAPP_API_TOKEN / WHATSAPP_PHONE_NUMBER_ID estén configurados.',
+  );
   return { sent: false, channel: 'manual' };
 }
 
