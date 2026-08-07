@@ -1,4 +1,4 @@
-const CACHE_NAME = 'sadel-customer-v7';
+const CACHE_NAME = 'sadel-customer-v8';
 
 // App shell mínimo para que la PWA instalada abra aunque no haya red
 // (la navegación sigue siendo network-first; esto solo garantiza un arranque offline).
@@ -137,8 +137,38 @@ self.addEventListener('fetch', function (event) {
   var requestUrl = new URL(event.request.url);
 
   if (event.request.method !== 'GET' || !requestUrl.protocol.startsWith('http')) return;
-  if (requestUrl.pathname.startsWith('/api/')) return;
   if (requestUrl.pathname.includes('socket.io')) return;
+
+  // API reads (same-origin /api/... proxied by Next): stale-while-revalidate.
+  // Primera visita usa red; las siguientes sirven al instante en segundo plano.
+  if (requestUrl.origin === self.location.origin && requestUrl.pathname.startsWith('/api/')) {
+    event.respondWith(
+      caches.open(CACHE_NAME).then(function (cache) {
+        return cache.match(event.request).then(function (cachedResponse) {
+          var networkFetch = fetch(event.request).then(function (networkResponse) {
+            if (networkResponse && networkResponse.ok) {
+              cache.put(event.request, networkResponse.clone());
+            }
+            return networkResponse;
+          });
+
+          var staleTimer = new Promise(function (resolve) {
+            setTimeout(function () {
+              resolve(undefined);
+            }, 1500);
+          });
+
+          if (cachedResponse && cachedResponse.ok) {
+            Promise.race([networkFetch, staleTimer]).catch(function () {});
+            return cachedResponse;
+          }
+
+          return networkFetch;
+        });
+      })
+    );
+    return;
+  }
 
   // Navigation (HTML pages): network-first, fallback to cache
   if (event.request.mode === 'navigate') {

@@ -31,6 +31,17 @@ const kindFolderMap: Record<MediaUploadKind, string> = {
   'driver-photo': 'drivers/photos',
 };
 
+// Límite máximo de ancho/alto por tipo. Evita que fotos de cámara
+// (2000-4000px) se descarguen completas cuando se muestran a 100-300px.
+const kindMaxDimension: Record<MediaUploadKind, number> = {
+  'restaurant-logo': 512,
+  'restaurant-cover': 1600,
+  'product-image': 900,
+  'payment-proof': 1280,
+  'site-image': 1280,
+  'driver-photo': 800,
+};
+
 function getR2Config() {
   const accountId = process.env.R2_ACCOUNT_ID?.trim();
   const accessKeyId = process.env.R2_ACCESS_KEY_ID?.trim();
@@ -152,7 +163,15 @@ export async function uploadImage(params: {
     const image = sharp(buffer);
     metadata = await image.metadata();
 
+    const maxDimension = kindMaxDimension[kind];
     webpBuffer = await image
+      .rotate()
+      .resize({
+        width: maxDimension,
+        height: maxDimension,
+        fit: 'inside',
+        withoutEnlargement: true,
+      })
       .webp({ quality: 80, effort: 4 })
       .toBuffer();
   } catch (err) {
