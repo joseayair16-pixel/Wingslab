@@ -24,6 +24,7 @@ import {
 import { restaurantOrderListSelect } from '../services/order-selects';
 import { getOrCreateRequestContext } from '../utils/request-context';
 import { getDistanceInKm, isRestaurant, getBusinessRef, getBusinessArticleCapitalized } from '../utils/restaurant';
+import { buildCustomerDeliveryUrl } from '../utils/customer-web';
 
 const listOrdersQuerySchema = z.object({
   status: z.nativeEnum(OrderStatus).optional(),
@@ -197,6 +198,7 @@ export async function registerRestaurantOrderRoutes(fastify: FastifyInstance): P
             token: tokenStr, // Devolver token en texto plano al cliente
             expiresAt: dToken.expiresAt,
             orderReference: order.orderReference,
+            url: buildCustomerDeliveryUrl(tokenStr),
           },
         });
       } catch (error) {
@@ -1051,6 +1053,7 @@ export async function registerRestaurantOrderRoutes(fastify: FastifyInstance): P
             deliveryToken: {
               token: tokenStr, // Devolver token en texto plano al cliente
               expiresAt: dToken.expiresAt,
+              url: buildCustomerDeliveryUrl(tokenStr),
             },
           },
         });
@@ -1932,6 +1935,7 @@ export async function registerRestaurantOrderRoutes(fastify: FastifyInstance): P
             deliveryToken: {
               token: supportTokenStr, // Token en texto plano para el QR
               expiresAt: supportDToken.expiresAt,
+              url: buildCustomerDeliveryUrl(supportTokenStr),
             },
           },
         });

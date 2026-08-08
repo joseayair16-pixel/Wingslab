@@ -380,9 +380,28 @@ function getCustomerOrigin(): string {
         return `${protocol}//${subdomains.slice(1).join('.')}${port ? `:${port}` : ''}`;
       }
     }
+    // La app del comensal nunca se sirve desde un hostname *.vercel.app
+    // (esos dominios pertenecen al host actual del panel). Devolvemos ''
+    // para que el llamador use la URL canónica del backend / NEXT_PUBLIC_CUSTOMER_URL.
+    if (hostname.endsWith('.vercel.app')) return '';
     return `${protocol}//${hostname}${port ? `:${port}` : ''}`;
   }
   return '';
+}
+
+/**
+ * Origen de la app del comensal. El backend entrega la URL canónica en el
+ * payload del QR (campo `url`); esta función es SOLO un fallback para
+ * desarrollo/localhost o cuando el backend aun no la provee.
+ */
+function resolveCustomerOrigin(): string {
+  if (process.env.NEXT_PUBLIC_CUSTOMER_URL) return process.env.NEXT_PUBLIC_CUSTOMER_URL;
+  const guessed = getCustomerOrigin();
+  if (guessed) return guessed;
+  if (typeof window !== 'undefined') {
+    return `${window.location.protocol}//${window.location.host}`;
+  }
+  return 'http://localhost:3003';
 }
 const storageKey = 'sadel.restaurant';
 const orderAlertSoundPreferenceKey = `${storageKey}.orderAlertSoundEnabled`;
@@ -841,7 +860,7 @@ export default function Home() {
   const [paymentDetailOrder, setPaymentDetailOrder] = useState<typeof selectedOrderForTicket | null>(null);
   const [emergencyDeliveryOrderId, setEmergencyDeliveryOrderId] = useState<string | null>(null);
   const [unassignConfirmOrderId, setUnassignConfirmOrderId] = useState<string | null>(null);
-  const [activeQrCodeData, setActiveQrCodeData] = useState<{ token: string; orderReference: string; id: string } | null>(null);
+  const [activeQrCodeData, setActiveQrCodeData] = useState<{ token: string; orderReference: string; id: string; url?: string } | null>(null);
   const [incomingOrderQueue, setIncomingOrderQueue] = useState<string[]>([]);
   const [incomingOrderCountdownMs, setIncomingOrderCountdownMs] = useState<number>(newOrderDecisionWindowMs);
   const [kitchenClockNow, setKitchenClockNow] = useState(Date.now());
@@ -3310,6 +3329,7 @@ export default function Home() {
           token: res.data.deliveryToken.token,
           orderReference: res.data.orderReference,
           id: orderId,
+          url: res.data.deliveryToken.url,
         });
       }
 
@@ -5458,6 +5478,7 @@ export default function Home() {
                           token: data.data.deliveryToken.token,
                           orderReference: data.data.orderReference || '',
                           id: supportRequestsQueue[0].orderId,
+                          url: data.data.deliveryToken.url,
                         });
                       }
                     } else {
@@ -5773,8 +5794,10 @@ export default function Home() {
 
       {/* MODAL DE DESPACHO EXPRESS QR (REPARTO PROPIO) */}
       {activeQrCodeData ? (() => {
-        const origin = getCustomerOrigin() || (typeof window !== 'undefined' ? `${window.location.protocol}//${window.location.host}` : 'http://localhost:3003');
-        const deliveryUrl = `${origin}/reparto/ver/${activeQrCodeData.token}`;
+        const deliveryUrl =
+          activeQrCodeData.url && /^https?:\/\//i.test(activeQrCodeData.url)
+            ? activeQrCodeData.url
+            : `${resolveCustomerOrigin()}/reparto/ver/${activeQrCodeData.token}`;
 
         return (
           <div
@@ -8432,6 +8455,7 @@ export default function Home() {
                                               token: res.data.token,
                                               orderReference: res.data.orderReference,
                                               id: order.id,
+                                              url: res.data.url,
                                             });
                                           } else {
                                             pushToast('error', 'Error', 'No se encontró un reparto activo para este pedido.');
@@ -8462,6 +8486,7 @@ export default function Home() {
                                               token: res.data.token,
                                               orderReference: res.data.orderReference,
                                               id: order.id,
+                                              url: res.data.url,
                                             });
                                           } else {
                                             pushToast('error', 'Error', 'No se encontró un reparto activo para este pedido.');
