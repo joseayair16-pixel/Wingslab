@@ -443,6 +443,7 @@ export default function Home() {
   const [promoImageUrl, setPromoImageUrl] = useState('');
   const [billboards, setBillboards] = useState<Billboard[]>([]);
   const [showAuthModal, setShowAuthModal] = useState(false);
+  const [welcomeUser, setWelcomeUser] = useState<AuthUser | null>(null);
 
   // Deuda por pedido no recibido (cliente no salió a recibir)
   const [debtData, setDebtData] = useState<DebtInfo | null>(null);
@@ -2536,12 +2537,20 @@ export default function Home() {
         requiresAcknowledgement: true,
         dismissible: false,
       });
+    } else {
+      setWelcomeUser(newUser);
     }
 
     void loadProfile();
     void loadAddresses();
     void loadDashboard();
   }, [loadProfile, loadAddresses, loadDashboard, setToken, setSessionUser]);
+
+  useEffect(() => {
+    if (!welcomeUser) return;
+    const timer = setTimeout(() => setWelcomeUser(null), 5000);
+    return () => clearTimeout(timer);
+  }, [welcomeUser]);
 
   async function handlePlaceOrder() {
     const isPickup = fulfillmentType === 'PICKUP';
@@ -4276,6 +4285,51 @@ export default function Home() {
           apiBase={apiBase}
           token={token || undefined}
         />
+      ) : null}
+
+      {welcomeUser ? (
+        <>
+          <style>{`
+            @keyframes welcomeIn {
+              from { opacity: 0; transform: translateY(-14px) scale(0.98); }
+              to { opacity: 1; transform: translateY(0) scale(1); }
+            }
+            @keyframes welcomeBar {
+              from { width: 100%; }
+              to { width: 0%; }
+            }
+            .animate-welcome-in { animation: welcomeIn 0.5s cubic-bezier(0.16, 1, 0.3, 1) both; }
+            .animate-welcome-bar { animation: welcomeBar 5s linear forwards; }
+          `}</style>
+          <div className="pointer-events-none fixed left-1/2 top-16 z-[70] w-[calc(100%-2rem)] max-w-sm -translate-x-1/2">
+            <div className="animate-welcome-in pointer-events-auto overflow-hidden rounded-3xl border border-black/[0.06] bg-white/95 shadow-[0_24px_48px_-12px_rgba(0,0,0,0.18)] backdrop-blur-md">
+              <div className="flex items-start gap-3.5 p-5">
+                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-sky-50 text-xl">👋</div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-[15px] font-bold tracking-[-0.01em] text-neutral-950">
+                    Hola {(welcomeUser.name || '').split(' ')[0] || 'amigo'} ¡Qué bueno tenerte aquí!
+                  </p>
+                  <p className="mt-1 text-[13px] leading-relaxed text-neutral-500">
+                    Explora SaDeL y descubre algo que te guste. Aquí encontrarás justo lo que buscas.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setWelcomeUser(null)}
+                  aria-label="Cerrar bienvenida"
+                  className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-neutral-400 transition-colors hover:bg-neutral-100 hover:text-neutral-700"
+                >
+                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+              <div className="h-1 w-full overflow-hidden rounded-full bg-neutral-100">
+                <div className="animate-welcome-bar h-full rounded-full bg-sky-400" />
+              </div>
+            </div>
+          </div>
+        </>
       ) : null}
 
       {toastMessage ? (

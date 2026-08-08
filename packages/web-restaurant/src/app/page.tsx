@@ -2300,7 +2300,12 @@ export default function Home() {
       persistSession(payload.data.token, payload.data.user);
       setPassword('');
       setIsLoginModalOpen(false);
-      pushToast('success', 'Sesion lista', `Bienvenido de nuevo, ${payload.data.user.name}.`);
+      const firstName = (payload.data.user.name || '').split(' ')[0] || 'negocio';
+      pushToast(
+        'success',
+        `¡Bienvenido de nuevo, ${firstName}! 👋`,
+        'Sesión iniciada. Tu tienda está lista: revisa tus pedidos y arranca el día con todo. 💪',
+      );
     } catch (requestError) {
       const message = getRequestErrorMessage(requestError, 'No se pudo iniciar sesion.');
       setError(message);
