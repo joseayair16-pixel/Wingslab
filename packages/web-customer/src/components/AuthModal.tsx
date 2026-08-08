@@ -612,7 +612,7 @@ export const AuthModal = memo(function AuthModal({ isOpen, onClose, onSuccess, a
                             type="button"
                             onClick={verifyCode}
                             disabled={verifyingCode || otpCode.trim().length !== 6}
-                            className="w-full rounded-2xl bg-[#0a0a0a] py-3.5 text-sm font-semibold text-[#ffffff] transition-all duration-200 hover:bg-[#262626] hover:shadow-[0_8px_24px_rgba(10,10,10,0.12)] disabled:cursor-not-allowed disabled:bg-neutral-100 disabled:text-neutral-400 disabled:shadow-none active:scale-[0.98] active-scale"
+                            className="w-full rounded-2xl bg-[#0a0a0a] py-3.5 text-sm font-semibold text-[#ffffff] transition-all duration-200 hover:bg-[#262626] hover:shadow-[0_8px_24px_rgba(10,10,10,0.12)] disabled:cursor-not-allowed disabled:bg-neutral-100 disabled:text-neutral-400 disabled:shadow-none active:scale-[0.98]"
                           >
                             {verifyingCode ? 'Verificando...' : 'Confirmar código'}
                           </button>
@@ -640,7 +640,7 @@ export const AuthModal = memo(function AuthModal({ isOpen, onClose, onSuccess, a
                             type="button"
                             onClick={handleResetPassword}
                             disabled={verifyingCode || password.length < 6 || password !== confirmPassword}
-                            className="w-full rounded-2xl bg-[#0a0a0a] py-3.5 text-sm font-semibold text-[#ffffff] transition-all duration-200 hover:bg-[#262626] hover:shadow-[0_8px_24px_rgba(10,10,10,0.12)] disabled:cursor-not-allowed disabled:bg-neutral-100 disabled:text-neutral-400 disabled:shadow-none active:scale-[0.98] active-scale"
+                            className="w-full rounded-2xl bg-[#0a0a0a] py-3.5 text-sm font-semibold text-[#ffffff] transition-all duration-200 hover:bg-[#262626] hover:shadow-[0_8px_24px_rgba(10,10,10,0.12)] disabled:cursor-not-allowed disabled:bg-neutral-100 disabled:text-neutral-400 disabled:shadow-none active:scale-[0.98]"
                           >
                             {verifyingCode ? 'Restableciendo...' : 'Restablecer contraseña'}
                           </button>
@@ -783,7 +783,7 @@ export const AuthModal = memo(function AuthModal({ isOpen, onClose, onSuccess, a
                             type="button"
                             onClick={verifyCode}
                             disabled={verifyingCode || otpCode.trim().length !== 6}
-                            className="w-full rounded-2xl bg-[#0a0a0a] py-3.5 text-sm font-semibold text-[#ffffff] transition-all duration-200 hover:bg-[#262626] hover:shadow-[0_8px_24px_rgba(10,10,10,0.12)] disabled:cursor-not-allowed disabled:bg-neutral-100 disabled:text-neutral-400 disabled:shadow-none active:scale-[0.98] active-scale"
+                            className="w-full rounded-2xl bg-[#0a0a0a] py-3.5 text-sm font-semibold text-[#ffffff] transition-all duration-200 hover:bg-[#262626] hover:shadow-[0_8px_24px_rgba(10,10,10,0.12)] disabled:cursor-not-allowed disabled:bg-neutral-100 disabled:text-neutral-400 disabled:shadow-none active:scale-[0.98]"
                           >
                             {verifyingCode ? 'Verificando...' : 'Verificar código'}
                           </button>
@@ -838,17 +838,15 @@ function formatPhoneNumber(value: string) {
 
 function PhoneHint({ phone }: { phone: string }) {
   const digits = phone.replace(/\D/g, '');
+  if (digits.length === 0) return null;
   if (digits.length === 10) {
     return <p className="text-[11px] font-semibold text-emerald-600 px-1">Teléfono válido ✓</p>;
   }
-  if (digits.length > 0) {
-    return (
-      <p className="text-[11px] font-medium text-neutral-500 px-1">
-        Te faltan {10 - digits.length} dígito{digits.length === 9 ? '' : 's'} — formato (55) 1234-5678
-      </p>
-    );
-  }
-  return <p className="text-[11px] text-neutral-400 px-1">Tu celular a 10 dígitos, ej. (55) 1234-5678</p>;
+  return (
+    <p className="text-[11px] font-medium text-neutral-500 px-1">
+      Te faltan {10 - digits.length} dígito{digits.length === 9 ? '' : 's'}
+    </p>
+  );
 }
 
 function Field({
@@ -889,7 +887,7 @@ function Field({
           }}
           placeholder={placeholder}
           {...inputProps}
-          className={`rounded-2xl border border-black/[0.08] bg-white text-sm text-neutral-950 outline-none transition-all duration-200 placeholder:text-neutral-400 shadow-[0_1px_2px_rgba(0,0,0,0.02)] focus:border-black/20 focus:shadow-[0_4px_12px_rgba(0,0,0,0.04)] focus:ring-2 focus:ring-black/[0.04] h-12 py-3 ${isPassword ? 'px-4 pr-14' : 'px-4'} ${type === 'date' ? 'appearance-none' : ''}`}
+          className={`w-full rounded-2xl border border-black/[0.08] bg-white text-sm text-neutral-950 outline-none transition-all duration-200 placeholder:text-neutral-400 shadow-[0_1px_2px_rgba(0,0,0,0.02)] focus:border-black/20 focus:shadow-[0_4px_12px_rgba(0,0,0,0.04)] focus:ring-2 focus:ring-black/[0.04] h-12 py-3 ${isPassword ? 'px-4 pr-14' : 'px-4'} ${type === 'date' ? 'appearance-none' : ''}`}
         />
         {isPassword && (
           <button
