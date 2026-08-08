@@ -12174,7 +12174,7 @@ function Field({
           value={value}
           onChange={(event) => onChange(event.target.value)}
           placeholder={placeholder}
-          className={`block w-full min-w-0 rounded-[18px] border border-black/5 bg-neutral-100/50 py-3.5 text-[15px] font-medium text-neutral-950 shadow-inner outline-none transition-all duration-300 placeholder:text-neutral-400 hover:bg-neutral-100/80 focus:border-sky-400 focus:bg-white focus:ring-4 focus:ring-sky-400/20 focus:shadow-md ${isPassword ? 'px-5 pr-12' : 'px-5'}`}
+          className={`block w-full min-w-0 rounded-[18px] border border-black/5 bg-neutral-100/50 py-3.5 text-[15px] font-medium text-neutral-950 shadow-inner outline-none transition-all duration-300 placeholder:text-neutral-400 hover:bg-neutral-100/80 focus:border-sky-400 focus:bg-white focus:ring-4 focus:ring-sky-400/20 focus:shadow-md ${isPassword ? 'px-5 pr-14' : 'px-5'}`}
         />
         {isPassword && (
           <button
@@ -12182,7 +12182,7 @@ function Field({
             onClick={() => setShowPassword((current) => !current)}
             aria-label={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
             tabIndex={-1}
-            className="absolute right-1.5 top-1/2 -translate-y-1/2 flex h-9 w-9 items-center justify-center rounded-full text-neutral-400 transition-all duration-200 hover:bg-sky-500/10 hover:text-sky-600 active:scale-95 focus-visible:text-sky-600"
+            className="absolute right-2 inset-y-0 my-auto flex h-8 w-8 items-center justify-center rounded-full text-neutral-400 transition-colors duration-200 hover:bg-sky-500/10 hover:text-sky-600 active:scale-95 focus-visible:text-sky-600"
           >
             {showPassword ? <EyeSlashIcon /> : <EyeIcon />}
           </button>
