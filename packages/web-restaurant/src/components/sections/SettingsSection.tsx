@@ -66,7 +66,7 @@ interface SettingsSectionProps {
   setActiveSettingsTab: (tab: string) => void;
   settingsTabs: any[];
   savingStoreProfile: boolean;
-  saveStoreProfile: () => void;
+  saveStoreProfile: (section?: 'perfil' | 'ubicacion' | 'entrega' | 'pagos') => void;
   saveOperatingHours: () => void;
   savePasswordChange: () => void;
   handleOrderAlertSoundToggle: (checked: boolean) => void;
@@ -134,6 +134,36 @@ export const SettingsSection = React.memo(function SettingsSection({
   const currentSettingsTab = settingsTabs.find((t: any) => t.key === activeSettingsTab) ?? settingsTabs[0];
   const [showWhatsappConfirm, setShowWhatsappConfirm] = React.useState(false);
 
+  const isProfileTab = activeSettingsTab === 'perfil' || activeSettingsTab === 'ubicacion' || activeSettingsTab === 'entrega' || activeSettingsTab === 'pagos';
+
+  const handleGlobalSave = () => {
+    if (activeSettingsTab === 'horarios') {
+      void saveOperatingHours();
+      return;
+    }
+    if (activeSettingsTab === 'seguridad') {
+      void savePasswordChange();
+      return;
+    }
+    if (isProfileTab) {
+      void saveStoreProfile(activeSettingsTab);
+    }
+  };
+
+  const globalSaving =
+    activeSettingsTab === 'horarios'
+      ? savingOperatingHours
+      : activeSettingsTab === 'seguridad'
+        ? savingPassword
+        : savingStoreProfile;
+
+  const globalLabel =
+    activeSettingsTab === 'horarios'
+      ? (savingOperatingHours ? 'Guardando horarios...' : 'Guardar horarios')
+      : activeSettingsTab === 'seguridad'
+        ? (savingPassword ? 'Actualizando...' : 'Cambiar contraseña')
+        : (savingStoreProfile ? 'Guardando ajustes...' : 'Guardar cambios');
+
   const applyWhatsappNotifications = async (checked: boolean) => {
     setStoreDraft((c: any) => ({ ...c, whatsappNotifications: checked }));
     if (!token) return;
@@ -170,12 +200,13 @@ export const SettingsSection = React.memo(function SettingsSection({
             </div>
             <button
               type="button"
-              onClick={() => void saveStoreProfile()}
-              disabled={savingStoreProfile}
+              onClick={handleGlobalSave}
+              disabled={globalSaving || activeSettingsTab === 'preferencias'}
+              title={activeSettingsTab === 'preferencias' ? 'Esta sección se guarda automáticamente' : undefined}
               className="group relative shrink-0 overflow-hidden rounded-full bg-neutral-950 px-6 py-3.5 text-sm font-bold text-white shadow-[0_8px_20px_rgba(15,15,15,0.2)] transition-all hover:-translate-y-0.5 hover:shadow-[0_12px_25px_rgba(15,15,15,0.3)] disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0"
             >
               <div className="absolute inset-0 bg-gradient-to-r from-sky-500/0 via-white/20 to-sky-500/0 -translate-x-full transition-transform duration-700 group-hover:translate-x-full"></div>
-              <span className="relative z-10">{savingStoreProfile ? 'Guardando ajustes...' : 'Guardar cambios'}</span>
+              <span className="relative z-10">{activeSettingsTab === 'preferencias' ? 'Se guarda automáticamente' : globalLabel}</span>
             </button>
           </div>
         </div>
@@ -341,7 +372,7 @@ export const SettingsSection = React.memo(function SettingsSection({
                 <div className="sm:col-span-2 flex justify-end">
                   <button
                     type="button"
-                    onClick={() => void saveStoreProfile()}
+                    onClick={() => void saveStoreProfile('perfil')}
                     disabled={savingStoreProfile}
                     className="rounded-full bg-neutral-950 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-neutral-800 disabled:bg-neutral-300"
                   >
@@ -447,7 +478,7 @@ export const SettingsSection = React.memo(function SettingsSection({
                 <div className="sm:col-span-2 flex justify-end">
                   <button
                     type="button"
-                    onClick={() => void saveStoreProfile()}
+                    onClick={() => void saveStoreProfile('ubicacion')}
                     disabled={savingStoreProfile}
                     className="rounded-full bg-neutral-950 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-neutral-850 disabled:bg-neutral-300"
                   >
@@ -575,7 +606,7 @@ export const SettingsSection = React.memo(function SettingsSection({
                 <div className="sm:col-span-2 flex justify-end">
                   <button
                     type="button"
-                    onClick={() => void saveStoreProfile()}
+                    onClick={() => void saveStoreProfile('entrega')}
                     disabled={savingStoreProfile}
                     className="rounded-full bg-neutral-950 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-neutral-800 disabled:bg-neutral-300"
                   >
@@ -720,7 +751,7 @@ export const SettingsSection = React.memo(function SettingsSection({
                 <div className="sm:col-span-2 flex justify-end">
                   <button
                     type="button"
-                    onClick={() => void saveStoreProfile()}
+                    onClick={() => void saveStoreProfile('pagos')}
                     disabled={savingStoreProfile}
                     className="rounded-full bg-neutral-950 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-neutral-800 disabled:bg-neutral-300"
                   >
@@ -734,7 +765,7 @@ export const SettingsSection = React.memo(function SettingsSection({
             {activeSettingsTab === 'seguridad' && (
               <div className="grid gap-4 max-w-md">
                 <div className="rounded-[18px] border border-rose-100 bg-rose-50 p-4 text-sm text-rose-800">
-                  Usa una contraseña segura de al menos 8 caracteres. No la compartas con nadie.
+                  Usa una contraseña segura de al menos 6 caracteres. No la compartas con nadie.
                 </div>
                 <Field
                   label="Contraseña actual"

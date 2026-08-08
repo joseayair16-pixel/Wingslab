@@ -3529,7 +3529,63 @@ export default function Home() {
     await assignDriver(lastFailedAction.orderId);
   }
 
-  async function saveStoreProfile() {
+  type SettingsSectionKey = 'perfil' | 'ubicacion' | 'entrega' | 'pagos';
+
+  function buildSettingsPayload(section: SettingsSectionKey): Record<string, unknown> {
+    const num = (v: string) => (v.trim() ? Number(v.trim()) : undefined);
+    const body: Record<string, unknown> = {};
+
+    if (section === 'perfil') {
+      body.name = storeDraft.name.trim();
+      body.description = storeDraft.description.trim();
+      body.contactPhone = storeDraft.contactPhone.trim();
+      body.email = storeDraft.email.trim();
+      body.instagram = storeDraft.instagram.trim() || null;
+      body.facebook = storeDraft.facebook.trim() || null;
+      body.tiktok = storeDraft.tiktok.trim() || null;
+      body.storeCategories = storeDraft.storeCategories;
+      return body;
+    }
+
+    if (section === 'ubicacion') {
+      body.address = `${storeDraft.address.trim()}${storeDraft.houseNumber.trim() ? `, No. ${storeDraft.houseNumber.trim()}` : ''}`;
+      if (storeDraft.latitude.trim()) body.latitude = Number(storeDraft.latitude);
+      if (storeDraft.longitude.trim()) body.longitude = Number(storeDraft.longitude);
+      return body;
+    }
+
+    if (section === 'entrega') {
+      const minT = num(storeDraft.minDeliveryTime);
+      const maxT = num(storeDraft.maxDeliveryTime);
+      body.hasOwnDelivery = storeDraft.hasOwnDelivery;
+      body.deliveryPricingModel = storeDraft.hasOwnDelivery ? storeDraft.deliveryPricingModel : 'fixed';
+      if (storeDraft.hasOwnDelivery) {
+        const distance = storeDraft.deliveryPricingModel === 'distance';
+        body.deliveryRadius = num(storeDraft.deliveryRadius) ?? 3;
+        body.deliveryFee = distance ? null : (num(storeDraft.deliveryFee) ?? null);
+        if (distance) {
+          body.deliveryBaseRate = num(storeDraft.deliveryBaseRate) ?? 20;
+          body.deliveryPerKmRate = num(storeDraft.deliveryPerKmRate) ?? 8;
+          body.deliveryMinFee = num(storeDraft.deliveryMinFee) ?? 15;
+          body.deliveryMaxFee = num(storeDraft.deliveryMaxFee) ?? 150;
+        }
+      } else {
+        body.deliveryFee = null;
+      }
+      if (minT !== undefined) body.minDeliveryTime = minT;
+      if (maxT !== undefined) body.maxDeliveryTime = maxT;
+      return body;
+    }
+
+    // pagos
+    body.maxCashOrder = num(storeDraft.maxCashOrder) ?? 500;
+    body.transferBankName = transferBankName.trim() || null;
+    body.transferAccountNumber = transferAccountNumber.trim() || null;
+    body.transferBeneficiaryName = transferBeneficiaryName.trim() || null;
+    return body;
+  }
+
+  async function saveStoreProfile(section: SettingsSectionKey = 'perfil') {
     if (!token) {
       return;
     }
@@ -3539,51 +3595,7 @@ export default function Home() {
     setAuthMessage('');
 
     try {
-      const payloadBody = {
-        name: storeDraft.name.trim(),
-        description: storeDraft.description.trim(),
-        address: `${storeDraft.address.trim()}${storeDraft.houseNumber.trim() ? `, No. ${storeDraft.houseNumber.trim()}` : ''}`,
-        contactPhone: storeDraft.contactPhone.trim(),
-        email: storeDraft.email.trim(),
-        logo: storeDraft.logo.trim() || null,
-        coverImage: storeDraft.coverImage.trim() || null,
-        hasOwnDelivery: storeDraft.hasOwnDelivery,
-        minDeliveryTime: Number(storeDraft.minDeliveryTime),
-        maxDeliveryTime: Number(storeDraft.maxDeliveryTime),
-        deliveryFee:
-          storeDraft.hasOwnDelivery && storeDraft.deliveryFee.trim()
-            ? Number(storeDraft.deliveryFee)
-            : null,
-        deliveryRadius: storeDraft.deliveryRadius.trim()
-          ? Number(storeDraft.deliveryRadius)
-          : 3,
-        deliveryPricingModel: storeDraft.hasOwnDelivery ? storeDraft.deliveryPricingModel : 'fixed',
-        deliveryBaseRate: storeDraft.hasOwnDelivery && storeDraft.deliveryBaseRate.trim()
-          ? Number(storeDraft.deliveryBaseRate)
-          : 20,
-        deliveryPerKmRate: storeDraft.hasOwnDelivery && storeDraft.deliveryPerKmRate.trim()
-          ? Number(storeDraft.deliveryPerKmRate)
-          : 8,
-        deliveryMinFee: storeDraft.hasOwnDelivery && storeDraft.deliveryMinFee.trim()
-          ? Number(storeDraft.deliveryMinFee)
-          : 15,
-        deliveryMaxFee: storeDraft.hasOwnDelivery && storeDraft.deliveryMaxFee.trim()
-          ? Number(storeDraft.deliveryMaxFee)
-          : 150,
-        maxCashOrder: storeDraft.maxCashOrder.trim()
-          ? Number(storeDraft.maxCashOrder)
-          : 500,
-        storeCategories: storeDraft.storeCategories,
-        enableTicketPrinting: storeDraft.enableTicketPrinting,
-        instagram: storeDraft.instagram.trim() || null,
-        facebook: storeDraft.facebook.trim() || null,
-        tiktok: storeDraft.tiktok.trim() || null,
-        transferBankName: transferBankName.trim() || null,
-        transferAccountNumber: transferAccountNumber.trim() || null,
-        transferBeneficiaryName: transferBeneficiaryName.trim() || null,
-        ...(storeDraft.latitude.trim() ? { latitude: Number(storeDraft.latitude) } : {}),
-        ...(storeDraft.longitude.trim() ? { longitude: Number(storeDraft.longitude) } : {}),
-      };
+      const payloadBody = buildSettingsPayload(section);
 
       const payload = await requestJson<SuccessResponse<RestaurantProfile>>({
         apiBase,
