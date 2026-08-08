@@ -5515,7 +5515,7 @@ export default function Home() {
                         <div className="p-5">
                           <h4 className="text-lg font-bold text-neutral-900">{promo.title}</h4>
                           <p className="mt-1 text-xs text-neutral-500 line-clamp-1">
-                            {promo.regions.length > 0 ? `Zonas: ${promo.regions.join(', ')}` : 'Todas las zonas (Global)'} | Rol: {promo.targetRole === 'ALL' ? 'Todos' : promo.targetRole === 'CUSTOMER' ? 'Clientes' : promo.targetRole === 'RESTAURANT' ? 'Restaurantes' : 'Repartidores'}
+                            {promo.regions.length > 0 ? `Zonas: ${promo.regions.join(', ')}` : 'Todas las zonas (Global)'} | Rol: {promo.targetRole === 'ALL' ? 'Todos' : promo.targetRole === 'GUEST' ? 'Solo visitantes' : promo.targetRole === 'CUSTOMER' ? 'Clientes' : promo.targetRole === 'RESTAURANT' ? 'Restaurantes' : 'Repartidores'}
                           </p>
                           <div className="mt-4 flex gap-2">
                             <button
@@ -5558,12 +5558,13 @@ export default function Home() {
                           </div>
                           <div className="flex-1">
                             <label className="text-xs font-bold uppercase tracking-widest text-neutral-500">Destinatarios</label>
-                            <select value={promoForm.targetRole} onChange={(e) => setPromoForm({ ...promoForm, targetRole: e.target.value })} className="mt-2 w-full rounded-2xl border border-black/10 bg-neutral-50 px-4 py-3.5 text-sm focus:border-black focus:ring-1 focus:ring-black">
-                              <option value="ALL">Todos los Usuarios</option>
-                              <option value="CUSTOMER">Solo Clientes</option>
-                              <option value="RESTAURANT">Solo Restaurantes</option>
-                              <option value="DRIVER">Solo Repartidores</option>
-                            </select>
+<select value={promoForm.targetRole} onChange={(e) => setPromoForm({ ...promoForm, targetRole: e.target.value })} className="mt-2 w-full rounded-2xl border border-black/10 bg-neutral-50 px-4 py-3.5 text-sm focus:border-black focus:ring-1 focus:ring-black">
+                               <option value="ALL">Todos los Usuarios</option>
+                               <option value="GUEST">Solo Visitantes (no logueados)</option>
+                               <option value="CUSTOMER">Solo Clientes</option>
+                               <option value="RESTAURANT">Solo Restaurantes</option>
+                               <option value="DRIVER">Solo Repartidores</option>
+                             </select>
                           </div>
                         </div>
                         <div>

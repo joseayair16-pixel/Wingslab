@@ -1024,7 +1024,7 @@ model Promotion {
   targetUrl  String?
   isActive   Boolean  @default(true)
   regions    String[] // Ej. ["CDMX", "GDL"]. Si está vacío, aplica a TODAS.
-  targetRole String   @default("ALL") // "ALL", "CUSTOMER", "RESTAURANT", "DRIVER"
+  targetRole String   @default("ALL") // "ALL", "GUEST", "CUSTOMER", "RESTAURANT", "DRIVER"
 
   startDate DateTime? // Cuándo empieza
   endDate   DateTime? // Cuándo termina

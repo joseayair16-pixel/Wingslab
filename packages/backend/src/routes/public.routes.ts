@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { prisma } from '../config/database';
 import { getDistanceInKm, isRestaurantOpenNow, getNextOpenTime, resolveZoneFromNearestRestaurant } from '../utils/restaurant';
 import { calculateDistanceDeliveryFee } from '../utils/delivery-pricing';
+import { applyPromotionRoleFilter } from '../utils/promotion-targeting';
 import { createPlatformRequest } from '../utils/platform-requests';
 import { decrypt } from '../utils/crypto';
 
@@ -556,12 +557,12 @@ export async function registerPublicRoutes(fastify: FastifyInstance): Promise<vo
         orderBy: { createdAt: 'desc' }
       });
 
-      const filteredPromotions = promotions.filter((p) => {
-        if (role && p.targetRole && p.targetRole !== 'ALL' && p.targetRole !== role) return false;
-
-        if (p.regions && p.regions.length > 0 && (!resolvedRegion || !p.regions.includes(resolvedRegion))) return false;
-
-        return true;
+      // Usuarios anónimos = rol GUEST: solo ven promociones target 'ALL' (o sin target).
+      // Los roles autenticados ven sus promociones propias + las 'ALL'.
+      const viewerRole = role ?? 'GUEST';
+      const filteredPromotions = applyPromotionRoleFilter(promotions, {
+        viewerRole,
+        resolvedRegion,
       });
 
       return reply.send({
