@@ -897,7 +897,7 @@ export const HomeView = React.memo(function HomeView({
                       key={zone.regionCode}
                       type="button"
                       onClick={() => onZoneSelect?.(zone)}
-                      className="group relative inline-flex items-center gap-2 overflow-hidden rounded-full border border-white/50 bg-white/70 px-4 py-2.5 text-sm font-bold text-neutral-800 shadow-[0_2px_12px_rgba(0,0,0,0.04)] backdrop-blur-xl transition-all duration-300 hover:-translate-y-0.5 hover:shadow-[0_8px_24px_rgba(0,0,0,0.08)] active:scale-[0.97]"
+                      className="group relative inline-flex items-center gap-2 overflow-hidden rounded-full border border-sky-400/70 bg-white/70 px-4 py-2.5 text-sm font-bold text-neutral-800 shadow-[0_2px_12px_rgba(14,165,233,0.15)] backdrop-blur-xl transition-all duration-300 hover:-translate-y-0.5 hover:border-sky-500 hover:shadow-[0_8px_24px_rgba(14,165,233,0.2)] active:scale-[0.97]"
                     >
                       <span className="relative z-10 flex items-center gap-1.5">
                         <svg className="h-4 w-4 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
@@ -917,11 +917,6 @@ export const HomeView = React.memo(function HomeView({
 
               <div className="relative overflow-hidden rounded-[32px] border border-black/[0.04] bg-gradient-to-br from-amber-50/30 to-white px-6 py-7 text-center shadow-[0_2px_20px_rgba(0,0,0,0.03)]">
                 <div className="absolute -right-8 -top-8 h-28 w-28 rounded-full bg-amber-400/10 blur-3xl" />
-                <div className="relative mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-[18px] bg-gradient-to-br from-sky-500 to-blue-600 shadow-[0_4px_16px_rgba(14,165,233,0.25)]">
-                  <svg className="h-6 w-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="1.8">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-                  </svg>
-                </div>
                 <h3 className="text-lg font-extrabold tracking-[-0.03em] text-neutral-900">¿Tienes un negocio?</h3>
                 <p className="mt-1.5 max-w-sm mx-auto text-sm font-medium text-neutral-500">
                   Lleva tu restaurante o tienda a más clientes. Registrarlo es rápido y sin costo.

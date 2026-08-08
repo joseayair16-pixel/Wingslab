@@ -93,11 +93,7 @@ export const AuthModal = memo(function AuthModal({ isOpen, onClose, onSuccess, a
   const handleDobChange = useCallback((next: { day?: number; month?: number; year?: number }) => {
     const month = next.month ?? dobMonth;
     const year = next.year ?? dobYear;
-    const now = new Date();
-    const maxDay =
-      year === now.getFullYear() && month === now.getMonth() + 1
-        ? now.getDate()
-        : daysInMonth(year, month);
+    const maxDay = daysInMonth(year, month);
     setDobDay(Math.min(next.day ?? dobDay, maxDay));
     setDobMonth(month);
     setDobYear(year);
@@ -273,6 +269,16 @@ export const AuthModal = memo(function AuthModal({ isOpen, onClose, onSuccess, a
     setAuthMessage('');
 
     try {
+      const dobDate = new Date(dobYear, dobMonth - 1, dobDay);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      dobDate.setHours(0, 0, 0, 0);
+      if (dobDate > today) {
+        setError('La fecha de nacimiento no puede estar en el futuro. Elige una fecha válida e intenta de nuevo.');
+        setVerifyingCode(false);
+        return;
+      }
+
       const payload = await requestJson<any>({
         apiBase,
         path: '/auth/verificar-codigo',
@@ -882,20 +888,14 @@ function WheelDatePicker({
 }) {
   const now = new Date();
   const currentYear = now.getFullYear();
-  const currentMonth = now.getMonth() + 1;
-  const currentDay = now.getDate();
   const years = useMemo(
     () => Array.from({ length: currentYear - 1950 + 1 }, (_, i) => 1950 + i),
     [currentYear],
   );
-  const months = useMemo(
-    () => Array.from({ length: year === currentYear ? currentMonth : 12 }, (_, i) => i + 1),
-    [year, currentYear, currentMonth],
-  );
-  const isCurrentMonth = year === currentYear && month === currentMonth;
-  const maxDay = isCurrentMonth ? Math.min(daysInMonth(year, month), currentDay) : daysInMonth(year, month);
+  const months = useMemo(() => Array.from({ length: 12 }, (_, i) => i + 1), []);
+  const maxDay = daysInMonth(year, month);
   const days = useMemo(() => Array.from({ length: maxDay }, (_, i) => i + 1), [maxDay]);
-  // Seguridad: el día nunca puede rebasar el máximo del mes/año seleccionado.
+  // El día solo se limita por los días reales del mes/año, nunca por el día de hoy.
   const safeDay = Math.min(day, maxDay);
 
   const columns: { label: string; items: number[]; value: number; onPick: (v: number) => void; flex: string }[] = [
