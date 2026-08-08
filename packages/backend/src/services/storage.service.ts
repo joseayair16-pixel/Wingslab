@@ -149,12 +149,30 @@ export async function uploadImage(params: {
   let metadata: { width?: number; height?: number };
 
   try {
-    const image = sharp(buffer);
-    metadata = await image.metadata();
+    // Imágenes "site-image" (promociones y billboards) se ven a pantalla completa,
+    // por eso se re-encoden con mayor calidad y se acotan a un límite de píxeles
+    // (sin ampliar nunca, para no fabricar nitidez que no existe).
+    const isHighQuality = kind === 'site-image';
+    const maxHighQualityDimension = 2400;
 
-    webpBuffer = await image
-      .webp({ quality: 80, effort: 4 })
+    // rotate() respeta la orientación EXIF de fotos tomadas con el celular.
+    const image = sharp(buffer).rotate();
+
+    const encodeImage = isHighQuality
+      ? sharp(buffer).rotate().resize({
+          width: maxHighQualityDimension,
+          height: maxHighQualityDimension,
+          fit: 'inside',
+          withoutEnlargement: true,
+        })
+      : image;
+
+    webpBuffer = await encodeImage
+      .webp({ quality: isHighQuality ? 92 : 80, effort: 4 })
       .toBuffer();
+
+    const finalMetadata = await sharp(webpBuffer).metadata();
+    metadata = { width: finalMetadata.width, height: finalMetadata.height };
   } catch (err) {
     throw new AppError(
       502,

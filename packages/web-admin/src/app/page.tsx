@@ -5574,6 +5574,9 @@ export default function Home() {
                             onChange={(val) => setPromoForm({ ...promoForm, imageUrl: val })}
                             apiBase={apiBase}
                             token={token!}
+                            maxWidth={1440}
+                            maxHeight={1920}
+                            quality={0.9}
                           />
                         </div>
                         <div>
@@ -8539,6 +8542,7 @@ function ImageUploadField({
   token,
   maxWidth = 800,
   maxHeight = 800,
+  quality = 0.85,
   fileNamePrefix = 'promo',
 }: {
   label: string;
@@ -8549,6 +8553,7 @@ function ImageUploadField({
   token: string;
   maxWidth?: number;
   maxHeight?: number;
+  quality?: number;
   fileNamePrefix?: string;
 }) {
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -8565,7 +8570,7 @@ function ImageUploadField({
 
     setIsUploading(true);
     try {
-      const compressedBase64 = await convertImageFileToDataUrl(file, maxWidth, maxHeight, 0.85);
+      const compressedBase64 = await convertImageFileToDataUrl(file, maxWidth, maxHeight, quality);
       
       const uploadResult = await uploadMediaAsset({
         apiBase,
