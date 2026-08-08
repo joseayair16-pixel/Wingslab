@@ -527,8 +527,7 @@ export const AuthModal = memo(function AuthModal({ isOpen, onClose, onSuccess, a
                         label="Teléfono (10 dígitos)"
                         value={phone}
                         onChange={handlePhoneChange}
-                        placeholder="(55) 0000-0000"
-                        prefix="+52"
+                        placeholder="Ingresa tu celular"
                         mask={formatPhoneNumber}
                       />
                       <PhoneHint phone={phone} />
@@ -567,8 +566,7 @@ export const AuthModal = memo(function AuthModal({ isOpen, onClose, onSuccess, a
                             label="Teléfono (10 dígitos)"
                             value={phone}
                             onChange={handlePhoneChange}
-                            placeholder="(55) 0000-0000"
-                            prefix="+52"
+                            placeholder="Ingresa tu celular"
                             mask={formatPhoneNumber}
                           />
                           <PhoneHint phone={phone} />
@@ -696,8 +694,7 @@ export const AuthModal = memo(function AuthModal({ isOpen, onClose, onSuccess, a
                             label="Teléfono (10 dígitos)"
                             value={phone}
                             onChange={handlePhoneChange}
-                            placeholder="(55) 0000-0000"
-                            prefix="+52"
+                            placeholder="Ingresa tu celular"
                             mask={formatPhoneNumber}
                           />
                           <PhoneHint phone={phone} />
@@ -861,7 +858,6 @@ function Field({
   placeholder,
   type = 'text',
   mask,
-  prefix,
 }: {
   label: string;
   value: string;
@@ -869,10 +865,9 @@ function Field({
   placeholder: string;
   type?: string;
   mask?: (value: string) => string;
-  prefix?: string;
 }) {
   const inputProps =
-    prefix !== undefined
+    mask
       ? { inputMode: 'numeric' as const, autoComplete: 'tel' as const }
       : type === 'email'
         ? { inputMode: 'email' as const, autoComplete: 'email' as const }
@@ -881,24 +876,17 @@ function Field({
   return (
     <label className="grid gap-1.5 text-xs text-neutral-600 font-medium">
       <span>{label}</span>
-      <div className="relative">
-        {prefix && (
-          <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-sm font-semibold text-neutral-700">
-            {prefix}
-          </span>
-        )}
-        <input
-          type={type}
-          value={mask ? mask(value) : value}
-          onChange={(event) => {
-            const rawValue = mask ? event.target.value.replace(/\D/g, '').slice(0, 10) : event.target.value;
-            onChange(rawValue);
-          }}
-          placeholder={placeholder}
-          {...inputProps}
-          className={`rounded-2xl border border-black/[0.08] bg-white text-sm text-neutral-950 outline-none transition-all duration-200 placeholder:text-neutral-400 shadow-[0_1px_2px_rgba(0,0,0,0.02)] focus:border-black/20 focus:shadow-[0_4px_12px_rgba(0,0,0,0.04)] focus:ring-2 focus:ring-black/[0.04] h-12 py-3 ${prefix ? 'pl-[4.25rem] pr-4' : 'px-4'} ${type === 'date' ? 'appearance-none' : ''}`}
-        />
-      </div>
+      <input
+        type={type}
+        value={mask ? mask(value) : value}
+        onChange={(event) => {
+          const rawValue = mask ? event.target.value.replace(/\D/g, '').slice(0, 10) : event.target.value;
+          onChange(rawValue);
+        }}
+        placeholder={placeholder}
+        {...inputProps}
+        className={`rounded-2xl border border-black/[0.08] bg-white px-4 text-sm text-neutral-950 outline-none transition-all duration-200 placeholder:text-neutral-400 shadow-[0_1px_2px_rgba(0,0,0,0.02)] focus:border-black/20 focus:shadow-[0_4px_12px_rgba(0,0,0,0.04)] focus:ring-2 focus:ring-black/[0.04] h-12 py-3 ${type === 'date' ? 'appearance-none' : ''}`}
+      />
     </label>
   );
 }
