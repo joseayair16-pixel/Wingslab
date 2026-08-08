@@ -2110,7 +2110,7 @@ export default function Home() {
                     onClick={() => setShowLoginPassword((current) => !current)}
                     aria-label={showLoginPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
                     tabIndex={-1}
-                    className="absolute right-1.5 top-1/2 -translate-y-1/2 flex h-9 w-9 items-center justify-center rounded-full text-neutral-400 transition-colors hover:text-neutral-700"
+                    className="absolute right-1 top-1/2 -translate-y-1/2 flex h-9 w-9 items-center justify-center rounded-full text-neutral-400 transition-all duration-200 hover:bg-neutral-100 hover:text-neutral-800 active:scale-95 focus-visible:text-neutral-800"
                   >
                     {showLoginPassword ? (
                       <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">

@@ -12177,7 +12177,7 @@ function Field({
             onClick={() => setShowPassword((current) => !current)}
             aria-label={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
             tabIndex={-1}
-            className="absolute right-2 top-1/2 -translate-y-1/2 flex h-9 w-9 items-center justify-center rounded-full text-neutral-400 transition-colors hover:text-sky-600 focus-visible:text-sky-600"
+            className="absolute right-1.5 top-1/2 -translate-y-1/2 flex h-9 w-9 items-center justify-center rounded-full text-neutral-400 transition-all duration-200 hover:bg-sky-500/10 hover:text-sky-600 active:scale-95 focus-visible:text-sky-600"
           >
             {showPassword ? <EyeSlashIcon /> : <EyeIcon />}
           </button>
