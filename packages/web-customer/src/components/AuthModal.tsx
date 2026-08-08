@@ -527,9 +527,11 @@ export const AuthModal = memo(function AuthModal({ isOpen, onClose, onSuccess, a
                         label="Teléfono (10 dígitos)"
                         value={phone}
                         onChange={handlePhoneChange}
-                        placeholder="5512345678"
+                        placeholder="(55) 0000-0000"
+                        prefix="+52"
                         mask={formatPhoneNumber}
                       />
+                      <PhoneHint phone={phone} />
                       <Field
                         label="Contraseña"
                         value={password}
@@ -565,9 +567,11 @@ export const AuthModal = memo(function AuthModal({ isOpen, onClose, onSuccess, a
                             label="Teléfono (10 dígitos)"
                             value={phone}
                             onChange={handlePhoneChange}
-                            placeholder="5512345678"
+                            placeholder="(55) 0000-0000"
+                            prefix="+52"
                             mask={formatPhoneNumber}
                           />
+                          <PhoneHint phone={phone} />
                           <button
                             type="button"
                             onClick={() => sendCode('sms')}
@@ -692,9 +696,11 @@ export const AuthModal = memo(function AuthModal({ isOpen, onClose, onSuccess, a
                             label="Teléfono (10 dígitos)"
                             value={phone}
                             onChange={handlePhoneChange}
-                            placeholder="5512345678"
+                            placeholder="(55) 0000-0000"
+                            prefix="+52"
                             mask={formatPhoneNumber}
                           />
+                          <PhoneHint phone={phone} />
                           {phoneExists === true && (
                             <Callout tone="danger">Este teléfono ya tiene una cuenta registrada.</Callout>
                           )}
@@ -833,6 +839,21 @@ function formatPhoneNumber(value: string) {
   return `(${digits.slice(0, 2)}) ${digits.slice(2, 6)}-${digits.slice(6, 10)}`;
 }
 
+function PhoneHint({ phone }: { phone: string }) {
+  const digits = phone.replace(/\D/g, '');
+  if (digits.length === 10) {
+    return <p className="text-[11px] font-semibold text-emerald-600 px-1">Teléfono válido ✓</p>;
+  }
+  if (digits.length > 0) {
+    return (
+      <p className="text-[11px] font-medium text-neutral-500 px-1">
+        Te faltan {10 - digits.length} dígito{digits.length === 9 ? '' : 's'} — formato (55) 1234-5678
+      </p>
+    );
+  }
+  return <p className="text-[11px] text-neutral-400 px-1">Tu celular a 10 dígitos, ej. (55) 1234-5678</p>;
+}
+
 function Field({
   label,
   value,
@@ -840,6 +861,7 @@ function Field({
   placeholder,
   type = 'text',
   mask,
+  prefix,
 }: {
   label: string;
   value: string;
@@ -847,20 +869,36 @@ function Field({
   placeholder: string;
   type?: string;
   mask?: (value: string) => string;
+  prefix?: string;
 }) {
+  const inputProps =
+    prefix !== undefined
+      ? { inputMode: 'numeric' as const, autoComplete: 'tel' as const }
+      : type === 'email'
+        ? { inputMode: 'email' as const, autoComplete: 'email' as const }
+        : {};
+
   return (
     <label className="grid gap-1.5 text-xs text-neutral-600 font-medium">
       <span>{label}</span>
-      <input
-        type={type}
-        value={mask ? mask(value) : value}
-        onChange={(event) => {
-          const rawValue = mask ? event.target.value.replace(/\D/g, '').slice(0, 10) : event.target.value;
-          onChange(rawValue);
-        }}
-        placeholder={placeholder}
-        className={`rounded-2xl border border-black/[0.08] bg-white px-4 text-sm text-neutral-950 outline-none transition-all duration-200 placeholder:text-neutral-400 shadow-[0_1px_2px_rgba(0,0,0,0.02)] focus:border-black/20 focus:shadow-[0_4px_12px_rgba(0,0,0,0.04)] focus:ring-2 focus:ring-black/[0.04] h-12 py-3 ${type === 'date' ? 'appearance-none' : ''}`}
-      />
+      <div className="relative">
+        {prefix && (
+          <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-sm font-semibold text-neutral-700">
+            {prefix}
+          </span>
+        )}
+        <input
+          type={type}
+          value={mask ? mask(value) : value}
+          onChange={(event) => {
+            const rawValue = mask ? event.target.value.replace(/\D/g, '').slice(0, 10) : event.target.value;
+            onChange(rawValue);
+          }}
+          placeholder={placeholder}
+          {...inputProps}
+          className={`rounded-2xl border border-black/[0.08] bg-white text-sm text-neutral-950 outline-none transition-all duration-200 placeholder:text-neutral-400 shadow-[0_1px_2px_rgba(0,0,0,0.02)] focus:border-black/20 focus:shadow-[0_4px_12px_rgba(0,0,0,0.04)] focus:ring-2 focus:ring-black/[0.04] h-12 py-3 ${prefix ? 'pl-[4.25rem] pr-4' : 'px-4'} ${type === 'date' ? 'appearance-none' : ''}`}
+        />
+      </div>
     </label>
   );
 }
