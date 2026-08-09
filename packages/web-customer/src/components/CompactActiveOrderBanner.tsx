@@ -535,7 +535,7 @@ export const CompactActiveOrderBanner = memo(function CompactActiveOrderBanner({
               {order ? (
                 <LiveTrackingMap order={order} driverLocation={driverLocation || null} />
               ) : (
-                <div className="h-44 w-full rounded-2xl border border-black/[0.05] bg-neutral-50 z-0 animate-scale-up no-invert" />
+                <div className="h-52 w-full rounded-2xl border border-black/[0.05] bg-neutral-50 z-0 animate-scale-up no-invert md:h-64" />
               )}
               <button
                 type="button"

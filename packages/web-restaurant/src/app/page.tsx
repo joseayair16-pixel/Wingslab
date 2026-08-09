@@ -1037,6 +1037,210 @@ export default function Home() {
   ordersRef.current = orders;
   const pendingNotificationOrderIdRef = useRef<string | null>(null);
   const pendingEtaExtensionOrderIdRef = useRef<string | null>(null);
+
+  // ============================================================
+  // Tracking GPS del reparto propio / apoyo (reparto a cargo del
+  // restaurante). Se activa solo cuando el restaurante va en camino
+  // a entregar un pedido (deliveredByRestaurant o ApoyoId en IN_TRANSIT).
+  // ============================================================
+  const gpsRescheduleRef = useRef<(() => void) | null>(null);
+
+  const hasActiveOwnDeliveries = useMemo(
+    () =>
+      orders.some(
+        (o) =>
+          o.fulfillmentType !== 'PICKUP' &&
+          ['PICKED_UP', 'IN_TRANSIT'].includes(o.status) &&
+          (o.deliveredByRestaurant === true ||
+            (typeof o.notes === 'string' && o.notes.includes('[ApoyoId:')))
+      ),
+    [orders]
+  );
+
+  useEffect(() => {
+    gpsRescheduleRef.current?.();
+  }, [hasActiveOwnDeliveries]);
+
+  useEffect(() => {
+    if (!token || !sessionUser || sessionUser.role !== 'RESTAURANT') {
+      return;
+    }
+
+    if (typeof window === 'undefined' || !navigator.geolocation) {
+      return;
+    }
+
+    const GEO_PAUSE_KEY = 'sadel.restaurant.geoPausedUntil';
+
+    let watchId: number | null = null;
+    let cancelled = false;
+    let consecutiveFailures = 0;
+    let lastErrorLogAt = 0;
+    let lastPosition: { lat: number; lng: number } | null = null;
+    let lastPostAt = 0;
+
+    const readPausedUntil = () => {
+      const raw = window.sessionStorage.getItem(GEO_PAUSE_KEY);
+      const parsed = raw ? Number(raw) : 0;
+      return Number.isFinite(parsed) ? parsed : 0;
+    };
+
+    const writePausedUntil = (until: number) => {
+      if (until > Date.now()) {
+        window.sessionStorage.setItem(GEO_PAUSE_KEY, String(until));
+      } else {
+        window.sessionStorage.removeItem(GEO_PAUSE_KEY);
+      }
+    };
+
+    // El restaurante solo comparte ubicación mientras tiene un reparto
+    // propio/apoyo EN TRÁNSITO (el panel no corre de fondo como el repartidor).
+    const getTrackingMode = () => {
+      const currentOrders = ordersRef.current;
+      const hasActive = currentOrders.some(
+        (o) =>
+          o.fulfillmentType !== 'PICKUP' &&
+          ['PICKED_UP', 'IN_TRANSIT'].includes(o.status) &&
+          (o.deliveredByRestaurant === true ||
+            (typeof o.notes === 'string' && o.notes.includes('[ApoyoId:')))
+      );
+      return { hasActive, shouldTrack: hasActive };
+    };
+
+    const shouldSend = (lat: number, lng: number) => {
+      if (!lastPosition) return true;
+      const deltaLat = Math.abs(lat - lastPosition.lat);
+      const deltaLng = Math.abs(lng - lastPosition.lng);
+      return !(deltaLat < 0.00006 && deltaLng < 0.00006);
+    };
+
+    const postLocation = async (lat: number, lng: number) => {
+      const now = Date.now();
+      // Cadencia densa: el rastreo solo corre mientras se entrega.
+      if (now - lastPostAt < 6000) return;
+      lastPostAt = now;
+
+      try {
+        await requestJson({
+          apiBase,
+          path: '/restaurant-panel/ubicacion',
+          token,
+          options: {
+            method: 'POST',
+            body: JSON.stringify({ coords: [lat, lng] }),
+          },
+          fallbackMessage: 'No se pudo actualizar la ubicación.',
+        });
+      } catch {
+        // Error de red/backend: no es un fallo de GPS.
+      }
+    };
+
+    const stopWatching = () => {
+      if (watchId !== null) {
+        navigator.geolocation.clearWatch(watchId);
+        watchId = null;
+      }
+    };
+
+    const maybeLogGeoError = (error: GeolocationPositionError) => {
+      if (error.code === 2 || error.code === 3) {
+        const now = Date.now();
+        if (now - lastErrorLogAt > 5 * 60 * 1000) {
+          lastErrorLogAt = now;
+          if (process.env.NODE_ENV !== 'production') {
+            console.debug('Geolocation unavailable (transient). Will retry later.');
+          }
+        }
+        return;
+      }
+      if (process.env.NODE_ENV !== 'production') {
+        console.warn('Geolocation permission denied.');
+      }
+    };
+
+    const onPositionSuccess = (position: GeolocationPosition) => {
+      if (cancelled) return;
+
+      consecutiveFailures = 0;
+      writePausedUntil(0);
+
+      const lat = parseFloat(position.coords.latitude.toFixed(6));
+      const lng = parseFloat(position.coords.longitude.toFixed(6));
+
+      if (document.visibilityState === 'hidden') return;
+      if (!shouldSend(lat, lng)) return;
+
+      lastPosition = { lat, lng };
+      void postLocation(lat, lng);
+    };
+
+    const onPositionError = (error: GeolocationPositionError) => {
+      if (cancelled) return;
+
+      consecutiveFailures += 1;
+      maybeLogGeoError(error);
+
+      if (error.code === 1) {
+        stopWatching();
+        return;
+      }
+
+      if (consecutiveFailures >= 3) {
+        const pauseMs = consecutiveFailures >= 5 ? 15 * 60 * 1000 : 5 * 60 * 1000;
+        writePausedUntil(Date.now() + pauseMs);
+      }
+    };
+
+    const startWatching = () => {
+      stopWatching();
+      if (cancelled || document.visibilityState === 'hidden') return;
+
+      const { shouldTrack } = getTrackingMode();
+      if (!shouldTrack) return;
+
+      const pausedUntil = readPausedUntil();
+      if (Date.now() < pausedUntil) return;
+
+      // Alta precisión: rastreo activo solo al entregar.
+      watchId = navigator.geolocation.watchPosition(
+        onPositionSuccess,
+        onPositionError,
+        {
+          enableHighAccuracy: true,
+          timeout: 20000,
+          maximumAge: 10000,
+        }
+      );
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        startWatching();
+      } else {
+        stopWatching();
+      }
+    };
+
+    const handleOnline = () => {
+      consecutiveFailures = 0;
+      writePausedUntil(0);
+      startWatching();
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('online', handleOnline);
+    gpsRescheduleRef.current = startWatching;
+    startWatching();
+
+    return () => {
+      cancelled = true;
+      gpsRescheduleRef.current = null;
+      stopWatching();
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('online', handleOnline);
+    };
+  }, [token, sessionUser, apiBase]);
   const navigateToOrder = useCallback((orderId: string) => {
     const currentOrders = ordersRef.current;
     const order = currentOrders?.find?.((o: any) => o.id === orderId);

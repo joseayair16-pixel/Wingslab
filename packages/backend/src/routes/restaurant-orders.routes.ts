@@ -2331,5 +2331,96 @@ export async function registerRestaurantOrderRoutes(fastify: FastifyInstance): P
         return sendAppError(reply, error);
       }
     });
+
+    // ── Ubicación en vivo del reparto propio / apoyo (reparto a cargo del restaurante)
+    const locationUpdateSchema = z.object({
+      coords: z
+        .array(z.number())
+        .length(2, 'Las coordenadas deben contener exactamente [latitud, longitud]'),
+    });
+
+    restaurantOrders.post('/restaurant-panel/ubicacion', async (request, reply) => {
+      const parsed = locationUpdateSchema.safeParse(request.body);
+
+      if (!parsed.success) {
+        return reply.status(400).send({
+          success: false,
+          error: {
+            code: 'INVALID_PAYLOAD',
+            message: parsed.error.issues[0]?.message || 'Datos inválidos.',
+          },
+        });
+      }
+
+      const user = getAuthenticatedUser(request);
+      const requestContext = getOrCreateRequestContext(request);
+
+      try {
+        const restaurant = await prisma.restaurant.findUnique({
+          where: { userId: user.sub },
+        });
+
+        if (!restaurant) {
+          return reply.status(404).send({
+            success: false,
+            error: {
+              code: 'RESTAURANT_NOT_FOUND',
+              message: 'No se encontró el restaurante asociado a este usuario.',
+            },
+          });
+        }
+
+        const [latitude, longitude] = parsed.data.coords;
+
+        // Pedidos que el restaurante está entregando él mismo: reparto propio
+        // (deliveredByRestaurant) o apoyo a red ([ApoyoId: ...]) en tránsito.
+        const activeOwnOrders = await prisma.order.findMany({
+          where: {
+            status: { in: ['PICKED_UP', 'IN_TRANSIT'] },
+            OR: [
+              {
+                restaurantId: restaurant.id,
+                deliveredByRestaurant: true,
+              },
+              {
+                notes: { contains: `[ApoyoId: ${restaurant.id}]` },
+              },
+            ],
+          },
+          select: {
+            id: true,
+            customer: {
+              select: {
+                user: {
+                  select: { id: true },
+                },
+              },
+            },
+          },
+        });
+
+        for (const order of activeOwnOrders) {
+          emitNotification(
+            fastify.io,
+            order.customer.user.id,
+            'CUSTOMER',
+            'order:driver-location',
+            {
+              orderId: order.id,
+              latitude,
+              longitude,
+            },
+            {
+              requestId: requestContext.requestId,
+              orderId: order.id,
+            }
+          );
+        }
+
+        return reply.send({ success: true, emitted: activeOwnOrders.length });
+      } catch (error) {
+        return sendAppError(reply, error);
+      }
+    });
   });
 }

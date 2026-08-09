@@ -1479,12 +1479,20 @@ export default function Home() {
       if (!lastPosition) return true;
       const deltaLat = Math.abs(lat - lastPosition.lat);
       const deltaLng = Math.abs(lng - lastPosition.lng);
-      return !(deltaLat < 0.00015 && deltaLng < 0.00015);
+      // Durante entregas activas toleramos menos desplazamiento para capturar
+      // giros/paradas (rastro denso); en reposo solo enviamos si hubo movimiento claro.
+      const { hasActiveDeliveries } = getTrackingMode();
+      const threshold = hasActiveDeliveries ? 0.00006 : 0.00015;
+      return !(deltaLat < threshold && deltaLng < threshold);
     };
 
     const postLocation = async (lat: number, lng: number) => {
       const now = Date.now();
-      if (now - lastPostAt < 15000) return;
+      const { hasActiveDeliveries } = getTrackingMode();
+      // Cadencia adaptativa: durante entregas activas enviamos más seguido
+      // (rastro fluido para el cliente); en reposo mantenemos el mínimo.
+      const minInterval = hasActiveDeliveries ? 6000 : 15000;
+      if (now - lastPostAt < minInterval) return;
       lastPostAt = now;
 
       try {
