@@ -894,12 +894,38 @@ export async function registerPublicRoutes(fastify: FastifyInstance): Promise<vo
           });
         });
 
-      for (let i = offers.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [offers[i], offers[j]] = [offers[j], offers[i]];
+      const shuffle = <T,>(arr: T[]): T[] => {
+        const copy = [...arr];
+        for (let i = copy.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [copy[i], copy[j]] = [copy[j], copy[i]];
+        }
+        return copy;
+      };
+
+      const offersByRestaurant = new Map<string, any[]>();
+      for (const offer of offers) {
+        const key = offer.restaurant.id;
+        if (!offersByRestaurant.has(key)) offersByRestaurant.set(key, []);
+        offersByRestaurant.get(key)!.push(offer);
       }
 
-      return reply.send({ success: true, data: offers });
+      const groups = shuffle([...offersByRestaurant.values()]).map((g) => shuffle(g));
+
+      const interleavedOffers: any[] = [];
+      let remaining = true;
+      while (remaining) {
+        remaining = false;
+        for (const group of groups) {
+          const item = group.shift();
+          if (item !== undefined) {
+            interleavedOffers.push(item);
+            remaining = true;
+          }
+        }
+      }
+
+      return reply.send({ success: true, data: interleavedOffers });
     } catch (error) {
       return reply.status(500).send({
         success: false,
