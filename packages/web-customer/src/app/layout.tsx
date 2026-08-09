@@ -53,7 +53,7 @@ export default function RootLayout({
       <head>
         <script
           dangerouslySetInnerHTML={{
-            __html: `(function(){try{var d=document.documentElement;var s=localStorage.getItem('darkMode');var isDark=s===null?window.matchMedia('(prefers-color-scheme: dark)').matches:s==='true';d.classList.toggle('dark',isDark);}catch(e){}})();`,
+            __html: `(function(){try{document.documentElement.classList.remove('dark');}catch(e){}})();`,
           }}
         />
         <meta name="color-scheme" content="light dark" />

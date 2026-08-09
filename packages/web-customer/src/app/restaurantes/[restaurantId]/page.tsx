@@ -967,8 +967,7 @@ export default function RestaurantPage({
       const savedSession = readStoredSession(storageKey);
 
       if (typeof window !== 'undefined' && window.localStorage) {
-        const isDark = window.localStorage.getItem('darkMode') === 'true';
-        if (isDark) {
+        if (document.documentElement.classList.contains('dark')) {
           document.documentElement.classList.add('dark');
         }
       }
@@ -2670,7 +2669,7 @@ function triggerHaptic(pattern: number | number[] = 10) {
 
   return (
     <main
-      className="min-h-[100dvh] bg-[#fafafa] text-neutral-900 transition-colors duration-500"
+      className="min-h-[100dvh] bg-[#fafafa] text-neutral-900 transition-colors duration-500 dark:bg-[#0b0b0d] dark:text-zinc-100"
       onTouchStart={handleTouchStart}
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
@@ -4479,11 +4478,11 @@ function triggerHaptic(pattern: number | number[] = 10) {
                     </div>
                   </div>
 
-                  <div className="mt-3 flex flex-col lg:flex-row items-stretch lg:items-center gap-1.5 lg:gap-0 lg:divide-x divide-black/[0.06] rounded-2xl lg:rounded-full border border-black/[0.04] bg-white p-1.5 shadow-[0_2px_12px_rgba(0,0,0,0.02)] lg:p-1 lg:pr-3 transition-all hover:shadow-[0_6px_20px_rgba(0,0,0,0.04)]">
+                  <div className="mt-3 flex flex-col lg:flex-row items-stretch lg:items-center gap-1.5 lg:gap-0 lg:divide-x divide-black/[0.06] rounded-2xl lg:rounded-full border border-black/[0.04] bg-white p-1.5 shadow-[0_2px_12px_rgba(0,0,0,0.02)] lg:p-1 lg:pr-3 transition-all hover:shadow-[0_6px_20px_rgba(0,0,0,0.04)] dark:divide-zinc-800 dark:border-zinc-800/60 dark:bg-neutral-900">
                     {/* Address */}
-                    <div className="w-full flex-1 rounded-xl lg:rounded-full bg-neutral-50 lg:bg-transparent px-3 py-2.5 lg:py-1.5 text-[12px] text-neutral-600 flex items-center gap-2">
-                      <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-white shadow-sm border border-black/[0.03] lg:bg-neutral-100 lg:shadow-none lg:border-transparent">
-                        <svg className="h-3 w-3 text-neutral-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <div className="w-full flex-1 rounded-xl lg:rounded-full bg-neutral-50 lg:bg-transparent px-3 py-2.5 lg:py-1.5 text-[12px] text-neutral-600 flex items-center gap-2 dark:text-zinc-300">
+                      <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-white shadow-sm border border-black/[0.03] lg:bg-neutral-100 lg:shadow-none lg:border-transparent dark:bg-neutral-800 dark:lg:bg-transparent">
+                        <svg className="h-3 w-3 text-neutral-500 dark:text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.828 0l-4.243-4.243a8 8 0 1111.314 0z" />
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
                         </svg>
@@ -4493,26 +4492,26 @@ function triggerHaptic(pattern: number | number[] = 10) {
 
                     {/* Stats Grid for Mobile / Flex for Desktop */}
                     <div className="flex w-full lg:w-auto gap-1.5 lg:gap-0">
-                      <div className="flex flex-1 lg:flex-none flex-col items-center justify-center gap-0 rounded-xl lg:rounded-none bg-neutral-50 lg:bg-transparent px-2 py-1.5 lg:px-4">
-                        <span className="text-[9px] font-extrabold uppercase tracking-widest text-neutral-400">Distancia</span>
-                        <div className="flex items-center gap-1 text-[12px] font-semibold text-neutral-700">
-                          <svg className="h-3 w-3 text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <div className="flex flex-1 lg:flex-none flex-col items-center justify-center gap-0 rounded-xl lg:rounded-none bg-neutral-50 lg:bg-transparent px-2 py-1.5 lg:px-4 dark:bg-transparent">
+                        <span className="text-[9px] font-extrabold uppercase tracking-widest text-neutral-400 dark:text-zinc-500">Distancia</span>
+                        <div className="flex items-center gap-1 text-[12px] font-semibold text-neutral-700 dark:text-zinc-200">
+                          <svg className="h-3 w-3 text-neutral-400 dark:text-zinc-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
                           </svg>
                           <span>{distanceKm ? `${distanceKm.toFixed(1)} km` : '-- km'}</span>
                         </div>
                       </div>
-                      <div className="flex flex-1 lg:flex-none flex-col items-center justify-center gap-0 rounded-xl lg:rounded-none bg-neutral-50 lg:bg-transparent px-2 py-1.5 lg:px-4">
-                        <span className="text-[9px] font-extrabold uppercase tracking-widest text-neutral-400">Envío</span>
-                        <div className="flex items-center gap-1 text-[12px] font-semibold text-neutral-700">
-                          <svg className="h-3 w-3 text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <div className="flex flex-1 lg:flex-none flex-col items-center justify-center gap-0 rounded-xl lg:rounded-none bg-neutral-50 lg:bg-transparent px-2 py-1.5 lg:px-4 dark:bg-transparent">
+                        <span className="text-[9px] font-extrabold uppercase tracking-widest text-neutral-400 dark:text-zinc-500">Envío</span>
+                        <div className="flex items-center gap-1 text-[12px] font-semibold text-neutral-700 dark:text-zinc-200">
+                          <svg className="h-3 w-3 text-neutral-400 dark:text-zinc-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                           </svg>
                           <span>{formatDeliverySummary(deliveryFee)}</span>
                         </div>
                       </div>
-                      <div className="flex flex-1 lg:flex-none flex-col items-center justify-center gap-0 rounded-xl lg:rounded-none bg-neutral-50 lg:bg-transparent px-2 py-1.5 lg:px-4">
-                        <span className="text-[9px] font-extrabold uppercase tracking-widest text-neutral-400">Estado</span>
+                      <div className="flex flex-1 lg:flex-none flex-col items-center justify-center gap-0 rounded-xl lg:rounded-none bg-neutral-50 lg:bg-transparent px-2 py-1.5 lg:px-4 dark:bg-transparent">
+                        <span className="text-[9px] font-extrabold uppercase tracking-widest text-neutral-400 dark:text-zinc-500">Estado</span>
                         <div className="flex items-center gap-1.5 text-[12px]">
                           <span className="relative flex h-2 w-2 shrink-0">
                             <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${restaurant.isOpen ? 'bg-emerald-500' : 'bg-red-500'}`}></span>
@@ -4526,7 +4525,7 @@ function triggerHaptic(pattern: number | number[] = 10) {
                 </div>
               </section>
 
-              <div data-sticky-header className="sticky top-[72px] z-20 -mx-4 bg-white/90 backdrop-blur-2xl border-b border-black/[0.04] md:-mx-6 lg:-mx-7">
+              <div data-sticky-header className="sticky top-[72px] z-20 -mx-4 bg-white/90 backdrop-blur-2xl border-b border-black/[0.04] md:-mx-6 lg:-mx-7 dark:bg-neutral-950/90 dark:border-zinc-800/60">
                 <div className="px-4 py-3 md:px-6 lg:px-7">
                   <div className="relative w-full">
                     <input
@@ -4534,13 +4533,13 @@ function triggerHaptic(pattern: number | number[] = 10) {
                       placeholder={`Buscar en ${restaurant?.name || 'el menú'}...`}
                       value={productSearchQuery}
                       onChange={(e) => setProductSearchQuery(e.target.value)}
-                      className="w-full rounded-full border border-black/10 bg-white px-5 py-3 pr-11 text-sm text-neutral-900 outline-none transition placeholder:text-neutral-400 focus:border-black/20"
+                      className="w-full rounded-full border border-black/10 bg-white px-5 py-3 pr-11 text-sm text-neutral-900 outline-none transition placeholder:text-neutral-400 focus:border-black/20 dark:border-zinc-800 dark:bg-neutral-900 dark:text-zinc-100 dark:placeholder:text-zinc-500 dark:focus:border-zinc-600"
                     />
                     {productSearchQuery ? (
                       <button
                         type="button"
                         onClick={() => setProductSearchQuery('')}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-neutral-400 hover:text-neutral-700 transition-colors rounded-full hover:bg-neutral-100"
+                        className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-neutral-400 hover:text-neutral-700 transition-colors rounded-full hover:bg-neutral-100 dark:text-zinc-500 dark:hover:text-zinc-200 dark:hover:bg-zinc-800"
                         aria-label="Limpiar búsqueda"
                       >
                         <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -4548,7 +4547,7 @@ function triggerHaptic(pattern: number | number[] = 10) {
                         </svg>
                       </button>
                     ) : (
-                      <svg className="pointer-events-none absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <svg className="pointer-events-none absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-400 dark:text-zinc-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M21 21l-5.2-5.2m1.7-4.3a7 7 0 11-14 0 7 7 0 0114 0z" />
                       </svg>
                     )}
@@ -4567,8 +4566,8 @@ function triggerHaptic(pattern: number | number[] = 10) {
                             onClick={() => scrollToCategory(category.id)}
                             className={`relative px-4 py-3 text-[13.5px] font-semibold transition-all duration-200 ${
                               isActive
-                                ? 'text-sky-600'
-                                : 'text-neutral-500 hover:text-neutral-800'
+                                ? 'text-sky-600 dark:text-sky-400'
+                                : 'text-neutral-500 hover:text-neutral-800 dark:text-zinc-400 dark:hover:text-zinc-100'
                             }`}
                           >
                             {category.name}
@@ -4607,45 +4606,45 @@ function triggerHaptic(pattern: number | number[] = 10) {
                     {searchResults.map((product) => {
                       const quantity = getCartQuantity(product.id);
                       return (
-                        <article id={product.id} key={product.id} className="overflow-hidden rounded-[24px] border border-black/[0.04] bg-white transition-all duration-300 shadow-[0_2px_12px_rgba(0,0,0,0.02)] hover:shadow-[0_8px_24px_rgba(0,0,0,0.06)]">
+                        <article id={product.id} key={product.id} className="overflow-hidden rounded-[24px] border border-black/[0.04] bg-white transition-all duration-300 shadow-[0_2px_12px_rgba(0,0,0,0.02)] hover:shadow-[0_8px_24px_rgba(0,0,0,0.06)] dark:border-zinc-800 dark:bg-neutral-900">
                           <div className="flex gap-4 p-4">
                             <div className="relative h-24 w-24 shrink-0 overflow-hidden rounded-2xl sm:h-28 sm:w-28">
                               {product.image ? (
                                 <img src={product.image} alt={product.name} className="h-full w-full object-cover" loading="lazy" decoding="async" />
                               ) : (
-                                <div className="h-full w-full bg-gradient-to-br from-neutral-100 to-neutral-200" />
+                                <div className="h-full w-full bg-gradient-to-br from-neutral-100 to-neutral-200 dark:from-zinc-800 dark:to-zinc-900" />
                               )}
                             </div>
                             <div className="flex min-w-0 flex-1 flex-col justify-between">
                               <div>
-                                <h3 className="text-base font-semibold text-neutral-950">{product.name}</h3>
-                                <p className="mt-0.5 text-sm text-neutral-500 line-clamp-2 leading-snug">{product.description}</p>
+                                <h3 className="text-base font-semibold text-neutral-950 dark:text-white">{product.name}</h3>
+                                <p className="mt-0.5 text-sm text-neutral-500 line-clamp-2 leading-snug dark:text-zinc-400">{product.description}</p>
                               </div>
                               <div className="mt-2 flex items-center justify-between gap-3">
                                 {product.discountPrice ? (
                                   <div className="flex items-center gap-1.5">
-                                    <span className="text-lg font-bold text-neutral-950">{formatCurrency(product.discountPrice)}</span>
-                                    <span className="text-xs text-neutral-400 line-through">{formatCurrency(product.price)}</span>
+                                    <span className="text-lg font-bold text-neutral-950 dark:text-white">{formatCurrency(product.discountPrice)}</span>
+                                    <span className="text-xs text-neutral-400 line-through dark:text-zinc-500">{formatCurrency(product.price)}</span>
                                   </div>
                                 ) : (
-                                  <span className="text-lg font-bold text-neutral-950">{formatCurrency(product.price)}</span>
+                                  <span className="text-lg font-bold text-neutral-950 dark:text-white">{formatCurrency(product.price)}</span>
                                 )}
                                 {quantity > 0 ? (
-                                  <div className="flex items-center gap-0.5 rounded-full border border-black/[0.06] bg-neutral-50 p-0.5">
-                                    <button type="button" onClick={() => { if (product.optionGroups?.length) { decreaseQuantityForProduct(product.id); } else { updateCartItem(product.id, { quantity: quantity - 1 }); } }} className="flex h-7 w-7 items-center justify-center rounded-full text-neutral-500 transition-all hover:bg-white active:scale-90">
+                                  <div className="flex items-center gap-0.5 rounded-full border border-black/[0.06] bg-neutral-50 p-0.5 dark:border-zinc-700 dark:bg-neutral-800">
+                                    <button type="button" onClick={() => { if (product.optionGroups?.length) { decreaseQuantityForProduct(product.id); } else { updateCartItem(product.id, { quantity: quantity - 1 }); } }} className="flex h-7 w-7 items-center justify-center rounded-full text-neutral-500 transition-all hover:bg-white active:scale-90 dark:text-zinc-300 dark:hover:bg-zinc-700">
                                       {quantity === 1 ? (
                                         <svg className="h-3 w-3 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                                       ) : (
                                         <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M20 12H4" /></svg>
                                       )}
                                     </button>
-                                    <span className="flex h-7 w-7 items-center justify-center text-xs font-bold text-neutral-900">{quantity}</span>
-                                    <button type="button" onClick={() => addToCart(product)} className="flex h-7 w-7 items-center justify-center rounded-full text-neutral-500 transition-all hover:bg-white active:scale-90">
+                                    <span className="flex h-7 w-7 items-center justify-center text-xs font-bold text-neutral-900 dark:text-white">{quantity}</span>
+                                    <button type="button" onClick={() => addToCart(product)} className="flex h-7 w-7 items-center justify-center rounded-full text-neutral-500 transition-all hover:bg-white active:scale-90 dark:text-zinc-300 dark:hover:bg-zinc-700">
                                       <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" /></svg>
                                     </button>
                                   </div>
                                 ) : (
-                                  <button type="button" onClick={() => addToCart(product)} disabled={!restaurant?.isOpen} className="rounded-full bg-neutral-100 px-4 py-2 text-sm font-bold text-neutral-900 transition hover:bg-neutral-200 disabled:cursor-not-allowed disabled:bg-neutral-50 disabled:text-neutral-400">
+                                  <button type="button" onClick={() => addToCart(product)} disabled={!restaurant?.isOpen} className="rounded-full bg-neutral-100 px-4 py-2 text-sm font-bold text-neutral-900 transition hover:bg-neutral-200 disabled:cursor-not-allowed disabled:bg-neutral-50 disabled:text-neutral-400 dark:bg-zinc-100 dark:text-neutral-950 dark:hover:bg-white dark:disabled:bg-zinc-800 dark:disabled:text-zinc-600">
                                     Agregar
                                   </button>
                                 )}
@@ -4692,14 +4691,14 @@ function triggerHaptic(pattern: number | number[] = 10) {
 
                       return (
                         isPromoCarousel ? (
-                          <article id={product.id} key={product.id} className="group w-32 shrink-0 snap-start overflow-hidden rounded-2xl border border-black/[0.04] bg-white transition-all duration-300 shadow-[0_2px_8px_rgba(0,0,0,0.02)] hover:-translate-y-0.5 hover:shadow-[0_8px_24px_rgba(0,0,0,0.06)] active:scale-[0.98]">
+                          <article id={product.id} key={product.id} className="group w-32 shrink-0 snap-start overflow-hidden rounded-2xl border border-black/[0.04] bg-white transition-all duration-300 shadow-[0_2px_8px_rgba(0,0,0,0.02)] hover:-translate-y-0.5 hover:shadow-[0_8px_24px_rgba(0,0,0,0.06)] active:scale-[0.98] dark:border-zinc-800 dark:bg-neutral-900">
                           
                             <div className="relative overflow-hidden">
                               {product.image ? (
                                 <img src={product.image} alt={product.name} className="h-20 w-full object-cover transition duration-300 group-hover:scale-105" loading="lazy" decoding="async" />
                               ) : (
-                                <div className="flex h-20 w-full items-center justify-center bg-gradient-to-br from-neutral-100 to-neutral-200">
-                                  <svg className="h-6 w-6 text-neutral-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
+                                <div className="flex h-20 w-full items-center justify-center bg-gradient-to-br from-neutral-100 to-neutral-200 dark:from-zinc-800 dark:to-zinc-900">
+                                  <svg className="h-6 w-6 text-neutral-400 dark:text-zinc-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
                                     <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607zM13.5 10.5h-3" />
                                   </svg>
                                 </div>
@@ -4711,39 +4710,39 @@ function triggerHaptic(pattern: number | number[] = 10) {
                               )}
                             </div>
                             <div className="px-1.5 pb-1.5 pt-1">
-                              <h3 className="truncate text-[11px] font-bold leading-tight text-neutral-900">{product.name}</h3>
+                              <h3 className="truncate text-[11px] font-bold leading-tight text-neutral-900 dark:text-white">{product.name}</h3>
                               {product.sellBy === 'WEIGHT' ? (
-                                <p className="mt-0.5 text-[11px] font-bold text-neutral-900">{formatCurrency(product.unitPrice || product.price)}/kg</p>
+                                <p className="mt-0.5 text-[11px] font-bold text-neutral-900 dark:text-white">{formatCurrency(product.unitPrice || product.price)}/kg</p>
                               ) : product.discountPrice ? (
                                 <div className="mt-0.5 flex items-baseline gap-1">
                                   <span className="text-xs font-bold text-rose-600">{formatCurrency(product.discountPrice)}</span>
-                                  <span className="text-[9px] text-neutral-400 line-through">{formatCurrency(product.price)}</span>
+                                  <span className="text-[9px] text-neutral-400 line-through dark:text-zinc-500">{formatCurrency(product.price)}</span>
                                 </div>
                               ) : (
-                                <p className="mt-0.5 text-xs font-bold text-neutral-900">{formatCurrency(product.price)}</p>
+                                <p className="mt-0.5 text-xs font-bold text-neutral-900 dark:text-white">{formatCurrency(product.price)}</p>
                               )}
                               {product.discountPrice && (
-                                <span className="mt-0.5 inline-block rounded-full bg-emerald-50 px-1 py-0.5 text-[8px] font-bold text-emerald-600">
+                                <span className="mt-0.5 inline-block rounded-full bg-emerald-50 px-1 py-0.5 text-[8px] font-bold text-emerald-600 dark:bg-emerald-500/10">
                                   -{formatCurrency(product.price - product.discountPrice)}
                                 </span>
                               )}
                               <div className="mt-1.5">
                                 {quantity > 0 ? (
-                                  <div className="flex w-fit items-center gap-0.5 rounded-lg border border-black/[0.06] bg-neutral-50 p-0.5">
-                                    <button type="button" onClick={() => { if (product.optionGroups?.length) { decreaseQuantityForProduct(product.id); } else { updateCartItem(product.id, { quantity: quantity - 1 }); } }} className="flex h-5 w-5 items-center justify-center rounded-md text-neutral-500 transition-all hover:bg-white active:scale-90" aria-label={`Quitar una unidad de ${product.name}`}>
+                                  <div className="flex w-fit items-center gap-0.5 rounded-lg border border-black/[0.06] bg-neutral-50 p-0.5 dark:border-zinc-700 dark:bg-neutral-800">
+                                    <button type="button" onClick={() => { if (product.optionGroups?.length) { decreaseQuantityForProduct(product.id); } else { updateCartItem(product.id, { quantity: quantity - 1 }); } }} className="flex h-5 w-5 items-center justify-center rounded-md text-neutral-500 transition-all hover:bg-white active:scale-90 dark:text-zinc-300 dark:hover:bg-zinc-700" aria-label={`Quitar una unidad de ${product.name}`}>
                                       {quantity === 1 ? (
                                         <svg className="h-2.5 w-2.5 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                                       ) : (
                                         <svg className="h-2 w-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M20 12H4" /></svg>
                                       )}
                                     </button>
-                                    <span className="flex h-5 w-5 items-center justify-center text-[10px] font-bold text-neutral-900">{quantity}</span>
-                                    <button type="button" onClick={() => addToCart(product)} className="flex h-5 w-5 items-center justify-center rounded-md text-neutral-500 transition-all hover:bg-white active:scale-90" aria-label={`Agregar una unidad de ${product.name}`}>
+                                    <span className="flex h-5 w-5 items-center justify-center text-[10px] font-bold text-neutral-900 dark:text-white">{quantity}</span>
+                                    <button type="button" onClick={() => addToCart(product)} className="flex h-5 w-5 items-center justify-center rounded-md text-neutral-500 transition-all hover:bg-white active:scale-90 dark:text-zinc-300 dark:hover:bg-zinc-700" aria-label={`Agregar una unidad de ${product.name}`}>
                                       <svg className="h-2 w-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" /></svg>
                                     </button>
                                   </div>
                                 ) : (
-                                  <button type="button" onClick={() => addToCart(product)} disabled={!restaurant.isOpen} className="w-full rounded-lg bg-neutral-900 py-1.5 text-[10px] font-bold text-white transition hover:bg-neutral-800 disabled:bg-neutral-200 disabled:text-neutral-400">
+                                  <button type="button" onClick={() => addToCart(product)} disabled={!restaurant.isOpen} className="w-full rounded-lg bg-neutral-900 py-1.5 text-[10px] font-bold text-white transition hover:bg-neutral-800 disabled:bg-neutral-200 disabled:text-neutral-400 dark:bg-white dark:text-neutral-950 dark:hover:bg-zinc-200 dark:disabled:bg-neutral-800 dark:disabled:text-zinc-600">
                                     Agregar
                                   </button>
                                 )}
@@ -4751,10 +4750,10 @@ function triggerHaptic(pattern: number | number[] = 10) {
                             </div>
                           </article>
                         ) : isLargeCategory ? (
-                          <article id={product.id} key={product.id} className="w-[42vw] shrink-0 snap-start sm:w-52 overflow-hidden rounded-2xl border border-black/[0.04] bg-white transition-all duration-300 shadow-[0_2px_12px_rgba(0,0,0,0.02)] hover:-translate-y-0.5 hover:shadow-[0_8px_24px_rgba(0,0,0,0.06)]">
+                          <article id={product.id} key={product.id} className="w-[42vw] shrink-0 snap-start sm:w-52 overflow-hidden rounded-2xl border border-black/[0.04] bg-white transition-all duration-300 shadow-[0_2px_12px_rgba(0,0,0,0.02)] hover:-translate-y-0.5 hover:shadow-[0_8px_24px_rgba(0,0,0,0.06)] dark:border-zinc-800 dark:bg-neutral-900">
                             <div className="flex h-full flex-col">
                               <div
-                                className="relative aspect-square overflow-hidden bg-neutral-50 cursor-pointer"
+                                className="relative aspect-square overflow-hidden bg-neutral-50 cursor-pointer dark:bg-neutral-900"
                                 onClick={() => openProductPreview(product)}
                               >
                                 {product.image ? (
@@ -4767,7 +4766,7 @@ function triggerHaptic(pattern: number | number[] = 10) {
                                     decoding="async"
                                   />
                                 ) : (
-                                  <div className="h-full w-full bg-gradient-to-br from-neutral-100 to-neutral-200" />
+                                  <div className="h-full w-full bg-gradient-to-br from-neutral-100 to-neutral-200 dark:from-zinc-800 dark:to-zinc-900" />
                                 )}
                                 {product.discountPrice && (
                                   <div className="absolute left-1.5 top-1.5 flex items-center gap-1 rounded-full bg-rose-500/90 px-2 py-0.5 text-[9px] font-bold text-white shadow-sm">
@@ -4776,34 +4775,34 @@ function triggerHaptic(pattern: number | number[] = 10) {
                                 )}
                               </div>
                               <div className="flex flex-1 flex-col p-3">
-                                 <h3 className="text-sm font-bold leading-snug text-neutral-900 line-clamp-2">{product.name}</h3>
+                                 <h3 className="text-sm font-bold leading-snug text-neutral-900 line-clamp-2 dark:text-white">{product.name}</h3>
                                 {product.sellBy === 'WEIGHT' ? (
-                                  <p className="mt-0.5 text-xs font-semibold text-neutral-500">{formatCurrency(product.unitPrice || product.price)}/kg</p>
+                                  <p className="mt-0.5 text-xs font-semibold text-neutral-500 dark:text-zinc-400">{formatCurrency(product.unitPrice || product.price)}/kg</p>
                                 ) : product.discountPrice ? (
                                   <div className="mt-0.5 flex items-baseline gap-1.5">
                                     <span className="text-xs font-bold text-rose-600">{formatCurrency(product.discountPrice)}</span>
-                                    <span className="text-[10px] text-neutral-400 line-through">{formatCurrency(product.price)}</span>
+                                    <span className="text-[10px] text-neutral-400 line-through dark:text-zinc-500">{formatCurrency(product.price)}</span>
                                   </div>
                                 ) : (
-                                  <p className="mt-0.5 text-xs font-semibold text-neutral-500">{formatCurrency(product.price)}</p>
+                                  <p className="mt-0.5 text-xs font-semibold text-neutral-500 dark:text-zinc-400">{formatCurrency(product.price)}</p>
                                 )}
                                 <div className="mt-auto pt-3">
                                   {quantity > 0 ? (
-                                    <div className="flex w-fit items-center gap-0.5 rounded-full border border-black/[0.06] bg-neutral-50 p-0.5">
-                                      <button type="button" onClick={() => { if (product.optionGroups?.length) { decreaseQuantityForProduct(product.id); } else { updateCartItem(product.id, { quantity: quantity - 1 }); } }} className="flex h-7 w-7 items-center justify-center rounded-full text-neutral-500 transition-all hover:bg-white active:scale-90" aria-label={`Quitar una unidad de ${product.name}`}>
+                                    <div className="flex w-fit items-center gap-0.5 rounded-full border border-black/[0.06] bg-neutral-50 p-0.5 dark:border-zinc-700 dark:bg-neutral-800">
+                                      <button type="button" onClick={() => { if (product.optionGroups?.length) { decreaseQuantityForProduct(product.id); } else { updateCartItem(product.id, { quantity: quantity - 1 }); } }} className="flex h-7 w-7 items-center justify-center rounded-full text-neutral-500 transition-all hover:bg-white active:scale-90 dark:text-zinc-300 dark:hover:bg-zinc-700" aria-label={`Quitar una unidad de ${product.name}`}>
                                         {quantity === 1 ? (
                                           <svg className="h-3 w-3 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                                         ) : (
                                           <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M20 12H4" /></svg>
                                         )}
                                       </button>
-                                      <span className="flex h-7 w-7 items-center justify-center text-xs font-bold text-neutral-900">{quantity}</span>
-                                      <button type="button" onClick={() => addToCart(product)} className="flex h-7 w-7 items-center justify-center rounded-full text-neutral-500 transition-all hover:bg-white active:scale-90" aria-label={`Agregar una unidad de ${product.name}`}>
+                                      <span className="flex h-7 w-7 items-center justify-center text-xs font-bold text-neutral-900 dark:text-white">{quantity}</span>
+                                      <button type="button" onClick={() => addToCart(product)} className="flex h-7 w-7 items-center justify-center rounded-full text-neutral-500 transition-all hover:bg-white active:scale-90 dark:text-zinc-300 dark:hover:bg-zinc-700" aria-label={`Agregar una unidad de ${product.name}`}>
                                         <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" /></svg>
                                       </button>
                                     </div>
                                   ) : (
-                                    <button type="button" onClick={() => addToCart(product)} disabled={!restaurant.isOpen} className="w-full rounded-xl bg-neutral-900 py-2.5 text-[11px] font-bold text-white transition hover:bg-neutral-800 disabled:bg-neutral-200 disabled:text-neutral-400">
+                                    <button type="button" onClick={() => addToCart(product)} disabled={!restaurant.isOpen} className="w-full rounded-xl bg-neutral-900 py-2.5 text-[11px] font-bold text-white transition hover:bg-neutral-800 disabled:bg-neutral-200 disabled:text-neutral-400 dark:bg-white dark:text-neutral-950 dark:hover:bg-zinc-200 dark:disabled:bg-neutral-800 dark:disabled:text-zinc-600">
                                       Agregar
                                     </button>
                                   )}
@@ -4812,10 +4811,10 @@ function triggerHaptic(pattern: number | number[] = 10) {
                             </div>
                           </article>
                         ) : isStore ? (
-                          <article id={product.id} key={product.id} className="overflow-hidden rounded-2xl border border-black/[0.04] bg-white transition-all duration-300 shadow-[0_2px_12px_rgba(0,0,0,0.02)] hover:-translate-y-0.5 hover:shadow-[0_8px_24px_rgba(0,0,0,0.06)]">
+                          <article id={product.id} key={product.id} className="overflow-hidden rounded-2xl border border-black/[0.04] bg-white transition-all duration-300 shadow-[0_2px_12px_rgba(0,0,0,0.02)] hover:-translate-y-0.5 hover:shadow-[0_8px_24px_rgba(0,0,0,0.06)] dark:border-zinc-800 dark:bg-neutral-900">
                             <div className="flex h-full flex-col">
                               <div
-                                className="relative aspect-square overflow-hidden bg-neutral-50 cursor-pointer"
+                                className="relative aspect-square overflow-hidden bg-neutral-50 cursor-pointer dark:bg-neutral-900"
                                 onClick={() => openProductPreview(product)}
                               >
                                 {product.image ? (
@@ -4828,7 +4827,7 @@ function triggerHaptic(pattern: number | number[] = 10) {
                                     decoding="async"
                                   />
                                 ) : (
-                                  <div className="h-full w-full bg-gradient-to-br from-neutral-100 to-neutral-200" />
+                                  <div className="h-full w-full bg-gradient-to-br from-neutral-100 to-neutral-200 dark:from-zinc-800 dark:to-zinc-900" />
                                 )}
                                 {product.discountPrice && (
                                   <div className="absolute left-1.5 top-1.5 flex items-center gap-1 rounded-full bg-rose-500/90 px-2 py-0.5 text-[9px] font-bold text-white shadow-sm">
@@ -4837,34 +4836,34 @@ function triggerHaptic(pattern: number | number[] = 10) {
                                 )}
                               </div>
                               <div className="flex flex-1 flex-col p-3">
-                                <h3 className="text-sm font-bold leading-snug text-neutral-900 line-clamp-2">{product.name}</h3>
+                                <h3 className="text-sm font-bold leading-snug text-neutral-900 line-clamp-2 dark:text-white">{product.name}</h3>
                                 {product.sellBy === 'WEIGHT' ? (
-                                  <p className="mt-0.5 text-xs font-semibold text-neutral-500">{formatCurrency(product.unitPrice || product.price)}/kg</p>
+                                  <p className="mt-0.5 text-xs font-semibold text-neutral-500 dark:text-zinc-400">{formatCurrency(product.unitPrice || product.price)}/kg</p>
                                 ) : product.discountPrice ? (
                                   <div className="mt-0.5 flex items-baseline gap-1.5">
                                     <span className="text-xs font-bold text-rose-600">{formatCurrency(product.discountPrice)}</span>
-                                    <span className="text-[10px] text-neutral-400 line-through">{formatCurrency(product.price)}</span>
+                                    <span className="text-[10px] text-neutral-400 line-through dark:text-zinc-500">{formatCurrency(product.price)}</span>
                                   </div>
                                 ) : (
-                                  <p className="mt-0.5 text-xs font-semibold text-neutral-500">{formatCurrency(product.price)}</p>
+                                  <p className="mt-0.5 text-xs font-semibold text-neutral-500 dark:text-zinc-400">{formatCurrency(product.price)}</p>
                                 )}
                                 <div className="mt-auto pt-3">
                                   {quantity > 0 ? (
-                                    <div className="flex w-fit items-center gap-0.5 rounded-full border border-black/[0.06] bg-neutral-50 p-0.5">
-                                      <button type="button" onClick={() => { if (product.optionGroups?.length) { decreaseQuantityForProduct(product.id); } else { updateCartItem(product.id, { quantity: quantity - 1 }); } }} className="flex h-7 w-7 items-center justify-center rounded-full text-neutral-500 transition-all hover:bg-white active:scale-90" aria-label={`Quitar una unidad de ${product.name}`}>
+                                    <div className="flex w-fit items-center gap-0.5 rounded-full border border-black/[0.06] bg-neutral-50 p-0.5 dark:border-zinc-700 dark:bg-neutral-800">
+                                      <button type="button" onClick={() => { if (product.optionGroups?.length) { decreaseQuantityForProduct(product.id); } else { updateCartItem(product.id, { quantity: quantity - 1 }); } }} className="flex h-7 w-7 items-center justify-center rounded-full text-neutral-500 transition-all hover:bg-white active:scale-90 dark:text-zinc-300 dark:hover:bg-zinc-700" aria-label={`Quitar una unidad de ${product.name}`}>
                                         {quantity === 1 ? (
                                           <svg className="h-3 w-3 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                                         ) : (
                                           <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M20 12H4" /></svg>
                                         )}
                                       </button>
-                                      <span className="flex h-7 w-7 items-center justify-center text-xs font-bold text-neutral-900">{quantity}</span>
-                                      <button type="button" onClick={() => addToCart(product)} className="flex h-7 w-7 items-center justify-center rounded-full text-neutral-500 transition-all hover:bg-white active:scale-90" aria-label={`Agregar una unidad de ${product.name}`}>
+                                      <span className="flex h-7 w-7 items-center justify-center text-xs font-bold text-neutral-900 dark:text-white">{quantity}</span>
+                                      <button type="button" onClick={() => addToCart(product)} className="flex h-7 w-7 items-center justify-center rounded-full text-neutral-500 transition-all hover:bg-white active:scale-90 dark:text-zinc-300 dark:hover:bg-zinc-700" aria-label={`Agregar una unidad de ${product.name}`}>
                                         <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" /></svg>
                                       </button>
                                     </div>
                                   ) : (
-                                    <button type="button" onClick={() => addToCart(product)} disabled={!restaurant.isOpen} className="w-full rounded-xl bg-neutral-900 py-2.5 text-[11px] font-bold text-white transition hover:bg-neutral-800 disabled:bg-neutral-200 disabled:text-neutral-400">
+                                    <button type="button" onClick={() => addToCart(product)} disabled={!restaurant.isOpen} className="w-full rounded-xl bg-neutral-900 py-2.5 text-[11px] font-bold text-white transition hover:bg-neutral-800 disabled:bg-neutral-200 disabled:text-neutral-400 dark:bg-white dark:text-neutral-950 dark:hover:bg-zinc-200 dark:disabled:bg-neutral-800 dark:disabled:text-zinc-600">
                                       Agregar
                                     </button>
                                   )}
@@ -4873,7 +4872,7 @@ function triggerHaptic(pattern: number | number[] = 10) {
                             </div>
                           </article>
                         ) : (
-                          <article id={product.id} key={product.id} className="overflow-hidden rounded-2xl border border-black/[0.04] bg-white transition-all duration-200 shadow-[0_1px_3px_rgba(0,0,0,0.04)] hover:shadow-[0_4px_12px_rgba(0,0,0,0.06)]">
+                          <article id={product.id} key={product.id} className="overflow-hidden rounded-2xl border border-black/[0.04] bg-white transition-all duration-200 shadow-[0_1px_3px_rgba(0,0,0,0.04)] hover:shadow-[0_4px_12px_rgba(0,0,0,0.06)] dark:border-zinc-800 dark:bg-neutral-900">
                             <div className="flex gap-3 p-3">
                               <div className="relative h-24 w-24 shrink-0 overflow-hidden rounded-xl sm:h-28 sm:w-28">
                                 {product.image ? (
@@ -4941,40 +4940,40 @@ function triggerHaptic(pattern: number | number[] = 10) {
                               </div>
                               <div className="flex min-w-0 flex-1 flex-col">
                                 <div className="flex flex-col gap-0.5">
-                                  <h3 className="truncate text-sm font-bold text-neutral-900">{product.name}</h3>
+                                  <h3 className="truncate text-sm font-bold text-neutral-900 dark:text-white">{product.name}</h3>
                                   {product.description && (
-                                    <p className="text-xs leading-relaxed text-neutral-500 line-clamp-2">{product.description}</p>
+                                    <p className="text-xs leading-relaxed text-neutral-500 line-clamp-2 dark:text-zinc-400">{product.description}</p>
                                   )}
                                   <div className="mt-0.5">
                                     {product.sellBy === 'WEIGHT' ? (
-                                      <span className="text-sm font-bold text-neutral-900">{formatCurrency(product.unitPrice || product.price)}/kg</span>
+                                      <span className="text-sm font-bold text-neutral-900 dark:text-white">{formatCurrency(product.unitPrice || product.price)}/kg</span>
                                     ) : product.discountPrice ? (
                                       <div className="flex items-baseline gap-1.5">
                                         <span className="text-sm font-bold text-rose-600">{formatCurrency(product.discountPrice)}</span>
-                                        <span className="text-[10px] text-neutral-400 line-through">{formatCurrency(product.price)}</span>
+                                        <span className="text-[10px] text-neutral-400 line-through dark:text-zinc-500">{formatCurrency(product.price)}</span>
                                       </div>
                                     ) : (
-                                      <span className="text-sm font-bold text-neutral-900">{formatCurrency(product.price)}</span>
+                                      <span className="text-sm font-bold text-neutral-900 dark:text-white">{formatCurrency(product.price)}</span>
                                     )}
                                   </div>
                                 </div>
                                 <div className="mt-auto pt-3 flex justify-end">
                                   {quantity > 0 ? (
-                                    <div className="flex w-fit items-center gap-0.5 rounded-full border border-black/[0.06] bg-neutral-50 p-0.5">
-                                      <button type="button" onClick={() => { if (product.optionGroups?.length) { decreaseQuantityForProduct(product.id); } else { updateCartItem(product.id, { quantity: quantity - 1 }); } }} className="flex h-7 w-7 items-center justify-center rounded-full text-neutral-500 transition-all hover:bg-white active:scale-90" aria-label={`Quitar una unidad de ${product.name}`}>
+                                    <div className="flex w-fit items-center gap-0.5 rounded-full border border-black/[0.06] bg-neutral-50 p-0.5 dark:border-zinc-700 dark:bg-neutral-800">
+                                      <button type="button" onClick={() => { if (product.optionGroups?.length) { decreaseQuantityForProduct(product.id); } else { updateCartItem(product.id, { quantity: quantity - 1 }); } }} className="flex h-7 w-7 items-center justify-center rounded-full text-neutral-500 transition-all hover:bg-white active:scale-90 dark:text-zinc-300 dark:hover:bg-zinc-700" aria-label={`Quitar una unidad de ${product.name}`}>
                                         {quantity === 1 ? (
                                           <svg className="h-3 w-3 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                                         ) : (
                                           <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M20 12H4" /></svg>
                                         )}
                                       </button>
-                                      <span className="flex h-7 w-7 items-center justify-center text-xs font-bold text-neutral-900">{quantity}</span>
-                                      <button type="button" onClick={() => addToCart(product)} className="flex h-7 w-7 items-center justify-center rounded-full text-neutral-500 transition-all hover:bg-white active:scale-90" aria-label={`Agregar una unidad de ${product.name}`}>
+                                      <span className="flex h-7 w-7 items-center justify-center text-xs font-bold text-neutral-900 dark:text-white">{quantity}</span>
+                                      <button type="button" onClick={() => addToCart(product)} className="flex h-7 w-7 items-center justify-center rounded-full text-neutral-500 transition-all hover:bg-white active:scale-90 dark:text-zinc-300 dark:hover:bg-zinc-700" aria-label={`Agregar una unidad de ${product.name}`}>
                                         <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" /></svg>
                                       </button>
                                     </div>
                                   ) : (
-                                    <button type="button" onClick={() => addToCart(product)} disabled={!restaurant.isOpen} className="rounded-xl bg-neutral-900 px-5 py-2.5 text-[11px] font-bold text-white transition hover:bg-neutral-800 disabled:bg-neutral-200 disabled:text-neutral-400">
+                                    <button type="button" onClick={() => addToCart(product)} disabled={!restaurant.isOpen} className="rounded-xl bg-neutral-900 px-5 py-2.5 text-[11px] font-bold text-white transition hover:bg-neutral-800 disabled:bg-neutral-200 disabled:text-neutral-400 dark:bg-white dark:text-neutral-950 dark:hover:bg-zinc-200 dark:disabled:bg-neutral-800 dark:disabled:text-zinc-600">
                                       Agregar
                                     </button>
                                   )}
