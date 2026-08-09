@@ -2237,6 +2237,16 @@ export default function Home() {
       localStorage.removeItem('exploringZone');
     } catch (e) {}
 
+    // Al regresar a la zona del GPS se recarga todo el dashboard; subir al tope
+    // para que el usuario vea el inicio y no quede en medio/fondo de la página.
+    if (typeof window !== 'undefined') {
+      try {
+        window.scrollTo({ top: 0, left: 0, behavior: 'smooth' });
+      } catch {
+        window.scrollTo(0, 0);
+      }
+    }
+
     // Keep the current location rendered while GPS re-acquires, otherwise the
     // location modal flashes for the whole resolution window (up to 10s).
     if (typeof navigator !== 'undefined' && navigator.geolocation) {
