@@ -3233,56 +3233,57 @@ export default function Home() {
     };
   }, [isEditingAddress, profileAddress.latitude, profileAddress.longitude]);
 
-  useEffect(() => {
-    if (!token || !sessionUser || activeOrderListItems.length === 0) {
+  const activeOrderListItemsRef = useRef(activeOrderListItems);
+  useEffect(() => { activeOrderListItemsRef.current = activeOrderListItems; }, [activeOrderListItems]);
+
+  const refreshActiveOrderDetails = useCallback(async (itemsOverride?: Array<{ id: string; orderReference: string }>) => {
+    const items = itemsOverride || activeOrderListItemsRef.current;
+    if (!token || !sessionUser || items.length === 0) {
       setActiveOrderDetailsMap({});
       return;
     }
 
-    let cancelled = false;
-
-    async function loadAllActiveOrderDetails() {
-      try {
-        const promises = activeOrderListItems.map(async (item) => {
-          if (selectedOrder?.id === item.id) {
-            return selectedOrder;
-          }
-          try {
-            const res = await requestJson<{ success: true; data: CustomerOrderDetail }>({
-              apiBase,
-              path: `/me/pedidos/${item.id}`,
-              token,
-              fallbackMessage: `No se pudo cargar el seguimiento del pedido ${item.orderReference}`,
-            });
-            return res.data;
-          } catch (err) {
-            console.error(`Failed to load order detail for ${item.id}`, err);
-            return null;
-          }
-        });
-
-        const results = await Promise.all(promises);
-
-        if (!cancelled) {
-          const nextMap: Record<string, CustomerOrderDetail> = {};
-          results.forEach((detail) => {
-            if (detail) {
-              nextMap[detail.id] = detail;
-            }
+    try {
+      const promises = items.map(async (item) => {
+        try {
+          const res = await requestJson<{ success: true; data: CustomerOrderDetail }>({
+            apiBase,
+            path: `/me/pedidos/${item.id}`,
+            token,
+            fallbackMessage: `No se pudo cargar el seguimiento del pedido ${item.orderReference}`,
           });
-          setActiveOrderDetailsMap(nextMap);
+          return res.data;
+        } catch (err) {
+          console.error(`Failed to load order detail for ${item.id}`, err);
+          return null;
         }
-      } catch (err) {
-        console.error('Error loading active order details:', err);
-      }
+      });
+
+      const results = await Promise.all(promises);
+
+      const nextMap: Record<string, CustomerOrderDetail> = {};
+      results.forEach((detail) => {
+        if (detail) {
+          nextMap[detail.id] = detail;
+        }
+      });
+      setActiveOrderDetailsMap(nextMap);
+    } catch (err) {
+      console.error('Error loading active order details:', err);
+    }
+  }, [apiBase, sessionUser, token]);
+
+  const refreshActiveOrderDetailsRef = useRef(refreshActiveOrderDetails);
+  useEffect(() => { refreshActiveOrderDetailsRef.current = refreshActiveOrderDetails; }, [refreshActiveOrderDetails]);
+
+  useEffect(() => {
+    if (!token || !sessionUser) {
+      setActiveOrderDetailsMap({});
+      return;
     }
 
-    void loadAllActiveOrderDetails();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [activeOrderListItems, apiBase, selectedOrder, sessionUser, token]);
+    void refreshActiveOrderDetails(activeOrderListItems);
+  }, [activeOrderListItems, apiBase, refreshActiveOrderDetails, sessionUser, token]);
 
   const loadDashboardRef = useRef(loadDashboard);
   useEffect(() => { loadDashboardRef.current = loadDashboard; }, [loadDashboard]);
@@ -3290,12 +3291,22 @@ export default function Home() {
   useEffect(() => { loadOrderDetailRef.current = loadOrderDetail; }, [loadOrderDetail]);
 
   useForegroundPolling(() => {
-    // Solo refresca cuando el socket está caído: el respaldo se activa exactamente
-    // cuando el socket no puede entregar eventos (segundo plano, red inestable).
-    if (token && sessionUser?.role === 'CUSTOMER' && (!socketRef.current || socketRef.current.disconnected)) {
-      void loadDashboardRef.current(true);
+    // Sincronización de respaldo siempre activa cuando hay pedidos en curso:
+    // el socket puede reportar "conectado" y aun así perder eventos (iOS suspende
+    // la PWA en segundo plano, red inestable). El polling garantiza que el estado
+    // real del pedido siempre se refleje, sin importar si el socket funcionó.
+    if (token && sessionUser?.role === 'CUSTOMER') {
+      const socketDown = !socketRef.current || socketRef.current.disconnected;
+      if (socketDown) {
+        // Socket caído: recarga todo el dashboard para no perder nada.
+        void loadDashboardRef.current(true);
+      } else if (activeOrderListItems.length > 0) {
+        // Socket "conectado": igual refresca el estado real del pedido activo
+        // en segundo plano por si se perdió algún evento.
+        void refreshActiveOrderDetailsRef.current();
+      }
     }
-  });
+  }, 20_000);
 
   const sessionUserIdRef = useRef(sessionUser?.id);
   useEffect(() => { sessionUserIdRef.current = sessionUser?.id; }, [sessionUser?.id]);

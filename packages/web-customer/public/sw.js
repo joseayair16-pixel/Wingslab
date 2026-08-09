@@ -1,4 +1,4 @@
-const CACHE_NAME = 'sadel-customer-v9';
+const CACHE_NAME = 'sadel-customer-v10';
 
 // App shell mínimo para que la PWA instalada abra aunque no haya red
 // (la navegación sigue siendo network-first; esto solo garantiza un arranque offline).
@@ -139,33 +139,29 @@ self.addEventListener('fetch', function (event) {
   if (event.request.method !== 'GET' || !requestUrl.protocol.startsWith('http')) return;
   if (requestUrl.pathname.includes('socket.io')) return;
 
-  // API reads (same-origin /api/... proxied by Next): stale-while-revalidate.
-  // Primera visita usa red; las siguientes sirven al instante en segundo plano.
+  // API reads (same-origin /api/... proxied by Next): network-first, no stale cache.
+  // NUNCA se sirve una respuesta vieja si hay red: el estado del pedido debe ser
+  // siempre el real. La caché solo respalda cuando no hay conexión (offline).
   if (requestUrl.origin === self.location.origin && requestUrl.pathname.startsWith('/api/')) {
     event.respondWith(
-      caches.open(CACHE_NAME).then(function (cache) {
-        return cache.match(event.request).then(function (cachedResponse) {
-          var networkFetch = fetch(event.request).then(function (networkResponse) {
-            if (networkResponse && networkResponse.ok) {
-              cache.put(event.request, networkResponse.clone());
-            }
-            return networkResponse;
-          });
-
-          var staleTimer = new Promise(function (resolve) {
-            setTimeout(function () {
-              resolve(undefined);
-            }, 1500);
-          });
-
-          if (cachedResponse && cachedResponse.ok) {
-            Promise.race([networkFetch, staleTimer]).catch(function () {});
-            return cachedResponse;
+      fetch(event.request)
+        .then(function (networkResponse) {
+          if (networkResponse && networkResponse.ok) {
+            var responseToCache = networkResponse.clone();
+            caches.open(CACHE_NAME).then(function (cache) {
+              cache.put(event.request, responseToCache);
+            });
           }
-
-          return networkFetch;
-        });
-      })
+          return networkResponse;
+        })
+        .catch(function () {
+          return caches.match(event.request).then(function (cached) {
+            return cached || new Response(JSON.stringify({ success: false, data: null }), {
+              status: 503,
+              headers: { 'content-type': 'application/json' },
+            });
+          });
+        })
     );
     return;
   }

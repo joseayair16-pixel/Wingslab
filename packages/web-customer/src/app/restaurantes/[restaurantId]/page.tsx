@@ -1244,12 +1244,17 @@ export default function RestaurantPage({
   }, [apiBase, sessionUser?.role, token]);
 
   useForegroundPolling(() => {
-    // Solo refresca cuando el socket está caído: el respaldo cubre exactamente
-    // el caso en que el socket no entrega eventos (segundo plano, red inestable).
-    if (token && sessionUser?.role === 'CUSTOMER' && (!socketRef.current || socketRef.current.disconnected)) {
-      loadActiveOrdersRef.current();
+    // Sincronización de respaldo siempre activa cuando hay pedidos en curso:
+    // el socket puede reportar "conectado" y aun así perder eventos (iOS suspende
+    // la PWA en segundo plano, red inestable). El polling garantiza que el estado
+    // real del pedido siempre se refleje, sin importar si el socket funcionó.
+    if (token && sessionUser?.role === 'CUSTOMER') {
+      const socketDown = !socketRef.current || socketRef.current.disconnected;
+      if (socketDown || activeOrderListItems.length > 0) {
+        loadActiveOrdersRef.current();
+      }
     }
-  });
+  }, 20_000);
 
   useEffect(() => {
     if (!token || !sessionUser || sessionUser.role !== 'CUSTOMER') {
