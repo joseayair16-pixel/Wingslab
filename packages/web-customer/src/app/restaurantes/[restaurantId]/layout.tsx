@@ -3,7 +3,7 @@ import type { Metadata } from 'next';
 export const dynamic = 'force-dynamic';
 
 export function generateMetadata(): Metadata {
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://sadel.app';
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://pideloporsadel.app';
 
   return {
     title: 'SaDeL - Pide en línea',

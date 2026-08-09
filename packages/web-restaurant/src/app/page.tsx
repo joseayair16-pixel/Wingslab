@@ -360,8 +360,15 @@ type ProductDraft = {
 };
 
 const defaultApiBase = 'https://sadel-production.up.railway.app';
+function getCanonicalCustomerUrl(): string {
+  return 'https://pideloporsadel.app';
+}
+
 function getCustomerOrigin(): string {
-  if (process.env.NEXT_PUBLIC_CUSTOMER_URL) return process.env.NEXT_PUBLIC_CUSTOMER_URL;
+  // NUNCA usar un *.vercel.app como origen del comensal: es un preview/deplegado
+  // temporal, no el dominio público. Si la env quedó mal configurada, ignorarla.
+  const customerUrl = process.env.NEXT_PUBLIC_CUSTOMER_URL;
+  if (customerUrl && !customerUrl.includes('.vercel.app')) return customerUrl;
   if (typeof window !== 'undefined') {
     const { hostname, port, protocol } = window.location;
     if (hostname === 'localhost' || hostname === '127.0.0.1') {
@@ -380,13 +387,11 @@ function getCustomerOrigin(): string {
         return `${protocol}//${subdomains.slice(1).join('.')}${port ? `:${port}` : ''}`;
       }
     }
-    // La app del comensal nunca se sirve desde un hostname *.vercel.app
-    // (esos dominios pertenecen al host actual del panel). Devolvemos ''
-    // para que el llamador use la URL canónica del backend / NEXT_PUBLIC_CUSTOMER_URL.
-    if (hostname.endsWith('.vercel.app')) return '';
-    return `${protocol}//${hostname}${port ? `:${port}` : ''}`;
   }
-  return '';
+  // La app del comensal nunca se sirve desde un hostname *.vercel.app
+  // (esos dominios pertenecen al host actual del panel). Devolvemos el
+  // origen canónico de producción para nunca generar links con el preview.
+  return getCanonicalCustomerUrl();
 }
 
 /**
@@ -395,13 +400,13 @@ function getCustomerOrigin(): string {
  * desarrollo/localhost o cuando el backend aun no la provee.
  */
 function resolveCustomerOrigin(): string {
-  if (process.env.NEXT_PUBLIC_CUSTOMER_URL) return process.env.NEXT_PUBLIC_CUSTOMER_URL;
+  const customerUrl = process.env.NEXT_PUBLIC_CUSTOMER_URL;
+  if (customerUrl && !customerUrl.includes('.vercel.app')) return customerUrl;
   const guessed = getCustomerOrigin();
-  if (guessed) return guessed;
-  if (typeof window !== 'undefined') {
-    return `${window.location.protocol}//${window.location.host}`;
-  }
-  return 'http://localhost:3003';
+  if (guessed && !guessed.includes('.vercel.app')) return guessed;
+  // Devolvemos el origen canónico de producción. NUNCA usamos el host actual
+  // del panel (puede ser un preview de Vercel o el subdominio del panel).
+  return getCanonicalCustomerUrl();
 }
 const storageKey = 'sadel.restaurant';
 const orderAlertSoundPreferenceKey = `${storageKey}.orderAlertSoundEnabled`;
