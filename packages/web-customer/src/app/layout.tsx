@@ -53,7 +53,15 @@ export default function RootLayout({
       <head>
         <script
           dangerouslySetInnerHTML={{
-            __html: `(function(){try{document.documentElement.classList.remove('dark');}catch(e){}})();`,
+            __html: `(function(){try{document.documentElement.classList.remove('dark');}catch(e){}})();
+(function(){try{
+  var m=document.querySelector('meta[name="theme-color"]');
+  if(m){var upd=function(){
+    m.setAttribute('content', document.documentElement.classList.contains('dark') ? '#0b0b0d' : '#fafafa');
+  };
+  upd();
+  new MutationObserver(upd).observe(document.documentElement,{attributes:true,attributeFilter:['class']});
+}}catch(e){}})();`,
           }}
         />
         <meta name="color-scheme" content="light dark" />

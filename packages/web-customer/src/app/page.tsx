@@ -4353,7 +4353,7 @@ export default function Home() {
         </div>
       ) : null}
 
-      <div className="sticky top-0 z-40 bg-white">
+      <div className="sticky top-0 z-40 bg-white pt-[env(safe-area-inset-top)]">
         {!isOnline && (
           <div className="bg-amber-500 text-white text-center py-2 text-sm font-medium shadow-md">
             Estás sin conexión. Los datos pueden no estar actualizados.

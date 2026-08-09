@@ -539,7 +539,7 @@ export default function DeliveryTicketPage({ params }: PageProps) {
       <div className={`min-h-[100dvh] font-sans antialiased pb-12 transition-colors duration-300 ${bg} ${textPrimary}`}>
         
         {/* ── HEADER COMPACTO E INTELIGENTE ── */}
-<header className={`sticky top-0 z-50 border-b transition-all duration-300 ${
+<header className={`sticky top-0 z-50 border-b transition-all duration-300 pt-[env(safe-area-inset-top)] ${
           darkMode 
             ? 'bg-[#09090b] border-zinc-800/60' 
             : 'bg-white border-black/[0.04]'
@@ -1071,7 +1071,7 @@ export default function DeliveryTicketPage({ params }: PageProps) {
 
     return (
       <div className={`min-h-[100dvh] font-sans antialiased pb-12 transition-colors duration-300 ${bg} ${textPrimary}`}>
-        <header className={`sticky top-0 z-50 border-b backdrop-blur-md transition-all duration-300 ${
+        <header className={`sticky top-0 z-50 border-b backdrop-blur-md transition-all duration-300 pt-[env(safe-area-inset-top)] ${
           darkMode ? 'bg-[#09090b]/90 border-zinc-800/60' : 'bg-white/90 border-black/[0.04]'
         }`}>
           <div className="mx-auto flex max-w-lg items-center justify-between px-4 py-3">
@@ -1199,7 +1199,7 @@ export default function DeliveryTicketPage({ params }: PageProps) {
     <div className={`min-h-[100dvh] font-sans antialiased pb-12 transition-colors duration-300 ${bg} ${textPrimary}`}>
       
       {/* ── HEADER DE DETALLE PREMIUM ── */}
-      <header className={`sticky top-0 z-50 border-b backdrop-blur-md transition-all duration-300 ${
+      <header className={`sticky top-0 z-50 border-b backdrop-blur-md transition-all duration-300 pt-[env(safe-area-inset-top)] ${
         darkMode 
           ? 'bg-[#09090b]/90 border-zinc-800/60' 
           : 'bg-white/90 border-black/[0.04]'

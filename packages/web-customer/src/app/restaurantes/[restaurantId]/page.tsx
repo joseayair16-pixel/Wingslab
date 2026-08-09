@@ -2713,7 +2713,7 @@ function triggerHaptic(pattern: number | number[] = 10) {
         />
       ) : null}
       <div className="sticky top-0 z-40">
-        <header className="border-b border-black/5 bg-white dark:bg-neutral-950 sticky top-0 z-40 shadow-[0_4px_20px_rgba(0,0,0,0.03)]">
+        <header className="border-b border-black/5 bg-white dark:bg-neutral-950 sticky top-0 z-40 shadow-[0_4px_20px_rgba(0,0,0,0.03)] pt-[env(safe-area-inset-top)]">
           <div className="mx-auto flex max-w-7xl items-center gap-3 px-4 py-4 md:px-6">
             <button
               type="button"
@@ -4525,7 +4525,7 @@ function triggerHaptic(pattern: number | number[] = 10) {
                 </div>
               </section>
 
-              <div data-sticky-header className="sticky top-[72px] z-20 -mx-4 bg-white/90 backdrop-blur-2xl border-b border-black/[0.04] md:-mx-6 lg:-mx-7 dark:bg-neutral-950/90 dark:border-zinc-800/60">
+              <div data-sticky-header className="sticky top-[calc(env(safe-area-inset-top)+72px)] z-20 -mx-4 bg-white/90 backdrop-blur-2xl border-b border-black/[0.04] md:-mx-6 lg:-mx-7 dark:bg-neutral-950/90 dark:border-zinc-800/60">
                 <div className="px-4 py-3 md:px-6 lg:px-7">
                   <div className="relative w-full">
                     <input
