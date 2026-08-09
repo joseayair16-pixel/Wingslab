@@ -969,6 +969,7 @@ export default function RestaurantPage({
       if (typeof window !== 'undefined' && window.localStorage) {
         if (document.documentElement.classList.contains('dark')) {
           document.documentElement.classList.add('dark');
+          document.documentElement.classList.add('pure-dark');
         }
       }
 
@@ -1049,6 +1050,10 @@ export default function RestaurantPage({
       console.error('Error during restaurant customer session initialization:', e);
       setIsAuthReady(true);
     }
+
+    return () => {
+      document.documentElement.classList.remove('pure-dark');
+    };
   }, []);
 
   // Cualquier 401 del API cierra la sesión globalmente (usuario eliminado, token inválido, etc.)

@@ -53,7 +53,20 @@ export default function RootLayout({
       <head>
         <script
           dangerouslySetInnerHTML={{
-            __html: `(function(){try{document.documentElement.classList.remove('dark');}catch(e){}})();
+            __html: `(function(){
+  try {
+    // Hard reset: la PWA SIEMPRE arranca en modo claro, sin importar el modo
+    // del sistema, valores legados de localStorage o el splash.
+    var d = document.documentElement;
+    d.classList.remove('dark');
+    d.classList.remove('pure-dark');
+    if (window.localStorage) {
+      try { window.localStorage.removeItem('darkMode'); } catch (e) {}
+    }
+    var cs = document.querySelector('meta[name="color-scheme"]');
+    if (cs) cs.setAttribute('content', 'light');
+  } catch (e) {}
+})();
 (function(){try{
   var m=document.querySelector('meta[name="theme-color"]');
   if(m){var upd=function(){
@@ -64,7 +77,7 @@ export default function RootLayout({
 }}catch(e){}})();`,
           }}
         />
-        <meta name="color-scheme" content="light dark" />
+        <meta name="color-scheme" content="light" />
         <meta name="theme-color" content="#fafafa" />
         <link rel="preconnect" href="https://maps.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />

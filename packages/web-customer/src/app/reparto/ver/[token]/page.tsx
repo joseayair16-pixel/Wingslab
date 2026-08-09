@@ -91,18 +91,15 @@ export default function DeliveryTicketPage({ params }: PageProps) {
     }
   };
 
-  // Dark mode automático según preferencia del sistema
+  // Oscuridad SOLO local de esta página (estilos propios vía darkMode).
+  // NO se toca la clase "dark" del <html>: el resto de la app debe
+  // respetar la decisión de sesión (siempre claro por defecto).
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
     const mq = window.matchMedia('(prefers-color-scheme: dark)');
     const apply = (isDark: boolean) => {
       setDarkMode(isDark);
-      if (isDark) {
-        document.documentElement.classList.add('dark', 'pure-dark');
-      } else {
-        document.documentElement.classList.remove('dark', 'pure-dark');
-      }
     };
 
     apply(mq.matches);
@@ -111,7 +108,6 @@ export default function DeliveryTicketPage({ params }: PageProps) {
 
     return () => {
       mq.removeEventListener('change', handler);
-      document.documentElement.classList.remove('dark', 'pure-dark');
     };
   }, []);
 
@@ -747,7 +743,7 @@ export default function DeliveryTicketPage({ params }: PageProps) {
                         )}
 
                         {/* Fila de detalles: Restaurante y Estado */}
-                        <div className="flex items-center justify-between mt-3.5 pt-3 border-t border-black/[0.03] dark:border-white/[0.03]">
+                        <div className={`flex items-center justify-between mt-3.5 pt-3 border-t ${darkMode ? 'border-white/[0.04]' : 'border-black/[0.03]'}`}>
                           <span className={`text-[10px] font-bold tracking-wide truncate ${textTertiary}`}>
                             {deliv.data.isSupportDelivery ? `🛒 Recoger en: ${deliv.data.restaurant.name}` : `🏪 ${deliv.data.restaurant.name}`}
                           </span>
@@ -766,7 +762,7 @@ export default function DeliveryTicketPage({ params }: PageProps) {
                       </div>
 
                       {/* ACCIONES RÁPIDAS (Fila inferior de botones) */}
-                      <div className="flex items-center gap-2 mt-4 pt-3.5 border-t border-black/[0.04] dark:border-white/[0.04]">
+                      <div className={`flex items-center gap-2 mt-4 pt-3.5 border-t ${darkMode ? 'border-white/[0.05]' : 'border-black/[0.04]'}`}>
                         
                         {/* Navegar - Google Maps */}
                         <a
@@ -1100,7 +1096,7 @@ export default function DeliveryTicketPage({ params }: PageProps) {
         <main className="mx-auto max-w-lg px-4 pb-20">
           <div className="mt-4 flex items-center gap-2">
             <span className={`text-[10px] font-black uppercase tracking-widest ${textTertiary}`}>Fase 1 de 2</span>
-            <div className="flex-1 h-1.5 rounded-full bg-black/10 dark:bg-white/10 overflow-hidden">
+            <div className={`flex-1 h-1.5 overflow-hidden rounded-full ${darkMode ? 'bg-white/10' : 'bg-black/10'}`}>
               <div className="h-full w-1/2 bg-sky-400 rounded-full" />
             </div>
           </div>

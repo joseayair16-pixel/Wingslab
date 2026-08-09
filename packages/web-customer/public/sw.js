@@ -1,4 +1,4 @@
-const CACHE_NAME = 'sadel-customer-v8';
+const CACHE_NAME = 'sadel-customer-v9';
 
 // App shell mínimo para que la PWA instalada abra aunque no haya red
 // (la navegación sigue siendo network-first; esto solo garantiza un arranque offline).
