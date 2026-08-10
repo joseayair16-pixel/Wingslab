@@ -1762,7 +1762,7 @@ export default function DeliveryTicketPage({ params }: PageProps) {
                       ? (darkMode ? 'text-amber-400' : 'text-amber-700') 
                       : (darkMode ? 'text-emerald-400' : 'text-emerald-700')
                   }`}>
-                    {isCash ? 'Cobrar el monto de' : 'Pedido ya pagado'}
+                    {isCash ? 'Cobrar el monto de' : currentTicket.paymentMethod === 'TRANSFER' ? 'Pagado con transferencia' : 'Pagado en línea'}
                   </p>
                   <p className={`text-2xl font-extrabold tracking-tight mt-0.5 ${
                     isCash 

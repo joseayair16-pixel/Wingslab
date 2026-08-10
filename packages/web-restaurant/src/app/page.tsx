@@ -680,6 +680,7 @@ export default function Home() {
     expiresAt: number;
   }>>([]);
   const [supportNotifyByOrder, setSupportNotifyByOrder] = useState<Record<string, { attemptsLeft: number; exhausted: boolean }>>({});
+  const [supportAliadoNamesByOrder, setSupportAliadoNamesByOrder] = useState<Record<string, string>>({});
   const [supportCountdownNow, setSupportCountdownNow] = useState(() => Date.now());
   const supportAlertLoopRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [products, setProducts] = useState<ProductItem[]>([]);
@@ -3009,6 +3010,9 @@ export default function Home() {
         delete next[(payload as any).orderId];
         return next;
       });
+      if ((payload as any).supportRestaurantName) {
+        setSupportAliadoNamesByOrder((prev) => ({ ...prev, [(payload as any).orderId]: (payload as any).supportRestaurantName }));
+      }
     }
 
     if (eventName === 'order:created') {
@@ -3019,6 +3023,9 @@ export default function Home() {
     if (eventName === 'order:driver-arrived-restaurant' && payload.orderId) {
       setDriverArrivedOrders((prev) => ({ ...prev, [payload.orderId!]: true }));
       if (payload.isSupportDelivery) {
+        if (payload.driverName) {
+          setSupportAliadoNamesByOrder((prev) => ({ ...prev, [payload.orderId!]: payload.driverName }));
+        }
         void playIncomingOrderAlert();
         pushToast('info', '🛵 Repartidor de apoyo',
           payload.driverName
@@ -8479,7 +8486,7 @@ export default function Home() {
                                       <span className="font-medium text-sky-600 bg-sky-50 px-2 py-0.5 rounded border border-sky-100/50">
                                         Asignado (Esperando confirmación)
                                       </span>
-                                    ) : order.supportRestaurant?.name ? (
+                                    ) : order.supportRestaurant?.name || (isSupported && supportAliadoNamesByOrder[order.id]) ? (
                                       <span className="inline-flex items-center gap-1.5 bg-emerald-50 border border-emerald-100 rounded-full pr-3 pl-1 py-1">
                                         <div className="w-5 h-5 rounded-full bg-emerald-100 flex items-center justify-center text-[9px] font-bold text-emerald-700">
                                           🤝
@@ -8487,7 +8494,7 @@ export default function Home() {
                                         <span className="font-semibold text-emerald-800 dark:text-emerald-300 text-xs">
                                           {isHelper
                                             ? `🧑‍🍳 ${order.restaurant?.name || 'Red aliada'}`
-                                            : `🛵 ${order.supportRestaurant.name}`}
+                                            : `🛵 ${order.supportRestaurant?.name || supportAliadoNamesByOrder[order.id] || 'Restaurante aliado'}`}
                                         </span>
                                         <span className="text-[9px] font-bold text-emerald-600 bg-emerald-100 px-1.5 py-0.5 rounded-full">
                                           {isHelper ? 'Entrega de apoyo' : 'Apoyo a red'}
