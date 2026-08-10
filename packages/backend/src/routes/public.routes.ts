@@ -976,6 +976,7 @@ export async function registerPublicRoutes(fastify: FastifyInstance): Promise<vo
     try {
       const restaurants = await prisma.restaurant.findMany({
         where: {
+          status: RestaurantStatus.ACTIVE,
           region: { not: '' },
         },
         select: {
@@ -992,6 +993,9 @@ export async function registerPublicRoutes(fastify: FastifyInstance): Promise<vo
       const grouped = new Map<string, { latitudes: number[]; longitudes: number[] }>();
       for (const r of restaurants) {
         if (!r.region) continue;
+        // Ignore restaurants without real coordinates; otherwise a 0,0 (o null)
+        // would drag the zone's center far away and empty the results.
+        if (!r.latitude || !r.longitude) continue;
         const entry = grouped.get(r.region) || { latitudes: [], longitudes: [] };
         entry.latitudes.push(r.latitude);
         entry.longitudes.push(r.longitude);
