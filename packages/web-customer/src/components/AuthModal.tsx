@@ -713,10 +713,10 @@ export const AuthModal = memo(function AuthModal({ isOpen, onClose, onSuccess, a
                             <button
                               type="button"
                               onClick={() => sendCode('sms')}
-                              disabled={sendingCode || phone.length !== 10}
+                              disabled
                               className="w-full rounded-2xl border border-black/[0.08] bg-white py-3.5 text-sm font-semibold text-[#171717] transition-all duration-200 hover:bg-neutral-50 hover:shadow-[0_8px_24px_rgba(0,0,0,0.06)] active:scale-[0.98] disabled:cursor-not-allowed disabled:bg-neutral-100 disabled:text-neutral-400 disabled:border-transparent disabled:shadow-none"
                             >
-                              {sendingCode ? 'Enviando código...' : 'Recibir código vía SMS'}
+                              Recibir código vía SMS · disponible mañana después de las 12 pm
                             </button>
                           </div>
                         </div>
