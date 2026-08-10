@@ -677,8 +677,11 @@ export default function Home() {
     distanceToDeliveryKm?: number | null;
     supportAttempts?: number;
     attemptsLeft?: number;
+    expiresAt: number;
   }>>([]);
   const [supportNotifyByOrder, setSupportNotifyByOrder] = useState<Record<string, { attemptsLeft: number; exhausted: boolean }>>({});
+  const [supportCountdownNow, setSupportCountdownNow] = useState(() => Date.now());
+  const supportAlertLoopRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [products, setProducts] = useState<ProductItem[]>([]);
   const [categories, setCategories] = useState<CategoryItem[]>([]);
   const [drivers, setDrivers] = useState<DriverItem[]>([]);
@@ -2219,6 +2222,51 @@ export default function Home() {
     return false;
   }, [isOrderAlertSoundEnabled]);
 
+  // Alerta de apoyo continua: mientras haya una solicitud sin responder, suena
+  // cada pocos segundos y se actualiza el countdown visible del modal.
+  useEffect(() => {
+    if (supportRequestsQueue.length === 0) {
+      if (supportAlertLoopRef.current) {
+        clearInterval(supportAlertLoopRef.current);
+        supportAlertLoopRef.current = null;
+      }
+      return;
+    }
+
+    let lastSoundAt = 0;
+    const tick = () => {
+      setSupportCountdownNow(Date.now());
+      if (Date.now() - lastSoundAt >= 3000) {
+        lastSoundAt = Date.now();
+        void playIncomingOrderAlert();
+      }
+    };
+    tick();
+    supportAlertLoopRef.current = setInterval(tick, 1000);
+
+    return () => {
+      if (supportAlertLoopRef.current) {
+        clearInterval(supportAlertLoopRef.current);
+        supportAlertLoopRef.current = null;
+      }
+    };
+  }, [supportRequestsQueue.length, playIncomingOrderAlert]);
+
+  // Auto-rechazo del modal cuando se agotan los 2 minutos sin responder
+  useEffect(() => {
+    const headItem = supportRequestsQueue[0];
+    if (!headItem || !headItem.expiresAt) return;
+    if (headItem.expiresAt > supportCountdownNow) return;
+
+    setSupportRequestsQueue((prev) => prev.filter((item) => item.orderId !== headItem.orderId));
+    pushToast('info', 'Tiempo agotado', `La solicitud de ${headItem.restaurantName} expiró sin responder.`);
+
+    void fetch(`${apiBase}/restaurant-panel/pedidos/${headItem.orderId}/rechazar-apoyo`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+    }).catch(() => undefined);
+  }, [supportRequestsQueue, supportCountdownNow, apiBase, token, pushToast]);
+
   const playOverdueAlert = useCallback(async () => {
     if (!isOrderAlertSoundEnabled) return false;
 
@@ -2932,7 +2980,7 @@ export default function Home() {
       setSupportRequestsQueue((current) => {
         const exists = current.some((item) => item.orderId === (payload as any).orderId);
         if (exists) return current;
-        return [...current, payload as any];
+        return [...current, { ...(payload as any), expiresAt: Date.now() + 2 * 60 * 1000 }];
       });
       void playIncomingOrderAlert();
       pushToast('info', 'Solicitud de apoyo', '¡Un restaurante cercano solicita apoyo!');
@@ -5709,6 +5757,32 @@ export default function Home() {
               <p className="mt-2 text-sm text-neutral-600">
                 {businessTypeLabel(profile?.businessType)} <strong>{supportRequestsQueue[0].restaurantName}</strong> solicita tu apoyo para entregar un pedido.
               </p>
+
+              {(() => {
+                const remainingMs = Math.max(0, supportRequestsQueue[0].expiresAt - supportCountdownNow);
+                const secs = Math.ceil(remainingMs / 1000);
+                const mm = String(Math.floor(secs / 60)).padStart(2, '0');
+                const ss = String(secs % 60).padStart(2, '0');
+                const progress = remainingMs / (2 * 60 * 1000);
+                return (
+                  <div className="mt-3 flex items-center gap-3 rounded-2xl border border-sky-100 bg-sky-50/70 px-4 py-3">
+                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-sky-600 text-[11px] font-black text-white tabular-nums">
+                      {mm}:{ss}
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <div className="h-1.5 w-full overflow-hidden rounded-full bg-sky-100">
+                        <div
+                          className="h-full rounded-full bg-sky-500 transition-[width] duration-1000 ease-linear"
+                          style={{ width: `${progress * 100}%` }}
+                        />
+                      </div>
+                      <p className="mt-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-sky-700">
+                        Si no respondes, se rechazará automáticamente en 2 minutos
+                      </p>
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
 
             <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-7 sm:py-5">
@@ -8397,10 +8471,12 @@ export default function Home() {
                                           🤝
                                         </div>
                                         <span className="font-semibold text-emerald-800 dark:text-emerald-300 text-xs">
-                                          🛵 {order.supportRestaurant.name}
+                                          {isHelper
+                                            ? `🧑‍🍳 ${order.restaurant?.name || 'Red aliada'}`
+                                            : `🛵 ${order.supportRestaurant.name}`}
                                         </span>
                                         <span className="text-[9px] font-bold text-emerald-600 bg-emerald-100 px-1.5 py-0.5 rounded-full">
-                                          Apoyo a red
+                                          {isHelper ? 'Entrega de apoyo' : 'Apoyo a red'}
                                         </span>
                                       </span>
                                     ) : hasOwnDelivery ? (
@@ -8444,7 +8520,7 @@ export default function Home() {
                                       className="mt-2.5 mb-3 rounded-xl bg-neutral-50/80 p-3 border border-black/5 cursor-pointer transition hover:bg-neutral-100/80"
                                     >
                                       <p className="text-[10px] font-bold uppercase tracking-wider text-neutral-400 mb-2 flex items-center gap-1">
-                                        <span>{profile?.businessType !== 'RESTAURANT' ? '📦' : '🍳'}</span> {profile?.businessType !== 'RESTAURANT' ? 'Productos a surtir' : 'Productos a preparar'}
+                                        <span>{isHelper ? '🛵' : profile?.businessType !== 'RESTAURANT' ? '📦' : '🍳'}</span> {isHelper ? 'Productos a entregar' : profile?.businessType !== 'RESTAURANT' ? 'Productos a surtir' : 'Productos a preparar'}
                                       </p>
                                       <div className="space-y-1.5">
                                         {order.items.map((item, idx) => (
@@ -8719,7 +8795,7 @@ export default function Home() {
                                   })()}
                                 </div>
                                 <div className="flex flex-col sm:flex-row sm:flex-wrap gap-2 items-stretch sm:items-center justify-end min-w-0" onClick={(e) => e.stopPropagation()}>
-                                  {order.status !== 'IN_TRANSIT' || (!hasOwnDelivery && !!order.driver) ? (
+                                  {!isHelper && (order.status !== 'IN_TRANSIT' || (!hasOwnDelivery && !!order.driver)) ? (
                                     <button
                                       type="button"
                                       onClick={() => setSelectedOrderForTicket(order)}
@@ -8732,7 +8808,7 @@ export default function Home() {
                                     </button>
                                   ) : null}
 
-                                  {order.status === 'IN_TRANSIT' && (hasOwnDelivery || !order.driver) && (
+                                  {order.status === 'IN_TRANSIT' && !isHelper && (hasOwnDelivery || !order.driver) && (
                                     <button
                                       type="button"
                                       onClick={async () => {
@@ -8763,7 +8839,7 @@ export default function Home() {
                                     </button>
                                   )}
 
-                                  {isHelper && isSupported && !['DELIVERED', 'COMPLETED', 'REJECTED', 'CANCELLED', 'PENDING'].includes(order.status) && (
+                                  {isHelper && !['DELIVERED', 'COMPLETED', 'REJECTED', 'CANCELLED', 'PENDING'].includes(order.status) && (
                                     <button
                                       type="button"
                                       onClick={async () => {
@@ -8794,8 +8870,8 @@ export default function Home() {
                                     </button>
                                   )}
 
-                                  {/* Botones de Accion */}
-                                  {actionButtons.length > 0 ? (
+                                  {/* Botones de Accion (solo para pedidos propios; las entregas de apoyo usan el QR) */}
+                                  {!isHelper && actionButtons.length > 0 ? (
                                     <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
                                       {actionButtons.map((actionKey) => {
                                         const action = restaurantActionMap[actionKey];
