@@ -451,10 +451,77 @@ export async function registerPublicDeliveryRoutes(fastify: FastifyInstance): Pr
 
       const order = dToken.order;
 
-      // Este avance de estado solo aplica a entregas de apoyo a red: el repartidor del
-      // restaurante aliado llega al restaurante origen a recoger el pedido.
+      // Flujo de apoyo a red: el repartidor del restaurante aliado llega al
+      // restaurante origen a recoger el pedido. Primero se NOTIFICA la llegada
+      // (sin avanzar estado); solo cuando el restaurante confirma la entrega
+      // (PIN en transferencia / cobro en efectivo) la entrega inicia.
       if (order.supportRestaurantId) {
         if (order.status === OrderStatus.READY) {
+          if (!order.driverArrivedAt) {
+            await prisma.order.update({
+              where: { id: order.id },
+              data: { driverArrivedAt: new Date() },
+            });
+
+            await prisma.orderTracking.create({
+              data: {
+                orderId: order.id,
+                status: OrderStatus.READY,
+                notes: 'SUPPORT_DRIVER_ARRIVED_RESTAURANT',
+              },
+            });
+
+            // Notificar al restaurante origen que el repartidor de apoyo llegó
+            emitNotification(
+              fastify.io,
+              order.restaurant.userId,
+              'RESTAURANT',
+              'order:driver-arrived-restaurant',
+              {
+                orderId: order.id,
+                orderReference: order.orderReference,
+                status: order.status,
+                driverName: order.supportRestaurant?.name || 'El repartidor de apoyo',
+                isSupportDelivery: true,
+              },
+              {
+                orderId: order.id,
+              }
+            );
+
+            try {
+              await sendPushNotification(order.restaurant.userId, {
+                title: '🛵 Repartidor de apoyo en tu establecimiento',
+                body: `${order.supportRestaurant?.name || 'Tu restaurante aliado'} ha llegado por el pedido ${order.orderReference}. Entrégalo (PIN o efectivo) para que inicie la entrega.`,
+                icon: '/app-icon-192.png',
+                badge: '/badge.png',
+                tag: `driver-arrived-${order.id}`,
+                vibrate: [300, 100, 300, 100, 300],
+                requireInteraction: true,
+                data: {
+                  orderId: order.id,
+                  event: 'order:driver-arrived-restaurant',
+                  url: `/?orderId=${order.id}`,
+                },
+              });
+            } catch (pushErr) {
+              request.log.error(pushErr as any, '[Push] Error al notificar llegada de repartidor de apoyo al restaurante origen');
+            }
+          }
+
+          return reply.send({
+            success: true,
+            message: 'Llegada notificada al restaurante. Espera a que confirme la entrega para iniciar el reparto.',
+            data: {
+              arrived: true,
+              needsHandover: true,
+              status: order.status,
+            },
+          });
+        }
+
+        // El restaurante origen ya confirmó la entrega (PIN/efectivo): inicia la entrega
+        if (order.status === OrderStatus.PICKED_UP) {
           await prisma.order.update({
             where: { id: order.id },
             data: {
@@ -524,8 +591,30 @@ export async function registerPublicDeliveryRoutes(fastify: FastifyInstance): Pr
               orderId: order.id,
             }
           );
+
+          return reply.send({
+            success: true,
+            message: 'Recogida confirmada por el restaurante. ¡Va en camino a entregarlo!',
+            data: {
+              arrived: true,
+              needsHandover: false,
+              status: 'IN_TRANSIT',
+            },
+          });
         }
-        // Si ya estaba IN_TRANSIT, el avance es idempotente: no se vuelve a notificar.
+
+        // Ya en camino: idempotente
+        if (order.status === OrderStatus.IN_TRANSIT) {
+          return reply.send({
+            success: true,
+            message: 'La entrega ya está en camino.',
+            data: {
+              arrived: true,
+              needsHandover: false,
+              status: order.status,
+            },
+          });
+        }
       }
 
       return reply.send({

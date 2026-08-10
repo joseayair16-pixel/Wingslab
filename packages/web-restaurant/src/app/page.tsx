@@ -3018,6 +3018,13 @@ export default function Home() {
 
     if (eventName === 'order:driver-arrived-restaurant' && payload.orderId) {
       setDriverArrivedOrders((prev) => ({ ...prev, [payload.orderId!]: true }));
+      if (payload.isSupportDelivery) {
+        void playIncomingOrderAlert();
+        pushToast('info', '🛵 Repartidor de apoyo',
+          payload.driverName
+            ? `${payload.driverName} llegó a tu local. Entrégalo para iniciar la entrega.`
+            : 'El repartidor de apoyo llegó a tu local. Entrégalo para iniciar la entrega.');
+      }
     }
 
     if (eventName === 'order:picked-up' && payload.orderId) {
@@ -8251,7 +8258,14 @@ export default function Home() {
                             // Se conserva el flujo manual del apoyo (iniciar entrega / marcar entregado);
                             // el QR de express es la vía principal que usa el repartidor aliado.
                             ? (order.status === 'READY' ? ['iniciarEntrega'] : order.status === 'IN_TRANSIT' ? ['delivered'] : [])
-                            : (isSupported ? [] : getRestaurantActions(order, hasOwnDelivery));
+                            // Pedido de apoyo (restaurante origen): al llegar el repartidor aliado se
+                            // habilita confirmar la entrega (PIN en transferencia / efectivo), igual que
+                            // con un repartidor SaDeL.
+                            : (isSupported
+                                ? (order.status === 'READY' && driverArrivedOrders[order.id]
+                                    ? ['handover'] as Array<keyof typeof restaurantActionMap>
+                                    : [])
+                                : getRestaurantActions(order, hasOwnDelivery));
                           const selectedDriverId = selectedDriverByOrder[order.id] || '';
                           const canAssignDriver =
                             hasOwnDelivery &&
