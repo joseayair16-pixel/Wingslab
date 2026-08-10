@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { SaDelLogo } from '../components/SaDelLogo';
 import { IncomingOrderModal } from '../components/IncomingOrderModal';
+import DriverNavigationMap from '../components/DriverNavigationMap';
 import PushEnableBanner from '../components/PushEnableBanner';
 import { io } from 'socket.io-client';
 import {
@@ -518,6 +519,7 @@ export default function Home() {
   const [deliveryPinError, setDeliveryPinError] = useState('');
   const [showRestaurantContact, setShowRestaurantContact] = useState(false);
   const [selectedOrderDetail, setSelectedOrderDetail] = useState<DriverOrder | null>(null);
+  const [navigationMapOpenFor, setNavigationMapOpenFor] = useState<Record<string, 'pickup' | 'delivery' | null>>({});
   const [tripStartedForOrderId, setTripStartedForOrderId] = useState<string | null>(null);
 
   // Reloj para la cuenta regresiva de entrega sin contacto (10 min transfer / 15 min cash)
@@ -2963,6 +2965,53 @@ export default function Home() {
                                 </button>
                               </div>
 
+                              {/* Mapa embebido de navegación (opcional) — recogida */}
+                              {isPickupPhase && restaurantQuery && (
+                                <div className="space-y-2">
+                                  {navigationMapOpenFor[order.id] === 'pickup' ? (
+                                    <>
+                                      <DriverNavigationMap
+                                        origin={null}
+                                        destination={
+                                          order.restaurant.latitude && order.restaurant.longitude
+                                            ? {
+                                                id: `pickup:${order.id}`,
+                                                lat: order.restaurant.latitude,
+                                                lng: order.restaurant.longitude,
+                                                label: order.restaurant.name,
+                                                emoji: '🏪',
+                                              }
+                                            : null
+                                        }
+                                      />
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          triggerHaptic(20);
+                                          setNavigationMapOpenFor((prev) => ({ ...prev, [order.id]: null }));
+                                        }}
+                                        className="w-full py-2 rounded-lg border border-neutral-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-[11px] font-bold text-neutral-500 dark:text-zinc-400 flex items-center justify-center gap-1.5 transition active:scale-[0.98]"
+                                      >
+                                        📴 Cerrar mapa
+                                      </button>
+                                    </>
+                                  ) : (
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        triggerHaptic(10);
+                                        setNavigationMapOpenFor((prev) => ({ ...prev, [order.id]: 'pickup' }));
+                                      }}
+                                      className="w-full py-2.5 rounded-2xl border border-dashed border-neutral-300 dark:border-zinc-700 bg-neutral-50/50 dark:bg-zinc-900/40 flex items-center justify-center gap-2 text-xs font-bold text-neutral-700 dark:text-zinc-300 transition active:scale-[0.98]"
+                                    >
+                                      <span className="text-sm">🗺</span> Ver mapa de navegación
+                                    </button>
+                                  )}
+                                </div>
+                              )}
+
                               {/* Prep countdown card */}
                               {(() => {
                                 if (order.status === 'READY') {
@@ -3359,6 +3408,53 @@ export default function Home() {
                                 <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/><circle cx="12" cy="9" r="2.5"/></svg>
                                 Abrir en Google Maps
                               </a>
+                            )}
+
+                            {/* ── Mapa embebido de navegación (opcional) — entrega ── */}
+                            {customerQuery && (
+                              <div className="space-y-2">
+                                {navigationMapOpenFor[order.id] === 'delivery' ? (
+                                  <>
+                                    <DriverNavigationMap
+                                      origin={null}
+                                      destination={
+                                        order.latitude && order.longitude
+                                          ? {
+                                              id: `delivery:${order.id}`,
+                                              lat: order.latitude,
+                                              lng: order.longitude,
+                                              label: customerAddressStr,
+                                              emoji: '🏠',
+                                            }
+                                          : null
+                                      }
+                                    />
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        triggerHaptic(20);
+                                        setNavigationMapOpenFor((prev) => ({ ...prev, [order.id]: null }));
+                                      }}
+                                      className="w-full py-2 rounded-lg border border-neutral-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-[11px] font-bold text-neutral-500 dark:text-zinc-400 flex items-center justify-center gap-1.5 transition active:scale-[0.98]"
+                                    >
+                                      📴 Cerrar mapa
+                                    </button>
+                                  </>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      triggerHaptic(10);
+                                      setNavigationMapOpenFor((prev) => ({ ...prev, [order.id]: 'delivery' }));
+                                    }}
+                                    className="w-full py-2.5 rounded-2xl border border-dashed border-neutral-300 dark:border-zinc-700 bg-neutral-50/50 dark:bg-zinc-900/40 flex items-center justify-center gap-2 text-xs font-bold text-neutral-700 dark:text-zinc-300 transition active:scale-[0.98]"
+                                  >
+                                    <span className="text-sm">🗺</span> Ver mapa de navegación
+                                  </button>
+                                )}
+                              </div>
                             )}
 
                             {/* ── Delivery preference ── */}
