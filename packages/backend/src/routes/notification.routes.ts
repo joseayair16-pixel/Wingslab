@@ -1,7 +1,7 @@
 import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { prisma } from '../config/database';
-import { sendPushNotification } from '../services/notification.service';
+import { sendPushNotification, isVapidConfigured } from '../services/notification.service';
 
 const subscribeSchema = z.object({
   endpoint: z.string().url(),
@@ -72,8 +72,21 @@ export async function registerNotificationRoutes(fastify: FastifyInstance): Prom
   });
 
   fastify.get('/notifications/vapid-key', async (request, reply) => {
+    if (!isVapidConfigured()) {
+      return reply.status(503).send({
+        success: false,
+        configured: false,
+        publicKey: null,
+        error: {
+          code: 'VAPID_NOT_CONFIGURED',
+          message: 'Las notificaciones push no están configuradas en el servidor.',
+        },
+      });
+    }
+
     return reply.send({
       success: true,
+      configured: true,
       publicKey: process.env.VAPID_PUBLIC_KEY,
     });
   });

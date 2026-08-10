@@ -21,6 +21,10 @@ function initVapid(): void {
 
 initVapid();
 
+export function isVapidConfigured(): boolean {
+  return vapidConfigured;
+}
+
 export type NotificationPayload = {
   title: string;
   body: string;

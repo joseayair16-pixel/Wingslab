@@ -2,9 +2,15 @@
 
 import { useEffect, useState } from 'react';
 
+type EnableStatus = 'DENIED' | 'BLOCKED' | 'INSECURE' | 'NOT_SUPPORTED' | 'VAPID_NOT_CONFIGURED' | 'SUBSCRIBE_FAILED' | 'UNKNOWN';
+
+type EnableResult =
+  | { ok: true }
+  | { ok: false; reason: EnableStatus };
+
 type Props = {
   visible: boolean;
-  onEnable: () => Promise<void>;
+  onEnable: () => Promise<EnableResult>;
 };
 
 function isIosDevice(): boolean {
@@ -26,11 +32,22 @@ function getIosTooOld(): boolean {
 
 const STORAGE_KEY = 'sadel-push-banner-dismissed';
 
+const REASON_MESSAGES: Record<EnableStatus, string> = {
+  DENIED: 'Rechazaste el permiso de notificaciones. Actívalo en los ajustes del navegador para no perder pedidos.',
+  BLOCKED: 'Notificaciones bloqueadas en este sitio. Actívalas en los ajustes del navegador.',
+  INSECURE: 'Estás entrando por HTTP. Abre el panel con https:// para poder activar las notificaciones.',
+  NOT_SUPPORTED: 'Este navegador no soporta notificaciones push.',
+  VAPID_NOT_CONFIGURED: 'Las notificaciones del servidor no están configuradas. Contacta al soporte de SaDeL.',
+  SUBSCRIBE_FAILED: 'No se pudo completar la suscripción. Inténtalo de nuevo en unos segundos.',
+  UNKNOWN: 'Ocurrió un error al activar las notificaciones. Inténtalo de nuevo.',
+};
+
 export default function PushEnableBanner({ visible, onEnable }: Props) {
   const [permission, setPermission] = useState<NotificationPermission>('default');
   const [subscribed, setSubscribed] = useState(false);
   const [dismissed, setDismissed] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   // Estado de permiso/suscripción + listener de rotación de suscripción del SW
   useEffect(() => {
@@ -52,7 +69,10 @@ export default function PushEnableBanner({ visible, onEnable }: Props) {
     const onMessage = (event: MessageEvent) => {
       // El navegador rotó la suscripción push: re-suscribir con un endpoint nuevo
       if (event.data?.type === 'PUSH_SUBSCRIPTION_CHANGED') {
-        void onEnable().catch(() => {});
+        void (async () => {
+          const result = await onEnable();
+          if (result.ok) setSubscribed(true);
+        })();
       }
     };
     navigator.serviceWorker.addEventListener('message', onMessage);
@@ -60,12 +80,15 @@ export default function PushEnableBanner({ visible, onEnable }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const insecureContext = typeof window !== 'undefined' && window.isSecureContext === false;
+
   if (!visible || dismissed || busy) return null;
   if (subscribed) return null;
   if (permission === 'denied') {
     return (
       <div className="fixed inset-x-0 top-0 z-[9991] bg-amber-50 px-4 py-2.5 text-center text-xs font-medium text-amber-800 shadow-sm border-b border-amber-100">
-        Notificaciones bloqueadas en el navegador. Actívalas en los ajustes del dispositivo para no perder pedidos.
+        Notificaciones bloqueadas. Para activarlas: toca el ícono 🔒 (o ℹ️) junto a la URL y habilita
+        «Notificaciones» en Chrome / «Permisos → Notificaciones» en Safari.
       </div>
     );
   }
@@ -75,36 +98,63 @@ export default function PushEnableBanner({ visible, onEnable }: Props) {
 
   return (
     <div className="fixed inset-x-0 top-0 z-[9991] bg-sky-600 px-4 py-2.5 text-white shadow-md">
-      <div className="mx-auto flex max-w-5xl items-center justify-between gap-3">
-        <p className="text-xs font-semibold leading-snug sm:text-sm">
-          🔔 {iosTooOld
-            ? 'Tu iPhone necesita iOS 16.4+ para recibir notificaciones. Actualiza iOS.'
-            : 'Activa las notificaciones para no perderte ningún pedido.'}
-        </p>
-        <div className="flex shrink-0 items-center gap-2">
-          {!iosTooOld && (
+      <div className="mx-auto flex max-w-5xl flex-col gap-1">
+        {insecureContext && (
+          <p className="text-[11px] font-semibold text-sky-100">
+            ⚠️ Nota: estás en una conexión no segura (HTTP). Abre el panel con https:// para que las
+            notificaciones puedan activarse.
+          </p>
+        )}
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-xs font-semibold leading-snug sm:text-sm">
+            🔔 {iosTooOld
+              ? 'Tu iPhone necesita iOS 16.4+ para recibir notificaciones. Actualiza iOS.'
+              : 'Activa las notificaciones para no perderte ningún pedido.'}
+          </p>
+          <div className="flex shrink-0 items-center gap-2">
+            {!iosTooOld && (
+              <button
+                type="button"
+                disabled={busy}
+                onClick={async () => {
+                  setBusy(true);
+                  setErrorMessage(null);
+                  try {
+                    const result = await onEnable();
+                    if (result.ok) {
+                      setSubscribed(true);
+                    } else {
+                      setErrorMessage(REASON_MESSAGES[result.reason]);
+                    }
+                  } catch {
+                    setErrorMessage(REASON_MESSAGES.UNKNOWN);
+                  } finally {
+                    setBusy(false);
+                  }
+                }}
+                className="rounded-full bg-white px-3.5 py-1.5 text-xs font-bold text-sky-700 transition hover:bg-sky-50 active:scale-95 disabled:opacity-60"
+              >
+                {busy ? 'Activando...' : 'Activar'}
+              </button>
+            )}
             <button
               type="button"
-              onClick={() => { void onEnable().then(() => setBusy(false)); setBusy(true); }}
-              className="rounded-full bg-white px-3.5 py-1.5 text-xs font-bold text-sky-700 transition hover:bg-sky-50 active:scale-95"
+              onClick={() => {
+                window.localStorage.setItem(STORAGE_KEY, 'true');
+                setDismissed(true);
+              }}
+              aria-label="Descartar"
+              className="flex h-6 w-6 items-center justify-center rounded-full text-white/70 transition hover:bg-white/15 hover:text-white"
             >
-              Activar
+              <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+              </svg>
             </button>
-          )}
-          <button
-            type="button"
-            onClick={() => {
-              window.localStorage.setItem(STORAGE_KEY, 'true');
-              setDismissed(true);
-            }}
-            aria-label="Descartar"
-            className="flex h-6 w-6 items-center justify-center rounded-full text-white/70 transition hover:bg-white/15 hover:text-white"
-          >
-            <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
+          </div>
         </div>
+        {errorMessage && (
+          <p className="text-[11px] font-semibold text-amber-100">{errorMessage}</p>
+        )}
       </div>
     </div>
   );

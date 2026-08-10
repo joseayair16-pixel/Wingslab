@@ -1720,22 +1720,33 @@ export default function Home() {
     });
   }
 
-  const subscribeToPush = async (tokenToUse: string) => {
-    if (typeof window === 'undefined' || !('serviceWorker' in navigator)) return;
+  const subscribeToPush = async (tokenToUse: string): Promise<
+    | { ok: true }
+    | { ok: false; reason: 'DENIED' | 'BLOCKED' | 'INSECURE' | 'NOT_SUPPORTED' | 'VAPID_NOT_CONFIGURED' | 'SUBSCRIBE_FAILED' | 'UNKNOWN' }
+  > => {
+    if (typeof window === 'undefined' || !('serviceWorker' in navigator) || !('Notification' in window)) {
+      return { ok: false, reason: 'NOT_SUPPORTED' };
+    }
+
+    // Push/Notification requieren un contexto seguro (HTTPS). Sin ello el navegador
+    // ignora la petición en silencio: es la causa #1 de "no llegan notificaciones".
+    if (window.isSecureContext === false) {
+      return { ok: false, reason: 'INSECURE' };
+    }
 
     // Request notification permission first
     if (Notification.permission === 'default') {
       try {
         const permission = await Notification.requestPermission();
         if (permission !== 'granted') {
-          return;
+          return { ok: false, reason: 'DENIED' };
         }
       } catch {
-        return;
+        return { ok: false, reason: 'DENIED' };
       }
     }
     if (Notification.permission !== 'granted') {
-      return;
+      return { ok: false, reason: 'BLOCKED' };
     }
 
     const fetchWithRetry = async (url: string, retries = 3): Promise<Response> => {
@@ -1760,12 +1771,17 @@ export default function Home() {
       const registration = await navigator.serviceWorker.ready;
 
       const response = await fetchWithRetry(`${apiBase}/notifications/vapid-key`);
-      const data = await response.json();
-      const publicKey = data.publicKey;
+      let data: { publicKey?: string | null; configured?: boolean; error?: { code?: string } };
+      try {
+        data = await response.json();
+      } catch {
+        data = {};
+      }
 
-      if (!publicKey) {
-        console.warn('No VAPID public key returned from backend');
-        return;
+      const publicKey = data.publicKey;
+      if (!publicKey || data.configured === false) {
+        console.error('[Push] VAPID no configurado en el servidor:', data);
+        return { ok: false, reason: 'VAPID_NOT_CONFIGURED' };
       }
 
       const existingSub = await registration.pushManager.getSubscription();
@@ -1789,12 +1805,14 @@ export default function Home() {
 
       if (!subResponse.ok) {
         console.error('Push subscription rejected by server:', subResponse.status, await subResponse.text().catch(() => ''));
-        return;
+        return { ok: false, reason: 'SUBSCRIBE_FAILED' };
       }
 
       console.log('Subscribed to push notifications');
+      return { ok: true };
     } catch (error) {
       console.error('Failed to subscribe to push:', error);
+      return { ok: false, reason: 'SUBSCRIBE_FAILED' };
     }
   };
 

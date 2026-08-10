@@ -13,8 +13,10 @@ async function fetchVapidKey(): Promise<string> {
     try {
       const res = await fetch(`${API_URL}/notifications/vapid-key`);
       const data = await res.json();
-      cachedVapidKey = data.publicKey;
-      if (!cachedVapidKey) throw new Error('VAPID public key not returned');
+      cachedVapidKey = data?.publicKey || null;
+      if (!cachedVapidKey || data?.configured === false) {
+        throw new Error('VAPID public key not returned');
+      }
       return cachedVapidKey;
     } catch (err) {
       vapidKeyPromise = null;
