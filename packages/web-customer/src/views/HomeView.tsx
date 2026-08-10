@@ -279,13 +279,16 @@ export const HomeView = React.memo(function HomeView({
                     key={category.id}
                     type="button"
                     onClick={() => setSelectedCategory(category.id)}
-                    className={`flex w-[56px] flex-col items-center overflow-hidden rounded-[14px] border px-2 py-1.5 text-center transition-all active-scale sm:w-[66px] sm:rounded-[16px] sm:px-2.5 sm:py-2 md:w-[76px] md:rounded-[18px] md:px-3 md:py-2.5 ${isActive
-                      ? 'border-transparent bg-accent text-white shadow-[0_8px_20px_rgba(135,206,235,0.2)]'
-                      : 'border-black/5 bg-[#f5f5f5] text-neutral-800 hover:border-black/10 hover:bg-white'
-                      }`}
+                    className={`group flex w-[56px] flex-col items-center gap-1 transition-all duration-300 active:scale-[0.94] sm:w-[66px] md:w-[76px] ${isActive ? '-translate-y-0.5' : ''}`}
                   >
-                    <span className="text-[18px] leading-none sm:text-[20px] md:text-[22px]">{category.icon}</span>
-                    <span className={`mt-1 w-full truncate text-[10px] font-semibold leading-3 sm:mt-1.5 sm:text-[11px] md:mt-2 md:text-xs ${isActive ? 'text-black' : 'text-neutral-900'}`}>
+                    <span className={`flex h-11 w-11 items-center justify-center rounded-[16px] text-[18px] leading-none transition-all duration-300 sm:h-12 sm:w-12 sm:rounded-[18px] sm:text-[20px] md:h-14 md:w-14 md:rounded-[20px] md:text-[22px] ${isActive
+                      ? 'bg-gradient-to-br from-sky-400 via-sky-500 to-sky-600 text-white shadow-[0_10px_24px_rgba(56,189,248,0.4)]'
+                      : 'bg-neutral-100 text-neutral-500 shadow-[inset_0_1px_0_rgba(255,255,255,0.6)] group-hover:bg-neutral-200 group-hover:text-neutral-700 group-hover:scale-105'
+                      }`}
+                    >
+                      {category.icon}
+                    </span>
+                    <span className={`w-full truncate text-[10px] font-semibold leading-3 transition-colors duration-300 sm:text-[11px] md:text-xs ${isActive ? 'text-sky-700' : 'text-neutral-600 group-hover:text-neutral-900'}`}>
                       {category.name}
                     </span>
                   </button>

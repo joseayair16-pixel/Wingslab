@@ -63,8 +63,10 @@ export function decrypt(cipherText: string): string {
     
     return decrypted;
   } catch (error) {
-    // Si falla el descifrado, asumimos retrocompatibilidad (el registro estaba en texto plano)
-    return cipherText;
+    // Tenia formato cifrado pero el descifrado fallo (p.ej. cambio de clave).
+    // Devolver el ciphertext filtraria datos internos al cliente; mejor vacio
+    // para que el panel lo trate como "no configurado" y se pueda re-guardar.
+    return '';
   }
 }
 
