@@ -39,16 +39,33 @@ export type RestaurantOperationalStats = {
   deliveredRevenue: number;
 };
 
-function addCycle(date: Date, cycle: BillingCycle) {
-  const next = new Date(date);
+type RevenueAttributionOrder = {
+  restaurantId: string;
+  supportRestaurantId: string | null;
+  deliveredByRestaurant?: boolean | null;
+  totalAmount: number;
+  deliveryFee: number | null;
+  restaurant?: { hasOwnDelivery?: boolean | null } | null;
+};
 
-  if (cycle === 'MONTHLY') {
-    next.setMonth(next.getMonth() + 1);
-    return next;
+/**
+ * Ingreso que le corresponde a un restaurante por un pedido ya entregado.
+ * - Restaurante de apoyo (el que prestó al repartidor): se lleva la tarifa de envío.
+ * - Restaurante origen con entrega propia: se lleva el total (hizo el reparto).
+ * - Restaurante origen con reparto de plataforma o apoyo a red: se lleva el total
+ *   menos el envío, porque la tarifa de envío es de quien entrega (repartidor o aliado).
+ */
+export function attributedRevenueFor(order: RevenueAttributionOrder, viewerRestaurantId: string): number {
+  if (order.supportRestaurantId && order.supportRestaurantId === viewerRestaurantId) {
+    return order.deliveryFee || 0;
   }
-
-  next.setDate(next.getDate() + 7);
-  return next;
+  if (order.restaurantId !== viewerRestaurantId) {
+    return 0;
+  }
+  if (order.deliveredByRestaurant || order.restaurant?.hasOwnDelivery) {
+    return order.totalAmount;
+  }
+  return order.totalAmount - (order.deliveryFee || 0);
 }
 
 function resolveBillingStart(seed: BillingSeed, now: Date = new Date()) {
@@ -98,7 +115,6 @@ export async function buildRestaurantBillingSummary(seed: BillingSeed, cutEnd?: 
       },
     },
     _sum: {
-      totalAmount: true,
       whatsappFee: true,
       platformFee: true,
     },
@@ -106,8 +122,31 @@ export async function buildRestaurantBillingSummary(seed: BillingSeed, cutEnd?: 
       id: true,
     },
   });
- 
-  const deliveredRevenue = aggregate._sum.totalAmount || 0;
+
+  // Para el ingreso del origen se resta la tarifa de envío de los pedidos de apoyo a
+  // red (esa tarifa le pertenece al restaurante aliado que hizo la entrega).
+  const deliveredRevenueOrders = await prisma.order.findMany({
+    where: {
+      restaurantId: seed.id,
+      status: { in: ['DELIVERED', 'COMPLETED'] },
+      createdAt: {
+        gte: debtStart,
+        lte: periodEnd,
+      },
+    },
+    select: {
+      restaurantId: true,
+      totalAmount: true,
+      deliveryFee: true,
+      supportRestaurantId: true,
+      deliveredByRestaurant: true,
+      restaurant: { select: { hasOwnDelivery: true } },
+    },
+  });
+  const deliveredRevenue = deliveredRevenueOrders.reduce(
+    (sum, order) => sum + attributedRevenueFor(order, seed.id),
+    0
+  );
   const deliveredOrders = aggregate._count.id;
   const serviceFeeRevenue = (seed.serviceFee || 0) * deliveredOrders;
   // La comision de la plataforma se suma desde el fee real guardado por pedido
@@ -159,55 +198,57 @@ export async function buildRestaurantOperationalStats(restaurantId: string): Pro
   const todayStart = new Date();
   todayStart.setHours(0, 0, 0, 0);
 
-  const [totalOrders, deliveredOrders, activeOrders, todayOrders, totalRevenue, deliveredRevenue] = await Promise.all([
-    prisma.order.count({
-      where: { restaurantId },
-    }),
-    prisma.order.count({
-      where: { restaurantId, status: { in: ['DELIVERED', 'COMPLETED'] } },
-    }),
-    prisma.order.count({
-      where: {
-        restaurantId,
-        status: {
-          in: ['PENDING', 'CONFIRMED', 'PREPARING', 'READY', 'PICKED_UP', 'IN_TRANSIT'],
-        },
-      },
-    }),
-    prisma.order.count({
-      where: {
-        restaurantId,
-        createdAt: {
-          gte: todayStart,
-        },
-      },
-    }),
-    prisma.order.aggregate({
-      where: {
-        restaurantId,
-        status: {
-          notIn: ['CANCELLED', 'REJECTED'],
-        },
-      },
-      _sum: {
-        totalAmount: true,
-      },
-    }),
-    prisma.order.aggregate({
-      where: { restaurantId, status: { in: ['DELIVERED', 'COMPLETED'] } },
-      _sum: {
-        totalAmount: true,
-      },
-    }),
-  ]);
+  const orders = await prisma.order.findMany({
+    where: {
+      OR: [
+        { restaurantId },
+        { supportRestaurantId: restaurantId },
+      ],
+    },
+    select: {
+      status: true,
+      createdAt: true,
+      restaurantId: true,
+      supportRestaurantId: true,
+      deliveredByRestaurant: true,
+      totalAmount: true,
+      deliveryFee: true,
+      restaurant: { select: { hasOwnDelivery: true } },
+    },
+  });
+
+  let totalOrders = 0;
+  let deliveredOrders = 0;
+  let activeOrders = 0;
+  let todayOrders = 0;
+  let totalRevenue = 0;
+  let deliveredRevenue = 0;
+
+  for (const order of orders) {
+    if (order.createdAt >= todayStart) {
+      todayOrders += 1;
+    }
+    if (order.status === 'CANCELLED' || order.status === 'REJECTED') {
+      continue;
+    }
+    totalOrders += 1;
+    totalRevenue += attributedRevenueFor(order, restaurantId);
+    if (order.status === 'DELIVERED' || order.status === 'COMPLETED') {
+      deliveredOrders += 1;
+      deliveredRevenue += attributedRevenueFor(order, restaurantId);
+    }
+    if (['PENDING', 'CONFIRMED', 'PREPARING', 'READY', 'PICKED_UP', 'IN_TRANSIT'].includes(order.status)) {
+      activeOrders += 1;
+    }
+  }
 
   return {
     totalOrders,
     deliveredOrders,
     activeOrders,
     todayOrders,
-    totalRevenue: roundCurrency(totalRevenue._sum.totalAmount || 0),
-    deliveredRevenue: roundCurrency(deliveredRevenue._sum.totalAmount || 0),
+    totalRevenue: roundCurrency(totalRevenue),
+    deliveredRevenue: roundCurrency(deliveredRevenue),
   };
 }
 
@@ -219,8 +260,10 @@ export async function buildRestaurantWeeklyPerformance(restaurantId: string) {
 
   const orders = await prisma.order.findMany({
     where: {
-      restaurantId,
-      status: { in: ['DELIVERED', 'COMPLETED'] },
+      OR: [
+        { restaurantId, status: { in: ['DELIVERED', 'COMPLETED'] } },
+        { supportRestaurantId: restaurantId, status: { in: ['DELIVERED', 'COMPLETED'] } },
+      ],
       createdAt: {
         gte: startDate,
       },
@@ -228,6 +271,9 @@ export async function buildRestaurantWeeklyPerformance(restaurantId: string) {
     select: {
       createdAt: true,
       subtotal: true,
+      deliveryFee: true,
+      restaurantId: true,
+      supportRestaurantId: true,
     },
   });
 
@@ -257,7 +303,11 @@ export async function buildRestaurantWeeklyPerformance(restaurantId: string) {
     
     const existing = dailyMap.get(dateKey);
     if (existing) {
-      existing.ingresos += order.subtotal;
+      // Entregas de apoyo: el restaurante aliado ingresa la tarifa de envío.
+      const isSupportDelivery = order.supportRestaurantId === restaurantId;
+      existing.ingresos += isSupportDelivery
+        ? (order.deliveryFee || 0)
+        : order.subtotal;
     }
   }
 

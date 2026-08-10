@@ -629,8 +629,14 @@ function parseStoreNotes(notes?: string | null): string | null {
   return parsed || null;
 }
 
-function getRestaurantCollectionAmount(order: OrderItem, profileHasOwnDelivery?: boolean): number {
-  if (order.deliveredByRestaurant || (order.restaurant?.hasOwnDelivery ?? profileHasOwnDelivery ?? true)) {
+function getRestaurantCollectionAmount(
+  order: OrderItem,
+  profile?: { id?: string; hasOwnDelivery?: boolean } | null
+): number {
+  if (order.supportRestaurantId && profile?.id && order.restaurantId !== profile.id) {
+    return order.deliveryFee || 0;
+  }
+  if (order.deliveredByRestaurant || (order.restaurant?.hasOwnDelivery ?? profile?.hasOwnDelivery ?? true)) {
     return order.totalAmount;
   }
   return order.totalAmount - (order.deliveryFee || 0);
@@ -5394,7 +5400,7 @@ export default function Home() {
                               preparationTimeMinutes: 10,
                               paymentProofUrl: activeIncomingOrder.paymentProofUrl,
                               orderReference: activeIncomingOrder.orderReference,
-                              collectionAmount: getRestaurantCollectionAmount(activeIncomingOrder, profile?.hasOwnDelivery),
+                              collectionAmount: getRestaurantCollectionAmount(activeIncomingOrder, profile),
                               onConfirm: () => {
                                 onAccept();
                                 setIsSelectingPrepTime(false);
@@ -5418,7 +5424,7 @@ export default function Home() {
                               preparationTimeMinutes: selectedPreparationTime,
                               paymentProofUrl: activeIncomingOrder.paymentProofUrl,
                               orderReference: activeIncomingOrder.orderReference,
-                              collectionAmount: getRestaurantCollectionAmount(activeIncomingOrder, profile?.hasOwnDelivery),
+                              collectionAmount: getRestaurantCollectionAmount(activeIncomingOrder, profile),
                               onConfirm: () => {
                                 onAccept();
                                 setIsSelectingPrepTime(false);
@@ -5638,7 +5644,7 @@ export default function Home() {
                   <div className="rounded-2xl bg-neutral-950 p-5 text-white shadow-lg">
                     <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-neutral-400">Total del pedido</p>
                     <p className="mt-1 text-3xl font-bold tracking-[-0.04em]">
-                      {formatCurrency(getRestaurantCollectionAmount(activeIncomingOrder, profile?.hasOwnDelivery))}
+                      {formatCurrency(getRestaurantCollectionAmount(activeIncomingOrder, profile))}
                     </p>
                   </div>
 
@@ -5651,7 +5657,7 @@ export default function Home() {
                         </span>
                       </div>
                       <p className="text-xs text-neutral-500 mb-3 leading-relaxed">
-                        Verifica en tu banca móvil que el importe de <strong>{formatCurrency(getRestaurantCollectionAmount(activeIncomingOrder, profile?.hasOwnDelivery))}</strong> haya ingresado.
+                        Verifica en tu banca móvil que el importe de <strong>{formatCurrency(getRestaurantCollectionAmount(activeIncomingOrder, profile))}</strong> haya ingresado.
                       </p>
                       {activeIncomingOrder.paymentProofUrl ? (
                         <button
@@ -6635,7 +6641,7 @@ export default function Home() {
                         preparationTimeMinutes: selectedPreparationTime,
                         paymentProofUrl: acceptancePromptOrder.paymentProofUrl,
                         orderReference: acceptancePromptOrder.orderReference,
-                        collectionAmount: getRestaurantCollectionAmount(acceptancePromptOrder, profile?.hasOwnDelivery),
+                        collectionAmount: getRestaurantCollectionAmount(acceptancePromptOrder, profile),
                         onConfirm: onAccept,
                       });
                     } else {
@@ -8708,8 +8714,14 @@ export default function Home() {
                                     if (isHelper) {
                                       return (
                                         <>
-                                          <p className="text-xs font-semibold uppercase tracking-[0.22em] text-neutral-400">Apoyo de entrega</p>
+                                          <p className="text-xs font-semibold uppercase tracking-[0.22em] text-emerald-600">Apoyo de entrega · Tu tarifa</p>
                                           <p className="text-xl font-bold text-neutral-950">{formatCurrency(order.deliveryFee)}</p>
+                                          <p className="text-[10px] text-emerald-600 font-medium flex items-center gap-1 mt-1">
+                                            <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                                            {order.paymentMethod === 'CASH'
+                                              ? `Entregas ${formatCurrency(order.totalAmount - (order.deliveryFee || 0))} al restaurante y cobras ${formatCurrency(order.totalAmount)} al cliente`
+                                              : 'Recibe la tarifa por la entrega del apoyo'}
+                                          </p>
                                         </>
                                       );
                                     }
@@ -8773,14 +8785,19 @@ export default function Home() {
                                     }
 
                                     if (order.paymentMethod === 'CASH') {
+                                      const supportDelivery = !!order.supportRestaurantId;
                                       return (
                                         <>
                                           <p className="text-xs font-semibold uppercase tracking-[0.22em] text-amber-600">
-                                            {order.status === 'DELIVERED' || order.cashPaymentConfirmedAt ? 'Cobrado al repartidor' : 'Cobrar al repartidor'}
+                                            {supportDelivery
+                                              ? (order.status === 'DELIVERED' || order.cashPaymentConfirmedAt ? 'Cobrado al restaurante aliado' : 'Cobrar al restaurante que entrega')
+                                              : (order.status === 'DELIVERED' || order.cashPaymentConfirmedAt ? 'Cobrado al repartidor' : 'Cobrar al repartidor')}
                                           </p>
                                           <p className="text-xl font-bold text-neutral-950">{formatCurrency(foodAmount)}</p>
                                           {order.status !== 'DELIVERED' && !order.cashPaymentConfirmedAt && (
-                                            <p className="text-[10px] text-neutral-500">El repartidor cobra el total al cliente.</p>
+                                            supportDelivery
+                                              ? <p className="text-[10px] text-neutral-500">Entregar al aliado al recoger; él cobra el total al cliente y le queda el envío.</p>
+                                              : <p className="text-[10px] text-neutral-500">El repartidor cobra el total al cliente.</p>
                                           )}
                                         </>
                                       );
@@ -8796,11 +8813,30 @@ export default function Home() {
                                           {order.status !== 'DELIVERED' && !order.deliveredByRestaurant && (order as any).fulfillmentType !== 'PICKUP' && (
                                             <div className="mt-2 rounded-xl border border-dashed border-rose-200 bg-rose-50/60 px-3 py-2">
                                               <div className="flex items-center justify-between">
-                                                <span className="text-[11px] font-semibold text-rose-600">👉 Pagar al repartidor</span>
-                                                <span className="text-sm font-bold text-rose-700">{formatCurrency(order.deliveryFee)}</span>
+                                                {order.supportRestaurantId ? (
+                                                  <>
+                                                    <span className="text-[11px] font-semibold text-rose-600">👉 Pagar al restaurante aliado</span>
+                                                    <span className="text-sm font-bold text-rose-700">{formatCurrency(order.deliveryFee)}</span>
+                                                  </>
+                                                ) : (
+                                                  <>
+                                                    <span className="text-[11px] font-semibold text-rose-600">👉 Pagar al repartidor</span>
+                                                    <span className="text-sm font-bold text-rose-700">{formatCurrency(order.deliveryFee)}</span>
+                                                  </>
+                                                )}
                                               </div>
-                                              <p className="text-[9px] text-rose-400 mt-0.5 leading-tight">Entregar en efectivo al repartidor al recoger el pedido</p>
+                                              <p className="text-[9px] text-rose-400 mt-0.5 leading-tight">
+                                                {order.supportRestaurantId
+                                                  ? 'Entregar en efectivo al restaurante aliado al recoger el pedido'
+                                                  : 'Entregar en efectivo al repartidor al recoger el pedido'}
+                                              </p>
                                             </div>
+                                          )}
+                                          {order.status === 'DELIVERED' && order.supportRestaurantId && (
+                                            <p className="text-[10px] text-emerald-600 font-medium flex items-center gap-1 mt-1">
+                                              <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                                              {formatCurrency(order.deliveryFee)} de envío para el restaurante que entregó
+                                            </p>
                                           )}
                                         </>
                                       );
@@ -10037,11 +10073,18 @@ export default function Home() {
                       <div className="flex items-end justify-between gap-4">
                         <div>
                           <p className="text-xs font-semibold uppercase tracking-[0.2em] text-neutral-500">
-                            Ingreso neto del pedido
+                            {!!profile?.id && selectedOrderForTicket.restaurantId !== profile.id && selectedOrderForTicket.supportRestaurantId
+                              ? 'Tu tarifa por la entrega'
+                              : 'Ingreso neto del pedido'}
                           </p>
                           <p className="mt-1 text-4xl font-bold tracking-[-0.04em] text-neutral-950">
-                            {formatCurrency(getRestaurantCollectionAmount(selectedOrderForTicket, profile?.hasOwnDelivery))}
+                            {formatCurrency(getRestaurantCollectionAmount(selectedOrderForTicket, profile))}
                           </p>
+                          {!!profile?.id && selectedOrderForTicket.restaurantId !== profile.id && selectedOrderForTicket.supportRestaurantId && (
+                            <p className="text-[10px] text-emerald-600 font-medium mt-1">
+                              Apoyo a red — te corresponde la tarifa de envío por entregar el pedido de {selectedOrderForTicket.restaurant?.name || 'otro restaurante'}.
+                            </p>
+                          )}
                         </div>
                         <div className="text-xs text-neutral-400 font-medium">
                           SaDeL Restaurant Portal
@@ -10763,7 +10806,7 @@ export default function Home() {
                     <div className="flex flex-col gap-2">
                       <div className="flex justify-between items-center border-b border-rose-100/50 pb-2">
                         <span className="text-xs text-rose-800 font-semibold">Monto a reembolsar:</span>
-                        <span className="text-base font-bold text-rose-700">{formatCurrency(getRestaurantCollectionAmount(transferRefundOrder, profile?.hasOwnDelivery))}</span>
+                        <span className="text-base font-bold text-rose-700">{formatCurrency(getRestaurantCollectionAmount(transferRefundOrder, profile))}</span>
                       </div>
                       <div className="flex justify-between items-center text-xs text-rose-800 font-medium">
                         <span>Referencia del pedido:</span>

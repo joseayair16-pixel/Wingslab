@@ -372,18 +372,18 @@ export const HomeView = React.memo(function HomeView({
                   const { product, restaurant } = item;
                   return (
                     <button key={product.id} onClick={() => router.push(`/restaurantes/${restaurant.id}?focusProduct=${product.id}`)}
-                      className="group w-44 shrink-0 overflow-hidden rounded-[18px] border border-black/5 bg-white text-left transition-all duration-300 ease-out hover:-translate-y-1 hover:border-black/10 hover:shadow-[0_12px_30px_rgba(15,15,15,0.08)] active:scale-[0.98]">
-                        <div className="relative overflow-hidden h-24">
+                      className="group w-28 sm:w-44 shrink-0 overflow-hidden rounded-[18px] border border-black/5 bg-white text-left transition-all duration-300 ease-out hover:-translate-y-1 hover:border-black/10 hover:shadow-[0_12px_30px_rgba(15,15,15,0.08)] active:scale-[0.98]">
+                        <div className="relative overflow-hidden h-20 sm:h-24">
                           {product.image ? (
                             <Image
                               src={product.image}
                               alt={product.name}
                               fill
-                              sizes="176px"
+                              sizes="(max-width:640px) 112px, 176px"
                               className="object-cover transition duration-300 group-hover:scale-105"
                             />
                         ) : (
-                          <div className="h-24 w-full bg-gradient-to-br from-neutral-100 to-neutral-200 flex items-center justify-center">
+                          <div className="h-20 sm:h-24 w-full bg-gradient-to-br from-neutral-100 to-neutral-200 flex items-center justify-center">
                             <svg className="w-8 h-8 text-neutral-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
                               <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607zM13.5 10.5h-3" />
                             </svg>

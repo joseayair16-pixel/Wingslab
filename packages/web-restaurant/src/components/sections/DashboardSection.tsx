@@ -34,7 +34,7 @@ interface DashboardSectionProps {
   formatDate: (date: string) => string;
   getPreparationRemainingMs: (order: any, now: number) => number | null;
   isPreparationTimeUrgent: (order: any, now: number) => boolean;
-  getRestaurantCollectionAmount: (order: any, hasOwnDelivery?: boolean) => number;
+  getRestaurantCollectionAmount: (order: any, profile?: { id?: string; hasOwnDelivery?: boolean } | null) => number;
   getCustomerOrigin: () => string | null;
   formatWeekday: (date: Date) => string;
   formatCalendarDate: (date: Date) => string;
@@ -210,7 +210,7 @@ export const DashboardSection = React.memo(function DashboardSection({
     const dayKey = date.toDateString();
     const dayOrders = orders.filter((order: any) => !order.id.startsWith('mock-order-') && new Date(order.createdAt).toDateString() === dayKey);
     const validOrders = dayOrders.filter((order: any) => !['CANCELLED', 'REJECTED'].includes(order.status));
-    const dayRevenue = validOrders.reduce((sum: number, order: any) => sum + getRestaurantCollectionAmount(order, profile?.hasOwnDelivery), 0);
+    const dayRevenue = validOrders.reduce((sum: number, order: any) => sum + getRestaurantCollectionAmount(order, profile), 0);
     return {
       label: formatWeekday(date),
       dateLabel: formatCalendarDate(date),
@@ -730,7 +730,7 @@ const OrderColumn = React.memo(function OrderColumn({
                   </button>
                 )}
               </div>
-              <p className="text-xs font-bold text-neutral-900">{formatCurrency(getRestaurantCollectionAmount(order, profile?.hasOwnDelivery))}</p>
+              <p className="text-xs font-bold text-neutral-900">{formatCurrency(getRestaurantCollectionAmount(order, profile))}</p>
             </div>
             <p className="mt-1 truncate text-xs text-neutral-500">👤 {order.customer?.user?.name || 'Cliente'}</p>
             {kitchenColumn && (
@@ -756,7 +756,7 @@ const OrderColumn = React.memo(function OrderColumn({
                   </button>
                 )}
                 {!kitchenColumn && !isDispatch && <span className="text-[10px] font-bold text-sky-600">Ver →</span>}
-                {kitchenColumn && <span className="text-[11px] font-bold text-neutral-900 bg-neutral-100 px-2 py-0.5 rounded-md">{formatCurrency(getRestaurantCollectionAmount(order, profile?.hasOwnDelivery))}</span>}
+                {kitchenColumn && <span className="text-[11px] font-bold text-neutral-900 bg-neutral-100 px-2 py-0.5 rounded-md">{formatCurrency(getRestaurantCollectionAmount(order, profile))}</span>}
               </div>
             </div>
           </div>
