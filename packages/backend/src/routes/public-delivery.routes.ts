@@ -48,6 +48,12 @@ export async function registerPublicDeliveryRoutes(fastify: FastifyInstance): Pr
                   longitude: true,
                 },
               },
+              supportRestaurant: {
+                select: {
+                  id: true,
+                  name: true,
+                },
+              },
               address: true,
               customer: {
                 include: {
@@ -94,6 +100,12 @@ export async function registerPublicDeliveryRoutes(fastify: FastifyInstance): Pr
           notes: dToken.order.notes,
           handoverPin: dToken.order.handoverPin,
           isSupportDelivery: Boolean(dToken.order.supportRestaurantId),
+          supportRestaurant: dToken.order.supportRestaurant
+            ? {
+                id: dToken.order.supportRestaurant.id,
+                name: dToken.order.supportRestaurant.name,
+              }
+            : null,
           restaurant: {
             name: dToken.order.restaurant.name,
             phone: dToken.order.restaurant.contactPhone,
@@ -477,6 +489,25 @@ export async function registerPublicDeliveryRoutes(fastify: FastifyInstance): Pr
               orderId: order.id,
             }
           );
+
+          // Push al restaurante origen: el aliado ya recogió el pedido
+          try {
+            await sendPushNotification(order.restaurant.userId, {
+              title: '¡Pedido recogido por tu aliado! 🛒',
+              body: `${order.supportRestaurant?.name || 'Tu restaurante aliado'} recogió el pedido ${order.orderReference} y va en camino a entregarlo.`,
+              icon: '/app-icon-192.png',
+              badge: '/badge.png',
+              vibrate: [500, 100, 500, 100, 500],
+              requireInteraction: true,
+              data: {
+                orderId: order.id,
+                event: 'order:support-picked-up',
+                url: `/?orderId=${order.id}`,
+              },
+            });
+          } catch (pushErr) {
+            request.log.error(pushErr as any, '[Push] Error al notificar recogida de apoyo al restaurante origen');
+          }
 
           // Notificar al comensal que la entrega va en camino
           emitNotification(

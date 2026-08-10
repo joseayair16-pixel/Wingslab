@@ -397,6 +397,7 @@ model Order {
   isSupportRequested    Boolean     @default(false)
   supportCount          Int         @default(0)
   supportRejectionCount Int         @default(0)
+  supportAttempts       Int         @default(0)
   noDriversAvailable    Boolean     @default(false)
 
   fulfillmentType FulfillmentType @default(DELIVERY)

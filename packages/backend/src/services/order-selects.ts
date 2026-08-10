@@ -8,6 +8,10 @@ const orderBaseScalarSelect = {
   driverId: true,
   addressId: true,
   supportRestaurantId: true,
+  isSupportRequested: true,
+  supportCount: true,
+  supportRejectionCount: true,
+  supportAttempts: true,
   latitude: true,
   longitude: true,
   subtotal: true,
@@ -171,6 +175,13 @@ export const restaurantOrderListSelect = Prisma.validator<Prisma.OrderSelect>()(
       id: true,
       name: true,
       hasOwnDelivery: true,
+    },
+  },
+  supportRestaurant: {
+    select: {
+      id: true,
+      name: true,
+      contactPhone: true,
     },
   },
 });

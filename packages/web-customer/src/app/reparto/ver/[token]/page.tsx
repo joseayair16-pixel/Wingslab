@@ -31,6 +31,10 @@ interface DeliveryTicketData {
   notes?: string | null;
   handoverPin?: string | null;
   isSupportDelivery?: boolean;
+  supportRestaurant?: {
+    id: string;
+    name: string;
+  } | null;
   restaurant: {
     name: string;
     phone: string;
@@ -1123,6 +1127,14 @@ export default function DeliveryTicketPage({ params }: PageProps) {
                 El comensal ya pagó en línea (incluido el envío). Al recoger el pedido, el restaurante te entrega en efectivo el envío:
                 <strong className={textPrimary}> ${currentTicket.deliveryFee ? `$${currentTicket.deliveryFee.toFixed(2)}` : 'la tarifa de envío'}</strong>.
               </p>
+            )}
+            {currentTicket.supportRestaurant?.name && (
+              <div className={`mt-3 flex items-center gap-2 rounded-2xl border px-3 py-2.5 text-xs font-bold ${
+                darkMode ? 'bg-emerald-950/20 border-emerald-900/30 text-emerald-300' : 'bg-emerald-50 border-emerald-200/60 text-emerald-700'
+              }`}>
+                <span>🤝</span>
+                <span>Entregas como: {currentTicket.supportRestaurant.name}</span>
+              </div>
             )}
           </div>
 

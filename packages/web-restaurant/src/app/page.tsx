@@ -111,6 +111,15 @@ type OrderItem = {
   orderReference: string;
   restaurantId?: string;
   supportRestaurantId?: string | null;
+  isSupportRequested?: boolean;
+  supportCount?: number;
+  supportRejectionCount?: number;
+  supportAttempts?: number;
+  supportRestaurant?: {
+    id: string;
+    name: string;
+    contactPhone?: string | null;
+  };
   status: OrderStatus;
   totalAmount: number;
   deliveryFee: number;
@@ -441,6 +450,10 @@ const liveEvents = [
   'order:eta-updated',
   'order:delivered',
   'order:support-requested',
+  'order:support-accepted',
+  'order:support-rejected-all',
+  'order:support-exhausted',
+  'order:support-picked-up',
   'order:no-drivers-available',
   'order:driver-arrived-restaurant',
   'order:queue-next',
@@ -661,7 +674,11 @@ export default function Home() {
     deliveryFee: number;
     address: string;
     distanceToRestaurant: number;
+    distanceToDeliveryKm?: number | null;
+    supportAttempts?: number;
+    attemptsLeft?: number;
   }>>([]);
+  const [supportNotifyByOrder, setSupportNotifyByOrder] = useState<Record<string, { attemptsLeft: number; exhausted: boolean }>>({});
   const [products, setProducts] = useState<ProductItem[]>([]);
   const [categories, setCategories] = useState<CategoryItem[]>([]);
   const [drivers, setDrivers] = useState<DriverItem[]>([]);
@@ -2912,9 +2929,38 @@ export default function Home() {
     }
 
     if (eventName === 'order:support-requested') {
-      setSupportRequestsQueue((current) => [...current, payload as any]);
+      setSupportRequestsQueue((current) => {
+        const exists = current.some((item) => item.orderId === (payload as any).orderId);
+        if (exists) return current;
+        return [...current, payload as any];
+      });
+      void playIncomingOrderAlert();
       pushToast('info', 'Solicitud de apoyo', '¡Un restaurante cercano solicita apoyo!');
       return;
+    }
+
+    if (eventName === 'order:support-rejected-all' || eventName === 'order:support-exhausted') {
+      const payloadAny = payload as any;
+      if (payloadAny.orderId) {
+        setSupportNotifyByOrder((prev) => ({
+          ...prev,
+          [payloadAny.orderId]: {
+            attemptsLeft: Number(payloadAny.attemptsLeft ?? 0),
+            exhausted: Boolean(payloadAny.exhausted || eventName === 'order:support-exhausted'),
+          },
+        }));
+      }
+      pushToast(eventName === 'order:support-exhausted' ? 'error' : 'info', 'Apoyo a red', payloadAny.message || 'Nadie aceptó tu solicitud de apoyo.');
+      void loadOrdersOnly();
+      return;
+    }
+
+    if (eventName === 'order:support-accepted' && (payload as any).orderId) {
+      setSupportNotifyByOrder((prev) => {
+        const next = { ...prev };
+        delete next[(payload as any).orderId];
+        return next;
+      });
     }
 
     if (eventName === 'order:created') {
@@ -5678,7 +5724,11 @@ export default function Home() {
                   </div>
                   <div>
                     <p className="text-xs font-semibold uppercase tracking-[0.2em] text-neutral-500">Distancia</p>
-                    <p className="mt-1 text-sm font-medium text-neutral-900">{supportRequestsQueue[0].distanceToRestaurant.toFixed(2)} km (aprox)</p>
+                    <p className="mt-1 text-sm font-medium text-neutral-900">
+                      {supportRequestsQueue[0].distanceToDeliveryKm != null
+                        ? `${supportRequestsQueue[0].distanceToDeliveryKm.toFixed(2)} km hasta la entrega`
+                        : `${supportRequestsQueue[0].distanceToRestaurant.toFixed(2)} km (aprox)`}
+                    </p>
                   </div>
                 </div>
               </div>
@@ -8119,6 +8169,10 @@ export default function Home() {
                           const isHelper = order.restaurantId !== profile?.id;
                           const hasOwnDelivery = order.restaurant?.hasOwnDelivery ?? profile?.hasOwnDelivery ?? false;
                           const isSupported = order.notes?.includes('[ApoyoId:');
+                          const supportNotifyHere = supportNotifyByOrder[order.id];
+                          const supportExhaustedHere =
+                            (supportNotifyHere?.exhausted ?? false) ||
+                            ((order.supportAttempts ?? 0) >= 2 && !order.supportRestaurantId && !order.isSupportRequested);
                           const actionButtons = isHelper
                             // Se conserva el flujo manual del apoyo (iniciar entrega / marcar entregado);
                             // el QR de express es la vía principal que usa el repartidor aliado.
@@ -8336,6 +8390,18 @@ export default function Home() {
                                     ) : order.driver?.user?.name && !order.isAcceptedByDriver ? (
                                       <span className="font-medium text-sky-600 bg-sky-50 px-2 py-0.5 rounded border border-sky-100/50">
                                         Asignado (Esperando confirmación)
+                                      </span>
+                                    ) : order.supportRestaurant?.name ? (
+                                      <span className="inline-flex items-center gap-1.5 bg-emerald-50 border border-emerald-100 rounded-full pr-3 pl-1 py-1">
+                                        <div className="w-5 h-5 rounded-full bg-emerald-100 flex items-center justify-center text-[9px] font-bold text-emerald-700">
+                                          🤝
+                                        </div>
+                                        <span className="font-semibold text-emerald-800 dark:text-emerald-300 text-xs">
+                                          🛵 {order.supportRestaurant.name}
+                                        </span>
+                                        <span className="text-[9px] font-bold text-emerald-600 bg-emerald-100 px-1.5 py-0.5 rounded-full">
+                                          Apoyo a red
+                                        </span>
                                       </span>
                                     ) : hasOwnDelivery ? (
                                       <span className="font-medium text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-100/50">
@@ -8852,30 +8918,59 @@ export default function Home() {
                               ) : null}
 
                               {/* Boton de Emergencia: Asumir Reparto o Pedir Apoyo (solo delivery) */}
-                              {((order as any).fulfillmentType !== 'PICKUP' && (order.status === 'READY' || ((order.status === 'CONFIRMED' || order.status === 'PREPARING') && order.noDriversAvailable)) && !order.driver) ? (
-                                <div className="flex flex-col sm:flex-row gap-2 mt-2" onClick={(e) => e.stopPropagation()}>
-                                  <button
-                                    type="button"
-                                    onClick={() => void runOrderAction(order.id, 'asumirReparto')}
-                                    disabled={activeActionKey === `${order.id}:asumirReparto`}
-                                    className="flex-1 rounded-xl border border-emerald-200 bg-emerald-600 px-4 py-3 text-sm font-semibold text-white shadow-[0_4px_12px_rgba(16,185,129,0.2)] transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-neutral-300 disabled:text-neutral-500"
-                                  >
-                                    {activeActionKey === `${order.id}:asumirReparto`
-                                      ? 'Procesando...'
-                                      : '🚴‍♂️ Ir a entregar'}
-                                  </button>
-                                  {!profile?.hasOwnDelivery && (
+                              {((order as any).fulfillmentType !== 'PICKUP' && !order.supportRestaurantId && !order.isSupportRequested && (order.status === 'READY' || ((order.status === 'CONFIRMED' || order.status === 'PREPARING') && order.noDriversAvailable)) && !order.driver) ? (
+                                <div className="flex flex-col gap-2 mt-2" onClick={(e) => e.stopPropagation()}>
+                                  {supportNotifyHere ? (
+                                    <div className="rounded-[16px] border border-rose-100 bg-rose-50 px-4 py-3 text-sm text-rose-800">
+                                      <div className="flex items-center gap-2">
+                                        <span className="text-base">😕</span>
+                                        <div className="min-w-0 flex-1">
+                                          <p className="font-semibold">Nadie aceptó tu solicitud de apoyo</p>
+                                          {supportNotifyHere.exhausted ? (
+                                            <p className="text-xs text-rose-600 mt-0.5">Agotaste los 2 intentos. Solo puedes ir a entregar tú mismo.</p>
+                                          ) : (
+                                            <p className="text-xs text-rose-600 mt-0.5">
+                                              Puedes reintentar (te queda{supportNotifyHere.attemptsLeft === 1 ? '' : 'n'} {supportNotifyHere.attemptsLeft} intento{supportNotifyHere.attemptsLeft === 1 ? '' : 's'}) o entregarlo tú mismo.
+                                            </p>
+                                          )}
+                                        </div>
+                                        {!supportNotifyHere.exhausted && (
+                                          <button
+                                            type="button"
+                                            onClick={() => void runOrderAction(order.id, 'solicitarApoyo')}
+                                            disabled={activeActionKey === `${order.id}:solicitarApoyo`}
+                                            className="shrink-0 rounded-full bg-rose-600 px-4 py-2 text-xs font-bold text-white transition hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-50"
+                                          >
+                                            {activeActionKey === `${order.id}:solicitarApoyo` ? 'Reenviando...' : 'Reintentar'}
+                                          </button>
+                                        )}
+                                      </div>
+                                    </div>
+                                  ) : null}
+                                  <div className="flex flex-col sm:flex-row gap-2">
                                     <button
                                       type="button"
-                                      onClick={() => void runOrderAction(order.id, 'solicitarApoyo')}
-                                      disabled={activeActionKey === `${order.id}:solicitarApoyo`}
-                                      className="flex-1 rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm font-semibold text-sky-700 transition hover:bg-sky-100 disabled:cursor-not-allowed disabled:bg-neutral-100 disabled:text-neutral-400"
+                                      onClick={() => void runOrderAction(order.id, 'asumirReparto')}
+                                      disabled={activeActionKey === `${order.id}:asumirReparto`}
+                                      className="flex-1 rounded-xl border border-emerald-200 bg-emerald-600 px-4 py-3 text-sm font-semibold text-white shadow-[0_4px_12px_rgba(16,185,129,0.2)] transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-neutral-300 disabled:text-neutral-500"
                                     >
-                                      {activeActionKey === `${order.id}:solicitarApoyo`
-                                        ? 'Enviando...'
-                                        : '🤝 Pedir apoyo a red'}
+                                      {activeActionKey === `${order.id}:asumirReparto`
+                                        ? 'Procesando...'
+                                        : '🚴‍♂️ Ir a entregar'}
                                     </button>
-                                  )}
+                                    {!profile?.hasOwnDelivery && !supportExhaustedHere && !supportNotifyHere?.exhausted && (
+                                      <button
+                                        type="button"
+                                        onClick={() => void runOrderAction(order.id, 'solicitarApoyo')}
+                                        disabled={activeActionKey === `${order.id}:solicitarApoyo`}
+                                        className="flex-1 rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm font-semibold text-sky-700 transition hover:bg-sky-100 disabled:cursor-not-allowed disabled:bg-neutral-100 disabled:text-neutral-400"
+                                      >
+                                        {activeActionKey === `${order.id}:solicitarApoyo`
+                                          ? 'Enviando...'
+                                          : '🤝 Pedir apoyo a red'}
+                                      </button>
+                                    )}
+                                  </div>
                                 </div>
                               ) : null}
                             </article>
@@ -12829,6 +12924,24 @@ function buildRestaurantLiveMessage(
 
   if (eventName === 'order:support-requested') {
     return `¡Un restaurante cercano solicita apoyo para una entrega!`;
+  }
+
+  if (eventName === 'order:support-accepted') {
+    const supportName = (payload as any).supportRestaurantName || 'Un restaurante aliado';
+    return `¡${supportName} aceptó entregar ${orderLabel}!`;
+  }
+
+  if (eventName === 'order:support-picked-up') {
+    const supportName = (payload as any).supportRestaurantName || 'Tu aliado';
+    return `${supportName} recogió ${orderLabel} y va en camino.`;
+  }
+
+  if (eventName === 'order:support-rejected-all') {
+    return `Nadie aceptó la solicitud de apoyo de ${orderLabel}.`;
+  }
+
+  if (eventName === 'order:support-exhausted') {
+    return `Agotaste los 2 intentos de apoyo para ${orderLabel}; entrega tú mismo.`;
   }
 
   if (eventName === 'order:no-drivers-available' as any) {

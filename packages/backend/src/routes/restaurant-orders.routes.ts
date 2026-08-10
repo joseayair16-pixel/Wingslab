@@ -1636,6 +1636,17 @@ export async function registerRestaurantOrderRoutes(fastify: FastifyInstance): P
           });
         }
 
+        const supportAttemptsUsed = order.supportAttempts ?? 0;
+        if (supportAttemptsUsed >= 2) {
+          return reply.status(400).send({
+            success: false,
+            error: {
+              code: 'SUPPORT_LIMIT_REACHED',
+              message: 'Agotaste los 2 intentos de solicitar apoyo a la red. Solo puedes ir a entregar tú mismo.',
+            },
+          });
+        }
+
         const originLat = order.restaurant.latitude;
         const originLng = order.restaurant.longitude;
 
@@ -1692,8 +1703,14 @@ export async function registerRestaurantOrderRoutes(fastify: FastifyInstance): P
             isSupportRequested: true,
             supportCount: nearbyRestaurants.length,
             supportRejectionCount: 0,
+            supportAttempts: { increment: 1 },
           },
         });
+
+        const deliveryLat = order.address?.latitude ?? order.latitude;
+        const deliveryLng = order.address?.longitude ?? order.longitude;
+        const attemptsUsed = (order.supportAttempts ?? 0) + 1;
+        const attemptsLeft = Math.max(0, 2 - attemptsUsed);
 
         // Emitir notificaciones a los restaurantes cercanos
         for (const r of nearbyRestaurants) {
@@ -1701,6 +1718,15 @@ export async function registerRestaurantOrderRoutes(fastify: FastifyInstance): P
             { latitude: originLat, longitude: originLng },
             { latitude: r.latitude!, longitude: r.longitude! }
           );
+
+          // Distancia precisa del restaurante aliado (pickup) a la dirección de entrega
+          let distanceToDeliveryKm: number | null = null;
+          if (deliveryLat && deliveryLng && r.latitude && r.longitude) {
+            distanceToDeliveryKm = getDistanceInKm(
+              { latitude: r.latitude, longitude: r.longitude },
+              { latitude: deliveryLat, longitude: deliveryLng }
+            );
+          }
           emitNotification(
             fastify.io,
             r.userId,
@@ -1712,6 +1738,9 @@ export async function registerRestaurantOrderRoutes(fastify: FastifyInstance): P
               deliveryFee: order.deliveryFee,
               address: order.address ? `${order.address.street} ${order.address.number}, ${order.address.neighborhood}` : 'Recoger en tienda',
               distanceToRestaurant: dist,
+              distanceToDeliveryKm,
+              supportAttempts: attemptsUsed,
+              attemptsLeft,
               message: `El restaurante ${order.restaurant.name} solicita apoyo para una entrega. Tarifa: $${order.deliveryFee}`,
             },
             {
@@ -1728,6 +1757,8 @@ export async function registerRestaurantOrderRoutes(fastify: FastifyInstance): P
               orderId: order.id,
               tag: `support-request-${order.id}`,
               vibrate: [500, 100, 500, 100, 500, 100, 500],
+              supportAttempts: attemptsUsed,
+              attemptsLeft,
               url: `/?orderId=${order.id}`,
             }
           }).catch((err) => {
@@ -1740,10 +1771,17 @@ export async function registerRestaurantOrderRoutes(fastify: FastifyInstance): P
           try {
             const currentOrder = await prisma.order.findUnique({
               where: { id: order.id },
-              select: { supportRestaurantId: true, restaurant: { select: { userId: true } }, orderReference: true },
+              select: {
+                supportRestaurantId: true,
+                supportAttempts: true,
+                restaurant: { select: { userId: true } },
+                orderReference: true,
+              },
             });
 
-            if (currentOrder && !currentOrder.supportRestaurantId) {
+            // Guarda anti-timers obsoletos: si el pedido fue reenviado (supportAttempts
+            // avanzó), este temporizador de la ronda anterior ya no debe notificar.
+            if (currentOrder && !currentOrder.supportRestaurantId && currentOrder.supportAttempts === attemptsUsed) {
               // Nadie aceptó en 2 minutos!
               await prisma.order.update({
                 where: { id: order.id },
@@ -1752,14 +1790,23 @@ export async function registerRestaurantOrderRoutes(fastify: FastifyInstance): P
                 },
               });
 
+              const attemptsUsed = currentOrder.supportAttempts ?? 0;
+              const attemptsLeft = Math.max(0, 2 - attemptsUsed);
+              const exhausted = attemptsLeft === 0;
+
               emitNotification(
                 fastify.io,
                 currentOrder.restaurant.userId,
                 'RESTAURANT',
-                'order:support-rejected-all',
+                exhausted ? 'order:support-exhausted' : 'order:support-rejected-all',
                 {
                   orderId: order.id,
-                  message: `Expiro el tiempo de 2 minutos y ningun restaurante acepto tu solicitud de apoyo para el pedido ${currentOrder.orderReference}.`,
+                  supportAttempts: attemptsUsed,
+                  attemptsLeft,
+                  exhausted,
+                  message: exhausted
+                    ? `Nadie aceptó tu solicitud de apoyo y agotaste tus 2 intentos para el pedido ${currentOrder.orderReference}. Entrega tú mismo el pedido.`
+                    : `Nadie aceptó tu solicitud de apoyo para el pedido ${currentOrder.orderReference}. Puedes reintentar (te queda${attemptsLeft === 1 ? '' : 'n'} ${attemptsLeft} intento${attemptsLeft === 1 ? '' : 's'}) o entregarlo tú mismo.`,
                 },
                 {
                   requestId: requestContext.requestId,
@@ -1851,7 +1898,7 @@ export async function registerRestaurantOrderRoutes(fastify: FastifyInstance): P
         // Marcar el pedido como tomado por apoyo (actualización atómica para evitar
         // que dos restaurantes acepten el mismo pedido de forma concurrente).
         const existingNotes = order.notes ? order.notes + ' | ' : '';
-        const newNotes = existingNotes + `[Apoyo por: ${supportRestaurant.name}] [ApoyoId: ${supportRestaurant.id}]`;
+        const newNotes = existingNotes + `[ApoyoId: ${supportRestaurant.id}]`;
 
         const acceptedCount = await prisma.order.updateMany({
           where: {
@@ -1996,14 +2043,22 @@ export async function registerRestaurantOrderRoutes(fastify: FastifyInstance): P
 
         // Si todos rechazaron, notificar al restaurante solicitante
         if (updatedOrder.supportRejectionCount >= updatedOrder.supportCount) {
+          const attemptsUsed = updatedOrder.supportAttempts ?? 0;
+          const attemptsLeft = Math.max(0, 2 - attemptsUsed);
+          const exhausted = attemptsLeft === 0;
           emitNotification(
             fastify.io,
             order.restaurant.userId,
             'RESTAURANT',
-            'order:support-rejected-all',
+            exhausted ? 'order:support-exhausted' : 'order:support-rejected-all',
             {
               orderId: order.id,
-              message: `Ningun restaurante acepto tu solicitud de apoyo para el pedido ${order.orderReference}.`,
+              supportAttempts: attemptsUsed,
+              attemptsLeft,
+              exhausted,
+              message: exhausted
+                ? `Ningun restaurante acepto tu solicitud de apoyo y agotaste tus 2 intentos para el pedido ${order.orderReference}. Entrega tú mismo el pedido.`
+                : `Ningun restaurante acepto tu solicitud de apoyo para el pedido ${order.orderReference}. Puedes reintentar (te queda${attemptsLeft === 1 ? '' : 'n'} ${attemptsLeft} intento${attemptsLeft === 1 ? '' : 's'}) o entregarlo tú mismo.`,
             },
             {
               requestId: requestContext.requestId,
