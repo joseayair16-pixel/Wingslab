@@ -101,6 +101,7 @@ type RestaurantProfile = {
 
 type OperatingHourItem = {
   dayOfWeek: number;
+  shiftIndex: number;
   openTime: string;
   closeTime: string;
   isClosed: boolean;
@@ -472,9 +473,12 @@ const weekDayOptions = [
   { dayOfWeek: 6, label: 'Sabado' },
 ] as const;
 
+const MAX_SHIFTS_PER_DAY = 2;
+
 function buildDefaultOperatingHours(): OperatingHourItem[] {
   return weekDayOptions.map((item) => ({
     dayOfWeek: item.dayOfWeek,
+    shiftIndex: 0,
     openTime: '09:00',
     closeTime: '18:00',
     isClosed: item.dayOfWeek === 0,
@@ -488,7 +492,15 @@ function normalizeOperatingHours(items?: OperatingHourItem[]): OperatingHourItem
     return defaults;
   }
 
-  return defaults.map((base) => items.find((item) => item.dayOfWeek === base.dayOfWeek) || base);
+  return items
+    .map((item, index) => ({
+      dayOfWeek: item.dayOfWeek,
+      shiftIndex: typeof item.shiftIndex === 'number' ? item.shiftIndex : index,
+      openTime: item.openTime || '09:00',
+      closeTime: item.closeTime || '18:00',
+      isClosed: item.isClosed ?? false,
+    }))
+    .sort((a, b) => a.dayOfWeek - b.dayOfWeek || a.shiftIndex - b.shiftIndex);
 }
 
 const restaurantActionMap: Record<
@@ -4859,6 +4871,7 @@ export default function Home() {
           body: JSON.stringify(
             operatingHoursDraft.map((item) => ({
               dayOfWeek: item.dayOfWeek,
+              shiftIndex: item.shiftIndex,
               openTime: item.openTime,
               closeTime: item.closeTime,
               isClosed: item.isClosed,
@@ -13336,20 +13349,22 @@ function isCurrentlyWithinOperatingHours(operatingHours?: any[]) {
     return currentMinutes >= openMinutes && currentMinutes < closeMinutes;
   };
 
-  const todaySchedule = operatingHours.find((h) => h.dayOfWeek === dayOfWeek);
-  if (todaySchedule && !todaySchedule.isClosed && isWithinRange(todaySchedule)) {
-    return true;
+  for (const block of operatingHours) {
+    if (block.dayOfWeek !== dayOfWeek || block.isClosed) continue;
+    if (isWithinRange(block)) {
+      return true;
+    }
   }
 
   const yesterdayDay = (dayOfWeek + 6) % 7;
-  const yesterdaySchedule = operatingHours.find((h) => h.dayOfWeek === yesterdayDay);
-  if (
-    yesterdaySchedule &&
-    !yesterdaySchedule.isClosed &&
-    toMinutes(yesterdaySchedule.closeTime) < toMinutes(yesterdaySchedule.openTime) &&
-    currentMinutes < toMinutes(yesterdaySchedule.closeTime)
-  ) {
-    return true;
+  for (const block of operatingHours) {
+    if (block.dayOfWeek !== yesterdayDay || block.isClosed) continue;
+    if (
+      toMinutes(block.closeTime) < toMinutes(block.openTime) &&
+      currentMinutes < toMinutes(block.closeTime)
+    ) {
+      return true;
+    }
   }
 
   return false;

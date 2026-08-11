@@ -1,6 +1,31 @@
 import { RestaurantStatus } from '@prisma/client';
 
-import { getDistanceInKm, isRestaurantOpenNow, resolveZoneFromNearestRestaurant, ZoneRestaurant } from './restaurant';
+import {
+  getDistanceInKm,
+  getNextOpenTime,
+  isRestaurantOpenNow,
+  resolveZoneFromNearestRestaurant,
+  ZoneRestaurant,
+} from './restaurant';
+
+function scheduleBlock(
+  dayOfWeek: number,
+  openTime: string,
+  closeTime: string,
+  overrides: Partial<{ isClosed: boolean; shiftIndex: number }> = {}
+) {
+  return {
+    id: '1',
+    restaurantId: 'r1',
+    dayOfWeek,
+    shiftIndex: overrides.shiftIndex ?? 0,
+    openTime,
+    closeTime,
+    isClosed: overrides.isClosed ?? false,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  };
+}
 
 describe('restaurant utils', () => {
   it('detecta restaurante abierto con horario valido', () => {
@@ -8,18 +33,7 @@ describe('restaurant utils', () => {
       RestaurantStatus.ACTIVE,
       true,
       false,
-      [
-        {
-          id: '1',
-          restaurantId: 'r1',
-          dayOfWeek: 2,
-          openTime: '09:00',
-          closeTime: '18:00',
-          isClosed: false,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        },
-      ],
+      [scheduleBlock(2, '09:00', '18:00')],
       new Date('2026-04-14T15:30:00')
     );
 
@@ -32,18 +46,7 @@ describe('restaurant utils', () => {
       RestaurantStatus.ACTIVE,
       true,
       false,
-      [
-        {
-          id: '1',
-          restaurantId: 'r1',
-          dayOfWeek: 2,
-          openTime: '09:00',
-          closeTime: '18:00',
-          isClosed: false,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        },
-      ],
+      [scheduleBlock(2, '09:00', '18:00')],
       new Date('2026-04-14T23:00:00')
     );
 
@@ -64,18 +67,7 @@ describe('restaurant utils', () => {
   });
 
   it('maneja rangos que cruzan la medianoche', () => {
-    const overnightSchedule = [
-      {
-        id: '1',
-        restaurantId: 'r1',
-        dayOfWeek: 2,
-        openTime: '22:00',
-        closeTime: '02:00',
-        isClosed: false,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      },
-    ];
+    const overnightSchedule = [scheduleBlock(2, '22:00', '02:00')];
 
     const beforeOpen = isRestaurantOpenNow(RestaurantStatus.ACTIVE, true, false, overnightSchedule, new Date('2026-04-14T21:59:00'));
     const openAtStart = isRestaurantOpenNow(RestaurantStatus.ACTIVE, true, false, overnightSchedule, new Date('2026-04-14T22:00:00'));
@@ -86,6 +78,56 @@ describe('restaurant utils', () => {
     expect(openAtStart).toBe(true);
     expect(openAfterMidnight).toBe(true);
     expect(afterClose).toBe(false);
+  });
+
+  it('soporta dos turnos por dia (comida + cena nocturna)', () => {
+    const twoShifts = [
+      scheduleBlock(2, '12:00', '16:00', { shiftIndex: 0 }),
+      scheduleBlock(2, '19:00', '01:00', { shiftIndex: 1 }),
+    ];
+
+    const lunch = isRestaurantOpenNow(RestaurantStatus.ACTIVE, true, false, twoShifts, new Date('2026-04-14T13:30:00'));
+    const gap = isRestaurantOpenNow(RestaurantStatus.ACTIVE, true, false, twoShifts, new Date('2026-04-14T17:00:00'));
+    const dinner = isRestaurantOpenNow(RestaurantStatus.ACTIVE, true, false, twoShifts, new Date('2026-04-14T20:00:00'));
+    const inheritedMorning = isRestaurantOpenNow(RestaurantStatus.ACTIVE, true, false, twoShifts, new Date('2026-04-15T00:30:00'));
+    const closedAfterMorning = isRestaurantOpenNow(RestaurantStatus.ACTIVE, true, false, twoShifts, new Date('2026-04-15T02:00:00'));
+
+    expect(lunch).toBe(true);
+    expect(gap).toBe(false);
+    expect(dinner).toBe(true);
+    expect(inheritedMorning).toBe(true);
+    expect(closedAfterMorning).toBe(false);
+  });
+
+  it('getNextOpenTime: elige el siguiente inicio mas cercano entre turnos y dias', () => {
+    const twoShifts = [
+      scheduleBlock(2, '12:00', '16:00', { shiftIndex: 0 }),
+      scheduleBlock(2, '19:00', '01:00', { shiftIndex: 1 }),
+    ];
+
+    // Martes 10:00 -> abre hoy a las 12:00
+    expect(getNextOpenTime(twoShifts, new Date('2026-04-14T10:00:00'))).toBe('hoy a las 12:00 pm');
+    // Martes 17:00 -> siguiente turno de hoy a las 19:00
+    expect(getNextOpenTime(twoShifts, new Date('2026-04-14T17:00:00'))).toBe('hoy a las 7:00 pm');
+    // Martes 02:00 (madrugada) -> abre hoy a las 12:00
+    expect(getNextOpenTime(twoShifts, new Date('2026-04-14T02:00:00'))).toBe('hoy a las 12:00 pm');
+    // Miercoles 02:30 -> no hay turnos el Miercoles, vuelve el Martes siguiente
+    expect(getNextOpenTime(twoShifts, new Date('2026-04-15T02:30:00'))).toBe('el Martes a las 12:00 pm');
+  });
+
+  it('getNextOpenTime: turno solo nocturno y siguiente semana', () => {
+    const overnight = [scheduleBlock(2, '22:00', '02:00')];
+
+    // Martes 10:00 -> abre hoy a las 22:00
+    expect(getNextOpenTime(overnight, new Date('2026-04-14T10:00:00'))).toBe('hoy a las 10:00 pm');
+    // Miercoles 03:00 -> la madrugada ya paso, vuelve el Martes siguiente
+    expect(getNextOpenTime(overnight, new Date('2026-04-15T03:00:00'))).toBe('el Martes a las 10:00 pm');
+  });
+
+  it('getNextOpenTime: sin horario o cerrado todos los dias devuelve null', () => {
+    expect(getNextOpenTime([], new Date('2026-04-14T10:00:00'))).toBeNull();
+    const allClosed = [scheduleBlock(2, '09:00', '18:00', { isClosed: true })];
+    expect(getNextOpenTime(allClosed, new Date('2026-04-14T10:00:00'))).toBeNull();
   });
 
   it('calcula distancia aproximada entre coordenadas', () => {

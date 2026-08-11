@@ -45,14 +45,43 @@ const restaurantProfileSchema = z.object({
   tiktok: z.string().nullable().optional(),
 });
 
-const operatingHoursSchema = z.array(
-  z.object({
-    dayOfWeek: z.number().int().min(0).max(6),
-    openTime: z.string().regex(/^\d{2}:\d{2}$/, 'La hora de apertura debe ser HH:mm.'),
-    closeTime: z.string().regex(/^\d{2}:\d{2}$/, 'La hora de cierre debe ser HH:mm.'),
-    isClosed: z.boolean().default(false),
-  })
-).min(1, 'Debes enviar al menos un horario.');
+const MAX_SHIFTS_PER_DAY = 2;
+
+const operatingHoursSchema = z
+  .array(
+    z.object({
+      dayOfWeek: z.number().int().min(0).max(6),
+      shiftIndex: z.number().int().min(0).max(MAX_SHIFTS_PER_DAY - 1),
+      openTime: z.string().regex(/^\d{2}:\d{2}$/, 'La hora de apertura debe ser HH:mm.'),
+      closeTime: z.string().regex(/^\d{2}:\d{2}$/, 'La hora de cierre debe ser HH:mm.'),
+      isClosed: z.boolean().default(false),
+    })
+  )
+  .min(1, 'Debes enviar al menos un horario.')
+  .superRefine((items, ctx) => {
+    const pairs = new Set<string>();
+    const countsByDay = new Map<number, number>();
+
+    for (const item of items) {
+      countsByDay.set(item.dayOfWeek, (countsByDay.get(item.dayOfWeek) || 0) + 1);
+
+      const pair = `${item.dayOfWeek}:${item.shiftIndex}`;
+      if (pairs.has(pair)) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'No puedes repetir el mismo dia y turno en los horarios.' });
+      }
+      pairs.add(pair);
+
+      if (!item.isClosed && item.openTime === item.closeTime) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'La hora de apertura no puede ser igual a la de cierre en un dia abierto.' });
+      }
+    }
+
+    for (const [day, count] of countsByDay) {
+      if (count > MAX_SHIFTS_PER_DAY) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, message: `No puedes configurar mas de ${MAX_SHIFTS_PER_DAY} turnos para el mismo dia.` });
+      }
+    }
+  });
 
 const categorySchema = z.object({
   name: z.string().min(2, 'El nombre es obligatorio.'),
@@ -652,7 +681,7 @@ export async function registerRestaurantPanelRoutes(fastify: FastifyInstance): P
 
       const items = await prisma.operatingHours.findMany({
         where: { restaurantId: ownedRestaurant.id },
-        orderBy: { dayOfWeek: 'asc' },
+        orderBy: [{ dayOfWeek: 'asc' }, { shiftIndex: 'asc' }],
       });
 
       return reply.send({
@@ -666,17 +695,6 @@ export async function registerRestaurantPanelRoutes(fastify: FastifyInstance): P
 
       if ('error' in parsed) {
         return reply.status(400).send(parsed.error);
-      }
-
-      const uniqueDays = new Set(parsed.data.map((item) => item.dayOfWeek));
-      if (uniqueDays.size !== parsed.data.length) {
-        return reply.status(400).send({
-          success: false,
-          error: {
-            code: 'DUPLICATE_DAY',
-            message: 'No puedes repetir dias en los horarios.',
-          },
-        });
       }
 
       const user = getAuthenticatedUser(request);
@@ -700,6 +718,7 @@ export async function registerRestaurantPanelRoutes(fastify: FastifyInstance): P
           data: parsed.data.map((item) => ({
             restaurantId: ownedRestaurant.id,
             dayOfWeek: item.dayOfWeek,
+            shiftIndex: item.shiftIndex,
             openTime: item.openTime,
             closeTime: item.closeTime,
             isClosed: item.isClosed,
@@ -709,7 +728,7 @@ export async function registerRestaurantPanelRoutes(fastify: FastifyInstance): P
 
       const items = await prisma.operatingHours.findMany({
         where: { restaurantId: ownedRestaurant.id },
-        orderBy: { dayOfWeek: 'asc' },
+        orderBy: [{ dayOfWeek: 'asc' }, { shiftIndex: 'asc' }],
       });
 
       return reply.send({

@@ -17,41 +17,37 @@ export function isRestaurantOpenNow(
   }
 
   const dayOfWeek = currentDate.getDay();
-  const currentTime = `${String(currentDate.getHours()).padStart(2, '0')}:${String(currentDate.getMinutes()).padStart(2, '0')}`;
+  const currentMinutes = currentDate.getHours() * 60 + currentDate.getMinutes();
 
-  const isWithinRange = (openTime: string, closeTime: string): boolean => {
-    // Rango de cero minutos: no abierto.
-    if (openTime === closeTime) {
-      return false;
+  // Turnos del dia actual (puede haber mas de uno).
+  for (const block of operatingHours) {
+    if (block.dayOfWeek !== dayOfWeek || block.isClosed) continue;
+    if (isWithinShift(block.openTime, block.closeTime, currentMinutes)) {
+      return true;
     }
-    // Rangos que cruzan la medianoche (ej. 22:00 - 02:00).
-    if (closeTime < openTime) {
-      return currentTime >= openTime || currentTime < closeTime;
-    }
-    return currentTime >= openTime && currentTime < closeTime;
-  };
-
-  const todaySchedule = operatingHours.find((h) => h.dayOfWeek === dayOfWeek);
-  if (todaySchedule && !todaySchedule.isClosed && isWithinRange(todaySchedule.openTime, todaySchedule.closeTime)) {
-    return true;
   }
 
   // Madrugada heredada del dia anterior (ej. martes 22:00 - miercoles 02:00).
   const yesterdayDay = (dayOfWeek + 6) % 7;
-  const yesterdaySchedule = operatingHours.find((h) => h.dayOfWeek === yesterdayDay);
-  if (
-    yesterdaySchedule &&
-    !yesterdaySchedule.isClosed &&
-    yesterdaySchedule.closeTime < yesterdaySchedule.openTime &&
-    currentTime < yesterdaySchedule.closeTime
-  ) {
-    return true;
+  for (const block of operatingHours) {
+    if (block.dayOfWeek !== yesterdayDay || block.isClosed) continue;
+    if (
+      parseTimeToMinutes(block.closeTime) < parseTimeToMinutes(block.openTime) &&
+      currentMinutes < parseTimeToMinutes(block.closeTime)
+    ) {
+      return true;
+    }
   }
 
   return false;
 }
 
 const DAYS_ES = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+
+function parseTimeToMinutes(time24h: string): number {
+  const [hStr, mStr] = time24h.split(':');
+  return parseInt(hStr, 10) * 60 + parseInt(mStr, 10);
+}
 
 function formatTime12h(time24h: string): string {
   const [hStr, mStr] = time24h.split(':');
@@ -62,40 +58,78 @@ function formatTime12h(time24h: string): string {
   return `${h}:${mStr} ${ampm}`;
 }
 
+/**
+ * Devuelve true cuando `currentMinutes` esta dentro de un turno, soportando
+ * turnos que cruzan la medianoche (ej. 22:00 - 02:00).
+ */
+function isWithinShift(openTime: string, closeTime: string, currentMinutes: number): boolean {
+  const open = parseTimeToMinutes(openTime);
+  const close = parseTimeToMinutes(closeTime);
+
+  // Rango de cero minutos: no abierto.
+  if (open === close) {
+    return false;
+  }
+
+  if (close < open) {
+    return currentMinutes >= open || currentMinutes < close;
+  }
+
+  return currentMinutes >= open && currentMinutes < close;
+}
+
 export function getNextOpenTime(operatingHours: OperatingHours[], currentDate = new Date()): string | null {
   if (!operatingHours || operatingHours.length === 0) return null;
 
   const currentDay = currentDate.getDay();
-  const currentTime = `${String(currentDate.getHours()).padStart(2, '0')}:${String(currentDate.getMinutes()).padStart(2, '0')}`;
+  const currentMinutes = currentDate.getHours() * 60 + currentDate.getMinutes();
 
-  // Check the rest of today
-  const todaySchedule = operatingHours.find((h) => h.dayOfWeek === currentDay);
-  if (todaySchedule && !todaySchedule.isClosed) {
-    if (currentTime < todaySchedule.openTime) {
-      return `hoy a las ${formatTime12h(todaySchedule.openTime)}`;
-    } else if (currentTime >= todaySchedule.openTime && currentTime <= todaySchedule.closeTime) {
-      const [currH, currM] = currentTime.split(':').map(Number);
-      const [openH, openM] = todaySchedule.openTime.split(':').map(Number);
-      const diffMinutes = (currH * 60 + currM) - (openH * 60 + openM);
+  let bestOffset: number | null = null;
+  let bestMinutes = Infinity;
 
-      if (diffMinutes <= 90) {
-        return 'pronto';
+  for (let dayOffset = 0; dayOffset <= 6; dayOffset++) {
+    const day = (currentDay + dayOffset) % 7;
+    const blocks = operatingHours
+      .filter((h) => h.dayOfWeek === day && !h.isClosed)
+      .sort((a, b) => parseTimeToMinutes(a.openTime) - parseTimeToMinutes(b.openTime));
+
+    for (const block of blocks) {
+      const open = parseTimeToMinutes(block.openTime);
+      const close = parseTimeToMinutes(block.closeTime);
+
+      if (open === close) continue;
+
+      // El turno de hoy ya inicio (o ya paso); su siguiente apertura es en otro dia.
+      if (dayOffset === 0 && open <= currentMinutes) {
+        continue;
       }
-      // If > 90 mins have passed, assume they won't open today and fall through to next days
+
+      const candidateMinutes = dayOffset * 1440 + open;
+      if (candidateMinutes < bestMinutes) {
+        bestMinutes = candidateMinutes;
+        bestOffset = dayOffset;
+      }
     }
   }
 
-  // Check the next 6 days
-  for (let i = 1; i <= 6; i++) {
-    const nextDay = (currentDay + i) % 7;
-    const schedule = operatingHours.find((h) => h.dayOfWeek === nextDay);
-    if (schedule && !schedule.isClosed) {
-      if (i === 1) return `mañana a las ${formatTime12h(schedule.openTime)}`;
-      return `el ${DAYS_ES[nextDay]} a las ${formatTime12h(schedule.openTime)}`;
-    }
-  }
+  if (bestOffset === null) return null;
 
-  return null;
+  const day = (currentDay + bestOffset) % 7;
+  const openMinutesOfDay = bestMinutes % 1440;
+  const openTime = formatTime12h(
+    `${String(Math.floor(openMinutesOfDay / 60)).padStart(2, '0')}:${String(openMinutesOfDay % 60).padStart(2, '0')}`
+  );
+
+  if (bestOffset === 0) {
+    if (bestMinutes - currentMinutes <= 90) {
+      return 'pronto';
+    }
+    return `hoy a las ${openTime}`;
+  }
+  if (bestOffset === 1) {
+    return `mañana a las ${openTime}`;
+  }
+  return `el ${DAYS_ES[day]} a las ${openTime}`;
 }
 
 export function getDistanceInKm(

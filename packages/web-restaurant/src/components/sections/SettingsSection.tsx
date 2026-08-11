@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import { requestJson } from '@sadel/shared';
 
 type SuccessResponse<T> = {
@@ -23,6 +23,43 @@ const weekDayOptions = [
   { dayOfWeek: 5, label: 'Viernes' },
   { dayOfWeek: 6, label: 'Sabado' },
 ] as const;
+
+const MAX_SHIFTS_PER_DAY = 2;
+
+type HoursBlock = {
+  dayOfWeek: number;
+  shiftIndex: number;
+  openTime: string;
+  closeTime: string;
+  isClosed: boolean;
+};
+
+function hoursToMinutes(time?: string): number {
+  if (!time) return NaN;
+  const [h, m] = String(time).split(':').map(Number);
+  return h * 60 + m;
+}
+
+function formatTime12h(time24h?: string): string {
+  if (!time24h) return '';
+  const [hStr, mStr] = time24h.split(':');
+  let h = parseInt(hStr, 10);
+  const ampm = h >= 12 ? 'pm' : 'am';
+  h = h % 12;
+  if (h === 0) h = 12;
+  return `${h}:${mStr} ${ampm}`;
+}
+
+function isOvernightShift(block: HoursBlock): boolean {
+  return hoursToMinutes(block.closeTime) < hoursToMinutes(block.openTime);
+}
+
+function formatDaySummary(blocks: HoursBlock[]): string {
+  return blocks
+    .filter((b) => !b.isClosed)
+    .map((b) => `${formatTime12h(b.openTime)} – ${formatTime12h(b.closeTime)}`)
+    .join(' · ');
+}
 
 interface SettingsSectionProps {
   profile: any;
@@ -133,6 +170,75 @@ export const SettingsSection = React.memo(function SettingsSection({
 }: SettingsSectionProps) {
   const currentSettingsTab = settingsTabs.find((t: any) => t.key === activeSettingsTab) ?? settingsTabs[0];
   const [showWhatsappConfirm, setShowWhatsappConfirm] = React.useState(false);
+  const [copySourceDay, setCopySourceDay] = useState(1);
+  const hoursDraft = (operatingHoursDraft ?? []) as HoursBlock[];
+
+  const dayBlocks = (day: number): HoursBlock[] =>
+    hoursDraft.filter((b) => b.dayOfWeek === day).sort((a, b) => a.shiftIndex - b.shiftIndex);
+  const isDayOpen = (day: number) => dayBlocks(day).some((b) => !b.isClosed);
+  const dayHasInvalid = (day: number) => dayBlocks(day).some((b) => !b.isClosed && b.openTime === b.closeTime);
+
+  const hasInvalidHours = hoursDraft.some((b) => !b.isClosed && b.openTime === b.closeTime);
+
+  const toggleDay = (day: number) => {
+    setOperatingHoursDraft((current: HoursBlock[]) => {
+      const dayItems = current.filter((b) => b.dayOfWeek === day);
+      if (dayItems.some((b) => !b.isClosed)) {
+        return current.map((b) => (b.dayOfWeek === day ? { ...b, isClosed: true } : b));
+      }
+      if (dayItems.length === 0) {
+        return [...current, { dayOfWeek: day, shiftIndex: 0, openTime: '09:00', closeTime: '18:00', isClosed: false }];
+      }
+      return current.map((b) => (b.dayOfWeek === day ? { ...b, isClosed: false } : b));
+    });
+  };
+
+  const updateShift = (day: number, shiftIndex: number, patch: Partial<HoursBlock>) => {
+    setOperatingHoursDraft((current: HoursBlock[]) =>
+      current.map((b) => (b.dayOfWeek === day && b.shiftIndex === shiftIndex ? { ...b, ...patch } : b))
+    );
+  };
+
+  const addShift = (day: number) => {
+    setOperatingHoursDraft((current: HoursBlock[]) => {
+      const dayItems = current.filter((b) => b.dayOfWeek === day);
+      if (dayItems.length >= MAX_SHIFTS_PER_DAY) return current;
+      const used = new Set(dayItems.map((b) => b.shiftIndex));
+      let next = 0;
+      while (used.has(next) && next < MAX_SHIFTS_PER_DAY) next += 1;
+      if (next >= MAX_SHIFTS_PER_DAY) return current;
+      const last = dayItems[dayItems.length - 1];
+      return [
+        ...current,
+        {
+          dayOfWeek: day,
+          shiftIndex: next,
+          openTime: last?.openTime ?? '09:00',
+          closeTime: last?.closeTime ?? '18:00',
+          isClosed: false,
+        },
+      ];
+    });
+  };
+
+  const removeShift = (day: number, shiftIndex: number) => {
+    setOperatingHoursDraft((current: HoursBlock[]) =>
+      current.filter((b) => !(b.dayOfWeek === day && b.shiftIndex === shiftIndex))
+    );
+  };
+
+  const applyToAllDays = () => {
+    setOperatingHoursDraft((current: HoursBlock[]) => {
+      const source = current.filter((b) => b.dayOfWeek === copySourceDay);
+      if (source.length === 0) return current;
+      const clones = weekDayOptions
+        .filter((d) => d.dayOfWeek !== copySourceDay)
+        .flatMap((d) => source.map((b) => ({ ...b, dayOfWeek: d.dayOfWeek })));
+      const kept = current.filter((b) => b.dayOfWeek === copySourceDay);
+      return [...kept, ...clones].sort((a, b) => a.dayOfWeek - b.dayOfWeek || a.shiftIndex - b.shiftIndex);
+    });
+    pushToast('info', 'Horario copiado', 'El horario seleccionado se aplico a todos los dias.');
+  };
 
   const isProfileTab = activeSettingsTab === 'perfil' || activeSettingsTab === 'ubicacion' || activeSettingsTab === 'entrega' || activeSettingsTab === 'pagos';
 
@@ -619,87 +725,153 @@ export const SettingsSection = React.memo(function SettingsSection({
             {/* ─── HORARIOS ─── */}
             {activeSettingsTab === 'horarios' && (
               <div className="grid gap-4">
-                <div className="overflow-hidden rounded-[20px] border border-black/5 bg-white shadow-sm">
-                  <div className="hidden md:grid md:grid-cols-[1fr_80px_120px_120px] items-center gap-3 border-b border-black/5 bg-neutral-50 px-5 py-2.5">
-                    <span className="text-[11px] font-bold uppercase tracking-[0.1em] text-neutral-500">Día</span>
-                    <span className="text-center text-[11px] font-bold uppercase tracking-[0.1em] text-neutral-500">Estado</span>
-                    <span className="text-center text-[11px] font-bold uppercase tracking-[0.1em] text-neutral-500">Apertura</span>
-                    <span className="text-center text-[11px] font-bold uppercase tracking-[0.1em] text-neutral-500">Cierre</span>
-                  </div>
-                  <div className="divide-y divide-black/5">
-                    {operatingHoursDraft.map((item: any) => (
-                      <div
-                        key={item.dayOfWeek}
-                        className={`grid grid-cols-2 items-center gap-x-3 gap-y-0.5 px-4 py-2.5 transition-colors md:grid-cols-[1fr_80px_120px_120px] md:gap-3 md:px-5 md:py-2 ${item.isClosed ? 'opacity-50' : 'hover:bg-neutral-50/50'}`}
+                <div className="rounded-[20px] border border-sky-100 bg-sky-50 p-4 text-sm text-sky-700">
+                  <p className="mb-0.5 font-semibold">Horario operativo</p>
+                  <p className="text-sky-700/80">
+                    Configura hasta 2 turnos por dia. Si un turno cruza la medianoche (ej. 7:00 pm a 1:00 am),
+                    lo detectamos y lo mostramos como que cierra al dia siguiente.
+                  </p>
+                  <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">
+                    <label className="flex items-center gap-2 text-[12px] font-semibold text-sky-700/90">
+                      Copiar horario de
+                      <select
+                        value={copySourceDay}
+                        onChange={(e) => setCopySourceDay(Number(e.target.value))}
+                        className="rounded-[12px] border border-sky-200 bg-white px-2.5 py-1.5 text-[13px] font-medium text-neutral-900 outline-none transition-all duration-200 focus:border-sky-400 focus:ring-4 focus:ring-sky-400/20"
                       >
-                        <div className="flex items-center gap-2 md:block">
-                          <p className="text-sm font-semibold text-neutral-900">
-                            {weekDayOptions.find((o) => o.dayOfWeek === item.dayOfWeek)?.label || `Día ${item.dayOfWeek}`}
-                          </p>
-                          <p className={`text-[11px] md:mt-0.5 ${item.isClosed ? 'text-neutral-400' : 'text-emerald-600 font-medium'}`}>
-                            {item.isClosed ? 'Cerrado' : 'Abierto'}
-                          </p>
-                        </div>
-                        <div className="justify-self-end md:justify-self-center">
-                          <button
-                            type="button"
-                            role="switch"
-                            aria-checked={!item.isClosed}
-                            onClick={() =>
-                              setOperatingHoursDraft((current: any) =>
-                                current.map((entry: any) =>
-                                  entry.dayOfWeek === item.dayOfWeek ? { ...entry, isClosed: !entry.isClosed } : entry
-                                )
-                              )
-                            }
-                            className={`relative inline-flex h-[30px] w-[50px] shrink-0 items-center rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-sky-400 focus:ring-offset-1 ${!item.isClosed ? 'bg-sky-500' : 'bg-neutral-300'}`}
-                          >
-                            <span
-                              className={`inline-block h-[24px] w-[24px] rounded-full bg-white shadow-sm ring-0 transition-transform duration-200 ${!item.isClosed ? 'translate-x-[22px]' : 'translate-x-[0px]'}`}
-                            />
-                          </button>
-                        </div>
-                        <div className="col-span-1">
-                          <label className="mb-0.5 block text-[10px] font-bold uppercase tracking-wider text-neutral-400 md:sr-only">Apertura</label>
-                          <input
-                            type="time"
-                            value={item.openTime}
-                            onChange={(e: any) =>
-                              setOperatingHoursDraft((current: any) =>
-                                current.map((entry: any) =>
-                                  entry.dayOfWeek === item.dayOfWeek ? { ...entry, openTime: e.target.value } : entry
-                                )
-                              )
-                            }
-                            disabled={item.isClosed}
-                            className="w-full rounded-[12px] border border-black/5 bg-neutral-100/50 px-2.5 py-1.5 text-[13px] font-medium text-neutral-900 outline-none transition-all duration-200 focus:border-sky-400 focus:bg-white focus:ring-4 focus:ring-sky-400/20 disabled:cursor-not-allowed disabled:opacity-40"
-                          />
-                        </div>
-                        <div className="col-span-1">
-                          <label className="mb-0.5 block text-[10px] font-bold uppercase tracking-wider text-neutral-400 md:sr-only">Cierre</label>
-                          <input
-                            type="time"
-                            value={item.closeTime}
-                            onChange={(e: any) =>
-                              setOperatingHoursDraft((current: any) =>
-                                current.map((entry: any) =>
-                                  entry.dayOfWeek === item.dayOfWeek ? { ...entry, closeTime: e.target.value } : entry
-                                )
-                              )
-                            }
-                            disabled={item.isClosed}
-                            className="w-full rounded-[12px] border border-black/5 bg-neutral-100/50 px-2.5 py-1.5 text-[13px] font-medium text-neutral-900 outline-none transition-all duration-200 focus:border-sky-400 focus:bg-white focus:ring-4 focus:ring-sky-400/20 disabled:cursor-not-allowed disabled:opacity-40"
-                          />
-                        </div>
-                      </div>
-                    ))}
+                        {weekDayOptions.map((opt) => (
+                          <option key={opt.dayOfWeek} value={opt.dayOfWeek}>
+                            {opt.label}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <button
+                      type="button"
+                      onClick={applyToAllDays}
+                      className="rounded-full bg-neutral-950 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-neutral-800"
+                    >
+                      Aplicar a todos los dias
+                    </button>
                   </div>
                 </div>
+
+                <div className="overflow-hidden rounded-[20px] border border-black/5 bg-white shadow-sm">
+                  <div className="divide-y divide-black/5">
+                    {weekDayOptions.map((day) => {
+                      const blocks = dayBlocks(day.dayOfWeek);
+                      const open = isDayOpen(day.dayOfWeek);
+                      const invalid = dayHasInvalid(day.dayOfWeek);
+                      return (
+                        <div key={day.dayOfWeek} className={`px-4 py-3.5 transition-colors md:px-5 ${open ? '' : 'opacity-60'}`}>
+                          <div className="flex items-center justify-between gap-3">
+                            <div className="min-w-0">
+                              <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                                <p className="text-sm font-semibold text-neutral-900">{day.label}</p>
+                                <span className={`text-[11px] font-medium ${open ? 'text-emerald-600' : 'text-neutral-400'}`}>
+                                  {open ? formatDaySummary(blocks) : 'Cerrado'}
+                                </span>
+                              </div>
+                              {invalid && (
+                                <p className="mt-1 text-[11px] font-semibold text-red-600">
+                                  La hora de apertura no puede ser igual a la de cierre.
+                                </p>
+                              )}
+                            </div>
+                            <button
+                              type="button"
+                              role="switch"
+                              aria-checked={open}
+                              aria-label={open ? `Cerrar ${day.label}` : `Abrir ${day.label}`}
+                              onClick={() => toggleDay(day.dayOfWeek)}
+                              className={`relative inline-flex h-[30px] w-[50px] shrink-0 items-center rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-sky-400 focus:ring-offset-1 ${open ? 'bg-sky-500' : 'bg-neutral-300'}`}
+                            >
+                              <span
+                                className={`inline-block h-[24px] w-[24px] rounded-full bg-white shadow-sm ring-0 transition-transform duration-200 ${open ? 'translate-x-[22px]' : 'translate-x-[0px]'}`}
+                              />
+                            </button>
+                          </div>
+
+                          {open && (
+                            <div className="mt-3 grid gap-2.5">
+                              {blocks
+                                .slice()
+                                .sort((a: HoursBlock, b: HoursBlock) => a.shiftIndex - b.shiftIndex)
+                                .map((block: HoursBlock, idx: number) => (
+                                  <div
+                                    key={`${block.dayOfWeek}-${block.shiftIndex}`}
+                                    className="rounded-[16px] border border-black/5 bg-neutral-50/70 p-3"
+                                  >
+                                    <div className="flex flex-wrap items-center justify-between gap-2">
+                                      <div className="flex flex-wrap items-center gap-2">
+                                        <span className="text-[11px] font-bold uppercase tracking-wider text-neutral-400">
+                                          {blocks.length > 1 ? `Turno ${idx + 1}` : 'Horario'}
+                                        </span>
+                                        {isOvernightShift(block) && (
+                                          <span className="rounded-full bg-indigo-50 px-2 py-0.5 text-[10px] font-semibold text-indigo-600">
+                                            Cierra a las {formatTime12h(block.closeTime)} del dia siguiente
+                                          </span>
+                                        )}
+                                      </div>
+                                      {blocks.length > 1 && (
+                                        <button
+                                          type="button"
+                                          onClick={() => removeShift(day.dayOfWeek, block.shiftIndex)}
+                                          className="text-[11px] font-semibold text-red-500 transition hover:text-red-600"
+                                        >
+                                          Quitar turno
+                                        </button>
+                                      )}
+                                    </div>
+                                    <div className="mt-2.5 grid grid-cols-2 gap-3">
+                                      <div>
+                                        <label className="mb-0.5 block text-[10px] font-bold uppercase tracking-wider text-neutral-400">Apertura</label>
+                                        <input
+                                          type="time"
+                                          value={block.openTime}
+                                          onChange={(e: any) => updateShift(day.dayOfWeek, block.shiftIndex, { openTime: e.target.value })}
+                                          className="w-full rounded-[12px] border border-black/5 bg-white px-2.5 py-1.5 text-[13px] font-medium text-neutral-900 outline-none transition-all duration-200 focus:border-sky-400 focus:ring-4 focus:ring-sky-400/20"
+                                        />
+                                      </div>
+                                      <div>
+                                        <label className="mb-0.5 block text-[10px] font-bold uppercase tracking-wider text-neutral-400">Cierre</label>
+                                        <input
+                                          type="time"
+                                          value={block.closeTime}
+                                          onChange={(e: any) => updateShift(day.dayOfWeek, block.shiftIndex, { closeTime: e.target.value })}
+                                          className="w-full rounded-[12px] border border-black/5 bg-white px-2.5 py-1.5 text-[13px] font-medium text-neutral-900 outline-none transition-all duration-200 focus:border-sky-400 focus:ring-4 focus:ring-sky-400/20"
+                                        />
+                                      </div>
+                                    </div>
+                                  </div>
+                                ))}
+                              {blocks.length < MAX_SHIFTS_PER_DAY && (
+                                <button
+                                  type="button"
+                                  onClick={() => addShift(day.dayOfWeek)}
+                                  className="inline-flex w-fit items-center gap-1.5 rounded-full border border-dashed border-neutral-300 px-3.5 py-1.5 text-[12px] font-semibold text-neutral-600 transition hover:border-sky-400 hover:text-sky-600"
+                                >
+                                  + Agregar segundo turno
+                                </button>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {hasInvalidHours && (
+                  <p className="text-[12px] font-medium text-red-600">
+                    Revisa los horarios marcados en rojo antes de guardar.
+                  </p>
+                )}
                 <div className="flex justify-end">
                   <button
                     type="button"
                     onClick={() => void saveOperatingHours()}
-                    disabled={savingOperatingHours}
+                    disabled={savingOperatingHours || hasInvalidHours}
                     className="rounded-full bg-neutral-950 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-neutral-800 disabled:bg-neutral-300"
                   >
                     {savingOperatingHours ? 'Guardando horarios...' : 'Guardar horarios'}

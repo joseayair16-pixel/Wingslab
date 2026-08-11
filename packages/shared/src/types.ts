@@ -67,6 +67,7 @@ export enum RestaurantStatus {
 
 export interface OperatingHours {
   dayOfWeek: number; // 0-6
+  shiftIndex?: number; // 0 = primer turno, 1 = segundo turno
   openTime: string; // HH:mm
   closeTime: string; // HH:mm
   isClosed: boolean;

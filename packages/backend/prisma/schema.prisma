@@ -244,15 +244,16 @@ model OperatingHours {
   restaurantId String
   restaurant   Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
 
-  dayOfWeek Int // 0-6
-  openTime  String // HH:mm
-  closeTime String // HH:mm
-  isClosed  Boolean @default(false)
+  dayOfWeek  Int // 0-6
+  shiftIndex Int     @default(0) // 0 = primer turno, 1 = segundo turno
+  openTime   String // HH:mm
+  closeTime  String // HH:mm
+  isClosed   Boolean @default(false)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@unique([restaurantId, dayOfWeek])
+  @@unique([restaurantId, dayOfWeek, shiftIndex])
 }
 
 // ============== Menu Categories ==============
