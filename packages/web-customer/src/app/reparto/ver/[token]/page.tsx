@@ -777,7 +777,7 @@ export default function DeliveryTicketPage({ params }: PageProps) {
                                 ? 'bg-emerald-950/20 text-emerald-400 border-emerald-900/30' 
                                 : 'bg-emerald-50 text-emerald-700 border-emerald-200/50'
                           }`}>
-                            {isCash ? `💵 Cobrar: $${deliv.data.totalAmount.toFixed(0)}` : '💳 Pagado en línea'}
+                            {isCash ? `💵 Cobrar: $${deliv.data.totalAmount.toFixed(0)}` : deliv.data.paymentMethod === 'TRANSFER' ? '🏦 Pagado con transferencia' : '💳 Pagado en línea'}
                           </span>
                         </div>
 
@@ -1056,6 +1056,7 @@ export default function DeliveryTicketPage({ params }: PageProps) {
   const googleMapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(addressText)}`;
 
   const isCash = currentTicket.paymentMethod === 'CASH';
+  const isTransfer = currentTicket.paymentMethod === 'TRANSFER';
 
   // Mapa estático de Google (una sola imagen, ~15KB)
   const staticMapUrl = addressObj.latitude && addressObj.longitude
@@ -1085,7 +1086,7 @@ export default function DeliveryTicketPage({ params }: PageProps) {
           </div>
           <div className="flex justify-between text-xs py-1">
             <span className={textSecondary}>Pago:</span>
-            <span className={`font-semibold ${textPrimary}`}>{isCash ? 'Efectivo (Cobrado)' : 'En línea'}</span>
+            <span className={`font-semibold ${textPrimary}`}>{isCash ? 'Efectivo (Cobrado)' : isTransfer ? 'Transferencia' : 'En línea'}</span>
           </div>
           <div className={`flex justify-between text-xs py-1 border-t mt-1 pt-1.5 ${divider}`}>
             <span className={textSecondary}>Total:</span>
@@ -1555,13 +1556,13 @@ export default function DeliveryTicketPage({ params }: PageProps) {
           <div className="flex items-center justify-between">
             <div>
               <p className={`text-[10px] font-black uppercase tracking-widest ${isCash ? (darkMode ? 'text-amber-400' : 'text-amber-700') : (darkMode ? 'text-emerald-400' : 'text-emerald-700')}`}>
-                {isCash ? 'Cobrar en efectivo' : 'Pago confirmado'}
+                {isCash ? 'Cobrar en efectivo' : isTransfer ? 'Pagado por transferencia' : 'Pago confirmado'}
               </p>
               <p className={`text-2xl font-black tracking-tight mt-1 ${isCash ? (darkMode ? 'text-amber-300' : 'text-amber-950') : (darkMode ? 'text-emerald-300' : 'text-emerald-950')}`}>
                 ${currentTicket.totalAmount.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
               </p>
             </div>
-            <span className="text-3xl">{isCash ? '💵' : '💳'}</span>
+            <span className="text-3xl">{isCash ? '💵' : isTransfer ? '🏦' : '💳'}</span>
           </div>
         </div>
 
