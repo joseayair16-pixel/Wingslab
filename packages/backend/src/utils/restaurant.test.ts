@@ -63,6 +63,31 @@ describe('restaurant utils', () => {
     expect(paused).toBe(false);
   });
 
+  it('maneja rangos que cruzan la medianoche', () => {
+    const overnightSchedule = [
+      {
+        id: '1',
+        restaurantId: 'r1',
+        dayOfWeek: 2,
+        openTime: '22:00',
+        closeTime: '02:00',
+        isClosed: false,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      },
+    ];
+
+    const beforeOpen = isRestaurantOpenNow(RestaurantStatus.ACTIVE, true, false, overnightSchedule, new Date('2026-04-14T21:59:00'));
+    const openAtStart = isRestaurantOpenNow(RestaurantStatus.ACTIVE, true, false, overnightSchedule, new Date('2026-04-14T22:00:00'));
+    const openAfterMidnight = isRestaurantOpenNow(RestaurantStatus.ACTIVE, true, false, overnightSchedule, new Date('2026-04-15T01:30:00'));
+    const afterClose = isRestaurantOpenNow(RestaurantStatus.ACTIVE, true, false, overnightSchedule, new Date('2026-04-15T02:30:00'));
+
+    expect(beforeOpen).toBe(false);
+    expect(openAtStart).toBe(true);
+    expect(openAfterMidnight).toBe(true);
+    expect(afterClose).toBe(false);
+  });
+
   it('calcula distancia aproximada entre coordenadas', () => {
     const distance = getDistanceInKm(
       { latitude: 19.4326, longitude: -99.1332 },

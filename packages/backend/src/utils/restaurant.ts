@@ -4,14 +4,51 @@ export function isRestaurantOpenNow(
   status: RestaurantStatus,
   isAcceptingOrders: boolean,
   isPaused: boolean,
-  _operatingHours?: OperatingHours[],
-  _currentDate = new Date()
+  operatingHours?: OperatingHours[],
+  currentDate = new Date()
 ): boolean {
   if (status !== RestaurantStatus.ACTIVE || !isAcceptingOrders || isPaused) {
     return false;
   }
-  
-  return true;
+
+  // Sin horario configurado no hay restriccion de tiempo (restaurantes antiguos).
+  if (!operatingHours || operatingHours.length === 0) {
+    return true;
+  }
+
+  const dayOfWeek = currentDate.getDay();
+  const currentTime = `${String(currentDate.getHours()).padStart(2, '0')}:${String(currentDate.getMinutes()).padStart(2, '0')}`;
+
+  const isWithinRange = (openTime: string, closeTime: string): boolean => {
+    // Rango de cero minutos: no abierto.
+    if (openTime === closeTime) {
+      return false;
+    }
+    // Rangos que cruzan la medianoche (ej. 22:00 - 02:00).
+    if (closeTime < openTime) {
+      return currentTime >= openTime || currentTime < closeTime;
+    }
+    return currentTime >= openTime && currentTime < closeTime;
+  };
+
+  const todaySchedule = operatingHours.find((h) => h.dayOfWeek === dayOfWeek);
+  if (todaySchedule && !todaySchedule.isClosed && isWithinRange(todaySchedule.openTime, todaySchedule.closeTime)) {
+    return true;
+  }
+
+  // Madrugada heredada del dia anterior (ej. martes 22:00 - miercoles 02:00).
+  const yesterdayDay = (dayOfWeek + 6) % 7;
+  const yesterdaySchedule = operatingHours.find((h) => h.dayOfWeek === yesterdayDay);
+  if (
+    yesterdaySchedule &&
+    !yesterdaySchedule.isClosed &&
+    yesterdaySchedule.closeTime < yesterdaySchedule.openTime &&
+    currentTime < yesterdaySchedule.closeTime
+  ) {
+    return true;
+  }
+
+  return false;
 }
 
 const DAYS_ES = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];

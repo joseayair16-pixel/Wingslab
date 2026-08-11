@@ -13311,7 +13311,48 @@ async function persistUploadedImageSource(params: {
 }
 
 function isCurrentlyWithinOperatingHours(operatingHours?: any[]) {
-  return true;
+  if (!operatingHours || operatingHours.length === 0) {
+    return true;
+  }
+
+  const now = new Date();
+  const dayOfWeek = now.getDay();
+  const currentMinutes = now.getHours() * 60 + now.getMinutes();
+  const toMinutes = (time?: string) => {
+    if (!time) return NaN;
+    const [h, m] = String(time).split(':').map(Number);
+    return h * 60 + m;
+  };
+
+  const isWithinRange = (schedule: any) => {
+    const openMinutes = toMinutes(schedule.openTime);
+    const closeMinutes = toMinutes(schedule.closeTime);
+    if (openMinutes === closeMinutes) {
+      return false;
+    }
+    if (closeMinutes < openMinutes) {
+      return currentMinutes >= openMinutes || currentMinutes < closeMinutes;
+    }
+    return currentMinutes >= openMinutes && currentMinutes < closeMinutes;
+  };
+
+  const todaySchedule = operatingHours.find((h) => h.dayOfWeek === dayOfWeek);
+  if (todaySchedule && !todaySchedule.isClosed && isWithinRange(todaySchedule)) {
+    return true;
+  }
+
+  const yesterdayDay = (dayOfWeek + 6) % 7;
+  const yesterdaySchedule = operatingHours.find((h) => h.dayOfWeek === yesterdayDay);
+  if (
+    yesterdaySchedule &&
+    !yesterdaySchedule.isClosed &&
+    toMinutes(yesterdaySchedule.closeTime) < toMinutes(yesterdaySchedule.openTime) &&
+    currentMinutes < toMinutes(yesterdaySchedule.closeTime)
+  ) {
+    return true;
+  }
+
+  return false;
 }
 
 function getRestaurantOperationalStatusLabel(status?: string, isAcceptingOrders?: boolean, isPaused?: boolean, isWithinHours = true) {
