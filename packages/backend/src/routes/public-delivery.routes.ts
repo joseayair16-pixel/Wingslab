@@ -339,6 +339,18 @@ export async function registerPublicDeliveryRoutes(fastify: FastifyInstance): Pr
         },
       });
 
+      // Persistir la llegada a la puerta del comensal para que la app del cliente
+      // pueda reconstruir el modal "Tu repartidor ha llegado" al abrir/volver a la
+      // pestaña aunque el evento de socket se hubiera perdido (app cerrada o en
+      // segundo plano). Guardado para no pisar el ancla de los umbrales de
+      // entrega abandonada.
+      if (!order.driverArrivedAtCustomer) {
+        await prisma.order.update({
+          where: { id: order.id },
+          data: { driverArrivedAtCustomer: new Date() },
+        });
+      }
+
             // 2. Notificaciones
       // Sockets
       emitNotification(
@@ -591,6 +603,25 @@ export async function registerPublicDeliveryRoutes(fastify: FastifyInstance): Pr
               orderId: order.id,
             }
           );
+
+          // Push al comensal: la entrega va en camino
+          try {
+            await sendPushNotification(order.customer.user.id, {
+              title: '¡Tu pedido va en camino! 🛵',
+              body: `Tu pedido va en camino y será entregado por ${order.supportRestaurant?.name || 'un restaurante aliado'}.`,
+              icon: '/app-icon-192.png',
+              badge: '/badge.png',
+              vibrate: [500, 100, 500, 100, 500],
+              requireInteraction: true,
+              data: {
+                orderId: order.id,
+                event: 'order:in-transit',
+                url: `/?orderId=${order.id}`,
+              },
+            });
+          } catch (pushErr) {
+            request.log.error(pushErr as any, '[Push] Error al notificar en camino al comensal (apoyo)');
+          }
 
           return reply.send({
             success: true,

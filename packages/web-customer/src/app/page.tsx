@@ -135,6 +135,7 @@ type CustomerOrderListItem = {
   paymentMethod: string;
   createdAt: string;
   estimatedDeliveryTime: string;
+  driverArrivedAtCustomer?: string | null;
   review?: { id: string } | null;
   restaurant: {
     id: string;
@@ -173,6 +174,7 @@ type CustomerOrderDetail = {
   handoverPin?: string | null;
   deliveryPin?: string | null;
   pickupPin?: string | null;
+  driverArrivedAtCustomer?: string | null;
   createdAt: string;
   isSecondInRoute?: boolean;
   batchId?: string | null;
@@ -1179,6 +1181,43 @@ export default function Home() {
       localStorage.removeItem('sadel_persistent_modal');
     }
   }, [apiBase, token]);
+
+  // Reabrir el modal "Tu repartidor ha llegado" desde los datos del pedido.
+  // Cubre el caso en que la app estaba cerrada o la pestaña en segundo plano y
+  // el evento de socket se perdió: si el repartidor ya llegó a la puerta
+  // (driverArrivedAtCustomer) y el comensal aún no pulsó "Entendido", el modal
+  // debe seguir apareciendo hasta que lo reconozca.
+  useEffect(() => {
+    if (!token) return;
+    if (isDriverArrivedModalOpen) return;
+    if (!orders || orders.length === 0) return;
+
+    const arrivedOrderItem = orders.find(
+      (o) => o.driverArrivedAtCustomer && o.status === 'IN_TRANSIT'
+    );
+    if (!arrivedOrderItem) return;
+
+    try {
+      if (localStorage.getItem(`sadel_driver_arrived_ack_${arrivedOrderItem.id}`) === 'true') return;
+    } catch {}
+
+    requestJson<{ success: true; data: CustomerOrderDetail }>({
+      apiBase,
+      path: `/me/pedidos/${arrivedOrderItem.id}`,
+      token,
+    })
+      .then((detailRes) => {
+        if (!detailRes.success || !detailRes.data) return;
+        if (
+          normalizeOrderStatusValue(detailRes.data.status) === 'IN_TRANSIT' &&
+          detailRes.data.driverArrivedAtCustomer
+        ) {
+          setArrivedOrder(detailRes.data);
+          setIsDriverArrivedModalOpen(true);
+        }
+      })
+      .catch(() => {});
+  }, [orders, token, apiBase, isDriverArrivedModalOpen]);
 
   useEffect(() => {
     if (!isDetailModalOpen) {
@@ -6282,6 +6321,9 @@ export default function Home() {
                   onClick={() => {
                     setIsDriverArrivedModalOpen(false);
                     setArrivedOrder(null);
+                    if (arrivedOrder) {
+                      try { localStorage.setItem(`sadel_driver_arrived_ack_${arrivedOrder.id}`, 'true'); } catch {}
+                    }
                     localStorage.removeItem('sadel_driver_arrived_order');
                     localStorage.removeItem('sadel_persistent_modal');
                   }}

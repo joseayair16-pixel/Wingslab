@@ -1225,9 +1225,25 @@ export default function DeliveryTicketPage({ params }: PageProps) {
                 </div>
               </div>
               <p className="text-sm font-medium mt-3 opacity-95">
-                Notificamos a <strong>{pickupName}</strong> que ya llegaste. Entrégale lo necesario y espera
+                Notificamos a <strong>{pickupName}</strong> que llegaste por el pedido{' '}
+                <strong>#{currentTicket.orderReference}</strong> de{' '}
+                <strong>{currentTicket.customer.name}</strong>. Entrégale lo necesario y espera
                 a que confirme la entrega para iniciar el reparto.
               </p>
+            </div>
+
+            {/* Resumen del pedido: número y comensal */}
+            <div className={`mt-4 rounded-[28px] border p-5 shadow-[0_4px_24px_rgba(0,0,0,0.015)] ${cardBg} ${cardBorder}`}>
+              <div className="flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <p className={`text-[10px] font-black uppercase tracking-widest ${textTertiary}`}>Número de pedido</p>
+                  <p className={`mt-1 text-lg font-black tracking-tight truncate ${textPrimary}`}>#{currentTicket.orderReference}</p>
+                </div>
+                <div className="min-w-0 text-right">
+                  <p className={`text-[10px] font-black uppercase tracking-widest ${textTertiary}`}>Comensal</p>
+                  <p className={`mt-1 text-lg font-black tracking-tight truncate ${textPrimary}`}>{currentTicket.customer.name}</p>
+                </div>
+              </div>
             </div>
 
             {/* PIN de entrega (transferencia): lo valida el restaurante origen */}
@@ -1239,9 +1255,17 @@ export default function DeliveryTicketPage({ params }: PageProps) {
                 </p>
                 <p className={`mt-3 text-xs leading-relaxed ${textSecondary}`}>
                   Muéstrale este código al restaurante <strong className={textPrimary}>{pickupName}</strong>.
-                  Ellos lo validarán para liberar la entrega y te pagarán el envío
-                  (<strong className={textPrimary}> ${currentTicket.deliveryFee ? `$${currentTicket.deliveryFee.toFixed(2)}` : 'la tarifa de envío'}</strong>).
+                  Ellos lo validarán para liberar la entrega y te pagarán el{' '}
+                  <strong className={textPrimary}>envío</strong> en efectivo.
                 </p>
+                <div className={`mt-3 rounded-2xl border px-4 py-3 flex items-center justify-between ${
+                  darkMode ? 'border-emerald-800/50 bg-emerald-950/30' : 'border-emerald-200 bg-emerald-50'
+                }`}>
+                  <span className={`text-[10px] font-black uppercase tracking-widest ${textTertiary}`}>Cobrarás por el envío</span>
+                  <span className={`text-lg font-black ${darkMode ? 'text-emerald-300' : 'text-emerald-700'}`}>
+                    {currentTicket.deliveryFee ? `$${currentTicket.deliveryFee.toFixed(2)}` : 'Tarifa de envío'}
+                  </span>
+                </div>
               </div>
             )}
 
@@ -1250,9 +1274,9 @@ export default function DeliveryTicketPage({ params }: PageProps) {
               <div className={`mt-4 rounded-[28px] border p-5 shadow-[0_4px_24px_rgba(0,0,0,0.015)] ${cardBg} ${cardBorder}`}>
                 <p className={`text-[10px] font-black uppercase tracking-widest ${textTertiary}`}>Cobro en la recogida</p>
                 <p className={`mt-2 text-xs leading-relaxed ${textSecondary}`}>
-                  El restaurante <strong className={textPrimary}>{pickupName}</strong> cobrará solo el
-                  <strong className={textPrimary}> total del pedido sin el envío</strong>. El envío lo cobras
-                  tú en efectivo al comensal. Espera su confirmación para iniciar la entrega.
+                  El comensal te paga en <strong className={textPrimary}>efectivo el total al entregar</strong>.
+                  De ese cobro te quedas <strong className={textPrimary}>{currentTicket.deliveryFee ? `$${currentTicket.deliveryFee.toFixed(2)}` : 'la tarifa'}</strong> por el envío;
+                  el resto es del restaurante. Aquí solo recoges el pedido.
                 </p>
               </div>
             )}
@@ -1323,8 +1347,9 @@ export default function DeliveryTicketPage({ params }: PageProps) {
               </p>
             ) : (
               <p className={`mt-2 text-xs leading-relaxed ${textSecondary}`}>
-                El comensal ya pagó en línea (incluido el envío). Al recoger el pedido, el restaurante te entrega en efectivo el envío:
-                <strong className={textPrimary}> ${currentTicket.deliveryFee ? `$${currentTicket.deliveryFee.toFixed(2)}` : 'la tarifa de envío'}</strong>.
+                El comensal ya pagó en línea (incluido el envío). Al recoger el pedido, el restaurante
+                te entrega en efectivo el envío:{' '}
+                <strong className={textPrimary}>{currentTicket.deliveryFee ? `$${currentTicket.deliveryFee.toFixed(2)}` : 'la tarifa de envío'}</strong>.
               </p>
             )}
             {currentTicket.supportRestaurant?.name && (
