@@ -8518,6 +8518,11 @@ export default function Home() {
                                         <span className="text-[9px] font-bold text-emerald-600 bg-emerald-100 px-1.5 py-0.5 rounded-full">
                                           {isHelper ? 'Entrega de apoyo' : 'Apoyo a red'}
                                         </span>
+                                        {!isHelper && driverArrivedOrders[order.id] && order.status === 'READY' && (
+                                          <span className="text-[9px] font-bold text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded-full">
+                                            🛵 Repartidor en tienda
+                                          </span>
+                                        )}
                                       </span>
                                     ) : hasOwnDelivery ? (
                                       <span className="font-medium text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-100/50">
@@ -8803,11 +8808,11 @@ export default function Home() {
                                         <>
                                           <p className="text-xs font-semibold uppercase tracking-[0.22em] text-amber-600">
                                             {supportDelivery
-                                              ? (order.status === 'DELIVERED' || order.cashPaymentConfirmedAt ? 'Cobrado al restaurante aliado' : 'Cobrar al restaurante que entrega')
+                                              ? (['DELIVERED', 'PICKED_UP', 'IN_TRANSIT'].includes(order.status) || order.cashPaymentConfirmedAt ? 'Cobrado al restaurante aliado' : 'Cobrar al restaurante que entrega')
                                               : (order.status === 'DELIVERED' || order.cashPaymentConfirmedAt ? 'Cobrado al repartidor' : 'Cobrar al repartidor')}
                                           </p>
                                           <p className="text-xl font-bold text-neutral-950">{formatCurrency(foodAmount)}</p>
-                                          {order.status !== 'DELIVERED' && !order.cashPaymentConfirmedAt && (
+                                          {!['PICKED_UP', 'IN_TRANSIT', 'DELIVERED'].includes(order.status) && !order.cashPaymentConfirmedAt && (
                                             supportDelivery
                                               ? <p className="text-[10px] text-neutral-500">Entregar al aliado al recoger; él cobra el total al cliente y le queda el envío.</p>
                                               : <p className="text-[10px] text-neutral-500">El repartidor cobra el total al cliente.</p>
@@ -8817,39 +8822,49 @@ export default function Home() {
                                     }
 
                                     if (order.paymentMethod === 'TRANSFER') {
+                                      const handedOver = ['PICKED_UP', 'IN_TRANSIT', 'DELIVERED'].includes(order.status);
                                       return (
                                         <>
                                           <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-sky-600">
                                             Recibido por transferencia
                                           </p>
                                           <p className="text-xl font-bold text-neutral-950">{formatCurrency(order.totalAmount)}</p>
-                                          {order.status !== 'DELIVERED' && !order.deliveredByRestaurant && (order as any).fulfillmentType !== 'PICKUP' && (
-                                            <div className="mt-2 rounded-xl border border-dashed border-rose-200 bg-rose-50/60 px-3 py-2">
-                                              <div className="flex items-center justify-between">
-                                                {order.supportRestaurantId ? (
-                                                  <>
+                                          {order.supportRestaurantId ? (
+                                            handedOver ? (
+                                              <div className="mt-2 rounded-xl border border-emerald-200 bg-emerald-50/60 px-3 py-2">
+                                                <div className="flex items-center justify-between">
+                                                  <span className="text-[11px] font-semibold text-emerald-600">✅ Ya pagado al repartidor de apoyo</span>
+                                                  <span className="text-sm font-bold text-emerald-700">{formatCurrency(order.deliveryFee)}</span>
+                                                </div>
+                                                <p className="text-[9px] text-emerald-500 mt-0.5 leading-tight">
+                                                  El total del pedido cuenta como ingreso del restaurante aliado; él gana solo el envío.
+                                                </p>
+                                              </div>
+                                            ) : (
+                                              (order as any).fulfillmentType !== 'PICKUP' && (
+                                                <div className="mt-2 rounded-xl border border-dashed border-rose-200 bg-rose-50/60 px-3 py-2">
+                                                  <div className="flex items-center justify-between">
                                                     <span className="text-[11px] font-semibold text-rose-600">👉 Pagar al restaurante aliado</span>
                                                     <span className="text-sm font-bold text-rose-700">{formatCurrency(order.deliveryFee)}</span>
-                                                  </>
-                                                ) : (
-                                                  <>
-                                                    <span className="text-[11px] font-semibold text-rose-600">👉 Pagar al repartidor</span>
-                                                    <span className="text-sm font-bold text-rose-700">{formatCurrency(order.deliveryFee)}</span>
-                                                  </>
-                                                )}
+                                                  </div>
+                                                  <p className="text-[9px] text-rose-400 mt-0.5 leading-tight">
+                                                    Entregar en efectivo al restaurante aliado al recoger el pedido
+                                                  </p>
+                                                </div>
+                                              )
+                                            )
+                                          ) : (
+                                            !handedOver && !order.deliveredByRestaurant && (order as any).fulfillmentType !== 'PICKUP' && (
+                                              <div className="mt-2 rounded-xl border border-dashed border-rose-200 bg-rose-50/60 px-3 py-2">
+                                                <div className="flex items-center justify-between">
+                                                  <span className="text-[11px] font-semibold text-rose-600">👉 Pagar al repartidor</span>
+                                                  <span className="text-sm font-bold text-rose-700">{formatCurrency(order.deliveryFee)}</span>
+                                                </div>
+                                                <p className="text-[9px] text-rose-400 mt-0.5 leading-tight">
+                                                  Entregar en efectivo al repartidor al recoger el pedido
+                                                </p>
                                               </div>
-                                              <p className="text-[9px] text-rose-400 mt-0.5 leading-tight">
-                                                {order.supportRestaurantId
-                                                  ? 'Entregar en efectivo al restaurante aliado al recoger el pedido'
-                                                  : 'Entregar en efectivo al repartidor al recoger el pedido'}
-                                              </p>
-                                            </div>
-                                          )}
-                                          {order.status === 'DELIVERED' && order.supportRestaurantId && (
-                                            <p className="text-[10px] text-emerald-600 font-medium flex items-center gap-1 mt-1">
-                                              <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                                              {formatCurrency(order.deliveryFee)} de envío para el restaurante que entregó
-                                            </p>
+                                            )
                                           )}
                                         </>
                                       );
@@ -8878,7 +8893,7 @@ export default function Home() {
                                     </button>
                                   ) : null}
 
-                                  {order.status === 'IN_TRANSIT' && !isHelper && (hasOwnDelivery || !order.driver) && (
+                                  {order.status === 'IN_TRANSIT' && !isHelper && !order.supportRestaurantId && (hasOwnDelivery || !order.driver) && (
                                     <button
                                       type="button"
                                       onClick={async () => {

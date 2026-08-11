@@ -407,7 +407,7 @@ export default function DeliveryTicketPage({ params }: PageProps) {
         setDeliveries(prev => {
           const newList = prev.map(item => {
             if (item.token === targetToken) {
-              return { ...item, pickedUp: true };
+              return { ...item, pickedUp: true, data: { ...item.data, status: 'IN_TRANSIT' } };
             }
             return item;
           });
@@ -940,6 +940,24 @@ export default function DeliveryTicketPage({ params }: PageProps) {
                             <span>¡Llegué al restaurante!</span>
                           </button>
                           )
+                        ) : deliv.data.isSupportDelivery && deliv.pickedUp && deliv.data.status === 'PICKED_UP' ? (
+                          <button
+                            type="button"
+                            disabled={notifying}
+                            onClick={(e) => { e.stopPropagation(); void handleLlegueRestauranteForToken(deliv.token); }}
+                            className={`flex items-center justify-center gap-1.5 rounded-2xl py-2.5 px-4 text-xs font-bold transition-all active:scale-95 active-scale disabled:opacity-50 border shadow-sm ${
+                              darkMode 
+                                ? 'bg-emerald-400/10 text-emerald-300 border-emerald-400/20 hover:bg-emerald-400/20' 
+                                : 'bg-emerald-50 text-emerald-600 border-emerald-200 hover:bg-emerald-100'
+                            }`}
+                          >
+                            {notifying ? (
+                              <div className={`h-3.5 w-3.5 animate-spin rounded-full border-2 ${darkMode ? 'border-emerald-300/40 border-t-emerald-300' : 'border-emerald-500/30 border-t-emerald-600'}`} />
+                            ) : (
+                              <span className="text-sm">🚀</span>
+                            )}
+                            <span>Iniciar entrega</span>
+                          </button>
                         ) : !deliv.arrived ? (
                           <button
                             type="button"
@@ -1588,6 +1606,29 @@ export default function DeliveryTicketPage({ params }: PageProps) {
               </svg>
               <span>Llegada notificada</span>
             </div>
+          ) : currentTicket.isSupportDelivery && currentPickedUp && currentTicket.status === 'PICKED_UP' ? (
+            <button
+              type="button"
+              disabled={notifying}
+              onClick={() => { triggerHaptic([40]); void handleLlegueRestaurante(); }}
+              className={`w-full flex items-center justify-center gap-2 rounded-2xl py-3.5 text-xs font-bold transition-all active:scale-95 active-scale disabled:opacity-50 border shadow-sm ${
+                darkMode 
+                  ? 'bg-emerald-400/10 text-emerald-300 border border-emerald-400/20 hover:bg-emerald-400/20' 
+                  : 'bg-emerald-50 text-emerald-600 border border-emerald-200 hover:bg-emerald-100'
+              }`}
+            >
+              {notifying ? (
+                <>
+                  <div className={`h-4 w-4 animate-spin rounded-full border-2 ${darkMode ? 'border-emerald-300/40 border-t-emerald-300' : 'border-emerald-500/30 border-t-emerald-600'}`} />
+                  <span>Iniciando entrega…</span>
+                </>
+              ) : (
+                <>
+                  <span className="text-sm">🚀</span>
+                  <span>Iniciar entrega</span>
+                </>
+              )}
+            </button>
           ) : (
             <button
               type="button"
