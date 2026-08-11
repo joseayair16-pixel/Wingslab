@@ -723,14 +723,24 @@ export const SettingsSection = React.memo(function SettingsSection({
             )}
 
             {/* ─── HORARIOS ─── */}
-            {activeSettingsTab === 'horarios' && (
+            {activeSettingsTab === 'horarios' && (() => {
+              const openDaysCount = weekDayOptions.filter((d) => isDayOpen(d.dayOfWeek)).length;
+              return (
               <div className="grid gap-4">
                 <div className="rounded-[20px] border border-sky-100 bg-sky-50 p-4 text-sm text-sky-700">
-                  <p className="mb-0.5 font-semibold">Horario operativo</p>
-                  <p className="text-sky-700/80">
-                    Configura hasta 2 turnos por dia. Si un turno cruza la medianoche (ej. 7:00 pm a 1:00 am),
-                    lo detectamos y lo mostramos como que cierra al dia siguiente.
-                  </p>
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="mb-0.5 font-semibold">Horario operativo</p>
+                      <p className="text-sky-700/80">
+                        Configura hasta 2 turnos por dia. Si un turno cruza la medianoche (ej. 7:00 pm a 1:00 am),
+                        lo detectamos y lo mostramos como que cierra al dia siguiente.
+                      </p>
+                    </div>
+                    <span className="inline-flex items-center gap-1.5 rounded-full bg-white/80 px-3 py-1 text-[11px] font-bold text-sky-700 ring-1 ring-sky-200">
+                      <span className="h-1.5 w-1.5 rounded-full bg-sky-500" />
+                      {openDaysCount} de {weekDayOptions.length} días al servicio
+                    </span>
+                  </div>
                   <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">
                     <label className="flex items-center gap-2 text-[12px] font-semibold text-sky-700/90">
                       Copiar horario de
@@ -757,13 +767,13 @@ export const SettingsSection = React.memo(function SettingsSection({
                 </div>
 
                 <div className="overflow-hidden rounded-[20px] border border-black/5 bg-white shadow-sm">
-                  <div className="divide-y divide-black/5">
+                  <div className="divide-y divide-black/5 md:grid md:grid-cols-2 md:divide-y-0 md:gap-3 md:p-3">
                     {weekDayOptions.map((day) => {
                       const blocks = dayBlocks(day.dayOfWeek);
                       const open = isDayOpen(day.dayOfWeek);
                       const invalid = dayHasInvalid(day.dayOfWeek);
                       return (
-                        <div key={day.dayOfWeek} className={`px-4 py-3.5 transition-colors md:px-5 ${open ? '' : 'opacity-60'}`}>
+                        <div key={day.dayOfWeek} className={`px-4 py-3.5 transition-colors md:h-full md:rounded-[16px] md:border md:border-black/5 md:bg-neutral-50/50 md:px-5 md:py-4 md:hover:bg-neutral-50 ${open ? '' : 'opacity-60'}`}>
                           <div className="flex items-center justify-between gap-3">
                             <div className="min-w-0">
                               <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
@@ -878,7 +888,8 @@ export const SettingsSection = React.memo(function SettingsSection({
                   </button>
                 </div>
               </div>
-            )}
+              );
+            })()}
 
             {/* ─── PAGOS ─── */}
             {activeSettingsTab === 'pagos' && (
