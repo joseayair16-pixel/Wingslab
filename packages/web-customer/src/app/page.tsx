@@ -2222,6 +2222,13 @@ export default function Home() {
       localStorage.setItem('exploringZone', '1');
     } catch (e) {}
     loadDashboard();
+    if (typeof window !== 'undefined') {
+      try {
+        window.scrollTo({ top: 0, left: 0, behavior: 'smooth' });
+      } catch {
+        window.scrollTo(0, 0);
+      }
+    }
   }, [loadDashboard]);
 
   const handleResetZone = useCallback(() => {
