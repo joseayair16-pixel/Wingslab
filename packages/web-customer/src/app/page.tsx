@@ -131,6 +131,7 @@ type CustomerOrderListItem = {
   orderReference: string;
   dailyCounter?: number;
   status: OrderStatus;
+  cancelledBy?: string | null;
   totalAmount: number;
   paymentMethod: string;
   createdAt: string;
@@ -231,6 +232,7 @@ type CustomerOrderDetail = {
   }>;
   paymentProofUrl?: string | null;
   cancellationRequestedAt?: string | null;
+  cancellationReason?: string | null;
   cancelledBy?: string | null;
   fulfillmentType?: 'DELIVERY' | 'PICKUP';
   scheduledDeliveryAt?: string | null;
@@ -410,6 +412,7 @@ const liveEvents = [
   'order:completed',
   'order:cancellation-approved',
   'order:cancellation-rejected',
+  'order:cancelled',
   'order:pin-reset',
   'order:schedule-proposal',
   'order:schedule-accepted',
@@ -981,6 +984,7 @@ export default function Home() {
   const [isSubmittingRating, setIsSubmittingRating] = useState(false);
   const [isDriverArrivedModalOpen, setIsDriverArrivedModalOpen] = useState(false);
   const [arrivedOrder, setArrivedOrder] = useState<CustomerOrderDetail | null>(null);
+  const [cancelledOrderNotice, setCancelledOrderNotice] = useState<CustomerOrderDetail | null>(null);
   const [pickupReadyOrder, setPickupReadyOrder] = useState<CustomerOrderDetail | null>(null);
   const [visibleOrdersCount, setVisibleOrdersCount] = useState(10);
   const [activeOrderDetailsMap, setActiveOrderDetailsMap] = useState<Record<string, CustomerOrderDetail>>({});
@@ -1221,6 +1225,48 @@ export default function Home() {
       })
       .catch(() => {});
   }, [orders, token, apiBase, isDriverArrivedModalOpen]);
+
+  // Modal PERSISTENTE de cancelación por el restaurante: no se cierra hasta que
+  // el comensal pulse "Entendido" (ni al recargar). Cubre el caso en que la app
+  // estaba cerrada o en segundo plano y el socket/push se perdió: al abrir, si
+  // hay un pedido cancelado por el restaurante reciente y sin reconocer, se
+  // vuelve a mostrar con el motivo.
+  useEffect(() => {
+    if (!token) return;
+    if (cancelledOrderNotice) return;
+    if (!orders || orders.length === 0) return;
+
+    const cancelledItem = orders.find(
+      (o) => o.status === 'CANCELLED' && o.cancelledBy === 'RESTAURANT'
+    );
+    if (!cancelledItem) return;
+
+    try {
+      if (localStorage.getItem(`sadel_cancel_ack_${cancelledItem.id}`) === 'true') return;
+    } catch {}
+
+    // Solo cancelaciones recientes (7 días) para no revivir pedidos viejos sin ack.
+    try {
+      const created = new Date(cancelledItem.createdAt).getTime();
+      if (!Number.isFinite(created) || Date.now() - created > 7 * 24 * 60 * 60 * 1000) return;
+    } catch {}
+
+    requestJson<{ success: true; data: CustomerOrderDetail }>({
+      apiBase,
+      path: `/me/pedidos/${cancelledItem.id}`,
+      token,
+    })
+      .then((detailRes) => {
+        if (!detailRes.success || !detailRes.data) return;
+        if (
+          normalizeOrderStatusValue(detailRes.data.status) === 'CANCELLED' &&
+          detailRes.data.cancelledBy === 'RESTAURANT'
+        ) {
+          setCancelledOrderNotice(detailRes.data);
+        }
+      })
+      .catch(() => {});
+  }, [orders, token, apiBase, cancelledOrderNotice]);
 
   useEffect(() => {
     if (!isDetailModalOpen) {
@@ -3504,12 +3550,16 @@ export default function Home() {
             orderReference: matchingOrder?.orderReference,
           });
         } else if (normalizeOrderStatusValue(payload.status || '') === 'CANCELLED') {
-          showTransientNotice({
-            key: `socket-cancelled:${liveEventKey}`,
-            title: 'Pedido cancelado',
-            description: 'Tu pedido fue cancelado. Puedes volver a intentarlo cuando quieras.',
-            tone: 'danger',
-          });
+          // Si la canceló el restaurante se muestra el modal PERSISTENTE (abajo);
+          // aquí solo el transient para el resto de orígenes de cancelación.
+          if ((payload as any).cancelledBy !== 'RESTAURANT') {
+            showTransientNotice({
+              key: `socket-cancelled:${liveEventKey}`,
+              title: 'Pedido cancelado',
+              description: 'Tu pedido fue cancelado. Puedes volver a intentarlo cuando quieras.',
+              tone: 'danger',
+            });
+          }
         } else if (eventName === 'order:delivered' && payload.orderId) {
           if (localStorage.getItem(`sadel_dismissed_rating_${payload.orderId}`) ||
               localStorage.getItem(`sadel_prompted_rating_${payload.orderId}`)) return;
@@ -3716,6 +3766,14 @@ export default function Home() {
                 try { localStorage.setItem('sadel_persistent_modal', JSON.stringify({ type: 'driver_arrived', orderId: payload.orderId })); } catch {}
               } else {
                 console.error(`[Socket.io] Error: se recibio ${eventName} pero los datos del pedido son nulos.`);
+              }
+            } else if (eventName === 'order:cancelled' && orderData) {
+              if (
+                normalizeOrderStatusValue(orderData.status) === 'CANCELLED' &&
+                orderData.cancelledBy === 'RESTAURANT'
+              ) {
+                console.log('[Socket.io] Abriendo modal persistente de cancelación por el restaurante:', orderData);
+                setCancelledOrderNotice(orderData);
               }
             }
           });
@@ -6387,6 +6445,61 @@ export default function Home() {
           </div>
         )}
 
+        {/* Modal PERSISTENTE de cancelación por el restaurante: no se cierra
+            hasta que el comensal pulse "Entendido" (ni al recargar). */}
+        {cancelledOrderNotice && (
+          <div
+            className="fixed inset-0 z-[80] flex items-center justify-center bg-black/55 backdrop-blur-sm px-4 py-6"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="cancelled-order-title"
+          >
+            <div className="relative w-full max-w-[460px] overflow-hidden rounded-[28px] border border-black/5 bg-white p-6 shadow-[0_32px_110px_rgba(15,15,15,0.35)]">
+              <div className="text-center">
+                <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full border border-rose-100 bg-rose-50 text-rose-600">
+                  <svg className="h-7 w-7" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="12" cy="12" r="10" />
+                    <path d="m15 9-6 6m0-6 6 6" />
+                  </svg>
+                </div>
+                <h3 id="cancelled-order-title" className="text-xl font-bold tracking-tight text-neutral-950">
+                  Pedido cancelado
+                </h3>
+                <p className="mt-2 text-sm leading-relaxed text-neutral-500">
+                  {cancelledOrderNotice.restaurant?.name || 'El restaurante'} canceló tu pedido{' '}
+                  <strong className="text-neutral-800">{cancelledOrderNotice.orderReference}</strong>.
+                </p>
+
+                {cancelledOrderNotice.cancellationReason && (
+                  <div className="mt-4 rounded-2xl border border-amber-100/70 bg-amber-50/80 p-4 text-left">
+                    <p className="mb-1 text-[11px] font-bold uppercase tracking-wider text-amber-600">Motivo de la cancelación</p>
+                    <p className="text-sm font-semibold leading-relaxed text-amber-900">
+                      {cancelledOrderNotice.cancellationReason}
+                    </p>
+                  </div>
+                )}
+
+                {cancelledOrderNotice.paymentMethod === 'TRANSFER' && (
+                  <p className="mt-4 text-xs leading-relaxed text-neutral-500">
+                    Si realizaste una transferencia, el reembolso se gestionará automáticamente.
+                  </p>
+                )}
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    try { localStorage.setItem(`sadel_cancel_ack_${cancelledOrderNotice.id}`, 'true'); } catch {}
+                    setCancelledOrderNotice(null);
+                  }}
+                  className="mt-6 w-full rounded-full bg-neutral-950 py-3.5 text-sm font-bold text-white shadow-md transition hover:bg-neutral-800 active:scale-95"
+                >
+                  Entendido
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Modal de pedido listo para recoger (pickup) — no dismissible */}
         {pickupReadyOrder && (
           <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/70 backdrop-blur-sm px-4 py-6">
@@ -8096,6 +8209,7 @@ const notificationTitleMap: Record<(typeof liveEvents)[number], string> = {
   'order:completed': 'Pedido recogido',
   'order:cancellation-approved': 'Cancelación aprobada',
   'order:cancellation-rejected': 'Cancelación rechazada',
+  'order:cancelled': 'Pedido cancelado',
   'order:pin-reset': 'Nuevo PIN de recolección',
   'order:schedule-proposal': 'Propuesta de fecha de entrega',
   'order:schedule-accepted': 'Fecha de entrega confirmada',
@@ -8138,6 +8252,10 @@ function buildNotificationMessage(
 
   if (eventName === 'order:arrival-reminder') {
     return 'El repartidor sigue esperándote en tu punto de entrega. Sal a recibir tu pedido.';
+  }
+
+  if (eventName === 'order:cancelled') {
+    return 'Tu pedido fue cancelado. Revisa el motivo en tu app.';
   }
 
   return payload.orderId
