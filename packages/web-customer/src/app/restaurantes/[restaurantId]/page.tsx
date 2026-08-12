@@ -4,9 +4,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { AuthUser, clearStoredSession, readStoredSession, requestJson, submitReview, uploadMediaAsset, convertImageFileToDataUrl, getOrderStatusLabel, isRestaurant, ApiRequestError, isAuthRequestError, setGlobalSessionExpiredHandler } from '@sadel/shared';
 import { io } from 'socket.io-client';
-import LiveTrackingMap from '../../../components/LiveTrackingMap';
 import { AuthModal } from '../../../components/AuthModal';
-import { CompactActiveOrderBanner, getEtaWindowMinutes, formatEstimatedArrivalMinutes } from '../../../components/CompactActiveOrderBanner';
+import { CompactActiveOrderBanner, formatEstimatedArrivalMinutes } from '../../../components/CompactActiveOrderBanner';
 import RatingModal from '../../../components/RatingModal';
 import { useForegroundPolling } from '../../../hooks/useForegroundPolling';
 import { SaDelLoader } from '../../../components/SaDelLoader';
@@ -231,6 +230,7 @@ type CustomerOrderDetail = {
     createdAt: string;
   }>;
   cancellationRequestedAt?: string | null;
+  cancellationReason?: string | null;
   cancelledBy?: string | null;
   fulfillmentType?: 'DELIVERY' | 'PICKUP';
 };
@@ -460,6 +460,7 @@ export default function RestaurantPage({
 
   const [activeOrderListItems, setActiveOrderListItems] = useState<CustomerOrderListItem[]>([]);
   const [activeOrderDetailsMap, setActiveOrderDetailsMap] = useState<Record<string, CustomerOrderDetail>>({});
+  const [cancelledOrderNotice, setCancelledOrderNotice] = useState<CustomerOrderDetail | null>(null);
   const activeOrderDetailsMapRef = useRef(activeOrderDetailsMap);
   activeOrderDetailsMapRef.current = activeOrderDetailsMap;
   const [unreadMessagesMap, setUnreadMessagesMap] = useState<Record<string, number>>({});
@@ -847,7 +848,6 @@ export default function RestaurantPage({
   const [addressSuggestions, setAddressSuggestions] = useState<any[]>([]);
   const [isSearchingAddress, setIsSearchingAddress] = useState(false);
   const [locatingAddress, setLocatingAddress] = useState(false);
-  const cartRef = useRef<HTMLDivElement | null>(null);
   const checkoutRef = useRef<HTMLDivElement | null>(null);
   const checkoutMapRef = useRef<any>(null);
   const checkoutMarkerRef = useRef<any>(null);
@@ -1001,7 +1001,7 @@ export default function RestaurantPage({
         if (savedProfileAddress) {
           try {
             const parsed = JSON.parse(savedProfileAddress) as Partial<CheckoutForm>;
-            const { notes, storeNotes, ...safeParsed } = parsed;
+            const { notes: _notes, storeNotes: _storeNotes, ...safeParsed } = parsed;
             setCheckoutForm((current) => ({
               ...current,
               ...safeParsed,
@@ -1166,12 +1166,28 @@ export default function RestaurantPage({
           }
 
           if (normalizedRecentStatus === 'CANCELLED') {
-            showTransientNotice({
-              key: `restaurant-recent-order-cancelled:${recentCreatedOrder.id}`,
-              title: 'Pedido cancelado',
-              description: `Tu pedido ${recentCreatedOrder.orderReference} fue cancelado.`,
-              tone: 'danger',
-            });
+            // Si la canceló el restaurante con motivo, se muestra el modal PERSISTENTE
+            // con el motivo (no el aviso genérico).
+            if (recentOrder?.cancelledBy === 'RESTAURANT') {
+              requestJson<{ success: true; data: CustomerOrderDetail }>({
+                apiBase,
+                path: `/me/pedidos/${recentOrder.id}`,
+                token,
+              })
+                .then((detailRes) => {
+                  if (detailRes.success && detailRes.data && detailRes.data.cancelledBy === 'RESTAURANT') {
+                    setCancelledOrderNotice(detailRes.data);
+                  }
+                })
+                .catch(() => {});
+            } else {
+              showTransientNotice({
+                key: `restaurant-recent-order-cancelled:${recentCreatedOrder.id}`,
+                title: 'Pedido cancelado',
+                description: `Tu pedido ${recentCreatedOrder.orderReference} fue cancelado.`,
+                tone: 'danger',
+              });
+            }
             recentCreatedOrderRef.current = null;
           }
         }
@@ -1782,6 +1798,11 @@ export default function RestaurantPage({
     }
 
     if (normalizedStatus === 'CANCELLED') {
+      // Restaurante con motivo → modal PERSISTENTE; cualquier otro origen → aviso genérico.
+      if (activeOrder.cancelledBy === 'RESTAURANT') {
+        setCancelledOrderNotice(activeOrder);
+        return;
+      }
       showTransientNotice({
         key: `restaurant-order-cancelled:${activeOrder.id}:${normalizedStatus}`,
         title: 'Pedido cancelado',
@@ -3326,6 +3347,60 @@ function triggerHaptic(pattern: number | number[] = 10) {
                   type="button"
                   onClick={() => setIsDriverArrivedModalOpen(false)}
                   className="flex-1 rounded-full bg-neutral-950 dark:bg-white text-white dark:text-neutral-950 py-3.5 text-sm font-bold shadow-md transition hover:bg-neutral-800 dark:hover:bg-neutral-100 active:scale-95 active-scale"
+                >
+                  Entendido
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Modal PERSISTENTE de cancelación por el restaurante (con motivo) */}
+        {cancelledOrderNotice && (
+          <div
+            className="fixed inset-0 z-[80] flex items-center justify-center bg-black/55 backdrop-blur-sm px-4 py-6"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="cancelled-order-title"
+          >
+            <div className="relative w-full max-w-[460px] overflow-hidden rounded-[28px] border border-black/5 bg-white p-6 shadow-[0_32px_110px_rgba(15,15,15,0.35)]">
+              <div className="text-center">
+                <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full border border-rose-100 bg-rose-50 text-rose-600">
+                  <svg className="h-7 w-7" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="12" cy="12" r="10" />
+                    <path d="m15 9-6 6m0-6 6 6" />
+                  </svg>
+                </div>
+                <h3 id="cancelled-order-title" className="text-xl font-bold tracking-tight text-neutral-950">
+                  Pedido cancelado
+                </h3>
+                <p className="mt-2 text-sm leading-relaxed text-neutral-500">
+                  {cancelledOrderNotice.restaurant?.name || 'El restaurante'} canceló tu pedido{' '}
+                  <strong className="text-neutral-800">{cancelledOrderNotice.orderReference}</strong>.
+                </p>
+
+                {cancelledOrderNotice.cancellationReason && (
+                  <div className="mt-4 rounded-2xl border border-amber-100/70 bg-amber-50/80 p-4 text-left">
+                    <p className="mb-1 text-[11px] font-bold uppercase tracking-wider text-amber-600">Motivo de la cancelación</p>
+                    <p className="text-sm font-semibold leading-relaxed text-amber-900">
+                      {cancelledOrderNotice.cancellationReason}
+                    </p>
+                  </div>
+                )}
+
+                {cancelledOrderNotice.paymentMethod === 'TRANSFER' && (
+                  <p className="mt-4 text-xs leading-relaxed text-neutral-500">
+                    Si realizaste una transferencia, el reembolso se gestionará automáticamente.
+                  </p>
+                )}
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    try { localStorage.setItem(`sadel_cancel_ack_${cancelledOrderNotice.id}`, 'true'); } catch { /* noop */ }
+                    setCancelledOrderNotice(null);
+                  }}
+                  className="mt-6 w-full rounded-full bg-neutral-950 py-3.5 text-sm font-bold text-white shadow-md transition hover:bg-neutral-800 active:scale-95"
                 >
                   Entendido
                 </button>
@@ -5709,7 +5784,7 @@ function Callout({
 function TransientNoticeBanner({
   notice,
   onClose,
-  onRefundAction,
+  onRefundAction: _onRefundAction,
   apiBase,
   token,
 }: {
@@ -6014,49 +6089,6 @@ function formatDate(date: string) {
   }).format(new Date(date));
 }
 
-function formatShortTime(date: Date) {
-  return new Intl.DateTimeFormat('es-MX', {
-    hour: 'numeric',
-    minute: '2-digit',
-  }).format(date);
-}
-
-
-function formatEstimatedArrivalWindow(estimatedDeliveryTime: string, status: string, currentTimestamp: number = Date.now()) {
-  const etaDate = new Date(estimatedDeliveryTime);
-
-  if (Number.isNaN(etaDate.getTime())) {
-    return 'Calculando...';
-  }
-
-  if (status === 'DELIVERED') {
-    return `Entregado ${formatShortTime(etaDate)}`;
-  }
-
-  if (status === 'CANCELLED' || status === 'REJECTED') {
-    return formatDate(estimatedDeliveryTime);
-  }
-
-  const windowMinutes = getEtaWindowMinutes(status);
-  let start = new Date(etaDate.getTime() - windowMinutes.early * 60 * 1000);
-  let end = new Date(etaDate.getTime() + windowMinutes.late * 60 * 1000);
-
-  // If delayed, adjust window start dynamically to avoid displaying times in the past
-  if (['PENDING', 'CONFIRMED', 'PREPARING', 'READY', 'PICKED_UP', 'IN_TRANSIT'].includes(status) && currentTimestamp > start.getTime()) {
-    let bufferMinutes = 3;
-    if (status === 'PENDING') bufferMinutes = 8;
-    else if (status === 'CONFIRMED' || status === 'PREPARING') bufferMinutes = 5;
-    else if (status === 'READY' || status === 'PICKED_UP') bufferMinutes = 3;
-    else if (status === 'IN_TRANSIT') bufferMinutes = 2;
-
-    start = new Date(currentTimestamp + bufferMinutes * 60 * 1000);
-    // Keep a tight window even when delayed
-    const delayedWindowSize = windowMinutes.early + windowMinutes.late;
-    end = new Date(start.getTime() + delayedWindowSize * 60 * 1000);
-  }
-
-  return `Entre ${formatShortTime(start)} y ${formatShortTime(end)}`;
-}
 
 
 function buildDetailAddressLabel(address: CustomerOrderDetail['address'] | null | undefined) {

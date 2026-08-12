@@ -104,11 +104,21 @@ export const usePushNotifications = () => {
         return;
       }
 
+      // El usuario optó explícitamente por desactivarlas desde su perfil; al
+      // suscribirse de nuevo (gesto) se limpia esa bandera.
+      try { localStorage.removeItem('sadel.push_optout'); } catch { /* noop */ }
+
       const registration = await navigator.serviceWorker.ready;
 
+      // ROBUSTEZ: si ya existe una suscripción válida se REUTILIZA tal cual.
+      // Nunca se desuscribe una sub válida para re-crearla: eso mata las push
+      // (sobre todo en iOS) si la recreación falla a mitad.
       const existingSub = await registration.pushManager.getSubscription();
       if (existingSub) {
-        await existingSub.unsubscribe();
+        setSubscription(existingSub);
+        setIsSubscribed(true);
+        await sendSubscriptionToBackend(existingSub, tokenOverride);
+        return;
       }
 
       const publicKey = await fetchVapidKey();
@@ -123,6 +133,17 @@ export const usePushNotifications = () => {
           });
         } catch (subscribeError: any) {
           attempts++;
+          // AbortError: transitorio en iOS, se reintenta.
+          // InvalidStateError: la clave VAPID cambió y la sub vieja quedó huérfana;
+          // solo en ese caso (y no antes) se limpia y se vuelve a intentar.
+          if (subscribeError?.name === 'InvalidStateError') {
+            const stale = await registration.pushManager.getSubscription();
+            if (stale) {
+              try { await stale.unsubscribe(); } catch { /* noop */ }
+            }
+            await new Promise((r) => setTimeout(r, 500));
+            continue;
+          }
           if (subscribeError?.name === 'AbortError' && attempts < 3) {
             await new Promise((r) => setTimeout(r, 1000 * attempts));
             continue;
@@ -148,6 +169,9 @@ export const usePushNotifications = () => {
   }, []);
 
   const unsubscribe = async () => {
+    // Marca el opt-out para que la auto-re-sincronización no lo vuelva a
+    // suscribir en segundo plano: solo se reactiva con un gesto explícito.
+    try { localStorage.setItem('sadel.push_optout', 'true'); } catch { /* noop */ }
     if (subscription) {
       await subscription.unsubscribe();
       setSubscription(null);

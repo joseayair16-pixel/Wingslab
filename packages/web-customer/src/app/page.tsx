@@ -1,11 +1,10 @@
 'use client';
 
-import React, { useCallback, useEffect, useMemo, useRef, useState, useTransition, useDeferredValue } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState, useDeferredValue } from 'react';
 import { useRouter } from 'next/navigation';
 import { io } from 'socket.io-client';
 import {
   ApiRequestError,
-  AuthResponse,
   AuthUser,
   clearStoredSession,
   isAuthRequestError,
@@ -17,7 +16,6 @@ import {
   submitReview,
   uploadMediaAsset,
   getOrderStatusLabel,
-  isRestaurant,
   convertImageFileToDataUrl,
 } from '@sadel/shared';
 import { usePushNotifications } from '../hooks/usePushNotifications';
@@ -29,7 +27,7 @@ import { useStore } from '../store';
 import { RestaurantSearchBar } from '../components/RestaurantSearchBar';
 import { SaDelLogo } from '../components/SaDelLogo';
 import { SaDelLoader } from '../components/SaDelLoader';
-import { CompactActiveOrderBanner, buildTimelineSteps, getEtaWindowMinutes, formatEstimatedArrivalMinutes } from '../components/CompactActiveOrderBanner';
+import { CompactActiveOrderBanner, formatEstimatedArrivalMinutes } from '../components/CompactActiveOrderBanner';
 import { type Billboard } from '../components/BillboardCarousel';
 import { createPlacesSource } from '../lib/places';
 
@@ -375,7 +373,6 @@ const defaultProfileAddress: CustomerProfileAddress = {
   isDefault: false,
 };
 
-const defaultApiBase = '/api';
 const storageKey = 'sadel.customer';
 const profileAddressStorageKey = `${storageKey}.profile-address`;
 const persistentNoticeStorageKey = `${storageKey}.persistent-notice`;
@@ -442,7 +439,7 @@ export default function Home() {
   const setSessionUser = useStore(state => state.setSessionUser);
   const isOnline = useStore(state => state.isOnline);
   const setIsOnline = useStore(state => state.setIsOnline);
-  const [showIOSPrompt, setShowIOSPrompt] = useState(false);
+  const [, setShowIOSPrompt] = useState(false);
   const [isAuthChecked, setIsAuthChecked] = useState(false);
   const [isTransitioning, setIsTransitioning] = useState(true);
   const [toastData, setToastData] = useState<{message: string, type: 'success' | 'error' | 'info'}>({message: '', type: 'success'});
@@ -486,8 +483,6 @@ export default function Home() {
   const setActiveSection = useStore(state => state.setActiveSection);
   const searchQuery = useStore(state => state.searchQuery);
   const deferredSearchQuery = useDeferredValue(searchQuery);
-  const isSearchStale = searchQuery !== deferredSearchQuery;
-  const setSearchQuery = useStore(state => state.setSearchQuery);
   const searchType = useStore(state => state.searchType);
   const unreadMessagesMap = useChatStore(state => state.unreadMessagesMap);
   const isChatOpen = useChatStore(state => state.isChatOpen);
@@ -792,7 +787,7 @@ export default function Home() {
       } catch (err) {
         console.error('Error in reverse geocoding:', err);
       }
-    }, (err) => {
+    }, () => {
       alert('No se pudo determinar tu ubicación exacta en este momento. Por favor ingresa tu dirección manualmente o asegúrate de tener buena señal.');
     }, { enableHighAccuracy: false, timeout: 10000, maximumAge: 60000 });
   }
@@ -836,9 +831,7 @@ export default function Home() {
 
   const cartItems = useCartStore(state => state.items);
   const cartRestaurantId = useCartStore(state => state.restaurantId);
-  const cartServiceFeeVal = useCartStore(state => state.serviceFee);
   const clearCart = useCartStore(state => state.clearCart);
-  const updateCartItem = useCartStore(state => state.updateItem);
   const [mounted, setMounted] = useState(false);
   useEffect(() => { setMounted(true); }, []);
   const cart: CartItem[] = mounted ? cartItems : [];
@@ -846,7 +839,7 @@ export default function Home() {
     window.dispatchEvent(new CustomEvent('sadel:bottom-cta', { detail: cart.length > 0 }));
   }, [cart.length]);
   const [, setCheckoutForm] = useState<CheckoutForm>(defaultCheckoutForm);
-  const [selectedCheckoutAddressId, setSelectedCheckoutAddressId] = useState('');
+  const [, setSelectedCheckoutAddressId] = useState('');
   const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number; address: string; accuracy?: number; ts?: number } | null>(() => {
     try {
       const raw = typeof window !== 'undefined' ? window.localStorage.getItem('userLocation') : null;
@@ -871,13 +864,10 @@ export default function Home() {
     return false;
   });
   const [userZone, setUserZone] = useState<string | null>(null);
-  const [locationDenied, setLocationDenied] = useState(false);
-  const [locationSource, setLocationSource] = useState<'gps' | 'manual' | null>(null);
+  const [, setLocationDenied] = useState(false);
+  const [, setLocationSource] = useState<'gps' | 'manual' | null>(null);
   const [isLocationChecked, setIsLocationChecked] = useState(false);
-  const [paymentMethod, setPaymentMethod] = useState<'CASH' | 'TRANSFER'>('CASH');
   const [fulfillmentType, setFulfillmentType] = useState<'DELIVERY' | 'PICKUP'>('DELIVERY');
-  const [paymentProofUrl, setPaymentProofUrl] = useState('');
-  const [paymentProofUploading, setPaymentProofUploading] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(false);
 
   const [supportTickets, setSupportTickets] = useState<any[]>([]);
@@ -1017,12 +1007,11 @@ export default function Home() {
     return false;
   });
   const [whatsappNotificationsEnabled, setWhatsappNotificationsEnabled] = useState(false);
-  const [orderAlertAudioState, setOrderAlertAudioState] = useState<'unsupported' | 'needs-gesture' | 'ready'>('ready');
+  const [, setOrderAlertAudioState] = useState<'unsupported' | 'needs-gesture' | 'ready'>('ready');
   const customerAudioContextRef = useRef<AudioContext | null>(null);
   const customerAudioBufferRef = useRef<AudioBuffer | null>(null);
   const customerLlegueBufferRef = useRef<AudioBuffer | null>(null);
   const chatMessageBufferRef = useRef<AudioBuffer | null>(null);
-  const hasCustomerInteractedRef = useRef(false);
   const { isSubscribed, permission: pushPermission, pushSupportIssue, subscribe: subscribePush, unsubscribe: unsubscribePush } = usePushNotifications();
   const selectedOrderIdRef = useRef(selectedOrderId);
 
@@ -1062,7 +1051,6 @@ export default function Home() {
   const seenLiveEventKeysRef = useRef<string[]>([]);
   const [isSideMenuOpen, setIsSideMenuOpen] = useState(false);
   const [isCartOpen, setIsCartOpen] = useState(false);
-  const [orderNotes, setOrderNotes] = useState('');
   const [userRegion, setUserRegion] = useState('Mi ciudad');
   const [pullDistance, setPullDistance] = useState(0);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -1072,7 +1060,6 @@ export default function Home() {
   const fallbackSearchSourceRef = useRef<ReturnType<typeof createPlacesSource> | null>(null);
   const touchStartY = useRef(0);
   const sideMenuRef = useRef<HTMLDivElement | null>(null);
-  const cartRef = useRef<HTMLDivElement | null>(null);
   const transientNoticeTimeoutRef = useRef<number | null>(null);
   const recentNoticeKeysRef = useRef<string[]>([]);
   const orderStatusSnapshotRef = useRef<Record<string, string>>({});
@@ -1243,13 +1230,13 @@ export default function Home() {
 
     try {
       if (localStorage.getItem(`sadel_cancel_ack_${cancelledItem.id}`) === 'true') return;
-    } catch {}
+    } catch { /* noop */ }
 
     // Solo cancelaciones recientes (7 días) para no revivir pedidos viejos sin ack.
     try {
       const created = new Date(cancelledItem.createdAt).getTime();
       if (!Number.isFinite(created) || Date.now() - created > 7 * 24 * 60 * 60 * 1000) return;
-    } catch {}
+    } catch { /* noop */ }
 
     requestJson<{ success: true; data: CustomerOrderDetail }>({
       apiBase,
@@ -1279,7 +1266,6 @@ export default function Home() {
     }
   }, [isDetailModalOpen]);
   const addressMapRef = useRef<any>(null);
-  const autocompleteServiceRef = useRef<any>(null);
   const placesServiceRef = useRef<any>(null);
   const autocompleteSessionTokenRef = useRef<any>(null);
   const addressSearchSourceRef = useRef<ReturnType<typeof createPlacesSource> | null>(null);
@@ -1465,8 +1451,6 @@ export default function Home() {
     }
   }, [userLocation]);
 
-
-
   useEffect(() => {
     if (!isSideMenuOpen) {
       return;
@@ -1506,10 +1490,6 @@ export default function Home() {
       }
     };
   }, []);
-
-  const timelineSteps = useMemo(() => {
-    return selectedOrder ? buildTimelineSteps(selectedOrder) : [];
-  }, [selectedOrder]);
 
   const sortedOrders = useMemo(() => {
     let filtered = [...orders];
@@ -1937,10 +1917,8 @@ export default function Home() {
     }, 0),
     [cart]
   );
-  const cartServiceFee = cart.length ? cartServiceFeeVal : 0;
-  const cartTotal = cartSubtotal + cartServiceFee;
 
-  function clearSession(message?: string) {
+  function clearSession(_message?: string) {
     setToken('');
     setSessionUser(null);
     setActiveSection('home');
@@ -2264,6 +2242,7 @@ export default function Home() {
         setError(errorMessage || 'No se pudo cargar el panel.');
       }
     } finally {
+      // eslint-disable-next-line no-unsafe-finally -- guard de llamada obsoleta; devuelve undefined a propósito
       if (callId !== loadDashboardCallIdRef.current) return;
       if (loaded) setLoadingDashboard(false);
     }
@@ -2663,225 +2642,6 @@ export default function Home() {
     return () => clearTimeout(timer);
   }, [welcomeUser]);
 
-  async function handlePlaceOrder() {
-    const isPickup = fulfillmentType === 'PICKUP';
-
-    if (!isPickup) {
-      const addressId = selectedCheckoutAddressId || addresses.find(a => a.isDefault)?.id;
-      if (!addressId) {
-        setToastMessage('Por favor, selecciona una dirección.');
-        setTimeout(() => setToastMessage(''), 2000);
-        return;
-      }
-
-      let address = addresses.find(a => a.id === addressId);
-      if (!address) return;
-
-      if (locationDenied && paymentMethod === 'CASH') {
-        setToastMessage('Para pagar en efectivo es necesario permitir el acceso a tu ubicación. Puedes usar transferencia.');
-        setTimeout(() => setToastMessage(''), 3500);
-        return;
-      }
-
-      if (!userLocation) {
-        setToastMessage('Necesitamos tu ubicación para procesar pedidos. Por favor permite el acceso a la ubicación.');
-        setTimeout(() => setToastMessage(''), 3000);
-        return;
-      }
-
-      const verificationTtlDays = 7;
-      const verifiedAt = (address as any).locationVerifiedAt;
-      const isAddressVerified = verifiedAt && (Date.now() - new Date(verifiedAt).getTime()) <= verificationTtlDays * 24 * 60 * 60 * 1000;
-
-      if (!isAddressVerified) {
-        const shouldVerify = confirm('Esta dirección necesita ser verificada con tu ubicación actual para crear el pedido. ¿Deseas verificarla ahora?');
-        if (!shouldVerify) {
-          return;
-        }
-
-        setToastMessage('Verificando ubicación...');
-        try {
-          const response = await fetch(`${apiBase}/customer/addresses/verify`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${token}`,
-            },
-            body: JSON.stringify({
-              street: address.street,
-              number: address.number,
-              apartment: address.apartment || '',
-              neighborhood: address.neighborhood,
-              city: address.city,
-              state: address.state,
-              zipCode: address.zipCode,
-              country: address.country,
-              reference: address.reference || '',
-              latitude: typeof address.latitude === 'string' ? parseFloat(address.latitude) : address.latitude,
-              longitude: typeof address.longitude === 'string' ? parseFloat(address.longitude) : address.longitude,
-            }),
-          });
-
-          if (!response.ok) {
-            setToastMessage('No se pudo verificar la dirección. Intenta de nuevo.');
-            setTimeout(() => setToastMessage(''), 2000);
-            return;
-          }
-
-          const verifiedAddress = await response.json();
-          setToastMessage('Dirección verificada. Creando pedido...');
-          address = verifiedAddress.data || address;
-        } catch (error) {
-          console.error('Error verifying address:', error);
-          setToastMessage('Error al verificar la dirección.');
-          setTimeout(() => setToastMessage(''), 2000);
-          return;
-        }
-      }
-
-      const addrLat = typeof address.latitude === 'string' ? parseFloat(address.latitude) : address.latitude;
-      const addrLng = typeof address.longitude === 'string' ? parseFloat(address.longitude) : address.longitude;
-      const distanceToAddressKm = haversineKm(userLocation.latitude, userLocation.longitude, addrLat, addrLng);
-      const MAX_CASH_DISTANCE_KM = 1;
-
-      if (distanceToAddressKm > MAX_CASH_DISTANCE_KM && paymentMethod !== 'TRANSFER') {
-        setToastMessage('Por la distancia a tu ubicación actual, esta entrega solo está disponible pagando por transferencia.');
-        setTimeout(() => setToastMessage(''), 4500);
-        return;
-      }
-    }
-
-    if (paymentMethod === 'TRANSFER' && !paymentProofUrl.trim()) {
-      setToastMessage('Por favor, sube el comprobante de transferencia.');
-      setTimeout(() => setToastMessage(''), 2000);
-      return;
-    }
-
-    try {
-      const headers: Record<string, string> = {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`,
-      };
-
-      const body: Record<string, any> = {
-        restaurantId: selectedRestaurant?.id,
-        items: cart.map(item => ({
-          productId: item.productId,
-          quantity: item.quantity,
-          specialInstructions: item.specialInstructions,
-        })),
-        fulfillmentType,
-        paymentMethod,
-        paymentProofUrl: paymentMethod === 'TRANSFER' ? paymentProofUrl : undefined,
-        notes: orderNotes,
-        locationVerified: locationSource === 'gps',
-      };
-
-      if (!isPickup) {
-        const address = addresses.find(a => a.id === (selectedCheckoutAddressId || addresses.find(a => a.isDefault)?.id));
-        if (address) {
-          body.deliveryAddress = {
-            street: address.street,
-            number: address.number,
-            apartment: address.apartment || '',
-            neighborhood: address.neighborhood,
-            city: address.city,
-            state: address.state,
-            zipCode: address.zipCode,
-            country: address.country,
-            reference: address.reference || '',
-            latitude: typeof address.latitude === 'string' ? parseFloat(address.latitude) : address.latitude,
-            longitude: typeof address.longitude === 'string' ? parseFloat(address.longitude) : address.longitude,
-          };
-        }
-        if (userLocation) {
-          body.currentLocation = {
-            latitude: userLocation.latitude,
-            longitude: userLocation.longitude,
-            accuracy: userLocation.accuracy,
-            capturedAt: userLocation.ts,
-          };
-        }
-      }
-
-      const response = await fetch(`${'/api'}/pedidos`, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify(body),
-      });
-
-      const data = await response.json();
-
-      if (data.success) {
-        setToastMessage('¡Pedido realizado con éxito!');
-        triggerHaptic([30, 50, 30]); // Double vibration
-        setTimeout(() => setToastMessage(''), 2000);
-        clearCart();
-        setOrderNotes('');
-        openDashboardSection('history');
-        void loadDashboard(); // Reload orders
-      } else {
-        const errorMsg = data.error?.message || data.message || 'No se pudo realizar el pedido';
-        console.error('Order creation error:', { status: response.status, data });
-        setToastMessage(`Error: ${errorMsg}`);
-        setTimeout(() => setToastMessage(''), 3000);
-      }
-    } catch (error) {
-      console.error('Error placing order:', error);
-      setToastMessage('Error de conexión');
-      setTimeout(() => setToastMessage(''), 2000);
-    }
-  }
-
-  async function handlePaymentProofUpload(file: File) {
-    if (!file) return;
-
-    // Validate file size (max 5MB)
-    const MAX_FILE_SIZE = 5 * 1024 * 1024;
-    if (file.size > MAX_FILE_SIZE) {
-      setToastMessage('El archivo es demasiado grande. Máximo 5MB.');
-      setTimeout(() => setToastMessage(''), 2000);
-      return;
-    }
-
-    // Validate file type (image or PDF)
-    const validTypes = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
-    if (!validTypes.includes(file.type)) {
-      setToastMessage('Solo se aceptan imágenes (JPG, PNG, WebP) o PDF.');
-      setTimeout(() => setToastMessage(''), 2000);
-      return;
-    }
-
-    setPaymentProofUploading(true);
-    try {
-      const reader = new FileReader();
-      reader.onload = async (e) => {
-        const dataUrl = e.target?.result as string;
-
-        const uploaded = await uploadMediaAsset({
-          apiBase,
-          token,
-          kind: 'payment-proof',
-          source: dataUrl,
-          fileName: file.name,
-          fallbackMessage: 'No se pudo subir el comprobante de transferencia.',
-          fallbackToSource: true,
-        });
-
-        setPaymentProofUrl(uploaded.url);
-        setToastMessage('Comprobante subido exitosamente ✓');
-        setTimeout(() => setToastMessage(''), 2000);
-      };
-      reader.readAsDataURL(file);
-    } catch (error) {
-      console.error('Error uploading payment proof:', error);
-      setToastMessage('Error al subir el comprobante. Intenta de nuevo.');
-      setTimeout(() => setToastMessage(''), 2000);
-    } finally {
-      setPaymentProofUploading(false);
-    }
-  }
-
   const loadRestaurantDetail = useCallback(async (restaurantId: string) => {
     setLoadingRestaurant(true);
     setError('');
@@ -2947,15 +2707,6 @@ export default function Home() {
     await loadMessages(orderId, apiBase, token);
   }, [apiBase, token]);
 
-  const sendChatMessage = async () => {
-    const state = useChatStore.getState();
-    const result = await state.sendChatMessage(apiBase, token);
-    if (result.error) {
-      setToastMessage(result.error);
-      setTimeout(() => setToastMessage(''), 2000);
-    }
-  };
-
   const initialDashboardLoadedRef = useRef(false);
 
   useEffect(() => {
@@ -2968,10 +2719,7 @@ export default function Home() {
   }, [loadDashboard, token, sessionUser]);
 
   useEffect(() => {
-    const LOCATION_TTL = 24 * 60 * 60 * 1000; // 24 hours
-
-    async function tryUpdateFromGeolocation() {
-      if (!navigator.geolocation) return null;
+    async function tryUpdateFromGeolocation() {      if (!navigator.geolocation) return null;
 
       return new Promise((resolve) => {
         navigator.geolocation.getCurrentPosition(async (position) => {
@@ -3155,19 +2903,27 @@ export default function Home() {
     };
   }, []);
 
-  const hasAttemptedPushSyncRef = useRef(false);
-
+  // Re-sincronización PUSH ROBUSTA: cada vez que la app abre o vuelve al primer
+  // plano, si el permiso ya fue concedido y el usuario no la desactivó
+  // explícitamente, se re-utiliza/refresca la suscripción en el backend. Nunca
+  // desuscribe una sub válida (el hook la reutiliza), así las push sobreviven a
+  // cierres, actualizaciones de iOS y rotaciones del Service Worker.
   useEffect(() => {
-    if (token && sessionUser && !hasAttemptedPushSyncRef.current) {
-      // Solo se restablece la suscripción cuando el permiso YA fue concedido en una
-      // sesión anterior. El primer permiso (estado 'default') debe pedirse desde un
-      // gesto del usuario (toggle en el perfil); pedirlo al cargar la página es
-      // ignorado en silencio por iOS y Chrome.
-      if (pushPermission === 'granted') {
-        hasAttemptedPushSyncRef.current = true;
-        subscribePush(token).catch(err => console.error('[Push] Error al restablecer suscripción:', err));
+    const sync = () => {
+      if (token && sessionUser && pushPermission === 'granted') {
+        try {
+          if (localStorage.getItem('sadel.push_optout') === 'true') return;
+        } catch {}
+        subscribePush(token).catch((err) => console.error('[Push] Error al restablecer suscripción:', err));
       }
-    }
+    };
+
+    sync();
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') sync();
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => document.removeEventListener('visibilitychange', handleVisibility);
   }, [token, sessionUser, pushPermission, subscribePush]);
 
   // Leer orderId de la URL (cuando se da click a una notificación push)
@@ -3934,6 +3690,11 @@ export default function Home() {
           orderReference: order.orderReference,
         });
       } else if (normalizedStatus === 'CANCELLED') {
+        // Si la canceló el restaurante con motivo, el modal PERSISTENTE lo cubre;
+        // aquí no se muestra el aviso genérico para evitar duplicados.
+        if ((order as any).cancelledBy === 'RESTAURANT') {
+          return;
+        }
         if (!alreadySounded) {
           try {
             if (window.localStorage.getItem('customerAlertSoundEnabled') !== 'false') {
@@ -4036,8 +3797,6 @@ export default function Home() {
     }
   }
 
-
-
   async function checkCustomerDebt(): Promise<DebtInfo | null> {
     if (!token || !sessionUser?.role) return null;
     try {
@@ -4132,10 +3891,6 @@ export default function Home() {
       }, 2200);
     }
   }
-
-
-
-
 
   function updateAddressMarker(lat: number, lng: number) {
     const google = (window as any).google;
@@ -4409,8 +4164,6 @@ export default function Home() {
       </div>
     );
   }
-
-  const totalUnreadMessages = Object.values(unreadMessagesMap).reduce((acc, count) => acc + count, 0);
 
   return (
     <main
@@ -6255,8 +6008,6 @@ export default function Home() {
                     </div>
                   )}
 
-
-
                   {/* Acciones */}
                   {['DELIVERED', 'CANCELLED', 'REJECTED'].includes(selectedOrder.status) && (
                     <div className="border-t border-black/[0.05] pt-4">
@@ -6488,7 +6239,7 @@ export default function Home() {
                 <button
                   type="button"
                   onClick={() => {
-                    try { localStorage.setItem(`sadel_cancel_ack_${cancelledOrderNotice.id}`, 'true'); } catch {}
+                    try { localStorage.setItem(`sadel_cancel_ack_${cancelledOrderNotice.id}`, 'true'); } catch { /* noop */ }
                     setCancelledOrderNotice(null);
                   }}
                   className="mt-6 w-full rounded-full bg-neutral-950 py-3.5 text-sm font-bold text-white shadow-md transition hover:bg-neutral-800 active:scale-95"
@@ -6755,16 +6506,6 @@ export default function Home() {
                     return;
                   }
 
-                  const request = {
-                    id: `rest-req-${Date.now()}`,
-                    ownerName: joinRestOwnerName,
-                    businessName: joinRestName,
-                    giro: joinRestGiro,
-                    location: joinRestLocation,
-                    whatsapp: joinRestWhatsapp,
-                    createdAt: new Date().toISOString()
-                  };
-
                   try {
                     const apiUrl = '/api';
                     const response = await fetch(`${apiUrl}/public/solicitudes`, {
@@ -6913,15 +6654,6 @@ export default function Home() {
                     setTimeout(() => setToastMessage(''), 3000);
                     return;
                   }
-
-                  const request = {
-                    id: `driver-req-${Date.now()}`,
-                    name: joinDriverName,
-                    whatsapp: joinDriverWhatsapp,
-                    motorcycle: joinDriverMotorcycle,
-                    location: joinDriverLocation,
-                    createdAt: new Date().toISOString()
-                  };
 
                   try {
                     const apiUrl = '/api';
@@ -7497,33 +7229,6 @@ export default function Home() {
     </main>
   );
 }
-
-function StatChip({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-[24px] border border-white/10 bg-white/8 px-4 py-3 backdrop-blur">
-      <p className="text-xs font-semibold uppercase tracking-[0.22em] text-white/55">{label}</p>
-      <p className="mt-2 text-xl font-semibold text-white">{value}</p>
-    </div>
-  );
-}
-
-function SummaryCard({
-  title,
-  value,
-  description,
-}: {
-  title: string;
-  value: string;
-  description: string;
-}) {
-  return (
-    <article className="rounded-[28px] border border-black/5 bg-white p-5 shadow-[0_18px_50px_rgba(15,15,15,0.05)]">
-      <p className="text-xs font-semibold uppercase tracking-[0.22em] text-neutral-400">{title}</p>
-      <p className="mt-3 text-3xl font-semibold tracking-[-0.04em] text-neutral-950">{value}</p>
-      <p className="mt-2 text-sm leading-6 text-neutral-600">{description}</p>
-    </article>
-  );
-}
 function rankBestRated(restaurant: RestaurantSummary) {
   const reviewCount = Math.max(0, restaurant.reviewCount || 0);
   const totalOrders = Math.max(0, restaurant.totalOrders || 0);
@@ -7617,13 +7322,6 @@ function mapOrderAddressToProfile(address: NonNullable<CustomerOrderDetail['addr
   };
 }
 
-function buildProfileAddressLabel(address: CustomerProfileAddress) {
-  const firstLine = [address.street, address.number].filter(Boolean).join(' ').trim();
-  const secondLine = [address.neighborhood, address.reference].filter(Boolean).join(' · ').trim();
-
-  return [firstLine, secondLine].filter(Boolean).join(', ') || 'Aun no has guardado una direccion.';
-}
-
 function buildDetailAddressLabel(address: CustomerOrderDetail['address'] | null | undefined) {
   if (!address) return '';
   return [
@@ -7642,8 +7340,6 @@ function normalizeSearchValue(value: string) {
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '');
 }
-
-
 
 const Panel = React.memo(function Panel({
   title,
@@ -7686,13 +7382,6 @@ function triggerHaptic(pattern: number | number[] = 10) {
   if (typeof window !== 'undefined' && navigator.vibrate) {
     navigator.vibrate(pattern);
   }
-}
-
-function formatPhoneNumber(value: string) {
-  const digits = value.replace(/\D/g, '');
-  if (digits.length <= 2) return digits;
-  if (digits.length <= 6) return `(${digits.slice(0, 2)}) ${digits.slice(2)}`;
-  return `(${digits.slice(0, 2)}) ${digits.slice(2, 6)}-${digits.slice(6, 10)}`;
 }
 
 function SegmentedOtp({
@@ -7804,15 +7493,6 @@ function Field({
   );
 }
 
-function Info({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-[24px] border border-black/5 bg-neutral-50 p-4">
-      <p className="text-xs font-semibold uppercase tracking-[0.22em] text-neutral-400">{label}</p>
-      <p className="mt-2 text-sm leading-6 text-neutral-950">{value}</p>
-    </div>
-  );
-}
-
 const EmptyState = React.memo(function EmptyState({ text, compact = false }: { text: string; compact?: boolean }) {
   return (
     <div
@@ -7844,7 +7524,7 @@ function Callout({
 function TransientNoticeBanner({
   notice,
   onClose,
-  onRefundAction,
+  onRefundAction: _onRefundAction,
   apiBase,
   token,
 }: {
@@ -8112,47 +7792,6 @@ function TransientNoticeBanner({
   );
 }
 
-
-function Timeline({
-  steps,
-}: {
-  steps: Array<{
-    key: string;
-    label: string;
-    description: string;
-    state: 'done' | 'active' | 'pending';
-  }>;
-}) {
-  return (
-    <div className="rounded-[28px] border border-black/5 bg-neutral-50 p-4">
-      <p className="text-xs font-semibold uppercase tracking-[0.22em] text-neutral-400">Timeline del pedido</p>
-      <div className="mt-4 grid gap-4">
-        {steps.map((step, index) => (
-          <div key={step.key} className="flex items-start gap-4">
-            <div className="flex flex-col items-center">
-              <span
-                className={`flex h-10 w-10 items-center justify-center rounded-full border text-sm font-semibold ${step.state === 'done'
-                  ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
-                  : step.state === 'active'
-                    ? 'border-neutral-950 bg-neutral-950 text-white'
-                    : 'border-black/10 bg-white text-neutral-400'
-                  }`}
-              >
-                {index + 1}
-              </span>
-              {index < steps.length - 1 ? <span className="mt-2 h-10 w-px bg-black/10" /> : null}
-            </div>
-            <div className="pt-1">
-              <p className="font-medium text-neutral-950">{step.label}</p>
-              <p className="mt-1 text-sm text-neutral-600">{step.description}</p>
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
 function StatusBadge({ status, inverted = false, businessType }: { status: OrderStatus; inverted?: boolean; businessType?: string }) {
   const palette = inverted ? invertedStatusPaletteMap : statusPaletteMap;
 
@@ -8221,8 +7860,6 @@ function isActiveOrderStatus(status: string) {
 
   return ['PENDING', 'CONFIRMED', 'PREPARING', 'READY', 'PICKED_UP', 'IN_TRANSIT', 'DRIVER_ARRIVED'].includes(normalizedStatus);
 }
-
-
 
 function normalizeOrderStatusValue(status: string) {
   return status.trim().toUpperCase().replace(/[\s-]+/g, '_');
@@ -8318,56 +7955,6 @@ function formatDate(date: string) {
   }).format(new Date(date));
 }
 
-function formatShortTime(date: Date) {
-  return new Intl.DateTimeFormat('es-MX', {
-    hour: 'numeric',
-    minute: '2-digit',
-  }).format(date);
-}
-
-
-function formatEstimatedArrivalWindow(estimatedDeliveryTime: string, status: string, currentTimestamp: number = Date.now()) {
-  const etaDate = new Date(estimatedDeliveryTime);
-
-  if (Number.isNaN(etaDate.getTime())) {
-    return 'Calculando...';
-  }
-
-  if (status === 'DELIVERED') {
-    return `Entregado ${formatShortTime(etaDate)}`;
-  }
-
-  if (status === 'CANCELLED' || status === 'REJECTED') {
-    return formatDate(estimatedDeliveryTime);
-  }
-
-  const windowMinutes = getEtaWindowMinutes(status);
-  let start = new Date(etaDate.getTime() - windowMinutes.early * 60 * 1000);
-  let end = new Date(etaDate.getTime() + windowMinutes.late * 60 * 1000);
-
-  // If delayed, adjust window start dynamically to avoid displaying times in the past
-  if (['PENDING', 'CONFIRMED', 'PREPARING', 'READY', 'PICKED_UP', 'IN_TRANSIT'].includes(status) && currentTimestamp > start.getTime()) {
-    let bufferMinutes = 3;
-    if (status === 'PENDING') bufferMinutes = 8;
-    else if (status === 'CONFIRMED' || status === 'PREPARING') bufferMinutes = 5;
-    else if (status === 'READY' || status === 'PICKED_UP') bufferMinutes = 3;
-    else if (status === 'IN_TRANSIT') bufferMinutes = 2;
-
-    start = new Date(currentTimestamp + bufferMinutes * 60 * 1000);
-    // Keep a tight window even when delayed
-    const delayedWindowSize = windowMinutes.early + windowMinutes.late;
-    end = new Date(start.getTime() + delayedWindowSize * 60 * 1000);
-  }
-
-  return `Entre ${formatShortTime(start)} y ${formatShortTime(end)}`;
-}
-
-
-function formatShortAddress(address: CustomerOrderListItem['address']) {
-  if (!address) return '';
-  return `${address.street} ${address.number}, ${address.neighborhood}`;
-}
-
 /**
  * Calcula la distancia en línea recta entre dos coordenadas (Fórmula de Haversine).
  * Enfoque Senior: Manejo de precisión y radio de la Tierra exacto.
@@ -8443,5 +8030,4 @@ function PasswordToggleButton({ show, onToggle }: { show: boolean; onToggle: () 
     </button>
   );
 }
-
 
