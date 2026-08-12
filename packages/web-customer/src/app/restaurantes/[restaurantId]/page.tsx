@@ -3617,13 +3617,11 @@ function triggerHaptic(pattern: number | number[] = 10) {
                   ) : (
                   /* ── PASO 1 (DELIVERY): DIRECCIÓN DE ENTREGA ── */
                   <div className="rounded-[22px] border border-black/[0.04] bg-white p-4 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
-                    <div className="flex items-center justify-between border-b border-black/[0.03] pb-2.5 mb-3.5">
-                      <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-neutral-400 flex items-center gap-1.5">
-                        <span><svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z" /></svg></span> Dirección de entrega
-                      </p>
-                      <span className="rounded-full bg-sky-50 px-2 py-0.5 text-[9px] font-bold text-sky-600">
-                        Paso 1
-                      </span>
+                    <div className="mb-4 flex items-center justify-between border-b border-black/[0.05] pb-3">
+                      <div className="flex items-center gap-2.5">
+                        <span className="flex h-6 w-6 items-center justify-center rounded-full bg-sky-600 text-[11px] font-black text-white">1</span>
+                        <h3 className="text-[13px] font-bold tracking-tight text-neutral-900">Dirección de entrega</h3>
+                      </div>
                     </div>
 
                     {/* Modo: Mostrando Direcciones Guardadas */}
@@ -3776,7 +3774,6 @@ function triggerHaptic(pattern: number | number[] = 10) {
                           label="Referencias del domicilio" 
                           value={checkoutForm.reference} 
                           onChange={(value) => setCheckoutForm((current) => ({ ...current, reference: value }))} 
-                          placeholder="Ej. Depto 4B, timbre blanco, portón café" 
                         />
                       </div>
                     )}
@@ -3924,13 +3921,11 @@ function triggerHaptic(pattern: number | number[] = 10) {
                                 label="Número de casa / Apto / Interior"
                                 value={checkoutForm.number}
                                 onChange={(value) => setCheckoutForm((current) => ({ ...current, number: value }))}
-                                placeholder="Ej. Casa 3, Apto 402"
                               />
                               <Field
                                 label="Referencias del domicilio"
                                 value={checkoutForm.reference}
                                 onChange={(value) => setCheckoutForm((current) => ({ ...current, reference: value }))}
-                                placeholder="Ej. Portón café, junto al parque"
                               />
                             </div>
 
@@ -3969,20 +3964,17 @@ function triggerHaptic(pattern: number | number[] = 10) {
 
                   {/* ── PASO 2: INSTRUCCIONES ── */}
                   <div className="rounded-[22px] border border-black/[0.04] bg-white p-4 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
-                    <div className="flex items-center justify-between border-b border-black/[0.03] pb-2.5 mb-3.5">
-                      <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-neutral-400 flex items-center gap-1.5">
-                        <span><svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" /></svg></span> Instrucciones
-                      </p>
-                      <span className="rounded-full bg-sky-50 px-2 py-0.5 text-[9px] font-bold text-sky-600">
-                        Paso 2
-                      </span>
+                    <div className="mb-4 flex items-center justify-between border-b border-black/[0.05] pb-3">
+                      <div className="flex items-center gap-2.5">
+                        <span className="flex h-6 w-6 items-center justify-center rounded-full bg-sky-600 text-[11px] font-black text-white">2</span>
+                        <h3 className="text-[13px] font-bold tracking-tight text-neutral-900">Instrucciones</h3>
+                      </div>
                     </div>
                     <div className="space-y-3.5">
                       <Field 
                         label="Instrucciones para la tienda" 
                         value={checkoutForm.storeNotes} 
                         onChange={(value) => setCheckoutForm((current) => ({ ...current, storeNotes: value }))} 
-                        placeholder="Ingresa indicaciones al restaurante" 
                       />
 
                       {fulfillmentType !== 'PICKUP' && (
@@ -3990,7 +3982,6 @@ function triggerHaptic(pattern: number | number[] = 10) {
                         label="Instrucciones para el repartidor" 
                         value={checkoutForm.notes} 
                         onChange={(value) => setCheckoutForm((current) => ({ ...current, notes: value }))} 
-                        placeholder="¿Dónde dejarlo o cómo encontrarte?" 
                       />
                       )}
                     </div>
@@ -3998,20 +3989,17 @@ function triggerHaptic(pattern: number | number[] = 10) {
 
                   {/* ── PASO 3: PAGO Y DETALLES ── */}
                   <div className="rounded-[22px] border border-black/[0.04] bg-white p-4 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
-                    <div className="flex items-center justify-between border-b border-black/[0.03] pb-2.5 mb-3.5">
-                      <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-neutral-400 flex items-center gap-1.5">
-                        <span><svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M2.25 8.25h19.5M2.25 9h19.5m-16.5 5.25h6m-6 2.25h3m-3.75 3h15a2.25 2.25 0 002.25-2.25V6.75A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25v10.5A2.25 2.25 0 004.5 19.5zm15-8.25h.008v.008h-.008v-.008zm0 2.25h.008v.008h-.008v-.008zm0 2.25h.008v.008h-.008v-.008z" /></svg></span> Método de pago
-                      </p>
-                      <span className="rounded-full bg-sky-50 px-2 py-0.5 text-[9px] font-bold text-sky-600">
-                        Paso 3
-                      </span>
+                    <div className="mb-4 flex items-center justify-between border-b border-black/[0.05] pb-3">
+                      <div className="flex items-center gap-2.5">
+                        <span className="flex h-6 w-6 items-center justify-center rounded-full bg-sky-600 text-[11px] font-black text-white">3</span>
+                        <h3 className="text-[13px] font-bold tracking-tight text-neutral-900">Método de pago</h3>
+                      </div>
                     </div>
 
                     <div className="space-y-4">
                       {/* Selector de Método de Pago */}
                       <div>
-                        <label className="mb-2 block text-sm font-semibold text-neutral-800">Método de pago</label>
-                        <div className="flex gap-1.5 rounded-xl bg-neutral-100 p-0.5">
+                        <div className="flex gap-1.5 rounded-2xl bg-neutral-100 p-1">
                           <button
                             type="button"
                             onClick={() => {
@@ -4019,7 +4007,7 @@ function triggerHaptic(pattern: number | number[] = 10) {
                               setTransferProofName('');
                               setTransferProofSource('');
                             }}
-                            className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg px-2.5 py-2 text-[11px] font-bold transition-all ${
+                            className={`flex flex-1 items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-xs font-bold transition-all ${
                               checkoutForm.paymentMethod === 'CASH'
                                 ? 'bg-sky-500 text-white shadow-sm shadow-sky-500/30'
                                 : 'text-neutral-500 hover:text-neutral-800'
@@ -4033,7 +4021,7 @@ function triggerHaptic(pattern: number | number[] = 10) {
                             onClick={() => {
                               setCheckoutForm((current) => ({ ...current, paymentMethod: 'TRANSFER' }));
                             }}
-                            className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg px-2.5 py-2 text-[11px] font-bold transition-all ${
+                            className={`flex flex-1 items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-xs font-bold transition-all ${
                               checkoutForm.paymentMethod === 'TRANSFER'
                                 ? 'bg-sky-500 text-white shadow-sm shadow-sky-500/30'
                                 : 'text-neutral-500 hover:text-neutral-800'
@@ -5736,18 +5724,18 @@ function Field({
   label: string;
   value: string;
   onChange: (value: string) => void;
-  placeholder: string;
+  placeholder?: string;
   type?: string;
 }) {
   return (
-    <label className="grid gap-2 text-sm text-neutral-600">
-      <span className="font-medium text-neutral-800">{label}</span>
+    <label className="grid gap-1.5 text-sm text-neutral-600">
+      <span className="text-[11px] font-bold uppercase tracking-[0.08em] text-neutral-500">{label}</span>
       <input
         value={value}
         onChange={(event) => onChange(event.target.value)}
         placeholder={placeholder}
         type={type}
-        className="rounded-2xl border border-black/10 bg-white px-4 py-3 text-neutral-950 outline-none transition placeholder:text-neutral-400 focus:border-black/20"
+        className="rounded-xl border border-black/[0.08] bg-neutral-50/70 px-4 py-3 text-sm text-neutral-950 outline-none transition placeholder:text-neutral-400/80 focus:border-sky-400 focus:bg-white focus:ring-4 focus:ring-sky-400/15"
       />
     </label>
   );
