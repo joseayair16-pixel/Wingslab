@@ -3,15 +3,16 @@ import { MetadataRoute } from 'next';
 export default function manifest(): MetadataRoute.Manifest {
   return {
     id: '/',
-    name: 'SaDeL Eats',
+    name: 'SaDeL',
     short_name: 'SaDeL',
-    description: '¡Pídelo por aquí!',
+    description: 'Pide comida y productos en línea. Recoge en tienda o recibe en casa con seguimiento en tiempo real.',
+    lang: 'es-MX',
     start_url: '/',
     scope: '/',
     display: 'standalone',
     background_color: '#ffffff',
     theme_color: '#fafafa',
-    categories: ['food', 'shopping'],
+    categories: ['food', 'shopping', 'lifestyle'],
     icons: [
       {
         src: '/app-icon-192.png',

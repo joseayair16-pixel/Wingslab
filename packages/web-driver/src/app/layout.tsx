@@ -5,8 +5,12 @@ import InstallAppButton from '../components/InstallAppButton';
 import SplashScreen from '../components/SplashScreen';
 
 export const metadata: Metadata = {
-  title: 'SaDeL Driver',
+  title: 'SaDeL Repartidor',
   description: 'Gestiona disponibilidad, entregas y seguimiento desde el panel del repartidor SaDeL.',
+  robots: {
+    index: false,
+    follow: false,
+  },
   manifest: '/manifest.json',
   icons: {
     icon: '/app-icon-192.png',
@@ -15,7 +19,7 @@ export const metadata: Metadata = {
   appleWebApp: {
     capable: true,
     statusBarStyle: 'default',
-    title: 'SaDeL Driver',
+    title: 'SaDeL Repartidor',
   },
   other: {
     'mobile-web-app-capable': 'yes',

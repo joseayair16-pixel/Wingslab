@@ -8,6 +8,10 @@ import SplashScreen from '../components/SplashScreen';
 export const metadata: Metadata = {
   title: 'SaDeL Restaurant',
   description: 'Opera pedidos, menu y despacho desde el panel de restaurante de SaDeL.',
+  robots: {
+    index: false,
+    follow: false,
+  },
   manifest: '/manifest.json',
   icons: {
     icon: '/app-icon-192.png',

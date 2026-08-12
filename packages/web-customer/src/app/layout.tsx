@@ -18,10 +18,57 @@ const plusJakartaSans = Plus_Jakarta_Sans({
   display: 'swap',
 });
 
+const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://pideloporsadel.app';
+
 export const metadata: Metadata = {
-  title: 'SaDeL Eats',
-  description: '¡Pídelo por aquí!',
+  metadataBase: new URL(siteUrl),
+  title: {
+    default: 'SaDeL — Pídelo por aquí',
+    template: '%s | SaDeL',
+  },
+  description:
+    'Pide comida y productos en línea desde tu localidad. Entrega a domicilio o recogida en tienda, pago en efectivo o por transferencia y seguimiento en tiempo real. El comercio local, ahora en digital con SaDeL.',
+  applicationName: 'SaDeL',
   manifest: '/manifest.json',
+  alternates: {
+    canonical: '/',
+  },
+  keywords: [
+    'pedir comida en línea',
+    'entrega a domicilio',
+    'recoger en tienda',
+    'restaurantes cerca de mí',
+    'comida rápida',
+    'pídelo por aquí',
+    'SaDeL',
+  ],
+  openGraph: {
+    type: 'website',
+    siteName: 'SaDeL',
+    locale: 'es_MX',
+    url: siteUrl,
+    title: 'SaDeL — Pídelo por aquí',
+    description:
+      'Pide comida y productos en línea desde tu localidad. Entrega a domicilio o recogida en tienda, con seguimiento en tiempo real.',
+    images: [
+      {
+        url: `${siteUrl}/app-icon-512.png`,
+        width: 512,
+        height: 512,
+        alt: 'SaDeL',
+      },
+    ],
+  },
+  twitter: {
+    card: 'summary',
+    title: 'SaDeL — Pídelo por aquí',
+    description: 'Pide comida y productos en línea desde tu localidad.',
+    images: [`${siteUrl}/app-icon-512.png`],
+  },
+  robots: {
+    index: true,
+    follow: true,
+  },
   icons: {
     icon: '/app-icon-192.png',
     apple: '/app-icon-192.png',
@@ -29,7 +76,7 @@ export const metadata: Metadata = {
   appleWebApp: {
     capable: true,
     statusBarStyle: 'default',
-    title: 'SaDeL Eats',
+    title: 'SaDeL',
   },
   other: {
     'mobile-web-app-capable': 'yes',

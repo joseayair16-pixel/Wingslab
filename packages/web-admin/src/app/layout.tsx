@@ -8,6 +8,10 @@ import SplashScreen from '../components/SplashScreen';
 export const metadata: Metadata = {
   title: 'SaDeL Admin',
   description: 'Opera restaurantes, valida estados y administra la plataforma SaDeL.',
+  robots: {
+    index: false,
+    follow: false,
+  },
   manifest: '/manifest.json',
   icons: {
     icon: '/app-icon-192.png',

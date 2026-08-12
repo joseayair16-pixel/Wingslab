@@ -6298,8 +6298,7 @@ function hasTransferDetails(restaurant: PublicRestaurantDetail | null) {
     restaurant.transferBankName?.trim() &&
       restaurant.transferAccountNumber?.trim() &&
       restaurant.transferBeneficiaryName?.trim()
-  );
-}
+  );}
 
 function orderStatusLabel(status: OrderStatus, businessType?: string): string {
   return getOrderStatusLabel(status, businessType);

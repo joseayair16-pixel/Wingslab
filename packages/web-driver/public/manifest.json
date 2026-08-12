@@ -1,7 +1,7 @@
 {
   "id": "/",
-  "name": "SaDeL Driver",
-  "short_name": "SaDeL Driver",
+  "name": "SaDeL Repartidor",
+  "short_name": "SaDeL Rep",
   "description": "Gestiona disponibilidad, entregas y seguimiento desde el panel del repartidor SaDeL.",
   "start_url": "/",
   "scope": "/",
