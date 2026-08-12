@@ -4627,6 +4627,26 @@ function triggerHaptic(pattern: number | number[] = 10) {
                 </div>
               </section>
 
+              {(() => {
+                const radiusKm = restaurant.deliveryRadius || 3;
+                if (
+                  !restaurant.pickupOnly &&
+                  typeof distanceKm === 'number' &&
+                  distanceKm > radiusKm
+                ) {
+                  return (
+                    <div className="mt-4 flex items-start gap-2.5 rounded-2xl border border-amber-200/70 bg-amber-50/80 px-4 py-3 text-[13px] leading-relaxed text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300">
+                      <span className="mt-0.5 text-base shrink-0">📦</span>
+                      <p>
+                        Estás a <strong>{distanceKm.toFixed(1)} km</strong> de este negocio. La entrega a domicilio está
+                        disponible dentro de <strong>{radiusKm} km</strong>; también puedes <strong>recoger en tienda</strong>.
+                      </p>
+                    </div>
+                  );
+                }
+                return null;
+              })()}
+
               <div data-sticky-header className="sticky top-[calc(env(safe-area-inset-top)+72px)] z-20 -mx-4 bg-white/90 backdrop-blur-2xl border-b border-black/[0.04] md:-mx-6 lg:-mx-7 dark:bg-neutral-950/90 dark:border-zinc-800/60">
                 <div className="px-4 py-3 md:px-6 lg:px-7">
                   <div className="relative w-full">
