@@ -61,9 +61,8 @@ function loadGoogleMaps(): Promise<void> {
       return;
     }
 
-    const libs = 'places';
     const script = document.createElement('script');
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=${libs}&callback=__onDriverMapsLoaded&loading=async`;
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&callback=__onDriverMapsLoaded&loading=async`;
     script.async = true;
     script.defer = true;
     script.dataset.driverMaps = '1';

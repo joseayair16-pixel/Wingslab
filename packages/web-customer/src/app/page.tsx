@@ -175,6 +175,9 @@ type CustomerOrderDetail = {
   deliveryPin?: string | null;
   pickupPin?: string | null;
   driverArrivedAtCustomer?: string | null;
+  lastDriverLatitude?: number | null;
+  lastDriverLongitude?: number | null;
+  lastDriverLocationAt?: string | null;
   createdAt: string;
   isSecondInRoute?: boolean;
   batchId?: string | null;
@@ -3209,27 +3212,65 @@ export default function Home() {
     setDriverLocation(null);
   }, [carouselIndex]);
 
-  // Suscripción condicional al WebSocket para recibir la ubicación del repartidor
+  // Suscripción condicional al WebSocket para recibir la ubicación del repartidor,
+  // con snapshot inicial de la última posición persistida y fallback por polling
+  // cuando el socket está caído.
   useEffect(() => {
-    if (!isTrackingEnabled || !pinnedOrder || !socketRef.current) {
+    if (!isTrackingEnabled || !pinnedOrder) {
       return;
+    }
+
+    // Snapshot inicial: mostrar la última posición persistida de inmediato.
+    if (pinnedOrder.lastDriverLatitude != null && pinnedOrder.lastDriverLongitude != null) {
+      setDriverLocation({ lat: pinnedOrder.lastDriverLatitude, lng: pinnedOrder.lastDriverLongitude });
     }
 
     const socket = socketRef.current;
 
     const handleDriverLocation = (payload: { orderId: string; latitude: number; longitude: number }) => {
-      console.log('[Socket.io] Ubicación de repartidor recibida en cliente:', payload);
       if (payload.orderId === pinnedOrder.id) {
         setDriverLocation({ lat: payload.latitude, lng: payload.longitude });
       }
     };
 
-    socket.on('order:driver-location', handleDriverLocation);
+    if (socket) {
+      socket.on('order:driver-location', handleDriverLocation);
+    }
+
+    // Fallback: si el socket no está conectado, refrescar por polling (~10s) la
+    // última posición persistida para que el mapa siga avanzando igual.
+    let pollTimer: ReturnType<typeof setInterval> | null = null;
+    if (socketStatus !== 'connected') {
+      pollTimer = setInterval(() => {
+        requestJson<{ success: true; data: CustomerOrderDetail }>({
+          apiBase,
+          path: `/me/pedidos/${pinnedOrder.id}`,
+          token,
+        })
+          .then((detailRes) => {
+            if (
+              detailRes.success &&
+              detailRes.data &&
+              detailRes.data.lastDriverLatitude != null &&
+              detailRes.data.lastDriverLongitude != null
+            ) {
+              setDriverLocation({
+                lat: detailRes.data.lastDriverLatitude,
+                lng: detailRes.data.lastDriverLongitude,
+              });
+            }
+          })
+          .catch(() => {});
+      }, 10000);
+    }
 
     return () => {
-      socket.off('order:driver-location', handleDriverLocation);
+      if (socket) {
+        socket.off('order:driver-location', handleDriverLocation);
+      }
+      if (pollTimer) clearInterval(pollTimer);
     };
-  }, [isTrackingEnabled, pinnedOrder?.id, socketStatus]);
+  }, [isTrackingEnabled, pinnedOrder?.id, socketStatus, apiBase, token]);
 
   // Inicialización del mapa estático simple del modal de detalles (sin conflictos de DOM)
 

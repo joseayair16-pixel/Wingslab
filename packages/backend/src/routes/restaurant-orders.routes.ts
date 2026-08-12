@@ -2485,6 +2485,17 @@ export async function registerRestaurantOrderRoutes(fastify: FastifyInstance): P
           );
         }
 
+        if (activeOwnOrders.length > 0) {
+          await prisma.order.updateMany({
+            where: { id: { in: activeOwnOrders.map((order) => order.id) } },
+            data: {
+              lastDriverLatitude: latitude,
+              lastDriverLongitude: longitude,
+              lastDriverLocationAt: new Date(),
+            },
+          });
+        }
+
         return reply.send({ success: true, emitted: activeOwnOrders.length });
       } catch (error) {
         return sendAppError(reply, error);

@@ -460,6 +460,11 @@ model Order {
   inTransitAt DateTime?
   deliveredAt DateTime?
 
+  // Última posición conocida del repartidor (persistida para snapshot del comensal)
+  lastDriverLatitude  Float?
+  lastDriverLongitude Float?
+  lastDriverLocationAt DateTime?
+
   // Thank-you WhatsApp (5+ min after delivery, gated by admin toggle)
   whatsappThankYouSentAt   DateTime?
   whatsappThankYouSkippedAt DateTime?

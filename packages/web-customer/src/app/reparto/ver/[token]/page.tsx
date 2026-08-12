@@ -8,6 +8,7 @@
 /* eslint-disable react-hooks/exhaustive-deps */
 
 import { useEffect, useState } from 'react';
+import DeliveryRouteMap from '../../../../components/DeliveryRouteMap';
 
 interface DeliveryTicketData {
   id: string;
@@ -82,6 +83,8 @@ export default function DeliveryTicketPage({ params }: PageProps) {
   // Repartidor de apoyo: tokens cuyo repartidor YA llegó al restaurante origen y
   // está esperando que confirme la entrega (PIN en transferencia / efectivo).
   const [waitingHandoverTokens, setWaitingHandoverTokens] = useState<string[]>([]);
+  // Posición GPS actual del repartidor (para el mapa de navegación en la app).
+  const [driverPos, setDriverPos] = useState<{ lat: number; lng: number } | null>(null);
 
   // Dark mode automático por preferencia del sistema
   const [darkMode, setDarkMode] = useState(false);
@@ -300,10 +303,105 @@ export default function DeliveryTicketPage({ params }: PageProps) {
     };
 
     void poll();
-    const interval = setInterval(poll, 4000);
-    return () => clearInterval(interval);
+    // Guard de visibilidad: pausa el polling cuando la pestaña está oculta
+    // (ahorra datos) y lo retoma al volver a primer plano.
+    let interval: ReturnType<typeof setInterval> | null = null;
+    const startPolling = () => {
+      if (interval) return;
+      interval = setInterval(poll, 4000);
+    };
+    const stopPolling = () => {
+      if (interval) {
+        clearInterval(interval);
+        interval = null;
+      }
+    };
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        startPolling();
+      } else {
+        stopPolling();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+    startPolling();
+    return () => {
+      if (interval) clearInterval(interval);
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedToken, waitingHandoverTokens.length, apiBase]);
+
+  // Tokens de entregas en ruta (PICKED_UP/IN_TRANSIT): el repartidor propio/apoyo
+  // comparte su GPS con el cliente real de SaDeL para el seguimiento en vivo.
+  const activeTrackingTokens = deliveries
+    .filter((d) => ['PICKED_UP', 'IN_TRANSIT'].includes(d.data.status) && !d.delivered)
+    .map((d) => d.token)
+    .join(',');
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || !navigator.geolocation) return;
+    if (!activeTrackingTokens) return;
+
+    const tokens = activeTrackingTokens.split(',');
+    let watchId: number | null = null;
+    let lastSent: { lat: number; lng: number; at: number } | null = null;
+
+    const postLocation = (tokenToPost: string, lat: number, lng: number) => {
+      fetch(`${apiBase}/public/delivery-ticket/${tokenToPost}/ubicacion`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ coords: [lat, lng] }),
+      }).catch(() => {});
+    };
+
+    const onPositionSuccess = (position: GeolocationPosition) => {
+      if (document.visibilityState === 'hidden') return;
+      const lat = parseFloat(position.coords.latitude.toFixed(6));
+      const lng = parseFloat(position.coords.longitude.toFixed(6));
+      const now = Date.now();
+      setDriverPos({ lat, lng });
+      // Cadencia ~8s y desplazamiento >~20m antes de reportar.
+      if (lastSent && now - lastSent.at < 8000) return;
+      const movedEnough =
+        !lastSent ||
+        Math.abs(lat - lastSent.lat) > 0.0002 ||
+        Math.abs(lng - lastSent.lng) > 0.0002;
+      if (!movedEnough) return;
+      lastSent = { lat, lng, at: now };
+      for (const t of tokens) postLocation(t, lat, lng);
+    };
+
+    const start = () => {
+      if (watchId !== null) return;
+      watchId = navigator.geolocation.watchPosition(onPositionSuccess, () => {}, {
+        enableHighAccuracy: true,
+        timeout: 20000,
+        maximumAge: 10000,
+      });
+    };
+    const stop = () => {
+      if (watchId !== null) {
+        navigator.geolocation.clearWatch(watchId);
+        watchId = null;
+      }
+    };
+
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        start();
+      } else {
+        stop();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+    start();
+    return () => {
+      stop();
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTrackingTokens, apiBase]);
 
   const activeDelivery = deliveries.find(d => d.token === selectedToken);
   const currentTicket = activeDelivery ? activeDelivery.data : null;
@@ -1076,11 +1174,6 @@ export default function DeliveryTicketPage({ params }: PageProps) {
   const isCash = currentTicket.paymentMethod === 'CASH';
   const isTransfer = currentTicket.paymentMethod === 'TRANSFER';
 
-  // Mapa estático de Google (una sola imagen, ~15KB)
-  const staticMapUrl = addressObj.latitude && addressObj.longitude
-    ? `https://maps.googleapis.com/maps/api/staticmap?center=${addressObj.latitude},${addressObj.longitude}&zoom=16&size=600x200&scale=2&maptype=roadmap&markers=color:red%7C${addressObj.latitude},${addressObj.longitude}&key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || ''}`
-    : null;
-
   // ══════════════════════════════════════
   // VISTA: ENTREGA COMPLETADA
   // ══════════════════════════════════════
@@ -1573,21 +1666,32 @@ export default function DeliveryTicketPage({ params }: PageProps) {
           </div>
         </div>
 
-        {/* ── MAPA ESTÁTICO ── */}
-        {staticMapUrl && (
-          <a
-            href={googleMapsUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className={`mt-3 block overflow-hidden rounded-[28px] border shadow-[0_4px_24px_rgba(0,0,0,0.015)] transition-transform hover:scale-[1.01] ${cardBorder}`}
-          >
-            <img
-              src={staticMapUrl}
-              alt={`Mapa de ${addressText}`}
-              className="w-full h-[180px] object-cover"
-              loading="lazy"
+        {/* ── MAPA DE NAVEGACIÓN IN-APP ── */}
+        {addressObj.latitude && addressObj.longitude && (
+          <div className={`mt-3 overflow-hidden rounded-[28px] border shadow-[0_4px_24px_rgba(0,0,0,0.015)] ${cardBorder}`}>
+            <DeliveryRouteMap
+              origin={
+                currentTicket.restaurant.latitude && currentTicket.restaurant.longitude
+                  ? {
+                      lat: currentTicket.restaurant.latitude,
+                      lng: currentTicket.restaurant.longitude,
+                      label: currentTicket.restaurant.name,
+                      emoji: '🏪',
+                      color: '#f59e0b',
+                    }
+                  : null
+              }
+              destination={{
+                lat: addressObj.latitude,
+                lng: addressObj.longitude,
+                label: addressText,
+                emoji: '🏠',
+                color: '#ef4444',
+              }}
+              userPos={driverPos}
+              height={200}
             />
-          </a>
+          </div>
         )}
 
         {/* ── ALERTA DE PAGO ── */}

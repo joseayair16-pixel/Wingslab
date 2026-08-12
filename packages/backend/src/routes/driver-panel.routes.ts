@@ -2335,6 +2335,17 @@ export async function registerDriverPanelRoutes(fastify: FastifyInstance): Promi
         },
       });
 
+      if (activeOrders.length > 0) {
+        await prisma.order.updateMany({
+          where: { id: { in: activeOrders.map((order) => order.id) } },
+          data: {
+            lastDriverLatitude: latitude,
+            lastDriverLongitude: longitude,
+            lastDriverLocationAt: new Date(),
+          },
+        });
+      }
+
       const requestContext = getOrCreateRequestContext(request);
 
       for (const order of activeOrders) {

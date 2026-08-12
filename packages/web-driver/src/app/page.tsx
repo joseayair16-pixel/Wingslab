@@ -1509,7 +1509,8 @@ export default function Home() {
       // Durante entregas activas toleramos menos desplazamiento para capturar
       // giros/paradas (rastro denso); en reposo solo enviamos si hubo movimiento claro.
       const { hasActiveDeliveries } = getTrackingMode();
-      const threshold = hasActiveDeliveries ? 0.00006 : 0.00015;
+      // Reposo: mínimo ~200 m de desplazamiento antes de volver a reportar.
+      const threshold = hasActiveDeliveries ? 0.00006 : 0.002;
       return !(deltaLat < threshold && deltaLng < threshold);
     };
 
@@ -1517,8 +1518,8 @@ export default function Home() {
       const now = Date.now();
       const { hasActiveDeliveries } = getTrackingMode();
       // Cadencia adaptativa: durante entregas activas enviamos más seguido
-      // (rastro fluido para el cliente); en reposo mantenemos el mínimo.
-      const minInterval = hasActiveDeliveries ? 6000 : 15000;
+      // (rastro fluido para el cliente); en reposo reducimos a ~1/minuto.
+      const minInterval = hasActiveDeliveries ? 6000 : 60000;
       if (now - lastPostAt < minInterval) return;
       lastPostAt = now;
 
@@ -1670,10 +1671,24 @@ export default function Home() {
 
     let healthCheckInterval: any;
     let lastEventTime = Date.now();
-    // Debounce para eventos no críticos: evita recargas en ráfaga
+    // Debounce trailing con tope máximo: agrupa ráfagas de eventos en una sola
+    // recarga, pero garantiza refresco aunque lleguen eventos continuos.
     let refreshDebounceTimer: any = null;
+    let refreshScheduledAt = 0;
     const debouncedRefresh = () => {
-      if (refreshDebounceTimer) return;
+      const now = Date.now();
+      if (refreshDebounceTimer && now - refreshScheduledAt >= 10000) {
+        clearTimeout(refreshDebounceTimer);
+        refreshDebounceTimer = null;
+        refreshScheduledAt = now;
+        void loadDashboard();
+        return;
+      }
+      if (refreshDebounceTimer) {
+        clearTimeout(refreshDebounceTimer);
+      } else {
+        refreshScheduledAt = now;
+      }
       refreshDebounceTimer = setTimeout(() => {
         refreshDebounceTimer = null;
         void loadDashboard();

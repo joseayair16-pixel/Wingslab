@@ -66,11 +66,9 @@ self.addEventListener('notificationclick', function(event) {
   );
 });
 
-const CACHE_NAME = 'sadel-driver-v3';
+const CACHE_NAME = 'sadel-driver-v4';
 const PRECACHE_URLS = [
   '/',
-  '/sounds/notifica.wav',
-  '/sounds/mensaje.wav',
   '/icon.svg',
   '/sadel-icon.svg',
   '/app-icon-192.png',
@@ -152,6 +150,31 @@ self.addEventListener('fetch', function(event) {
         return cached || fetch(event.request);
       })
     );
+    return;
+  }
+
+  // Assets estáticos de Next.js (JS/CSS con hash): cache-first con
+  // revalidación en segundo plano. Solo se cachean respuestas exitosas.
+  if (
+    url.origin === self.location.origin &&
+    (url.pathname.startsWith('/_next/static/') || url.pathname === '/manifest.json')
+  ) {
+    event.respondWith(
+      caches.open(CACHE_NAME).then(function(cache) {
+        return cache.match(event.request).then(function(cached) {
+          var fetchPromise = fetch(event.request).then(function(networkResponse) {
+            if (networkResponse && networkResponse.ok) {
+              cache.put(event.request, networkResponse.clone());
+            }
+            return networkResponse;
+          }).catch(function() {
+            return cached;
+          });
+          return cached || fetchPromise;
+        });
+      })
+    );
+    return;
   }
 });
 

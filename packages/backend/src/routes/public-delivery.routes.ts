@@ -279,6 +279,102 @@ export async function registerPublicDeliveryRoutes(fastify: FastifyInstance): Pr
     }
   });
 
+  fastify.post('/public/delivery-ticket/:token/ubicacion', async (request, reply) => {
+    const params = z.object({ token: z.string().min(1) }).safeParse(request.params);
+    const bodySchema = z.object({
+      coords: z
+        .array(z.number())
+        .length(2, 'Las coordenadas deben contener exactamente [latitud, longitud]'),
+    });
+    const body = bodySchema.safeParse(request.body);
+
+    if (!params.success) {
+      return reply.status(400).send({
+        success: false,
+        error: { code: 'INVALID_PARAMS', message: 'Token invalido.' },
+      });
+    }
+
+    if (!body.success) {
+      return reply.status(400).send({
+        success: false,
+        error: { code: 'INVALID_PAYLOAD', message: 'Datos invalidos.' },
+      });
+    }
+
+    try {
+      const { hashToken } = require('../utils/crypto');
+      const hashedToken = hashToken(params.data.token);
+      const dToken = await (prisma as any).deliveryToken.findFirst({
+        where: {
+          OR: [
+            { token: hashedToken },
+            { token: params.data.token }
+          ]
+        },
+        include: {
+          order: {
+            include: {
+              customer: {
+                include: {
+                  user: true,
+                },
+              },
+            },
+          },
+        },
+      }) as any;
+
+      if (!dToken) {
+        return reply.status(404).send({
+          success: false,
+          error: { code: 'TOKEN_NOT_FOUND', message: 'El enlace de reparto no existe o ha expirado.' },
+        });
+      }
+
+      if (new Date() > dToken.expiresAt) {
+        await (prisma as any).deliveryToken.delete({ where: { id: dToken.id } });
+        return reply.status(410).send({
+          success: false,
+          error: { code: 'TOKEN_EXPIRED', message: 'El enlace de reparto ha expirado.' },
+        });
+      }
+
+      const order = dToken.order;
+      const [latitude, longitude] = body.data.coords;
+
+      await prisma.order.update({
+        where: { id: order.id },
+        data: {
+          lastDriverLatitude: latitude,
+          lastDriverLongitude: longitude,
+          lastDriverLocationAt: new Date(),
+        },
+      });
+
+      emitNotification(
+        fastify.io,
+        order.customer.user.id,
+        'CUSTOMER',
+        'order:driver-location',
+        {
+          orderId: order.id,
+          latitude,
+          longitude,
+        },
+        {
+          orderId: order.id,
+        }
+      );
+
+      return reply.send({
+        success: true,
+      });
+    } catch (error) {
+      return sendAppError(reply, error);
+    }
+  });
+
   fastify.post('/public/delivery-ticket/:token/llegue', async (request, reply) => {
     const params = z.object({ token: z.string().min(1) }).safeParse(request.params);
 
