@@ -101,7 +101,7 @@ async function processNearlyReadyOrders(db: PrismaClient, io: any) {
   return nearlyReadyOrders.length;
 }
 
-async function processUnclaimedReadyOrders(db: PrismaClient, io: any) {
+async function processUnclaimedReadyOrders(db: PrismaClient, _io: any) {
   const thirtyMinAgo = new Date(Date.now() - 30 * 60 * 1000);
 
   const unclaimedOrders = await db.order.findMany({

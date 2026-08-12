@@ -1274,7 +1274,6 @@ export async function registerRestaurantOrderRoutes(fastify: FastifyInstance): P
       }
 
       const user = getAuthenticatedUser(request);
-      const requestContext = getOrCreateRequestContext(request);
 
       try {
         const updatedOrder = await handoverOrderFromRestaurant({
@@ -1331,7 +1330,6 @@ export async function registerRestaurantOrderRoutes(fastify: FastifyInstance): P
       }
 
       const user = getAuthenticatedUser(request);
-      const requestContext = getOrCreateRequestContext(request);
 
       try {
         const updatedOrder = await completePickupByRestaurant({
@@ -2018,7 +2016,6 @@ export async function registerRestaurantOrderRoutes(fastify: FastifyInstance): P
         });
       }
 
-      const user = getAuthenticatedUser(request);
       const requestContext = getOrCreateRequestContext(request);
 
       try {

@@ -191,7 +191,7 @@ export async function createOrderForCustomer({
   prisma,
   customerUserId,
   input,
-  requestHeaders,
+  requestHeaders: _requestHeaders,
 }: CreateOrderParams & { requestHeaders?: any }) {
   logger.info('Creating order for customer', {
     customerUserId,

@@ -43,7 +43,7 @@ interface DashboardSectionProps {
 }
 
 export const DashboardSection = React.memo(function DashboardSection({
-  orders, profile, products, drivers, kitchenClockNow, sessionOpenedAt,
+  orders, profile, products, drivers, kitchenClockNow,
   selectedWeekOffset, dashboardChartView, revenueMode, isPrintingTicket,
   unreadMessagesMap, updatingOperationalStatus, isBusinessOpen, isBusinessPaused,
   isWithinHours, operationalStatusLabel, restaurantName,
@@ -52,7 +52,7 @@ export const DashboardSection = React.memo(function DashboardSection({
   onSetDashboardChartView, onSetSelectedWeekOffset, onSetRevenueMode, onPushToast,
   formatCurrency, formatDate, getPreparationRemainingMs, isPreparationTimeUrgent,
   getRestaurantCollectionAmount,   getCustomerOrigin, formatWeekday, formatCalendarDate,
-  formatHourLabel, Panel,
+  Panel,
 }: DashboardSectionProps) {
   const ProfileBadge = React.useCallback(function ProfileBadge({ tone, label, detail }: { tone: string; label: string; detail: string }) {
     const colorMap: Record<string, string> = {

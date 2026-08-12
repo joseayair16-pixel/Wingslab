@@ -135,7 +135,6 @@ export default memo(function DriverNavigationMap({
   const destMarkerRef = useRef<any>(null);
   const routeRef = useRef<any>(null);
   const playgroundRef = useRef<any>(null);
-  const fitDoneRef = useRef<string>('');
   const originRef = useRef<Point | null>(origin);
   const destinationRef = useRef<Destination | null>(destination);
   const lastRouteOriginRef = useRef<Point | null>(null);

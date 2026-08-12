@@ -3,7 +3,6 @@ import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 
 import { prisma } from '../config/database';
-import { getRedis } from '../config/redis';
 import { sendAppError } from '../errors/http';
 import { authenticate, authorize, getAuthenticatedUser } from '../middleware/auth';
 import { customerOrderDetailSelect, customerOrderListSelect } from '../services/order-selects';

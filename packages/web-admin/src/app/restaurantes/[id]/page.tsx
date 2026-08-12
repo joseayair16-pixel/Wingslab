@@ -1,6 +1,5 @@
 'use client';
 
-import Head from 'next/head';
 import Link from 'next/link';
 import { SaDelLogo } from '../../../components/SaDelLogo';
 import { useParams } from 'next/navigation';
@@ -13,16 +12,6 @@ import {
   readStoredSession,
   requestJson,
 } from '@sadel/shared';
-
-const mockPerformanceData = [
-  { name: 'Lun', ingresos: 4000, pedidos: 24 },
-  { name: 'Mar', ingresos: 3000, pedidos: 18 },
-  { name: 'Mié', ingresos: 2000, pedidos: 12 },
-  { name: 'Jue', ingresos: 2780, pedidos: 16 },
-  { name: 'Vie', ingresos: 5890, pedidos: 38 },
-  { name: 'Sáb', ingresos: 8390, pedidos: 55 },
-  { name: 'Dom', ingresos: 7490, pedidos: 48 },
-];
 
 type RestaurantStatus = 'ACTIVE' | 'SUSPENDED' | 'DELETED';
 type BillingCycle = 'WEEKLY' | 'MONTHLY';

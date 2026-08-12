@@ -1,7 +1,7 @@
 'use client';
 
 import { memo, useMemo } from 'react';
-import { useCartStore, type CartItem } from '../store/cartStore';
+import { useCartStore } from '../store/cartStore';
 
 function formatCurrency(amount: number) {
   return '$' + Math.round(amount).toLocaleString('es-MX');

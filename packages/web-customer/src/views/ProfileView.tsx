@@ -56,7 +56,6 @@ export const ProfileView = memo(function ProfileView({
   unsubscribePush,
   pushSupportIssue,
   setEditName,
-  editLastName,
   setEditLastName,
   setEditPhone,
   setIsEditingProfile,
@@ -77,15 +76,12 @@ export const ProfileView = memo(function ProfileView({
   setProfileAddress,
   setIsEditingAddress,
   updatePreferences,
-  whatsappNotificationsEnabled,
-  handleCustomerWhatsAppToggle,
   customerProfile,
   setIsChangingPassword,
   clearSession,
   Field,
   token,
   apiBase,
-  loadAddresses,
   setToastMessage
 }: ProfileViewProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);

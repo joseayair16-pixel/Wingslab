@@ -15,10 +15,8 @@ import {
 } from './order-selects';
 import {
   getDistanceInKm,
-  isRestaurant,
   getBusinessRef,
   getBusinessArticleCapitalized,
-  getStatusLabel,
 } from '../utils/restaurant';
 import { getRedis } from '../config/redis';
 import { logger } from '../utils/logger';

@@ -1,6 +1,5 @@
 import React from 'react';
 import { useStore } from '../store';
-import Image from 'next/image';
 
 interface OrdersViewProps {
   sortedOrders: any[];
@@ -57,7 +56,6 @@ export function OrdersView({
       ) : (
         <>
           {sortedOrders.slice(0, visibleOrdersCount).map((order) => {
-            const itemCount = order.items?.reduce((acc: number, curr: any) => acc + curr.quantity, 0) || 0;
 
             return (
               <div key={order.id} className="bg-white rounded-2xl border border-neutral-100 overflow-hidden">

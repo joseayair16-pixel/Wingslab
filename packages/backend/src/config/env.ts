@@ -22,6 +22,8 @@ function fileExists(filePath: string): boolean {
 function findWorkspaceRoot(startDir: string): string {
   let currentDir = path.resolve(startDir);
 
+  // Bucle intencional: sube de directorio hasta hallar la raíz del workspace.
+  // eslint-disable-next-line no-constant-condition
   while (true) {
     if (
       fileExists(path.join(currentDir, 'package.json')) &&

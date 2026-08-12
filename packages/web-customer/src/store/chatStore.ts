@@ -106,7 +106,6 @@ export const useChatStore = create<ChatState>((set, get) => ({
   },
 
   handleIncomingMessage: (payload, currentSelectedOrderId, isChatOpen) => {
-    const state = get();
     const isCurrentOrder = payload.orderId === currentSelectedOrderId;
 
     if (isCurrentOrder) {

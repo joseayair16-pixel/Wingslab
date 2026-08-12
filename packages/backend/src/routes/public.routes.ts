@@ -349,8 +349,6 @@ export async function registerPublicRoutes(fastify: FastifyInstance): Promise<vo
       });
     }
 
-    const hasCoordinates = query.success && query.data.latitude !== undefined && query.data.longitude !== undefined;
-
     const restaurant = await prisma.restaurant.findFirst({
       where: {
         id: params.data.id,
@@ -861,7 +859,7 @@ export async function registerPublicRoutes(fastify: FastifyInstance): Promise<vo
             { latitude, longitude },
             { latitude: restaurant.latitude, longitude: restaurant.longitude }
           );
-          let maxRadius = restaurant.hasOwnDelivery
+          const maxRadius = restaurant.hasOwnDelivery
             ? restaurant.deliveryRadius
             : (regionsByCode.get(restaurant.region)?.deliveryRadius ?? null);
           if (maxRadius === null) return false;

@@ -12,7 +12,6 @@ import {
   clearStoredSession,
   getRequestErrorMessage,
   isAuthRequestError,
-  isTransientRequestError,
   persistApiBase,
   persistStoredSession,
   readStoredSession,
@@ -225,19 +224,6 @@ const liveEvents = [
   'order:driver-rejected',
   'order:delivered',
 ] as const;
-
-const availabilityOptions: Array<{ label: string; value: DriverAvailability; description: string }> = [
-  {
-    label: 'Conectado',
-    value: 'AVAILABLE',
-    description: 'Disponible para recibir y operar pedidos asignados en tu zona.',
-  },
-  {
-    label: 'Desconectado',
-    value: 'OFFLINE',
-    description: 'Fuera de servicio. No recibirás notificaciones ni pedidos asignados.',
-  },
-];
 
 const driverActionMap: Record<
   string,
@@ -507,7 +493,7 @@ export default function Home() {
 
   // React PIN Modal States
   const [showPinModal, setShowPinModal] = useState(false);
-  const [pinModalOrderId, setPinModalOrderId] = useState('');
+  const [pinModalOrderId] = useState('');
   const [pinInput, setPinInput] = useState('');
   const [pinModalError, setPinModalError] = useState('');
 
@@ -527,8 +513,8 @@ export default function Home() {
   const [safePlaceConfirmOrderId, setSafePlaceConfirmOrderId] = useState<string | null>(null);
   const [noShowConfirmOrderId, setNoShowConfirmOrderId] = useState<string | null>(null);
 
-  const [socketStatus, setSocketStatus] = useState<'idle' | 'connecting' | 'connected' | 'reconnecting'>('idle');
-  const [socketAttempts, setSocketAttempts] = useState(0);
+  const [, setSocketStatus] = useState<'idle' | 'connecting' | 'connected' | 'reconnecting'>('idle');
+  const [, setSocketAttempts] = useState(0);
   const [lastFailedAction, setLastFailedAction] = useState<DriverRetryAction | null>(null);
   const [isOnline, setIsOnline] = useState(true);
   const [error, setError] = useState('');
@@ -542,7 +528,6 @@ export default function Home() {
   const gpsRescheduleRef = useRef<(() => void) | null>(null);
 
   // Refs de audio de alarma estilo Uber y Screen Wake Lock
-  const audioRef = useRef<HTMLAudioElement | null>(null);
   const wakeLockRef = useRef<any>(null);
   const audioCtxRef = useRef<AudioContext | null>(null);
   const audioBufferRef = useRef<AudioBuffer | null>(null);
@@ -916,7 +901,7 @@ export default function Home() {
       }
 
       if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.register('/sw.js').then((registration) => {
+        navigator.serviceWorker.register('/sw.js').then(() => {
           console.log('Service Worker registered');
         }).catch((error) => {
           console.error('Service Worker registration failed:', error);
@@ -2025,15 +2010,6 @@ export default function Home() {
     }
   }
 
-  // Abre el hermoso modal nativo en React para la recolección
-  const openPinModal = (orderId: string) => {
-    triggerHaptic(40);
-    setPinModalOrderId(orderId);
-    setPinInput('');
-    setPinModalError('');
-    setShowPinModal(true);
-  };
-
   async function retryLastFailedAction() {
     if (!lastFailedAction) return;
 
@@ -2043,8 +2019,6 @@ export default function Home() {
     }
     await runDriverAction(lastFailedAction.orderId, lastFailedAction.actionKey);
   }
-
-  const socketStatusLabel = socketStatusCopy[socketStatus];
 
   // Settlement detail modal
   const openSettlementDetailModal = async (settlement: any) => {
@@ -3289,7 +3263,6 @@ export default function Home() {
                               const arrivalMs = arrivalTracking ? new Date(arrivalTracking.createdAt).getTime() : 0;
                               const waitMs = arrivalMs ? Date.now() - arrivalMs : 0;
                               const canRelease = waitMs >= MIN_WAIT_MS && order.status !== 'READY' && order.status !== 'PICKED_UP';
-                              const waitRemainingMin = arrivalMs ? Math.max(0, Math.ceil((MIN_WAIT_MS - waitMs) / 60000)) : 0;
                               return canRelease && (
                                 <button
                                   type="button"
@@ -5728,13 +5701,6 @@ const orderStatusLabelMap: Record<OrderStatus, string> = {
   PICKED_UP: 'Recogido',
   IN_TRANSIT: 'En Camino',
   DELIVERED: 'Entregado',
-};
-
-const socketStatusCopy: Record<'idle' | 'connecting' | 'connected' | 'reconnecting', string> = {
-  idle: 'Desconectado',
-  connecting: 'Estableciendo enlace...',
-  connected: 'Conexión activa',
-  reconnecting: 'Reenlazando...',
 };
 
 // Toast notifications intentionally disabled for the driver UI.

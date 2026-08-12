@@ -8,7 +8,7 @@ import { logger } from '../utils/logger';
 const FIVE_MINUTES_MS = 5 * 60 * 1000;
 const MIN_ALERT_INTERVAL_MS = 2 * 60 * 1000;
 
-export function startDriverPickupAlertJob(fastify: FastifyInstance) {
+export function startDriverPickupAlertJob(_fastify: FastifyInstance) {
   cron.schedule('*/30 * * * * *', async () => {
     try {
       const now = new Date();
@@ -43,7 +43,6 @@ export function startDriverPickupAlertJob(fastify: FastifyInstance) {
           if (elapsedSinceLastAlert < MIN_ALERT_INTERVAL_MS) continue;
         }
 
-        const alertLabel = minutesLate >= 10 ? '⚠️' : minutesLate >= 7 ? '⏰' : '🕐';
         const alertTitle = minutesLate >= 10
           ? '⚠️ Pedido esperando - Retraso crítico'
           : minutesLate >= 7

@@ -1,10 +1,9 @@
 'use client';
 
-import Head from 'next/head';
 import { SaDelLogo } from '../components/SaDelLogo';
 import Link from 'next/link';
 import { FormEvent, useCallback, useEffect, useRef, useState } from 'react';
-import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Legend } from 'recharts';
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts';
 import {
   AuthResponse,
   AuthUser,
@@ -549,7 +548,7 @@ const storageKey = 'sadel.admin';
 const defaultRestaurantServiceFee = '5';
 
 export default function Home() {
-  const [apiBase, setApiBase] = useState(defaultApiBase);
+  const [apiBase] = useState(defaultApiBase);
   const [token, setToken] = useState('');
   const [sessionUser, setSessionUser] = useState<AuthUser | null>(null);
   const [isCheckingSession, setIsCheckingSession] = useState(true);
@@ -562,7 +561,7 @@ export default function Home() {
   const [savingRegion, setSavingRegion] = useState(false);
   const [deletingRegion, setDeletingRegion] = useState(false);
   const [error, setError] = useState('');
-  const [authMessage, setAuthMessage] = useState('');
+  const [, setAuthMessage] = useState('');
   const [storeCategories, setStoreCategories] = useState<StoreCategoryItem[]>([]);
   const [loadingStoreCategories, setLoadingStoreCategories] = useState(false);
   const [isCreateCategoryModalOpen, setIsCreateCategoryModalOpen] = useState(false);
@@ -614,7 +613,7 @@ export default function Home() {
 
   // Deuda de clientes (pedidos no recibidos)
   const [customerSettlements, setCustomerSettlements] = useState<any[]>([]);
-  const [customerSettlementsTotal, setCustomerSettlementsTotal] = useState(0);
+  const [, setCustomerSettlementsTotal] = useState(0);
   const [customerSettlementFilter, setCustomerSettlementFilter] = useState('');
   const [loadingCustomerSettlements, setLoadingCustomerSettlements] = useState(false);
   const [customerSettlementActionLoading, setCustomerSettlementActionLoading] = useState<string | null>(null);
@@ -623,7 +622,7 @@ export default function Home() {
   const [drivers, setDrivers] = useState<DriverItem[]>([]);
   const [driversTotal, setDriversTotal] = useState(0);
   const [loadingDrivers, setLoadingDrivers] = useState(false);
-  const [loadingDriverDetail, setLoadingDriverDetail] = useState(false);
+  const [, setLoadingDriverDetail] = useState(false);
   const [selectedDriverId, setSelectedDriverId] = useState('');
   const [selectedDriver, setSelectedDriver] = useState<DriverDetail | null>(null);
   const [driverSettlements, setDriverSettlements] = useState<any[]>([]);
@@ -716,7 +715,6 @@ export default function Home() {
   const [dashboardTicketResponse, setDashboardTicketResponse] = useState<{ [ticketId: string]: string }>({});
   const [dashboardSubmittingTicketId, setDashboardSubmittingTicketId] = useState<string | null>(null);
   const [viewingSettlementUrl, setViewingSettlementUrl] = useState<string | null>(null);
-  const [dashboardApprovingAffiliationId, setDashboardApprovingAffiliationId] = useState<string | null>(null);
 
   // Promotions State
   const [promotions, setPromotions] = useState<any[]>([]);

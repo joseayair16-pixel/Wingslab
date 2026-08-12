@@ -1,4 +1,4 @@
-import { Admin, Customer, UserRole, UserStatus } from '@prisma/client';
+import { Admin, Customer, UserRole } from '@prisma/client';
 import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import bcryptjs from 'bcryptjs';
@@ -141,11 +141,6 @@ const checkPhoneSchema = z.object({
     .refine((value) => value.length === 10, 'El telefono debe tener 10 digitos.'),
   role: z.nativeEnum(UserRole).optional(),
 });
-
-async function canBootstrapAdmin(): Promise<boolean> {
-  const adminCount = await prisma.admin.count();
-  return adminCount === 0;
-}
 
 async function createRelatedProfile(userId: string, role: UserRole): Promise<Admin | Customer | null> {
   if (role === UserRole.ADMIN) {

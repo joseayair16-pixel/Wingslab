@@ -43,8 +43,7 @@ export async function createOrJoinBatch(
   restaurantLongitude: number,
 ): Promise<string | null> {
   const existingBatchOrder = existingDriverOrders.find((o) => o.batchId);
-  let batchId = existingBatchOrder?.batchId || crypto.randomUUID();
-  const allBatchOrderIds = existingDriverOrders.map((o) => o.id);
+  const batchId = existingBatchOrder?.batchId || crypto.randomUUID();
 
   const ordersToUpdate: { id: string; latitude: number; longitude: number }[] = [
     ...existingDriverOrders,
@@ -135,7 +134,7 @@ export async function deliverBatchOrder(
   orderId: string,
   batchId: string | null,
   driverUserId: string,
-  handoverPin?: string,
+  _handoverPin?: string,
 ): Promise<{ nextOrder: BatchOrderInfo | null; total: number; completed: number }> {
   const batchOrders = batchId
     ? await db.order.findMany({

@@ -5,7 +5,7 @@ import bcryptjs from 'bcryptjs';
 
 import { prisma } from '../config/database';
 import { authenticate, authorize, getAuthenticatedUser } from '../middleware/auth';
-import { buildRestaurantBillingSummary, getCachedBillingSummary, setCachedBillingSummary, invalidateBillingCache, type RestaurantBillingSummary } from '../services/restaurant-billing.service';
+import { buildRestaurantBillingSummary, getCachedBillingSummary, setCachedBillingSummary, type RestaurantBillingSummary } from '../services/restaurant-billing.service';
 import { encrypt, decrypt } from '../utils/crypto';
 import { emitNotification } from '../services/socket.service';
 import { sendPushNotification } from '../services/notification.service';
@@ -76,7 +76,7 @@ const operatingHoursSchema = z
       }
     }
 
-    for (const [day, count] of countsByDay) {
+    for (const [, count] of countsByDay) {
       if (count > MAX_SHIFTS_PER_DAY) {
         ctx.addIssue({ code: z.ZodIssueCode.custom, message: `No puedes configurar mas de ${MAX_SHIFTS_PER_DAY} turnos para el mismo dia.` });
       }
@@ -588,7 +588,7 @@ export async function registerRestaurantPanelRoutes(fastify: FastifyInstance): P
       }
 
       const updatedRestaurant = await prisma.$transaction(async (tx) => {
-        const updated = await tx.restaurant.update({
+        await tx.restaurant.update({
           where: { id: ownedRestaurant.id },
           data: updateData,
         });
@@ -1206,7 +1206,7 @@ export async function registerRestaurantPanelRoutes(fastify: FastifyInstance): P
           }
         }
 
-        const { optionGroups, ...baseData } = parsed.data;
+        const { optionGroups: _optionGroups, ...baseData } = parsed.data;
         const cleanData = Object.fromEntries(
           Object.entries(baseData).filter(([_, v]) => v !== undefined)
         );

@@ -7,19 +7,6 @@ import { emitNotification } from '../services/socket.service';
 import { sendPushNotification } from '../services/notification.service';
 import { logger } from '../utils/logger';
 
-function addMinutes(timeString: string, minutesToAdd: number): string {
-  const [hStr, mStr] = timeString.split(':');
-  let h = parseInt(hStr, 10);
-  let m = parseInt(mStr, 10);
-  
-  m += minutesToAdd;
-  h += Math.floor(m / 60);
-  m = m % 60;
-  h = h % 24;
-  
-  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
-}
-
 function timeToMins(timeStr: string): number {
   const [h, m] = timeStr.split(':').map(Number);
   return h * 60 + m;

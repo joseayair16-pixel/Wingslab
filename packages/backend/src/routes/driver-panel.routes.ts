@@ -275,7 +275,6 @@ export async function registerDriverPanelRoutes(fastify: FastifyInstance): Promi
       });
 
       // 5. Calculate next cutoff / suspension dates
-      const now2 = new Date();
       let nextCutoffDate: string | null = null;
       let nextCutoffLabel: string | null = null;
       let nextSuspensionDate: string | null = null;

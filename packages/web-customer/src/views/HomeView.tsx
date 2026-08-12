@@ -87,7 +87,6 @@ export const HomeView = React.memo(function HomeView({
 }: HomeViewProps) {
   const searchQuery = useStore(state => state.searchQuery);
   const searchType = useStore(state => state.searchType);
-  const activeSection = useStore(state => state.activeSection);
 
   const [businessTypeFilter, setBusinessTypeFilter] = useState<BusinessTypeTab>('all');
 
@@ -207,7 +206,7 @@ export const HomeView = React.memo(function HomeView({
     if (!highlight.trim()) {
       return <span>{text}</span>;
     }
-    const regex = new RegExp(`(${highlight.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&')})`, 'gi');
+    const regex = new RegExp(`(${highlight.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&')})`, 'gi');
     const parts = text.split(regex);
     return (
       <span>

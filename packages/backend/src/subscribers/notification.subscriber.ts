@@ -101,7 +101,7 @@ export const setupNotificationSubscribers = (fastify: FastifyInstance) => {
   });
 
   appEvents.on('order.driver_auto_assigned_on_free_slot', async (data) => {
-    const { orderId, driverId, restaurantUserId } = data;
+    const { orderId, restaurantUserId } = data;
     logger.info(`Event order.driver_auto_assigned_on_free_slot received for order ${orderId}`);
 
     try {

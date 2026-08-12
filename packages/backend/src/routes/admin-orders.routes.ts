@@ -194,7 +194,6 @@ export const registerAdminOrdersRoutes = async (fastify: FastifyInstance) => {
       try {
         const { id } = request.params as { id: string };
         const { reason } = cancelSchema.parse(request.body);
-        const adminId = (request.user as any).id;
 
         const order = await prisma.order.findUnique({
           where: { id },
@@ -334,7 +333,7 @@ export const registerAdminOrdersRoutes = async (fastify: FastifyInstance) => {
 
         const result = await prisma.$transaction(async (tx) => {
           if (action === 'reassign') {
-            const updated = await tx.order.update({
+            await tx.order.update({
               where: { id },
               data: {
                 status: 'READY',
@@ -416,7 +415,6 @@ export const registerAdminOrdersRoutes = async (fastify: FastifyInstance) => {
     app.post('/admin/orders/:id/reassign', async (request, reply) => {
       try {
         const { id } = request.params as { id: string };
-        const adminId = (request.user as any).id;
 
         const order = await prisma.order.findUnique({ where: { id } });
         if (!order) {

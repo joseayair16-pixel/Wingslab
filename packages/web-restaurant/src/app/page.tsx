@@ -473,8 +473,6 @@ const weekDayOptions = [
   { dayOfWeek: 6, label: 'Sabado' },
 ] as const;
 
-const MAX_SHIFTS_PER_DAY = 2;
-
 function buildDefaultOperatingHours(): OperatingHourItem[] {
   return weekDayOptions.map((item) => ({
     dayOfWeek: item.dayOfWeek,
@@ -587,7 +585,7 @@ function triggerHaptic(pattern: number | number[] = 10) {
 function urlBase64ToUint8Array(base64String: string) {
   const padding = '='.repeat((4 - base64String.length % 4) % 4);
   const base64 = (base64String + padding)
-    .replace(/\-/g, '+')
+    .replace(/-/g, '+')
     .replace(/_/g, '/');
 
   const rawData = window.atob(base64);
@@ -662,7 +660,6 @@ export default function Home() {
   const settingsMapRef = useRef<any>(null);
   const settingsMarkerRef = useRef<any>(null);
   const ignoreAddressSearchRef = useRef(false);
-  const autocompleteServiceRef = useRef<any>(null);
   const autocompleteSessionTokenRef = useRef<any>(null);
   const placesServiceRef = useRef<any>(null);
   const addressSearchSourceRef = useRef<ReturnType<typeof createPlacesSource> | null>(null);
@@ -740,7 +737,7 @@ export default function Home() {
   const [cancelConfirmOrder, setCancelConfirmOrder] = useState<OrderItem | null>(null);
   const [cancelReason, setCancelReason] = useState('');
   const [cancelRequestModalOrder, setCancelRequestModalOrder] = useState<OrderItem | null>(null);
-  const [cancelRequestNote, setCancelRequestNote] = useState('');
+  const [, setCancelRequestNote] = useState('');
   const [cancelRequestProcessing, setCancelRequestProcessing] = useState(false);
   const [comandaCancelNote, setComandaCancelNote] = useState('');
 
@@ -3503,7 +3500,7 @@ export default function Home() {
 
   useEffect(() => {
     return () => {
-      for (const [id, timeoutId] of toastTimeoutsRef.current) {
+      for (const [, timeoutId] of toastTimeoutsRef.current) {
         clearTimeout(timeoutId);
       }
       toastTimeoutsRef.current.clear();
@@ -5042,12 +5039,6 @@ export default function Home() {
         ? orders.filter((order) => !order.id.startsWith('mock-order-') && ['DELIVERED', 'COMPLETED'].includes(order.status))
         : orders.filter((order) => !order.id.startsWith('mock-order-') && order.status === selectedStatus);
   const socketStatusLabel = socketStatusCopy[socketStatus];
-  const orderAlertSoundDescription =
-    orderAlertAudioState === 'unsupported'
-      ? 'Este navegador no permite reproducir alertas de audio en este panel.'
-      : orderAlertAudioState === 'ready'
-        ? 'Sonará una alerta corta cuando entre un pedido nuevo.'
-        : 'Se activará después de la primera interacción con el panel.';
   const isRestaurantSession = Boolean(sessionUser && sessionUser.role === 'RESTAURANT');
   const restaurantName = profile?.name || sessionUser?.name || 'Panel del restaurante';
   const activeOrders = useMemo(() => {
@@ -5080,7 +5071,6 @@ export default function Home() {
   const isBusinessPaused = profile?.isPaused ?? false;
   const isWithinHours = isCurrentlyWithinOperatingHours(profile?.operatingHours);
   const operationalStatusLabel = getRestaurantOperationalStatusLabel(profile?.status, profile?.isAcceptingOrders, profile?.isPaused, isWithinHours);
-  const operationalStatusTone = getRestaurantOperationalStatusTone(profile?.status, profile?.isAcceptingOrders, profile?.isPaused, isWithinHours);
   const navigationItems: Array<{ key: RestaurantPortalSection; label: string }> = [
     { key: 'dashboard', label: 'Dashboard' },
     { key: 'orders', label: 'Ordenes' },
@@ -5164,8 +5154,6 @@ export default function Home() {
     const current = now - start;
     return Math.min(100, Math.max(0, Math.round((current / total) * 100)));
   };
-
-  const currentSettingsTab = settingsTabs.find(t => t.key === activeSettingsTab) ?? settingsTabs[0];
 
   return (
     <main
@@ -5879,7 +5867,7 @@ export default function Home() {
                 <button
                   type="button"
                   onClick={async () => {
-                    const res = await fetch(`${apiBase}/restaurant-panel/pedidos/${supportRequestsQueue[0].orderId}/rechazar-apoyo`, {
+                    await fetch(`${apiBase}/restaurant-panel/pedidos/${supportRequestsQueue[0].orderId}/rechazar-apoyo`, {
                       method: 'POST',
                       headers: { Authorization: `Bearer ${token}` },
                     });
@@ -8588,7 +8576,6 @@ export default function Home() {
                                   )}
 
                                 {(() => {
-                                  const isStore = profile?.businessType && profile.businessType !== 'RESTAURANT';
                                   const ms = getPreparationRemainingMs(order, kitchenClockNow);
                                   let isDelayed = false;
                                   let overdueMinutes = 0;
@@ -12802,31 +12789,6 @@ function businessTypeLabel(type?: string | null): string {
   return (type && BUSINESS_TYPE_LABELS[type]) || 'Restaurante';
 }
 
-function TimeField({
-  label,
-  value,
-  onChange,
-  disabled = false,
-}: {
-  label: string;
-  value: string;
-  onChange: (value: string) => void;
-  disabled?: boolean;
-}) {
-  return (
-    <label className="group grid min-w-0 gap-2 text-sm text-neutral-600">
-      <span className="text-[12px] font-bold uppercase tracking-[0.1em] text-neutral-600 transition-colors group-focus-within:text-sky-500">{label}</span>
-      <input
-        type="time"
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        disabled={disabled}
-        className="block w-full min-w-0 rounded-[18px] border border-black/5 bg-neutral-100/50 px-5 py-3.5 text-[15px] font-medium text-neutral-950 shadow-inner outline-none transition-all duration-300 focus:border-sky-400 focus:bg-white focus:ring-4 focus:ring-sky-400/20 focus:shadow-md hover:bg-neutral-100/80 disabled:cursor-not-allowed disabled:bg-neutral-100/50 disabled:text-neutral-400 disabled:shadow-none"
-      />
-    </label>
-  );
-}
-
 function ToggleField({
   label,
   checked,
@@ -12896,15 +12858,6 @@ function TextAreaField({
         className="block min-h-[140px] w-full min-w-0 rounded-[24px] border border-black/5 bg-neutral-100/50 px-5 py-4 text-[15px] font-medium text-neutral-950 shadow-inner outline-none transition-all duration-300 placeholder:text-neutral-400 hover:bg-neutral-100/80 focus:border-sky-400 focus:bg-white focus:ring-4 focus:ring-sky-400/20 focus:shadow-md"
       />
     </label>
-  );
-}
-
-function Info({ label, value, full = false }: { label: string; value: string; full?: boolean }) {
-  return (
-    <div className={`rounded-[24px] border border-black/5 bg-neutral-50 p-4 ${full ? 'md:col-span-2' : ''}`}>
-      <p className="text-xs font-semibold uppercase tracking-[0.22em] text-neutral-400">{label}</p>
-      <p className="mt-2 text-sm leading-6 text-neutral-950">{value}</p>
-    </div>
   );
 }
 
@@ -13325,27 +13278,9 @@ function getPreparationRemainingMs(order: OrderItem, nowMs: number) {
   return new Date(order.preparationDeadlineAt).getTime() - nowMs;
 }
 
-function formatPreparationCountdown(order: OrderItem, nowMs: number) {
-  const remainingMs = getPreparationRemainingMs(order, nowMs);
-
-  if (remainingMs === null) {
-    return order.preparationTimeMinutes ? `${order.preparationTimeMinutes} min estimados` : 'Tiempo por definir';
-  }
-
-  if (remainingMs <= 0) {
-    return `Tiempo vencido por ${formatCountdown(Math.abs(remainingMs))}`;
-  }
-
-  return `${formatCountdown(remainingMs)} restantes`;
-}
-
 function isPreparationTimeUrgent(order: OrderItem, nowMs: number) {
   const remainingMs = getPreparationRemainingMs(order, nowMs);
   return typeof remainingMs === 'number' && remainingMs <= 2 * 60 * 1000;
-}
-
-function shouldShowExtendTimeControls(order: OrderItem) {
-  return order.status === 'CONFIRMED' || order.status === 'PREPARING';
 }
 
 function formatShortTime(date?: string | null) {
@@ -13448,20 +13383,6 @@ function getRestaurantOperationalStatusLabel(status?: string, isAcceptingOrders?
   }
 
   return 'Negocio suspendido';
-}
-
-function getRestaurantOperationalStatusTone(status?: string, isAcceptingOrders?: boolean, isPaused?: boolean, isWithinHours = true) {
-  if (status === 'ACTIVE') {
-    if (isPaused) return 'bg-sky-100 text-sky-700';
-    if (!isAcceptingOrders) return 'bg-neutral-100 text-neutral-600';
-    return isWithinHours ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700 border-rose-200';
-  }
-
-  if (status === 'DELETED') {
-    return 'bg-rose-100 text-rose-700';
-  }
-
-  return 'bg-sky-100 text-sky-700';
 }
 
 function getImageValidationMessage(value: string, kind: 'cover' | 'logo' | 'product') {

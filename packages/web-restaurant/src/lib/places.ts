@@ -142,14 +142,12 @@ export interface PlacesSource {
 export function createPlacesSource(options: PlacesSourceOptions = {}): PlacesSource {
   const { countryCode = 'mx', debounceMs = 350, minLength = 3 } = options;
   let timer: ReturnType<typeof setTimeout> | null = null;
-  let latestQuery = '';
   let seq = 0;
 
   function search(query: string, handlers: PlacesSourceHandlers) {
     const { onResults, onBusy } = handlers;
     const trimmed = query.trim();
     const mySeq = ++seq;
-    latestQuery = trimmed;
 
     if (timer) {
       clearTimeout(timer);
