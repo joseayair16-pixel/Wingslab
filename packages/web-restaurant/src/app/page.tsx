@@ -9908,22 +9908,6 @@ export default function Home() {
                         </div>
                         </div>
                     <div className="flex items-center gap-2 sm:self-start">
-                      {/* Botón de Cancelar dentro de la comanda */}
-                      {['CONFIRMED', 'PREPARING'].includes(selectedOrderForTicket.status) && !(selectedOrderForTicket as any).cancellationRequestedAt && !(selectedOrderForTicket as any).cancelledBy && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setCancelReason('');
-                            setCancelConfirmOrder(selectedOrderForTicket);
-                          }}
-                          className="flex items-center gap-2 rounded-full bg-rose-500 hover:bg-rose-400 active:scale-95 text-white px-4 py-2.5 text-sm font-bold shadow-md shadow-rose-200/60 transition-all"
-                        >
-                          <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                            <path d="M18 6 6 18"/><path d="m6 6 12 12"/>
-                          </svg>
-                          <span className="hidden sm:inline">Cancelar</span>
-                        </button>
-                      )}
                       {profile?.enableTicketPrinting !== false && (
                         <button
                           type="button"
@@ -10310,6 +10294,29 @@ export default function Home() {
                     )}
                   </div>
 
+                </div>
+
+                {/* FOOTER: acciones del pedido (Cancelar se separa del botón de cierre) */}
+                <div className="shrink-0 border-t border-neutral-200 bg-white px-5 py-3 sm:px-7 flex items-center justify-between gap-3">
+                  <span className="hidden text-[11px] font-medium text-neutral-400 sm:block">
+                    {selectedOrderForTicket.orderReference}
+                  </span>
+                  {['CONFIRMED', 'PREPARING'].includes(selectedOrderForTicket.status) && !(selectedOrderForTicket as any).cancellationRequestedAt && !(selectedOrderForTicket as any).cancelledBy && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCancelReason('');
+                        setCancelConfirmOrder(selectedOrderForTicket);
+                      }}
+                      className="inline-flex items-center gap-2 rounded-full border border-rose-200 bg-rose-50/70 hover:bg-rose-100 active:scale-95 text-rose-700 px-4 py-2.5 text-sm font-bold shadow-sm transition-all"
+                    >
+                      <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                        <circle cx="12" cy="12" r="10" />
+                        <path d="m4.9 4.9 14.2 14.2" />
+                      </svg>
+                      Cancelar pedido
+                    </button>
+                  )}
                 </div>
               </div>
               </div>
