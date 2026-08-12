@@ -1262,6 +1262,16 @@ export default function Home() {
   const handleTouchEnd = () => {
     if (pullDistance > 60) {
       setIsRefreshing(true);
+      // Además de recargar datos, fuerza el chequeo de una versión nueva de la PWA:
+      // si el Service Worker detecta cambios, el controllerchange recargará la app.
+      if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
+        navigator.serviceWorker
+          .getRegistration()
+          .then((reg) => {
+            void reg?.update().catch(() => {});
+          })
+          .catch(() => {});
+      }
       void loadDashboard().then(() => {
         setIsRefreshing(false);
         setPullDistance(0);

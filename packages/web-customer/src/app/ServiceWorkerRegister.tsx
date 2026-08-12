@@ -26,10 +26,20 @@ export default function ServiceWorkerRegister() {
       registration?.update().catch(() => {});
     };
 
-    navigator.serviceWorker.register('/sw.js').then((reg) => {
-      registration = reg;
-      reg.addEventListener('updatefound', handleUpdateFound);
-    }).catch(() => {});
+    // Si un Service Worker nuevo toma el control (skipWaiting + clients.claim),
+    // recarga la página para que sirva los assets de la versión nueva de inmediato.
+    const handleControllerChange = () => {
+      window.location.reload();
+    };
+    navigator.serviceWorker.addEventListener('controllerchange', handleControllerChange);
+
+    navigator.serviceWorker
+      .register('/sw.js', { updateViaCache: 'none' })
+      .then((reg) => {
+        registration = reg;
+        reg.addEventListener('updatefound', handleUpdateFound);
+      })
+      .catch(() => {});
 
     // En PWAs instaladas iOS no siempre se detecta el update al abrir; se verifica
     // cada vez que la app vuelve a primer plano.
@@ -43,6 +53,7 @@ export default function ServiceWorkerRegister() {
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       registration?.removeEventListener('updatefound', handleUpdateFound);
+      navigator.serviceWorker.removeEventListener('controllerchange', handleControllerChange);
     };
   }, []);
 

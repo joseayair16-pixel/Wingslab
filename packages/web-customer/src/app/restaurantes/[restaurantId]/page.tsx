@@ -939,6 +939,15 @@ export default function RestaurantPage({
   const handleTouchEnd = () => {
     if (pullDistance > 60) {
       setIsRefreshing(true);
+      // Fuerza el chequeo de una versión nueva de la PWA además del refresco de datos.
+      if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
+        navigator.serviceWorker
+          .getRegistration()
+          .then((reg) => {
+            void reg?.update().catch(() => {});
+          })
+          .catch(() => {});
+      }
       void requestJson<{ success: true; data: PublicRestaurantDetail }>({
         apiBase,
         path: `/restaurantes/${params.restaurantId}${getUserLocationQuery()}`,
