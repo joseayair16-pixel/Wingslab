@@ -906,7 +906,6 @@ export default function Home() {
   const [unassignConfirmOrderId, setUnassignConfirmOrderId] = useState<string | null>(null);
   const [activeQrCodeData, setActiveQrCodeData] = useState<{ token: string; orderReference: string; id: string; url?: string } | null>(null);
   const [incomingOrderQueue, setIncomingOrderQueue] = useState<string[]>([]);
-  const [incomingOrderCountdownMs, setIncomingOrderCountdownMs] = useState<number>(newOrderDecisionWindowMs);
   const [kitchenClockNow, setKitchenClockNow] = useState(Date.now());
   const [sessionOpenedAt, setSessionOpenedAt] = useState<number | null>(null);
   const [acceptancePromptOrderId, setAcceptancePromptOrderId] = useState<string | null>(null);
@@ -1874,7 +1873,6 @@ export default function Home() {
     setLastFailedAction(null);
     setSelectedOrderForTicket(null);
     setIncomingOrderQueue([]);
-    setIncomingOrderCountdownMs(newOrderDecisionWindowMs);
     setAcceptancePromptOrderId(null);
     setSelectedPreparationTime(15);
     setStoreDraft({
@@ -3514,7 +3512,6 @@ export default function Home() {
 
   useEffect(() => {
     if (!activeIncomingOrder) {
-      setIncomingOrderCountdownMs(newOrderDecisionWindowMs);
       setIsSelectingPrepTime(false);
       setIsScheduledMode(false);
       setScheduledDeliveryDate('');
@@ -3526,30 +3523,8 @@ export default function Home() {
     setIsScheduledMode(false);
     setScheduledDeliveryDate('');
     setScheduledDeliveryTime('');
-    const orderId = activeIncomingOrder.id;
-    const isStoreOrder = profile?.businessType && profile.businessType !== 'RESTAURANT';
-    const decisionWindow = activeIncomingOrder.paymentMethod === 'TRANSFER' ? 10 * 60 * 1000 : isStoreOrder ? 8 * 60 * 1000 : 2 * 60 * 1000;
-
-    // When order becomes first in queue (active), start its decision window now.
-    // The backend also uses this "active since" timestamp via Redis.
-    // This ensures queued orders get a full window when they reach the front of the line.
-    const activeSince = Date.now();
-
-    function syncCountdown() {
-      const expiresAt = activeSince + decisionWindow;
-      const nextCountdown = Math.max(0, expiresAt - Date.now());
-      setIncomingOrderCountdownMs(nextCountdown);
-
-      if (nextCountdown === 0) {
-        // El auto-rechazo se maneja en el backend (order-timeout.job).
-      }
-    }
-
-    syncCountdown();
-    const timer = window.setInterval(syncCountdown, 1000);
-    return () => {
-      window.clearInterval(timer);
-    };
+    // El countdown vive en <IncomingOrderCountdown> (timer aislado) para no
+    // re-renderizar toda la página cada segundo.
   }, [activeIncomingOrder?.id]);
 
   async function runOrderAction(
@@ -5261,8 +5236,8 @@ export default function Home() {
         >
           <div className="flex max-h-[min(92vh,960px)] w-full max-w-4xl flex-col overflow-hidden rounded-[30px] bg-white shadow-[0_32px_110px_rgba(15,15,15,0.35)] sm:rounded-[24px]">
             {/* HEADER */}
-            <div className="border-b border-black/5 bg-neutral-50/50 px-5 py-5 sm:px-8">
-              <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="border-b border-black/5 bg-neutral-50/50 px-5 py-4 sm:px-8">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div className="min-w-0">
                   <div className="flex items-center gap-2">
                     <span className="relative flex h-2.5 w-2.5">
@@ -5275,7 +5250,7 @@ export default function Home() {
                   </div>
                   <h2
                     id="incoming-order-title"
-                    className="mt-2 text-2xl font-bold tracking-[-0.04em] text-neutral-950 sm:text-3xl"
+                    className="mt-1.5 text-xl font-bold tracking-[-0.04em] text-neutral-950 sm:text-2xl"
                   >
                     {(activeIncomingOrder as any).dailyCounter ? `#${String((activeIncomingOrder as any).dailyCounter).padStart(2, '0')}` : (
                       activeIncomingOrder.orderReference.slice(-6)
@@ -5288,19 +5263,17 @@ export default function Home() {
                   )}
                 </div>
 
-                {/* TIMER PILL */}
-                <div className="flex items-center gap-3 self-start rounded-full border border-rose-100 bg-rose-50 px-4 py-2.5 sm:self-center">
-                  <svg className="h-5 w-5 text-rose-600" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                    <circle cx="12" cy="12" r="8" strokeWidth={1.7} />
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M12 7v5l3 2" />
-                  </svg>
-                  <div>
-                    <p className="text-xs font-medium uppercase tracking-[0.1em] text-rose-600">Expira en</p>
-                    <p className="font-bold text-rose-700">
-                      {formatCountdown(incomingOrderCountdownMs)}
-                    </p>
-                  </div>
-                </div>
+                {/* TIMER PILL (timer aislado para no re-renderizar la página) */}
+                <IncomingOrderCountdown
+                  key={activeIncomingOrder.id}
+                  windowMs={
+                    activeIncomingOrder.paymentMethod === 'TRANSFER'
+                      ? 10 * 60 * 1000
+                      : profile?.businessType && profile.businessType !== 'RESTAURANT'
+                        ? storeOrderDecisionWindowMs
+                        : newOrderDecisionWindowMs
+                  }
+                />
               </div>
             </div>
 
@@ -5478,15 +5451,15 @@ export default function Home() {
                 </div>
               </div>
             ) : (
-              <><div className="min-h-0 flex-1 overflow-y-auto px-5 py-6 sm:px-8">
-              <div className="grid gap-8 lg:grid-cols-[minmax(0,1.5fr)_320px]">
+              <><div className="min-h-0 flex-1 overflow-y-auto px-5 py-5 sm:px-8">
+              <div className="grid gap-6 lg:grid-cols-[minmax(0,1.5fr)_320px]">
 
                 {/* LEFT COLUMN: CHEF FOCUS (Items First!) */}
                 <div className="space-y-6">
                   {/* COMANDA */}
-                  <div className="rounded-3xl border border-sky-100 bg-white p-6 shadow-[0_8px_30px_rgba(2,132,199,0.06)] relative overflow-hidden">
+                  <div className="rounded-3xl border border-sky-100 bg-white p-5 shadow-[0_8px_30px_rgba(2,132,199,0.06)] relative overflow-hidden">
                     <div className="absolute top-0 left-0 w-1.5 h-full bg-sky-600"></div>
-                    <div className="flex items-center justify-between border-b border-black/5 pb-4">
+                    <div className="flex items-center justify-between border-b border-black/5 pb-3.5">
                       <p className="text-sm font-bold uppercase tracking-[0.2em] text-neutral-800">{profile?.businessType === 'RESTAURANT' ? 'Comanda para Cocina' : 'Detalle del Pedido'}</p>
                       <span className="rounded-full bg-sky-100 px-4 py-1.5 text-xs font-bold text-sky-700">
                         {countOrderProducts(activeIncomingOrder)} {countOrderProducts(activeIncomingOrder) === 1 ? 'Producto' : 'Productos'}
@@ -5496,7 +5469,7 @@ export default function Home() {
                     <div className="divide-y divide-black/5 mt-2">
                       {activeIncomingOrder.items && activeIncomingOrder.items.length > 0 ? (
                         activeIncomingOrder.items.map((item) => (
-                          <div key={item.id} className="grid grid-cols-[40px_40px_minmax(0,1fr)] gap-3.5 py-4 items-start">
+                          <div key={item.id} className="grid grid-cols-[40px_40px_minmax(0,1fr)] gap-3.5 py-3 items-start">
                             <div className={`flex h-10 w-10 items-center justify-center rounded-xl text-base font-extrabold shrink-0 select-none ${
                               item.quantity > 1
                                 ? 'bg-amber-500 text-white shadow-sm shadow-amber-500/20'
@@ -5520,7 +5493,7 @@ export default function Home() {
                             )}
 
                             <div className="min-w-0">
-                              <p className="text-[17px] font-black leading-snug text-neutral-950">
+                              <p className="text-[15px] font-black leading-snug text-neutral-950 line-clamp-2">
                                 {item.product?.name || 'Producto'}
                               </p>
                               {item.sellBy === 'WEIGHT' && item.weightG ? (
@@ -5573,11 +5546,20 @@ export default function Home() {
                   </div>
                 </div>
                 {/* RIGHT COLUMN: ACTIONS & BILLING */}
-                <div className="space-y-5 lg:border-l lg:border-black/5 lg:pl-6">
+                <div className="space-y-4 lg:border-l lg:border-black/5 lg:pl-6">
                   
                   {/* COMPACT DELIVERY DATA FOR CASHIER */}
                   <div className="rounded-2xl border border-neutral-100 bg-neutral-50/50 p-4">
-                    <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-neutral-400 mb-3">Resumen de Entrega</p>
+                    <div className="mb-3 flex items-center justify-between gap-2">
+                      <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-neutral-400">Resumen de Entrega</p>
+                      <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-bold ${
+                        (activeIncomingOrder as any).fulfillmentType === 'PICKUP'
+                          ? 'bg-emerald-100 text-emerald-700'
+                          : 'bg-sky-100 text-sky-700'
+                      }`}>
+                        {(activeIncomingOrder as any).fulfillmentType === 'PICKUP' ? '🛍️ Recogida' : '🛵 Envío'}
+                      </span>
+                    </div>
                     <div className="flex flex-col gap-3">
                       <div className="flex items-center gap-3">
                         {activeIncomingOrder.customer?.user?.profilePhoto ? (
@@ -5654,12 +5636,33 @@ export default function Home() {
                   </div>
 
                   {/* TOTAL */}
-                  <div className="rounded-2xl bg-neutral-950 p-5 text-white shadow-lg">
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-neutral-400">Total del pedido</p>
-                    <p className="mt-1 text-3xl font-bold tracking-[-0.04em]">
-                      {formatCurrency(getRestaurantCollectionAmount(activeIncomingOrder, profile))}
-                    </p>
+                  <div className="rounded-2xl bg-neutral-950 p-4 text-white shadow-lg">
+                    <div className="flex items-baseline justify-between gap-3">
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-neutral-400">Total del pedido</p>
+                      <p className="text-2xl font-bold tracking-[-0.04em]">
+                        {formatCurrency(getRestaurantCollectionAmount(activeIncomingOrder, profile))}
+                      </p>
+                    </div>
+                    {(activeIncomingOrder as any).fulfillmentType !== 'PICKUP' && (activeIncomingOrder.deliveryFee || 0) > 0 && (
+                      <p className="mt-1 text-[11px] font-medium text-neutral-400">
+                        Incluye envío de {formatCurrency(activeIncomingOrder.deliveryFee || 0)}
+                      </p>
+                    )}
                   </div>
+
+                  {activeIncomingOrder.paymentMethod === 'CASH' && (
+                    <div className="rounded-2xl border border-amber-200 bg-gradient-to-br from-amber-50 to-yellow-50 p-4">
+                      <div className="flex items-center gap-2 mb-1.5">
+                        <span className="flex h-2 w-2 rounded-full bg-amber-500" />
+                        <span className="text-xs font-bold uppercase tracking-wider text-amber-700 bg-amber-100/50 px-2 py-0.5 rounded-md border border-amber-200/30">
+                          Pago en Efectivo
+                        </span>
+                      </div>
+                      <p className="text-xs text-amber-800 font-bold">
+                        💵 Cobra en efectivo al entregar: {formatCurrency(getRestaurantCollectionAmount(activeIncomingOrder, profile))}
+                      </p>
+                    </div>
+                  )}
 
                   {activeIncomingOrder.paymentMethod === 'TRANSFER' && (
                     <div className="rounded-2xl border border-sky-100 bg-gradient-to-br from-sky-50 to-blue-50 p-4 animate-float-gentle">
@@ -5736,15 +5739,15 @@ export default function Home() {
               </div>
             </div>
             {/* STICKY FOOTER WITH ACTIONS */}
-            <div className="shrink-0 border-t border-black/5 bg-white px-5 py-4 sm:px-8 shadow-[0_-8px_30px_rgba(0,0,0,0.06)]">
+            <div className="shrink-0 border-t border-black/5 bg-white px-5 py-3 sm:px-8 shadow-[0_-8px_30px_rgba(0,0,0,0.06)]">
               <div className="flex gap-3">
                 <button
                   type="button"
                   onClick={() => setIsSelectingPrepTime(true)}
                   disabled={Boolean(activeActionKey)}
-                  className="flex-1 rounded-full bg-sky-600 px-5 py-4 text-sm font-semibold text-white shadow-[0_4px_12px_rgba(2,132,199,0.3)] transition hover:bg-sky-700 disabled:cursor-not-allowed disabled:bg-sky-300"
+                  className="flex-1 rounded-full bg-sky-600 px-5 py-3.5 text-sm font-semibold text-white shadow-[0_4px_12px_rgba(2,132,199,0.3)] transition hover:bg-sky-700 disabled:cursor-not-allowed disabled:bg-sky-300"
                 >
-                  Aceptar Pedido
+                  {activeActionKey === `${activeIncomingOrder.id}:accept` ? 'Aceptando...' : 'Aceptar Pedido'}
                 </button>
                 <button
                   type="button"
@@ -5756,7 +5759,7 @@ export default function Home() {
                     }
                   }}
                   disabled={Boolean(activeActionKey)}
-                  className="flex-1 rounded-full border border-rose-200 bg-white px-5 py-4 text-sm font-semibold text-rose-700 transition hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-60"
+                  className="flex-1 rounded-full border border-rose-200 bg-white px-5 py-3.5 text-sm font-semibold text-rose-700 transition hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   {activeActionKey === `${activeIncomingOrder.id}:reject` ? 'Rechazando...' : 'Rechazar Pedido'}
                 </button>
@@ -13264,6 +13267,47 @@ function formatCountdown(remainingMs: number) {
   const minutes = Math.floor(totalSeconds / 60);
   const seconds = totalSeconds % 60;
   return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+}
+
+// Countdown aislado del countdown del modal: mantiene su propio timer para que
+// re-renderizar cada segundo no redibuje toda la página del panel.
+function IncomingOrderCountdown({ windowMs }: { windowMs: number }) {
+  const [remainingMs, setRemainingMs] = useState(windowMs);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      setRemainingMs((prev) => Math.max(0, prev - 1000));
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  const urgent = remainingMs <= 30000 && remainingMs > 0;
+  const expired = remainingMs <= 0;
+
+  return (
+    <div
+      className={`flex items-center gap-3 self-start rounded-full border px-4 py-2.5 sm:self-center ${
+        expired
+          ? 'border-neutral-200 bg-neutral-100'
+          : urgent
+            ? 'border-red-200 bg-red-50 animate-pulse'
+            : 'border-rose-100 bg-rose-50'
+      }`}
+    >
+      <svg className={`h-5 w-5 ${expired ? 'text-neutral-400' : urgent ? 'text-red-600' : 'text-rose-600'}`} viewBox="0 0 24 24" fill="none" stroke="currentColor">
+        <circle cx="12" cy="12" r="8" strokeWidth={1.7} />
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M12 7v5l3 2" />
+      </svg>
+      <div>
+        <p className={`text-xs font-medium uppercase tracking-[0.1em] ${expired ? 'text-neutral-400' : urgent ? 'text-red-600' : 'text-rose-600'}`}>
+          {expired ? 'Vencido' : 'Expira en'}
+        </p>
+        <p className={`font-bold tabular-nums ${expired ? 'text-neutral-500' : urgent ? 'text-red-700' : 'text-rose-700'}`}>
+          {formatCountdown(remainingMs)}
+        </p>
+      </div>
+    </div>
+  );
 }
 
 function getPreparationRemainingMs(order: OrderItem, nowMs: number) {
