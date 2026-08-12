@@ -16,6 +16,7 @@ type CartDrawerProps = {
   isRestaurantOpen?: boolean;
   overrideDeliveryFee?: number;
   overrideServiceFee?: number;
+  pickupOnly?: boolean;
 };
 
 export default memo(function CartDrawer({
@@ -27,6 +28,7 @@ export default memo(function CartDrawer({
   isRestaurantOpen = true,
   overrideDeliveryFee,
   overrideServiceFee,
+  pickupOnly = false,
 }: CartDrawerProps) {
   const cart = useCartStore(state => state.items);
   const updateCartItem = useCartStore(state => state.updateItem);
@@ -236,7 +238,7 @@ export default memo(function CartDrawer({
                     </span>
                     <span className="font-medium text-neutral-700">{formatCurrency(cartSubtotal)}</span>
                   </div>
-                  {fulfillmentType !== 'PICKUP' && (
+                  {fulfillmentType !== 'PICKUP' && !pickupOnly && (
                   <div className="flex items-center justify-between text-neutral-500">
                     <span className="flex items-center gap-1">
                       <span className="text-[10px]">🛵</span> Envío
@@ -260,6 +262,11 @@ export default memo(function CartDrawer({
                 </div>
               </div>
 
+              {pickupOnly ? (
+                <div className="mt-2 flex items-center justify-center gap-2 rounded-xl border border-sky-200 bg-sky-50/70 px-3 py-2.5 text-[11px] font-bold text-sky-700">
+                  🛍️ Solo recoger en tienda
+                </div>
+              ) : (
               <div className="mt-2 grid grid-cols-2 gap-1 rounded-xl bg-neutral-100 p-0.5">
                 <button
                   type="button"
@@ -298,6 +305,7 @@ export default memo(function CartDrawer({
                   <span><svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13.5 21v-7.5a.75.75 0 01.75-.75h3a.75.75 0 01.75.75V21m-4.5 0H2.36m11.14 0H18m0 0h3.64m-1.39 0V9.349m-16.5 11.65V9.35m0 0a3.001 3.001 0 003.75-.615A2.993 2.993 0 009.75 9.75c.896 0 1.7-.393 2.25-1.016a2.993 2.993 0 002.25 1.016c.896 0 1.7-.393 2.25-1.016a3.001 3.001 0 003.75.614m-16.5 0a3.004 3.004 0 01-.621-4.72L4.318 3.44A1.5 1.5 0 015.378 3h13.243a1.5 1.5 0 011.06.44l1.19 1.189a3 3 0 01-.621 4.72m-13.5 8.65h3.75a.75.75 0 00.75-.75V13.5a.75.75 0 00-.75-.75H6.75a.75.75 0 00-.75.75v3.75c0 .415.336.75.75.75z" /></svg></span> Recoger en tienda
                 </button>
               </div>
+              )}
 
               <div className="mt-2 grid gap-2 sm:grid-cols-2">
                 <button

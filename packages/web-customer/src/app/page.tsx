@@ -102,6 +102,7 @@ type PublicRestaurantDetail = {
   status: string;
   isOpen: boolean;
   hasOwnDelivery: boolean;
+  pickupOnly?: boolean;
   serviceFee?: number | null;
   deliveryFee?: number | null;
   effectiveDeliveryFee?: number | null;
@@ -868,6 +869,18 @@ export default function Home() {
   const [, setLocationSource] = useState<'gps' | 'manual' | null>(null);
   const [isLocationChecked, setIsLocationChecked] = useState(false);
   const [fulfillmentType, setFulfillmentType] = useState<'DELIVERY' | 'PICKUP'>('DELIVERY');
+  const isPickupOnly = selectedRestaurant?.pickupOnly === true;
+
+  const handleFulfillmentChange = (type: 'DELIVERY' | 'PICKUP') => {
+    if (isPickupOnly && type !== 'PICKUP') return;
+    setFulfillmentType(type);
+  };
+
+  useEffect(() => {
+    if (isPickupOnly) {
+      setFulfillmentType('PICKUP');
+    }
+  }, [isPickupOnly]);
   const [isDarkMode, setIsDarkMode] = useState(false);
 
   const [supportTickets, setSupportTickets] = useState<any[]>([]);
@@ -4659,11 +4672,12 @@ export default function Home() {
           if (!isAuthenticated) {
             setShowAuthModal(true);
           } else if (cartRestaurantId) {
-            router.push(`/restaurantes/${cartRestaurantId}?checkout=true&fulfillment=${fulfillmentType}`);
+            router.push(`/restaurantes/${cartRestaurantId}?checkout=true&fulfillment=${isPickupOnly ? 'PICKUP' : fulfillmentType}`);
           }
         }}
         fulfillmentType={fulfillmentType}
-        onFulfillmentTypeChange={setFulfillmentType}
+        onFulfillmentTypeChange={handleFulfillmentChange}
+        pickupOnly={isPickupOnly}
       />
       <div className="mx-auto max-w-7xl px-4 py-4 md:px-6 md:py-5">
         {activeSection !== 'home' && activeSection !== 'profile' ? (

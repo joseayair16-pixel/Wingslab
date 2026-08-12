@@ -44,6 +44,8 @@ const createRestaurantSchema = z.object({
   serviceFee: z.number().nonnegative().default(0),
   platformFeePerOrder: z.number().nonnegative().default(0),
   hasOwnDelivery: z.boolean(),
+  supportsNetworkDelivery: z.boolean().default(true),
+  pickupOnly: z.boolean().default(false),
   deliveryFee: z.number().nonnegative().optional(),
   deliveryPricingModel: z.enum(['fixed', 'distance']).optional(),
   deliveryBaseRate: z.number().nonnegative().optional(),
@@ -1719,6 +1721,14 @@ export async function registerAdminRoutes(fastify: FastifyInstance): Promise<voi
           } else {
             restaurantData.platformFeeRate = 0;
           }
+        }
+
+        // "Solo recoger en tienda" excluye la entrega: fuerza reparto propio y apoyo
+        // a la red apagados, y sin tarifa de envío.
+        if (restaurantData.pickupOnly === true) {
+          restaurantData.hasOwnDelivery = false;
+          restaurantData.supportsNetworkDelivery = false;
+          (restaurantData as any).deliveryFee = null;
         }
 
         return tx.restaurant.update({

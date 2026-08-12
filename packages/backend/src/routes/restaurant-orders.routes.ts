@@ -1532,6 +1532,14 @@ export async function registerRestaurantOrderRoutes(fastify: FastifyInstance): P
           });
         }
 
+        // Si el restaurante desactivó prestar apoyo a la red, no es candidato.
+        if (myRestaurant.supportsNetworkDelivery === false || myRestaurant.pickupOnly) {
+          return reply.send({
+            success: true,
+            data: [],
+          });
+        }
+
         const orders = await prisma.order.findMany({
           where: {
             status: OrderStatus.READY,
@@ -1661,11 +1669,13 @@ export async function registerRestaurantOrderRoutes(fastify: FastifyInstance): P
           });
         }
 
-        // Buscar restaurantes cercanos con reparto propio
+        // Buscar restaurantes cercanos con reparto propio que acepten prestar apoyo
         const restaurants = await prisma.restaurant.findMany({
           where: {
             id: { not: order.restaurant.id },
             hasOwnDelivery: true,
+            supportsNetworkDelivery: true,
+            pickupOnly: false,
             status: 'ACTIVE',
             isAcceptingOrders: true,
           },
@@ -1857,6 +1867,17 @@ export async function registerRestaurantOrderRoutes(fastify: FastifyInstance): P
             error: {
               code: 'RESTAURANT_NOT_FOUND',
               message: 'No se encontro tu restaurante.',
+            },
+          });
+        }
+
+        // Defensa: si el restaurante desactivó prestar apoyo a la red, no puede aceptar.
+        if (supportRestaurant.supportsNetworkDelivery === false || supportRestaurant.pickupOnly) {
+          return reply.status(400).send({
+            success: false,
+            error: {
+              code: 'SUPPORT_DISABLED',
+              message: 'Desactivaste prestar apoyo a la red. Actívalo en Ajustes para aceptar entregas de otros restaurantes.',
             },
           });
         }

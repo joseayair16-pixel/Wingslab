@@ -263,6 +263,7 @@ export async function registerPublicRoutes(fastify: FastifyInstance): Promise<vo
           categories: restaurant.categories,
           storeCategories: restaurant.storeCategories?.map(sc => sc.category) || [],
           hasOwnDelivery: restaurant.hasOwnDelivery,
+          pickupOnly: restaurant.pickupOnly,
           serviceFee: restaurant.serviceFee,
           maxCashOrder: restaurant.maxCashOrder,
           deliveryFee: restaurant.deliveryFee,

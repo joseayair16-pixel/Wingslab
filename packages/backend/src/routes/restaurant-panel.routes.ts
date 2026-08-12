@@ -22,6 +22,8 @@ const restaurantProfileSchema = z.object({
   coverImage: z.string().url('La portada debe ser una URL valida.').nullable().optional(),
   featuredFlyer: z.string().url('El flyer debe ser una URL valida.').nullable().optional(),
   hasOwnDelivery: z.boolean().optional(),
+  supportsNetworkDelivery: z.boolean().optional(),
+  pickupOnly: z.boolean().optional(),
   deliveryFee: z.number().nonnegative().nullable().optional(),
   deliveryRadius: z.number().nonnegative().optional(),
   deliveryPricingModel: z.enum(['fixed', 'distance']).optional(),
@@ -576,10 +578,21 @@ export async function registerRestaurantPanelRoutes(fastify: FastifyInstance): P
         restData.transferAccountNumber = encrypt(restData.transferAccountNumber);
       }
 
+      const nextPickupOnly = restData.pickupOnly ?? ownedRestaurant.pickupOnly ?? false;
+
+      // "Solo recoger en tienda" es excluyente con la entrega: fuerza reparto propio
+      // y prestar apoyo a la red apagados, y sin tarifa de envío.
+      if (nextPickupOnly) {
+        restData.hasOwnDelivery = false;
+        restData.supportsNetworkDelivery = false;
+        restData.deliveryFee = null;
+      }
+
       const nextHasOwnDelivery = restData.hasOwnDelivery ?? ownedRestaurant.hasOwnDelivery;
       const updateData: Record<string, unknown> = {
         ...restData,
-        deliveryFee: nextHasOwnDelivery ? restData.deliveryFee : null,
+        pickupOnly: nextPickupOnly,
+        deliveryFee: nextPickupOnly ? null : (nextHasOwnDelivery ? restData.deliveryFee : null),
       };
       if (nextHasOwnDelivery !== undefined) {
         updateData.deliveryPricingModel = nextHasOwnDelivery

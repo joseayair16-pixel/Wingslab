@@ -88,6 +88,12 @@ model Restaurant {
   isPaused                Boolean          @default(false)
   serviceFee              Float            @default(0)
   hasOwnDelivery          Boolean          @default(false)
+  // Opt-in/out para prestar apoyo a la red: solo recibe solicitudes de apoyo si
+  // está activado. No afecta su capacidad de solicitar apoyo como restaurante origen.
+  supportsNetworkDelivery Boolean          @default(true)
+  // Solo recoger en tienda: el negocio no entrega a domicilio bajo ninguna modalidad.
+  // Al activarlo se fuerzan hasOwnDelivery=false y supportsNetworkDelivery=false.
+  pickupOnly              Boolean          @default(false)
   deliveryFee             Float?
   deliveryRadius          Float            @default(3)
   // Dynamic delivery pricing (optional per restaurant when own delivery is enabled)

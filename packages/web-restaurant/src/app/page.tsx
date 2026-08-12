@@ -78,6 +78,8 @@ type RestaurantProfile = {
   deliveryMaxFee?: number | null;
   maxCashOrder?: number | null;
   hasOwnDelivery: boolean;
+  supportsNetworkDelivery?: boolean;
+  pickupOnly?: boolean;
   minDeliveryTime: number;
   maxDeliveryTime: number;
   transferBankName?: string | null;
@@ -330,6 +332,8 @@ type StoreProfileDraft = {
   logo: string;
   coverImage: string;
   hasOwnDelivery: boolean;
+  supportsNetworkDelivery: boolean;
+  pickupOnly: boolean;
   minDeliveryTime: string;
   maxDeliveryTime: string;
   deliveryFee: string;
@@ -940,6 +944,8 @@ export default function Home() {
     logo: '',
     coverImage: '',
     hasOwnDelivery: false,
+    supportsNetworkDelivery: true,
+    pickupOnly: false,
     minDeliveryTime: '',
     maxDeliveryTime: '',
     deliveryFee: '',
@@ -1884,6 +1890,8 @@ export default function Home() {
       logo: '',
       coverImage: '',
         hasOwnDelivery: false,
+        supportsNetworkDelivery: true,
+        pickupOnly: false,
         minDeliveryTime: '',
         maxDeliveryTime: '',
         deliveryFee: '',
@@ -2770,6 +2778,8 @@ export default function Home() {
         logo: profileData.data.logo || '',
         coverImage: profileData.data.coverImage || '',
         hasOwnDelivery: profileData.data.hasOwnDelivery,
+        supportsNetworkDelivery: profileData.data.supportsNetworkDelivery ?? true,
+        pickupOnly: profileData.data.pickupOnly ?? false,
         minDeliveryTime: String(profileData.data.minDeliveryTime || ''),
         maxDeliveryTime: String(profileData.data.maxDeliveryTime || ''),
         deliveryFee: profileData.data.deliveryFee?.toString() || '',
@@ -3907,7 +3917,16 @@ export default function Home() {
     if (section === 'entrega') {
       const minT = num(storeDraft.minDeliveryTime);
       const maxT = num(storeDraft.maxDeliveryTime);
-      body.hasOwnDelivery = storeDraft.hasOwnDelivery;
+      body.pickupOnly = storeDraft.pickupOnly ?? false;
+      if (storeDraft.pickupOnly) {
+        // Solo recoger en tienda excluye la entrega: se apagan reparto propio y apoyo.
+        body.hasOwnDelivery = false;
+        body.supportsNetworkDelivery = false;
+        body.deliveryFee = null;
+      } else {
+        body.hasOwnDelivery = storeDraft.hasOwnDelivery;
+        body.supportsNetworkDelivery = storeDraft.supportsNetworkDelivery ?? true;
+      }
       body.deliveryPricingModel = storeDraft.hasOwnDelivery ? storeDraft.deliveryPricingModel : 'fixed';
       if (storeDraft.hasOwnDelivery) {
         const distance = storeDraft.deliveryPricingModel === 'distance';
@@ -3978,6 +3997,8 @@ export default function Home() {
         logo: payload.data.logo || '',
         coverImage: payload.data.coverImage || '',
         hasOwnDelivery: payload.data.hasOwnDelivery,
+        supportsNetworkDelivery: payload.data.supportsNetworkDelivery ?? true,
+        pickupOnly: payload.data.pickupOnly ?? false,
         minDeliveryTime: String(payload.data.minDeliveryTime || ''),
         maxDeliveryTime: String(payload.data.maxDeliveryTime || ''),
         deliveryFee: typeof payload.data.deliveryFee === 'number' ? String(payload.data.deliveryFee) : '',

@@ -85,6 +85,8 @@ type RestaurantDetail = {
   contactPhone: string;
   serviceFee?: number | null;
   hasOwnDelivery: boolean;
+  supportsNetworkDelivery?: boolean;
+  pickupOnly?: boolean;
   deliveryFee?: number | null;
   deliveryPricingModel?: string | null;
   deliveryBaseRate?: number | null;
@@ -138,6 +140,8 @@ type RestaurantEditForm = {
   email: string;
   serviceFee: string;
   hasOwnDelivery: boolean;
+  supportsNetworkDelivery: boolean;
+  pickupOnly: boolean;
   deliveryFee: string;
   deliveryPricingModel: 'fixed' | 'distance';
   deliveryBaseRate: string;
@@ -274,6 +278,11 @@ export default function RestaurantDetailPage() {
               return val ? parseRequiredDecimal(val) : 0;
             })(),
             hasOwnDelivery: editForm.hasOwnDelivery,
+            supportsNetworkDelivery: editForm.supportsNetworkDelivery ?? true,
+            pickupOnly: editForm.pickupOnly ?? false,
+            ...(editForm.pickupOnly
+              ? { hasOwnDelivery: false, supportsNetworkDelivery: false, deliveryFee: undefined }
+              : {}),
             deliveryFee: editForm.hasOwnDelivery ? parseOptionalNumber(editForm.deliveryFee) : undefined,
             deliveryPricingModel: editForm.hasOwnDelivery ? editForm.deliveryPricingModel : 'fixed',
             deliveryBaseRate: editForm.hasOwnDelivery ? parseOptionalNumber(editForm.deliveryBaseRate) ?? 20 : undefined,
@@ -851,6 +860,32 @@ export default function RestaurantDetailPage() {
                       />
                     </div>
 
+                    <label className="flex items-center gap-3 rounded-2xl border border-sky-200/70 bg-sky-50/50 px-4 py-3 text-sm text-neutral-700">
+                      <input
+                        type="checkbox"
+                        checked={editForm.pickupOnly === true}
+                        onChange={(event) =>
+                          setEditForm((current) =>
+                            current
+                              ? {
+                                  ...current,
+                                  pickupOnly: event.target.checked,
+                                  hasOwnDelivery: event.target.checked ? false : current.hasOwnDelivery,
+                                  supportsNetworkDelivery: event.target.checked ? false : current.supportsNetworkDelivery,
+                                }
+                              : current
+                          )
+                        }
+                        className="h-4 w-4 rounded border-sky-300"
+                      />
+                      <span>
+                        <span className="font-semibold text-neutral-900">Solo recoger en tienda</span>
+                        <span className="block text-xs text-neutral-500">No entrega a domicilio; solo recogida en el local. Desactiva reparto propio y apoyo a la red.</span>
+                      </span>
+                    </label>
+
+                    {!editForm.pickupOnly ? (
+                      <>
                     <label className="flex items-center gap-3 rounded-2xl border border-black/10 bg-neutral-50 px-4 py-3 text-sm text-neutral-700">
                       <input
                         type="checkbox"
@@ -864,6 +899,25 @@ export default function RestaurantDetailPage() {
                       />
                       <span>El restaurante maneja su propio delivery</span>
                     </label>
+
+                    {editForm.hasOwnDelivery && (
+                      <label className="flex items-center gap-3 rounded-2xl border border-sky-200/60 bg-sky-50/50 px-4 py-3 text-sm text-neutral-700">
+                        <input
+                          type="checkbox"
+                          checked={editForm.supportsNetworkDelivery !== false}
+                          onChange={(event) =>
+                            setEditForm((current) =>
+                              current ? { ...current, supportsNetworkDelivery: event.target.checked } : current
+                            )
+                          }
+                          className="h-4 w-4 rounded border-sky-300"
+                        />
+                        <span>
+                          <span className="font-semibold text-neutral-900">Presta apoyo a la red</span>
+                          <span className="block text-xs text-neutral-500">Ayuda a otros restaurantes a entregar pedidos cercanos.</span>
+                        </span>
+                      </label>
+                    )}
 
                     {editForm.hasOwnDelivery ? (
                       <>
@@ -942,6 +996,12 @@ export default function RestaurantDetailPage() {
                       <div className="rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm leading-6 text-emerald-800">
                         Este restaurante usa repartidores SaDeL. La tarifa visible para cliente se toma desde la region
                         configurada en admin.
+                      </div>
+                    )}
+                      </>
+                    ) : (
+                      <div className="rounded-2xl border border-sky-200 bg-sky-50/60 px-4 py-3 text-sm leading-6 text-sky-800">
+                        🛍️ Este restaurante solo ofrece recoger en tienda. No se muestran opciones de entrega a domicilio.
                       </div>
                     )}
 
@@ -1673,6 +1733,8 @@ function createEditFormState(restaurant: RestaurantDetail): RestaurantEditForm {
     email: restaurant.email,
     serviceFee: restaurant.serviceFee?.toString() || '0',
     hasOwnDelivery: restaurant.hasOwnDelivery,
+    supportsNetworkDelivery: restaurant.supportsNetworkDelivery !== false,
+    pickupOnly: restaurant.pickupOnly === true,
     deliveryFee: restaurant.deliveryFee?.toString() || '',
     deliveryPricingModel: restaurant.deliveryPricingModel === 'distance' ? 'distance' : 'fixed',
     deliveryBaseRate: restaurant.deliveryBaseRate != null ? String(restaurant.deliveryBaseRate) : '',

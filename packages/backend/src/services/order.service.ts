@@ -270,6 +270,16 @@ export async function createOrderForCustomer({
 
   const isPickup = input.fulfillmentType === 'PICKUP';
 
+  // Defensa: un negocio configurado como "solo recoger en tienda" nunca recibe
+  // pedidos de entrega a domicilio (cualquier ruta de creación).
+  if (restaurant.pickupOnly && !isPickup) {
+    throw new AppError(
+      400,
+      'DELIVERY_UNAVAILABLE',
+      'Este negocio solo ofrece recoger en tienda.'
+    );
+  }
+
   if (isPickup && input.paymentMethod === PaymentMethod.CASH) {
     if (!input.locationVerified) {
       throw new AppError(
