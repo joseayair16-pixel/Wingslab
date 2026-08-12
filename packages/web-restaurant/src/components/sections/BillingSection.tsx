@@ -164,16 +164,22 @@ export const BillingSection = React.memo(function BillingSection({
           </div>
 
           {(() => {
-            const totalRevenue = billingSummary?.deliveredRevenue ?? 0;
-            const platformFee = billingSummary?.platformFeeRevenue ?? 0;
+            const platformFeeRevenue = billingSummary?.platformFeeRevenue ?? 0;
+            const platformFeeRate = billingSummary?.platformFeeRate ?? 0;
             const platformFeePerOrder = billingSummary?.platformFeePerOrder ?? 0;
-            if (totalRevenue <= 0 || platformFeePerOrder <= 0) return null;
-            const percentage = totalRevenue > 0 ? ((platformFee / totalRevenue) * 100).toFixed(1) : '0.0';
+            if (platformFeeRate <= 0 && platformFeePerOrder <= 0) return null;
+            const rateLabel =
+              platformFeeRate > 0
+                ? `${(platformFeeRate * 100).toFixed((platformFeeRate * 100) % 1 === 0 ? 0 : 1)}% del subtotal de tus productos`
+                : `$${platformFeePerOrder.toFixed(2)} por pedido`;
             return (
               <div className="mt-4 space-y-1">
                 <p className="text-xs font-semibold text-blue-700 bg-blue-50/60 border border-blue-100/40 rounded-xl px-3 py-2.5 w-fit flex items-center gap-2">
                   <span>📈</span>
-                  <span>Comisión por uso de plataforma equivale al <strong>{percentage}%</strong> (${platformFee.toFixed(2)} MXN)</span>
+                  <span>
+                    Uso de la plataforma: <strong>{rateLabel}</strong>
+                    {platformFeeRevenue > 0 ? ` (${platformFeeRevenue.toFixed(2)} MXN acumulados)` : ''}
+                  </span>
                 </p>
                 <p className="text-[10px] text-neutral-400 pl-1 leading-relaxed mt-1">
                   * Tarifa cobrada al cliente que recaudas y transfieres al administrador.
@@ -195,7 +201,15 @@ export const BillingSection = React.memo(function BillingSection({
             <div className="flex items-center justify-between text-sm">
               <div className="flex items-center gap-2">
                 <span className="text-neutral-500 font-medium">Uso de la Plataforma</span>
-                <span className="text-[11px] font-semibold text-neutral-400 bg-neutral-100/80 rounded-md px-2 py-0.5">${(billingSummary?.platformFeePerOrder ?? 0).toFixed(2)} c/u</span>
+                {(billingSummary?.platformFeeRate ?? 0) > 0 ? (
+                  <span className="text-[11px] font-semibold text-neutral-400 bg-neutral-100/80 rounded-md px-2 py-0.5">
+                    {((billingSummary?.platformFeeRate ?? 0) * 100).toFixed(
+                      ((billingSummary?.platformFeeRate ?? 0) * 100) % 1 === 0 ? 0 : 1
+                    )}% del subtotal
+                  </span>
+                ) : (
+                  <span className="text-[11px] font-semibold text-neutral-400 bg-neutral-100/80 rounded-md px-2 py-0.5">${(billingSummary?.platformFeePerOrder ?? 0).toFixed(2)} c/u</span>
+                )}
               </div>
               <span className="font-semibold text-neutral-950 bg-neutral-50 border border-black/5 rounded-lg px-2.5 py-1">
                 ${(billingSummary?.platformFeeRevenue ?? 0).toFixed(2)} MXN
