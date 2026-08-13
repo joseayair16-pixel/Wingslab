@@ -767,55 +767,56 @@ export const HomeView = React.memo(function HomeView({
                       </div>
 
                       <div className="relative px-4 pb-4 pt-4">
-                        <div className="mb-2 flex items-end gap-3">
-                          <div className="-mt-11 flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-2xl border-4 border-white bg-white shadow-[0_10px_24px_rgba(15,15,15,0.14)] relative">
+                        <div className="flex items-end gap-3">
+                          <div className="-mt-12 flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-[22px] border-[3px] border-white bg-white shadow-[0_10px_28px_rgba(15,15,15,0.18)] ring-1 ring-black/5 relative">
                             {restaurant.logo ? (
                               <Image
                                 src={restaurant.logo}
                                 alt={`Logo de ${restaurant.name}`}
                                 fill
-                                sizes="64px"
+                                sizes="80px"
                                 className="object-cover"
                               />
                             ) : (
-                              <span className="text-lg font-semibold text-neutral-900">
+                              <span className="text-xl font-semibold text-neutral-900">
                                 {buildRestaurantInitials(restaurant.name)}
                               </span>
                             )}
                           </div>
-                          <div className="min-w-0 flex-1">
-                            <div className="flex items-center gap-2">
-                              <h3 className="truncate text-xl font-bold tracking-tight">{restaurant.name}</h3>
+
+                          <div className="min-w-0 flex-1 pb-0.5">
+                            <div className="flex items-start justify-between gap-2">
+                              <h3 className="min-w-0 truncate text-lg font-extrabold tracking-tight">{restaurant.name}</h3>
+                              <span className="flex shrink-0 items-center gap-1 text-xs font-semibold text-neutral-700">
+                                <span className="text-amber-400">★</span>
+                                {restaurant.rating ? restaurant.rating.toFixed(1) : 'Nuevo'}
+                                {(restaurant.reviewCount ?? 0) > 0 && (
+                                  <span className="font-normal text-neutral-400">({restaurant.reviewCount})</span>
+                                )}
+                              </span>
                             </div>
-                            <p className="mt-0.5 truncate text-xs text-neutral-500">{restaurant.address}</p>
-                            <div className="mt-1 flex items-center gap-3 text-xs text-neutral-600">
+                            <p className="mt-0.5 truncate text-[11px] text-neutral-500">{restaurant.address}</p>
+                            <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1">
                               {(() => {
                                 const dist = restaurant.calculatedDistance;
-                                return dist ? <span>{dist.toFixed(1)} km</span> : null;
+                                return dist ? (
+                                  <span className="text-[11px] font-medium text-neutral-600">{dist.toFixed(1)} km</span>
+                                ) : null;
                               })()}
-                              <span className="flex items-center gap-0.5 font-semibold text-neutral-900">
-                                ⭐ {restaurant.rating ? restaurant.rating.toFixed(1) : 'Nuevo'}
-                                {(restaurant.reviewCount ?? 0) > 0 && (
-                                  <span className="font-normal text-neutral-500"> ({restaurant.reviewCount})</span>
-                                )}
+                              <span className="text-[11px] font-medium text-neutral-600">
+                                🛵 {restaurant.effectiveDeliveryFee === 0 ? 'Envío gratis' : `${formatDeliverySummary(restaurant.effectiveDeliveryFee)} de envío`}
                               </span>
                             </div>
                           </div>
                         </div>
 
-                        <div className="ml-[76px] flex flex-wrap items-center gap-x-3 gap-y-1">
-                          <span className="flex items-center gap-1.5 font-medium text-neutral-700 text-[13px]">
-                            <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-emerald-50 text-emerald-600 text-xs">
-                              🛵
-                            </span>
-                            {restaurant.effectiveDeliveryFee === 0 ? 'Envío gratis' : `${formatDeliverySummary(restaurant.effectiveDeliveryFee)} envío`}
-                          </span>
+                        <div className="mt-3 flex flex-wrap items-center gap-1.5">
                           {(restaurant.description?.toLowerCase().includes('promo') || restaurant.description?.toLowerCase().includes('descuento')) && (
-                            <span className="rounded-full bg-[#FEF7E0] px-2.5 py-1 text-xs font-semibold text-[#B06000]">
+                            <span className="rounded-full bg-[#FEF7E0] px-2.5 py-1 text-[11px] font-semibold text-[#B06000]">
                               Descuentos disponibles
                             </span>
                           )}
-                          <span className="rounded-full bg-black/5 px-2.5 py-1 text-xs text-neutral-500">
+                          <span className="rounded-full bg-neutral-100 px-2.5 py-1 text-[11px] font-medium text-neutral-500">
                             {formatRegionChipLabel(restaurant.regionName || restaurant.region)}
                           </span>
                         </div>
