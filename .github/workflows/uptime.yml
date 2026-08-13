@@ -1,0 +1,83 @@
+name: Uptime Monitor
+
+on:
+  schedule:
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: uptime-monitor
+  cancel-in-progress: false
+
+jobs:
+  check:
+    name: Health check
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Ping API health
+        id: health
+        run: |
+          code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 30 https://sadel-production.up.railway.app/health || echo "000")
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+          echo "HTTP status: $code"
+      - name: Open incident issue when down
+        if: steps.health.outputs.code != '200'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const code = process.env.HTTP_CODE;
+            const now = new Date().toISOString();
+            const title = `API caida (health ${code})`;
+            const body = [
+              `El API de produccion no responde correctamente.`,
+              ``,
+              `Endpoint: https://sadel-production.up.railway.app/health`,
+              `Estado HTTP: ${code} (esperado: 200)`,
+              `Fecha: ${now}`,
+              ``,
+              `Acciones recomendadas:`,
+              `1. Revisa el dashboard de Railway -> Deployments -> logs del deploy.`,
+              `2. Confirma que prisma migrate deploy y el backend arrancaron (start-backend.sh).`,
+              `3. Verifica que el trial/plan de Railway tenga credito restante.`,
+              `4. Verifica la DB (Postgres) y Redis.`,
+              ``,
+              `Cuando el API vuelva a 200, este issue se cerrara automaticamente.`,
+            ].join('\n');
+
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+
+            const open = await github.rest.issues.listForRepo({
+              owner, repo, state: 'open', per_page: 100,
+            });
+            const existing = open.data.find((i) => i.title.includes('API caida'));
+            if (!existing) {
+              await github.rest.issues.create({ owner, repo, title, body });
+            }
+          env:
+            HTTP_CODE: ${{ steps.health.outputs.code }}
+      - name: Close incident issue when back up
+        if: steps.health.outputs.code == '200'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const open = await github.rest.issues.listForRepo({
+              owner, repo, state: 'open', per_page: 100,
+            });
+            const incident = open.data.find((i) => i.title.includes('API caida'));
+            if (incident) {
+              await github.rest.issues.update({
+                owner, repo, issue_number: incident.number,
+                state: 'closed',
+                state_reason: 'completed',
+              });
+              const note = `El API volvio a responder 200 en ${new Date().toISOString()}. Issue cerrado automaticamente.`;
+              await github.rest.issues.createComment({
+                owner, repo, issue_number: incident.number,
+                body: note,
+              });
+            }

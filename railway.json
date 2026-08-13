@@ -5,8 +5,11 @@
     "buildCommand": "npm install --include=dev && npm run build -w @sadel/shared && npx prisma generate --schema=packages/backend/prisma/schema.prisma && npm run build -w @sadel/backend"
   },
   "deploy": {
-    "startCommand": "npx prisma migrate deploy --schema=packages/backend/prisma/schema.prisma && node packages/backend/dist/index.js",
+    "startCommand": "bash infrastructure/scripts/start-backend.sh",
+    "healthcheckPath": "/health",
+    "healthcheckTimeout": 300,
     "restartPolicyType": "ON_FAILURE",
-    "restartPolicyMaxRetries": 10
+    "restartPolicyMaxRetries": 10,
+    "overlapSeconds": 60
   }
 }
