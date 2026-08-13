@@ -4,6 +4,7 @@ import {
   sendWhatsAppPaymentReminder,
   sendWhatsAppPaymentSuspended,
 } from '../services/whatsapp.service';
+import { claimNotification, releaseNotification } from '../services/payment-notification.guard';
 
 // Mexico uses UTC-6 year-round (DST abolished in 2022).
 function getMexicoParts(now: Date) {
@@ -48,20 +49,22 @@ async function processReminders() {
   for (const settlement of pending) {
     const phone = settlement.restaurant.contactPhone;
     if (!phone) continue;
+    const claimedAt = new Date();
     try {
+      const claimed = await claimNotification(prisma, settlement.id, 'reminderSentAt', claimedAt);
+      if (!claimed) continue;
+
       const result = await sendWhatsAppPaymentReminder({
         restaurantPhone: phone,
         restaurantName: settlement.restaurant.name,
         reference: settlement.reference,
         balanceUrl,
       });
-      if (result.sent) {
-        await prisma.restaurantBillingSettlement.update({
-          where: { id: settlement.id },
-          data: { reminderSentAt: new Date() },
-        });
+      if (!result.sent) {
+        await releaseNotification(prisma, settlement.id, 'reminderSentAt', claimedAt);
       }
     } catch (error) {
+      await releaseNotification(prisma, settlement.id, 'reminderSentAt', claimedAt).catch(() => {});
       console.error(`[PaymentReminders] Error reminder ${settlement.reference}:`, error);
     }
   }
@@ -89,20 +92,22 @@ async function processReminders() {
 
     const phone = settlement.restaurant.contactPhone;
     if (!phone) continue;
+    const claimedAt = new Date();
     try {
+      const claimed = await claimNotification(prisma, settlement.id, 'suspendedReminderSentAt', claimedAt);
+      if (!claimed) continue;
+
       const result = await sendWhatsAppPaymentSuspended({
         restaurantPhone: phone,
         restaurantName: settlement.restaurant.name,
         reference: settlement.reference,
         balanceUrl,
       });
-      if (result.sent) {
-        await prisma.restaurantBillingSettlement.update({
-          where: { id: settlement.id },
-          data: { suspendedReminderSentAt: new Date() },
-        });
+      if (!result.sent) {
+        await releaseNotification(prisma, settlement.id, 'suspendedReminderSentAt', claimedAt);
       }
     } catch (error) {
+      await releaseNotification(prisma, settlement.id, 'suspendedReminderSentAt', claimedAt).catch(() => {});
       console.error(`[PaymentReminders] Error suspended ${settlement.reference}:`, error);
     }
   }

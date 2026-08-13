@@ -1,35 +1,11 @@
 import cron from 'node-cron';
 import { prisma } from '../config/database';
 import { sendWhatsAppPaymentSuspended } from '../services/whatsapp.service';
+import { claimNotification, releaseNotification } from '../services/payment-notification.guard';
 
 function buildBalanceUrl(): string {
   const base = (process.env.RESTAURANT_PANEL_URL || process.env.WEBAPP_URL || '').replace(/\/+$/, '');
   return base ? `${base}/?section=billing` : '';
-}
-
-async function sendSuspensionWhatsApp(settlement: {
-  id: string;
-  reference: string;
-  restaurant: { name: string; contactPhone: string | null };
-}) {
-  const phone = settlement.restaurant.contactPhone;
-  if (!phone) return;
-  try {
-    const result = await sendWhatsAppPaymentSuspended({
-      restaurantPhone: phone,
-      restaurantName: settlement.restaurant.name,
-      reference: settlement.reference,
-      balanceUrl: buildBalanceUrl(),
-    });
-    if (result.sent) {
-      await prisma.restaurantBillingSettlement.update({
-        where: { id: settlement.id },
-        data: { suspendedReminderSentAt: new Date() },
-      });
-    }
-  } catch (error) {
-    console.error(`[BillingOverdueJob] WhatsApp suspension ${settlement.reference}:`, error);
-  }
 }
 
 async function processOverdueSettlements() {
@@ -55,12 +31,25 @@ async function processOverdueSettlements() {
     console.log(`[BillingOverdueJob] Found ${pendingOverdue.length} PENDING settlements past due.`);
 
     for (const settlement of pendingOverdue) {
+      const claimedAt = new Date();
+      let claimed = false;
       try {
         await prisma.$transaction(async (tx) => {
-          await tx.restaurantBillingSettlement.update({
-            where: { id: settlement.id },
-            data: { status: 'OVERDUE' },
+          // Reclamación atómica: marca OVERDUE + bloquea la notificación en un
+          // solo update; una 2a instancia no puede repetir el envío.
+          const res = await tx.restaurantBillingSettlement.updateMany({
+            where: {
+              id: settlement.id,
+              status: 'PENDING',
+              suspendedReminderSentAt: null,
+            },
+            data: {
+              status: 'OVERDUE',
+              suspendedReminderSentAt: claimedAt,
+            },
           });
+          if (res.count === 0) return;
+          claimed = true;
 
           const restaurant = await tx.restaurant.findUnique({
             where: { id: settlement.restaurantId },
@@ -79,10 +68,24 @@ async function processOverdueSettlements() {
               },
             });
             console.log(`[BillingOverdueJob] Suspended restaurant ${settlement.restaurant.name} (${settlement.restaurantId}).`);
-            await sendSuspensionWhatsApp(settlement);
           }
         });
+
+        if (claimed) {
+          const result = await sendWhatsAppPaymentSuspended({
+            restaurantPhone: settlement.restaurant.contactPhone || '',
+            restaurantName: settlement.restaurant.name,
+            reference: settlement.reference,
+            balanceUrl: buildBalanceUrl(),
+          });
+          if (!result.sent) {
+            await releaseNotification(prisma, settlement.id, 'suspendedReminderSentAt', claimedAt);
+          }
+        }
       } catch (error) {
+        if (claimed) {
+          await releaseNotification(prisma, settlement.id, 'suspendedReminderSentAt', claimedAt).catch(() => {});
+        }
         console.error(`[BillingOverdueJob] Failed to process settlement ${settlement.reference}:`, error);
       }
     }
@@ -104,7 +107,9 @@ async function processOverdueSettlements() {
     }
 
     for (const settlement of activeWithOverdue) {
+      const claimedAt = new Date();
       try {
+        let suspended = false;
         await prisma.$transaction(async (tx) => {
           const restaurant = await tx.restaurant.findUnique({
             where: { id: settlement.restaurantId },
@@ -121,11 +126,27 @@ async function processOverdueSettlements() {
                 isAcceptingOrders: false,
               },
             });
+            suspended = true;
             console.log(`[BillingOverdueJob] (Repair) Suspended restaurant ${settlement.restaurant.name} (${settlement.restaurantId}).`);
-            await sendSuspensionWhatsApp(settlement);
           }
         });
+
+        if (suspended) {
+          // Reparación no debe re-mensajear: solo notifica si este corte aún no fue avisado.
+          const claimed = await claimNotification(prisma, settlement.id, 'suspendedReminderSentAt', claimedAt);
+          if (!claimed) continue;
+          const result = await sendWhatsAppPaymentSuspended({
+            restaurantPhone: settlement.restaurant.contactPhone || '',
+            restaurantName: settlement.restaurant.name,
+            reference: settlement.reference,
+            balanceUrl: buildBalanceUrl(),
+          });
+          if (!result.sent) {
+            await releaseNotification(prisma, settlement.id, 'suspendedReminderSentAt', claimedAt);
+          }
+        }
       } catch (error) {
+        await releaseNotification(prisma, settlement.id, 'suspendedReminderSentAt', claimedAt).catch(() => {});
         console.error(`[BillingOverdueJob] Failed repair for settlement ${settlement.reference}:`, error);
       }
     }
