@@ -2,6 +2,7 @@ import { UserRole } from '@prisma/client';
 import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import bcryptjs from 'bcryptjs';
+import { MENU_THEME_IDS } from '@sadel/shared';
 
 import { prisma } from '../config/database';
 import { authenticate, authorize, getAuthenticatedUser } from '../middleware/auth';
@@ -26,6 +27,7 @@ const restaurantProfileSchema = z.object({
   pickupOnly: z.boolean().optional(),
   autoOpenEnabled: z.boolean().optional(),
   accentColor: z.string().regex(/^#[0-9a-fA-F]{6}$/, 'El color debe ser un hex válido (#RRGGBB).').nullable().optional(),
+  menuTheme: z.string().refine((id) => id === null || MENU_THEME_IDS.includes(id), { message: 'El tema de fondo no es válido.' }).nullable().optional(),
   deliveryFee: z.number().nonnegative().nullable().optional(),
   deliveryRadius: z.number().nonnegative().optional(),
   deliveryPricingModel: z.enum(['fixed', 'distance']).optional(),

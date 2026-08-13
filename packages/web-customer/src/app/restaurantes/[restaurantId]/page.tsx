@@ -2723,7 +2723,8 @@ function triggerHaptic(pattern: number | number[] = 10) {
 
   return (
     <main
-      className="min-h-[100dvh] bg-[#fafafa] text-neutral-900 transition-colors duration-500 dark:bg-[#0b0b0d] dark:text-zinc-100"
+      className="min-h-[100dvh] bg-[var(--menu-bg)] text-neutral-900 transition-colors duration-500 dark:bg-[var(--menu-bg-dark)] dark:text-zinc-100"
+      style={{ background: 'var(--menu-bg)', backgroundAttachment: 'fixed' }}
       onTouchStart={handleTouchStart}
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
@@ -2767,7 +2768,7 @@ function triggerHaptic(pattern: number | number[] = 10) {
         />
       ) : null}
       <div className="sticky top-0 z-40">
-        <header className="border-b border-black/5 bg-white dark:bg-neutral-950 sticky top-0 z-40 shadow-[0_4px_20px_rgba(0,0,0,0.03)] pt-[env(safe-area-inset-top)]">
+        <header className="border-b border-black/5 bg-[var(--menu-surface)] dark:bg-[var(--menu-surface-dark)] sticky top-0 z-40 shadow-[0_4px_20px_rgba(0,0,0,0.03)] pt-[env(safe-area-inset-top)]">
           <div className="mx-auto flex max-w-7xl items-center gap-3 px-4 py-4 md:px-6">
             <button
               type="button"
@@ -4508,7 +4509,7 @@ function triggerHaptic(pattern: number | number[] = 10) {
         ) : restaurant ? (
           <div className="space-y-6">
             <div className="space-y-6">
-              <section className={`-mx-4 ${error ? 'mt-4' : 'mt-0'} lg:mx-0 lg:mt-0 overflow-hidden border-y border-black/5 dark:border-zinc-900/80 bg-white dark:bg-[#0c0c0e] shadow-[0_18px_60px_rgba(15,15,15,0.05)] dark:shadow-none lg:rounded-[32px] lg:border lg:border-black/5 lg:dark:border-zinc-900/80`}>
+              <section className={`-mx-4 ${error ? 'mt-4' : 'mt-0'} lg:mx-0 lg:mt-0 overflow-hidden border-y border-black/5 dark:border-zinc-900/80 bg-[var(--menu-surface)] dark:bg-[var(--menu-surface-dark)] shadow-[0_18px_60px_rgba(15,15,15,0.05)] dark:shadow-none lg:rounded-[32px] lg:border lg:border-black/5 lg:dark:border-zinc-900/80`}>
                 <div className="relative">
                   {restaurant.coverImage ? (
                       <img
@@ -4574,7 +4575,7 @@ function triggerHaptic(pattern: number | number[] = 10) {
                     </div>
                   </div>
 
-                  <div className="mt-3 flex flex-col lg:flex-row items-stretch lg:items-center gap-1.5 lg:gap-0 lg:divide-x divide-black/[0.06] rounded-2xl lg:rounded-full border border-black/[0.04] bg-white p-1.5 shadow-[0_2px_12px_rgba(0,0,0,0.02)] lg:p-1 lg:pr-3 transition-all hover:shadow-[0_6px_20px_rgba(0,0,0,0.04)] dark:divide-zinc-800 dark:border-zinc-800/60 dark:bg-neutral-900">
+                  <div className="mt-3 flex flex-col lg:flex-row items-stretch lg:items-center gap-1.5 lg:gap-0 lg:divide-x divide-black/[0.06] rounded-2xl lg:rounded-full border border-black/[0.04] bg-[var(--menu-surface)] p-1.5 shadow-[0_2px_12px_rgba(0,0,0,0.02)] lg:p-1 lg:pr-3 transition-all hover:shadow-[0_6px_20px_rgba(0,0,0,0.04)] dark:divide-zinc-800 dark:border-zinc-800/60 dark:bg-[var(--menu-surface-dark)]">
                     {/* Address */}
                     <div className="w-full flex-1 rounded-xl lg:rounded-full bg-neutral-50 lg:bg-transparent px-3 py-2.5 lg:py-1.5 text-[12px] text-neutral-600 flex items-center gap-2 dark:bg-zinc-800/60 dark:text-zinc-300 lg:dark:bg-transparent">
                       <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-white shadow-sm border border-black/[0.03] lg:bg-neutral-100 lg:shadow-none lg:border-transparent dark:bg-zinc-700 dark:lg:bg-transparent">
@@ -4641,7 +4642,7 @@ function triggerHaptic(pattern: number | number[] = 10) {
                 return null;
               })()}
 
-              <div data-sticky-header className="sticky top-[calc(env(safe-area-inset-top)+72px)] z-20 -mx-4 bg-white/90 backdrop-blur-2xl border-b border-black/[0.04] md:-mx-6 lg:-mx-7 dark:bg-neutral-950/90 dark:border-zinc-800/60">
+              <div data-sticky-header className="sticky top-[calc(env(safe-area-inset-top)+72px)] z-20 -mx-4 bg-[var(--menu-surface)]/90 backdrop-blur-2xl border-b border-black/[0.04] md:-mx-6 lg:-mx-7 dark:bg-[var(--menu-surface-dark)]/90 dark:border-zinc-800/60">
                 <div className="px-4 py-3 md:px-6 lg:px-7">
                   <div className="relative w-full">
                     <input
@@ -4722,7 +4723,7 @@ function triggerHaptic(pattern: number | number[] = 10) {
                     {searchResults.map((product) => {
                       const quantity = getCartQuantity(product.id);
                       return (
-                        <article id={product.id} key={product.id} className="overflow-hidden rounded-[24px] border border-black/[0.04] bg-white transition-all duration-300 shadow-[0_2px_12px_rgba(0,0,0,0.02)] hover:shadow-[0_8px_24px_rgba(0,0,0,0.06)] dark:border-zinc-800 dark:bg-neutral-900">
+                        <article id={product.id} key={product.id} className="overflow-hidden rounded-[24px] border border-black/[0.04] bg-[var(--menu-card)] transition-all duration-300 shadow-[0_2px_12px_rgba(0,0,0,0.02)] hover:shadow-[0_8px_24px_rgba(0,0,0,0.06)] dark:border-zinc-800 dark:bg-[var(--menu-card-dark)]">
                           <div className="flex gap-4 p-4">
                             <div className="relative h-24 w-24 shrink-0 overflow-hidden rounded-2xl sm:h-28 sm:w-28">
                               {product.image ? (

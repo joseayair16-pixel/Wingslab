@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { requestJson } from '@sadel/shared';
+import { requestJson, MENU_THEMES, getMenuThemeById } from '@sadel/shared';
 
 type SuccessResponse<T> = {
   success: true;
@@ -514,6 +514,67 @@ export const SettingsSection = React.memo(function SettingsSection({
                       Pedir ahora
                     </span>
                     <span className="text-[11px] text-neutral-400">Así se verá tu botón de pedir.</span>
+                  </div>
+                </div>
+                <div className="sm:col-span-2">
+                  <div className="border-t border-black/5 pt-4 mt-2 mb-3">
+                    <p className="text-[13px] font-bold text-neutral-900">Fondo de tu menú</p>
+                    <p className="text-xs text-neutral-500 mt-0.5">
+                      Elige el fondo y la ambientación de tu página de menú. Aplica a todo tu portal en la app del comensal.
+                    </p>
+                  </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setStoreDraft((c: any) => ({ ...c, menuTheme: null }))}
+                      className={`flex flex-col items-start gap-2 rounded-2xl border p-3 text-left transition-all active:scale-95 ${
+                        !storeDraft.menuTheme
+                          ? 'border-neutral-900 ring-2 ring-neutral-900/15'
+                          : 'border-black/10 hover:border-black/25'
+                      }`}
+                    >
+                      <span
+                        className="h-14 w-full rounded-xl border border-black/5"
+                        style={{ background: getMenuThemeById(null)?.gradientLight || 'linear-gradient(180deg,#fafafa,#f4f4f2)' }}
+                      />
+                      <span className="flex items-center gap-1.5 text-xs font-bold text-neutral-800">
+                        {!storeDraft.menuTheme && (
+                          <svg className="h-3.5 w-3.5 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+                        )}
+                        Por defecto
+                      </span>
+                    </button>
+                    {MENU_THEMES.map((theme) => {
+                      const isSelected = storeDraft.menuTheme === theme.id;
+                      return (
+                        <button
+                          key={theme.id}
+                          type="button"
+                          onClick={() => setStoreDraft((c: any) => ({ ...c, menuTheme: theme.id }))}
+                          className={`flex flex-col items-start gap-2 rounded-2xl border p-3 text-left transition-all active:scale-95 ${
+                            isSelected ? 'border-neutral-900 ring-2 ring-neutral-900/15' : 'border-black/10 hover:border-black/25'
+                          }`}
+                        >
+                          <span className="h-14 w-full rounded-xl border border-black/5" style={{ background: theme.gradientLight }} />
+                          <span className="flex items-center gap-1.5 text-xs font-bold text-neutral-800">
+                            {isSelected && (
+                              <svg className="h-3.5 w-3.5 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+                            )}
+                            {theme.name}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <div className="mt-4 flex items-center gap-3 rounded-2xl border border-black/5 bg-neutral-50 p-3">
+                    <span className="text-[11px] font-bold uppercase tracking-wider text-neutral-400">Vista previa</span>
+                    <span
+                      className="inline-flex items-center gap-1.5 rounded-full px-4 py-2 text-xs font-bold text-white shadow-sm"
+                      style={{ background: (storeDraft.menuTheme ? getMenuThemeById(storeDraft.menuTheme)?.gradientLight : 'linear-gradient(180deg,#fafafa,#f4f4f2)') || 'linear-gradient(180deg,#fafafa,#f4f4f2)' }}
+                    >
+                      Fondo de tu menú
+                    </span>
+                    <span className="text-[11px] text-neutral-400">Así se verá el fondo de tu portal.</span>
                   </div>
                 </div>
                 <div className="sm:col-span-2">

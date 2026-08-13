@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { cache } from 'react';
+import { getMenuThemeById } from '@sadel/shared';
 
 export const dynamic = 'force-dynamic';
 
@@ -14,6 +15,7 @@ type RestaurantMeta = {
   region: string;
   logo?: string | null;
   accentColor?: string | null;
+  menuTheme?: string | null;
   latitude?: number | null;
   longitude?: number | null;
   businessType?: string | null;
@@ -130,6 +132,12 @@ function darkenHex(hex: string, factor = 0.78): string {
   return `#${[r, g, b].map((v) => v.toString(16).padStart(2, '0')).join('')}`;
 }
 
+// Extrae el primer color hex de un gradiente CSS para el theme-color de la PWA.
+function gradientStartColor(gradient: string): string | null {
+  const match = gradient.match(/#[0-9a-fA-F]{6}/);
+  return match ? match[0].toLowerCase() : null;
+}
+
 export default async function RestaurantLayout({
   params,
   children,
@@ -146,8 +154,12 @@ export default async function RestaurantLayout({
   const accentSoft = `${accent}1A`;
   const accentSoftStrong = `${accent}2E`;
 
+  const menuTheme = getMenuThemeById(restaurant?.menuTheme ?? null);
+  const menuThemeColor = menuTheme ? (gradientStartColor(menuTheme.gradientLight) ?? '#fafafa') : null;
+
   return (
     <>
+      {menuThemeColor && <meta name="theme-color" content={menuThemeColor} />}
       {restaurant && (
         <script
           type="application/ld+json"
@@ -159,6 +171,12 @@ export default async function RestaurantLayout({
   --accent-strong: ${accentStrong};
   --accent-soft: ${accentSoft};
   --accent-soft-strong: ${accentSoftStrong};
+  --menu-bg: ${menuTheme ? menuTheme.gradientLight : '#fafafa'};
+  --menu-bg-dark: ${menuTheme ? menuTheme.gradientDark : '#0b0b0d'};
+  --menu-surface: ${menuTheme ? menuTheme.surface : '#ffffff'};
+  --menu-surface-dark: ${menuTheme ? menuTheme.surfaceDark : '#0c0c0e'};
+  --menu-card: ${menuTheme ? menuTheme.card : '#ffffff'};
+  --menu-card-dark: ${menuTheme ? menuTheme.cardDark : '#0c0c0e'};
 }`}</style>
       {children}
     </>

@@ -99,6 +99,8 @@ model Restaurant {
   pickupOnly              Boolean          @default(false)
   // Color de marca (hex) que tiñe los acentos de la página pública del negocio.
   accentColor             String?
+  // Tema de fondo del menú público (id del catálogo MENU_THEMES, null = default).
+  menuTheme               String?
   deliveryFee             Float?
   deliveryRadius          Float            @default(3)
   // Dynamic delivery pricing (optional per restaurant when own delivery is enabled)

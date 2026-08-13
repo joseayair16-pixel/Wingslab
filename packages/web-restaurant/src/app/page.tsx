@@ -82,6 +82,7 @@ type RestaurantProfile = {
   pickupOnly?: boolean;
   autoOpenEnabled?: boolean;
   accentColor?: string | null;
+  menuTheme?: string | null;
   minDeliveryTime: number;
   maxDeliveryTime: number;
   transferBankName?: string | null;
@@ -337,6 +338,7 @@ type StoreProfileDraft = {
   supportsNetworkDelivery: boolean;
   pickupOnly: boolean;
   accentColor: string | null;
+  menuTheme: string | null;
   minDeliveryTime: string;
   maxDeliveryTime: string;
   deliveryFee: string;
@@ -950,6 +952,7 @@ export default function Home() {
     supportsNetworkDelivery: true,
     pickupOnly: false,
     accentColor: null,
+    menuTheme: null,
     minDeliveryTime: '',
     maxDeliveryTime: '',
     deliveryFee: '',
@@ -1897,6 +1900,7 @@ export default function Home() {
         supportsNetworkDelivery: true,
         pickupOnly: false,
         accentColor: null,
+        menuTheme: null,
         minDeliveryTime: '',
         maxDeliveryTime: '',
         deliveryFee: '',
@@ -2786,6 +2790,7 @@ export default function Home() {
         supportsNetworkDelivery: profileData.data.supportsNetworkDelivery ?? true,
         pickupOnly: profileData.data.pickupOnly ?? false,
         accentColor: profileData.data.accentColor ?? null,
+        menuTheme: profileData.data.menuTheme ?? null,
         minDeliveryTime: String(profileData.data.minDeliveryTime || ''),
         maxDeliveryTime: String(profileData.data.maxDeliveryTime || ''),
         deliveryFee: profileData.data.deliveryFee?.toString() || '',
@@ -3911,6 +3916,7 @@ export default function Home() {
       body.tiktok = storeDraft.tiktok.trim() || null;
       body.storeCategories = storeDraft.storeCategories;
       body.accentColor = storeDraft.accentColor ?? null;
+      body.menuTheme = storeDraft.menuTheme ?? null;
       return body;
     }
 
@@ -4007,6 +4013,7 @@ export default function Home() {
         supportsNetworkDelivery: payload.data.supportsNetworkDelivery ?? true,
         pickupOnly: payload.data.pickupOnly ?? false,
         accentColor: payload.data.accentColor ?? null,
+        menuTheme: payload.data.menuTheme ?? null,
         minDeliveryTime: String(payload.data.minDeliveryTime || ''),
         maxDeliveryTime: String(payload.data.maxDeliveryTime || ''),
         deliveryFee: typeof payload.data.deliveryFee === 'number' ? String(payload.data.deliveryFee) : '',
