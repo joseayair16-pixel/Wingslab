@@ -396,6 +396,12 @@ export const DashboardSection = React.memo(function DashboardSection({
                 )}
                 {operationalStatusLabel}
               </span>
+              {profile?.autoOpenEnabled && (
+                <span className="inline-flex items-center gap-1 rounded-full border border-sky-200 bg-sky-50 px-2.5 py-1 text-xs font-semibold text-sky-700" title="Tu negocio se abre solo a la hora de apertura de cada día.">
+                  <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                  Apertura automática
+                </span>
+              )}
               {activeOrders.length > 0 && (
                 <span className="inline-flex items-center gap-1 rounded-full border border-sky-200 bg-sky-50 px-2.5 py-1 text-xs font-semibold text-sky-700">
                   <span className="relative flex h-1.5 w-1.5">

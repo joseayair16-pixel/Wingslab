@@ -86,6 +86,9 @@ model Restaurant {
   statusChangedBy         String?
   isAcceptingOrders       Boolean          @default(false)
   isPaused                Boolean          @default(false)
+  // Apertura automática: la tienda se abre sola a la hora de apertura para
+  // recibir pedidos. Respeta un cierre manual/pausa del día (no se reabre ese día).
+  autoOpenEnabled         Boolean          @default(false)
   serviceFee              Float            @default(0)
   hasOwnDelivery          Boolean          @default(false)
   // Opt-in/out para prestar apoyo a la red: solo recibe solicitudes de apoyo si

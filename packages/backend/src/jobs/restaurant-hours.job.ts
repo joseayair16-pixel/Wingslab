@@ -40,6 +40,54 @@ function getMexicoCityTimeInfo(date: Date) {
   return { currentDay, currentTime, nowMins };
 }
 
+function getMexicoDateKey(date: Date): string {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Mexico_City',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(date);
+}
+
+// Cierre deliberado (manual o pausa por pedido sin responder) ocurrido HOY en
+// hora México: la apertura automática lo respeta y no reabre ese día.
+function isDeliberateClosureToday(statusChangedBy: string | null, statusChangedAt: Date | null): boolean {
+  if (!statusChangedAt) return false;
+  if (statusChangedBy !== 'OWNER' && statusChangedBy !== 'SYSTEM_ORDER_TIMEOUT_INACTIVITY') return false;
+  return getMexicoDateKey(statusChangedAt) === getMexicoDateKey(new Date());
+}
+
+// Ventana REAL de horario (sin incluir las ventanas de gracia de auto-cierre):
+// turno de hoy o turno nocturno heredado del día anterior. Devuelve los minutos
+// de apertura/cierre cuando ahora mismo está dentro del horario.
+function findRealOpenWindow(
+  operatingHours: { dayOfWeek: number; isClosed: boolean; openTime: string; closeTime: string }[],
+  currentDay: number,
+  yesterdayDay: number,
+  nowMins: number
+): { openMins: number; closeMins: number } | null {
+  for (const schedule of operatingHours) {
+    if (schedule.isClosed) continue;
+    if (schedule.dayOfWeek !== currentDay) continue;
+    const openMins = timeToMins(schedule.openTime);
+    let closeMins = timeToMins(schedule.closeTime);
+    if (closeMins < openMins) closeMins += 1440;
+    if (nowMins >= openMins && nowMins <= closeMins) return { openMins, closeMins };
+  }
+
+  for (const schedule of operatingHours) {
+    if (schedule.isClosed) continue;
+    if (schedule.dayOfWeek !== yesterdayDay) continue;
+    const openMins = timeToMins(schedule.openTime);
+    let closeMins = timeToMins(schedule.closeTime);
+    if (closeMins < openMins) closeMins += 1440;
+    const nowRel = nowMins + 1440;
+    if (nowRel >= openMins && nowRel <= closeMins) return { openMins, closeMins };
+  }
+
+  return null;
+}
+
 export function startRestaurantHoursJob(fastify: FastifyInstance) {
   cron.schedule('0 * * * * *', async () => {
     try {
@@ -136,8 +184,47 @@ export function startRestaurantHoursJob(fastify: FastifyInstance) {
         let closeMins = timeToMins(bestSchedule.closeTime);
         if (closeMins < openMins) closeMins += 1440;
         
-        // 1. Apertura Asistida
-        if (!restaurant.isAcceptingOrders) {
+        // 0. Apertura Automática (opcional por tienda)
+        if (restaurant.autoOpenEnabled && !restaurant.isAcceptingOrders) {
+          const realShift = findRealOpenWindow(restaurant.operatingHours, currentDay, yesterdayDay, nowMins);
+          if (realShift && !restaurant.isPaused) {
+            // Respetar un cierre deliberado (manual o pausa por inactividad) de HOY:
+            // la tienda se reabre sola el siguiente día de apertura.
+            const closedToday = isDeliberateClosureToday(restaurant.statusChangedBy, restaurant.statusChangedAt);
+            if (!closedToday) {
+              const opened = await prisma.restaurant.updateMany({
+                where: {
+                  id: restaurant.id,
+                  status: 'ACTIVE',
+                  autoOpenEnabled: true,
+                  isPaused: false,
+                  isAcceptingOrders: false,
+                },
+                data: {
+                  isAcceptingOrders: true,
+                  statusChangedAt: null,
+                  statusChangedBy: null,
+                  statusReason: null,
+                },
+              });
+
+              if (opened.count > 0) {
+                restaurant.isAcceptingOrders = true;
+                logger.info(`[RestaurantHoursJob] Restaurante ${restaurant.id} (${restaurant.name}): Apertura automática.`);
+                emitNotification(fastify.io, restaurant.userId, 'RESTAURANT', 'restaurant:auto_opened', {});
+                await sendPushNotification(restaurant.userId, {
+                  title: 'Tu negocio se abrió automáticamente 🚀',
+                  body: 'Recibirás pedidos según tu horario. Si hoy no quieres atender, ciérralo manualmente.',
+                  icon: '/app-icon-192.png',
+                  badge: '/badge.png',
+                }).catch(() => {});
+              }
+            }
+          }
+        }
+
+        // 1. Apertura Asistida (solo si la tienda no tiene apertura automática)
+        if (!restaurant.isAcceptingOrders && !restaurant.autoOpenEnabled) {
           if (bestShiftMins >= openMins && bestShiftMins <= openMins + 4) {
             const hasPrompted = await redis.get(`prompted_open_${restaurant.id}_${currentDay}`);
             if (!hasPrompted) {

@@ -290,6 +290,35 @@ export const SettingsSection = React.memo(function SettingsSection({
       pushToast('error', 'Error', 'No se pudo actualizar la configuración.');
     }
   };
+
+  const toggleAutoOpen = async (checked: boolean) => {
+    if (!token) return;
+    const previous = profile?.autoOpenEnabled ?? false;
+    setProfile((c: any) => (c ? { ...c, autoOpenEnabled: checked } : c));
+    try {
+      const payload = await requestJson<SuccessResponse<RestaurantProfile>>({
+        apiBase,
+        path: '/restaurant-panel/perfil',
+        token,
+        options: {
+          method: 'PATCH',
+          body: JSON.stringify({ autoOpenEnabled: checked }),
+        },
+        fallbackMessage: 'Error al actualizar',
+      });
+      setProfile(payload.data);
+      pushToast(
+        'success',
+        checked ? 'Apertura automática activada' : 'Apertura automática desactivada',
+        checked
+          ? 'Tu negocio se abrirá solo a la hora de apertura de cada día.'
+          : 'Tu negocio ya no se abrirá solo. Podrás abrir manualmente cada día.'
+      );
+    } catch (e) {
+      setProfile((c: any) => (c ? { ...c, autoOpenEnabled: previous } : c));
+      pushToast('error', 'Error', 'No se pudo actualizar la configuración.');
+    }
+  };
   return (
     <div className="flex flex-col gap-6 w-full max-w-[1400px] mx-auto min-w-0">
         {/* Cabecera Premium */}
@@ -860,6 +889,33 @@ export const SettingsSection = React.memo(function SettingsSection({
                       className="rounded-full bg-neutral-950 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-neutral-800"
                     >
                       Aplicar a todos los dias
+                    </button>
+                  </div>
+                </div>
+
+                {/* Apertura automática */}
+                <div className="rounded-[20px] border border-sky-100 bg-white p-5 shadow-sm">
+                  <div className="flex flex-wrap items-start justify-between gap-4">
+                    <div className="min-w-0 flex-1">
+                      <p className="font-semibold text-neutral-900">Apertura automática</p>
+                      <p className="mt-1 text-[13px] leading-relaxed text-neutral-500">
+                        Tu negocio se abrirá solo a la hora de apertura para recibir pedidos, sin
+                        necesidad de entrar a la app. Si un día lo cierras manualmente (o el sistema
+                        lo pausa), ese día no se vuelve a abrir; reabrirá solo al siguiente día de
+                        servicio.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={profile?.autoOpenEnabled ?? false}
+                      aria-label="Apertura automática"
+                      onClick={() => toggleAutoOpen(!(profile?.autoOpenEnabled ?? false))}
+                      className={`relative inline-flex h-[30px] w-[50px] shrink-0 items-center rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-sky-400 focus:ring-offset-1 ${profile?.autoOpenEnabled ? 'bg-sky-500' : 'bg-neutral-300'}`}
+                    >
+                      <span
+                        className={`inline-block h-[24px] w-[24px] rounded-full bg-white shadow-sm ring-0 transition-transform duration-200 ${profile?.autoOpenEnabled ? 'translate-x-[22px]' : 'translate-x-[0px]'}`}
+                      />
                     </button>
                   </div>
                 </div>

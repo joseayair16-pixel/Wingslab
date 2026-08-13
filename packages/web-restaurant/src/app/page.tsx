@@ -80,6 +80,7 @@ type RestaurantProfile = {
   hasOwnDelivery: boolean;
   supportsNetworkDelivery?: boolean;
   pickupOnly?: boolean;
+  autoOpenEnabled?: boolean;
   accentColor?: string | null;
   minDeliveryTime: number;
   maxDeliveryTime: number;
