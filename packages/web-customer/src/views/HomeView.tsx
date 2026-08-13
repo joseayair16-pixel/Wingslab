@@ -806,19 +806,16 @@ export const HomeView = React.memo(function HomeView({
                               <span className="text-[11px] font-medium text-neutral-600">
                                 🛵 {restaurant.effectiveDeliveryFee === 0 ? 'Envío gratis' : `${formatDeliverySummary(restaurant.effectiveDeliveryFee)} de envío`}
                               </span>
+                              <span className="rounded-full bg-neutral-100 px-2 py-0.5 text-[10px] font-medium text-neutral-500">
+                                {formatRegionChipLabel(restaurant.regionName || restaurant.region)}
+                              </span>
+                              {(restaurant.description?.toLowerCase().includes('promo') || restaurant.description?.toLowerCase().includes('descuento')) && (
+                                <span className="rounded-full bg-[#FEF7E0] px-2 py-0.5 text-[10px] font-semibold text-[#B06000]">
+                                  Descuentos disponibles
+                                </span>
+                              )}
                             </div>
                           </div>
-                        </div>
-
-                        <div className="mt-3 flex flex-wrap items-center gap-1.5">
-                          {(restaurant.description?.toLowerCase().includes('promo') || restaurant.description?.toLowerCase().includes('descuento')) && (
-                            <span className="rounded-full bg-[#FEF7E0] px-2.5 py-1 text-[11px] font-semibold text-[#B06000]">
-                              Descuentos disponibles
-                            </span>
-                          )}
-                          <span className="rounded-full bg-neutral-100 px-2.5 py-1 text-[11px] font-medium text-neutral-500">
-                            {formatRegionChipLabel(restaurant.regionName || restaurant.region)}
-                          </span>
                         </div>
                       </div>
                     </div>
