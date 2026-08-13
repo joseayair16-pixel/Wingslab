@@ -31,7 +31,7 @@ type RestaurantMeta = {
 // JSON-LD server-side comparten una sola llamada al backend.
 const getRestaurant = cache(async (id: string): Promise<RestaurantMeta | null> => {
   try {
-    const res = await fetch(`${backendUrl}/restaurantes/${id}`, { next: { revalidate: 300 } });
+    const res = await fetch(`${backendUrl}/restaurantes/${id}`, { cache: 'no-store' });
     if (!res.ok) return null;
     const json = (await res.json()) as { data?: RestaurantMeta };
     return json?.data ?? null;
@@ -167,10 +167,11 @@ export default async function RestaurantLayout({
         />
       )}
       <style>{`:root {
-  --accent: ${accent};
-  --accent-strong: ${accentStrong};
-  --accent-soft: ${accentSoft};
-  --accent-soft-strong: ${accentSoftStrong};
+  --menu-accent: ${accent};
+  --menu-accent-strong: ${accentStrong};
+  --menu-accent-soft: ${accentSoft};
+  --menu-accent-soft-strong: ${accentSoftStrong};
+  --menu-accent-hover: ${darkenHex(accent, 0.68)};
   --menu-bg: ${menuTheme ? menuTheme.gradientLight : '#fafafa'};
   --menu-bg-dark: ${menuTheme ? menuTheme.gradientDark : '#0b0b0d'};
   --menu-surface: ${menuTheme ? menuTheme.surface : '#ffffff'};

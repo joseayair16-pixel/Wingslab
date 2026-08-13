@@ -72,6 +72,7 @@ type PublicRestaurantDetail = {
   transferBeneficiaryName?: string | null;
   rating?: number;
   reviewCount?: number;
+  accentColor?: string | null;
   instagram?: string | null;
   facebook?: string | null;
   tiktok?: string | null;
@@ -1140,6 +1141,25 @@ export default function RestaurantPage({
       cancelled = true;
     };
   }, [apiBase, params.restaurantId, menuReloadKey]);
+
+  useEffect(() => {
+    if (!document.documentElement) return;
+    const hex =
+      rawRestaurant?.accentColor && /^#[0-9a-fA-F]{6}$/.test(rawRestaurant.accentColor)
+        ? rawRestaurant.accentColor
+        : '#0ea5e9';
+    const clean = hex.replace('#', '');
+    const shade = (factor: number) =>
+      `#${[0, 2, 4].map((i) => Math.round(parseInt(clean.slice(i, i + 2), 16) * factor).toString(16).padStart(2, '0')).join('')}`;
+    const strong = shade(0.78);
+    const hover = shade(0.68);
+    const style = document.documentElement.style;
+    style.setProperty('--menu-accent', hex);
+    style.setProperty('--menu-accent-strong', strong);
+    style.setProperty('--menu-accent-hover', hover);
+    style.setProperty('--menu-accent-soft', `${hex}1A`);
+    style.setProperty('--menu-accent-soft-strong', `${hex}2E`);
+  }, [rawRestaurant?.accentColor]);
 
   useEffect(() => {
     if (!token || sessionUser?.role !== 'CUSTOMER') {
@@ -2827,7 +2847,7 @@ function triggerHaptic(pattern: number | number[] = 10) {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4h2l.4 2M7 14h10l4-8H5.4M7 14l-1.5 2.5A1 1 0 006.4 18H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
               </svg>
               {cart.length > 0 && !isCartOpen ? (
-                 <span className={`absolute -right-1 -top-1 flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-[var(--accent)] px-1 text-[11px] font-bold text-white shadow-sm ${
+                 <span className={`absolute -right-1 -top-1 flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-[var(--menu-accent)] px-1 text-[11px] font-bold text-white shadow-sm ${
                   cartJustUpdated ? 'animate-pulse' : ''
                 }`}>
                   {totalProducts}
@@ -2984,7 +3004,7 @@ function triggerHaptic(pattern: number | number[] = 10) {
                               <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold ${
                                 isRequirementMet
                                   ? 'bg-emerald-100 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400'
-                                  : 'bg-accent-soft dark:bg-sky-900/30 text-accent-hover dark:text-sky-400'
+                                  : 'bg-[var(--menu-accent-soft)] dark:bg-sky-900/30 text-[var(--menu-accent-hover)] dark:text-sky-400'
                               }`}>
                                 {isRequirementMet ? 'Listo' : 'Faltan datos'}
                               </span>
@@ -3016,7 +3036,7 @@ function triggerHaptic(pattern: number | number[] = 10) {
                                 }}
                                 className={`flex w-full items-center justify-between gap-4 rounded-2xl border p-4 text-left transition ${
                                   isChecked
-                                    ? 'border-[var(--accent)]/30 bg-accent-soft/40 dark:bg-sky-900/10'
+                                    ? 'border-[var(--menu-accent)]/30 bg-[var(--menu-accent-soft)]/40 dark:bg-sky-900/10'
                                     : 'border-black/5 dark:border-zinc-800 hover:bg-neutral-50 dark:hover:bg-neutral-800/40'
                                 } ${(!opt.isAvailable || isSelectionDisabled) ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'}`}
                               >
@@ -3024,7 +3044,7 @@ function triggerHaptic(pattern: number | number[] = 10) {
                                   {isSingleSelection ? (
                                     <div className={`flex h-5 w-5 items-center justify-center rounded-full border transition ${
                                       isChecked
-                                        ? 'border-[var(--accent)] bg-[var(--accent)] text-white'
+                                        ? 'border-[var(--menu-accent)] bg-[var(--menu-accent)] text-white'
                                         : 'border-black/20 dark:border-zinc-700 bg-white dark:bg-neutral-800'
                                     }`}>
                                       {isChecked && <div className="h-2 w-2 rounded-full bg-white" />}
@@ -3032,7 +3052,7 @@ function triggerHaptic(pattern: number | number[] = 10) {
                                   ) : (
                                     <div className={`flex h-5 w-5 items-center justify-center rounded-lg border transition ${
                                       isChecked
-                                        ? 'border-[var(--accent)] bg-[var(--accent)] text-white'
+                                        ? 'border-[var(--menu-accent)] bg-[var(--menu-accent)] text-white'
                                         : 'border-black/20 dark:border-zinc-700 bg-white dark:bg-neutral-800'
                                     }`}>
                                       {isChecked && (
@@ -3089,7 +3109,7 @@ function triggerHaptic(pattern: number | number[] = 10) {
                               onClick={() => setCustomizingWeight(p)}
                               className={`rounded-full border px-4 py-2 text-sm font-semibold transition-all ${
                                 customizingWeight === p
-                                  ? 'border-sky-400 bg-sky-50 text-[var(--accent-strong)]'
+                                  ? 'border-sky-400 bg-sky-50 text-[var(--menu-accent-strong)]'
                                   : 'border-black/5 bg-white text-neutral-600 hover:bg-neutral-50'
                               }`}
                             >
@@ -3301,7 +3321,7 @@ function triggerHaptic(pattern: number | number[] = 10) {
               <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-sky-1000/10 to-transparent dark:from-sky-1000/15 rounded-full blur-3xl pointer-events-none"></div>
               
               <div className="text-center mb-6">
-                <div className="w-20 h-20 bg-accent-soft dark:bg-sky-900/30 rounded-full flex items-center justify-center mx-auto mb-4 border-4 border-sky-100 dark:border-sky-800/20 shadow-inner">
+                <div className="w-20 h-20 bg-[var(--menu-accent-soft)] dark:bg-sky-900/30 rounded-full flex items-center justify-center mx-auto mb-4 border-4 border-sky-100 dark:border-sky-800/20 shadow-inner">
                   <span className="text-4xl animate-bounce"><svg className="h-10 w-10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13.5 21v-7.5a.75.75 0 01.75-.75h3a.75.75 0 01.75.75V21m-4.5 0H2.36m11.14 0H18m0 0h3.64m-1.39 0V9.349m-16.5 11.65V9.35m0 0a3.001 3.001 0 003.75-.615A2.993 2.993 0 009.75 9.75c.896 0 1.7-.393 2.25-1.016a2.993 2.993 0 002.25 1.016c.896 0 1.7-.393 2.25-1.016a3.001 3.001 0 003.75.614m-16.5 0a3.004 3.004 0 01-.621-4.72L4.318 3.44A1.5 1.5 0 015.378 3h13.243a1.5 1.5 0 011.06.44l1.19 1.189a3 3 0 01-.621 4.72m-13.5 8.65h3.75a.75.75 0 00.75-.75V13.5a.75.75 0 00-.75-.75H6.75a.75.75 0 00-.75.75v3.75c0 .415.336.75.75.75z" /></svg></span>
                 </div>
                 <h3 className="text-2xl font-black text-neutral-950 dark:text-white tracking-tight">¡Tu repartidor ha llegado!</h3>
@@ -3325,7 +3345,7 @@ function triggerHaptic(pattern: number | number[] = 10) {
                         arrivedOrder.paymentMethod === 'CASH'
                           ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-400 border border-amber-200 dark:border-amber-800/40'
                           : arrivedOrder.paymentMethod === 'TRANSFER'
-                            ? 'bg-[var(--accent-soft-strong)] dark:bg-sky-900/30 text-[var(--accent-strong)] dark:text-sky-400 border border-sky-200 dark:border-sky-800/40'
+                            ? 'bg-[var(--menu-accent-soft-strong)] dark:bg-sky-900/30 text-[var(--menu-accent-strong)] dark:text-sky-400 border border-sky-200 dark:border-sky-800/40'
                             : 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-400 border border-green-200 dark:border-green-800/40'
                       }`}>
                         {arrivedOrder.paymentMethod === 'CASH' ? <><svg className="h-3.5 w-3.5 inline-block align-text-bottom" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 6v12m-3-2.818l.879.659c1.171.879 3.07.879 4.242 0 1.172-.879 1.172-2.303 0-3.182C13.536 12.219 12.768 12 12 12c-.725 0-1.45-.22-2.003-.659-1.106-.879-1.106-2.303 0-3.182s2.9-.879 4.006 0l.415.33M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg> Efectivo</> : arrivedOrder.paymentMethod === 'TRANSFER' ? <><svg className="h-3.5 w-3.5 inline-block align-text-bottom" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M2.25 21h19.5m-18-18v18m10.5-18v18m6-13.5V21M6.75 6.75h.75m-.75 3h.75m-.75 3h.75m3-6h.75m-.75 3h.75m-.75 3h.75M6.75 21v-3.375c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21M3 3h12m-.75 4.5H21m-3.75 3.75h.008v.008h-.008v-.008zm0 3h.008v.008h-.008v-.008zm0 3h.008v.008h-.008v-.008z" /></svg> Transferencia</> : '💳 Pago Online'}
@@ -3456,7 +3476,7 @@ function triggerHaptic(pattern: number | number[] = 10) {
                         pickupReadyOrder.paymentMethod === 'CASH'
                           ? 'bg-amber-100 text-amber-800 border border-amber-200'
                           : pickupReadyOrder.paymentMethod === 'TRANSFER'
-                            ? 'bg-[var(--accent-soft-strong)] text-[var(--accent-strong)] border border-sky-200'
+                            ? 'bg-[var(--menu-accent-soft-strong)] text-[var(--menu-accent-strong)] border border-sky-200'
                             : 'bg-green-100 text-green-800 border border-green-200'
                       }`}>
                         {pickupReadyOrder.paymentMethod === 'CASH' ? <><svg className="h-3.5 w-3.5 inline-block align-text-bottom" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 6v12m-3-2.818l.879.659c1.171.879 3.07.879 4.242 0 1.172-.879 1.172-2.303 0-3.182C13.536 12.219 12.768 12 12 12c-.725 0-1.45-.22-2.003-.659-1.106-.879-1.106-2.303 0-3.182s2.9-.879 4.006 0l.415.33M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg> Efectivo</> : pickupReadyOrder.paymentMethod === 'TRANSFER' ? <><svg className="h-3.5 w-3.5 inline-block align-text-bottom" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M2.25 21h19.5m-18-18v18m10.5-18v18m6-13.5V21M6.75 6.75h.75m-.75 3h.75m-.75 3h.75m3-6h.75m-.75 3h.75m-.75 3h.75M6.75 21v-3.375c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21M3 3h12m-.75 4.5H21m-3.75 3.75h.008v.008h-.008v-.008zm0 3h.008v.008h-.008v-.008zm0 3h.008v.008h-.008v-.008z" /></svg> Transferencia</> : '💳 Pago Online'}
@@ -3487,7 +3507,7 @@ function triggerHaptic(pattern: number | number[] = 10) {
                     href={`https://www.google.com/maps/dir/?api=1&destination=${pickupReadyOrder.restaurant.latitude},${pickupReadyOrder.restaurant.longitude}`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="w-full flex items-center justify-center gap-2.5 rounded-full border-2 border-sky-200 bg-sky-50 py-3.5 text-sm font-bold text-[var(--accent-strong)] shadow-sm transition hover:bg-[var(--accent-soft-strong)] hover:shadow-md active:scale-[0.97]"
+                    className="w-full flex items-center justify-center gap-2.5 rounded-full border-2 border-sky-200 bg-sky-50 py-3.5 text-sm font-bold text-[var(--menu-accent-strong)] shadow-sm transition hover:bg-[var(--menu-accent-soft-strong)] hover:shadow-md active:scale-[0.97]"
                   >
                     <svg className="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.828 0l-4.243-4.243a8 8 0 1111.314 0z" />
@@ -4650,7 +4670,7 @@ function triggerHaptic(pattern: number | number[] = 10) {
                       placeholder={`Buscar en ${restaurant?.name || 'el menú'}...`}
                       value={productSearchQuery}
                       onChange={(e) => setProductSearchQuery(e.target.value)}
-                      className="w-full rounded-full border border-black/10 bg-white px-5 py-3 pr-11 text-sm text-neutral-900 outline-none transition placeholder:text-neutral-400 focus:border-black/20 dark:border-zinc-800 dark:bg-neutral-900 dark:text-zinc-100 dark:placeholder:text-zinc-500 dark:focus:border-zinc-600"
+                      className="w-full rounded-full border border-black/10 bg-white px-5 py-3.5 pr-11 text-base text-neutral-900 outline-none transition placeholder:text-neutral-400 focus:border-black/20 dark:border-zinc-800 dark:bg-neutral-900 dark:text-zinc-100 dark:placeholder:text-zinc-500 dark:focus:border-zinc-600"
                     />
                     {productSearchQuery ? (
                       <button

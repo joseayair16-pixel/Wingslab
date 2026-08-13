@@ -481,8 +481,11 @@ export const SettingsSection = React.memo(function SettingsSection({
                       Por defecto
                     </button>
                     {[
-                      '#0ea5e9', '#3b82f6', '#6366f1', '#8b5cf6', '#d946ef',
-                      '#ec4899', '#f43f5e', '#10b981', '#14b8a6', '#06b6d4',
+                      '#0ea5e9', '#3b82f6', '#2563eb', '#6366f1', '#4f46e5', '#8b5cf6',
+                      '#7c3aed', '#9333ea', '#d946ef', '#c026d3', '#ec4899', '#db2777',
+                      '#f43f5e', '#e11d48', '#ef4444', '#dc2626', '#f97316', '#f59e0b',
+                      '#eab308', '#84cc16', '#22c55e', '#16a34a', '#10b981', '#14b8a6',
+                      '#0d9488', '#06b6d4', '#0891b2', '#fda4af',
                     ].map((color) => {
                       const isSelected = storeDraft.accentColor?.toLowerCase() === color;
                       return (
@@ -523,11 +526,18 @@ export const SettingsSection = React.memo(function SettingsSection({
                       Elige el fondo y la ambientación de tu página de menú. Aplica a todo tu portal en la app del comensal.
                     </p>
                   </div>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-[11px] font-bold uppercase tracking-wider text-neutral-400">Temas de fondo</span>
+                    <span className="inline-flex items-center gap-1 text-[11px] font-medium text-neutral-400">
+                      Desliza
+                      <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" /></svg>
+                    </span>
+                  </div>
+                  <div className="scrollbar-none flex gap-3 overflow-x-auto pb-3 -mx-1 px-1 snap-x snap-mandatory">
                     <button
                       type="button"
                       onClick={() => setStoreDraft((c: any) => ({ ...c, menuTheme: null }))}
-                      className={`flex flex-col items-start gap-2 rounded-2xl border p-3 text-left transition-all active:scale-95 ${
+                      className={`flex w-36 shrink-0 snap-start flex-col items-start gap-2 rounded-2xl border p-3 text-left transition-all active:scale-95 ${
                         !storeDraft.menuTheme
                           ? 'border-neutral-900 ring-2 ring-neutral-900/15'
                           : 'border-black/10 hover:border-black/25'
@@ -551,7 +561,7 @@ export const SettingsSection = React.memo(function SettingsSection({
                           key={theme.id}
                           type="button"
                           onClick={() => setStoreDraft((c: any) => ({ ...c, menuTheme: theme.id }))}
-                          className={`flex flex-col items-start gap-2 rounded-2xl border p-3 text-left transition-all active:scale-95 ${
+                          className={`flex w-36 shrink-0 snap-start flex-col items-start gap-2 rounded-2xl border p-3 text-left transition-all active:scale-95 ${
                             isSelected ? 'border-neutral-900 ring-2 ring-neutral-900/15' : 'border-black/10 hover:border-black/25'
                           }`}
                         >
