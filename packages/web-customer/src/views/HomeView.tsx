@@ -803,7 +803,7 @@ export const HomeView = React.memo(function HomeView({
                           </div>
                         </div>
 
-                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                        <div className="ml-[76px] flex flex-wrap items-center gap-x-3 gap-y-1">
                           <span className="flex items-center gap-1.5 font-medium text-neutral-700 text-[13px]">
                             <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-emerald-50 text-emerald-600 text-xs">
                               🛵
