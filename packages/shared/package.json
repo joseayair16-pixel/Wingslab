@@ -2,6 +2,7 @@
   "name": "@sadel/shared",
   "version": "1.0.0",
   "description": "Shared types, constants, and utilities for SaDeL",
+  "type": "commonjs",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {

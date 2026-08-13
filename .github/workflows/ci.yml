@@ -32,11 +32,15 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run build -w @sadel/shared
+      - name: Verify @sadel/shared loads at runtime (CommonJS)
+        run: node -e "const s=require('@sadel/shared'); if(!s.MENU_THEME_IDS) process.exit(1); console.log('shared loads OK')"
       - run: npm run type-check -w @sadel/web-customer
       - run: npm run type-check -w @sadel/web-admin
       - run: npm run type-check -w @sadel/web-restaurant
       - run: npm run type-check -w @sadel/web-driver
       - run: npm run build -w @sadel/backend
+      - name: Verify backend module loads (no ESM resolution crash)
+        run: node -e "require('./packages/backend/dist/app')"
 
   test:
     name: Tests
