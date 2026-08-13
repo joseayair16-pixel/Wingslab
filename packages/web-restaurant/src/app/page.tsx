@@ -11559,15 +11559,15 @@ export default function Home() {
           ) : null}
 
           {isPayModalOpen ? (
-            <div className="fixed inset-0 z-[80] flex items-start justify-center overflow-y-auto bg-black/60 backdrop-blur-sm px-4 py-5 animate-in fade-in duration-300">
-              <div className="w-full max-w-[540px] my-auto rounded-[32px] bg-white p-5 sm:p-8 shadow-2xl ring-1 ring-black/5 animate-in zoom-in-95 duration-300">
+            <div className="fixed inset-0 z-[80] flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm animate-in fade-in duration-300">
+              <div className="w-full max-w-[540px] max-h-[92dvh] overflow-y-auto rounded-t-[28px] sm:rounded-[32px] bg-white p-5 sm:p-8 shadow-xl ring-1 ring-black/5 animate-in zoom-in-95 duration-300">
                 <div className="flex items-start justify-between gap-3 mb-5">
                   <div className="min-w-0">
                     <div className="flex items-center gap-2 mb-2">
-                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-blue-50 text-blue-600">
+                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-sky-50 text-sky-600">
                         <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5.586a1 1 0 0 1 .707.293l5.414 5.414a1 1 0 0 1 .293.707V19a2 2 0 0 1-2 2Z" /></svg>
                       </div>
-                      <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-blue-600">Liquidación</p>
+                      <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-sky-600">Liquidación</p>
                     </div>
                     <h3 className="text-xl sm:text-2xl font-black tracking-tight text-neutral-900 truncate">
                       Pagar Corte
@@ -11652,13 +11652,13 @@ export default function Home() {
                   </div>
 
                   {/* Warning Note */}
-                  <div className="flex gap-3 rounded-2xl bg-amber-50 p-4 border border-amber-100/50">
+                  <div className="flex gap-3 rounded-2xl bg-sky-50/60 p-4 border border-sky-100">
                     <div className="shrink-0 pt-0.5">
-                      <svg className="h-5 w-5 text-amber-500" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg>
+                      <svg className="h-5 w-5 text-sky-500" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg>
                     </div>
                     <div className="min-w-0">
-                      <p className="text-sm font-semibold text-amber-900">Instrucciones Importantes</p>
-                      <p className="mt-1 text-xs text-amber-800/80 leading-relaxed">
+                      <p className="text-sm font-semibold text-sky-900">Instrucciones Importantes</p>
+                      <p className="mt-1 text-xs text-sky-800/80 leading-relaxed">
                         Transfiere el monto exacto y usa el nombre de tu restaurante como <b>Referencia</b>. Al finalizar, sube el comprobante (ej. captura de tu app bancaria) aquí abajo.
                       </p>
                     </div>
@@ -11690,7 +11690,7 @@ export default function Home() {
                           onClick={handleSubmitProof}
                           disabled={uploadingProof}
                           className={`w-full flex items-center justify-center gap-2 rounded-full py-3.5 text-sm font-bold text-white transition-all active:scale-95 ${
-                            uploadingProof ? 'bg-blue-400' : 'bg-blue-600 hover:bg-blue-700 hover:shadow-lg hover:shadow-blue-600/20'
+                            uploadingProof ? 'bg-sky-400' : 'bg-sky-500 hover:bg-sky-600 hover:shadow-lg hover:shadow-sky-500/20'
                           }`}
                         >
                           {uploadingProof ? (
@@ -11724,11 +11724,11 @@ export default function Home() {
                           className={`group relative flex flex-col items-center justify-center gap-3 overflow-hidden rounded-[24px] border-2 border-dashed p-5 sm:p-8 transition-all ${
                             uploadingProof
                               ? 'cursor-not-allowed border-black/10 bg-black/5'
-                              : 'cursor-pointer border-blue-500/30 bg-blue-50/30 hover:border-blue-500 hover:bg-blue-50/80'
+                              : 'cursor-pointer border-sky-500/30 bg-sky-50/30 hover:border-sky-500 hover:bg-sky-50/80'
                           }`}
                         >
                           <div className="flex h-16 w-16 items-center justify-center rounded-full bg-white shadow-sm transition-transform group-hover:scale-110 group-active:scale-95">
-                            <svg className="h-7 w-7 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" /></svg>
+                            <svg className="h-7 w-7 text-sky-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" /></svg>
                           </div>
                           <div className="text-center">
                             <p className="text-sm font-bold text-neutral-900">Haz clic para elegir foto</p>
