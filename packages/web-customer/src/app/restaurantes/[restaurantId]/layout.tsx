@@ -13,6 +13,7 @@ type RestaurantMeta = {
   address: string;
   region: string;
   logo?: string | null;
+  accentColor?: string | null;
   latitude?: number | null;
   longitude?: number | null;
   businessType?: string | null;
@@ -120,6 +121,15 @@ export async function generateMetadata({ params }: { params: { restaurantId: str
   };
 }
 
+function darkenHex(hex: string, factor = 0.78): string {
+  const clean = hex.replace('#', '');
+  if (!/^[0-9a-fA-F]{6}$/.test(clean)) return '#0a7fbf';
+  const r = Math.round(parseInt(clean.slice(0, 2), 16) * factor);
+  const g = Math.round(parseInt(clean.slice(2, 4), 16) * factor);
+  const b = Math.round(parseInt(clean.slice(4, 6), 16) * factor);
+  return `#${[r, g, b].map((v) => v.toString(16).padStart(2, '0')).join('')}`;
+}
+
 export default async function RestaurantLayout({
   params,
   children,
@@ -128,6 +138,13 @@ export default async function RestaurantLayout({
   children: React.ReactNode;
 }) {
   const restaurant = await getRestaurant(params.restaurantId);
+  const accent =
+    restaurant?.accentColor && /^#[0-9a-fA-F]{6}$/.test(restaurant.accentColor)
+      ? restaurant.accentColor
+      : '#0ea5e9';
+  const accentStrong = darkenHex(accent);
+  const accentSoft = `${accent}1A`;
+  const accentSoftStrong = `${accent}2E`;
 
   return (
     <>
@@ -137,6 +154,12 @@ export default async function RestaurantLayout({
           dangerouslySetInnerHTML={{ __html: JSON.stringify(buildRestaurantJsonLd(restaurant)) }}
         />
       )}
+      <style>{`:root {
+  --accent: ${accent};
+  --accent-strong: ${accentStrong};
+  --accent-soft: ${accentSoft};
+  --accent-soft-strong: ${accentSoftStrong};
+}`}</style>
       {children}
     </>
   );

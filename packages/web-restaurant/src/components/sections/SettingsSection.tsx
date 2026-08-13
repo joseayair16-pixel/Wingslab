@@ -432,6 +432,62 @@ export const SettingsSection = React.memo(function SettingsSection({
                   />
                 </div>
                 <div className="sm:col-span-2">
+                  <div className="border-t border-black/5 pt-4 mt-2 mb-3">
+                    <p className="text-[13px] font-bold text-neutral-900">Color de tu marca</p>
+                    <p className="text-xs text-neutral-500 mt-0.5">
+                      Elige el color de los botones y acentos de tu página. Tu menú se verá con tu identidad.
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2.5">
+                    <button
+                      type="button"
+                      onClick={() => setStoreDraft((c: any) => ({ ...c, accentColor: null }))}
+                      className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-bold transition-all active:scale-95 ${
+                        !storeDraft.accentColor
+                          ? 'border-sky-500 bg-sky-50 text-sky-700 ring-2 ring-sky-500/20'
+                          : 'border-black/10 bg-white text-neutral-600 hover:border-black/20'
+                      }`}
+                    >
+                      <span className="h-3.5 w-3.5 rounded-full bg-sky-500" />
+                      Por defecto
+                    </button>
+                    {[
+                      '#0ea5e9', '#3b82f6', '#6366f1', '#8b5cf6', '#d946ef',
+                      '#ec4899', '#f43f5e', '#10b981', '#14b8a6', '#06b6d4',
+                    ].map((color) => {
+                      const isSelected = storeDraft.accentColor?.toLowerCase() === color;
+                      return (
+                        <button
+                          key={color}
+                          type="button"
+                          aria-label={`Color ${color}`}
+                          onClick={() => setStoreDraft((c: any) => ({ ...c, accentColor: color }))}
+                          className={`flex h-9 w-9 items-center justify-center rounded-full transition-all active:scale-95 ${
+                            isSelected ? 'ring-2 ring-offset-2 ring-neutral-900' : 'hover:scale-105'
+                          }`}
+                          style={{ backgroundColor: color }}
+                        >
+                          {isSelected && (
+                            <svg className="h-4 w-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3.5}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                            </svg>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <div className="mt-4 flex items-center gap-3 rounded-2xl border border-black/5 bg-neutral-50 p-3">
+                    <span className="text-[11px] font-bold uppercase tracking-wider text-neutral-400">Vista previa</span>
+                    <span
+                      className="inline-flex items-center gap-1.5 rounded-full px-4 py-2 text-xs font-bold text-white shadow-sm"
+                      style={{ backgroundColor: storeDraft.accentColor || '#0ea5e9' }}
+                    >
+                      Pedir ahora
+                    </span>
+                    <span className="text-[11px] text-neutral-400">Así se verá tu botón de pedir.</span>
+                  </div>
+                </div>
+                <div className="sm:col-span-2">
                   <label className="block text-[13px] font-semibold text-neutral-900 mb-2">
                     Categorías
                   </label>

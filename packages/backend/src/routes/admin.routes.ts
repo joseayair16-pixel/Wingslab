@@ -46,6 +46,7 @@ const createRestaurantSchema = z.object({
   hasOwnDelivery: z.boolean(),
   supportsNetworkDelivery: z.boolean().default(true),
   pickupOnly: z.boolean().default(false),
+  accentColor: z.string().regex(/^#[0-9a-fA-F]{6}$/, 'El color debe ser un hex válido (#RRGGBB).').nullable().optional(),
   deliveryFee: z.number().nonnegative().optional(),
   deliveryPricingModel: z.enum(['fixed', 'distance']).optional(),
   deliveryBaseRate: z.number().nonnegative().optional(),

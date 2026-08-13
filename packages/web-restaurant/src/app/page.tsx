@@ -80,6 +80,7 @@ type RestaurantProfile = {
   hasOwnDelivery: boolean;
   supportsNetworkDelivery?: boolean;
   pickupOnly?: boolean;
+  accentColor?: string | null;
   minDeliveryTime: number;
   maxDeliveryTime: number;
   transferBankName?: string | null;
@@ -334,6 +335,7 @@ type StoreProfileDraft = {
   hasOwnDelivery: boolean;
   supportsNetworkDelivery: boolean;
   pickupOnly: boolean;
+  accentColor: string | null;
   minDeliveryTime: string;
   maxDeliveryTime: string;
   deliveryFee: string;
@@ -946,6 +948,7 @@ export default function Home() {
     hasOwnDelivery: false,
     supportsNetworkDelivery: true,
     pickupOnly: false,
+    accentColor: null,
     minDeliveryTime: '',
     maxDeliveryTime: '',
     deliveryFee: '',
@@ -1892,6 +1895,7 @@ export default function Home() {
         hasOwnDelivery: false,
         supportsNetworkDelivery: true,
         pickupOnly: false,
+        accentColor: null,
         minDeliveryTime: '',
         maxDeliveryTime: '',
         deliveryFee: '',
@@ -2780,6 +2784,7 @@ export default function Home() {
         hasOwnDelivery: profileData.data.hasOwnDelivery,
         supportsNetworkDelivery: profileData.data.supportsNetworkDelivery ?? true,
         pickupOnly: profileData.data.pickupOnly ?? false,
+        accentColor: profileData.data.accentColor ?? null,
         minDeliveryTime: String(profileData.data.minDeliveryTime || ''),
         maxDeliveryTime: String(profileData.data.maxDeliveryTime || ''),
         deliveryFee: profileData.data.deliveryFee?.toString() || '',
@@ -3904,6 +3909,7 @@ export default function Home() {
       body.facebook = storeDraft.facebook.trim() || null;
       body.tiktok = storeDraft.tiktok.trim() || null;
       body.storeCategories = storeDraft.storeCategories;
+      body.accentColor = storeDraft.accentColor ?? null;
       return body;
     }
 
@@ -3999,6 +4005,7 @@ export default function Home() {
         hasOwnDelivery: payload.data.hasOwnDelivery,
         supportsNetworkDelivery: payload.data.supportsNetworkDelivery ?? true,
         pickupOnly: payload.data.pickupOnly ?? false,
+        accentColor: payload.data.accentColor ?? null,
         minDeliveryTime: String(payload.data.minDeliveryTime || ''),
         maxDeliveryTime: String(payload.data.maxDeliveryTime || ''),
         deliveryFee: typeof payload.data.deliveryFee === 'number' ? String(payload.data.deliveryFee) : '',
