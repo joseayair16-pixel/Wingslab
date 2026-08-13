@@ -983,7 +983,6 @@ export default function Home() {
   const [ratingIsPickup, setRatingIsPickup] = useState(false);
   const [restaurantRating, setRestaurantRating] = useState(0);
   const [driverRatingVal, setDriverRatingVal] = useState(0);
-  const [ratingComment, setRatingComment] = useState('');
   const [isSubmittingRating, setIsSubmittingRating] = useState(false);
   const [isDriverArrivedModalOpen, setIsDriverArrivedModalOpen] = useState(false);
   const [arrivedOrder, setArrivedOrder] = useState<CustomerOrderDetail | null>(null);
@@ -6071,8 +6070,6 @@ export default function Home() {
               onRestaurantRatingChange={setRestaurantRating}
               driverRating={driverRatingVal}
               onDriverRatingChange={setDriverRatingVal}
-              comment={ratingComment}
-              onCommentChange={setRatingComment}
               submitting={isSubmittingRating}
               onSkip={() => {
                 if (orderToRate) {
@@ -6084,7 +6081,6 @@ export default function Home() {
                 setOrderToRate(null);
                 setRestaurantRating(0);
                 setDriverRatingVal(0);
-                setRatingComment('');
                 setRatingIsPickup(false);
               }}
               onSubmit={async () => {
@@ -6097,10 +6093,8 @@ export default function Home() {
                     orderId: orderToRate,
                     payload: {
                       rating: restaurantRating,
-                      ...(ratingComment ? { comment: ratingComment } : {}),
                       ...(!ratingIsPickup && driverRatingVal > 0 ? {
                         driverRating: driverRatingVal,
-                        ...(ratingComment ? { driverComment: ratingComment } : {}),
                       } : {}),
                     },
                     getUser: () => sessionUser,
@@ -6112,7 +6106,6 @@ export default function Home() {
                     setOrderToRate(null);
                     setRestaurantRating(0);
                     setDriverRatingVal(0);
-                    setRatingComment('');
                     setRatingIsPickup(false);
                     setToastMessage('¡Gracias por tu calificación!');
                     setTimeout(() => setToastMessage(''), 2000);

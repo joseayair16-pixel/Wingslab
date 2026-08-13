@@ -1022,18 +1022,30 @@ export async function registerAdminRoutes(fastify: FastifyInstance): Promise<voi
       });
     });
 
-    admin.get('/admin/dashboard-stats', async (_request, reply) => {
+    admin.get('/admin/dashboard-stats', async (request, reply) => {
+      const rangeSchema = z.object({
+        days: z.coerce.number().int().refine((v) => [7, 30, 90].includes(v), 'days debe ser 7, 30 o 90.').default(30),
+      });
+      const parsedRange = rangeSchema.safeParse(request.query);
+      if (!parsedRange.success) {
+        return reply.status(400).send({
+          success: false,
+          error: { code: 'INVALID_QUERY', message: parsedRange.error.issues[0]?.message || 'Query invalida.' },
+        });
+      }
+      const days = parsedRange.data.days;
+
       const now = new Date();
       const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
       const startOfWeek = new Date(now);
       startOfWeek.setDate(now.getDate() - now.getDay());
       startOfWeek.setHours(0, 0, 0, 0);
       const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-      const thirtyDaysAgo = new Date(now);
-      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 29);
-      thirtyDaysAgo.setHours(0, 0, 0, 0);
-      const previousPeriodStart = new Date(thirtyDaysAgo);
-      previousPeriodStart.setDate(previousPeriodStart.getDate() - 30);
+      const rangeStart = new Date(now);
+      rangeStart.setDate(rangeStart.getDate() - (days - 1));
+      rangeStart.setHours(0, 0, 0, 0);
+      const previousPeriodStart = new Date(rangeStart);
+      previousPeriodStart.setDate(previousPeriodStart.getDate() - days);
 
       const liveStatuses: OrderStatus[] = [OrderStatus.PENDING, OrderStatus.CONFIRMED, OrderStatus.PREPARING, OrderStatus.READY, OrderStatus.PICKED_UP, OrderStatus.IN_TRANSIT];
 
@@ -1051,8 +1063,16 @@ export async function registerAdminRoutes(fastify: FastifyInstance): Promise<voi
         netRevenueWeek,
         netRevenueMonth,
         netRevenueAllTime,
-        earningsByRegion,
+        periodOrders,
         previousPeriodOrders,
+        statusDistribution,
+        paymentMethods,
+        fulfillmentSplit,
+        totalCustomers,
+        newCustomers,
+        restaurantMeta,
+        totalsAllTime,
+        activeOrdersList,
       ] = await Promise.all([
         // 1. Active orders count
         prisma.order.count({ where: { status: { in: liveStatuses } } }),
@@ -1068,48 +1088,89 @@ export async function registerAdminRoutes(fastify: FastifyInstance): Promise<voi
         prisma.driverBillingSettlement.count({ where: { status: 'IN_REVIEW' } }),
         prisma.platformRequest.count({ where: { status: 'PENDING' } }),
         prisma.supportTicket.count({ where: { status: { in: ['PENDING', 'IN_PROGRESS'] } } }),
-        // 7. Driver fleet stats
+        // 8. Driver fleet stats
         prisma.driver.findMany({ select: { status: true, availability: true, licenseExpiry: true } }),
         prisma.driver.count({ where: { licenseExpiry: { lt: now } } }),
-        // 8. Restaurant statuses
+        // 9. Restaurant statuses
         prisma.restaurant.findMany({ select: { status: true } }),
-        // 9. Net revenue this week
+        // 10. Net revenue this week
         prisma.order.aggregate({
           where: { createdAt: { gte: startOfWeek }, status: { notIn: [OrderStatus.CANCELLED, OrderStatus.REJECTED] } },
           _sum: { platformFee: true, driverPlatformFee: true, serviceFee: true },
           _count: { id: true },
         }),
-        // 10. Net revenue this month
+        // 11. Net revenue this month
         prisma.order.aggregate({
           where: { createdAt: { gte: startOfMonth }, status: { notIn: [OrderStatus.CANCELLED, OrderStatus.REJECTED] } },
           _sum: { platformFee: true, driverPlatformFee: true, serviceFee: true },
           _count: { id: true },
         }),
-        // 11. Net revenue all time
+        // 12. Net revenue all time
         prisma.order.aggregate({
           where: { status: { notIn: [OrderStatus.CANCELLED, OrderStatus.REJECTED] } },
-          _sum: { platformFee: true, driverPlatformFee: true, serviceFee: true },
+          _sum: { totalAmount: true, platformFee: true, driverPlatformFee: true, serviceFee: true },
           _count: { id: true },
         }),
-        // 12. Earnings by region (last 30 days)
+        // 13. Orders in the selected range (all statuses) — feeds charts, regions, top restaurants, peak hours
         prisma.order.findMany({
-          where: { createdAt: { gte: thirtyDaysAgo }, status: { notIn: [OrderStatus.CANCELLED, OrderStatus.REJECTED] } },
+          where: { createdAt: { gte: rangeStart } },
           select: {
-            createdAt: true, totalAmount: true, platformFee: true, driverPlatformFee: true, serviceFee: true,
-            restaurant: { select: { region: true } },
+            createdAt: true, status: true, totalAmount: true, platformFee: true, driverPlatformFee: true,
+            serviceFee: true, restaurantId: true, customerId: true, fulfillmentType: true,
           },
         }),
-        // 13. Previous 30-day period for comparison
+        // 14. Previous period for comparison
         prisma.order.findMany({
           where: {
-            createdAt: { gte: previousPeriodStart, lt: thirtyDaysAgo },
+            createdAt: { gte: previousPeriodStart, lt: rangeStart },
             status: { notIn: [OrderStatus.CANCELLED, OrderStatus.REJECTED] },
           },
           select: { totalAmount: true, platformFee: true, driverPlatformFee: true, serviceFee: true },
         }),
+        // 15. Status distribution in range
+        prisma.order.groupBy({
+          by: ['status'],
+          where: { createdAt: { gte: rangeStart } },
+          _count: { _all: true },
+        }),
+        // 16. Payment methods in range
+        prisma.order.groupBy({
+          by: ['paymentMethod'],
+          where: { createdAt: { gte: rangeStart } },
+          _count: { _all: true },
+        }),
+        // 17. Delivery vs pickup split in range
+        prisma.order.groupBy({
+          by: ['fulfillmentType'],
+          where: { createdAt: { gte: rangeStart } },
+          _count: { _all: true },
+        }),
+        // 18. Customer totals
+        prisma.user.count({ where: { role: UserRole.CUSTOMER, status: { not: 'INACTIVE' } } }),
+        prisma.user.count({ where: { role: UserRole.CUSTOMER, createdAt: { gte: rangeStart } } }),
+        // 19. Restaurant metadata for top restaurants + region mapping
+        prisma.restaurant.findMany({ select: { id: true, name: true, region: true } }),
+        // 20. All-time totals (GMV + delivered ticket)
+        prisma.order.aggregate({
+          where: { status: { in: [OrderStatus.DELIVERED, OrderStatus.COMPLETED] } },
+          _sum: { totalAmount: true },
+          _avg: { totalAmount: true },
+          _count: { id: true },
+        }),
+        // 21. Active Orders list (max 10)
+        prisma.order.findMany({
+          where: { status: { in: liveStatuses } },
+          orderBy: { createdAt: 'desc' },
+          take: 10,
+          include: {
+            restaurant: { select: { name: true } },
+            customer: { include: { user: { select: { name: true } } } },
+            driver: { include: { user: { select: { name: true } } } },
+          },
+        }),
       ]);
 
-      // Compute today's metrics
+      // ── Today's metrics ──
       const todayOrdersCount = todayOrders.length;
       const todayGMV = todayOrders.reduce((s, o) => s + o.totalAmount, 0);
       const todayNetRevenue = todayOrders.reduce((s, o) => s + (o.platformFee ?? 0) + (o.driverPlatformFee ?? 0) + (o.serviceFee ?? 0), 0);
@@ -1117,14 +1178,14 @@ export async function registerAdminRoutes(fastify: FastifyInstance): Promise<voi
       const todayDriverFees = todayOrders.reduce((s, o) => s + (o.driverPlatformFee ?? 0), 0);
       const todayServiceFees = todayOrders.reduce((s, o) => s + (o.serviceFee ?? 0), 0);
 
-      // Fleet & restaurant
+      // ── Fleet & restaurant ──
       const totalDrivers = driverStats.length;
       const activeDrivers = driverStats.filter(d => d.status === 'ACTIVE' && (d.availability === 'AVAILABLE' || d.availability === 'BUSY')).length;
       const totalRestaurants = restaurantStats.length;
       const activeRestaurants = restaurantStats.filter(r => r.status === 'ACTIVE').length;
       const suspendedRestaurants = restaurantStats.filter(r => r.status === 'SUSPENDED').length;
 
-      // Net revenue periods
+      // ── Net revenue periods ──
       const weeklyNet = (netRevenueWeek._sum.platformFee ?? 0) + (netRevenueWeek._sum.driverPlatformFee ?? 0) + (netRevenueWeek._sum.serviceFee ?? 0);
       const monthlyNet = (netRevenueMonth._sum.platformFee ?? 0) + (netRevenueMonth._sum.driverPlatformFee ?? 0) + (netRevenueMonth._sum.serviceFee ?? 0);
       const allTimeNet = (netRevenueAllTime._sum.platformFee ?? 0) + (netRevenueAllTime._sum.driverPlatformFee ?? 0) + (netRevenueAllTime._sum.serviceFee ?? 0);
@@ -1132,10 +1193,16 @@ export async function registerAdminRoutes(fastify: FastifyInstance): Promise<voi
       const monthlyOrders = netRevenueMonth._count.id;
       const allTimeOrders = netRevenueAllTime._count.id;
 
-      // Earnings by region
+      const isValid = (o: { status: string }) => o.status !== OrderStatus.CANCELLED && o.status !== OrderStatus.REJECTED;
+
+      // ── Region earnings from range orders ──
+      const restaurantMetaMap = new Map<string, { name: string; region: string }>();
+      for (const r of restaurantMeta) restaurantMetaMap.set(r.id, { name: r.name, region: r.region });
+
       const regionMap = new Map<string, { region: string; gmv: number; netRevenue: number; restaurantFees: number; driverFees: number; serviceFees: number; orders: number }>();
-      for (const o of earningsByRegion) {
-        const r = o.restaurant.region;
+      for (const o of periodOrders) {
+        if (!isValid(o)) continue;
+        const r = restaurantMetaMap.get(o.restaurantId)?.region || 'Otra';
         if (!regionMap.has(r)) regionMap.set(r, { region: r, gmv: 0, netRevenue: 0, restaurantFees: 0, driverFees: 0, serviceFees: 0, orders: 0 });
         const entry = regionMap.get(r)!;
         entry.gmv += o.totalAmount;
@@ -1147,26 +1214,77 @@ export async function registerAdminRoutes(fastify: FastifyInstance): Promise<voi
       }
       const regionEarnings = Array.from(regionMap.values()).sort((a, b) => b.netRevenue - a.netRevenue);
 
-      // Previous period comparison
+      // ── Current vs previous period comparison ──
       const prevGMV = previousPeriodOrders.reduce((s, o) => s + o.totalAmount, 0);
       const prevNet = previousPeriodOrders.reduce((s, o) => s + (o.platformFee ?? 0) + (o.driverPlatformFee ?? 0) + (o.serviceFee ?? 0), 0);
-      const currentPeriodOrders = earningsByRegion; // Same 30-day range
-      const currGMV = currentPeriodOrders.reduce((s, o) => s + o.totalAmount, 0);
-      const currNet = currentPeriodOrders.reduce((s, o) => s + (o.platformFee ?? 0) + (o.driverPlatformFee ?? 0) + (o.serviceFee ?? 0), 0);
+      const prevOrders = previousPeriodOrders.length;
+      let currGMV = 0;
+      let currNet = 0;
+      let currOrders = 0;
+      const uniqueCustomers = new Set<string>();
+      for (const o of periodOrders) {
+        uniqueCustomers.add(o.customerId);
+        if (!isValid(o)) continue;
+        currOrders += 1;
+        currGMV += o.totalAmount;
+        currNet += (o.platformFee ?? 0) + (o.driverPlatformFee ?? 0) + (o.serviceFee ?? 0);
+      }
+      const avgTicketPeriod = currOrders > 0 ? currGMV / currOrders : 0;
 
-      // Active Orders list (max 10)
-      const activeOrdersList = await prisma.order.findMany({
-        where: { status: { in: liveStatuses } },
-        orderBy: { createdAt: 'desc' },
-        take: 10,
-        include: {
-          restaurant: { select: { name: true } },
-          customer: { include: { user: { select: { name: true } } } },
-          driver: { include: { user: { select: { name: true } } } },
-        },
-      });
+      // ── Top restaurants (range) ──
+      const topRestaurantMap = new Map<string, { id: string; gmv: number; orders: number }>();
+      for (const o of periodOrders) {
+        if (!isValid(o)) continue;
+        const entry = topRestaurantMap.get(o.restaurantId) || { id: o.restaurantId, gmv: 0, orders: 0 };
+        entry.gmv += o.totalAmount;
+        entry.orders += 1;
+        topRestaurantMap.set(o.restaurantId, entry);
+      }
+      const topRestaurants = Array.from(topRestaurantMap.values())
+        .sort((a, b) => b.gmv - a.gmv)
+        .slice(0, 5)
+        .map((t) => ({
+          id: t.id,
+          name: restaurantMetaMap.get(t.id)?.name || 'Restaurante',
+          region: restaurantMetaMap.get(t.id)?.region || '',
+          gmv: t.gmv,
+          orders: t.orders,
+        }));
 
-      // Pending queues
+      // ── Peak hours (range) ──
+      const hourCounts = new Array(24).fill(0);
+      for (const o of periodOrders) {
+        hourCounts[o.createdAt.getHours()] += 1;
+      }
+      const peakHours = hourCounts.map((orders, hour) => ({ hour, orders }));
+
+      // ── Chart data (daily series for the selected range) ──
+      const chartDataMap = new Map<string, { date: string; orders: number; gmv: number; netRevenue: number; deliveredOrders: number; rejectedOrders: number }>();
+      for (let i = 0; i < days; i++) {
+        const d = new Date(rangeStart);
+        d.setDate(d.getDate() + i);
+        const dateStr = d.toISOString().split('T')[0];
+        const fmt = `${d.getDate().toString().padStart(2, '0')}/${(d.getMonth() + 1).toString().padStart(2, '0')}`;
+        chartDataMap.set(dateStr, { date: fmt, orders: 0, gmv: 0, netRevenue: 0, deliveredOrders: 0, rejectedOrders: 0 });
+      }
+      for (const o of periodOrders) {
+        const ds = o.createdAt.toISOString().split('T')[0];
+        const e = chartDataMap.get(ds);
+        if (!e) continue;
+        if (o.status === OrderStatus.CANCELLED || o.status === OrderStatus.REJECTED) {
+          e.rejectedOrders += 1;
+          continue;
+        }
+        e.orders += 1;
+        e.gmv += o.totalAmount;
+        e.netRevenue += (o.platformFee ?? 0) + (o.driverPlatformFee ?? 0) + (o.serviceFee ?? 0);
+        if (o.status === OrderStatus.DELIVERED || o.status === OrderStatus.COMPLETED) {
+          e.deliveredOrders += 1;
+        }
+      }
+      const chartData = Array.from(chartDataMap.values());
+
+      // ── Pending queues ──
       const [pendingSettlements, pendingAffiliations, pendingTickets] = await Promise.all([
         prisma.restaurantBillingSettlement.findMany({
           where: { status: 'IN_REVIEW' }, orderBy: { updatedAt: 'desc' }, take: 5,
@@ -1181,29 +1299,10 @@ export async function registerAdminRoutes(fastify: FastifyInstance): Promise<voi
         }),
       ]);
 
-      // Chart data (30-day daily net revenue + order volume)
-      const chartDataMap = new Map<string, { date: string; orders: number; gmv: number; netRevenue: number }>();
-      for (let i = 0; i < 30; i++) {
-        const d = new Date(thirtyDaysAgo);
-        d.setDate(d.getDate() + i);
-        const dateStr = d.toISOString().split('T')[0];
-        const fmt = `${d.getDate().toString().padStart(2, '0')}/${(d.getMonth() + 1).toString().padStart(2, '0')}`;
-        chartDataMap.set(dateStr, { date: fmt, orders: 0, gmv: 0, netRevenue: 0 });
-      }
-      for (const o of currentPeriodOrders) {
-        const ds = o.createdAt.toISOString().split('T')[0];
-        const e = chartDataMap.get(ds);
-        if (e) {
-          e.orders += 1;
-          e.gmv += o.totalAmount;
-          e.netRevenue += (o.platformFee ?? 0) + (o.driverPlatformFee ?? 0) + (o.serviceFee ?? 0);
-        }
-      }
-      const chartData = Array.from(chartDataMap.values());
-
       return reply.send({
         success: true,
         data: {
+          range: days,
           chartData,
           kpis: {
             activeOrdersCount,
@@ -1233,7 +1332,38 @@ export async function registerAdminRoutes(fastify: FastifyInstance): Promise<voi
           comparisons: {
             gmvChange: prevGMV > 0 ? ((currGMV - prevGMV) / prevGMV * 100).toFixed(1) : null,
             netChange: prevNet > 0 ? ((currNet - prevNet) / prevNet * 100).toFixed(1) : null,
+            ordersChange: prevOrders > 0 ? ((currOrders - prevOrders) / prevOrders * 100).toFixed(1) : null,
+            periodGmv: currGMV,
+            periodNet: currNet,
+            periodOrders: currOrders,
           },
+          totals: {
+            allTimeGmv: netRevenueAllTime._sum.totalAmount ?? 0,
+            allTimeOrders,
+            allTimeNet,
+            deliveredOrders: totalsAllTime._count.id,
+            avgTicket: allTimeOrders > 0 ? (netRevenueAllTime._sum.totalAmount ?? 0) / allTimeOrders : 0,
+            avgOrderValue: totalsAllTime._avg.totalAmount ?? 0,
+          },
+          period: {
+            gmv: currGMV,
+            net: currNet,
+            orders: currOrders,
+            avgTicket: avgTicketPeriod,
+            uniqueCustomers: uniqueCustomers.size,
+            deliveredOrders: chartData.reduce((s, d) => s + d.deliveredOrders, 0),
+            rejectedOrders: chartData.reduce((s, d) => s + d.rejectedOrders, 0),
+          },
+          statusDistribution: statusDistribution.map((row) => ({ status: row.status, count: row._count._all as number })),
+          paymentMethods: paymentMethods.map((row) => ({ method: row.paymentMethod, count: row._count._all as number })),
+          fulfillmentSplit: fulfillmentSplit.map((row) => ({ type: row.fulfillmentType, count: row._count._all as number })),
+          customers: {
+            totalCustomers,
+            newCustomers,
+            uniqueCustomersInPeriod: uniqueCustomers.size,
+          },
+          topRestaurants,
+          peakHours,
           activeOrders: activeOrdersList.map(order => ({
             id: order.id, orderReference: order.orderReference, status: order.status,
             totalAmount: order.totalAmount, noDriversAvailable: order.noDriversAvailable,

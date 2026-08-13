@@ -8,8 +8,6 @@ type RatingModalProps = {
   onRestaurantRatingChange: (value: number) => void;
   driverRating: number;
   onDriverRatingChange: (value: number) => void;
-  comment: string;
-  onCommentChange: (value: string) => void;
   submitting: boolean;
   onSkip: () => void;
   onSubmit: () => void;
@@ -23,8 +21,6 @@ export default memo(function RatingModal({
   onRestaurantRatingChange,
   driverRating,
   onDriverRatingChange,
-  comment,
-  onCommentChange,
   submitting,
   onSkip,
   onSubmit,
@@ -80,20 +76,6 @@ export default memo(function RatingModal({
               </div>
             </div>
           )}
-
-          {/* Comentarios */}
-          <div>
-            <label htmlFor="rating-comment" className="text-sm font-medium text-neutral-700 block mb-2">
-              ¿Algo que quieras agregar?
-            </label>
-            <textarea
-              id="rating-comment"
-              value={comment}
-              onChange={(e) => onCommentChange(e.target.value)}
-              placeholder={bizType && bizType !== 'RESTAURANT' ? 'Cuéntanos qué tal estuvo tu pedido o el servicio...' : 'Cuéntanos qué tal estuvo la comida o el servicio...'}
-              className="w-full rounded-xl border border-neutral-200 bg-white px-4 py-3 text-neutral-950 outline-none transition focus:border-emerald-300 min-h-[80px] text-sm"
-            />
-          </div>
 
           {/* Botones */}
           <div className="flex gap-3">

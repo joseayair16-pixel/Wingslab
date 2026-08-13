@@ -3,7 +3,7 @@
 import { SaDelLogo } from '../components/SaDelLogo';
 import Link from 'next/link';
 import { FormEvent, useCallback, useEffect, useRef, useState } from 'react';
-import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts';
+import { Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, ComposedChart, PieChart, Pie, Cell } from 'recharts';
 import {
   AuthResponse,
   AuthUser,
@@ -711,6 +711,7 @@ export default function Home() {
   // Dashboard Stats State
   const [dashboardStats, setDashboardStats] = useState<any | null>(null);
   const [loadingDashboard, setLoadingDashboard] = useState(false);
+  const [dashboardRange, setDashboardRange] = useState<7 | 30 | 90>(30);
   const [dashboardInboxTab, setDashboardInboxTab] = useState<'settlements' | 'affiliations' | 'tickets'>('settlements');
   const [dashboardTicketResponse, setDashboardTicketResponse] = useState<{ [ticketId: string]: string }>({});
   const [dashboardSubmittingTicketId, setDashboardSubmittingTicketId] = useState<string | null>(null);
@@ -1362,17 +1363,18 @@ export default function Home() {
     }
   }, [activeSection, settingsTab, isAdminSession, loadStoreCategories]);
 
-  const loadDashboardStats = useCallback(async () => {
+  const loadDashboardStats = useCallback(async (range: 7 | 30 | 90 = dashboardRange) => {
     setLoadingDashboard(true);
     setError('');
     try {
       const payload = await requestJson<{ success: true; data: any }>({
         apiBase,
-        path: '/admin/dashboard-stats',
+        path: `/admin/dashboard-stats?days=${range}`,
         token,
         fallbackMessage: 'No se pudieron cargar las estadísticas del dashboard.',
       });
       setDashboardStats(payload.data);
+      setDashboardRange(range);
     } catch (requestError) {
       setDashboardStats(null);
       setError(
@@ -1381,7 +1383,7 @@ export default function Home() {
     } finally {
       setLoadingDashboard(false);
     }
-  }, [apiBase, token]);
+  }, [apiBase, token, dashboardRange]);
 
   useEffect(() => {
     if (activeSection === 'dashboard' && isAdminSession) {
@@ -2857,6 +2859,18 @@ export default function Home() {
                     </div>
                   </div>
                   <div className="flex items-center gap-3">
+                    <div className="hidden sm:flex items-center gap-0.5 rounded-full border border-black/10 bg-white p-0.5 shadow-sm">
+                      {([7, 30, 90] as const).map((r) => (
+                        <button
+                          key={r}
+                          type="button"
+                          onClick={() => { if (r !== dashboardRange) void loadDashboardStats(r); }}
+                          className={`rounded-full px-3 py-1.5 text-xs font-bold transition-all ${dashboardRange === r ? 'bg-neutral-950 text-white shadow' : 'text-neutral-500 hover:text-neutral-900'}`}
+                        >
+                          {r}d
+                        </button>
+                      ))}
+                    </div>
                     {loadingDashboard && (
                       <span className="text-xs text-neutral-400 font-semibold flex items-center gap-1.5 bg-neutral-50 border border-black/5 px-3 py-1.5 rounded-full">
                         <svg className="animate-spin h-3.5 w-3.5 text-neutral-400" viewBox="0 0 24 24" fill="none">
@@ -2907,9 +2921,52 @@ export default function Home() {
                     activeRestaurants: 0,
                     suspendedRestaurants: 0,
                   };
-                  const netRev = dashboardStats?.netRevenue || { weekly: { amount: 0, orders: 0 }, monthly: { amount: 0, orders: 0 }, allTime: { amount: 0, orders: 0 } };
                   const regionData = dashboardStats?.regionEarnings || [];
-                  const comparisons = dashboardStats?.comparisons || { gmvChange: null, netChange: null };
+                  const comparisons = dashboardStats?.comparisons || { gmvChange: null, netChange: null, ordersChange: null, periodGmv: 0, periodNet: 0, periodOrders: 0 };
+                  const totals = dashboardStats?.totals || { allTimeGmv: 0, allTimeOrders: 0, allTimeNet: 0, deliveredOrders: 0, avgTicket: 0, avgOrderValue: 0 };
+                  const period = dashboardStats?.period || { gmv: 0, net: 0, orders: 0, avgTicket: 0, uniqueCustomers: 0, deliveredOrders: 0, rejectedOrders: 0 };
+                  const customers = dashboardStats?.customers || { totalCustomers: 0, newCustomers: 0, uniqueCustomersInPeriod: 0 };
+                  const statusDistribution = dashboardStats?.statusDistribution || [];
+                  const topRestaurants = dashboardStats?.topRestaurants || [];
+                  const peakHours = dashboardStats?.peakHours || [];
+                  const chartData = dashboardStats?.chartData || [];
+
+                  const changeBadge = (change: string | null | undefined, invert = false) => {
+                    if (change === null || change === undefined) return null;
+                    const n = Number(change);
+                    if (Number.isNaN(n)) return null;
+                    const up = n >= 0;
+                    const positive = up !== invert;
+                    return (
+                      <span className={`inline-flex items-center gap-0.5 rounded-full px-2 py-0.5 text-[10px] font-bold ${positive ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'}`}>
+                        {up ? '▲' : '▼'} {Math.abs(n)}%
+                      </span>
+                    );
+                  };
+                  const responsContribution = (value: number, total: number) => total > 0 ? Math.round((value / total) * 100) : 0;
+
+                  const rangeLabel = dashboardRange === 7 ? '7 días' : dashboardRange === 30 ? '30 días' : '90 días';
+                  const sparkSeries = (key: string) => chartData.map((d: any) => Number(d[key]) || 0);
+                  const sparkMax = (arr: number[]) => Math.max(...arr, 1);
+                  const sparkPts = (arr: number[]) => arr.map((v, i) => {
+                    const x = (i / Math.max(arr.length - 1, 1)) * 100;
+                    const y = 30 - (v / sparkMax(arr)) * 24 - 2;
+                    return `${x.toFixed(2)},${y.toFixed(2)}`;
+                  }).join(' ');
+                  const sparkArea = (arr: number[]) => `0,30 ${sparkPts(arr)} 100,30`;
+
+                  const statusLabel: Record<string, string> = {
+                    PENDING: 'Pendiente', CONFIRMED: 'Confirmado', PREPARING: 'Preparación', READY: 'Listo',
+                    PICKED_UP: 'Recogido', IN_TRANSIT: 'En camino', DELIVERED: 'Entregado', COMPLETED: 'Completado',
+                    CANCELLED: 'Cancelado', REJECTED: 'Rechazado',
+                  };
+                  const donutColors = ['#10b981', '#0ea5e9', '#8b5cf6', '#f59e0b', '#f43f5e', '#14b8a6', '#6366f1', '#a8a29e', '#f97316', '#22c55e'];
+                  const donutData = statusDistribution.map((s: any, i: number) => ({
+                    name: statusLabel[s.status] || s.status,
+                    value: s.count,
+                    color: donutColors[i % donutColors.length],
+                  }));
+                  const donutTotal = donutData.reduce((sum: number, d: any) => sum + d.value, 0);
 
                   return (
                     <div className="space-y-6">
@@ -2926,13 +2983,56 @@ export default function Home() {
                         </button>
                       </div>
 
+                      {/* Hero: Generación de la web */}
+                      <div className="relative overflow-hidden rounded-[32px] bg-neutral-950 p-6 md:p-8 text-white shadow-[0_24px_60px_rgba(15,15,15,0.28)]">
+                        <div className="pointer-events-none absolute inset-0">
+                          <div className="absolute -right-16 -top-24 h-80 w-80 rounded-full bg-emerald-500/20 blur-3xl" />
+                          <div className="absolute -bottom-28 -left-12 h-80 w-80 rounded-full bg-sky-500/15 blur-3xl" />
+                          <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-emerald-400/60 to-transparent" />
+                        </div>
+                        <div className="relative flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+                          <div className="min-w-0">
+                            <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-emerald-300">Generación de la web</p>
+                            <div className="mt-3 flex flex-wrap items-end gap-x-8 gap-y-3">
+                              <div>
+                                <p className="text-3xl font-black leading-none tracking-tight md:text-[2.6rem]">{formatCurrency(totals.allTimeGmv)}</p>
+                                <p className="mt-1.5 text-[11px] text-neutral-400">GMV acumulado · {totals.allTimeOrders} pedidos</p>
+                              </div>
+                              <div className="hidden h-14 w-px bg-white/10 sm:block" />
+                              <div>
+                                <p className="text-2xl font-extrabold leading-none tracking-tight text-emerald-300 md:text-3xl">{formatCurrency(totals.allTimeNet)}</p>
+                                <p className="mt-1.5 text-[11px] text-neutral-400">Ganancia neta total</p>
+                              </div>
+                              <div className="hidden h-14 w-px bg-white/10 sm:block" />
+                              <div>
+                                <p className="text-2xl font-extrabold leading-none tracking-tight md:text-3xl">{formatCurrency(totals.avgTicket)}</p>
+                                <p className="mt-1.5 text-[11px] text-neutral-400">Ticket promedio</p>
+                              </div>
+                              <div className="hidden h-14 w-px bg-white/10 sm:block" />
+                              <div>
+                                <p className="text-2xl font-extrabold leading-none tracking-tight md:text-3xl">{totals.deliveredOrders}</p>
+                                <p className="mt-1.5 text-[11px] text-neutral-400">Entregas completadas</p>
+                              </div>
+                            </div>
+                          </div>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/5 px-3 py-1.5 text-xs font-semibold text-neutral-300 backdrop-blur">
+                              <svg className="h-3.5 w-3.5 text-emerald-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4h13M8 4v16m6-12v12m4-16v16M3 20h18" /></svg>
+                              vs período anterior
+                            </span>
+                            {changeBadge(comparisons.gmvChange)}
+                            {changeBadge(comparisons.netChange)}
+                          </div>
+                        </div>
+                      </div>
+
                       {/* KPIs Grid */}
-                      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 3xl:grid-cols-7">
-                        {/* KPI 1: Pedidos Activos */}
+                      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+                        {/* KPI: Pedidos activos */}
                         <div className="group relative overflow-hidden rounded-[28px] border border-black/5 bg-white p-5 shadow-sm transition hover:shadow-md">
                           <div className="flex items-center justify-between">
                             <span className="text-[10px] font-bold uppercase tracking-[0.18em] text-neutral-400">Pedidos Activos</span>
-                            <div className="flex h-7 w-7 items-center justify-center rounded-xl bg-neutral-100 text-sm transition group-hover:scale-110">🛍️</div>
+                            <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-neutral-950 text-sm text-white transition group-hover:scale-110">🛍️</div>
                           </div>
                           <div className="mt-3 flex items-baseline gap-2">
                             <span className="text-2xl font-extrabold text-neutral-950 tracking-tight">{stats.activeOrdersCount}</span>
@@ -2945,55 +3045,90 @@ export default function Home() {
                           <p className="mt-1.5 text-[11px] text-neutral-500 font-medium">En preparación o tránsito</p>
                         </div>
 
-                        {/* KPI 2: Ganancia Neta Hoy */}
+                        {/* KPI: Ganancia neta del período */}
                         <div className="group relative overflow-hidden rounded-[28px] border border-black/5 bg-white p-5 shadow-sm transition hover:shadow-md">
                           <div className="flex items-center justify-between">
-                            <span className="text-[10px] font-bold uppercase tracking-[0.18em] text-neutral-400">Ganancia Neta Hoy</span>
-                            <div className="flex h-7 w-7 items-center justify-center rounded-xl bg-emerald-100 text-sm transition group-hover:scale-110">💰</div>
+                            <span className="text-[10px] font-bold uppercase tracking-[0.18em] text-neutral-400">Ganancia neta · {rangeLabel}</span>
+                            <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-emerald-100 text-sm transition group-hover:scale-110">💰</div>
                           </div>
                           <div className="mt-3 flex items-baseline gap-2">
-                            <span className="text-2xl font-extrabold text-neutral-950 tracking-tight">{formatCurrency(stats.todayNetRevenue)}</span>
-                            <span className="text-[10px] font-semibold text-neutral-400">({stats.todayOrdersCount} ord.)</span>
+                            <span className="text-2xl font-extrabold text-neutral-950 tracking-tight">{formatCurrency(period.net)}</span>
+                            {changeBadge(comparisons.netChange)}
                           </div>
-                          <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-0.5 text-[10px] text-neutral-500">
-                            <span>Rest: <strong className="text-neutral-800">{formatCurrency(stats.todayRestaurantFees)}</strong></span>
-                            <span>Driver: <strong className="text-neutral-800">{formatCurrency(stats.todayDriverFees)}</strong></span>
-                            <span>Servicio: <strong className="text-neutral-800">{formatCurrency(stats.todayServiceFees)}</strong></span>
-                          </div>
-                          <p className="mt-1 text-[11px] text-neutral-400">GMV: {formatCurrency(stats.todayGMV)}</p>
+                          <svg viewBox="0 0 100 30" preserveAspectRatio="none" className="mt-2 h-8 w-full">
+                            <polygon points={sparkArea(sparkSeries('netRevenue'))} fill="#10b981" fillOpacity="0.12" />
+                            <polyline points={sparkPts(sparkSeries('netRevenue'))} fill="none" stroke="#10b981" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                          </svg>
                         </div>
 
-                        {/* KPI 3: Volumen Semanal */}
+                        {/* KPI: GMV del período */}
                         <div className="group relative overflow-hidden rounded-[28px] border border-black/5 bg-white p-5 shadow-sm transition hover:shadow-md">
                           <div className="flex items-center justify-between">
-                            <span className="text-[10px] font-bold uppercase tracking-[0.18em] text-neutral-400">Comisiones Semana</span>
-                            <div className="flex h-7 w-7 items-center justify-center rounded-xl bg-indigo-100 text-sm transition group-hover:scale-110">📊</div>
+                            <span className="text-[10px] font-bold uppercase tracking-[0.18em] text-neutral-400">GMV · {rangeLabel}</span>
+                            <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-indigo-100 text-sm transition group-hover:scale-110">📈</div>
                           </div>
                           <div className="mt-3 flex items-baseline gap-2">
-                            <span className="text-2xl font-extrabold text-neutral-950 tracking-tight">{formatCurrency(netRev.weekly.amount)}</span>
-                            <span className="text-[10px] font-semibold text-neutral-400">{netRev.weekly.orders} ord.</span>
+                            <span className="text-2xl font-extrabold text-neutral-950 tracking-tight">{formatCurrency(period.gmv)}</span>
+                            {changeBadge(comparisons.gmvChange)}
                           </div>
-                          <p className="mt-1.5 text-[11px] text-neutral-500 font-medium">Esta semana</p>
+                          <svg viewBox="0 0 100 30" preserveAspectRatio="none" className="mt-2 h-8 w-full">
+                            <polygon points={sparkArea(sparkSeries('gmv'))} fill="#6366f1" fillOpacity="0.12" />
+                            <polyline points={sparkPts(sparkSeries('gmv'))} fill="none" stroke="#6366f1" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                          </svg>
                         </div>
 
-                        {/* KPI 4: Volumen Mensual */}
+                        {/* KPI: Pedidos del período */}
                         <div className="group relative overflow-hidden rounded-[28px] border border-black/5 bg-white p-5 shadow-sm transition hover:shadow-md">
                           <div className="flex items-center justify-between">
-                            <span className="text-[10px] font-bold uppercase tracking-[0.18em] text-neutral-400">Comisiones Mes</span>
-                            <div className="flex h-7 w-7 items-center justify-center rounded-xl bg-violet-100 text-sm transition group-hover:scale-110">📈</div>
+                            <span className="text-[10px] font-bold uppercase tracking-[0.18em] text-neutral-400">Pedidos · {rangeLabel}</span>
+                            <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-sky-100 text-sm transition group-hover:scale-110">🧾</div>
                           </div>
                           <div className="mt-3 flex items-baseline gap-2">
-                            <span className="text-2xl font-extrabold text-neutral-950 tracking-tight">{formatCurrency(netRev.monthly.amount)}</span>
-                            <span className="text-[10px] font-semibold text-neutral-400">{netRev.monthly.orders} ord.</span>
+                            <span className="text-2xl font-extrabold text-neutral-950 tracking-tight">{period.orders}</span>
+                            {changeBadge(comparisons.ordersChange)}
                           </div>
-                          <p className="mt-1.5 text-[11px] text-neutral-500 font-medium">Este mes</p>
+                          <div className="mt-2 flex items-center gap-3 text-[10px] font-semibold">
+                            <span className="text-emerald-600 bg-emerald-50 border border-emerald-100 px-2 py-0.5 rounded-md">{period.deliveredOrders} entregados</span>
+                            <span className="text-rose-600 bg-rose-50 border border-rose-100 px-2 py-0.5 rounded-md">{period.rejectedOrders} rechazados</span>
+                          </div>
                         </div>
 
-                        {/* KPI 5: Flota de Repartidores */}
+                        {/* KPI: Ticket promedio */}
+                        <div className="group relative overflow-hidden rounded-[28px] border border-black/5 bg-white p-5 shadow-sm transition hover:shadow-md">
+                          <div className="flex items-center justify-between">
+                            <span className="text-[10px] font-bold uppercase tracking-[0.18em] text-neutral-400">Ticket promedio · {rangeLabel}</span>
+                            <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-violet-100 text-sm transition group-hover:scale-110">🎫</div>
+                          </div>
+                          <div className="mt-3 flex items-baseline gap-2">
+                            <span className="text-2xl font-extrabold text-neutral-950 tracking-tight">{formatCurrency(period.avgTicket)}</span>
+                          </div>
+                          <svg viewBox="0 0 100 30" preserveAspectRatio="none" className="mt-2 h-8 w-full">
+                            <polygon points={sparkArea(sparkSeries('gmv').map((v: number, i: number) => (chartData[i]?.orders ? v / chartData[i].orders : 0)))} fill="#8b5cf6" fillOpacity="0.12" />
+                            <polyline points={sparkPts(sparkSeries('gmv').map((v: number, i: number) => (chartData[i]?.orders ? v / chartData[i].orders : 0)))} fill="none" stroke="#8b5cf6" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                          </svg>
+                        </div>
+
+                        {/* KPI: Clientes */}
+                        <div className="group relative overflow-hidden rounded-[28px] border border-black/5 bg-white p-5 shadow-sm transition hover:shadow-md">
+                          <div className="flex items-center justify-between">
+                            <span className="text-[10px] font-bold uppercase tracking-[0.18em] text-neutral-400">Clientes</span>
+                            <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-amber-100 text-sm transition group-hover:scale-110">👥</div>
+                          </div>
+                          <div className="mt-3 flex items-baseline gap-2">
+                            <span className="text-2xl font-extrabold text-neutral-950 tracking-tight">{customers.uniqueCustomersInPeriod || period.uniqueCustomers}</span>
+                            <span className="text-[10px] font-semibold text-neutral-400">únicos en {rangeLabel}</span>
+                          </div>
+                          <div className="mt-1.5 flex items-center gap-3 text-[11px] text-neutral-500 font-medium">
+                            <span>{customers.totalCustomers} registrados</span>
+                            <span className="text-emerald-600 font-bold">+{customers.newCustomers} nuevos</span>
+                          </div>
+                        </div>
+
+                        {/* KPI: Flota de Repartidores */}
                         <div className="group relative overflow-hidden rounded-[28px] border border-black/5 bg-white p-5 shadow-sm transition hover:shadow-md">
                           <div className="flex items-center justify-between">
                             <span className="text-[10px] font-bold uppercase tracking-[0.18em] text-neutral-400">Flota de Repartidores</span>
-                            <div className="flex h-7 w-7 items-center justify-center rounded-xl bg-neutral-100 text-sm transition group-hover:scale-110">🛵</div>
+                            <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-neutral-100 text-sm transition group-hover:scale-110">🛵</div>
                           </div>
                           <div className="mt-3 flex items-baseline gap-2">
                             <span className="text-2xl font-extrabold text-neutral-950 tracking-tight">{stats.activeDrivers}</span>
@@ -3005,24 +3140,11 @@ export default function Home() {
                           </div>
                         </div>
 
-                        {/* KPI 6: Inbox Administrativo */}
-                        <div className="group relative overflow-hidden rounded-[28px] border border-black/5 bg-white p-5 shadow-sm transition hover:shadow-md">
-                          <div className="flex items-center justify-between">
-                            <span className="text-[10px] font-bold uppercase tracking-[0.18em] text-neutral-400">Inbox Administrativo</span>
-                            <div className="flex h-7 w-7 items-center justify-center rounded-xl bg-neutral-100 text-sm transition group-hover:scale-110">📥</div>
-                          </div>
-                          <div className="mt-3 flex items-baseline gap-2">
-                            <span className="text-2xl font-extrabold text-neutral-950 tracking-tight">{stats.pendingSettlementsCount + stats.pendingAffiliationsCount + stats.pendingTicketsCount}</span>
-                            <span className="text-[10px] font-semibold text-neutral-400">pendientes</span>
-                          </div>
-                          <p className="mt-1.5 text-[11px] text-neutral-500 font-medium truncate">{stats.pendingSettlementsCount} pagos · {stats.pendingAffiliationsCount} sol. · {stats.pendingTicketsCount} tck.</p>
-                        </div>
-
-                        {/* KPI 7: Restaurantes */}
+                        {/* KPI: Restaurantes */}
                         <div className="group relative overflow-hidden rounded-[28px] border border-black/5 bg-white p-5 shadow-sm transition hover:shadow-md">
                           <div className="flex items-center justify-between">
                             <span className="text-[10px] font-bold uppercase tracking-[0.18em] text-neutral-400">Restaurantes Asociados</span>
-                            <div className="flex h-7 w-7 items-center justify-center rounded-xl bg-neutral-100 text-sm transition group-hover:scale-110">🍽️</div>
+                            <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-neutral-100 text-sm transition group-hover:scale-110">🍽️</div>
                           </div>
                           <div className="mt-3 flex items-baseline gap-2">
                             <span className="text-2xl font-extrabold text-neutral-950 tracking-tight">{stats.activeRestaurants}</span>
@@ -3040,18 +3162,16 @@ export default function Home() {
                         <div className="rounded-[28px] border border-black/5 bg-white p-5 shadow-sm">
                           <div className="mb-3 flex items-start justify-between">
                             <div>
-                              <h3 className="text-base font-bold text-neutral-950">Ganancia Neta vs GMV</h3>
-                              <p className="text-[11px] text-neutral-500 mt-0.5">Últimos 30 días · Comisiones de restaurante + repartidor</p>
+                              <h3 className="text-base font-bold text-neutral-950">Ganancia Neta vs GMV · {rangeLabel}</h3>
+                              <p className="text-[11px] text-neutral-500 mt-0.5">Áreas: comisiones · Barras: volumen de pedidos</p>
                             </div>
-                            {comparisons.netChange !== null && (
-                              <span className={`inline-flex items-center gap-0.5 rounded-full px-2 py-0.5 text-[10px] font-bold ${Number(comparisons.netChange) >= 0 ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'}`}>
-                                {Number(comparisons.netChange) >= 0 ? '▲' : '▼'} {Math.abs(Number(comparisons.netChange))}% vs período ant.
-                              </span>
-                            )}
+                            <div className="flex flex-wrap gap-1.5">
+                              {changeBadge(comparisons.netChange)}
+                            </div>
                           </div>
                           <div className="h-[250px] w-full">
                             <ResponsiveContainer width="100%" height={250}>
-                              <AreaChart data={dashboardStats?.chartData || []} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                              <ComposedChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
                                 <defs>
                                   <linearGradient id="colorNet" x1="0" y1="0" x2="0" y2="1">
                                     <stop offset="5%" stopColor="#10b981" stopOpacity={0.3}/>
@@ -3063,39 +3183,127 @@ export default function Home() {
                                   </linearGradient>
                                 </defs>
                                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
-                                <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#888' }} dy={10} />
-                                <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#888' }} tickFormatter={(val) => `$${val}`} />
+                                <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#888' }} dy={10} interval="preserveStartEnd" />
+                                <YAxis yAxisId="left" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#888' }} tickFormatter={(val) => `$${val}`} width={55} />
+                                <YAxis yAxisId="right" orientation="right" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#888' }} width={30} />
                                 <Tooltip
                                   contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
-                                  formatter={(value: number, name: string) => [`$${value.toFixed(2)}`, name === 'netRevenue' ? 'Ganancia Neta' : 'GMV']}
+                                  formatter={(value: number, name: string) => name === 'orders' ? [value, 'Pedidos'] : [`$${value.toFixed(2)}`, name === 'netRevenue' ? 'Ganancia Neta' : 'GMV']}
+                                  labelFormatter={(label) => `Día ${label}`}
                                 />
-                                <Area type="monotone" dataKey="gmv" stroke="#0f172a" strokeWidth={1.5} fillOpacity={1} fill="url(#colorGMV)" strokeDasharray="4 3" />
-                                <Area type="monotone" dataKey="netRevenue" stroke="#10b981" strokeWidth={2.5} fillOpacity={1} fill="url(#colorNet)" />
-                              </AreaChart>
+                                <Bar yAxisId="right" dataKey="orders" fill="#0f172a" fillOpacity={0.35} radius={[4, 4, 0, 0]} barSize={8} />
+                                <Area yAxisId="left" type="monotone" dataKey="gmv" stroke="#0f172a" strokeWidth={1.5} fillOpacity={1} fill="url(#colorGMV)" strokeDasharray="4 3" />
+                                <Area yAxisId="left" type="monotone" dataKey="netRevenue" stroke="#10b981" strokeWidth={2.5} fillOpacity={1} fill="url(#colorNet)" />
+                              </ComposedChart>
                             </ResponsiveContainer>
                           </div>
                           <div className="mt-3 flex items-center gap-4 text-[11px]">
                             <span className="flex items-center gap-1.5"><span className="h-3 w-3 rounded-sm bg-emerald-500/30 border border-emerald-500" /> Ganancia Neta (comisiones)</span>
                             <span className="flex items-center gap-1.5"><span className="h-3 w-3 rounded-sm bg-neutral-500/20 border border-neutral-400 border-dashed" /> GMV (ventas totales)</span>
+                            <span className="flex items-center gap-1.5"><span className="h-3 w-3 rounded-sm bg-neutral-950/30" /> Pedidos</span>
                           </div>
                         </div>
 
                         <div className="rounded-[28px] border border-black/5 bg-white p-5 shadow-sm">
                           <div className="mb-3">
-                            <h3 className="text-base font-bold text-neutral-950">Pedidos (Últimos 30 Días)</h3>
-                            <p className="text-[11px] text-neutral-500 mt-0.5">Volumen diario de pedidos procesados</p>
+                            <h3 className="text-base font-bold text-neutral-950">Distribución de Pedidos · {rangeLabel}</h3>
+                            <p className="text-[11px] text-neutral-500 mt-0.5">{donutTotal} pedidos en el período por estado</p>
                           </div>
-                          <div className="h-[250px] w-full">
-                            <ResponsiveContainer width="100%" height={250}>
-                              <BarChart data={dashboardStats?.chartData || []} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                          {donutData.length === 0 ? (
+                            <div className="flex flex-col items-center justify-center h-[250px] text-neutral-400">
+                              <span className="text-3xl mb-2">🍩</span>
+                              <p className="text-xs font-semibold text-neutral-500">Sin pedidos en el período</p>
+                            </div>
+                          ) : (
+                            <div className="flex flex-col items-center gap-3 sm:flex-row">
+                              <div className="relative h-[210px] w-[210px] shrink-0">
+                                <ResponsiveContainer width="100%" height="100%">
+                                  <PieChart>
+                                    <Pie data={donutData} dataKey="value" nameKey="name" innerRadius={62} outerRadius={90} paddingAngle={2} stroke="none">
+                                      {donutData.map((d: any, idx: number) => (
+                                        <Cell key={idx} fill={d.color} />
+                                      ))}
+                                    </Pie>
+                                    <Tooltip contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} formatter={(value: number, name: string) => [value, name]} />
+                                  </PieChart>
+                                </ResponsiveContainer>
+                                <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
+                                  <span className="text-[9px] font-bold uppercase tracking-[0.18em] text-neutral-400">Total</span>
+                                  <span className="text-xl font-extrabold text-neutral-950">{donutTotal}</span>
+                                </div>
+                              </div>
+                              <div className="w-full min-w-0 space-y-1.5">
+                                {donutData.slice(0, 6).map((d: any) => (
+                                  <div key={d.name} className="flex items-center justify-between gap-2 text-xs">
+                                    <span className="flex items-center gap-2 min-w-0 truncate text-neutral-600">
+                                      <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: d.color }} />
+                                      {d.name}
+                                    </span>
+                                    <span className="font-bold text-neutral-900 shrink-0">{d.value} <span className="font-medium text-neutral-400">({responsContribution(d.value, donutTotal)}%)</span></span>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Analytics Row */}
+                      <div className="grid gap-6 xl:grid-cols-2">
+                        <div className="rounded-[28px] border border-black/5 bg-white p-5 shadow-sm">
+                          <div className="mb-3">
+                            <h3 className="text-base font-bold text-neutral-950">Picos de Demanda</h3>
+                            <p className="text-[11px] text-neutral-500 mt-0.5">Pedidos por hora · {rangeLabel}</p>
+                          </div>
+                          <div className="h-[210px] w-full">
+                            <ResponsiveContainer width="100%" height="100%">
+                              <BarChart data={peakHours} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
                                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
-                                <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#888' }} dy={10} />
-                                <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#888' }} />
-                                <Tooltip contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} cursor={{ fill: '#f3f4f6' }} formatter={(value: number) => [value, 'Pedidos']} />
-                                <Bar dataKey="orders" fill="#0f172a" radius={[4, 4, 0, 0]} />
+                                <XAxis dataKey="hour" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#888' }} tickFormatter={(h: number) => `${h}`} dy={6} />
+                                <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#888' }} width={30} allowDecimals={false} />
+                                <Tooltip contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} cursor={{ fill: '#f3f4f6' }} formatter={(value: number) => [value, 'Pedidos']} labelFormatter={(h) => `${h}:00 - ${h + 1}:00`} />
+                                <Bar dataKey="orders" fill="#0ea5e9" radius={[4, 4, 0, 0]} />
                               </BarChart>
                             </ResponsiveContainer>
                           </div>
+                        </div>
+
+                        <div className="rounded-[28px] border border-black/5 bg-white p-5 shadow-sm">
+                          <div className="mb-3">
+                            <h3 className="text-base font-bold text-neutral-950">Top Restaurantes · {rangeLabel}</h3>
+                            <p className="text-[11px] text-neutral-500 mt-0.5">Los 5 negocios que más generaron</p>
+                          </div>
+                          {topRestaurants.length === 0 ? (
+                            <div className="flex flex-col items-center justify-center h-[210px] text-neutral-400">
+                              <span className="text-3xl mb-2">🏆</span>
+                              <p className="text-xs font-semibold text-neutral-500">Sin actividad en el período</p>
+                            </div>
+                          ) : (
+                            <div className="space-y-3">
+                              {topRestaurants.map((r: any, i: number) => {
+                                const maxGmv = Math.max(...topRestaurants.map((x: any) => x.gmv), 1);
+                                return (
+                                  <div key={r.id} className="group">
+                                    <div className="flex items-center justify-between gap-3">
+                                      <div className="flex items-center gap-2.5 min-w-0">
+                                        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-[11px] font-black text-white" style={{ background: donutColors[i % donutColors.length] }}>
+                                          {i + 1}
+                                        </div>
+                                        <div className="min-w-0">
+                                          <p className="text-sm font-bold text-neutral-950 truncate">{r.name}</p>
+                                          <p className="text-[9px] uppercase tracking-wider text-neutral-400">{r.region ? r.region.replace(/-/g, ' ') : ''} · {r.orders} pedidos</p>
+                                        </div>
+                                      </div>
+                                      <span className="text-sm font-extrabold text-neutral-950 shrink-0">{formatCurrency(r.gmv)}</span>
+                                    </div>
+                                    <div className="mt-1.5 h-1.5 w-full rounded-full bg-neutral-100 overflow-hidden">
+                                      <div className="h-full rounded-full transition-all duration-500" style={{ width: `${Math.min(100, (r.gmv / maxGmv) * 100)}%`, background: donutColors[i % donutColors.length] }} />
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
                         </div>
                       </div>
 
@@ -3108,7 +3316,16 @@ export default function Home() {
                               <h3 className="text-base font-bold text-neutral-950">Monitor Operativo en Vivo</h3>
                               <p className="text-[11px] text-neutral-500 mt-0.5">Últimos pedidos registrados en tránsito o preparación</p>
                             </div>
-                            <span className="inline-flex items-center gap-1.5 rounded-full bg-neutral-100 px-2.5 py-1 text-[10px] font-semibold text-neutral-600">{dashboardStats?.activeOrders?.length || 0} pedidos</span>
+                            <div className="flex items-center gap-2.5">
+                              <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-[10px] font-bold text-emerald-700">
+                                <span className="relative flex h-2 w-2">
+                                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-500 opacity-75" />
+                                  <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
+                                </span>
+                                En vivo
+                              </span>
+                              <span className="inline-flex items-center gap-1.5 rounded-full bg-neutral-100 px-2.5 py-1 text-[10px] font-semibold text-neutral-600">{dashboardStats?.activeOrders?.length || 0} pedidos</span>
+                            </div>
                           </div>
 
                           <div className="flex-1 overflow-y-auto max-h-[450px] space-y-2.5 pr-1">
@@ -3156,14 +3373,14 @@ export default function Home() {
                         <div className="rounded-[28px] border border-black/5 bg-white overflow-hidden shadow-sm flex flex-col min-h-[400px]">
                           <div className="p-5 pb-3 border-b border-black/5">
                             <h3 className="text-base font-bold text-neutral-950">Ganancias por Zona</h3>
-                            <p className="text-[11px] text-neutral-500 mt-0.5">Últimos 30 días · Comisiones netas por región</p>
+                            <p className="text-[11px] text-neutral-500 mt-0.5">{rangeLabel} · Comisiones netas por región</p>
                           </div>
                           <div className="flex-1 overflow-y-auto max-h-[450px]">
                             {regionData.length === 0 ? (
                               <div className="flex flex-col items-center justify-center h-56 text-center text-neutral-400">
                                 <span className="text-3xl mb-2">📍</span>
                                 <p className="text-xs font-semibold text-neutral-500">Sin datos</p>
-                                <p className="text-[10px] text-neutral-400 mt-1 max-w-[200px]">No hay actividad en los últimos 30 días.</p>
+                                <p className="text-[10px] text-neutral-400 mt-1 max-w-[200px]">No hay actividad en el {rangeLabel.toLowerCase()}.</p>
                               </div>
                             ) : (
                               <div className="divide-y divide-black/5">
@@ -3192,7 +3409,7 @@ export default function Home() {
                           </div>
                           <div className="border-t border-black/5 px-5 py-3 bg-neutral-50/30">
                             <div className="flex items-center justify-between text-sm">
-                              <span className="font-bold text-neutral-950">Total neto 30d</span>
+                              <span className="font-bold text-neutral-950">Total neto {rangeLabel}</span>
                               <span className="font-extrabold text-emerald-600">{formatCurrency(regionData.reduce((s: number, r: any) => s + r.netRevenue, 0))}</span>
                             </div>
                           </div>

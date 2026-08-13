@@ -849,7 +849,6 @@ export default function RestaurantPage({
   const [ratingIsPickup, setRatingIsPickup] = useState(false);
   const [restaurantRating, setRestaurantRating] = useState(0);
   const [driverRatingVal, setDriverRatingVal] = useState(0);
-  const [ratingComment, setRatingComment] = useState('');
   const [isSubmittingRating, setIsSubmittingRating] = useState(false);
   const [pullDistance, setPullDistance] = useState(0);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -3231,8 +3230,6 @@ function triggerHaptic(pattern: number | number[] = 10) {
               onRestaurantRatingChange={setRestaurantRating}
               driverRating={driverRatingVal}
               onDriverRatingChange={setDriverRatingVal}
-              comment={ratingComment}
-              onCommentChange={setRatingComment}
               submitting={isSubmittingRating}
               onSkip={() => {
                 if (orderToRate) {
@@ -3249,7 +3246,6 @@ function triggerHaptic(pattern: number | number[] = 10) {
                 setIsRatingModalOpen(false);
                 setRestaurantRating(0);
                 setDriverRatingVal(0);
-                setRatingComment('');
                 setRatingIsPickup(false);
                 setOrderToRate(null);
               }}
@@ -3264,7 +3260,6 @@ function triggerHaptic(pattern: number | number[] = 10) {
                     payload: {
                       rating: restaurantRating,
                       ...(isPickupRating ? {} : { driverRating: driverRatingVal || undefined }),
-                      ...(ratingComment ? { comment: ratingComment } : {}),
                     },
                     getUser: () => sessionUser,
                     onTokenRefreshed: (newToken) => setToken(newToken),
@@ -3285,7 +3280,6 @@ function triggerHaptic(pattern: number | number[] = 10) {
                   setIsRatingModalOpen(false);
                   setRestaurantRating(0);
                   setDriverRatingVal(0);
-                  setRatingComment('');
                   setRatingIsPickup(false);
                   setOrderToRate(null);
                 } finally {
