@@ -4662,15 +4662,15 @@ function triggerHaptic(pattern: number | number[] = 10) {
                 return null;
               })()}
 
-              <div data-sticky-header className="sticky top-[calc(env(safe-area-inset-top)+72px)] z-20 -mx-4 bg-[var(--menu-surface)]/90 backdrop-blur-2xl border-b border-black/[0.04] md:-mx-6 lg:-mx-7 dark:bg-[var(--menu-surface-dark)]/90 dark:border-zinc-800/60">
-                <div className="px-4 py-3 md:px-6 lg:px-7">
+              <div data-sticky-header className="sticky top-[calc(env(safe-area-inset-top)+72px)] z-20 -mx-4 bg-[var(--menu-surface)] shadow-[0_6px_20px_rgba(0,0,0,0.04)] border-b border-black/[0.04] md:-mx-6 lg:-mx-7 dark:bg-[var(--menu-surface-dark)] dark:border-zinc-800/60">
+                <div className="px-4 py-2.5 md:px-6 lg:px-7">
                   <div className="relative w-full">
                     <input
                       type="text"
                       placeholder={`Buscar en ${restaurant?.name || 'el menú'}...`}
                       value={productSearchQuery}
                       onChange={(e) => setProductSearchQuery(e.target.value)}
-                      className="w-full rounded-full border border-black/10 bg-white px-5 py-3.5 pr-11 text-base text-neutral-900 outline-none transition placeholder:text-neutral-400 focus:border-black/20 dark:border-zinc-800 dark:bg-neutral-900 dark:text-zinc-100 dark:placeholder:text-zinc-500 dark:focus:border-zinc-600"
+                      className="w-full rounded-full border border-black/10 bg-white px-5 py-2.5 pr-11 text-base text-neutral-900 outline-none transition placeholder:text-neutral-400 focus:border-black/20 dark:border-zinc-800 dark:bg-neutral-900 dark:text-zinc-100 dark:placeholder:text-zinc-500 dark:focus:border-zinc-600"
                     />
                     {productSearchQuery ? (
                       <button
@@ -4691,7 +4691,7 @@ function triggerHaptic(pattern: number | number[] = 10) {
                   </div>
                 </div>
                 {!productSearchQuery.trim() && (
-                <div className="px-4 pb-3 md:px-6 lg:px-7">
+                <div className="px-4 pb-2 md:px-6 lg:px-7">
                   <div className="-mx-1 overflow-x-auto px-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                     <div className="flex min-w-max gap-1 sm:gap-1">
                       {(productSearchQuery.trim() ? (filteredRestaurant?.categories ?? []) : restaurant.categories).map((category) => {
@@ -4701,7 +4701,7 @@ function triggerHaptic(pattern: number | number[] = 10) {
                             type="button"
                             key={category.id}
                             onClick={() => scrollToCategory(category.id)}
-                            className={`relative px-4 py-3 text-[13.5px] font-semibold transition-all duration-200 ${
+                            className={`relative px-4 py-2 text-[13px] font-semibold transition-all duration-200 ${
                               isActive
                                 ? 'text-[var(--accent)] dark:text-sky-400'
                                 : 'text-neutral-500 hover:text-neutral-800 dark:text-zinc-400 dark:hover:text-zinc-100'
