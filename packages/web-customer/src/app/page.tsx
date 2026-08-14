@@ -3053,6 +3053,16 @@ export default function Home() {
       setSocketStatus('idle');
     });
 
+    socket.on('connect_error', (err) => {
+      // Fallo de conexión (red, servidor caído, DNS). Marcamos el estado para
+      // que el polling de respaldo recargue el dashboard mientras socket.io
+      // reintenta por su cuenta.
+      setSocketStatus('reconnecting');
+      if (process.env.NODE_ENV !== 'production') {
+        console.warn('[Socket] connect_error:', err?.message || err);
+      }
+    });
+
     for (const eventName of liveEvents) {
       socket.on(eventName, async (payload: { orderId?: string; status?: string; driverName?: string }) => {
         const liveEventKey = buildLiveEventKey(eventName, payload);

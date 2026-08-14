@@ -139,6 +139,14 @@ export default function DriverArrivalModal() {
       socket.emit('join-room', sessionUserIdRef, 'CUSTOMER');
     });
 
+    socket.on('connect_error', (err) => {
+      // Fallo de conexión: el polling de respaldo sigue cubriendo la llegada del
+      // repartidor mientras socket.io reintenta por su cuenta.
+      if (process.env.NODE_ENV !== 'production') {
+        console.warn('[Socket] connect_error:', err?.message || err);
+      }
+    });
+
     for (const eventName of ['order:driver-arrived', 'order:driver_arrived']) {
       socket.on(eventName, async (payload: { orderId?: string }) => {
         if (!payload?.orderId) return;

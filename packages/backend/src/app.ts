@@ -34,6 +34,7 @@ import { startCustomerPickupReminderJob } from './jobs/customer-pickup-reminder.
 import { startCustomerArrivalReminderJob } from './jobs/customer-arrival-reminder.job';
 import { startOverduePreparationJob } from './jobs/overdue-preparation.job';
 import { startCleanupProofsJob } from './jobs/cleanup-proofs.job';
+import { startCleanupPushSubscriptionsJob } from './jobs/cleanup-push-subscriptions.job';
 import { startPaymentRemindersJob } from './jobs/payment-reminders.job';
 import { startThankYouMessagesJob } from './jobs/thank-you-messages.job';
 
@@ -218,6 +219,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   startCustomerArrivalReminderJob(fastify);
   startOverduePreparationJob(fastify);
   startCleanupProofsJob();
+  startCleanupPushSubscriptionsJob();
 
   fastify.setErrorHandler(errorHandler);
 

@@ -60,6 +60,46 @@ function isExpiredSubscription(error: any): boolean {
   return error?.statusCode === 410 || error?.statusCode === 404;
 }
 
+/**
+ * Verifica si una suscripción push sigue viva enviando un push de prueba
+ * silencioso (sin sonido ni vibración, visibilidad mínima). Devuelve
+ * `true` si el endpoint respondió OK y `false` si expiró (410/404).
+ */
+export async function probePushSubscription(sub: {
+  endpoint: string;
+  p256dh: string;
+  auth: string;
+}): Promise<boolean> {
+  if (!vapidConfigured) return true; // sin VAPID no podemos saber; no borrar
+  const pushSubscription = {
+    endpoint: sub.endpoint,
+    keys: { p256dh: sub.p256dh, auth: sub.auth },
+  };
+  const payload = JSON.stringify({
+    title: 'SaDeL',
+    body: '',
+    silent: true,
+    tag: 'sadel-push-probe',
+    data: { probe: true },
+  });
+  try {
+    await webpush.sendNotification(pushSubscription, payload, {
+      TTL: 60,
+      urgency: 'very-low' as any,
+    });
+    return true;
+  } catch (error: any) {
+    if (isExpiredSubscription(error)) {
+      return false;
+    }
+    if (isTransientError(error)) {
+      // No concluyente: no borrar por un error de red transitorio.
+      return true;
+    }
+    return true;
+  }
+}
+
 function determineUrgency(payload: NotificationPayload): 'high' | 'normal' {
   if (payload.sound) return 'high';
   if (payload.requireInteraction) return 'high';

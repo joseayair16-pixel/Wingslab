@@ -2060,8 +2060,8 @@ export default function Home() {
       const existingSub = await registration.pushManager.getSubscription();
       if (existingSub) {
         // Reutilizamos la suscripción existente: recrearla en cada carga mata la
-        // push en iOS y acumula endpoints huérfanos. Solo la re-creamos si la
-        // suscripción quedó inservible (p. ej. VAPID distinto en el servidor).
+        // push en iOS y acumula endpoints huérfanos. Si el servidor la rechaza
+        // (sub rota por VAPID distinto), la limpiamos y volvemos a suscribir.
         const subJson: any = existingSub.toJSON();
         const existingKey = subJson && typeof subJson === 'object' ? subJson.keys?.p256dh : undefined;
         if (!existingKey) {
@@ -2081,14 +2081,44 @@ export default function Home() {
             console.log('Push subscription already active, re-synced to server');
             return { ok: true };
           }
-          return { ok: false, reason: 'SUBSCRIBE_FAILED' };
+          // La sub quedó huérfana/inservible: descartarla y re-suscribir abajo.
+          try {
+            await existingSub.unsubscribe();
+          } catch { /* noop */ }
         }
       }
 
-      const subscription = await registration.pushManager.subscribe({
-        userVisibleOnly: true,
-        applicationServerKey: urlBase64ToUint8Array(publicKey)
-      });
+      // Crear la suscripción con reintentos que manejan errores transitorios de
+      // iOS (AbortError) y subs huérfanas por cambio de VAPID (InvalidStateError).
+      let subscription: PushSubscription | null = null;
+      const attempts = [0, 1, 2];
+      for (const attempt of attempts) {
+        try {
+          subscription = await registration.pushManager.subscribe({
+            userVisibleOnly: true,
+            applicationServerKey: urlBase64ToUint8Array(publicKey)
+          });
+          break;
+        } catch (subscribeError: any) {
+          if (subscribeError?.name === 'InvalidStateError') {
+            // La VAPID cambió: limpiar la sub vieja y reintentar una vez.
+            const stale = await registration.pushManager.getSubscription();
+            if (stale) {
+              try { await stale.unsubscribe(); } catch { /* noop */ }
+            }
+            continue;
+          }
+          if (subscribeError?.name === 'AbortError' && attempt < attempts.length - 1) {
+            await new Promise((r) => setTimeout(r, 1000 * (attempt + 1)));
+            continue;
+          }
+          console.error('[Push] Error al suscribir:', subscribeError);
+          return { ok: false, reason: 'SUBSCRIBE_FAILED' };
+        }
+      }
+      if (!subscription) {
+        return { ok: false, reason: 'SUBSCRIBE_FAILED' };
+      }
 
       const subResponse = await fetch(`${apiBase}/notifications/subscribe`, {
         method: 'POST',
@@ -3157,6 +3187,15 @@ export default function Home() {
         return;
       }
       setSocketStatus('idle');
+    });
+
+    socket.on('connect_error', (err) => {
+      // Fallo de conexión (red, servidor caído, DNS). Marcamos el estado para
+      // que el polling de respaldo recargue pedidos mientras socket.io reintenta.
+      setSocketStatus('reconnecting');
+      if (process.env.NODE_ENV !== 'production') {
+        console.warn('[Socket] connect_error:', err?.message || err);
+      }
     });
 
     // Debug: escuchar CUALQUIER evento que llegue

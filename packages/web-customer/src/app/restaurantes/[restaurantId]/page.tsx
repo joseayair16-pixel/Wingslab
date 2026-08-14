@@ -1175,6 +1175,14 @@ export default function RestaurantPage({
       socket.emit('join-room', sessionUser.id, 'CUSTOMER');
     });
 
+    socket.on('connect_error', (err) => {
+      // Fallo de conexión: el polling de respaldo recarga pedidos mientras
+      // socket.io reintenta por su cuenta.
+      if (process.env.NODE_ENV !== 'production') {
+        console.warn('[Socket] connect_error:', err?.message || err);
+      }
+    });
+
     const liveEvents = [
       'order:accepted',
       'order:rejected',
@@ -3988,7 +3996,7 @@ function triggerHaptic(pattern: number | number[] = 10) {
                       <button
                         type="button"
                         onClick={() => setIsCouponOpen(true)}
-                        className="group flex w-full items-center justify-center gap-2 rounded-2xl border-2 border-[var(--accent)]/40 bg-white px-4 py-3.5 text-sm font-bold text-[var(--accent-strong)] shadow-sm transition-all hover:border-[var(--accent)] hover:bg-sky-50/50 hover:shadow-[0_8px_20px_-8px_rgba(14,165,233,0.35)] active:scale-[0.98]"
+                        className="group flex w-full items-center justify-center gap-2 rounded-2xl border-2 border-sky-500/70 bg-white px-4 py-3.5 text-sm font-bold text-[var(--accent-strong)] shadow-sm transition-all hover:border-sky-500 hover:bg-sky-50/50 hover:shadow-[0_8px_20px_-8px_rgba(14,165,233,0.35)] active:scale-[0.98]"
                       >
                         <span className="text-base leading-none">🎟️</span>
                         <span>Tengo un cupón</span>

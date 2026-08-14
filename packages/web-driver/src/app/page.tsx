@@ -5,6 +5,7 @@ import { SaDelLogo } from '../components/SaDelLogo';
 import { IncomingOrderModal } from '../components/IncomingOrderModal';
 import DriverNavigationMap from '../components/DriverNavigationMap';
 import PushEnableBanner from '../components/PushEnableBanner';
+import { useForegroundPolling } from '../hooks/useForegroundPolling';
 import { io } from 'socket.io-client';
 import {
   AuthResponse,
@@ -527,6 +528,7 @@ export default function Home() {
   const [error, setError] = useState('');
   const [authMessage, setAuthMessage] = useState('');
   const seenLiveEventKeysRef = useRef<string[]>([]);
+  const socketConnectedRef = useRef(false);
   const activeTabRef = useRef(activeTab);
   const pendingOrdersRef = useRef(pendingOrders);
   pendingOrdersRef.current = pendingOrders;
@@ -1220,8 +1222,8 @@ export default function Home() {
       const existingSub = await registration.pushManager.getSubscription();
       if (existingSub) {
         // Reutilizamos la suscripción existente: recrearla en cada carga mata la
-        // push en iOS y acumula endpoints huérfanos. Solo la re-creamos si la
-        // suscripción quedó inservible (p. ej. VAPID distinto en el servidor).
+        // push en iOS y acumula endpoints huérfanos. Si el servidor la rechaza
+        // (sub rota por VAPID distinto), la limpiamos y volvemos a suscribir.
         const subJson: any = existingSub.toJSON();
         const existingKey = subJson && typeof subJson === 'object' ? subJson.keys?.p256dh : undefined;
         if (!existingKey) {
@@ -1243,14 +1245,44 @@ export default function Home() {
             }
             return { ok: true };
           }
-          return { ok: false, reason: 'SUBSCRIBE_FAILED' };
+          // La sub quedó huérfana/inservible: descartarla y re-suscribir abajo.
+          try {
+            await existingSub.unsubscribe();
+          } catch { /* noop */ }
         }
       }
 
-      const subscription = await registration.pushManager.subscribe({
-        userVisibleOnly: true,
-        applicationServerKey: urlBase64ToUint8Array(publicKey)
-      });
+      // Crear la suscripción con reintentos que manejan errores transitorios de
+      // iOS (AbortError) y subs huérfanas por cambio de VAPID (InvalidStateError).
+      let subscription: PushSubscription | null = null;
+      const attempts = [0, 1, 2];
+      for (const attempt of attempts) {
+        try {
+          subscription = await registration.pushManager.subscribe({
+            userVisibleOnly: true,
+            applicationServerKey: urlBase64ToUint8Array(publicKey)
+          });
+          break;
+        } catch (subscribeError: any) {
+          if (subscribeError?.name === 'InvalidStateError') {
+            // La VAPID cambió: limpiar la sub vieja y reintentar una vez.
+            const stale = await registration.pushManager.getSubscription();
+            if (stale) {
+              try { await stale.unsubscribe(); } catch { /* noop */ }
+            }
+            continue;
+          }
+          if (subscribeError?.name === 'AbortError' && attempt < attempts.length - 1) {
+            await new Promise((r) => setTimeout(r, 1000 * (attempt + 1)));
+            continue;
+          }
+          console.error('[Push] Error al suscribir:', subscribeError);
+          return { ok: false, reason: 'SUBSCRIBE_FAILED' };
+        }
+      }
+      if (!subscription) {
+        return { ok: false, reason: 'SUBSCRIBE_FAILED' };
+      }
 
       const subResponse = await fetch(`${apiBase}/notifications/subscribe`, {
         method: 'POST',
@@ -1527,6 +1559,7 @@ export default function Home() {
     };
 
     socket.on('connect', () => {
+      socketConnectedRef.current = true;
       setSocketStatus('connected');
       setSocketAttempts(0);
       lastEventTime = Date.now();
@@ -1536,12 +1569,14 @@ export default function Home() {
     });
 
     socket.io.on('reconnect_attempt', (attempt) => {
+      socketConnectedRef.current = false;
       setSocketStatus('reconnecting');
       setSocketAttempts(attempt);
     });
 
     socket.on('reconnect', () => {
       // Reconexión exitosa: forzar recarga de pedidos pendientes
+      socketConnectedRef.current = true;
       lastEventTime = Date.now();
       void loadPendingOrders();
       void loadDashboard();
@@ -1549,10 +1584,23 @@ export default function Home() {
 
     socket.on('disconnect', (reason) => {
       if (reason !== 'io client disconnect') {
+        socketConnectedRef.current = false;
         setSocketStatus('reconnecting');
         return;
       }
+      socketConnectedRef.current = false;
       setSocketStatus('idle');
+    });
+
+    socket.on('connect_error', (err) => {
+      // Fallo de conexión (red, servidor caído, DNS). Marcamos el socket como
+      // caído para que el polling de respaldo recargue pedidos mientras
+      // socket.io reintenta por su cuenta.
+      socketConnectedRef.current = false;
+      setSocketStatus('reconnecting');
+      if (process.env.NODE_ENV !== 'production') {
+        console.warn('[Socket] connect_error:', err?.message || err);
+      }
     });
 
     // Detectar socket zombie: si no se recibe ningún evento en 90s, forzar recarga
@@ -1651,10 +1699,20 @@ export default function Home() {
       socket.offAny(markEvent);
       socket.emit('leave-room', sessionUser.id, 'DRIVER');
       socket.disconnect();
+      socketConnectedRef.current = false;
       setSocketStatus('idle');
       setSocketAttempts(0);
     };
   }, [apiBase, loadDashboard, loadPendingOrders, sessionUser, token]);
+
+  // Polling de respaldo: cuando el socket está caído, recarga los pedidos
+  // pendientes en primer plano para no perder asignaciones (la push del OS
+  // cubre el segundo plano; aquí cubrimos el hueco con la app abierta).
+  useForegroundPolling(() => {
+    if (!token || !sessionUser || sessionUser.role !== 'DRIVER') return;
+    if (socketConnectedRef.current) return;
+    void loadPendingOrders();
+  }, 15_000);
 
   // Polling de respaldo solo cuando la pestaña está visible y hay efectivo pendiente
   useEffect(() => {
