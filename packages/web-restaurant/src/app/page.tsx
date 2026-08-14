@@ -16,6 +16,15 @@ import {
   requestJson,
   uploadMediaAsset,
   convertImageFileToDataUrl,
+  preload,
+  preloadAll,
+  warmup,
+  play,
+  stopAll,
+  getAudioState,
+  installWarmupListeners,
+  installVisibilityResumeListener,
+  reset,
 } from '@sadel/shared';
 
 import { useForegroundPolling } from '../hooks/useForegroundPolling';
@@ -1541,19 +1550,7 @@ export default function Home() {
   const resolvedIncomingOrderIdsRef = useRef<string[]>([]);
   const autoRejectingOrderIdsRef = useRef<string[]>([]);
   const soundedIncomingOrderIdsRef = useRef<string[]>([]);
-  const audioContextRef = useRef<AudioContext | null>(null);
-  const audioArrayBufferRef = useRef<ArrayBuffer | null>(null);
-  const audioBufferRef = useRef<AudioBuffer | null>(null);
-  const chatMessageArrayBufferRef = useRef<ArrayBuffer | null>(null);
-  const chatMessageBufferRef = useRef<AudioBuffer | null>(null);
-  const chatAudioRef = useRef<HTMLAudioElement | null>(null);
-  const overdueAudioArrayBufferRef = useRef<ArrayBuffer | null>(null);
-  const overdueAudioBufferRef = useRef<AudioBuffer | null>(null);
-  const chatMessageAudioRef = useRef<HTMLAudioElement | null>(null);
   const wakeLockRef = useRef<any>(null);
-  const alarmSourceRef = useRef<AudioBufferSourceNode | OscillatorNode | null>(null);
-  const pulseIntervalRef = useRef<NodeJS.Timeout | null>(null);
-  const hasUserInteractedRef = useRef(false);
   const hasShownOrderAlertBlockedToastRef = useRef(false);
   const coverImageInputRef = useRef<HTMLInputElement | null>(null);
   const logoInputRef = useRef<HTMLInputElement | null>(null);
@@ -1584,7 +1581,7 @@ export default function Home() {
   const productModalScrollRef = useRef<HTMLDivElement | null>(null);
 
   const handleTouchStart = (e: React.TouchEvent) => {
-    void warmOrderAlertAudio(true);
+    void warmup();
     if (window.scrollY === 0) {
       touchStartY.current = e.touches[0].clientY;
     }
@@ -1691,28 +1688,7 @@ export default function Home() {
         document.documentElement.classList.remove('dark');
       }
 
-      const supportsWebAudio = Boolean(window.AudioContext || (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext);
-      setOrderAlertAudioState(supportsWebAudio ? 'needs-gesture' : 'unsupported');
-
-      const preloadAudio = new Audio('/sounds/notifica.wav');
-      preloadAudio.preload = 'auto';
-      preloadAudio.volume = 1.0;
-      chatAudioRef.current = preloadAudio;
-
-      const preloadChatAudio = new Audio('/sounds/mensaje.wav');
-      preloadChatAudio.preload = 'auto';
-      preloadChatAudio.volume = 1.0;
-      chatMessageAudioRef.current = preloadChatAudio;
-
-      fetch('/sounds/notifica.wav')
-        .then((res) => res.arrayBuffer())
-        .then((buffer) => { audioArrayBufferRef.current = buffer; })
-        .catch(() => {});
-
-      fetch('/sounds/mensaje.wav')
-        .then((res) => res.arrayBuffer())
-        .then((buffer) => { chatMessageArrayBufferRef.current = buffer; })
-        .catch(() => {});
+      preloadAll(['notifica', 'mensaje', 'rezagado']);
 
       // Cross-tab sound dedup: listen for alerts from other tabs
       try {
@@ -2083,7 +2059,30 @@ export default function Home() {
 
       const existingSub = await registration.pushManager.getSubscription();
       if (existingSub) {
-        await existingSub.unsubscribe();
+        // Reutilizamos la suscripción existente: recrearla en cada carga mata la
+        // push en iOS y acumula endpoints huérfanos. Solo la re-creamos si la
+        // suscripción quedó inservible (p. ej. VAPID distinto en el servidor).
+        const subJson: any = existingSub.toJSON();
+        const existingKey = subJson && typeof subJson === 'object' ? subJson.keys?.p256dh : undefined;
+        if (!existingKey) {
+          try {
+            await existingSub.unsubscribe();
+          } catch { /* noop */ }
+        } else {
+          const subResponse = await fetch(`${apiBase}/notifications/subscribe`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${tokenToUse}`
+            },
+            body: JSON.stringify(existingSub)
+          });
+          if (subResponse.ok) {
+            console.log('Push subscription already active, re-synced to server');
+            return { ok: true };
+          }
+          return { ok: false, reason: 'SUBSCRIBE_FAILED' };
+        }
       }
 
       const subscription = await registration.pushManager.subscribe({
@@ -2346,44 +2345,9 @@ export default function Home() {
   }
 
   const warmOrderAlertAudio = useCallback(async (interactive: boolean) => {
-    if (typeof window === 'undefined') {
-      return false;
-    }
-
-    if (interactive) {
-      hasUserInteractedRef.current = true;
-    }
-
-    const AudioContextConstructor =
-      window.AudioContext || (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-
-    if (!AudioContextConstructor) {
-      setOrderAlertAudioState('unsupported');
-      return false;
-    }
-
-    if (!audioContextRef.current) {
-      audioContextRef.current = new AudioContextConstructor();
-    }
-
-    const context = audioContextRef.current;
-
-    if (context.state === 'running') {
-      setOrderAlertAudioState('ready');
-      return true;
-    }
-
-    try {
-      if (context.state === 'suspended') {
-        await context.resume();
-      }
-      const nextAudioState = audioContextRef.current?.state === 'running' ? 'ready' : 'needs-gesture';
-      setOrderAlertAudioState(nextAudioState);
-      return nextAudioState === 'ready';
-    } catch {
-      setOrderAlertAudioState('needs-gesture');
-      return false;
-    }
+    const ok = await warmup();
+    setOrderAlertAudioState(getAudioState());
+    return ok;
   }, []);
 
   const playIncomingOrderAlert = useCallback(async () => {
@@ -2402,88 +2366,9 @@ export default function Home() {
       bc.close();
     } catch { /* BroadcastChannel not supported */ }
 
-    try {
-      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
-      if (!AudioCtx) return false;
-
-      if (!audioContextRef.current) {
-        audioContextRef.current = new AudioCtx();
-      }
-      const ctx = audioContextRef.current;
-      if (ctx.state === 'suspended') await ctx.resume();
-
-      // 1. Try WAV buffer playback
-      if (!audioBufferRef.current && audioArrayBufferRef.current) {
-        audioBufferRef.current = await ctx.decodeAudioData(audioArrayBufferRef.current.slice(0));
-      }
-      if (audioBufferRef.current) {
-        const source = ctx.createBufferSource();
-        source.buffer = audioBufferRef.current;
-        const gain = ctx.createGain();
-        gain.gain.value = 1.0;
-        source.connect(gain);
-        gain.connect(ctx.destination);
-        source.start(0);
-        return true;
-      }
-    } catch {
-      // WAV falló, seguimos con oscilador
-    }
-
-    // 2. Oscillator fallback (no necesita archivo WAV)
-    try {
-      if (audioContextRef.current) {
-        const ctx = audioContextRef.current;
-        if (ctx.state === 'suspended') await ctx.resume();
-        const osc = ctx.createOscillator();
-        osc.type = 'square';
-        osc.frequency.value = 880;
-
-        const gain = ctx.createGain();
-        gain.gain.value = 0.6;
-
-        osc.connect(gain);
-        gain.connect(ctx.destination);
-        osc.start(0);
-
-        let pulseState = true;
-        if (pulseIntervalRef.current) {
-          clearInterval(pulseIntervalRef.current);
-        }
-        pulseIntervalRef.current = setInterval(() => {
-          pulseState = !pulseState;
-          gain.gain.value = pulseState ? 0.6 : 0.0;
-        }, 400);
-
-        alarmSourceRef.current = osc;
-
-        // Clean up pulse interval after ~4s (one-shot alert, not loop)
-        setTimeout(() => {
-          if (pulseIntervalRef.current) {
-            clearInterval(pulseIntervalRef.current);
-            pulseIntervalRef.current = null;
-          }
-        }, 4000);
-
-        return true;
-      }
-    } catch {
-      // oscilador falló, último recurso: <audio>
-    }
-
-    // 3. Fallback extremo: <audio>
-    try {
-      const audioEl = document.getElementById('restaurant-alert-audio') as HTMLAudioElement | null;
-      if (audioEl) {
-        audioEl.currentTime = 0;
-        await audioEl.play();
-        return true;
-      }
-    } catch {
-      return false;
-    }
-
-    return false;
+    const result = play('notifica');
+    setOrderAlertAudioState(getAudioState());
+    return result === 'played';
   }, [isOrderAlertSoundEnabled]);
 
   // Alerta de apoyo continua: mientras haya una solicitud sin responder, suena
@@ -2533,145 +2418,14 @@ export default function Home() {
 
   const playOverdueAlert = useCallback(async () => {
     if (!isOrderAlertSoundEnabled) return false;
-
-    try {
-      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
-      if (!AudioCtx) return false;
-
-      if (!audioContextRef.current) {
-        audioContextRef.current = new AudioCtx();
-      }
-      const ctx = audioContextRef.current;
-      if (ctx.state === 'suspended') await ctx.resume();
-
-      // 1. Try dedicated rezagado WAV buffer
-      if (!overdueAudioBufferRef.current) {
-        if (!overdueAudioArrayBufferRef.current) {
-          try {
-            const res = await fetch('/sounds/rezagado.wav');
-            if (res.ok) {
-              overdueAudioArrayBufferRef.current = await res.arrayBuffer();
-            }
-          } catch {}
-        }
-        if (overdueAudioArrayBufferRef.current) {
-          overdueAudioBufferRef.current = await ctx.decodeAudioData(overdueAudioArrayBufferRef.current.slice(0));
-        }
-      }
-      if (overdueAudioBufferRef.current) {
-        const playBuffer = async () => {
-          const source = ctx.createBufferSource();
-          source.buffer = overdueAudioBufferRef.current!;
-          const gain = ctx.createGain();
-          gain.gain.value = 1.0;
-          source.connect(gain);
-          gain.connect(ctx.destination);
-          source.start(0);
-          return source;
-        };
-        const first = await playBuffer();
-        first.onended = () => { void playBuffer(); };
-        return true;
-      }
-    } catch {
-      // WAV falló, seguimos con oscilador
-    }
-
-    // 2. Oscillator fallback (doble tono grave, más largo que el alert normal)
-    try {
-      if (audioContextRef.current) {
-        const ctx = audioContextRef.current;
-        if (ctx.state === 'suspended') await ctx.resume();
-        const osc = ctx.createOscillator();
-        osc.type = 'square';
-        osc.frequency.value = 440;
-
-        const gain = ctx.createGain();
-        gain.gain.value = 0.7;
-
-        osc.connect(gain);
-        gain.connect(ctx.destination);
-        osc.start(0);
-
-        let pulseState = true;
-        if (pulseIntervalRef.current) {
-          clearInterval(pulseIntervalRef.current);
-        }
-        pulseIntervalRef.current = setInterval(() => {
-          pulseState = !pulseState;
-          gain.gain.value = pulseState ? 0.7 : 0.0;
-        }, 550);
-
-        alarmSourceRef.current = osc;
-
-        setTimeout(() => {
-          if (pulseIntervalRef.current) {
-            clearInterval(pulseIntervalRef.current);
-            pulseIntervalRef.current = null;
-          }
-        }, 5000);
-
-        return true;
-      }
-    } catch {
-      // oscilador falló, último recurso: <audio>
-    }
-
-    // 3. Fallback extremo: <audio>
-    try {
-      const audioEl = document.getElementById('restaurant-alert-audio') as HTMLAudioElement | null;
-      if (audioEl) {
-        audioEl.currentTime = 0;
-        await audioEl.play();
-        return true;
-      }
-    } catch {
-      return false;
-    }
-
-    return false;
+    const result = play('rezagado');
+    setOrderAlertAudioState(getAudioState());
+    return result === 'played';
   }, [isOrderAlertSoundEnabled]);
 
   const playChatPopSound = useCallback(async () => {
     if (!isOrderAlertSoundEnabled) return;
-
-    try {
-      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
-      if (!AudioCtx) return;
-
-      if (!audioContextRef.current) {
-        audioContextRef.current = new AudioCtx();
-      }
-      const ctx = audioContextRef.current;
-      if (ctx.state === 'suspended') await ctx.resume();
-
-      if (!chatMessageBufferRef.current && chatMessageArrayBufferRef.current) {
-        chatMessageBufferRef.current = await ctx.decodeAudioData(chatMessageArrayBufferRef.current.slice(0));
-      }
-      if (chatMessageBufferRef.current) {
-        const source = ctx.createBufferSource();
-        source.buffer = chatMessageBufferRef.current;
-        const gain = ctx.createGain();
-        gain.gain.value = 1.0;
-        source.connect(gain);
-        gain.connect(ctx.destination);
-        source.start(0);
-        return;
-      }
-    } catch (err) {
-      console.warn('Failed to play chat sound via Web Audio API', err);
-    }
-
-    try {
-      const audio = chatMessageAudioRef.current;
-      if (audio) {
-        audio.currentTime = 0;
-        audio.volume = 1.0;
-        await audio.play();
-      }
-    } catch (err) {
-      console.warn('Failed to play chat sound via fallback', err);
-    }
+    play('mensaje');
   }, [isOrderAlertSoundEnabled]);
 
   const handleOrderAlertSoundToggle = useCallback(
@@ -3496,9 +3250,7 @@ export default function Home() {
         if (!socket.connected) {
           socket.connect();
         }
-        if (audioContextRef.current?.state === 'suspended' && hasUserInteractedRef.current) {
-          void audioContextRef.current.resume();
-        }
+        void warmup();
         loadOrdersOnly();
         enqueueBillingRefetch(false);
       }
@@ -3537,23 +3289,18 @@ export default function Home() {
     }
   });
 
+  // Warmup global por gesto + cleanup del contexto de audio compartido.
   useEffect(() => {
     if (!isOrderAlertSoundEnabled || orderAlertAudioState === 'unsupported') {
       return;
     }
-
-    function unlockOrderAlertAudio() {
-      void warmOrderAlertAudio(true);
-    }
-
-    window.addEventListener('pointerdown', unlockOrderAlertAudio, { passive: true });
-    window.addEventListener('keydown', unlockOrderAlertAudio);
-
+    const uninstallWarmup = installWarmupListeners();
+    const uninstallVisibility = installVisibilityResumeListener();
     return () => {
-      window.removeEventListener('pointerdown', unlockOrderAlertAudio);
-      window.removeEventListener('keydown', unlockOrderAlertAudio);
+      uninstallWarmup();
+      uninstallVisibility();
     };
-  }, [isOrderAlertSoundEnabled, orderAlertAudioState, warmOrderAlertAudio]);
+  }, [isOrderAlertSoundEnabled, orderAlertAudioState]);
 
   useEffect(() => {
     if (orderAlertAudioState === 'ready') {
@@ -3563,18 +3310,8 @@ export default function Home() {
 
   useEffect(() => {
     return () => {
-      if (pulseIntervalRef.current) {
-        clearInterval(pulseIntervalRef.current);
-        pulseIntervalRef.current = null;
-      }
-      try { alarmSourceRef.current?.stop(); } catch { /* ya terminó */ }
-      alarmSourceRef.current = null;
-      if (!audioContextRef.current) {
-        return;
-      }
-
-      void audioContextRef.current.close();
-      audioContextRef.current = null;
+      stopAll();
+      reset();
     };
   }, []);
 
@@ -13915,7 +13652,6 @@ export default function Home() {
           </div>
         </div>
       )}
-      <audio id="restaurant-alert-audio" src="/sounds/notifica.wav" preload="auto" loop></audio>
     </main>
   );
 }

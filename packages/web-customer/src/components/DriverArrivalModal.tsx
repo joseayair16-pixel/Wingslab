@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { io } from 'socket.io-client';
 import { requestJson, readStoredSession } from '@sadel/shared';
 import { useStore } from '../store';
+import { useCustomerSounds } from '../hooks/useCustomerSounds';
 
 function formatCurrency(amount: number) {
   return '$' + Math.round(amount).toLocaleString('es-MX');
@@ -58,35 +59,12 @@ export default function DriverArrivalModal() {
   const [modalOpen, setModalOpen] = useState(false);
   const lastCheckedRef = useRef<Record<string, number>>({});
 
-  const playLlegueSound = () => {
-    try {
-      if (typeof window === 'undefined') return;
-      if (window.localStorage.getItem('customerAlertSoundEnabled') === 'false') return;
-
-      const audioEl = document.getElementById('customer-llegue-audio') as HTMLAudioElement | null;
-      if (audioEl) {
-        audioEl.currentTime = 0;
-        audioEl.volume = 1.0;
-        audioEl.play().catch(() => {});
-      } else {
-        const audio = new Audio('/sounds/llegue.wav');
-        audio.volume = 1.0;
-        audio.play().catch(() => {});
-      }
-    } catch (e) {
-      /* noop */
-    }
-    try {
-      if (navigator.vibrate) navigator.vibrate([800, 400, 800, 400, 800]);
-    } catch (e) {
-      /* noop */
-    }
-  };
+  const { playLlegue } = useCustomerSounds();
 
   const openArrivalModal = (order: DriverArrivedOrder) => {
     setArrivedOrder(order);
     setModalOpen(true);
-    playLlegueSound();
+    playLlegue();
     try {
       localStorage.setItem('sadel_persistent_modal', JSON.stringify({ type: 'driver_arrived', orderId: order.id }));
     } catch {}

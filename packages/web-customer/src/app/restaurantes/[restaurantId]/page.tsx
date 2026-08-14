@@ -109,6 +109,7 @@ type PublicRestaurantDetail = {
 };
 
 import { usePushNotifications } from '../../../hooks/usePushNotifications';
+import { useCustomerSounds } from '../../../hooks/useCustomerSounds';
 import { useCartStore, type CartItem } from '../../../store/cartStore';
 
 type CheckoutForm = {
@@ -509,10 +510,7 @@ export default function RestaurantPage({
     }
   }, []);
 
-  const customerAudioContextRef = useRef<AudioContext | null>(null);
-  const customerAudioBufferRef = useRef<AudioBuffer | null>(null);
-  const customerLlegueBufferRef = useRef<AudioBuffer | null>(null);
-  const chatMessageBufferRef = useRef<AudioBuffer | null>(null);
+  const { playAlert, playLlegue, playChat, unlock } = useCustomerSounds();
 
   const isChatOpenRef = useRef(isChatOpen);
   const selectedOrderIdRef = useRef(selectedOrderId);
@@ -596,178 +594,6 @@ export default function RestaurantPage({
       setSendingChatMessage(false);
     }
   };
-
-  const playCustomerAlertAudio = useCallback(() => {
-    try {
-      if (typeof window === 'undefined') return;
-      if (window.localStorage.getItem('customerAlertSoundEnabled') === 'false') return;
-
-      // HTML5 Audio fallback
-      const audioEl = document.getElementById('customer-alert-audio') as HTMLAudioElement | null;
-      if (audioEl) {
-        audioEl.currentTime = 0;
-        audioEl.play().catch(() => {});
-      }
-
-      // Web Audio API playing (extremely robust)
-      const context = customerAudioContextRef.current;
-      const buffer = customerAudioBufferRef.current;
-      if (context && buffer) {
-        if (context.state === 'suspended') {
-          context.resume().catch(() => {});
-        }
-        const source = context.createBufferSource();
-        source.buffer = buffer;
-        source.connect(context.destination);
-        source.start(0);
-      }
-    } catch (err) {
-      console.error('Error reproducing customer audio alert:', err);
-    }
-  }, []);
-
-  const playChatMessageSound = useCallback(() => {
-    try {
-      if (typeof window === 'undefined') return;
-      if (window.localStorage.getItem('customerAlertSoundEnabled') === 'false') return;
-
-      const audioEl = document.getElementById('chat-message-audio') as HTMLAudioElement | null;
-      if (audioEl) {
-        audioEl.currentTime = 0;
-        audioEl.volume = 1.0;
-        audioEl.play().catch(() => {});
-      }
-
-      const context = customerAudioContextRef.current;
-      const buffer = chatMessageBufferRef.current;
-      if (context && buffer) {
-        if (context.state === 'suspended') {
-          context.resume().catch(() => {});
-        }
-        const source = context.createBufferSource();
-        source.buffer = buffer;
-        const gain = context.createGain();
-        gain.gain.value = 1.0;
-        source.connect(gain);
-        gain.connect(context.destination);
-        source.start(0);
-      }
-    } catch (err) {
-      console.error('Error reproducing chat message sound:', err);
-    }
-  }, []);
-
-  const playCustomerLlegueSound = useCallback(() => {
-    try {
-      if (typeof window === 'undefined') return;
-      if (window.localStorage.getItem('customerAlertSoundEnabled') === 'false') return;
-
-      const audioEl = document.getElementById('customer-llegue-audio') as HTMLAudioElement | null;
-      if (audioEl) {
-        audioEl.currentTime = 0;
-        audioEl.volume = 1.0;
-        audioEl.play().catch(() => {});
-      }
-
-      const context = customerAudioContextRef.current;
-      const buffer = customerLlegueBufferRef.current;
-      if (context && buffer) {
-        if (context.state === 'suspended') {
-          context.resume().catch(() => {});
-        }
-        const source = context.createBufferSource();
-        source.buffer = buffer;
-        const gain = context.createGain();
-        gain.gain.value = 1.0;
-        source.connect(gain);
-        gain.connect(context.destination);
-        source.start(0);
-      }
-    } catch (err) {
-      console.error('Error reproducing llegue sound:', err);
-    }
-  }, []);
-
-  useEffect(() => {
-    const handleGlobalInteraction = () => {
-      const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
-      if (AudioContextClass && !customerAudioContextRef.current) {
-        const context = new AudioContextClass();
-        // Explicitly resume within the same gesture to satisfy Chrome's
-        // autoplay policy (avoids "The AudioContext was not allowed to start").
-        if (context.state === 'suspended') {
-          void context.resume().catch(() => {});
-        }
-        customerAudioContextRef.current = context;
-
-        fetch('/sounds/notifica.wav')
-          .then((res) => res.arrayBuffer())
-          .then((arr) => context.decodeAudioData(arr))
-          .then((buf) => {
-            customerAudioBufferRef.current = buf;
-            if (process.env.NODE_ENV !== 'production') {
-              console.log('[Web Audio API] notifica.wav loaded and decoded successfully.');
-            }
-          })
-          .catch((err) => {
-            console.error('[Web Audio API] Failed to load/decode notifica.wav:', err);
-          });
-
-        fetch('/sounds/mensaje.wav')
-          .then((res) => res.arrayBuffer())
-          .then((arr) => context.decodeAudioData(arr))
-          .then((buf) => {
-            chatMessageBufferRef.current = buf;
-            if (process.env.NODE_ENV !== 'production') {
-              console.log('[Web Audio API] mensaje.wav loaded and decoded successfully.');
-            }
-          })
-          .catch((err) => {
-            console.error('[Web Audio API] Failed to load/decode mensaje.wav:', err);
-          });
-
-        fetch('/sounds/llegue.wav')
-          .then((res) => res.arrayBuffer())
-          .then((arr) => context.decodeAudioData(arr))
-          .then((buf) => {
-            customerLlegueBufferRef.current = buf;
-            if (process.env.NODE_ENV !== 'production') {
-              console.log('[Web Audio API] llegue.wav loaded and decoded successfully.');
-            }
-          })
-          .catch((err) => {
-            console.error('[Web Audio API] Failed to load/decode llegue.wav:', err);
-          });
-      } else if (customerAudioContextRef.current && customerAudioContextRef.current.state === 'suspended') {
-        customerAudioContextRef.current.resume().catch(() => {});
-      }
-
-      // Silent unlock: play an inaudible oscillator to prime the audio engine
-      // without playing any actual .wav files (avoids spurious notification sounds on iOS)
-      if (customerAudioContextRef.current) {
-        try {
-          const ctx = customerAudioContextRef.current;
-          const osc = ctx.createOscillator();
-          const gain = ctx.createGain();
-          gain.gain.value = 0;
-          osc.connect(gain);
-          gain.connect(ctx.destination);
-          osc.start();
-          osc.stop(ctx.currentTime + 0.05);
-        } catch (e) {
-          // ignore
-        }
-      }
-    };
-    document.addEventListener('pointerdown', handleGlobalInteraction, { once: true, passive: true });
-    document.addEventListener('keydown', handleGlobalInteraction, { once: true, passive: true });
-
-    return () => {
-      document.removeEventListener('pointerdown', handleGlobalInteraction);
-      document.removeEventListener('keydown', handleGlobalInteraction);
-    };
-  }, []);
-
 
   const activeOrder = useMemo(() => {
     const item = activeOrderListItems[carouselIndex];
@@ -1482,7 +1308,7 @@ export default function RestaurantPage({
         if (eventName === 'order:cancellation-approved') {
           try {
             if (window.localStorage.getItem('customerAlertSoundEnabled') !== 'false') {
-              void playCustomerAlertAudio();
+              void playAlert();
             }
           } catch (e) {}
           const matchingOrder = activeOrderListItems.find((o) => o.id === payload.orderId)
@@ -1501,7 +1327,7 @@ export default function RestaurantPage({
         if (eventName === 'order:cancellation-rejected') {
           try {
             if (window.localStorage.getItem('customerAlertSoundEnabled') !== 'false') {
-              void playCustomerAlertAudio();
+              void playAlert();
             }
           } catch (e) {}
           const matchingOrder = activeOrderListItems.find((o) => o.id === payload.orderId)
@@ -1535,7 +1361,7 @@ export default function RestaurantPage({
         ) {
           try {
             if (window.localStorage.getItem('customerAlertSoundEnabled') !== 'false') {
-              void playCustomerLlegueSound();
+              void playLlegue();
             }
           } catch (e) {}
         }
@@ -1547,14 +1373,14 @@ export default function RestaurantPage({
         ) {
           try {
             if (window.localStorage.getItem('customerAlertSoundEnabled') !== 'false') {
-              void playCustomerAlertAudio();
+              void playAlert();
             }
           } catch (e) {}
         }
 
         if (eventName === 'order_chat:message_received') {
           if (window.localStorage.getItem('customerAlertSoundEnabled') !== 'false') {
-            void playChatMessageSound();
+            void playChat();
           }
 
           if (payload.orderId === selectedOrderIdRef.current) {
@@ -5924,10 +5750,6 @@ function triggerHaptic(pattern: number | number[] = 10) {
           </div>
         </div>
       )}
-
-      <audio id="customer-alert-audio" src="/sounds/notifica.wav" preload="auto"></audio>
-      <audio id="chat-message-audio" src="/sounds/mensaje.wav" preload="auto"></audio>
-      <audio id="customer-llegue-audio" src="/sounds/llegue.wav" preload="auto"></audio>
 
       <AuthModal
         isOpen={showAuthModal}

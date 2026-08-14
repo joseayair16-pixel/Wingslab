@@ -17,6 +17,13 @@ import {
   readStoredSession,
   requestJson,
   convertImageFileToDataUrl,
+  preload,
+  warmup,
+  play,
+  stopAll,
+  vibrate,
+  installWarmupListeners,
+  installVisibilityResumeListener,
 } from '@sadel/shared';
 
 type DriverAvailability = 'AVAILABLE' | 'BUSY' | 'OFFLINE';
@@ -529,12 +536,6 @@ export default function Home() {
 
   // Refs de audio de alarma estilo Uber y Screen Wake Lock
   const wakeLockRef = useRef<any>(null);
-  const audioCtxRef = useRef<AudioContext | null>(null);
-  const audioBufferRef = useRef<AudioBuffer | null>(null);
-  const audioArrayBufferRef = useRef<ArrayBuffer | null>(null);
-  const alarmSourceRef = useRef<AudioBufferSourceNode | OscillatorNode | null>(null);
-  const pulseIntervalRef = useRef<NodeJS.Timeout | null>(null);
-  const hasUserInteractedRef = useRef(false);
 
   // Buscar si hay un pedido asignado pendiente de aceptar (estilo Uber)
   const pendingAssignedOrder = pendingOrders.find((order) => {
@@ -594,172 +595,45 @@ export default function Home() {
     };
   }, [driverProfile?.availability]);
 
-  // Precargar el MP3 al montar (sin crear AudioContext; eso requiere gesto del usuario)
+  // Sistema de audio compartido: precarga, desbloqueo por gesto y alarma en bucle.
   useEffect(() => {
-    if (typeof window === 'undefined') return;
-    fetch('/sounds/notifica.wav')
-      .then((res) => res.arrayBuffer())
-      .then((buffer) => {
-        audioArrayBufferRef.current = buffer;
-      })
-      .catch(() => {
-        console.warn('[Audio] No se pudo precargar notifica.wav, se usará fallback <audio>');
-      });
-
+    preload('notifica');
+    const uninstallWarmup = installWarmupListeners();
+    const uninstallVisibility = installVisibilityResumeListener();
     return () => {
-      audioArrayBufferRef.current = null;
-      audioBufferRef.current = null;
+      uninstallWarmup();
+      uninstallVisibility();
+      stopAll();
     };
   }, []);
 
-  async function ensureAudioContextReady() {
-    if (typeof window === 'undefined') return null;
-    const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
-    if (!AudioCtx) return null;
-
-    let ctx = audioCtxRef.current;
-    if (!ctx) {
-      ctx = new AudioCtx();
-      audioCtxRef.current = ctx;
-    }
-
-    if (ctx.state === 'suspended') {
-      try {
-        await ctx.resume();
-      } catch {
-        return ctx;
-      }
-    }
-
-    if (!audioBufferRef.current && audioArrayBufferRef.current) {
-      try {
-        const decoded = await ctx.decodeAudioData(audioArrayBufferRef.current.slice(0));
-        audioBufferRef.current = decoded;
-      } catch {
-        // Si falla el decode, seguimos con fallback <audio>
-      }
-    }
-
-    // Exponer en window para IncomingOrderModal
-    if (typeof window !== 'undefined') {
-      (window as any).__sadelAudioCtx = ctx;
-      (window as any).__sadelAudioBuffer = audioBufferRef.current;
-    }
-
-    return ctx;
-  }
-
-  function playAlarmSound() {
-    stopAlarmSound(alarmSourceRef.current);
-
-    const ctx = audioCtxRef.current;
-    if (!ctx) return null;
-
-    ctx.resume();
-
-    try {
-      // 1. Intentar con el buffer WAV decodificado (suena mejor)
-      const buf = audioBufferRef.current;
-      if (buf) {
-        const source = ctx.createBufferSource();
-        source.buffer = buf;
-        source.loop = true;
-        const gain = ctx.createGain();
-        gain.gain.value = 1.0;
-        source.connect(gain);
-        gain.connect(ctx.destination);
-        source.start(0);
-        alarmSourceRef.current = source;
-        return source;
-      }
-    } catch {
-      // falla el WAV, seguimos con oscilador
-    }
-
-    // 2. Oscilador programático — NO depende de archivos externos
-    try {
-      const osc = ctx.createOscillator();
-      osc.type = 'square';
-      osc.frequency.value = 880;
-
-      const gain = ctx.createGain();
-      gain.gain.value = 0.6;
-
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-      osc.start(0);
-
-      // Pulsos rítmicos: alterna volumen cada 400ms (efecto de alarma)
-      let state = true;
-      pulseIntervalRef.current = setInterval(() => {
-        state = !state;
-        gain.gain.value = state ? 0.6 : 0.0;
-      }, 400);
-
-      alarmSourceRef.current = osc;
-      return osc;
-    } catch {
-      // falló el oscilador, último recurso: <audio>
-    }
-
-    // 3. Fallback extremo: <audio> (sujeto a autoplay policy)
-    const audioEl = document.getElementById('driver-alert-audio') as HTMLAudioElement | null;
-    if (audioEl) {
-      audioEl.loop = true;
-      audioEl.volume = 1.0;
-      audioEl.play().catch(() => {});
-    }
-    return null;
-  }
-
-  function stopAlarmSound(sourceNode: AudioBufferSourceNode | OscillatorNode | null) {
-    if (sourceNode) {
-      try { sourceNode.stop(); } catch (e) { /* ya terminó */ }
-    }
-    if (alarmSourceRef.current === sourceNode) {
-      alarmSourceRef.current = null;
-    }
-    if (pulseIntervalRef.current) {
-      clearInterval(pulseIntervalRef.current);
-      pulseIntervalRef.current = null;
-    }
-    const audioEl = document.getElementById('driver-alert-audio') as HTMLAudioElement | null;
-    if (audioEl) {
-      audioEl.pause();
-      audioEl.currentTime = 0;
-    }
-  }
-
-  // Alarma acústica (bucle sonar Uber) y vibración periódica ante nueva asignación
+  // Alarma acústica (bucle sonar Uber) y vibración periódica ante nueva asignación.
+  // El sonido lo reproduce ÚNICAMENTE este efecto; IncomingOrderModal ya no
+  // dispara audio para evitar el doble sonido.
   useEffect(() => {
     let vibrationInterval: NodeJS.Timeout | null = null;
-    let sourceNode: AudioBufferSourceNode | OscillatorNode | null = null;
-    let cancelled = false;
 
     if (pendingAssignedOrder) {
       if (process.env.NODE_ENV !== 'production') {
         console.log('[Alarm] New order assigned pending acceptance:', pendingAssignedOrder.id);
       }
 
-      // Ensure AudioContext is ready before playing alarm
-      void ensureAudioContextReady().finally(() => {
-        if (cancelled) return;
-        sourceNode = playAlarmSound();
+      // El AudioContext debe estar desbloqueado (gesto previo) para que suene.
+      void warmup().finally(() => {
+        play('notifica', { loop: true });
       });
 
       // Vibración física repetitiva en dispositivos Android
       if (typeof window !== 'undefined' && 'vibrate' in navigator) {
-        navigator.vibrate([850, 450, 850, 450]);
+        vibrate([850, 450, 850, 450]);
         vibrationInterval = setInterval(() => {
-          if (typeof window !== 'undefined' && 'vibrate' in navigator) {
-            navigator.vibrate([850, 450, 850, 450]);
-          }
+          vibrate([850, 450, 850, 450]);
         }, 2500);
       }
 
       // Respaldo: notificación del sistema vía Service Worker.
-      // Nota: si la app está en primer plano, el sonido del OS + mp3 se duplican.
-      // Por eso, solo mostramos notificación cuando la app está en segundo plano.
+      // Si la app está en primer plano, el sonido del OS + audio web se duplican,
+      // por eso solo mostramos notificación cuando la app está en segundo plano.
       if (document.visibilityState === 'hidden' && 'serviceWorker' in navigator && navigator.serviceWorker.controller) {
         try {
           navigator.serviceWorker.controller.postMessage({
@@ -775,7 +649,7 @@ export default function Home() {
         }
       }
     } else {
-      stopAlarmSound(null);
+      stopAll();
       if (vibrationInterval) {
         clearInterval(vibrationInterval);
       }
@@ -787,10 +661,7 @@ export default function Home() {
     }
 
     return () => {
-      cancelled = true;
-      stopAlarmSound(sourceNode);
-      // Por seguridad, detener cualquier fuente activa (evita duplicados por callbacks async)
-      stopAlarmSound(alarmSourceRef.current);
+      stopAll();
       if (vibrationInterval) {
         clearInterval(vibrationInterval);
       }
@@ -802,59 +673,9 @@ export default function Home() {
     };
   }, [pendingAssignedOrder?.id]);
 
-  // Reintentar sonido al volver a la pestaña SOLO si el pedido sigue sin aceptar
-  useEffect(() => {
-    if (!pendingAssignedOrder) return;
-    const onVisible = () => {
-      if (document.visibilityState === 'visible') {
-        const ctx = audioCtxRef.current;
-        if (ctx && ctx.state === 'suspended' && hasUserInteractedRef.current) {
-          ctx.resume();
-        }
-      }
-    };
-    document.addEventListener('visibilitychange', onVisible);
-    return () => document.removeEventListener('visibilitychange', onVisible);
-  }, [pendingAssignedOrder?.id, pendingAssignedOrder?.isAcceptedByDriver]);
-
-  // Precalentar AudioContext en cualquier interacción (touch, click, tecla)
-  useEffect(() => {
-    function onInteraction() {
-      warmupAudioContext();
-    }
-    window.addEventListener('pointerdown', onInteraction, { passive: true });
-    window.addEventListener('keydown', onInteraction);
-    return () => {
-      window.removeEventListener('pointerdown', onInteraction);
-      window.removeEventListener('keydown', onInteraction);
-    };
-  }, []);
-
-  function warmupAudioContext() {
-    // Solo se debe llamar desde un gesto del usuario (click/touch).
-    hasUserInteractedRef.current = true;
-    void ensureAudioContextReady().then((ctx) => {
-      if (!ctx) return;
-      if (ctx.state !== 'running') return;
-      // Crear y descartar un nodo silencioso para “desbloquear” algunos navegadores
-      try {
-        const silent = ctx.createOscillator();
-        silent.frequency.value = 0;
-        const gain = ctx.createGain();
-        gain.gain.value = 0;
-        silent.connect(gain);
-        gain.connect(ctx.destination);
-        silent.start();
-        silent.stop(0.01);
-      } catch {
-        // ignore
-      }
-    });
-  }
-
   const handleTouchStart = (e: React.TouchEvent) => {
-    // Precalentar AudioContext para que suene en background sin restricción de autoplay
-    warmupAudioContext();
+    // Precalentar AudioContext para que suene sin restricción de autoplay.
+    void warmup();
 
     if (window.scrollY === 0) {
       touchStartY.current = e.touches[0].clientY;
@@ -1398,7 +1219,32 @@ export default function Home() {
 
       const existingSub = await registration.pushManager.getSubscription();
       if (existingSub) {
-        await existingSub.unsubscribe();
+        // Reutilizamos la suscripción existente: recrearla en cada carga mata la
+        // push en iOS y acumula endpoints huérfanos. Solo la re-creamos si la
+        // suscripción quedó inservible (p. ej. VAPID distinto en el servidor).
+        const subJson: any = existingSub.toJSON();
+        const existingKey = subJson && typeof subJson === 'object' ? subJson.keys?.p256dh : undefined;
+        if (!existingKey) {
+          try {
+            await existingSub.unsubscribe();
+          } catch { /* noop */ }
+        } else {
+          const subResponse = await fetch(`${apiBase}/notifications/subscribe`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${tokenToUse}`
+            },
+            body: JSON.stringify(existingSub)
+          });
+          if (subResponse.ok) {
+            if (process.env.NODE_ENV !== 'production') {
+              console.log('Push subscription already active, re-synced to server');
+            }
+            return { ok: true };
+          }
+          return { ok: false, reason: 'SUBSCRIBE_FAILED' };
+        }
       }
 
       const subscription = await registration.pushManager.subscribe({
@@ -2321,7 +2167,7 @@ export default function Home() {
       onTouchStart={handleTouchStart}
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
-      onClick={warmupAudioContext}
+      onClick={() => void warmup()}
     >
       <PushEnableBanner
         visible={Boolean(token && sessionUser && sessionUser.role === 'DRIVER')}
@@ -4868,8 +4714,6 @@ export default function Home() {
       )}
 
 
-
-      <audio id="driver-alert-audio" src="/sounds/notifica.wav" preload="auto" loop></audio>
 
       {/* ==========================================
           MODAL DE PAGO
