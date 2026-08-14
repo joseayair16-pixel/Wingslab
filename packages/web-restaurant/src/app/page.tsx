@@ -378,6 +378,187 @@ type ProductDraft = {
   optionGroups?: ProductOptionGroup[];
 };
 
+function cloneOptionGroups(groups: ProductOptionGroup[]): ProductOptionGroup[] {
+  return groups.map((group) => ({
+    ...group,
+    options: (group.options || []).map((option) => ({ ...option })),
+  }));
+}
+
+function buildEmptyProductDraft(
+  categoryId: string,
+  template?: {
+    sellBy?: ProductDraft['sellBy'];
+    unitPrice?: string;
+    minWeightG?: string;
+    maxWeightG?: string;
+    stepWeightG?: string;
+    weightPresets?: number[];
+    imagePosition?: string;
+    imageZoom?: number;
+    isAdultOnly?: boolean;
+    preparationTime?: string;
+    optionGroups?: ProductOptionGroup[];
+  },
+): ProductDraft {
+  return {
+    id: undefined,
+    categoryId,
+    name: '',
+    description: '',
+    price: '',
+    discountPrice: '',
+    sellBy: template?.sellBy || 'UNIT',
+    unitPrice: template?.unitPrice || '',
+    minWeightG: template?.minWeightG || '100',
+    maxWeightG: template?.maxWeightG || '5000',
+    stepWeightG: template?.stepWeightG || '100',
+    weightPresets: template?.weightPresets?.length ? [...template.weightPresets] : [100, 200, 300, 500, 1000],
+    image: '',
+    images: [],
+    imagePosition: template?.imagePosition || '50% 50%',
+    imageZoom: template?.imageZoom || 100,
+    isAdultOnly: template?.isAdultOnly ?? false,
+    preparationTime: template?.preparationTime || '15',
+    optionGroups: template?.optionGroups ? cloneOptionGroups(template.optionGroups) : [],
+  };
+}
+
+type ImportFieldKey = 'name' | 'price' | 'category' | 'sellBy' | 'description' | 'discountPrice' | 'image';
+
+const IMPORT_FIELD_LABELS: Record<ImportFieldKey, string> = {
+  name: 'Nombre',
+  price: 'Precio',
+  category: 'Categoría',
+  sellBy: 'Tipo de venta',
+  description: 'Descripción',
+  discountPrice: 'Precio especial',
+  image: 'Imagen (URL)',
+};
+
+const IMPORT_FIELD_ORDER: ImportFieldKey[] = ['name', 'price', 'category', 'sellBy', 'description', 'discountPrice', 'image'];
+
+const IMPORT_COLUMN_KEYWORDS: Record<ImportFieldKey, string[]> = {
+  name: ['nombre', 'name', 'platillo', 'plato', 'producto', 'item', 'articulo', 'artículo'],
+  price: ['precio', 'price', 'precio pieza', 'precio por pieza'],
+  category: ['categoria', 'category', 'categoría', 'seccion', 'sección'],
+  sellBy: ['tipo', 'tipo de venta', 'venta', 'sell by', 'unidad', 'peso'],
+  description: ['descripcion', 'description', 'descripción', 'detalle', 'detalles', 'des'],
+  discountPrice: ['precio especial', 'descuento', 'discount', 'precio oferta', 'precio promocion'],
+  image: ['imagen', 'image', 'foto', 'url', 'imagen url', 'foto url', 'url imagen'],
+};
+
+type CsvDelimiter = ',' | ';' | '\t';
+
+function guessCsvDelimiter(text: string): CsvDelimiter {
+  const sample = text.slice(0, 4000);
+  const commaCount = (sample.match(/,/g) || []).length;
+  const semicolonCount = (sample.match(/;/g) || []).length;
+  const tabCount = (sample.match(/\t/g) || []).length;
+  if (semicolonCount > commaCount && semicolonCount > 0) return ';';
+  if (tabCount > commaCount && tabCount > 0) return '\t';
+  return ',';
+}
+
+function parseCsvRows(text: string, delimiter: CsvDelimiter): string[][] {
+  const rows: string[][] = [];
+  let current: string[] = [];
+  let field = '';
+  let inQuotes = false;
+
+  const pushField = () => {
+    current.push(field);
+    field = '';
+  };
+  const pushRow = () => {
+    pushField();
+    rows.push(current);
+    current = [];
+  };
+
+  for (let i = 0; i < text.length; i += 1) {
+    const char = text[i];
+    if (inQuotes) {
+      if (char === '"') {
+        if (text[i + 1] === '"') {
+          field += '"';
+          i += 1;
+        } else {
+          inQuotes = false;
+        }
+      } else {
+        field += char;
+      }
+    } else if (char === '"') {
+      inQuotes = true;
+    } else if (char === delimiter) {
+      pushField();
+    } else if (char === '\n' || char === '\r') {
+      if (char === '\r' && text[i + 1] === '\n') i += 1;
+      if (field.trim() !== '' || current.length > 0) pushRow();
+    } else {
+      field += char;
+    }
+  }
+  if (field.trim() !== '' || current.length > 0) pushRow();
+
+  return rows.filter((row) => row.some((cell) => cell.trim() !== ''));
+}
+
+function detectCsvHeaderRow(firstRow: string[]): boolean {
+  const keywords = new Set(Object.values(IMPORT_COLUMN_KEYWORDS).flat().map((word) => word.trim().toLowerCase()));
+  return firstRow.some((cell) => keywords.has(cell.trim().toLowerCase()));
+}
+
+function autoMapImportColumns(headerRow: string[]): Record<ImportFieldKey, number | undefined> {
+  const map: Record<ImportFieldKey, number | undefined> = {
+    name: undefined,
+    price: undefined,
+    category: undefined,
+    sellBy: undefined,
+    description: undefined,
+    discountPrice: undefined,
+    image: undefined,
+  };
+
+  if (headerRow.length === 0) {
+    map.name = 0;
+    map.price = 1;
+    return map;
+  }
+
+  const normalized = headerRow.map((cell) => cell.trim().toLowerCase());
+  (Object.keys(IMPORT_COLUMN_KEYWORDS) as ImportFieldKey[]).forEach((field) => {
+    const index = normalized.findIndex((cell) => IMPORT_COLUMN_KEYWORDS[field].includes(cell));
+    if (index >= 0) map[field] = index;
+  });
+
+  if (map.name === undefined) map.name = 0;
+  if (map.price === undefined) {
+    map.price = map.name === 0 ? 1 : 0;
+  }
+
+  return map;
+}
+
+function parseImportPrice(cell: string, delimiter: CsvDelimiter): number | null {
+  let value = cell.trim();
+  if (!value) return null;
+  if (delimiter === ';' || delimiter === '\t') {
+    const hasDot = value.includes('.');
+    const hasComma = value.includes(',');
+    if (hasComma && hasDot) {
+      value = value.replace(/\./g, '').replace(',', '.');
+    } else if (hasComma) {
+      value = value.replace(',', '.');
+    }
+  } else {
+    value = value.replace(/,/g, '');
+  }
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
 const defaultApiBase = 'https://sadel-production.up.railway.app';
 function getCanonicalCustomerUrl(): string {
   return 'https://pideloporsadel.app';
@@ -1012,6 +1193,7 @@ export default function Home() {
   const [processingProductImage, setProcessingProductImage] = useState(false);
   const [productImageValidationError, setProductImageValidationError] = useState('');
   const [activeAvailabilityProductId, setActiveAvailabilityProductId] = useState<string | null>(null);
+  const [continueAfterSave, setContinueAfterSave] = useState(false);
   const [selectedWeekOffset, setSelectedWeekOffset] = useState(0);
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
@@ -1053,6 +1235,34 @@ export default function Home() {
     isAdultOnly: false,
     preparationTime: '15',
   });
+  const [productConfigInherited, setProductConfigInherited] = useState(false);
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+  const [importText, setImportText] = useState('');
+  const [importHasHeader, setImportHasHeader] = useState(false);
+  const [importColumnMap, setImportColumnMap] = useState<Record<ImportFieldKey, number | undefined>>({
+    name: 0,
+    price: 1,
+    category: 2,
+    sellBy: 3,
+    description: 4,
+    discountPrice: 5,
+    image: 6,
+  });
+  const [importDefaultCategoryId, setImportDefaultCategoryId] = useState('');
+  const [importCreateMissingCategories, setImportCreateMissingCategories] = useState(true);
+  const [importingProducts, setImportingProducts] = useState(false);
+  const [importResult, setImportResult] = useState<{
+    created: number;
+    skipped: number;
+    errors: { index: number; name: string; message: string }[];
+  } | null>(null);
+  const [storeViewMode, setStoreViewMode] = useState<'cards' | 'list'>('cards');
+  const [storeSearchQuery, setStoreSearchQuery] = useState('');
+  const [isSelectionMode, setIsSelectionMode] = useState(false);
+  const [selectedProductIds, setSelectedProductIds] = useState<Set<string>>(new Set());
+  const [bulkCategoryTargetId, setBulkCategoryTargetId] = useState('');
+  const [bulkActionLoading, setBulkActionLoading] = useState(false);
+  const [isBulkDeleteModalOpen, setIsBulkDeleteModalOpen] = useState(false);
   const [isCoverImageModalOpen, setIsCoverImageModalOpen] = useState(false);
   const [coverImageDraft, setCoverImageDraft] = useState('');
   const [coverImageValidationError, setCoverImageValidationError] = useState('');
@@ -1333,6 +1543,22 @@ export default function Home() {
     startPosition: string;
   }>({ isDragging: false, startX: 0, startY: 0, startPosition: '50% 50%' });
   const cropContainerRef = useRef<HTMLDivElement | null>(null);
+  const lastProductConfigRef = useRef<{
+    sellBy: ProductDraft['sellBy'];
+    unitPrice: string;
+    minWeightG: string;
+    maxWeightG: string;
+    stepWeightG: string;
+    weightPresets: number[];
+    imagePosition: string;
+    imageZoom: number;
+    isAdultOnly: boolean;
+    preparationTime: string;
+    optionGroups: ProductOptionGroup[];
+  } | null>(null);
+  const productNameInputRef = useRef<HTMLInputElement | null>(null);
+  const productPriceInputRef = useRef<HTMLInputElement | null>(null);
+  const productModalScrollRef = useRef<HTMLDivElement | null>(null);
 
   const handleTouchStart = (e: React.TouchEvent) => {
     void warmOrderAlertAudio(true);
@@ -1937,26 +2163,7 @@ export default function Home() {
     setLogoDraft('');
     setLogoValidationError('');
     setLogoPreviewError(false);
-      setProductDraft({
-        id: undefined,
-        categoryId: categories[0]?.id || '',
-        name: '',
-        description: '',
-        price: '',
-        discountPrice: '',
-        sellBy: 'UNIT',
-        unitPrice: '',
-        minWeightG: '100',
-        maxWeightG: '5000',
-        stepWeightG: '100',
-        weightPresets: [100, 200, 300, 500, 1000],
-        image: '',
-        images: [],
-        imagePosition: '50% 50%',
-        imageZoom: 100,
-        isAdultOnly: false,
-        preparationTime: '15',
-      });
+      setProductDraft(buildEmptyProductDraft(categories[0]?.id || ''));
     promptedIncomingOrderIdsRef.current = [];
     resolvedIncomingOrderIdsRef.current = [];
     autoRejectingOrderIdsRef.current = [];
@@ -4208,32 +4415,65 @@ export default function Home() {
 
   function openProductModal(categoryId?: string) {
     setProductImageValidationError('');
+    const template = lastProductConfigRef.current || undefined;
+    setProductDraft(buildEmptyProductDraft(categoryId || categories[0]?.id || '', template));
+    setProductConfigInherited(Boolean(template));
+    setIsProductModalOpen(true);
+  }
+
+  function openDuplicateProductModal(product: ProductItem) {
+    setProductImageValidationError('');
+    setProductConfigInherited(false);
     setProductDraft({
       id: undefined,
-      categoryId: categoryId || categories[0]?.id || '',
-      name: '',
-      description: '',
-      price: '',
-      discountPrice: '',
-      sellBy: 'UNIT',
-      unitPrice: '',
-      minWeightG: '100',
-      maxWeightG: '5000',
-      stepWeightG: '100',
-      weightPresets: [100, 200, 300, 500, 1000],
-      image: '',
-      images: [],
-      imagePosition: '50% 50%',
-      imageZoom: 100,
-      isAdultOnly: false,
-      preparationTime: '15',
-      optionGroups: [],
+      categoryId: product.categoryId || product.category?.id || '',
+      name: `${product.name} (Copia)`,
+      description: product.description,
+      price: String(product.price),
+      discountPrice: product.discountPrice ? String(product.discountPrice) : '',
+      sellBy: product.sellBy || 'UNIT',
+      unitPrice: product.unitPrice ? String(product.unitPrice) : '',
+      minWeightG: product.minWeightG ? String(product.minWeightG) : '100',
+      maxWeightG: product.maxWeightG ? String(product.maxWeightG) : '5000',
+      stepWeightG: product.stepWeightG ? String(product.stepWeightG) : '100',
+      weightPresets: product.weightPresets || [100, 200, 300, 500, 1000],
+      image: product.image || '',
+      images: product.images?.length ? product.images : (product.image ? [product.image] : []),
+      imagePosition: product.imagePosition || '50% 50%',
+      imageZoom: product.imageZoom || 100,
+      isAdultOnly: product.isAdultOnly || false,
+      preparationTime: String(product.preparationTime),
+      optionGroups: product.optionGroups || [],
     });
     setIsProductModalOpen(true);
+
+    if (token) {
+      void requestJson<SuccessResponse<ProductItem>>({
+        apiBase,
+        path: `/restaurant-panel/productos/${product.id}`,
+        token,
+        fallbackMessage: 'No se pudieron cargar los detalles del producto.',
+      }).then((response) => {
+        if (response.success && response.data) {
+          setProductDraft((current) => {
+            if (!current.id) {
+              return {
+                ...current,
+                optionGroups: response.data.optionGroups || [],
+              };
+            }
+            return current;
+          });
+        }
+      }).catch((err) => {
+        console.error('Error fetching full product details:', err);
+      });
+    }
   }
 
   function openEditProductModal(product: ProductItem) {
     setProductImageValidationError('');
+    setProductConfigInherited(false);
     setProductDraft({
       id: product.id,
       categoryId: product.categoryId || product.category?.id || '',
@@ -4586,31 +4826,25 @@ export default function Home() {
         fallbackMessage: 'No se pudo crear el producto.',
       });
 
-      setIsProductModalOpen(false);
-      setProductDraft({
-        id: undefined,
-        categoryId: categories[0]?.id || '',
-        name: '',
-        description: '',
-        price: '',
-        discountPrice: '',
-        sellBy: 'UNIT',
-        unitPrice: '',
-        minWeightG: '100',
-        maxWeightG: '5000',
-        stepWeightG: '100',
-        weightPresets: [100, 200, 300, 500, 1000],
-        image: '',
-        images: [],
-        imagePosition: '50% 50%',
-        imageZoom: 100,
-        isAdultOnly: false,
-        preparationTime: '15',
-      });
+      const publishedCategoryId = productDraft.categoryId;
+      storeLastProductConfig(productDraft);
       setProductImageValidationError('');
       await loadDashboard();
-      pushToast('success', 'Producto creado', 'El nuevo producto ya aparece en tu menu.');
-      setShowSaveSuccessModal(true);
+
+      if (continueAfterSave) {
+        setProductDraft(buildEmptyProductDraft(publishedCategoryId, lastProductConfigRef.current || undefined));
+        setProductConfigInherited(true);
+        pushToast('success', 'Producto creado', 'Producto publicado. Listo para el siguiente.');
+        requestAnimationFrame(() => {
+          productModalScrollRef.current?.scrollTo({ top: 0 });
+          productNameInputRef.current?.focus();
+        });
+      } else {
+        setIsProductModalOpen(false);
+        setProductDraft(buildEmptyProductDraft(categories[0]?.id || ''));
+        pushToast('success', 'Producto creado', 'El nuevo producto ya aparece en tu menu.');
+        setShowSaveSuccessModal(true);
+      }
     } catch (requestError) {
       const message = getRequestErrorMessage(requestError, 'No se pudo crear el producto.');
       setError(message);
@@ -4684,27 +4918,9 @@ export default function Home() {
         fallbackMessage: 'No se pudo actualizar el producto.',
       });
 
+      storeLastProductConfig(productDraft);
       setIsProductModalOpen(false);
-      setProductDraft({
-        id: undefined,
-        categoryId: categories[0]?.id || '',
-        name: '',
-        description: '',
-        price: '',
-        discountPrice: '',
-        sellBy: 'UNIT',
-        unitPrice: '',
-        minWeightG: '100',
-        maxWeightG: '5000',
-        stepWeightG: '100',
-        weightPresets: [100, 200, 300, 500, 1000],
-        image: '',
-        images: [],
-        imagePosition: '50% 50%',
-        imageZoom: 100,
-        isAdultOnly: false,
-        preparationTime: '15',
-      });
+      setProductDraft(buildEmptyProductDraft(categories[0]?.id || ''));
       setProductImageValidationError('');
       await loadDashboard();
       pushToast('success', 'Producto actualizado', 'Los cambios del producto ya aparecen en tu menu.');
@@ -5103,6 +5319,461 @@ export default function Home() {
       products: products.filter((product) => product.categoryId === category.id),
     }));
   }, [categories, products]);
+
+  const canSubmitProduct = Boolean(
+    productDraft.categoryId &&
+      productDraft.name.trim() &&
+      productDraft.description.trim() &&
+      productDraft.price.trim() &&
+      !getImageValidationMessage(productDraft.image.trim(), 'product'),
+  );
+
+  function storeLastProductConfig(draft: ProductDraft) {
+    lastProductConfigRef.current = {
+      sellBy: draft.sellBy,
+      unitPrice: draft.unitPrice,
+      minWeightG: draft.minWeightG,
+      maxWeightG: draft.maxWeightG,
+      stepWeightG: draft.stepWeightG,
+      weightPresets: draft.weightPresets,
+      imagePosition: draft.imagePosition || '50% 50%',
+      imageZoom: draft.imageZoom || 100,
+      isAdultOnly: draft.isAdultOnly,
+      preparationTime: draft.preparationTime,
+      optionGroups: draft.optionGroups ? cloneOptionGroups(draft.optionGroups) : [],
+    };
+  }
+
+  function resetInheritedProductConfig() {
+    lastProductConfigRef.current = null;
+    setProductConfigInherited(false);
+    setProductDraft((current) => ({
+      ...current,
+      sellBy: 'UNIT',
+      unitPrice: '',
+      minWeightG: '100',
+      maxWeightG: '5000',
+      stepWeightG: '100',
+      weightPresets: [100, 200, 300, 500, 1000],
+      imagePosition: '50% 50%',
+      imageZoom: 100,
+      isAdultOnly: false,
+      preparationTime: '15',
+      optionGroups: [],
+    }));
+  }
+
+  function submitProductNow() {
+    if (!canSubmitProduct || creatingProduct || savingProductChanges || processingProductImage) {
+      return;
+    }
+    void (productDraft.id ? saveProductChanges() : createProduct());
+  }
+
+  useEffect(() => {
+    if (isProductModalOpen) {
+      productModalScrollRef.current?.scrollTo({ top: 0 });
+      productNameInputRef.current?.focus();
+    }
+  }, [isProductModalOpen]);
+
+  const importDelimiter: CsvDelimiter = importText ? guessCsvDelimiter(importText) : ',';
+  const importRawRows = useMemo(() => parseCsvRows(importText, importDelimiter), [importText, importDelimiter]);
+  const importHeaderRow = importHasHeader ? (importRawRows[0] || []) : [];
+  const importDataRows = useMemo(
+    () => (importHasHeader ? importRawRows.slice(1) : importRawRows),
+    [importHasHeader, importRawRows],
+  );
+  const importColumnCount = useMemo(
+    () => importRawRows.reduce((max, row) => Math.max(max, row.length), 0),
+    [importRawRows],
+  );
+  const importCategoryIdByName = useMemo(() => {
+    const map = new Map<string, string>();
+    categories.forEach((category) => {
+      const key = category.name.trim().toLowerCase();
+      if (key && !map.has(key)) {
+        map.set(key, category.id);
+      }
+    });
+    return map;
+  }, [categories]);
+
+  useEffect(() => {
+    if (!isImportModalOpen || !importText.trim()) {
+      return;
+    }
+    const rows = parseCsvRows(importText, guessCsvDelimiter(importText));
+    if (rows.length === 0) {
+      return;
+    }
+    const hasHeader = detectCsvHeaderRow(rows[0]);
+    setImportHasHeader(hasHeader);
+    setImportColumnMap(autoMapImportColumns(hasHeader ? rows[0] : []));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [importText, isImportModalOpen]);
+
+  type ImportPreviewRow = {
+    rowIndex: number;
+    name: string;
+    price: number | null;
+    discountPrice: number | null;
+    description: string;
+    sellBy: 'UNIT' | 'WEIGHT';
+    image: string;
+    categoryTargetId: string;
+    willCreateCategory: boolean;
+    categoryLabel: string;
+    errors: string[];
+    isValid: boolean;
+  };
+
+  const importPreview = useMemo<ImportPreviewRow[]>(() => {
+    return importDataRows.map((row, rowIndex) => {
+      const cell = (field: ImportFieldKey): string => {
+        const index = importColumnMap[field];
+        return index !== undefined ? (row[index] ?? '').trim() : '';
+      };
+
+      const errors: string[] = [];
+      const name = cell('name');
+      const price = parseImportPrice(cell('price'), importDelimiter);
+      const description = cell('description') || name;
+      const categoryName = cell('category');
+      const discountPrice = parseImportPrice(cell('discountPrice'), importDelimiter);
+      const sellByCell = cell('sellBy').toLowerCase();
+      const sellBy: 'UNIT' | 'WEIGHT' =
+        sellByCell.includes('peso') || sellByCell.includes('weight') || sellByCell.includes('kg')
+          ? 'WEIGHT'
+          : 'UNIT';
+      const image = cell('image');
+
+      if (!name.trim()) {
+        errors.push('Falta el nombre');
+      } else if (name.trim().length < 2) {
+        errors.push('Nombre muy corto');
+      }
+      if (price === null) {
+        errors.push('Precio inválido o vacío');
+      } else if (price <= 0) {
+        errors.push('El precio debe ser mayor a 0');
+      }
+      if (description.trim().length < 5) {
+        errors.push('Descripción muy corta');
+      }
+      if (image) {
+        try {
+          new URL(image);
+        } catch {
+          errors.push('URL de imagen inválida');
+        }
+      }
+
+      let categoryTargetId = '';
+      let willCreateCategory = false;
+      let categoryLabel = '';
+      if (categoryName) {
+        const existingId = importCategoryIdByName.get(categoryName.trim().toLowerCase());
+        if (existingId) {
+          categoryTargetId = existingId;
+          categoryLabel = categoryName.trim();
+        } else if (importCreateMissingCategories) {
+          willCreateCategory = true;
+          categoryLabel = categoryName.trim();
+        } else {
+          errors.push(`Categoría no existe: ${categoryName.trim()}`);
+          categoryLabel = categoryName.trim();
+        }
+      } else if (importDefaultCategoryId) {
+        categoryTargetId = importDefaultCategoryId;
+        categoryLabel = 'Predeterminada';
+      } else {
+        errors.push('Selecciona una categoría por defecto o añade la columna Categoría');
+        categoryLabel = '';
+      }
+
+      return {
+        rowIndex,
+        name: name.trim(),
+        price,
+        discountPrice,
+        description: description.trim(),
+        sellBy,
+        image,
+        categoryTargetId,
+        willCreateCategory,
+        categoryLabel,
+        errors,
+        isValid: errors.length === 0 && Boolean(categoryTargetId),
+      };
+    });
+  }, [importDataRows, importColumnMap, importDelimiter, importCreateMissingCategories, importDefaultCategoryId, importCategoryIdByName]);
+
+  const importValidCount = importPreview.filter((row) => row.isValid).length;
+  const importErrorCount = importPreview.length - importValidCount;
+
+  function openImportModal() {
+    setImportText('');
+    setImportHasHeader(false);
+    setImportColumnMap({
+      name: 0,
+      price: 1,
+      category: 2,
+      sellBy: 3,
+      description: 4,
+      discountPrice: 5,
+      image: 6,
+    });
+    setImportDefaultCategoryId(categories[0]?.id || '');
+    setImportCreateMissingCategories(true);
+    setImportResult(null);
+    setIsImportModalOpen(true);
+  }
+
+  async function handleImportSubmit() {
+    if (!token || importingProducts) {
+      return;
+    }
+
+    const rowsToImport = importPreview.filter((row) => row.isValid);
+    if (rowsToImport.length === 0) {
+      return;
+    }
+
+    setImportingProducts(true);
+    setError('');
+
+    try {
+      const missingCategoryNames = [...new Set(
+        importPreview.filter((row) => row.willCreateCategory).map((row) => row.categoryLabel),
+      )].filter((name) => name !== '');
+
+      const createdCategoryIds = new Map<string, string>();
+      for (const name of missingCategoryNames) {
+        const response = await requestJson<SuccessResponse<CategoryItem>>({
+          apiBase,
+          path: '/restaurant-panel/categorias',
+          token,
+          options: {
+            method: 'POST',
+            body: JSON.stringify({ name, description: null, order: categories.length }),
+          },
+          fallbackMessage: `No se pudo crear la categoría "${name}".`,
+        });
+        if (response.success && response.data?.id) {
+          createdCategoryIds.set(name.toLowerCase(), response.data.id);
+        }
+      }
+
+      const productsPayload = rowsToImport.map((row) => {
+        const categoryId = row.willCreateCategory
+          ? createdCategoryIds.get(row.categoryLabel.toLowerCase()) || ''
+          : row.categoryTargetId;
+        return {
+          categoryId,
+          name: row.name.slice(0, 200),
+          description: row.description.slice(0, 500),
+          price: row.price as number,
+          discountPrice: row.discountPrice,
+          sellBy: row.sellBy,
+          unitPrice: row.sellBy === 'WEIGHT' ? (row.price as number) : null,
+          minWeightG: row.sellBy === 'WEIGHT' ? 100 : null,
+          maxWeightG: row.sellBy === 'WEIGHT' ? 5000 : null,
+          stepWeightG: row.sellBy === 'WEIGHT' ? 100 : null,
+          weightPresets: row.sellBy === 'WEIGHT' ? [100, 200, 300, 500, 1000] : null,
+          image: row.image || null,
+          imagePosition: null,
+          imageZoom: null,
+          isAvailable: true,
+          isAdultOnly: false,
+          preparationTime: 15,
+          allergens: [],
+        };
+      });
+
+      const response = await requestJson<SuccessResponse<{
+        created: number;
+        skipped: number;
+        products: ProductItem[];
+        errors: { index: number; name: string; message: string }[];
+      }>>({
+        apiBase,
+        path: '/restaurant-panel/productos/batch',
+        token,
+        options: {
+          method: 'POST',
+          body: JSON.stringify({ products: productsPayload }),
+        },
+        fallbackMessage: 'No se pudo importar la lista de productos.',
+      });
+
+      if (response.success && response.data) {
+        setImportResult(response.data);
+        if (response.data.created > 0) {
+          await loadDashboard();
+          pushToast('success', 'Menú importado', `${response.data.created} producto${response.data.created === 1 ? '' : 's'} importado${response.data.created === 1 ? '' : 's'}.`);
+        }
+        if (response.data.skipped > 0) {
+          pushToast('info', 'Importación parcial', `${response.data.skipped} fila${response.data.skipped === 1 ? '' : 's'} con errores. Revisa el detalle.`);
+        }
+      }
+    } catch (requestError) {
+      const message = getRequestErrorMessage(requestError, 'No se pudo importar la lista de productos.');
+      setError(message);
+      pushToast('error', 'Importación fallida', message);
+    } finally {
+      setImportingProducts(false);
+    }
+  }
+
+  const filteredStoreCategories = useMemo(() => {
+    const query = storeSearchQuery.trim().toLowerCase();
+    if (!query) {
+      return storeCategories;
+    }
+    return storeCategories
+      .map((category) => ({
+        ...category,
+        products: category.products.filter(
+          (product) =>
+            product.name.toLowerCase().includes(query) ||
+            (product.description || '').toLowerCase().includes(query),
+        ),
+      }))
+      .filter((category) => category.products.length > 0);
+  }, [storeCategories, storeSearchQuery]);
+
+  const categoryNameById = useMemo(() => {
+    const map = new Map<string, string>();
+    categories.forEach((category) => map.set(category.id, category.name));
+    return map;
+  }, [categories]);
+
+  const flatProductRows = useMemo(() => {
+    const query = storeSearchQuery.trim().toLowerCase();
+    const items = products.map((product) => ({
+      product,
+      categoryName: categoryNameById.get(product.categoryId) || 'Sin categoría',
+    }));
+    if (!query) {
+      return items;
+    }
+    return items.filter(
+      ({ product }) =>
+        product.name.toLowerCase().includes(query) ||
+        (product.description || '').toLowerCase().includes(query),
+    );
+  }, [products, storeSearchQuery, categoryNameById]);
+
+  const selectedProductCount = selectedProductIds.size;
+
+  function toggleProductSelection(productId: string) {
+    setSelectedProductIds((current) => {
+      const next = new Set(current);
+      if (next.has(productId)) {
+        next.delete(productId);
+      } else {
+        next.add(productId);
+      }
+      return next;
+    });
+  }
+
+  function exitSelectionMode() {
+    setIsSelectionMode(false);
+    setSelectedProductIds(new Set());
+  }
+
+  function enterSelectionMode() {
+    setSelectedProductIds(new Set());
+    setIsSelectionMode(true);
+  }
+
+  async function handleBulkAvailability(isAvailable: boolean) {
+    if (!token || selectedProductIds.size === 0 || bulkActionLoading) {
+      return;
+    }
+    setBulkActionLoading(true);
+    try {
+      await requestJson<SuccessResponse<{ updated: number }>>({
+        apiBase,
+        path: '/restaurant-panel/productos/bulk/disponibilidad',
+        token,
+        options: {
+          method: 'PATCH',
+          body: JSON.stringify({ ids: [...selectedProductIds], isAvailable }),
+        },
+        fallbackMessage: 'No se pudo actualizar la disponibilidad.',
+      });
+      await loadDashboard();
+      pushToast('success', isAvailable ? 'Productos disponibles' : 'Productos agotados', `${selectedProductIds.size} producto${selectedProductIds.size === 1 ? '' : 's'} actualizado${selectedProductIds.size === 1 ? '' : 's'}.`);
+    } catch (requestError) {
+      const message = getRequestErrorMessage(requestError, 'No se pudo actualizar la disponibilidad.');
+      setError(message);
+      pushToast('error', 'Error', message);
+    } finally {
+      setBulkActionLoading(false);
+    }
+  }
+
+  async function handleBulkMoveCategory(categoryId: string) {
+    if (!categoryId || !token || selectedProductIds.size === 0 || bulkActionLoading) {
+      return;
+    }
+    setBulkActionLoading(true);
+    try {
+      await requestJson<SuccessResponse<{ updated: number }>>({
+        apiBase,
+        path: '/restaurant-panel/productos/bulk/categoria',
+        token,
+        options: {
+          method: 'PATCH',
+          body: JSON.stringify({ ids: [...selectedProductIds], categoryId }),
+        },
+        fallbackMessage: 'No se pudo mover los productos.',
+      });
+      await loadDashboard();
+      setBulkCategoryTargetId('');
+      pushToast('success', 'Productos movidos', `${selectedProductIds.size} producto${selectedProductIds.size === 1 ? '' : 's'} movido${selectedProductIds.size === 1 ? '' : 's'}.`);
+    } catch (requestError) {
+      const message = getRequestErrorMessage(requestError, 'No se pudo mover los productos.');
+      setError(message);
+      pushToast('error', 'Error', message);
+    } finally {
+      setBulkActionLoading(false);
+    }
+  }
+
+  async function handleBulkDelete() {
+    if (!token || selectedProductIds.size === 0 || bulkActionLoading) {
+      return;
+    }
+    setBulkActionLoading(true);
+    try {
+      await requestJson<SuccessResponse<{ deleted: number }>>({
+        apiBase,
+        path: '/restaurant-panel/productos/bulk',
+        token,
+        options: {
+          method: 'DELETE',
+          body: JSON.stringify({ ids: [...selectedProductIds] }),
+        },
+        fallbackMessage: 'No se pudo eliminar los productos.',
+      });
+      setIsBulkDeleteModalOpen(false);
+      const deletedCount = selectedProductIds.size;
+      await loadDashboard();
+      exitSelectionMode();
+      pushToast('success', 'Productos eliminados', `${deletedCount} producto${deletedCount === 1 ? '' : 's'} eliminado${deletedCount === 1 ? '' : 's'}.`);
+    } catch (requestError) {
+      const message = getRequestErrorMessage(requestError, 'No se pudo eliminar los productos.');
+      setError(message);
+      pushToast('error', 'Error', message);
+    } finally {
+      setBulkActionLoading(false);
+    }
+  }
+
   const isBusinessOpen = profile?.isAcceptingOrders ?? false;
   const isBusinessPaused = profile?.isPaused ?? false;
   const isWithinHours = isCurrentlyWithinOperatingHours(profile?.operatingHours);
@@ -6873,7 +7544,15 @@ export default function Home() {
         </div>
       ) : null}
       {isProductModalOpen ? (
-        <div className="fixed inset-0 z-[80] flex items-end justify-center bg-sky-950/40 backdrop-blur-md transition-all duration-500 sm:items-center sm:px-4 sm:py-5">
+        <div
+          className="fixed inset-0 z-[80] flex items-end justify-center bg-sky-950/40 backdrop-blur-md transition-all duration-500 sm:items-center sm:px-4 sm:py-5"
+          onKeyDown={(event) => {
+            if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
+              event.preventDefault();
+              submitProductNow();
+            }
+          }}
+        >
           <div className="relative flex h-[94vh] w-full max-w-[760px] flex-col overflow-hidden rounded-t-[36px] bg-white shadow-[0_32px_120px_rgba(14,165,233,0.25)] ring-1 ring-sky-100 sm:h-auto sm:max-h-[92vh] sm:rounded-[36px]">
             
             {/* Ambient Background Glows */}
@@ -6894,6 +7573,19 @@ export default function Home() {
                     <p className="mt-0.5 text-[13px] font-medium text-sky-700/70 sm:mt-1 sm:text-sm">
                       {profile?.businessType === 'RESTAURANT' ? 'Información, precios y extras de tu platillo.' : 'Información, precios y variantes de tu producto.'}
                     </p>
+                    {productConfigInherited && !productDraft.id ? (
+                      <div className="mt-2.5 inline-flex flex-wrap items-center gap-x-2 gap-y-1 rounded-full bg-sky-50 px-3 py-1.5 text-[12px] font-semibold text-sky-700 ring-1 ring-sky-200/60">
+                        <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg>
+                        <span>Configuración heredada del último producto</span>
+                        <button
+                          type="button"
+                          onClick={resetInheritedProductConfig}
+                          className="rounded-full border border-sky-200 bg-white px-2.5 py-0.5 text-[11px] font-bold text-sky-700 transition hover:bg-sky-100"
+                        >
+                          Restablecer
+                        </button>
+                      </div>
+                    ) : null}
                   </div>
                 </div>
                 <button
@@ -6901,26 +7593,8 @@ export default function Home() {
                   onClick={() => {
                     setIsProductModalOpen(false);
                     setProductImageValidationError('');
-                    setProductDraft({
-                      id: undefined,
-                      categoryId: categories[0]?.id || '',
-                      name: '',
-                      description: '',
-                      price: '',
-                      discountPrice: '',
-                      sellBy: 'UNIT',
-                      unitPrice: '',
-                      minWeightG: '100',
-                      maxWeightG: '5000',
-                      stepWeightG: '100',
-                      weightPresets: [100, 200, 300, 500, 1000],
-                      image: '',
-                      images: [],
-                      imagePosition: '50% 50%',
-                      imageZoom: 100,
-                      isAdultOnly: false,
-                      preparationTime: '15',
-                    });
+                    setProductConfigInherited(false);
+                    setProductDraft(buildEmptyProductDraft(categories[0]?.id || ''));
                   }}
                   className="group inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-sky-50 text-sky-600 transition-all hover:bg-sky-100 hover:text-sky-900 sm:h-12 sm:w-12"
                   aria-label="Cerrar"
@@ -6931,7 +7605,7 @@ export default function Home() {
             </div>
 
             {/* Scrollable Content */}
-            <div className="relative flex-1 overflow-y-auto bg-gradient-to-b from-sky-50/30 to-white px-5 py-6 sm:px-10 sm:py-8">
+            <div ref={productModalScrollRef} className="relative flex-1 overflow-y-auto bg-gradient-to-b from-sky-50/30 to-white px-5 py-6 sm:px-10 sm:py-8">
               <div className="space-y-10">
                 
                 {/* 1. Información Básica */}
@@ -6964,6 +7638,13 @@ export default function Home() {
                         value={productDraft.name}
                         onChange={(value) => setProductDraft((current) => ({ ...current, name: value }))}
                         placeholder={profile?.businessType === 'RESTAURANT' ? 'Ej: Hamburguesa Clásica' : 'Ej: Camiseta Deportiva'}
+                        inputRef={productNameInputRef}
+                        onKeyDown={(event) => {
+                          if (event.key === 'Enter' && !event.shiftKey && !event.metaKey && !event.ctrlKey) {
+                            event.preventDefault();
+                            productPriceInputRef.current?.focus();
+                          }
+                        }}
                       />
                       {profile?.businessType === 'RESTAURANT' ? (
                         <Field
@@ -7041,6 +7722,13 @@ export default function Home() {
                           value={productDraft.price}
                           onChange={(value) => setProductDraft((current) => ({ ...current, price: value }))}
                           placeholder="0.00"
+                          inputRef={productPriceInputRef}
+                          onKeyDown={(event) => {
+                            if (event.key === 'Enter' && !event.shiftKey) {
+                              event.preventDefault();
+                              submitProductNow();
+                            }
+                          }}
                         />
                       ) : (
                         <Field
@@ -7048,6 +7736,13 @@ export default function Home() {
                           value={productDraft.unitPrice}
                           onChange={(value) => setProductDraft((current) => ({ ...current, unitPrice: value, price: value || '0' }))}
                           placeholder="0.00"
+                          inputRef={productPriceInputRef}
+                          onKeyDown={(event) => {
+                            if (event.key === 'Enter' && !event.shiftKey) {
+                              event.preventDefault();
+                              submitProductNow();
+                            }
+                          }}
                         />
                       )}
                       <Field
@@ -7593,6 +8288,22 @@ export default function Home() {
 
             {/* Sticky Footer */}
             <div className="relative shrink-0 border-t border-sky-100/50 bg-white/70 px-5 py-4 backdrop-blur-xl sm:px-10 sm:py-5">
+              {!productDraft.id ? (
+                <div className="mb-3 flex items-center justify-between gap-3">
+                  <label className="flex cursor-pointer select-none items-center gap-2.5 rounded-full border border-sky-100 bg-sky-50/60 px-4 py-2.5 text-[13px] font-semibold text-sky-800 transition hover:bg-sky-50">
+                    <input
+                      type="checkbox"
+                      checked={continueAfterSave}
+                      onChange={(event) => setContinueAfterSave(event.target.checked)}
+                      className="h-5 w-5 shrink-0 accent-sky-500"
+                    />
+                    Añadir otro al publicar
+                  </label>
+                  <span className="hidden text-[11px] font-medium text-neutral-400 sm:block">
+                    Enter en precio publica · Cmd/Ctrl + Enter en cualquier campo
+                  </span>
+                </div>
+              ) : null}
               <div className="flex items-center gap-3">
                 <button
                   type="button"
@@ -7603,17 +8314,8 @@ export default function Home() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => void (productDraft.id ? saveProductChanges() : createProduct())}
-                  disabled={
-                    creatingProduct ||
-                    savingProductChanges ||
-                    processingProductImage ||
-                    !productDraft.categoryId ||
-                    !productDraft.name.trim() ||
-                    !productDraft.description.trim() ||
-                    !productDraft.price.trim() ||
-                    Boolean(getImageValidationMessage(productDraft.image.trim(), 'product'))
-                  }
+                  onClick={() => void submitProductNow()}
+                  disabled={creatingProduct || savingProductChanges || processingProductImage || !canSubmitProduct}
                   className="group relative flex-1 overflow-hidden rounded-full bg-gradient-to-r from-sky-500 to-sky-400 px-6 py-3 text-sm font-bold text-white shadow-[0_4px_16px_rgba(14,165,233,0.35)] ring-1 ring-sky-400/50 transition-all hover:scale-105 disabled:pointer-events-none disabled:opacity-60 disabled:shadow-none disabled:grayscale sm:flex-none"
                 >
                   <div className="absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/30 to-transparent transition-transform duration-1000 group-hover:translate-x-full" />
@@ -7627,6 +8329,263 @@ export default function Home() {
                       : 'Publicar Producto'}
                   </span>
                 </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
+      {isImportModalOpen ? (
+        <div className="fixed inset-0 z-[90] flex items-end justify-center bg-sky-950/40 backdrop-blur-md sm:items-center sm:px-4 sm:py-6">
+          <div className="relative flex h-[94vh] w-full max-w-[900px] flex-col overflow-hidden rounded-t-[36px] bg-white shadow-[0_32px_120px_rgba(14,165,233,0.25)] ring-1 ring-sky-100 sm:h-auto sm:max-h-[92vh] sm:rounded-[36px]">
+            <div className="pointer-events-none absolute -left-20 -top-20 h-64 w-64 rounded-full bg-sky-300/20 blur-[80px]" />
+            <div className="pointer-events-none absolute -right-20 top-1/2 h-64 w-64 rounded-full bg-blue-300/10 blur-[80px]" />
+
+            <div className="relative shrink-0 border-b border-sky-100/50 bg-white/80 px-5 py-4 backdrop-blur-xl sm:px-8 sm:py-5">
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-3 sm:gap-4">
+                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-sky-100 to-sky-50 text-sky-600 shadow-inner ring-1 ring-sky-200/50 sm:h-14 sm:w-14">
+                    <svg className="h-6 w-6 sm:h-7 sm:w-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" /></svg>
+                  </div>
+                  <div className="min-w-0">
+                    <h3 className="text-lg font-bold tracking-tight text-neutral-900 sm:text-2xl">Importar menú</h3>
+                    <p className="mt-0.5 text-[13px] font-medium text-sky-700/70 sm:text-sm">
+                      Pega una tabla de Excel o Sheets y crea todos los productos de una vez.
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsImportModalOpen(false);
+                    setImportResult(null);
+                    setImportText('');
+                  }}
+                  className="group inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-sky-50 text-sky-600 transition-all hover:bg-sky-100 hover:text-sky-900 sm:h-12 sm:w-12"
+                  aria-label="Cerrar importación"
+                >
+                  <svg className="h-5 w-5 transition-transform duration-300 group-hover:rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" /></svg>
+                </button>
+              </div>
+            </div>
+
+            <div className="relative flex-1 overflow-y-auto bg-gradient-to-b from-sky-50/30 to-white px-5 py-5 sm:px-8">
+              {importResult ? (
+                <div className="mx-auto max-w-[520px] py-8 text-center">
+                  <div className={`mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-full ring-8 ${importResult.created > 0 ? 'bg-emerald-50 text-emerald-500 ring-emerald-50/50' : 'bg-amber-50 text-amber-500 ring-amber-50/50'}`}>
+                    {importResult.skipped === 0 ? (
+                      <svg className="h-10 w-10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" /></svg>
+                    ) : (
+                      <svg className="h-10 w-10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                    )}
+                  </div>
+                  <h3 className="mb-2 text-[22px] font-bold tracking-tight text-neutral-900">
+                    {importResult.created > 0 ? `Se importaron ${importResult.created} producto${importResult.created === 1 ? '' : 's'}` : 'Ningún producto importado'}
+                  </h3>
+                  {importResult.skipped > 0 ? (
+                    <p className="mb-5 text-[15px] leading-relaxed text-neutral-500">
+                      {importResult.skipped} fila{importResult.skipped === 1 ? '' : 's'} con errores fueron omitid{importResult.skipped === 1 ? 'a' : 'as'}.
+                    </p>
+                  ) : (
+                    <p className="mb-5 text-[15px] leading-relaxed text-neutral-500">
+                      Ya aparecen en tu menú publico.
+                    </p>
+                  )}
+
+                  {importResult.errors.length > 0 ? (
+                    <div className="mb-6 max-h-48 overflow-y-auto rounded-2xl border border-rose-100 bg-rose-50/60 p-3 text-left">
+                      <p className="mb-2 px-1 text-[11px] font-bold uppercase tracking-wide text-rose-600">Detalle de errores</p>
+                      {importResult.errors.map((error, index) => (
+                        <p key={index} className="px-1 py-1 text-[13px] leading-5 text-neutral-700">
+                          <span className="font-bold text-rose-700">Fila {error.index + 1}</span>
+                          <span className="text-neutral-500"> · {error.name}</span>
+                          <span className="text-rose-600"> — {error.message}</span>
+                        </p>
+                      ))}
+                    </div>
+                  ) : null}
+
+                  <div className="flex items-center justify-center gap-3">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setImportResult(null);
+                        setImportText('');
+                        setImportHasHeader(false);
+                      }}
+                      className="rounded-full border border-black/10 px-5 py-3 text-sm font-bold text-neutral-600 transition hover:bg-neutral-100 hover:text-neutral-900"
+                    >
+                      Importar otra lista
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setIsImportModalOpen(false)}
+                      className="rounded-full bg-gradient-to-r from-sky-500 to-sky-400 px-6 py-3 text-sm font-bold text-white shadow-[0_4px_16px_rgba(14,165,233,0.35)] ring-1 ring-sky-400/50 transition-all hover:scale-105"
+                    >
+                      Listo
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <div>
+                    <label className="grid gap-2">
+                      <span className="text-[12px] font-bold uppercase tracking-[0.1em] text-neutral-600">Pega aquí tus filas</span>
+                      <textarea
+                        value={importText}
+                        onChange={(event) => setImportText(event.target.value)}
+                        rows={6}
+                        placeholder={'nombre,precio,categoría,tipo,descripción\nTacos al pastor,45,Tacos,pieza,Tres tortillas con pastor y piña\nHamburguesa doble,90,Burgers,pieza,Pan artesanal con doble carne'}
+                        className="w-full rounded-[18px] border border-black/5 bg-white px-5 py-4 text-[15px] font-medium text-neutral-950 shadow-inner outline-none transition-all placeholder:text-neutral-400 focus:border-sky-400 focus:ring-4 focus:ring-sky-400/20"
+                      />
+                    </label>
+                    <p className="mt-2 text-[13px] leading-6 text-neutral-500">
+                      Se detecta automáticamente el separador (coma, punto y coma o tabulación) y los encabezados. Sin encabezados, el orden por defecto es: Nombre, Precio, Categoría, Tipo de venta, Descripción, Precio especial e Imagen.
+                    </p>
+                  </div>
+
+                  {importDataRows.length > 0 ? (
+                    <>
+                      <div className="mt-5 rounded-[28px] border border-sky-100 bg-white/80 p-5 shadow-[0_8px_30px_rgba(14,165,233,0.06)] ring-1 ring-sky-100/50">
+                        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                          <p className="text-sm font-bold text-neutral-900">Mapeo de columnas</p>
+                          <label className="flex cursor-pointer select-none items-center gap-2 text-[13px] font-semibold text-sky-800">
+                            <input
+                              type="checkbox"
+                              checked={importHasHeader}
+                              onChange={(event) => setImportHasHeader(event.target.checked)}
+                              className="h-4 w-4 accent-sky-500"
+                            />
+                            Primera fila es encabezado
+                          </label>
+                        </div>
+                        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                          {IMPORT_FIELD_ORDER.map((field) => (
+                            <label key={field} className="grid gap-1.5">
+                              <span className="text-[11px] font-bold uppercase tracking-wide text-neutral-500">{IMPORT_FIELD_LABELS[field]}</span>
+                              <select
+                                value={importColumnMap[field] ?? ''}
+                                onChange={(event) =>
+                                  setImportColumnMap((current) => ({
+                                    ...current,
+                                    [field]: event.target.value === '' ? undefined : Number(event.target.value),
+                                  }))
+                                }
+                                className="w-full rounded-xl border border-black/5 bg-neutral-50 px-3 py-2.5 text-sm font-semibold text-neutral-800 outline-none transition focus:border-sky-400 focus:ring-2 focus:ring-sky-400/20"
+                              >
+                                <option value="">— Sin usar —</option>
+                                {Array.from({ length: importColumnCount }, (_, index) => (
+                                  <option key={index} value={index}>
+                                    {String.fromCharCode(65 + index)}{importHeaderRow[index] ? ` · ${importHeaderRow[index]}` : ''}
+                                  </option>
+                                ))}
+                              </select>
+                            </label>
+                          ))}
+                          <label className="grid gap-1.5">
+                            <span className="text-[11px] font-bold uppercase tracking-wide text-neutral-500">Categoría por defecto</span>
+                            <select
+                              value={importDefaultCategoryId}
+                              onChange={(event) => setImportDefaultCategoryId(event.target.value)}
+                              className="w-full rounded-xl border border-black/5 bg-neutral-50 px-3 py-2.5 text-sm font-semibold text-neutral-800 outline-none transition focus:border-sky-400 focus:ring-2 focus:ring-sky-400/20"
+                            >
+                              <option value="">— Sin usar —</option>
+                              {categories.map((category) => (
+                                <option key={category.id} value={category.id}>{category.name}</option>
+                              ))}
+                            </select>
+                          </label>
+                        </div>
+                        <label className="mt-4 flex cursor-pointer select-none items-center gap-2 text-[13px] font-semibold text-sky-800">
+                          <input
+                            type="checkbox"
+                            checked={importCreateMissingCategories}
+                            onChange={(event) => setImportCreateMissingCategories(event.target.checked)}
+                            className="h-4 w-4 accent-sky-500"
+                          />
+                          Crear automáticamente las categorías que falten
+                        </label>
+                      </div>
+
+                      <div className="mt-5 rounded-[28px] border border-sky-100 bg-white/70 p-4 shadow-sm">
+                        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                          <p className="text-sm font-bold text-neutral-900">Vista previa</p>
+                          <p className="text-[13px] font-semibold">
+                            <span className="text-emerald-600">{importValidCount} listo{importValidCount === 1 ? '' : 's'}</span>
+                            {importErrorCount > 0 ? (
+                              <>
+                                <span className="text-neutral-300"> · </span>
+                                <span className="text-rose-600">{importErrorCount} con errores</span>
+                              </>
+                            ) : null}
+                          </p>
+                        </div>
+                        <div className="max-h-72 overflow-y-auto rounded-2xl border border-black/5">
+                          <table className="w-full text-left text-sm">
+                            <thead className="sticky top-0 bg-neutral-50 text-[11px] font-bold uppercase tracking-wide text-neutral-500">
+                              <tr>
+                                <th className="px-3 py-2">Nombre</th>
+                                <th className="px-3 py-2">Precio</th>
+                                <th className="px-3 py-2">Categoría</th>
+                                <th className="px-3 py-2">Estado</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-black/5 bg-white">
+                              {importPreview.map((row) => (
+                                <tr key={row.rowIndex} className="align-top">
+                                  <td className="px-3 py-2 font-medium text-neutral-900">{row.name || '—'}</td>
+                                  <td className="px-3 py-2 text-neutral-700">{row.price !== null ? formatCurrency(row.price) : '—'}</td>
+                                  <td className="px-3 py-2 text-neutral-700">
+                                    {row.willCreateCategory ? (
+                                      <span className="font-semibold text-amber-600">{row.categoryLabel} (nueva)</span>
+                                    ) : (
+                                      row.categoryLabel || '—'
+                                    )}
+                                  </td>
+                                  <td className="px-3 py-2">
+                                    {row.isValid ? (
+                                      <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-bold text-emerald-700">Listo</span>
+                                    ) : (
+                                      <span className="inline-flex items-center gap-1 rounded-full bg-rose-50 px-2 py-0.5 text-[11px] font-bold text-rose-700">{row.errors[0]}</span>
+                                    )}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    </>
+                  ) : null}
+                </>
+              )}
+            </div>
+
+            <div className="relative shrink-0 border-t border-sky-100/50 bg-white/70 px-5 py-4 backdrop-blur-xl sm:px-8 sm:py-5">
+              <div className="flex items-center justify-between gap-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsImportModalOpen(false);
+                    setImportResult(null);
+                    setImportText('');
+                  }}
+                  className="rounded-full border border-black/10 px-5 py-3 text-sm font-bold text-neutral-600 transition hover:bg-neutral-100 hover:text-neutral-900"
+                >
+                  Cancelar
+                </button>
+                {!importResult ? (
+                  <button
+                    type="button"
+                    onClick={() => void handleImportSubmit()}
+                    disabled={importingProducts || importValidCount === 0}
+                    className="group relative flex-1 overflow-hidden rounded-full bg-gradient-to-r from-sky-500 to-sky-400 px-6 py-3 text-sm font-bold text-white shadow-[0_4px_16px_rgba(14,165,233,0.35)] ring-1 ring-sky-400/50 transition-all hover:scale-105 disabled:pointer-events-none disabled:opacity-60 disabled:shadow-none disabled:grayscale sm:flex-none"
+                  >
+                    <div className="absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/30 to-transparent transition-transform duration-1000 group-hover:translate-x-full" />
+                    {importingProducts
+                      ? 'Importando...'
+                      : `Importar ${importValidCount} producto${importValidCount === 1 ? '' : 's'}`}
+                  </button>
+                ) : null}
               </div>
             </div>
           </div>
@@ -9189,7 +10148,7 @@ export default function Home() {
                 ) : null}
 
                 {activeSection === 'store' && profile ? (
-                    <div className="space-y-6">
+                    <div className={`space-y-6 ${isSelectionMode ? 'pb-32' : ''}`}>
                       <section className="overflow-hidden rounded-[32px] border border-black/5 bg-white shadow-[0_18px_60px_rgba(15,15,15,0.05)]">
                         <div className="relative">
                           {storeDraft.coverImage.trim() ? (
@@ -9359,6 +10318,69 @@ export default function Home() {
                         </div>
                       </section>
 
+                      <div className="flex flex-col gap-3 rounded-[24px] border border-black/5 bg-white p-3 shadow-[0_10px_30px_rgba(15,15,15,0.04)] sm:flex-row sm:items-center sm:justify-between">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <div className="inline-flex rounded-full border border-black/10 bg-neutral-100/70 p-1 shadow-inner">
+                            <button
+                              type="button"
+                              onClick={() => setStoreViewMode('cards')}
+                              className={`inline-flex items-center gap-2 rounded-full px-4 py-2 text-[13px] font-bold transition ${storeViewMode === 'cards' ? 'bg-white text-sky-700 shadow-sm' : 'text-neutral-500 hover:text-neutral-800'}`}
+                            >
+                              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" /></svg>
+                              Tarjetas
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setStoreViewMode('list')}
+                              className={`inline-flex items-center gap-2 rounded-full px-4 py-2 text-[13px] font-bold transition ${storeViewMode === 'list' ? 'bg-white text-sky-700 shadow-sm' : 'text-neutral-500 hover:text-neutral-800'}`}
+                            >
+                              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M4 14h16M4 18h16" /></svg>
+                              Lista
+                            </button>
+                          </div>
+                          <div className="relative min-w-0 flex-1 sm:min-w-[220px] sm:max-w-xs">
+                            <svg className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M17 10a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+                            <input
+                              type="text"
+                              value={storeSearchQuery}
+                              onChange={(event) => setStoreSearchQuery(event.target.value)}
+                              placeholder="Buscar en tu menú..."
+                              className="w-full rounded-full border border-black/10 bg-neutral-50 py-2.5 pl-10 pr-9 text-sm font-medium text-neutral-900 shadow-inner outline-none transition placeholder:text-neutral-400 focus:border-sky-400 focus:bg-white focus:ring-4 focus:ring-sky-400/20"
+                            />
+                            {storeSearchQuery ? (
+                              <button
+                                type="button"
+                                onClick={() => setStoreSearchQuery('')}
+                                className="absolute right-2 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-full text-neutral-400 transition hover:bg-neutral-200 hover:text-neutral-700"
+                                aria-label="Limpiar búsqueda"
+                              >
+                                <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" /></svg>
+                              </button>
+                            ) : null}
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {isSelectionMode ? (
+                            <button
+                              type="button"
+                              onClick={exitSelectionMode}
+                              className="rounded-full border border-sky-200 bg-sky-50 px-4 py-2.5 text-[13px] font-bold text-sky-800 transition hover:bg-sky-100"
+                            >
+                              Salir de selección
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={enterSelectionMode}
+                              className="inline-flex items-center gap-2 rounded-full border border-black/10 bg-white px-4 py-2.5 text-[13px] font-bold text-neutral-700 transition hover:bg-neutral-50 hover:text-neutral-900"
+                            >
+                              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" /></svg>
+                              Seleccionar varios
+                            </button>
+                          )}
+                        </div>
+                      </div>
+
                       <div className="-mx-1 overflow-x-auto px-1 pb-4 pt-2 sticky top-0 z-20 bg-gradient-to-b from-[#faf9f7] via-[#faf9f7]/95 to-transparent backdrop-blur-sm">
                         <div className="flex min-w-max gap-3 px-2">
                           {storeCategories.map((category) => (
@@ -9401,11 +10423,23 @@ export default function Home() {
                           >
                             + Agregar categoria
                           </button>
+                          <button
+                            type="button"
+                            onClick={openImportModal}
+                            className="inline-flex items-center gap-2 rounded-full border border-sky-200 bg-white px-5 py-2.5 text-[13px] font-bold text-sky-800 shadow-sm transition hover:bg-sky-50 hover:border-sky-400"
+                            title="Importa todo tu menú pegando una tabla de Excel o Sheets"
+                          >
+                            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                            </svg>
+                            Importar menú
+                          </button>
                         </div>
                       </div>
 
+                      {storeViewMode === 'cards' ? (
                       <div className="space-y-6">
-                        {storeCategories.map((category) => (
+                        {filteredStoreCategories.map((category) => (
                           <section key={category.id} className="rounded-[24px] px-0 py-0">
                       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4">
                               <div>
@@ -9476,6 +10510,16 @@ export default function Home() {
                                 >
                                   <div className="flex h-full flex-col gap-0 sm:flex-row">
                                     <div className="relative h-48 w-full shrink-0 sm:h-auto sm:w-44 sm:aspect-square">
+                                      {isSelectionMode ? (
+                                        <button
+                                          type="button"
+                                          onClick={() => toggleProductSelection(product.id)}
+                                          className={`absolute left-3 top-3 z-10 flex h-9 w-9 items-center justify-center rounded-full border-2 shadow-md transition ${selectedProductIds.has(product.id) ? 'border-sky-500 bg-sky-500 text-white' : 'border-white bg-white/90 text-transparent hover:border-sky-300 hover:text-sky-200'}`}
+                                          aria-label={selectedProductIds.has(product.id) ? `Quitar ${product.name} de la selección` : `Seleccionar ${product.name}`}
+                                        >
+                                          <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
+                                        </button>
+                                      ) : null}
                                       {product.image ? (
                                         <>
                                           <div
@@ -9608,6 +10652,22 @@ export default function Home() {
                                           </button>
                                           <button
                                             type="button"
+                                            onClick={() => openDuplicateProductModal(product)}
+                                            className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-sky-100 bg-sky-50 text-sky-600 transition hover:bg-sky-100"
+                                            aria-label={`Duplicar ${product.name}`}
+                                            title="Duplicar producto"
+                                          >
+                                            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                              <path
+                                                strokeLinecap="round"
+                                                strokeLinejoin="round"
+                                                strokeWidth={1.9}
+                                                d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
+                                              />
+                                            </svg>
+                                          </button>
+                                          <button
+                                            type="button"
                                             onClick={() => openDeleteProductModal(product)}
                                             className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-rose-200 bg-rose-50 text-rose-600 transition hover:bg-rose-100"
                                             aria-label={`Eliminar ${product.name}`}
@@ -9654,8 +10714,178 @@ export default function Home() {
 
                         {storeCategories.length === 0 ? (
                           <EmptyState text="Todavia no tienes categorias. Crea la primera para empezar a publicar tu menu." />
+                        ) : filteredStoreCategories.length === 0 ? (
+                          <EmptyState text="No hay resultados para tu busqueda." />
                         ) : null}
                       </div>
+                      ) : (
+                        <div className="overflow-hidden rounded-[28px] border border-sky-100/60 bg-white/80 shadow-[0_10px_30px_rgba(15,15,15,0.04)]">
+                          {flatProductRows.length === 0 ? (
+                            <EmptyState text={storeSearchQuery.trim() ? 'No hay resultados para tu busqueda.' : 'Aun no tienes productos. Agrega el primero o importa tu menu.'} />
+                          ) : (
+                            <div className="divide-y divide-black/5">
+                              {flatProductRows.map(({ product, categoryName }) => (
+                                <div
+                                  key={product.id}
+                                  className={`flex flex-col gap-3 px-4 py-3.5 transition hover:bg-sky-50/40 sm:flex-row sm:items-center sm:gap-4 ${selectedProductIds.has(product.id) ? 'bg-sky-50/60' : ''}`}
+                                >
+                                  {isSelectionMode ? (
+                                    <button
+                                      type="button"
+                                      onClick={() => toggleProductSelection(product.id)}
+                                      className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-md border-2 transition ${selectedProductIds.has(product.id) ? 'border-sky-500 bg-sky-500 text-white' : 'border-neutral-300 bg-white text-transparent hover:border-sky-300'}`}
+                                      aria-label={selectedProductIds.has(product.id) ? `Quitar ${product.name} de la selección` : `Seleccionar ${product.name}`}
+                                    >
+                                      <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
+                                    </button>
+                                  ) : null}
+                                  <div className="h-14 w-14 shrink-0 overflow-hidden rounded-2xl border border-black/5 bg-neutral-100">
+                                    {product.image ? (
+                                      <img src={product.image} alt={product.name} className="h-full w-full object-cover" loading="lazy" />
+                                    ) : (
+                                      <div className="flex h-full w-full items-center justify-center text-lg font-bold text-neutral-300">{product.name.charAt(0).toUpperCase()}</div>
+                                    )}
+                                  </div>
+                                  <div className="min-w-0 flex-1">
+                                    <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                                      <p className="truncate text-[15px] font-bold text-neutral-900">{product.name}</p>
+                                      {!product.isAvailable ? (
+                                        <span className="rounded-full bg-neutral-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-neutral-500">Agotado</span>
+                                      ) : null}
+                                    </div>
+                                    <p className="mt-0.5 truncate text-[13px] text-neutral-500">{categoryName}{product.description ? ` · ${product.description}` : ''}</p>
+                                  </div>
+                                  <div className="flex items-center gap-4 sm:w-auto">
+                                    <div className="flex items-center gap-1.5">
+                                      <span className="text-[11px] font-bold uppercase tracking-wide text-neutral-400">$</span>
+                                      <span className="text-[15px] font-bold text-neutral-900">{product.discountPrice ? formatCurrency(product.discountPrice) : formatCurrency(product.price)}</span>
+                                    </div>
+                                    <button
+                                      type="button"
+                                      role="switch"
+                                      aria-checked={product.isAvailable}
+                                      onClick={() => void toggleProductAvailability(product)}
+                                      disabled={activeAvailabilityProductId === product.id}
+                                      className={`relative inline-flex h-10 w-[68px] items-center rounded-full border px-1 transition ${product.isAvailable ? 'border-emerald-300 bg-emerald-500' : 'border-neutral-300 bg-neutral-300'} disabled:cursor-not-allowed disabled:opacity-60`}
+                                    >
+                                      <span className={`inline-flex h-8 w-8 items-center justify-center rounded-full bg-white text-[10px] font-bold uppercase tracking-[0.08em] text-neutral-700 shadow-sm transition ${product.isAvailable ? 'translate-x-[26px]' : 'translate-x-0'}`}>
+                                        {product.isAvailable ? 'On' : 'Off'}
+                                      </span>
+                                    </button>
+                                    <div className="flex items-center gap-1.5">
+                                      <button
+                                        type="button"
+                                        onClick={() => openEditProductModal(product)}
+                                        className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-black/10 bg-white text-neutral-800 transition hover:bg-neutral-100"
+                                        aria-label={`Editar ${product.name}`}
+                                      >
+                                        <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.9} d="M15.232 5.232l3.536 3.536M9 17l-4 1 1-4L15.5 4.5a2.121 2.121 0 013 3L9 17z" /></svg>
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => openDuplicateProductModal(product)}
+                                        className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-sky-100 bg-sky-50 text-sky-600 transition hover:bg-sky-100"
+                                        aria-label={`Duplicar ${product.name}`}
+                                        title="Duplicar producto"
+                                      >
+                                        <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.9} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => openDeleteProductModal(product)}
+                                        className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-rose-200 bg-rose-50 text-rose-600 transition hover:bg-rose-100"
+                                        aria-label={`Eliminar ${product.name}`}
+                                      >
+                                        <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.9} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6M9 7V4a1 1 0 011-1h4a1 1 0 011 1v3m-7 0h8" /></svg>
+                                      </button>
+                                    </div>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {isSelectionMode ? (
+                        <div className="fixed inset-x-0 bottom-4 z-[70] px-4">
+                          <div className="mx-auto flex max-w-2xl flex-wrap items-center justify-center gap-2 rounded-3xl border border-sky-100 bg-white/95 px-4 py-3 shadow-[0_20px_50px_rgba(15,15,15,0.2)] backdrop-blur-xl ring-1 ring-black/5">
+                            <span className="mx-1 text-[13px] font-bold text-neutral-900">
+                              {selectedProductCount === 0 ? 'Nada seleccionado' : `${selectedProductCount} seleccionado${selectedProductCount === 1 ? '' : 's'}`}
+                            </span>
+                            <div className="mx-1 h-5 w-px bg-black/10" />
+                            <button
+                              type="button"
+                              onClick={() => void handleBulkAvailability(true)}
+                              disabled={bulkActionLoading || selectedProductCount === 0}
+                              className="rounded-full bg-emerald-500 px-4 py-2 text-[13px] font-bold text-white transition hover:bg-emerald-600 disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                              Disponible
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => void handleBulkAvailability(false)}
+                              disabled={bulkActionLoading || selectedProductCount === 0}
+                              className="rounded-full border border-neutral-300 bg-white px-4 py-2 text-[13px] font-bold text-neutral-600 transition hover:bg-neutral-100 disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                              Agotado
+                            </button>
+                            <select
+                              value={bulkCategoryTargetId}
+                              onChange={(event) => void handleBulkMoveCategory(event.target.value)}
+                              disabled={bulkActionLoading || selectedProductCount === 0}
+                              className="rounded-full border border-black/10 bg-white px-3.5 py-2 text-[13px] font-semibold text-neutral-700 outline-none transition focus:border-sky-400 disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                              <option value="">Mover a categoría...</option>
+                              {categories.map((category) => (
+                                <option key={category.id} value={category.id}>{category.name}</option>
+                              ))}
+                            </select>
+                            <button
+                              type="button"
+                              onClick={() => setIsBulkDeleteModalOpen(true)}
+                              disabled={bulkActionLoading || selectedProductCount === 0}
+                              className="rounded-full border border-rose-200 bg-rose-50 px-4 py-2 text-[13px] font-bold text-rose-600 transition hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                              Eliminar
+                            </button>
+                          </div>
+                        </div>
+                      ) : null}
+
+                      {isBulkDeleteModalOpen ? (
+                        <div className="fixed inset-0 z-[95] flex items-end justify-center bg-black/55 px-4 py-4 sm:items-center sm:py-5">
+                          <div className="w-full max-w-[520px] rounded-[28px] bg-white p-5 shadow-[0_28px_90px_rgba(15,15,15,0.34)] sm:p-6">
+                            <div>
+                              <p className="text-xs font-semibold uppercase tracking-[0.22em] text-rose-500">Eliminar productos</p>
+                              <h3 className="mt-2 text-2xl font-semibold tracking-[-0.03em] text-neutral-950">
+                                Eliminar {selectedProductCount} producto{selectedProductCount === 1 ? '' : 's'}?
+                              </h3>
+                              <p className="mt-3 text-sm leading-6 text-neutral-600">
+                                Se eliminaran de tu menu publicado y de la tienda del cliente. Esta accion no se puede deshacer.
+                              </p>
+                            </div>
+                            <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+                              <button
+                                type="button"
+                                onClick={() => setIsBulkDeleteModalOpen(false)}
+                                disabled={bulkActionLoading}
+                                className="rounded-full border border-black/10 px-5 py-3 text-sm font-semibold text-neutral-700 transition hover:bg-neutral-100 disabled:cursor-not-allowed disabled:opacity-60"
+                              >
+                                Cancelar
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => void handleBulkDelete()}
+                                disabled={bulkActionLoading}
+                                className="rounded-full bg-rose-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-60"
+                              >
+                                {bulkActionLoading ? 'Eliminando...' : 'Eliminar ahora'}
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      ) : null}
 
                 {showMenuPreview ? (
                   <div
@@ -12703,12 +13933,16 @@ function Field({
   onChange,
   placeholder,
   type = 'text',
+  inputRef,
+  onKeyDown,
 }: {
   label: string;
   value: string;
   onChange: (value: string) => void;
   placeholder: string;
   type?: string;
+  inputRef?: React.Ref<HTMLInputElement>;
+  onKeyDown?: (event: React.KeyboardEvent<HTMLInputElement>) => void;
 }) {
   const [showPassword, setShowPassword] = useState(false);
   const isPassword = type === 'password';
@@ -12718,9 +13952,11 @@ function Field({
       <span className="text-[12px] font-bold uppercase tracking-[0.1em] text-neutral-600 transition-colors group-focus-within:text-sky-500">{label}</span>
       <div className="relative">
         <input
+          ref={inputRef}
           type={isPassword && showPassword ? 'text' : type}
           value={value}
           onChange={(event) => onChange(event.target.value)}
+          onKeyDown={onKeyDown}
           placeholder={placeholder}
           className={`block w-full min-w-0 rounded-[18px] border border-black/5 bg-neutral-100/50 py-3.5 text-[15px] font-medium text-neutral-950 shadow-inner outline-none transition-all duration-300 placeholder:text-neutral-400 hover:bg-neutral-100/80 focus:border-sky-400 focus:bg-white focus:ring-4 focus:ring-sky-400/20 focus:shadow-md ${isPassword ? 'px-5 pr-14' : 'px-5'}`}
         />

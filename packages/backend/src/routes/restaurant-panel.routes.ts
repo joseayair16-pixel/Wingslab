@@ -1067,6 +1067,272 @@ export async function registerRestaurantPanelRoutes(fastify: FastifyInstance): P
       });
     });
 
+    restaurant.post('/restaurant-panel/productos/batch', async (request, reply) => {
+      const batchSchema = z.object({
+        products: z.array(productSchema).min(1, 'Debes incluir al menos un producto.').max(200, 'Maximo 200 productos por importacion.'),
+      });
+      const parsed = parseBody(batchSchema.safeParse(request.body));
+
+      if ('error' in parsed) {
+        return reply.status(400).send(parsed.error);
+      }
+
+      const user = getAuthenticatedUser(request);
+      const ownedRestaurant = await getOwnedRestaurant(user.sub);
+
+      if (!ownedRestaurant) {
+        return reply.status(404).send({
+          success: false,
+          error: {
+            code: 'RESTAURANT_NOT_FOUND',
+            message: 'No se encontro el restaurante asociado a este usuario.',
+          },
+        });
+      }
+
+      const ownedCategoryIds = new Set(
+        (await prisma.menuCategory.findMany({
+          where: { restaurantId: ownedRestaurant.id },
+          select: { id: true },
+        })).map((category) => category.id),
+      );
+
+      const createdProducts: Array<{ id: string; name: string }> = [];
+      const perItemErrors: { index: number; name: string; message: string }[] = [];
+
+      for (let index = 0; index < parsed.data.products.length; index += 1) {
+        const validation = productSchema.safeParse(parsed.data.products[index]);
+
+        if (!validation.success) {
+          perItemErrors.push({
+            index,
+            name: String(parsed.data.products[index].name ?? `Producto ${index + 1}`),
+            message: validation.error.issues[0]?.message || 'Datos invalidos.',
+          });
+          continue;
+        }
+
+        const item = validation.data;
+
+        if (!ownedCategoryIds.has(item.categoryId)) {
+          perItemErrors.push({
+            index,
+            name: item.name,
+            message: 'La categoria no existe o no pertenece a este restaurante.',
+          });
+          continue;
+        }
+
+        const product = await prisma.product.create({
+          data: {
+            restaurantId: ownedRestaurant.id,
+            categoryId: item.categoryId,
+            name: item.name,
+            description: item.description,
+            price: item.price,
+            discountPrice: item.discountPrice || null,
+            sellBy: item.sellBy,
+            unitPrice: item.sellBy === 'WEIGHT' ? item.unitPrice : null,
+            minWeightG: item.sellBy === 'WEIGHT' ? item.minWeightG : null,
+            maxWeightG: item.sellBy === 'WEIGHT' ? item.maxWeightG : null,
+            stepWeightG: item.sellBy === 'WEIGHT' ? item.stepWeightG : null,
+            weightPresets: item.sellBy === 'WEIGHT' ? (item.weightPresets?.length ? JSON.stringify(item.weightPresets) : null) : null,
+            image: item.image || null,
+            images: item.images?.length ? item.images : (item.image ? [item.image] : []),
+            imagePosition: item.imagePosition || null,
+            imageZoom: item.imageZoom || null,
+            isAvailable: item.isAvailable ?? true,
+            isAdultOnly: item.isAdultOnly,
+            preparationTime: item.preparationTime,
+            calories: item.calories || null,
+            allergens: item.allergens,
+            optionGroups: item.optionGroups && item.optionGroups.length > 0 ? {
+              create: item.optionGroups.map((group) => ({
+                name: group.name,
+                minSelection: group.minSelection,
+                maxSelection: group.maxSelection,
+                options: {
+                  create: group.options.map((option) => ({
+                    name: option.name,
+                    price: option.price,
+                    isAvailable: option.isAvailable,
+                  })),
+                },
+              })),
+            } : undefined,
+          },
+          include: {
+            category: {
+              select: { id: true, name: true },
+            },
+          },
+        });
+
+        createdProducts.push(product);
+      }
+
+      return reply.status(200).send({
+        success: true,
+        data: {
+          created: createdProducts.length,
+          skipped: perItemErrors.length,
+          products: createdProducts,
+          errors: perItemErrors,
+        },
+      });
+    });
+
+    const productBulkIdsSchema = z.object({
+      ids: z.array(z.string().min(1)).min(1, 'Selecciona al menos un producto.').max(200, 'Maximo 200 productos por accion.'),
+    });
+
+    restaurant.patch('/restaurant-panel/productos/bulk/disponibilidad', async (request, reply) => {
+      const parsed = parseBody(productBulkIdsSchema.extend({ isAvailable: z.boolean() }).safeParse(request.body));
+
+      if ('error' in parsed) {
+        return reply.status(400).send(parsed.error);
+      }
+
+      const user = getAuthenticatedUser(request);
+      const ownedRestaurant = await getOwnedRestaurant(user.sub);
+
+      if (!ownedRestaurant) {
+        return reply.status(404).send({
+          success: false,
+          error: {
+            code: 'RESTAURANT_NOT_FOUND',
+            message: 'No se encontro el restaurante asociado a este usuario.',
+          },
+        });
+      }
+
+      const result = await prisma.product.updateMany({
+        where: {
+          id: { in: parsed.data.ids },
+          restaurantId: ownedRestaurant.id,
+        },
+        data: {
+          isAvailable: parsed.data.isAvailable,
+        },
+      });
+
+      return reply.send({
+        success: true,
+        data: {
+          updated: result.count,
+        },
+      });
+    });
+
+    restaurant.patch('/restaurant-panel/productos/bulk/categoria', async (request, reply) => {
+      const parsed = parseBody(productBulkIdsSchema.extend({ categoryId: z.string().min(1, 'La categoria es obligatoria.') }).safeParse(request.body));
+
+      if ('error' in parsed) {
+        return reply.status(400).send(parsed.error);
+      }
+
+      const user = getAuthenticatedUser(request);
+      const ownedRestaurant = await getOwnedRestaurant(user.sub);
+
+      if (!ownedRestaurant) {
+        return reply.status(404).send({
+          success: false,
+          error: {
+            code: 'RESTAURANT_NOT_FOUND',
+            message: 'No se encontro el restaurante asociado a este usuario.',
+          },
+        });
+      }
+
+      const category = await prisma.menuCategory.findFirst({
+        where: {
+          id: parsed.data.categoryId,
+          restaurantId: ownedRestaurant.id,
+        },
+      });
+
+      if (!category) {
+        return reply.status(404).send({
+          success: false,
+          error: {
+            code: 'CATEGORY_NOT_FOUND',
+            message: 'La categoria no existe o no pertenece a este restaurante.',
+          },
+        });
+      }
+
+      const result = await prisma.product.updateMany({
+        where: {
+          id: { in: parsed.data.ids },
+          restaurantId: ownedRestaurant.id,
+        },
+        data: {
+          categoryId: parsed.data.categoryId,
+        },
+      });
+
+      return reply.send({
+        success: true,
+        data: {
+          updated: result.count,
+        },
+      });
+    });
+
+    restaurant.delete('/restaurant-panel/productos/bulk', async (request, reply) => {
+      const parsed = parseBody(productBulkIdsSchema.safeParse(request.body));
+
+      if ('error' in parsed) {
+        return reply.status(400).send(parsed.error);
+      }
+
+      const user = getAuthenticatedUser(request);
+      const ownedRestaurant = await getOwnedRestaurant(user.sub);
+
+      if (!ownedRestaurant) {
+        return reply.status(404).send({
+          success: false,
+          error: {
+            code: 'RESTAURANT_NOT_FOUND',
+            message: 'No se encontro el restaurante asociado a este usuario.',
+          },
+        });
+      }
+
+      const productsToDelete = await prisma.product.findMany({
+        where: {
+          id: { in: parsed.data.ids },
+          restaurantId: ownedRestaurant.id,
+        },
+        select: {
+          id: true,
+          image: true,
+          images: true,
+        },
+      });
+
+      const imageKeys = productsToDelete
+        .flatMap((product) => [product.image, ...(product.images || [])])
+        .filter((key): key is string => Boolean(key))
+        .map(urlToKey);
+
+      await deleteImages(imageKeys);
+
+      const result = await prisma.product.deleteMany({
+        where: {
+          id: { in: parsed.data.ids },
+          restaurantId: ownedRestaurant.id,
+        },
+      });
+
+      return reply.send({
+        success: true,
+        data: {
+          deleted: result.count,
+        },
+      });
+    });
+
     restaurant.get('/restaurant-panel/productos/:id', async (request, reply) => {
       const params = z.object({ id: z.string().min(1) }).safeParse(request.params);
 

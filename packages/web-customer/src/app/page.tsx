@@ -6552,8 +6552,11 @@ export default function Home() {
                     type="text"
                     value={joinRestOwnerName}
                     onChange={(e) => setJoinRestOwnerName(e.target.value)}
-                    placeholder="Ej. Juan Pérez"
-                    className="mt-2 w-full rounded-2xl border border-black/5 bg-neutral-50/50 focus:bg-white px-4 py-3 text-sm font-medium text-neutral-900 transition-colors focus:border-neutral-950 focus:outline-none focus:ring-1 focus:ring-neutral-950 placeholder:text-neutral-300"
+                    placeholder="Nombre completo"
+                    autoComplete="off"
+                    autoCorrect="off"
+                    autoCapitalize="words"
+                    className="mt-2 w-full rounded-2xl border border-black/5 bg-neutral-50/50 focus:bg-white px-4 py-3.5 text-base font-medium text-neutral-900 transition-colors focus:border-neutral-950 focus:outline-none focus:ring-1 focus:ring-neutral-950 placeholder:text-neutral-400"
                   />
                 </div>
 
@@ -6563,26 +6566,40 @@ export default function Home() {
                     type="text"
                     value={joinRestName}
                     onChange={(e) => setJoinRestName(e.target.value)}
-                    placeholder="Ej. Tacos El Rey"
-                    className="mt-2 w-full rounded-2xl border border-black/5 bg-neutral-50/50 focus:bg-white px-4 py-3 text-sm font-medium text-neutral-900 transition-colors focus:border-neutral-950 focus:outline-none focus:ring-1 focus:ring-neutral-950 placeholder:text-neutral-300"
+                    placeholder="Nombre del negocio"
+                    autoComplete="off"
+                    autoCorrect="off"
+                    autoCapitalize="words"
+                    className="mt-2 w-full rounded-2xl border border-black/5 bg-neutral-50/50 focus:bg-white px-4 py-3.5 text-base font-medium text-neutral-900 transition-colors focus:border-neutral-950 focus:outline-none focus:ring-1 focus:ring-neutral-950 placeholder:text-neutral-400"
                   />
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 sm:gap-4">
                   <div>
                     <label className="text-[10px] font-bold uppercase tracking-widest text-neutral-400">Giro del Negocio</label>
-                    <select
-                      value={joinRestGiro}
-                      onChange={(e) => setJoinRestGiro(e.target.value)}
-                      className="mt-2 w-full rounded-2xl border border-black/5 bg-neutral-50/50 focus:bg-white px-4 py-3 text-sm font-medium text-neutral-900 transition-colors focus:border-neutral-950 focus:outline-none focus:ring-1 focus:ring-neutral-950"
-                    >
-                      <option value="Restaurante">Restaurante</option>
-                      <option value="Pastelería">Pastelería</option>
-                      <option value="Abarrotes">Abarrotes / Tiendita</option>
-                      <option value="Farmacia">Farmacia</option>
-                      <option value="Cafetería">Cafetería</option>
-                      <option value="Otro">Otro</option>
-                    </select>
+                    <div className="mt-2 grid grid-cols-2 gap-1.5 rounded-2xl border border-black/5 bg-neutral-50/50 p-1.5">
+                      {[
+                        { value: 'Restaurante', label: 'Restaurante', icon: '🍽️' },
+                        { value: 'Tienda', label: 'Tienda', icon: '🛒' },
+                      ].map((opt) => {
+                        const isActive = joinRestGiro === opt.value;
+                        return (
+                          <button
+                            key={opt.value}
+                            type="button"
+                            onClick={() => setJoinRestGiro(opt.value)}
+                            className={`flex items-center justify-center gap-1.5 rounded-xl px-3 py-2.5 text-xs font-bold transition-all active:scale-[0.98] ${
+                              isActive
+                                ? 'bg-white text-neutral-950 shadow-sm ring-1 ring-black/5'
+                                : 'text-neutral-500 hover:text-neutral-800'
+                            }`}
+                          >
+                            <span aria-hidden="true">{opt.icon}</span>
+                            {opt.label}
+                          </button>
+                        );
+                      })}
+                    </div>
                   </div>
                   <div>
                     <label className="text-[10px] font-bold uppercase tracking-widest text-neutral-400">WhatsApp de Contacto</label>
@@ -6590,8 +6607,10 @@ export default function Home() {
                       type="tel"
                       value={joinRestWhatsapp}
                       onChange={(e) => setJoinRestWhatsapp(e.target.value)}
-                      placeholder="Ej. 5512345678"
-                      className="mt-2 w-full rounded-2xl border border-black/5 bg-neutral-50/50 focus:bg-white px-4 py-3 text-sm font-medium text-neutral-900 transition-colors focus:border-neutral-950 focus:outline-none focus:ring-1 focus:ring-neutral-950 placeholder:text-neutral-300"
+                      placeholder="5512345678"
+                      autoComplete="off"
+                      inputMode="tel"
+                      className="mt-2 w-full rounded-2xl border border-black/5 bg-neutral-50/50 focus:bg-white px-4 py-3.5 text-base font-medium text-neutral-900 transition-colors focus:border-neutral-950 focus:outline-none focus:ring-1 focus:ring-neutral-950 placeholder:text-neutral-400"
                     />
                   </div>
                 </div>
@@ -6602,8 +6621,11 @@ export default function Home() {
                     type="text"
                     value={joinRestLocation}
                     onChange={(e) => setJoinRestLocation(e.target.value)}
-                    placeholder="Ej. Col. Centro, Calle Juárez #45"
-                    className="mt-2 w-full rounded-2xl border border-black/5 bg-neutral-50/50 focus:bg-white px-4 py-3 text-sm font-medium text-neutral-900 transition-colors focus:border-neutral-950 focus:outline-none focus:ring-1 focus:ring-neutral-950 placeholder:text-neutral-300"
+                    placeholder="Calle, número y colonia"
+                    autoComplete="off"
+                    autoCorrect="off"
+                    autoCapitalize="words"
+                    className="mt-2 w-full rounded-2xl border border-black/5 bg-neutral-50/50 focus:bg-white px-4 py-3.5 text-base font-medium text-neutral-900 transition-colors focus:border-neutral-950 focus:outline-none focus:ring-1 focus:ring-neutral-950 placeholder:text-neutral-400"
                   />
                 </div>
 
