@@ -894,9 +894,6 @@ export default function RestaurantPage({
     clientOrderKeyRef.current = '';
   }, [cartItems]);
 
-  // Estados para Modal de Repartidor Llegó
-  const [isDriverArrivedModalOpen, setIsDriverArrivedModalOpen] = useState(false);
-  const [arrivedOrder, setArrivedOrder] = useState<CustomerOrderDetail | null>(null);
   const [pickupReadyOrder, setPickupReadyOrder] = useState<CustomerOrderDetail | null>(null);
   const [copiedField, setCopiedField] = useState<'account' | 'beneficiary' | 'amount' | null>(null);
 
@@ -1471,25 +1468,12 @@ export default function RestaurantPage({
         }
 
         if (['order:driver-arrived', 'order:driver_arrived'].includes(eventName) && payload.orderId) {
-          if (process.env.NODE_ENV !== 'production') {
-            console.log(`[Socket.io] [Restaurante] Cargando detalles de pedido para ID de llegada: ${payload.orderId}`);
-          }
-          requestJson<{ success: true; data: CustomerOrderDetail }>({
-            apiBase,
-            path: `/me/pedidos/${payload.orderId}`,
-            token,
-            fallbackMessage: 'No se pudo cargar el detalle del pedido.',
-          }).then((res) => {
-            if (process.env.NODE_ENV !== 'production') {
-              console.log(`[Socket.io] [Restaurante] Detalle cargado con éxito para modal de llegada:`, res.data);
-            }
-            setArrivedOrder(res.data);
-            setIsDriverArrivedModalOpen(true);
-          }).catch((err) => {
-            if (process.env.NODE_ENV !== 'production') {
-              console.error(`[Socket.io] [Restaurante] Error al obtener detalles de pedido en llegada:`, err);
-            }
-          });
+          // El modal de llegada lo gestiona el listener global (DriverArrivalModal).
+          // Aquí solo se persiste la referencia para que el modal global lo restaure
+          // sin importar la ruta en la que navegue el comensal.
+          try {
+            localStorage.setItem('sadel_persistent_modal', JSON.stringify({ type: 'driver_arrived', orderId: payload.orderId }));
+          } catch (e) {}
         }
 
         if (eventName === 'order:cancellation-approved') {
@@ -3421,80 +3405,6 @@ function triggerHaptic(pattern: number | number[] = 10) {
           );
         })()}
 
-        {/* Modal de Repartidor Llegó */}
-        {isDriverArrivedModalOpen && arrivedOrder && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 backdrop-blur-sm px-4 py-6" onClick={() => setIsDriverArrivedModalOpen(false)}>
-            <div 
-              className="bg-white dark:bg-[#121214] rounded-3xl border border-black/[0.03] dark:border-zinc-800/80 shadow-[0_20px_50px_rgba(0,0,0,0.15)] dark:shadow-[0_20px_50px_rgba(0,0,0,0.4)] p-7 w-full max-w-md h-fit max-h-[90vh] overflow-y-auto relative transition-all" 
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-sky-1000/10 to-transparent dark:from-sky-1000/15 rounded-full blur-3xl pointer-events-none"></div>
-              
-              <div className="text-center mb-6">
-                <div className="w-20 h-20 bg-[var(--menu-accent-soft)] dark:bg-sky-900/30 rounded-full flex items-center justify-center mx-auto mb-4 border-4 border-sky-100 dark:border-sky-800/20 shadow-inner">
-                  <span className="text-4xl animate-bounce"><svg className="h-10 w-10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13.5 21v-7.5a.75.75 0 01.75-.75h3a.75.75 0 01.75.75V21m-4.5 0H2.36m11.14 0H18m0 0h3.64m-1.39 0V9.349m-16.5 11.65V9.35m0 0a3.001 3.001 0 003.75-.615A2.993 2.993 0 009.75 9.75c.896 0 1.7-.393 2.25-1.016a2.993 2.993 0 002.25 1.016c.896 0 1.7-.393 2.25-1.016a3.001 3.001 0 003.75.614m-16.5 0a3.004 3.004 0 01-.621-4.72L4.318 3.44A1.5 1.5 0 015.378 3h13.243a1.5 1.5 0 011.06.44l1.19 1.189a3 3 0 01-.621 4.72m-13.5 8.65h3.75a.75.75 0 00.75-.75V13.5a.75.75 0 00-.75-.75H6.75a.75.75 0 00-.75.75v3.75c0 .415.336.75.75.75z" /></svg></span>
-                </div>
-                <h3 className="text-2xl font-black text-neutral-950 dark:text-white tracking-tight">¡Tu repartidor ha llegado!</h3>
-                <p className="text-sm text-neutral-500 dark:text-neutral-400 mt-1">El repartidor ya está afuera de tu domicilio con tu pedido.</p>
-              </div>
-
-              <div className="space-y-4">
-                {/* Total a pagar */}
-                <div className="p-5 rounded-2xl bg-amber-50/40 dark:bg-amber-950/10 border border-amber-100/50 dark:border-amber-900/20">
-                  <div className="flex justify-between items-center">
-                    <div>
-                      <p className="text-[10px] font-semibold text-neutral-500 dark:text-neutral-400 uppercase tracking-wider">
-                        {arrivedOrder.paymentMethod === 'CASH' ? 'Total a pagar' : 'Total del pedido'}
-                      </p>
-                      <p className="text-3xl font-black text-neutral-900 dark:text-white mt-1">
-                        {formatCurrency(arrivedOrder.totalAmount)}
-                      </p>
-                    </div>
-                    <div className="text-right">
-                      <span className={`inline-block px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider ${
-                        arrivedOrder.paymentMethod === 'CASH'
-                          ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-400 border border-amber-200 dark:border-amber-800/40'
-                          : arrivedOrder.paymentMethod === 'TRANSFER'
-                            ? 'bg-[var(--menu-accent-soft-strong)] dark:bg-sky-900/30 text-[var(--menu-accent-strong)] dark:text-sky-400 border border-sky-200 dark:border-sky-800/40'
-                            : 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-400 border border-green-200 dark:border-green-800/40'
-                      }`}>
-                        {arrivedOrder.paymentMethod === 'CASH' ? <><svg className="h-3.5 w-3.5 inline-block align-text-bottom" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 6v12m-3-2.818l.879.659c1.171.879 3.07.879 4.242 0 1.172-.879 1.172-2.303 0-3.182C13.536 12.219 12.768 12 12 12c-.725 0-1.45-.22-2.003-.659-1.106-.879-1.106-2.303 0-3.182s2.9-.879 4.006 0l.415.33M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg> Efectivo</> : arrivedOrder.paymentMethod === 'TRANSFER' ? <><svg className="h-3.5 w-3.5 inline-block align-text-bottom" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M2.25 21h19.5m-18-18v18m10.5-18v18m6-13.5V21M6.75 6.75h.75m-.75 3h.75m-.75 3h.75m3-6h.75m-.75 3h.75m-.75 3h.75M6.75 21v-3.375c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21M3 3h12m-.75 4.5H21m-3.75 3.75h.008v.008h-.008v-.008zm0 3h.008v.008h-.008v-.008zm0 3h.008v.008h-.008v-.008z" /></svg> Transferencia</> : '💳 Pago Online'}
-                      </span>
-                      <p className="text-[10px] text-neutral-400 dark:text-neutral-500 mt-1.5 font-medium">
-                        {arrivedOrder.paymentMethod === 'CASH' ? 'Prepara el efectivo exacto' : 'Ya pagado vía app'}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                {/* deliveryPin (handoverPin como fallback) */}
-                {(arrivedOrder.deliveryPin || arrivedOrder.handoverPin) && (
-                  <div className="p-5 rounded-2xl bg-indigo-50/50 dark:bg-indigo-950/15 border border-indigo-100/50 dark:border-indigo-900/30 text-center">
-                    <p className="text-[10px] font-semibold text-indigo-600 dark:text-indigo-400 uppercase tracking-widest">Código de entrega</p>
-                    <p className="text-4xl font-extrabold tracking-[0.25em] text-indigo-950 dark:text-indigo-200 font-mono mt-2 mb-1.5 pl-[0.25em]">
-                      {arrivedOrder.deliveryPin || arrivedOrder.handoverPin}
-                    </p>
-                    <p className="text-[11px] text-neutral-500 dark:text-neutral-400 leading-relaxed">
-                      Proporciona este código al repartidor para confirmar la entrega.
-                    </p>
-                  </div>
-                )}
-              </div>
-
-              {/* Botón de cierre */}
-              <div className="mt-6 flex gap-3">
-                <button
-                  type="button"
-                  onClick={() => setIsDriverArrivedModalOpen(false)}
-                  className="flex-1 rounded-full bg-neutral-950 dark:bg-white text-white dark:text-neutral-950 py-3.5 text-sm font-bold shadow-md transition hover:bg-neutral-800 dark:hover:bg-neutral-100 active:scale-95 active-scale"
-                >
-                  Entendido
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
         {/* Modal PERSISTENTE de cancelación por el restaurante (con motivo) */}
         {cancelledOrderNotice && (
           <div
@@ -4189,7 +4099,7 @@ function triggerHaptic(pattern: number | number[] = 10) {
                       <div className="space-y-3.5">
                         <div className="flex items-center justify-between border-b border-black/[0.05] pb-3">
                           <div className="flex items-center gap-2.5">
-                            <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[var(--accent)] text-[11px] font-black text-white">🎟️</span>
+                            <svg className="h-5 w-5 text-[var(--accent)]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M9 14l6-6m-5.5.5h.01m4.99 5h.01M5 13v6a2 2 0 002 2h10a2 2 0 002-2v-6m-2 0a2 2 0 110-4m-8 4a2 2 0 100-4m7 4V7a2 2 0 00-2-2H7a2 2 0 00-2 2v6" /></svg>
                             <h3 className="text-[13px] font-bold tracking-tight text-neutral-900">Cupón de descuento</h3>
                           </div>
                         </div>
@@ -4233,10 +4143,11 @@ function triggerHaptic(pattern: number | number[] = 10) {
                       <button
                         type="button"
                         onClick={() => setIsCouponOpen(true)}
-                        className="flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-black/10 bg-neutral-50/60 px-4 py-3 text-sm font-semibold text-neutral-600 transition hover:border-sky-300 hover:bg-sky-50/50 hover:text-sky-700 active:scale-[0.99]"
+                        className="group relative flex w-full items-center justify-center gap-2 overflow-hidden rounded-2xl bg-gradient-to-br from-[var(--accent)] to-[var(--accent-strong)] px-4 py-3.5 text-sm font-bold text-white shadow-[0_8px_20px_-6px_rgba(14,165,233,0.45)] transition-all hover:shadow-[0_12px_24px_-8px_rgba(14,165,233,0.55)] hover:brightness-110 active:scale-[0.98]"
                       >
-                        <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M9 14l6-6m-5.5.5h.01m4.99 5h.01M5 13v6a2 2 0 002 2h10a2 2 0 002-2v-6m-2 0a2 2 0 110-4m-8 4a2 2 0 100-4m7 4V7a2 2 0 00-2-2H7a2 2 0 00-2 2v6" /></svg>
-                        Tengo un cupón
+                        <div className="absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/20 to-transparent transition-transform duration-1000 group-hover:translate-x-full" />
+                        <svg className="relative z-10 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M9 14l6-6m-5.5.5h.01m4.99 5h.01M5 13v6a2 2 0 002 2h10a2 2 0 002-2v-6m-2 0a2 2 0 110-4m-8 4a2 2 0 100-4m7 4V7a2 2 0 00-2-2H7a2 2 0 00-2 2v6" /></svg>
+                        <span className="relative z-10">Tengo un cupón</span>
                       </button>
                     )}
                   </div>

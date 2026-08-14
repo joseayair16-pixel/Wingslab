@@ -5,6 +5,7 @@ import '../styles/globals.css';
 import ServiceWorkerRegister from './ServiceWorkerRegister';
 import InstallAppButton from '../components/InstallAppButton';
 import SplashScreen from '../components/SplashScreen';
+import DriverArrivalModal from '../components/DriverArrivalModal';
 
 const inter = Inter({
   subsets: ['latin'],
@@ -138,6 +139,7 @@ export default function RootLayout({
         <InstallAppButton />
         <SplashScreen />
         {children}
+        <DriverArrivalModal />
       </body>
     </html>
   );

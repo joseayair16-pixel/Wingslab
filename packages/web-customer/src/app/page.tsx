@@ -984,8 +984,6 @@ export default function Home() {
   const [restaurantRating, setRestaurantRating] = useState(0);
   const [driverRatingVal, setDriverRatingVal] = useState(0);
   const [isSubmittingRating, setIsSubmittingRating] = useState(false);
-  const [isDriverArrivedModalOpen, setIsDriverArrivedModalOpen] = useState(false);
-  const [arrivedOrder, setArrivedOrder] = useState<CustomerOrderDetail | null>(null);
   const [cancelledOrderNotice, setCancelledOrderNotice] = useState<CustomerOrderDetail | null>(null);
   const [pickupReadyOrder, setPickupReadyOrder] = useState<CustomerOrderDetail | null>(null);
   const [visibleOrdersCount, setVisibleOrdersCount] = useState(10);
@@ -1166,15 +1164,11 @@ export default function Home() {
         if (parsed.type === 'pickup_ready' && detailRes.data.fulfillmentType === 'PICKUP') {
           setPickupReadyOrder(detailRes.data);
         } else if (parsed.type === 'driver_arrived') {
-          // Solo restaurar el modal si el pedido sigue en camino. Si ya fue
-          // entregado o liberado (p. ej. "cliente no salió"), el aviso de
-          // llegada es obsoleto y debe limpiarse para que no reaparezca en
-          // cada recarga.
+          // El modal de llegada lo gestiona el listener global (DriverArrivalModal),
+          // que restaura el estado desde el pedido. Aquí solo se limpia la
+          // persistencia si el pedido ya no está en camino.
           const arrivedStatus = normalizeOrderStatusValue(detailRes.data.status);
-          if (arrivedStatus === 'IN_TRANSIT') {
-            setArrivedOrder(detailRes.data);
-            setIsDriverArrivedModalOpen(true);
-          } else {
+          if (arrivedStatus !== 'IN_TRANSIT') {
             localStorage.removeItem('sadel_persistent_modal');
           }
         } else {
@@ -1187,43 +1181,6 @@ export default function Home() {
       localStorage.removeItem('sadel_persistent_modal');
     }
   }, [apiBase, token]);
-
-  // Reabrir el modal "Tu repartidor ha llegado" desde los datos del pedido.
-  // Cubre el caso en que la app estaba cerrada o la pestaña en segundo plano y
-  // el evento de socket se perdió: si el repartidor ya llegó a la puerta
-  // (driverArrivedAtCustomer) y el comensal aún no pulsó "Entendido", el modal
-  // debe seguir apareciendo hasta que lo reconozca.
-  useEffect(() => {
-    if (!token) return;
-    if (isDriverArrivedModalOpen) return;
-    if (!orders || orders.length === 0) return;
-
-    const arrivedOrderItem = orders.find(
-      (o) => o.driverArrivedAtCustomer && o.status === 'IN_TRANSIT'
-    );
-    if (!arrivedOrderItem) return;
-
-    try {
-      if (localStorage.getItem(`sadel_driver_arrived_ack_${arrivedOrderItem.id}`) === 'true') return;
-    } catch {}
-
-    requestJson<{ success: true; data: CustomerOrderDetail }>({
-      apiBase,
-      path: `/me/pedidos/${arrivedOrderItem.id}`,
-      token,
-    })
-      .then((detailRes) => {
-        if (!detailRes.success || !detailRes.data) return;
-        if (
-          normalizeOrderStatusValue(detailRes.data.status) === 'IN_TRANSIT' &&
-          detailRes.data.driverArrivedAtCustomer
-        ) {
-          setArrivedOrder(detailRes.data);
-          setIsDriverArrivedModalOpen(true);
-        }
-      })
-      .catch(() => {});
-  }, [orders, token, apiBase, isDriverArrivedModalOpen]);
 
   // Modal PERSISTENTE de cancelación por el restaurante: no se cierra hasta que
   // el comensal pulse "Entendido" (ni al recargar). Cubre el caso en que la app
@@ -3528,9 +3485,9 @@ export default function Home() {
             console.log(`[Socket.io] Detalle cargado para pedido ${payload.orderId}:`, orderData);
             if (['order:driver-arrived', 'order:driver_arrived'].includes(eventName)) {
               if (orderData) {
-                console.log('[Socket.io] Abriendo modal premium de llegada del repartidor con datos:', orderData);
-                setArrivedOrder(orderData);
-                setIsDriverArrivedModalOpen(true);
+                // El modal de llegada lo gestiona el listener global (DriverArrivalModal).
+                // Aquí solo se persiste la referencia para que el modal global lo restaure
+                // si el comensal está en cualquier otra ruta o recarga la página.
                 try { localStorage.setItem('sadel_persistent_modal', JSON.stringify({ type: 'driver_arrived', orderId: payload.orderId })); } catch {}
               } else {
                 console.error(`[Socket.io] Error: se recibio ${eventName} pero los datos del pedido son nulos.`);
@@ -3574,8 +3531,6 @@ export default function Home() {
       // Limpiar cualquier modal/apilado que haya quedado detrás del bloqueo
       // (aviso de suspensión, modal de llegada del repartidor, pickup).
       setTransientNotice(null);
-      setIsDriverArrivedModalOpen(false);
-      setArrivedOrder(null);
       setPickupReadyOrder(null);
       try { localStorage.removeItem('sadel_persistent_modal'); } catch {}
       setToastMessage('Tu cuenta ha sido reactivada. ¡Gracias por liquidar tu saldo!', 'success');
@@ -6122,87 +6077,6 @@ export default function Home() {
         })()}
 
         {/* Modal de Repartidor Llegó — no dismissible */}
-        {isDriverArrivedModalOpen && arrivedOrder && arrivedOrder.status && isActiveOrderStatus(arrivedOrder.status) && (
-          <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/70 backdrop-blur-sm px-4 py-6">
-            <div
-              className="bg-white dark:bg-[#121214] rounded-3xl border border-black/[0.03] dark:border-zinc-800/80 shadow-[0_20px_50px_rgba(0,0,0,0.15)] dark:shadow-[0_20px_50px_rgba(0,0,0,0.4)] p-7 w-full max-w-md h-fit max-h-[90vh] overflow-y-auto relative transition-all"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-sky-1000/10 to-transparent dark:from-sky-1000/15 rounded-full blur-3xl pointer-events-none"></div>
-
-              <div className="text-center mb-6">
-                <div className="w-20 h-20 bg-sky-200 dark:bg-sky-900/30 rounded-full flex items-center justify-center mx-auto mb-4 border-4 border-sky-100 dark:border-sky-800/20 shadow-inner">
-                  <span className="text-4xl animate-bounce">🛵</span>
-                </div>
-                <h3 className="text-2xl font-black text-neutral-950 dark:text-white tracking-tight">¡Tu repartidor ha llegado!</h3>
-                <p className="text-sm text-neutral-500 dark:text-neutral-400 mt-1">El repartidor ya está afuera de tu domicilio con tu pedido.</p>
-              </div>
-
-              <div className="space-y-4">
-                {/* Total a pagar */}
-                <div className="p-5 rounded-2xl bg-amber-50/40 dark:bg-amber-950/10 border border-amber-100/50 dark:border-amber-900/20">
-                  <div className="flex justify-between items-center">
-                    <div>
-                      <p className="text-[10px] font-semibold text-neutral-500 dark:text-neutral-400 uppercase tracking-wider">
-                        {arrivedOrder.paymentMethod === 'CASH' ? 'Total a pagar' : 'Total del pedido'}
-                      </p>
-                      <p className="text-3xl font-black text-neutral-900 dark:text-white mt-1">
-                        {formatCurrency(arrivedOrder.totalAmount)}
-                      </p>
-                    </div>
-                    <div className="text-right">
-                      <span className={`inline-block px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider ${
-                        arrivedOrder.paymentMethod === 'CASH'
-                          ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-400 border border-amber-200 dark:border-amber-800/40'
-                          : arrivedOrder.paymentMethod === 'TRANSFER'
-                            ? 'bg-sky-100 dark:bg-sky-900/30 text-sky-800 dark:text-sky-400 border border-sky-200 dark:border-sky-800/40'
-                            : 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-400 border border-green-200 dark:border-green-800/40'
-                      }`}>
-                        {arrivedOrder.paymentMethod === 'CASH' ? '💵 Efectivo' : arrivedOrder.paymentMethod === 'TRANSFER' ? '🏦 Transferencia' : '💳 Pago Online'}
-                      </span>
-                      <p className="text-[10px] text-neutral-400 dark:text-neutral-500 mt-1.5 font-medium">
-                        {arrivedOrder.paymentMethod === 'CASH' ? 'Prepara el efectivo exacto' : 'Ya pagado vía app'}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                {/* deliveryPin (handoverPin como fallback) — solo para transferencia */}
-                {arrivedOrder.paymentMethod === 'TRANSFER' && (arrivedOrder.deliveryPin || arrivedOrder.handoverPin) && (
-                  <div className="p-5 rounded-2xl bg-indigo-50/50 dark:bg-indigo-950/15 border border-indigo-100/50 dark:border-indigo-900/30 text-center">
-                    <p className="text-[10px] font-semibold text-indigo-600 dark:text-indigo-400 uppercase tracking-widest">Código de entrega</p>
-                    <p className="text-4xl font-extrabold tracking-[0.25em] text-indigo-950 dark:text-indigo-200 font-mono mt-2 mb-1.5 pl-[0.25em]">
-                      {arrivedOrder.deliveryPin || arrivedOrder.handoverPin}
-                    </p>
-                    <p className="text-[11px] text-neutral-500 dark:text-neutral-400 leading-relaxed">
-                      Proporciona este código al repartidor para confirmar la entrega.
-                    </p>
-                  </div>
-                )}
-              </div>
-
-              {/* Botón de cierre */}
-              <div className="mt-6 flex gap-3">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsDriverArrivedModalOpen(false);
-                    setArrivedOrder(null);
-                    if (arrivedOrder) {
-                      try { localStorage.setItem(`sadel_driver_arrived_ack_${arrivedOrder.id}`, 'true'); } catch {}
-                    }
-                    localStorage.removeItem('sadel_driver_arrived_order');
-                    localStorage.removeItem('sadel_persistent_modal');
-                  }}
-                  className="flex-1 rounded-full bg-neutral-950 dark:bg-white text-white dark:text-neutral-950 py-3.5 text-sm font-bold shadow-md transition hover:bg-neutral-800 dark:hover:bg-neutral-100 active:scale-95"
-                >
-                  Entendido
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
         {/* Modal PERSISTENTE de cancelación por el restaurante: no se cierra
             hasta que el comensal pulse "Entendido" (ni al recargar). */}
         {cancelledOrderNotice && (
