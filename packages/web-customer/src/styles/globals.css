@@ -15,9 +15,11 @@
   
   /* Azul Celeste – Identidad SaDeL */
   --accent: #38BDF8;
+  --accent-strong: #0284c7;
   --accent-hover: #0EA5E9;
   --accent-soft: #eef8fd;
   --accent-soft-hover: #d6eef9;
+  --accent-soft-strong: #cbeafb;
   --accent-text: #ffffff;
   
   --success-soft: #e8f6ed;

@@ -792,6 +792,7 @@ export default function RestaurantPage({
   const [promoCodeState, setPromoCodeState] = useState<'idle' | 'validating' | 'valid' | 'invalid'>('idle');
   const [promoCodeInfo, setPromoCodeInfo] = useState<{ code: string; type: 'PERCENT' | 'AMOUNT' | 'FREE_DELIVERY'; value: number; discount: number; description?: string | null } | null>(null);
   const [promoCodeError, setPromoCodeError] = useState('');
+  const [isCouponOpen, setIsCouponOpen] = useState(false);
   const [loadingRestaurant, setLoadingRestaurant] = useState(true);
   const [creatingOrder, setCreatingOrder] = useState(false);
   const [isCartOpen, setIsCartOpen] = useState(false);
@@ -2010,7 +2011,17 @@ export default function RestaurantPage({
     return Math.round(fee * 100) / 100;
   }, [restaurant, distanceKm, fulfillmentType, cartSubtotal, discountAmount]);
 
-  const orderTotal = Math.max(0, cartSubtotal - discountAmount - (promoCodeState === 'valid' && promoCodeInfo ? promoCodeInfo.discount : 0) + serviceFee + (fulfillmentType === 'PICKUP' ? 0 : deliveryFee));
+  const effectiveSubtotal = Math.max(0, cartSubtotal - discountAmount);
+  const couponDiscount = promoCodeState === 'valid' && promoCodeInfo ? promoCodeInfo.discount : 0;
+  const minOrderDiscount =
+    restaurant?.promoMinOrderPercent != null &&
+    restaurant?.promoMinOrderPercent > 0 &&
+    restaurant?.promoMinOrderAmount != null &&
+    restaurant?.promoMinOrderAmount > 0 &&
+    effectiveSubtotal >= restaurant.promoMinOrderAmount
+      ? Math.round(effectiveSubtotal * restaurant.promoMinOrderPercent / 100 * 100) / 100
+      : 0;
+  const orderTotal = Math.max(0, effectiveSubtotal - couponDiscount - minOrderDiscount + serviceFee + (fulfillmentType === 'PICKUP' ? 0 : deliveryFee));
   const checkoutValidationMessage = useMemo(() => {
     return getCheckoutValidationMessage(checkoutForm, cart, restaurant, token, Boolean(transferProofSource));
   }, [cart, checkoutForm, restaurant, token, transferProofSource]);
@@ -2710,6 +2721,7 @@ function triggerHaptic(pattern: number | number[] = 10) {
       setPromoCodeState('idle');
       setPromoCodeInfo(null);
       setPromoCodeError('');
+      setIsCouponOpen(false);
       setIsCheckoutOpen(false);
       setTransferProofName('');
       setTransferProofSource('');
@@ -4123,74 +4135,42 @@ function triggerHaptic(pattern: number | number[] = 10) {
 
                   {/* ── PASO 2.5: CUPÓN ── */}
                   <div className="rounded-[22px] border border-black/[0.04] bg-white p-4 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
-                    <div className="mb-4 flex items-center justify-between border-b border-black/[0.05] pb-3">
-                      <div className="flex items-center gap-2.5">
-                        <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[var(--accent)] text-[11px] font-black text-white">🎟️</span>
-                        <h3 className="text-[13px] font-bold tracking-tight text-neutral-900">Cupón de descuento</h3>
-                      </div>
-                    </div>
-                    <div className="space-y-3.5">
-                      <div className="flex gap-2">
-                        <div className="flex-1">
-                          <Field
-                            label="Código promocional"
-                            value={checkoutForm.promoCode}
-                            onChange={(value) => {
-                              setCheckoutForm((current) => ({ ...current, promoCode: value.toUpperCase() }));
-                              setPromoCodeState('idle');
-                              setPromoCodeInfo(null);
-                              setPromoCodeError('');
-                            }}
-                            placeholder="Ej. VERANO10"
-                          />
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => void validatePromoCode()}
-                          disabled={!checkoutForm.promoCode.trim() || promoCodeState === 'validating'}
-                          className="mt-6 inline-flex h-[46px] shrink-0 items-center justify-center gap-1.5 rounded-xl bg-neutral-950 px-4 text-sm font-bold text-white transition hover:bg-neutral-800 active:scale-[0.97] disabled:cursor-not-allowed disabled:bg-neutral-200 disabled:text-neutral-400"
-                        >
-                          {promoCodeState === 'validating' ? (
-                            <svg className="h-4 w-4 animate-spin text-white" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
-                          ) : promoCodeState === 'valid' ? (
-                            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
-                          ) : (
-                            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-5.2-5.2m1.7-4.3a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
-                          )}
-                          {promoCodeState === 'validating' ? 'Validando...' : promoCodeState === 'valid' ? 'Aplicado' : 'Aplicar'}
-                        </button>
-                      </div>
-
-                      {promoCodeState === 'valid' && promoCodeInfo && (
-                        <div className="flex items-start gap-2.5 rounded-xl border border-emerald-200 bg-emerald-50 px-3.5 py-3">
-                          <svg className="mt-0.5 h-4 w-4 shrink-0 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                          <div className="min-w-0">
-                            <p className="text-xs font-bold text-emerald-700">
-                              Cupón {promoCodeInfo.code} aplicado
-                              {promoCodeInfo.type === 'PERCENT' && ` · ${promoCodeInfo.value}% OFF`}
-                              {promoCodeInfo.type === 'AMOUNT' && ` · -$${promoCodeInfo.value}`}
-                              {promoCodeInfo.type === 'FREE_DELIVERY' && ' · Envío gratis'}
-                            </p>
-                            {promoCodeInfo.discount > 0 && (
-                              <p className="mt-0.5 text-[11px] font-semibold text-emerald-600">
-                                Descuento: -{formatCurrency(promoCodeInfo.discount)}
+                    {promoCodeState === 'valid' && promoCodeInfo ? (
+                      <div className="space-y-3.5">
+                        <div className="overflow-hidden rounded-2xl border border-sky-200/70 bg-gradient-to-br from-sky-50/90 via-white to-blue-50/60">
+                          <div className="flex items-start gap-3 border-b border-sky-100/80 px-4 py-3.5">
+                            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-[var(--accent)] to-[var(--accent-strong)] text-white shadow-[0_6px_14px_-4px_rgba(2,132,199,0.5)]">
+                              <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <p className="text-[13px] font-bold text-neutral-900">
+                                Cupón {promoCodeInfo.code} aplicado correctamente
                               </p>
-                            )}
+                              <p className="mt-0.5 text-[11px] font-semibold text-[var(--accent-strong)]">
+                                {promoCodeInfo.type === 'PERCENT' && `${promoCodeInfo.value}% de descuento`}
+                                {promoCodeInfo.type === 'AMOUNT' && `-${formatCurrency(promoCodeInfo.value)} en tu pedido`}
+                                {promoCodeInfo.type === 'FREE_DELIVERY' && 'Envío gratis en este pedido'}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="space-y-1.5 px-4 py-3.5 text-[12px]">
+                            <div className="flex items-center justify-between">
+                              <span className="text-neutral-500">Total sin cupón</span>
+                              <span className="font-semibold text-neutral-900">{formatCurrency(orderTotal + promoCodeInfo.discount)}</span>
+                            </div>
+                            <div className="flex items-center justify-between">
+                              <span className="text-neutral-500">Cupón {promoCodeInfo.code}</span>
+                              <span className="font-bold text-[var(--accent-strong)]">-{formatCurrency(promoCodeInfo.discount)}</span>
+                            </div>
                             {promoCodeInfo.description && (
-                              <p className="mt-0.5 text-[11px] text-emerald-600/80">{promoCodeInfo.description}</p>
+                              <p className="pt-1 text-[11px] text-neutral-400">{promoCodeInfo.description}</p>
                             )}
+                            <div className="mt-1.5 flex items-center justify-between rounded-xl bg-gradient-to-br from-[var(--accent)] to-[var(--accent-strong)] px-3.5 py-2.5 shadow-[0_8px_18px_-6px_rgba(2,132,199,0.5)]">
+                              <span className="text-[11px] font-bold uppercase tracking-wide text-white/90">Nuevo total</span>
+                              <span className="text-[15px] font-extrabold tracking-tight text-white">{formatCurrency(orderTotal)}</span>
+                            </div>
                           </div>
                         </div>
-                      )}
-
-                      {promoCodeState === 'invalid' && (
-                        <div className="flex items-start gap-2.5 rounded-xl border border-rose-200 bg-rose-50 px-3.5 py-3">
-                          <svg className="mt-0.5 h-4 w-4 shrink-0 text-rose-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" /></svg>
-                          <p className="text-xs font-medium text-rose-600">{promoCodeError || 'El código promocional no es válido.'}</p>
-                        </div>
-                      )}
-
-                      {checkoutForm.promoCode && (
                         <button
                           type="button"
                           onClick={() => {
@@ -4198,13 +4178,67 @@ function triggerHaptic(pattern: number | number[] = 10) {
                             setPromoCodeState('idle');
                             setPromoCodeInfo(null);
                             setPromoCodeError('');
+                            setIsCouponOpen(false);
                           }}
                           className="text-[11px] font-semibold text-neutral-400 underline-offset-2 hover:text-neutral-600 hover:underline"
                         >
                           Quitar cupón
                         </button>
-                      )}
-                    </div>
+                      </div>
+                    ) : isCouponOpen ? (
+                      <div className="space-y-3.5">
+                        <div className="flex items-center justify-between border-b border-black/[0.05] pb-3">
+                          <div className="flex items-center gap-2.5">
+                            <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[var(--accent)] text-[11px] font-black text-white">🎟️</span>
+                            <h3 className="text-[13px] font-bold tracking-tight text-neutral-900">Cupón de descuento</h3>
+                          </div>
+                        </div>
+                        <div className="flex gap-2">
+                          <div className="flex-1">
+                            <Field
+                              label="Código promocional"
+                              value={checkoutForm.promoCode}
+                              onChange={(value) => {
+                                setCheckoutForm((current) => ({ ...current, promoCode: value.toUpperCase() }));
+                                setPromoCodeState('idle');
+                                setPromoCodeInfo(null);
+                                setPromoCodeError('');
+                              }}
+                              placeholder="Ej. VERANO10"
+                            />
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => void validatePromoCode()}
+                            disabled={!checkoutForm.promoCode.trim() || promoCodeState === 'validating'}
+                            className="mt-6 inline-flex h-[46px] shrink-0 items-center justify-center gap-1.5 rounded-xl bg-neutral-950 px-4 text-sm font-bold text-white transition hover:bg-neutral-800 active:scale-[0.97] disabled:cursor-not-allowed disabled:bg-neutral-200 disabled:text-neutral-400"
+                          >
+                            {promoCodeState === 'validating' ? (
+                              <svg className="h-4 w-4 animate-spin text-white" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                            ) : (
+                              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-5.2-5.2m1.7-4.3a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+                            )}
+                            {promoCodeState === 'validating' ? 'Validando...' : 'Aplicar'}
+                          </button>
+                        </div>
+
+                        {promoCodeState === 'invalid' && (
+                          <div className="flex items-start gap-2.5 rounded-xl border border-rose-200 bg-rose-50 px-3.5 py-3">
+                            <svg className="mt-0.5 h-4 w-4 shrink-0 text-rose-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" /></svg>
+                            <p className="text-xs font-medium text-rose-600">{promoCodeError || 'El código promocional no es válido.'}</p>
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setIsCouponOpen(true)}
+                        className="flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-black/10 bg-neutral-50/60 px-4 py-3 text-sm font-semibold text-neutral-600 transition hover:border-sky-300 hover:bg-sky-50/50 hover:text-sky-700 active:scale-[0.99]"
+                      >
+                        <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M9 14l6-6m-5.5.5h.01m4.99 5h.01M5 13v6a2 2 0 002 2h10a2 2 0 002-2v-6m-2 0a2 2 0 110-4m-8 4a2 2 0 100-4m7 4V7a2 2 0 00-2-2H7a2 2 0 00-2 2v6" /></svg>
+                        Tengo un cupón
+                      </button>
+                    )}
                   </div>
 
                   {/* ── PASO 3: PAGO Y DETALLES ── */}
