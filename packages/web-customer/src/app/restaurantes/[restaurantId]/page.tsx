@@ -4748,7 +4748,7 @@ function triggerHaptic(pattern: number | number[] = 10) {
                     }
                     if (!promos.length) return null;
                     return (
-                      <div className="mt-3 flex flex-wrap gap-2">
+                      <div className="mt-3 flex flex-wrap justify-center gap-2">
                         {promos.map((promo) => (
                           <div
                             key={promo.key}
@@ -4756,7 +4756,7 @@ function triggerHaptic(pattern: number | number[] = 10) {
                           >
                             <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-sky-500 to-blue-600 text-white shadow-[0_4px_10px_-2px_rgba(2,132,199,0.5)]">
                               {promo.icon === 'delivery' ? (
-                                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M5.6 17.4a2 2 0 104 0 2 2 0 00-4 0zm9.6 0a2 2 0 104 0 2 2 0 00-4 0zM3 7h3l1.5 7h8.2l1.8-4.5H8.5M15.5 9H19l1.6 2.8a3 3 0 01.4 1.5V14h-2M11 7l-1.5 3H7" /></svg>
+                                <span className="text-[13px] leading-none">🛵</span>
                               ) : (
                                 <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M9 14l6-6m-5.5.5h.01m4.99 5h.01M5 13v6a2 2 0 002 2h10a2 2 0 002-2v-6m-2 0a2 2 0 110-4m-8 4a2 2 0 100-4m7 4V7a2 2 0 00-2-2H7a2 2 0 00-2 2v6" /></svg>
                               )}
