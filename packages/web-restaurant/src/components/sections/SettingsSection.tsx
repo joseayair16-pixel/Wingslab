@@ -467,11 +467,18 @@ export const SettingsSection = React.memo(function SettingsSection({
                       Elige el color de los botones y acentos de tu página. Tu menú se verá con tu identidad.
                     </p>
                   </div>
-                  <div className="flex flex-wrap items-center gap-2.5">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-[11px] font-bold uppercase tracking-wider text-neutral-400">Colores disponibles</span>
+                    <span className="inline-flex items-center gap-1 text-[11px] font-medium text-neutral-400">
+                      Desliza
+                      <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" /></svg>
+                    </span>
+                  </div>
+                  <div className="scrollbar-none flex items-center gap-2.5 overflow-x-auto pb-3 -mx-1 px-1 snap-x snap-mandatory">
                     <button
                       type="button"
                       onClick={() => setStoreDraft((c: any) => ({ ...c, accentColor: null }))}
-                      className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-bold transition-all active:scale-95 ${
+                      className={`inline-flex shrink-0 snap-start items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-bold transition-all active:scale-95 ${
                         !storeDraft.accentColor
                           ? 'border-sky-500 bg-sky-50 text-sky-700 ring-2 ring-sky-500/20'
                           : 'border-black/10 bg-white text-neutral-600 hover:border-black/20'
@@ -494,7 +501,7 @@ export const SettingsSection = React.memo(function SettingsSection({
                           type="button"
                           aria-label={`Color ${color}`}
                           onClick={() => setStoreDraft((c: any) => ({ ...c, accentColor: color }))}
-                          className={`flex h-9 w-9 items-center justify-center rounded-full transition-all active:scale-95 ${
+                          className={`flex h-9 w-9 shrink-0 snap-start items-center justify-center rounded-full transition-all active:scale-95 ${
                             isSelected ? 'ring-2 ring-offset-2 ring-neutral-900' : 'hover:scale-105'
                           }`}
                           style={{ backgroundColor: color }}
@@ -588,14 +595,20 @@ export const SettingsSection = React.memo(function SettingsSection({
                   </div>
                 </div>
                 <div className="sm:col-span-2">
-                  <label className="block text-[13px] font-semibold text-neutral-900 mb-2">
-                    Categorías
-                  </label>
-                  <p className="text-xs text-neutral-500 mb-3">Selecciona las categorías que mejor describan tu comida para aparecer en esas secciones de la app cliente.</p>
+                  <div className="flex items-center justify-between mb-3">
+                    <div>
+                      <label className="block text-[13px] font-semibold text-neutral-900">Categorías</label>
+                      <p className="text-xs text-neutral-500 mt-0.5">Selecciona las categorías que mejor describan tu comida para aparecer en esas secciones de la app cliente.</p>
+                    </div>
+                    <span className="inline-flex shrink-0 items-center gap-1 text-[11px] font-medium text-neutral-400">
+                      Desliza
+                      <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" /></svg>
+                    </span>
+                  </div>
                   {platformCategories.length === 0 ? (
                     <p className="text-sm text-neutral-500 italic">No hay categorías disponibles. Contacta a soporte.</p>
                   ) : (
-                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+                    <div className="scrollbar-none flex gap-3 overflow-x-auto pb-3 -mx-1 px-1 snap-x snap-mandatory">
                       {platformCategories.map((cat: any) => {
                         const isSelected = storeDraft.storeCategories.includes(cat.id);
                         return (
@@ -610,14 +623,14 @@ export const SettingsSection = React.memo(function SettingsSection({
                                   : [...prev.storeCategories, cat.id]
                               }))
                             }}
-                            className={`flex items-center gap-2 rounded-xl border p-3 text-left transition ${
+                            className={`flex w-[150px] shrink-0 snap-start items-center gap-2 rounded-xl border p-3 text-left transition ${
                               isSelected 
                                 ? 'border-neutral-900 bg-neutral-900 text-white' 
                                 : 'border-black/10 bg-white text-neutral-700 hover:border-black/20 hover:bg-neutral-50'
                             }`}
                           >
                             <span className="text-lg">{cat.icon}</span>
-                            <span className="text-sm font-medium leading-tight">{cat.name}</span>
+                            <span className="truncate text-sm font-medium leading-tight">{cat.name}</span>
                           </button>
                         );
                       })}
