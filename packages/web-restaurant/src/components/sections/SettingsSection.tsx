@@ -1721,42 +1721,37 @@ export const SettingsSection = React.memo(function SettingsSection({
         </div>
       </div>
       {promoCodeModalOpen && (
-        <div className="fixed inset-0 z-[96] flex items-center justify-center overflow-y-auto bg-black/70 px-4 py-5 backdrop-blur-md animate-fade-in"
+        <div className="fixed inset-0 z-[96] flex items-end justify-center bg-black/60 animate-fade-in sm:items-center sm:p-5"
           onClick={() => setPromoCodeModalOpen(false)}>
-          <div className="relative w-full max-w-xl overflow-hidden rounded-[32px] border border-white/60 bg-white shadow-[0_40px_120px_-20px_rgba(0,0,0,0.5)] animate-scale-up"
+          <div className="flex max-h-[92dvh] w-full flex-col overflow-hidden rounded-t-[28px] bg-white shadow-[0_32px_110px_rgba(15,15,15,0.35)] animate-scale-up sm:max-h-[calc(100vh-2.5rem)] sm:w-full sm:max-w-xl sm:rounded-[28px]"
             onClick={(e) => e.stopPropagation()}>
-            {/* Header con gradiente */}
-            <div className="relative overflow-hidden bg-gradient-to-br from-sky-600 via-blue-600 to-blue-700 px-6 py-6 sm:px-8">
-              <div className="absolute top-0 right-0 h-40 w-40 translate-x-1/4 -translate-y-1/4 rounded-full bg-white/10 blur-2xl"></div>
-              <div className="absolute bottom-0 left-0 h-32 w-32 -translate-x-1/4 translate-y-1/4 rounded-full bg-sky-400/20 blur-2xl"></div>
-              <button onClick={() => setPromoCodeModalOpen(false)}
-                className="absolute top-4 right-4 z-10 flex h-9 w-9 items-center justify-center rounded-full bg-white/15 text-white backdrop-blur-md transition-all hover:bg-white/25 hover:scale-105 active:scale-95"
-                aria-label="Cerrar">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-              </button>
-              <div className="relative z-10 flex items-center gap-4">
-                <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-white/15 text-white shadow-lg backdrop-blur-md ring-1 ring-white/25">
-                  <svg className="h-7 w-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M9 14l6-6m-5.5.5h.01m4.99 5h.01M5 13v6a2 2 0 002 2h10a2 2 0 002-2v-6m-2 0a2 2 0 110-4m-8 4a2 2 0 100-4m7 4V7a2 2 0 00-2-2H7a2 2 0 00-2 2v6" /></svg>
+            {/* Header */}
+            <div className="flex shrink-0 items-center justify-between gap-3 border-b border-neutral-100 px-5 py-4 sm:px-7">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-neutral-100 text-neutral-500">
+                  <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M9 14l6-6m-5.5.5h.01m4.99 5h.01M5 13v6a2 2 0 002 2h10a2 2 0 002-2v-6m-2 0a2 2 0 110-4m-8 4a2 2 0 100-4m7 4V7a2 2 0 00-2-2H7a2 2 0 00-2 2v6" /></svg>
                 </div>
-                <div>
-                  <p className="text-[10px] font-bold uppercase tracking-[0.25em] text-sky-100/90">Cupones</p>
-                  <h3 className="text-xl font-black tracking-[-0.02em] text-white">
+                <div className="min-w-0">
+                  <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-neutral-400">Cupones</p>
+                  <h3 className="truncate text-lg font-black tracking-[-0.02em] text-neutral-900">
                     {editingPromoCode ? `Editar cupón ${editingPromoCode.code}` : 'Nuevo cupón'}
                   </h3>
                 </div>
               </div>
+              <button onClick={() => setPromoCodeModalOpen(false)}
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-neutral-100 text-neutral-500 transition hover:bg-neutral-200 hover:text-neutral-700 active:scale-90"
+                aria-label="Cerrar">
+                ✕
+              </button>
             </div>
 
             {/* Cuerpo */}
-            <div className="max-h-[calc(100vh-140px)] overflow-y-auto px-6 py-6 sm:px-8">
+            <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5 sm:px-8 sm:py-6">
               <div className="grid gap-6">
                 {/* Sección: Descuento */}
                 <div>
                   <div className="mb-3 flex items-center gap-2">
-                    <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-sky-100 text-sky-600">
-                      <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" /></svg>
-                    </span>
-                    <h4 className="text-[12px] font-bold uppercase tracking-[0.12em] text-neutral-500">Descuento</h4>
+                    <h4 className="text-[11px] font-bold uppercase tracking-[0.12em] text-neutral-400">Descuento</h4>
                   </div>
                   <div className="grid gap-4 sm:grid-cols-2">
                     <label className="grid min-w-0 gap-1.5 text-sm text-neutral-600">
@@ -1782,19 +1777,16 @@ export const SettingsSection = React.memo(function SettingsSection({
                       />
                     </label>
                   </div>
-                  <div className="mt-3 flex items-start gap-2.5 rounded-2xl border border-sky-100 bg-sky-50/70 px-4 py-3">
-                    <svg className="mt-0.5 h-4 w-4 shrink-0 text-sky-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                    <p className="text-xs leading-relaxed text-sky-700">{PROMO_CODE_TYPE_LABELS[promoCodeForm.type].hint}</p>
+                  <div className="mt-3 flex items-start gap-2.5 rounded-xl border border-neutral-100 bg-neutral-50 px-4 py-3">
+                    <svg className="mt-0.5 h-4 w-4 shrink-0 text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                    <p className="text-xs leading-relaxed text-neutral-500">{PROMO_CODE_TYPE_LABELS[promoCodeForm.type].hint}</p>
                   </div>
                 </div>
 
                 {/* Sección: Código y descripción */}
-                <div className="border-t border-black/5 pt-6">
-                  <div className="mb-3 flex items-center gap-2">
-                    <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-blue-100 text-blue-600">
-                      <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 9h3.75M15 12h3.75M15 15h3.75M4.5 19.5h15a2.25 2.25 0 002.25-2.25V6.75A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25v10.5A2.25 2.25 0 004.5 19.5z" /></svg>
-                    </span>
-                    <h4 className="text-[12px] font-bold uppercase tracking-[0.12em] text-neutral-500">Código</h4>
+                <div className="border-t border-neutral-100 pt-6">
+                  <div className="mb-3">
+                    <h4 className="text-[11px] font-bold uppercase tracking-[0.12em] text-neutral-400">Código</h4>
                   </div>
                   <label className="grid min-w-0 gap-1.5 text-sm text-neutral-600">
                     <span className="text-[11px] font-bold uppercase tracking-[0.1em] text-neutral-500">Código del cupón</span>
@@ -1817,12 +1809,9 @@ export const SettingsSection = React.memo(function SettingsSection({
                 </div>
 
                 {/* Sección: Condiciones */}
-                <div className="border-t border-black/5 pt-6">
-                  <div className="mb-3 flex items-center gap-2">
-                    <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-violet-100 text-violet-600">
-                      <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z" /></svg>
-                    </span>
-                    <h4 className="text-[12px] font-bold uppercase tracking-[0.12em] text-neutral-500">Condiciones</h4>
+                <div className="border-t border-neutral-100 pt-6">
+                  <div className="mb-3">
+                    <h4 className="text-[11px] font-bold uppercase tracking-[0.12em] text-neutral-400">Condiciones</h4>
                   </div>
                   <div className="grid gap-4 sm:grid-cols-2">
                     <label className="grid min-w-0 gap-1.5 text-sm text-neutral-600">
@@ -1871,20 +1860,22 @@ export const SettingsSection = React.memo(function SettingsSection({
             </div>
 
             {/* Footer */}
-            <div className="flex flex-col gap-2 border-t border-black/5 bg-neutral-50/60 px-6 py-4 sm:flex-row sm:justify-end sm:px-8">
-              <button
-                onClick={() => setPromoCodeModalOpen(false)}
-                className="order-2 rounded-full border border-black/10 bg-white px-6 py-3 text-sm font-semibold text-neutral-700 shadow-sm transition-all hover:bg-neutral-100 hover:shadow active:scale-[0.98] sm:order-1"
-              >
-                Cancelar
-              </button>
-              <button
-                onClick={() => void savePromoCode()}
-                disabled={promoCodeSaving}
-                className="order-1 rounded-full bg-gradient-to-r from-sky-600 to-blue-600 px-6 py-3 text-sm font-bold text-white shadow-[0_8px_20px_-6px_rgba(2,132,199,0.5)] transition-all hover:shadow-[0_12px_28px_-6px_rgba(2,132,199,0.6)] hover:brightness-110 active:scale-[0.98] disabled:opacity-50 sm:order-2"
-              >
-                {promoCodeSaving ? 'Guardando...' : editingPromoCode ? 'Guardar cambios' : 'Crear cupón'}
-              </button>
+            <div className="shrink-0 border-t border-black/5 bg-neutral-50/80 px-5 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-4 sm:px-8 sm:pb-5">
+              <div className="grid grid-cols-2 gap-3 sm:flex sm:justify-end">
+                <button
+                  onClick={() => setPromoCodeModalOpen(false)}
+                  className="rounded-full border border-black/10 bg-white px-6 py-3 text-sm font-semibold text-neutral-700 shadow-sm transition-all hover:bg-neutral-100 hover:shadow active:scale-[0.98]"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={() => void savePromoCode()}
+                  disabled={promoCodeSaving}
+                  className="rounded-full bg-neutral-950 px-6 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-neutral-800 active:scale-[0.98] disabled:opacity-50"
+                >
+                  {promoCodeSaving ? 'Guardando...' : editingPromoCode ? 'Guardar cambios' : 'Crear cupón'}
+                </button>
+              </div>
             </div>
           </div>
         </div>

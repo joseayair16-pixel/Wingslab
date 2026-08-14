@@ -233,6 +233,7 @@ export const HomeView = React.memo(function HomeView({
     <>
       <div className="space-y-4">
         {/* Business type selector — hidden when searching, defaults to 'all' */}
+        <div className="space-y-2">
         {!isSearching && (
         <section className="-mx-4 border-y border-black/5 bg-white px-4 py-3 shadow-[0_18px_60px_rgba(15,15,15,0.05)] md:mx-0 md:rounded-[32px] md:border md:border-black/5 md:px-6 md:py-3">
           <div className="flex justify-center gap-4 md:gap-5">
@@ -296,6 +297,7 @@ export const HomeView = React.memo(function HomeView({
             </div>
           </div>
         </section>
+        </div>
 
         {featuredRestaurants && featuredRestaurants.length > 0 && (
           <section className="-mx-4 md:mx-0">
