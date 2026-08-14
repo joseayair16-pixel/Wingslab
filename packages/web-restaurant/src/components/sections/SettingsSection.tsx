@@ -1102,38 +1102,6 @@ export const SettingsSection = React.memo(function SettingsSection({
                     </div>
                   </>
                 )}
-                <div className="sm:col-span-2 rounded-[20px] border border-emerald-200/60 bg-emerald-50/40 p-4">
-                  <p className="text-[12px] font-bold uppercase tracking-[0.1em] text-emerald-700">Promociones del negocio</p>
-                  <p className="mb-3 mt-0.5 text-[11px] leading-snug text-neutral-500">
-                    Descuentos automáticos a nivel de pedido. Se combinan en orden: promo por cantidad, cupón, % por monto y envío gratis.
-                  </p>
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    <Field
-                      label="Envío gratis desde ($)"
-                      value={storeDraft.promoFreeDeliveryThreshold}
-                      onChange={(value: string) => setStoreDraft((c: any) => ({ ...c, promoFreeDeliveryThreshold: value }))}
-                      placeholder="550"
-                      type="number"
-                    />
-                    <div className="rounded-[14px] border border-black/5 bg-white/70 p-3 text-xs leading-relaxed text-neutral-500">
-                      Si el pedido llega o supera este monto, el envío se cobra en $0. Déjalo vacío para desactivarlo.
-                    </div>
-                    <Field
-                      label="Monto mínimo para descuento ($)"
-                      value={storeDraft.promoMinOrderAmount}
-                      onChange={(value: string) => setStoreDraft((c: any) => ({ ...c, promoMinOrderAmount: value }))}
-                      placeholder="500"
-                      type="number"
-                    />
-                    <Field
-                      label="% de descuento sobre ese monto"
-                      value={storeDraft.promoMinOrderPercent}
-                      onChange={(value: string) => setStoreDraft((c: any) => ({ ...c, promoMinOrderPercent: value }))}
-                      placeholder="15"
-                      type="number"
-                    />
-                  </div>
-                </div>
                 <div className="sm:col-span-2 flex justify-end">
                   <button
                     type="button"
@@ -1543,14 +1511,110 @@ export const SettingsSection = React.memo(function SettingsSection({
 
             {/* ─── CUPONES ─── */}
             {activeSettingsTab === 'cupones' && (
-              <div className="grid gap-4">
-                <div className="rounded-[20px] border border-emerald-200/60 bg-emerald-50/40 p-4">
+              <div className="grid gap-5">
+                <div className="rounded-[24px] border border-white/60 bg-white/80 p-5 shadow-[0_8px_30px_rgba(0,0,0,0.04)] backdrop-blur-xl sm:p-6">
+                  <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                    <div>
+                      <div className="flex items-center gap-2.5">
+                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-sky-500 to-blue-600 text-white shadow-[0_6px_16px_-4px_rgba(2,132,199,0.4)]">
+                          <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M2.25 18.75a60.07 60.07 0 0115.797 2.101c.727.198 1.453-.342 1.453-1.096V18.75M3.75 4.5v.75A.75.75 0 013 6h-.75m0 0v-.375c0-.621.504-1.125 1.125-1.125H20.25M2.25 6v9m18-10.5v.75c0 .414.336.75.75.75h.75m-1.5-1.5h.375c.621 0 1.125.504 1.125 1.125v9.75c0 .621-.504 1.125-1.125 1.125h-.375m1.5-1.5H21a.75.75 0 00-.75.75v.75m0 0H3.75m0 0h-.375a1.125 1.125 0 01-1.125-1.125V15m1.5 1.5v-.75A.75.75 0 003 15h-.75M15 10.5a3 3 0 11-6 0 3 3 0 016 0zm3 0h.008v.008H18V10.5zm-12 0h.008v.008H6V10.5z" /></svg>
+                        </div>
+                        <div>
+                          <h4 className="text-[15px] font-black tracking-[-0.02em] text-neutral-950">Promociones del negocio</h4>
+                          <p className="mt-0.5 text-xs font-medium text-neutral-500">
+                            Descuentos automáticos que se aplican a cada pedido, sin código.
+                          </p>
+                        </div>
+                      </div>
+                      <p className="mt-3 max-w-xl text-[12px] leading-relaxed text-neutral-500">
+                        Se combinan en orden con los cupones: <span className="font-semibold text-neutral-700">promo por cantidad → cupón → % por monto → envío gratis</span>.
+                        Deja un campo vacío para desactivar esa promo.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                    <div className="rounded-[20px] border border-black/5 bg-neutral-50/60 p-4 transition-colors hover:bg-neutral-50">
+                      <div className="mb-2 flex items-center gap-2">
+                        <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-br from-sky-100 to-blue-50 text-base">🛵</span>
+                        <span className="text-[12px] font-bold uppercase tracking-[0.08em] text-neutral-600">Envío gratis desde</span>
+                      </div>
+                      <Field
+                        label="Monto en pesos ($)"
+                        value={storeDraft.promoFreeDeliveryThreshold}
+                        onChange={(value: string) => setStoreDraft((c: any) => ({ ...c, promoFreeDeliveryThreshold: value }))}
+                        placeholder="550"
+                        type="number"
+                      />
+                      <p className="mt-2 text-[11px] leading-relaxed text-neutral-400">
+                        Si el pedido llega o supera este monto, el envío se cobra en $0.
+                      </p>
+                    </div>
+
+                    <div className="rounded-[20px] border border-black/5 bg-neutral-50/60 p-4 transition-colors hover:bg-neutral-50">
+                      <div className="mb-2 flex items-center gap-2">
+                        <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-br from-violet-100 to-fuchsia-50 text-base">🎯</span>
+                        <span className="text-[12px] font-bold uppercase tracking-[0.08em] text-neutral-600">Monto mínimo para descuento</span>
+                      </div>
+                      <Field
+                        label="Monto en pesos ($)"
+                        value={storeDraft.promoMinOrderAmount}
+                        onChange={(value: string) => setStoreDraft((c: any) => ({ ...c, promoMinOrderAmount: value }))}
+                        placeholder="500"
+                        type="number"
+                      />
+                      <p className="mt-2 text-[11px] leading-relaxed text-neutral-400">
+                        El % se activa solo cuando el pedido alcanza este monto.
+                      </p>
+                    </div>
+
+                    <div className="rounded-[20px] border border-black/5 bg-neutral-50/60 p-4 transition-colors hover:bg-neutral-50 sm:col-span-2 lg:col-span-1">
+                      <div className="mb-2 flex items-center gap-2">
+                        <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-100 to-teal-50 text-base">🎉</span>
+                        <span className="text-[12px] font-bold uppercase tracking-[0.08em] text-neutral-600">% de descuento</span>
+                      </div>
+                      <Field
+                        label="Porcentaje (%)"
+                        value={storeDraft.promoMinOrderPercent}
+                        onChange={(value: string) => setStoreDraft((c: any) => ({ ...c, promoMinOrderPercent: value }))}
+                        placeholder="15"
+                        type="number"
+                      />
+                      <p className="mt-2 text-[11px] leading-relaxed text-neutral-400">
+                        Se aplica al subtotal cuando se alcanza el monto mínimo.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="mt-5 flex items-center justify-between gap-3 rounded-2xl border border-black/5 bg-neutral-50/80 px-4 py-3">
+                    <p className="text-[11px] font-medium text-neutral-500">
+                      Estas promociones son automáticas: tus clientes las ven sin necesidad de escribir ningún código.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => void saveStoreProfile('entrega')}
+                      disabled={savingStoreProfile}
+                      className="shrink-0 rounded-full bg-neutral-950 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-neutral-800 disabled:bg-neutral-300"
+                    >
+                      {savingStoreProfile ? 'Guardando...' : 'Guardar promociones'}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="rounded-[24px] border border-white/60 bg-white/80 p-5 shadow-[0_8px_30px_rgba(0,0,0,0.04)] backdrop-blur-xl sm:p-6">
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <div>
-                      <p className="text-sm font-bold text-neutral-900">Cupones de descuento</p>
-                      <p className="mt-0.5 text-xs text-neutral-500">
-                        Crea códigos que tus clientes escriben al pagar. Se aplican antes del descuento por monto mínimo y del envío gratis.
-                      </p>
+                      <div className="flex items-center gap-2.5">
+                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-600 text-white shadow-[0_6px_16px_-4px_rgba(16,185,129,0.4)]">
+                          <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M9 14l6-6m-5.5.5h.01m4.99 5h.01M5 13v6a2 2 0 002 2h10a2 2 0 002-2v-6m-2 0a2 2 0 110-4m-8 4a2 2 0 100-4m7 4V7a2 2 0 00-2-2H7a2 2 0 00-2 2v6" /></svg>
+                        </div>
+                        <div>
+                          <h4 className="text-[15px] font-black tracking-[-0.02em] text-neutral-950">Cupones de descuento</h4>
+                          <p className="mt-0.5 text-xs font-medium text-neutral-500">
+                            Crea códigos que tus clientes escriben al pagar.
+                          </p>
+                        </div>
+                      </div>
                     </div>
                     <button
                       type="button"
@@ -1560,8 +1624,8 @@ export const SettingsSection = React.memo(function SettingsSection({
                       + Nuevo cupón
                     </button>
                   </div>
-                </div>
 
+                  <div className="mt-5">
                 {promoCodesLoading && promoCodes.length === 0 ? (
                   <div className="rounded-[20px] border border-black/5 bg-neutral-50 p-8 text-center text-sm text-neutral-500">
                     Cargando cupones...
@@ -1648,6 +1712,8 @@ export const SettingsSection = React.memo(function SettingsSection({
                     })}
                   </div>
                 )}
+                  </div>
+                </div>
               </div>
             )}
 
