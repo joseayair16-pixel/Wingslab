@@ -131,10 +131,16 @@ model Restaurant {
   businessType            BusinessType     @default(RESTAURANT)
   whatsappNotifications   Boolean          @default(false)
 
+  // Promociones a nivel de pedido
+  promoFreeDeliveryThreshold Float? // envío gratis en pedidos >= este monto
+  promoMinOrderAmount       Float? // descuento si el subtotal >= este monto
+  promoMinOrderPercent      Float? // % de descuento aplicado encima del monto mínimo
+
   // Relations
   categories         MenuCategory[]
   products           Product[]
   orders             Order[]
+  promoCodes         PromoCode[]
   operatingHours     OperatingHours[]
   stats              RestaurantStats?
   billingSettlements RestaurantBillingSettlement[]
@@ -302,6 +308,11 @@ model Product {
   price         Float
   discountPrice Float?
 
+  // Promoción por cantidad (2x1, 3x2, ...). Solo aplica para sellBy=UNIT.
+  promoType        String? // null | "MULTI_BUY"
+  promoBuyQuantity Int?    // compra N ...
+  promoPayQuantity Int?    // ... paga M (M < N)
+
   sellBy        String  @default("UNIT") // "UNIT" | "WEIGHT"
   unitPrice     Float? // precio por kg cuando sellBy=WEIGHT
   minWeightG    Int?    @default(100) // gramos mínimos
@@ -437,6 +448,11 @@ model Order {
   deliveryFee        Float
   deliveryDistanceKm Float?
   totalAmount        Float
+
+  // Promociones aplicadas (persistencia para auditoría/reportes)
+  promoCode           String?
+  promoDiscountAmount Float    @default(0)
+  discountBreakdown   String?
 
   status          OrderStatus   @default(PENDING)
   paymentMethod   PaymentMethod
@@ -589,6 +605,31 @@ model OrderItem {
 
   @@index([orderId])
   @@index([productId])
+}
+
+// ============== Promo Codes (cupones por restaurante) ==============
+model PromoCode {
+  id           String   @id @default(cuid())
+  restaurantId String
+  restaurant   Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+
+  code        String // código que escribe el cliente (uppercase, sin espacios)
+  description String?
+  type        String // "PERCENT" | "AMOUNT" | "FREE_DELIVERY"
+  value       Float  // % (PERCENT 0-100) o monto (AMOUNT $)
+
+  minOrderAmount Float?
+  validFrom      DateTime?
+  validUntil     DateTime?
+  maxUses        Int?
+  usesCount      Int      @default(0)
+  isActive       Boolean  @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([restaurantId, code])
+  @@index([restaurantId])
 }
 
 // ============== Order Tracking ==============

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { requestJson, MENU_THEMES, getMenuThemeById } from '@sadel/shared';
 
 type SuccessResponse<T> = {
@@ -12,6 +12,27 @@ type RestaurantProfile = {
   businessType?: string;
   status: string;
   isAcceptingOrders: boolean;
+};
+
+type PromoCodeItem = {
+  id: string;
+  code: string;
+  description?: string | null;
+  type: 'PERCENT' | 'AMOUNT' | 'FREE_DELIVERY';
+  value: number;
+  minOrderAmount?: number | null;
+  validFrom?: string | null;
+  validUntil?: string | null;
+  maxUses?: number | null;
+  usesCount: number;
+  isActive: boolean;
+  createdAt: string;
+};
+
+const PROMO_CODE_TYPE_LABELS: Record<PromoCodeItem['type'], { label: string; hint: string }> = {
+  PERCENT: { label: 'Porcentaje (%)', hint: 'Descuenta un % del subtotal.' },
+  AMOUNT: { label: 'Monto fijo ($)', hint: 'Descuenta una cantidad fija en pesos.' },
+  FREE_DELIVERY: { label: 'Envío gratis', hint: 'Elimina el costo de envío del pedido.' },
 };
 
 const weekDayOptions = [
@@ -173,6 +194,167 @@ export const SettingsSection = React.memo(function SettingsSection({
   const [copySourceDay, setCopySourceDay] = useState(1);
   const hoursDraft = (operatingHoursDraft ?? []) as HoursBlock[];
 
+  const [promoCodes, setPromoCodes] = useState<PromoCodeItem[]>([]);
+  const [promoCodesLoading, setPromoCodesLoading] = useState(false);
+  const [promoCodeModalOpen, setPromoCodeModalOpen] = useState(false);
+  const [promoCodeSaving, setPromoCodeSaving] = useState(false);
+  const [editingPromoCode, setEditingPromoCode] = useState<PromoCodeItem | null>(null);
+  const [promoCodeForm, setPromoCodeForm] = useState({
+    code: '',
+    description: '',
+    type: 'PERCENT' as PromoCodeItem['type'],
+    value: '',
+    minOrderAmount: '',
+    validFrom: '',
+    validUntil: '',
+    maxUses: '',
+    isActive: true,
+  });
+
+  const loadPromoCodes = async () => {
+    if (!token) return;
+    setPromoCodesLoading(true);
+    try {
+      const res = await requestJson<SuccessResponse<PromoCodeItem[]>>({
+        apiBase,
+        path: '/restaurant-panel/promocodes',
+        token,
+        fallbackMessage: 'No se pudieron cargar los cupones.',
+      });
+      if (res.success) setPromoCodes(res.data);
+    } catch {
+      pushToast('error', 'Error', 'No se pudieron cargar los cupones.');
+    } finally {
+      setPromoCodesLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeSettingsTab === 'cupones') {
+      void loadPromoCodes();
+    }
+  }, [activeSettingsTab]);
+
+  const openPromoCodeModal = (promo?: PromoCodeItem) => {
+    setEditingPromoCode(promo ?? null);
+    setPromoCodeForm({
+      code: promo?.code ?? '',
+      description: promo?.description ?? '',
+      type: promo?.type ?? 'PERCENT',
+      value: promo ? String(promo.value) : '',
+      minOrderAmount: promo?.minOrderAmount != null ? String(promo.minOrderAmount) : '',
+      validFrom: promo?.validFrom ? promo.validFrom.slice(0, 10) : '',
+      validUntil: promo?.validUntil ? promo.validUntil.slice(0, 10) : '',
+      maxUses: promo?.maxUses != null ? String(promo.maxUses) : '',
+      isActive: promo?.isActive ?? true,
+    });
+    setPromoCodeModalOpen(true);
+  };
+
+  const savePromoCode = async () => {
+    if (!token) return;
+    if (!promoCodeForm.code.trim() || !promoCodeForm.value) {
+      pushToast('error', 'Campos obligatorios', 'Indica el código y el valor del cupón.');
+      return;
+    }
+    const valueNum = Number(promoCodeForm.value);
+    if (!Number.isFinite(valueNum) || valueNum <= 0) {
+      pushToast('error', 'Valor inválido', 'El valor debe ser un número mayor a cero.');
+      return;
+    }
+    if (promoCodeForm.type === 'PERCENT' && valueNum > 100) {
+      pushToast('error', 'Valor inválido', 'El porcentaje no puede superar 100.');
+      return;
+    }
+    setPromoCodeSaving(true);
+    try {
+      const body: Record<string, unknown> = {
+        code: promoCodeForm.code.trim().toUpperCase(),
+        description: promoCodeForm.description.trim() || null,
+        type: promoCodeForm.type,
+        value: valueNum,
+        minOrderAmount: promoCodeForm.minOrderAmount ? Number(promoCodeForm.minOrderAmount) : null,
+        maxUses: promoCodeForm.maxUses ? Number(promoCodeForm.maxUses) : null,
+        isActive: promoCodeForm.isActive,
+      };
+      if (promoCodeForm.validFrom) body.validFrom = new Date(`${promoCodeForm.validFrom}T00:00:00`).toISOString();
+      if (promoCodeForm.validUntil) body.validUntil = new Date(`${promoCodeForm.validUntil}T23:59:59`).toISOString();
+
+      if (editingPromoCode) {
+        const res = await requestJson<SuccessResponse<PromoCodeItem>>({
+          apiBase,
+          path: `/restaurant-panel/promocodes/${editingPromoCode.id}`,
+          token,
+          options: { method: 'PATCH', body: JSON.stringify(body) },
+          fallbackMessage: 'No se pudo actualizar el cupón.',
+        });
+        setPromoCodes((current) =>
+          current.map((p) => (p.id === editingPromoCode.id ? res.data : p))
+        );
+        pushToast('success', 'Cupón actualizado', `El cupón ${res.data.code} se actualizó.`);
+      } else {
+        const res = await requestJson<SuccessResponse<PromoCodeItem>>({
+          apiBase,
+          path: '/restaurant-panel/promocodes',
+          token,
+          options: { method: 'POST', body: JSON.stringify(body) },
+          fallbackMessage: 'No se pudo crear el cupón.',
+        });
+        setPromoCodes((current) => [res.data, ...current]);
+        pushToast('success', 'Cupón creado', `El cupón ${res.data.code} ya está disponible.`);
+      }
+      setPromoCodeModalOpen(false);
+    } catch {
+      pushToast('error', 'Error', 'No se pudo guardar el cupón. Revisa que el código no se repita.');
+    } finally {
+      setPromoCodeSaving(false);
+    }
+  };
+
+  const togglePromoCodeActive = async (promo: PromoCodeItem) => {
+    if (!token) return;
+    const next = !promo.isActive;
+    setPromoCodes((current) =>
+      current.map((p) => (p.id === promo.id ? { ...p, isActive: next } : p))
+    );
+    try {
+      const res = await requestJson<SuccessResponse<PromoCodeItem>>({
+        apiBase,
+        path: `/restaurant-panel/promocodes/${promo.id}`,
+        token,
+        options: { method: 'PATCH', body: JSON.stringify({ isActive: next }) },
+        fallbackMessage: 'No se pudo actualizar el cupón.',
+      });
+      setPromoCodes((current) =>
+        current.map((p) => (p.id === promo.id ? res.data : p))
+      );
+    } catch {
+      setPromoCodes((current) =>
+        current.map((p) => (p.id === promo.id ? { ...p, isActive: !next } : p))
+      );
+      pushToast('error', 'Error', 'No se pudo actualizar el cupón.');
+    }
+  };
+
+  const deletePromoCode = async (promo: PromoCodeItem) => {
+    if (!token) return;
+    if (!window.confirm(`¿Eliminar el cupón ${promo.code}? Esta acción no se puede deshacer.`)) return;
+    try {
+      await requestJson({
+        apiBase,
+        path: `/restaurant-panel/promocodes/${promo.id}`,
+        token,
+        options: { method: 'DELETE' },
+        fallbackMessage: 'No se pudo eliminar el cupón.',
+      });
+      setPromoCodes((current) => current.filter((p) => p.id !== promo.id));
+      pushToast('success', 'Cupón eliminado', `El cupón ${promo.code} se eliminó.`);
+    } catch {
+      pushToast('error', 'Error', 'No se pudo eliminar el cupón.');
+    }
+  };
+
+
   const dayBlocks = (day: number): HoursBlock[] =>
     hoursDraft.filter((b) => b.dayOfWeek === day).sort((a, b) => a.shiftIndex - b.shiftIndex);
   const isDayOpen = (day: number) => dayBlocks(day).some((b) => !b.isClosed);
@@ -252,7 +434,7 @@ export const SettingsSection = React.memo(function SettingsSection({
       return;
     }
     if (isProfileTab) {
-      void saveStoreProfile(activeSettingsTab);
+      void saveStoreProfile(activeSettingsTab as 'perfil' | 'ubicacion' | 'entrega' | 'pagos');
     }
   };
 
@@ -336,12 +518,12 @@ export const SettingsSection = React.memo(function SettingsSection({
             <button
               type="button"
               onClick={handleGlobalSave}
-              disabled={globalSaving || activeSettingsTab === 'preferencias'}
-              title={activeSettingsTab === 'preferencias' ? 'Esta sección se guarda automáticamente' : undefined}
+              disabled={globalSaving || activeSettingsTab === 'preferencias' || activeSettingsTab === 'cupones'}
+              title={activeSettingsTab === 'preferencias' ? 'Esta sección se guarda automáticamente' : activeSettingsTab === 'cupones' ? 'Los cupones se guardan uno por uno' : undefined}
               className="group relative shrink-0 overflow-hidden rounded-full bg-neutral-950 px-6 py-3.5 text-sm font-bold text-white shadow-[0_8px_20px_rgba(15,15,15,0.2)] transition-all hover:-translate-y-0.5 hover:shadow-[0_12px_25px_rgba(15,15,15,0.3)] disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0"
             >
               <div className="absolute inset-0 bg-gradient-to-r from-sky-500/0 via-white/20 to-sky-500/0 -translate-x-full transition-transform duration-700 group-hover:translate-x-full"></div>
-              <span className="relative z-10">{activeSettingsTab === 'preferencias' ? 'Se guarda automáticamente' : globalLabel}</span>
+              <span className="relative z-10">{activeSettingsTab === 'preferencias' ? 'Se guarda automáticamente' : activeSettingsTab === 'cupones' ? 'Cupones' : globalLabel}</span>
             </button>
           </div>
         </div>
@@ -920,6 +1102,38 @@ export const SettingsSection = React.memo(function SettingsSection({
                     </div>
                   </>
                 )}
+                <div className="sm:col-span-2 rounded-[20px] border border-emerald-200/60 bg-emerald-50/40 p-4">
+                  <p className="text-[12px] font-bold uppercase tracking-[0.1em] text-emerald-700">Promociones del negocio</p>
+                  <p className="mb-3 mt-0.5 text-[11px] leading-snug text-neutral-500">
+                    Descuentos automáticos a nivel de pedido. Se combinan en orden: promo por cantidad, cupón, % por monto y envío gratis.
+                  </p>
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <Field
+                      label="Envío gratis desde ($)"
+                      value={storeDraft.promoFreeDeliveryThreshold}
+                      onChange={(value: string) => setStoreDraft((c: any) => ({ ...c, promoFreeDeliveryThreshold: value }))}
+                      placeholder="550"
+                      type="number"
+                    />
+                    <div className="rounded-[14px] border border-black/5 bg-white/70 p-3 text-xs leading-relaxed text-neutral-500">
+                      Si el pedido llega o supera este monto, el envío se cobra en $0. Déjalo vacío para desactivarlo.
+                    </div>
+                    <Field
+                      label="Monto mínimo para descuento ($)"
+                      value={storeDraft.promoMinOrderAmount}
+                      onChange={(value: string) => setStoreDraft((c: any) => ({ ...c, promoMinOrderAmount: value }))}
+                      placeholder="500"
+                      type="number"
+                    />
+                    <Field
+                      label="% de descuento sobre ese monto"
+                      value={storeDraft.promoMinOrderPercent}
+                      onChange={(value: string) => setStoreDraft((c: any) => ({ ...c, promoMinOrderPercent: value }))}
+                      placeholder="15"
+                      type="number"
+                    />
+                  </div>
+                </div>
                 <div className="sm:col-span-2 flex justify-end">
                   <button
                     type="button"
@@ -1327,9 +1541,240 @@ export const SettingsSection = React.memo(function SettingsSection({
               </div>
             )}
 
+            {/* ─── CUPONES ─── */}
+            {activeSettingsTab === 'cupones' && (
+              <div className="grid gap-4">
+                <div className="rounded-[20px] border border-emerald-200/60 bg-emerald-50/40 p-4">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-bold text-neutral-900">Cupones de descuento</p>
+                      <p className="mt-0.5 text-xs text-neutral-500">
+                        Crea códigos que tus clientes escriben al pagar. Se aplican antes del descuento por monto mínimo y del envío gratis.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => openPromoCodeModal()}
+                      className="rounded-full bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-700"
+                    >
+                      + Nuevo cupón
+                    </button>
+                  </div>
+                </div>
+
+                {promoCodesLoading && promoCodes.length === 0 ? (
+                  <div className="rounded-[20px] border border-black/5 bg-neutral-50 p-8 text-center text-sm text-neutral-500">
+                    Cargando cupones...
+                  </div>
+                ) : promoCodes.length === 0 ? (
+                  <div className="rounded-[20px] border border-dashed border-black/10 bg-neutral-50 p-10 text-center">
+                    <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-white text-neutral-400 shadow-sm">
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M9 14l6-6m-5.5.5h.01m4.99 5h.01M5 13v6a2 2 0 002 2h10a2 2 0 002-2v-6m-2 0a2 2 0 110-4m-8 4a2 2 0 100-4m7 4V7a2 2 0 00-2-2H7a2 2 0 00-2 2v6" /></svg>
+                    </div>
+                    <p className="text-sm font-semibold text-neutral-700">Aún no tienes cupones</p>
+                    <p className="mt-1 text-xs text-neutral-500">Crea tu primer código de descuento para ofrecer promociones a tus clientes.</p>
+                  </div>
+                ) : (
+                  <div className="grid gap-3">
+                    {promoCodes.map((promo) => {
+                      const typeInfo = PROMO_CODE_TYPE_LABELS[promo.type];
+                      const expired =
+                        promo.validUntil != null && new Date(promo.validUntil).getTime() < Date.now();
+                      const exhausted =
+                        promo.maxUses != null && promo.usesCount >= promo.maxUses;
+                      const isOff = !promo.isActive || expired || exhausted;
+                      return (
+                        <div
+                          key={promo.id}
+                          className={`flex flex-col sm:flex-row items-start sm:items-center gap-3 rounded-[18px] border p-4 transition-colors ${
+                            isOff ? 'border-black/5 bg-neutral-50/60 opacity-70' : 'border-black/5 bg-white'
+                          }`}
+                        >
+                          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-sky-100 text-sky-700 font-black text-sm tracking-wider">
+                            {promo.code.slice(0, 2)}
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="font-mono text-sm font-black tracking-wider text-neutral-900">{promo.code}</span>
+                              {promo.type === 'PERCENT' && (
+                                <span className="rounded-full bg-sky-100 px-2 py-0.5 text-[11px] font-bold text-sky-700">{promo.value}% OFF</span>
+                              )}
+                              {promo.type === 'AMOUNT' && (
+                                <span className="rounded-full bg-sky-100 px-2 py-0.5 text-[11px] font-bold text-sky-700">-${promo.value}</span>
+                              )}
+                              {promo.type === 'FREE_DELIVERY' && (
+                                <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-bold text-emerald-700">Envío gratis</span>
+                              )}
+                              {isOff && (
+                                <span className="rounded-full bg-neutral-200 px-2 py-0.5 text-[11px] font-bold text-neutral-600">
+                                  {!promo.isActive ? 'Desactivado' : expired ? 'Vencido' : 'Sin usos'}
+                                </span>
+                              )}
+                            </div>
+                            <p className="mt-0.5 text-xs text-neutral-500">{promo.description || typeInfo.label}</p>
+                            <p className="mt-0.5 text-[11px] text-neutral-400">
+                              {promo.usesCount} uso(s)
+                              {promo.maxUses != null ? ` de ${promo.maxUses}` : ''}
+                              {promo.minOrderAmount != null ? ` · min $${promo.minOrderAmount}` : ''}
+                              {promo.validUntil ? ` · vence ${promo.validUntil.slice(0, 10)}` : ''}
+                            </p>
+                          </div>
+                          <div className="flex shrink-0 items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => togglePromoCodeActive(promo)}
+                              className={`relative h-6 w-11 rounded-full transition-colors ${promo.isActive ? 'bg-emerald-500' : 'bg-neutral-300'}`}
+                              aria-label={promo.isActive ? 'Desactivar cupón' : 'Activar cupón'}
+                            >
+                              <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-all ${promo.isActive ? 'left-[22px]' : 'left-0.5'}`} />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => openPromoCodeModal(promo)}
+                              className="rounded-full border border-black/10 bg-white px-3 py-1.5 text-xs font-semibold text-neutral-700 transition hover:bg-neutral-100"
+                            >
+                              Editar
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => deletePromoCode(promo)}
+                              className="rounded-full border border-red-100 bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-600 transition hover:bg-red-100"
+                            >
+                              Eliminar
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+
           </div>
         </div>
       </div>
+      {promoCodeModalOpen && (
+        <div className="fixed inset-0 z-[96] flex items-center justify-center bg-black/60 px-4 py-5 backdrop-blur-sm animate-fade-in"
+          onClick={() => setPromoCodeModalOpen(false)}>
+          <div className="relative w-full max-w-lg rounded-[28px] bg-white p-6 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}>
+            <button onClick={() => setPromoCodeModalOpen(false)}
+              className="absolute top-4 right-4 flex h-8 w-8 items-center justify-center rounded-full bg-neutral-100 text-neutral-500 hover:bg-neutral-200 hover:text-neutral-700 transition-colors">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+            <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-100 text-emerald-600">
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M9 14l6-6m-5.5.5h.01m4.99 5h.01M5 13v6a2 2 0 002 2h10a2 2 0 002-2v-6m-2 0a2 2 0 110-4m-8 4a2 2 0 100-4m7 4V7a2 2 0 00-2-2H7a2 2 0 00-2 2v6" /></svg>
+            </div>
+            <h3 className="text-lg font-bold text-neutral-900">
+              {editingPromoCode ? `Editar cupón ${editingPromoCode.code}` : 'Nuevo cupón'}
+            </h3>
+            <div className="mt-4 grid gap-4">
+              <div className="grid grid-cols-2 gap-4">
+                <label className="grid min-w-0 gap-1.5 text-sm text-neutral-600">
+                  <span className="text-[11px] font-bold uppercase tracking-[0.1em] text-neutral-500">Código</span>
+                  <input
+                    value={promoCodeForm.code}
+                    onChange={(e) => setPromoCodeForm((c) => ({ ...c, code: e.target.value }))}
+                    placeholder="ej. VERANO25"
+                    className="rounded-xl border border-black/10 bg-white px-3.5 py-2.5 font-mono text-sm font-bold uppercase tracking-wider text-neutral-900 focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-400/20"
+                  />
+                </label>
+                <label className="grid min-w-0 gap-1.5 text-sm text-neutral-600">
+                  <span className="text-[11px] font-bold uppercase tracking-[0.1em] text-neutral-500">Tipo de descuento</span>
+                  <select
+                    value={promoCodeForm.type}
+                    onChange={(e) => setPromoCodeForm((c) => ({ ...c, type: e.target.value as PromoCodeItem['type'] }))}
+                    className="rounded-xl border border-black/10 bg-white px-3.5 py-2.5 text-sm text-neutral-900 focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-400/20"
+                  >
+                    <option value="PERCENT">Porcentaje (%)</option>
+                    <option value="AMOUNT">Monto fijo ($)</option>
+                    <option value="FREE_DELIVERY">Envío gratis</option>
+                  </select>
+                </label>
+              </div>
+              <label className="grid min-w-0 gap-1.5 text-sm text-neutral-600">
+                <span className="text-[11px] font-bold uppercase tracking-[0.1em] text-neutral-500">Valor</span>
+                <input
+                  type="number"
+                  value={promoCodeForm.value}
+                  onChange={(e) => setPromoCodeForm((c) => ({ ...c, value: e.target.value }))}
+                  placeholder={promoCodeForm.type === 'PERCENT' ? '15' : promoCodeForm.type === 'AMOUNT' ? '50' : '0'}
+                  className="rounded-xl border border-black/10 bg-white px-3.5 py-2.5 text-sm text-neutral-900 focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-400/20"
+                />
+              </label>
+              <p className="rounded-[12px] bg-neutral-50 px-3 py-2 text-xs text-neutral-500">
+                {PROMO_CODE_TYPE_LABELS[promoCodeForm.type].hint}
+              </p>
+              <label className="grid min-w-0 gap-1.5 text-sm text-neutral-600">
+                <span className="text-[11px] font-bold uppercase tracking-[0.1em] text-neutral-500">Descripción (opcional)</span>
+                <input
+                  value={promoCodeForm.description}
+                  onChange={(e) => setPromoCodeForm((c) => ({ ...c, description: e.target.value }))}
+                  placeholder="ej. Promo de bienvenida"
+                  className="rounded-xl border border-black/10 bg-white px-3.5 py-2.5 text-sm text-neutral-900 focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-400/20"
+                />
+              </label>
+              <div className="grid grid-cols-3 gap-4">
+                <label className="grid min-w-0 gap-1.5 text-sm text-neutral-600">
+                  <span className="text-[11px] font-bold uppercase tracking-[0.1em] text-neutral-500">Mínimo ($)</span>
+                  <input
+                    type="number"
+                    value={promoCodeForm.minOrderAmount}
+                    onChange={(e) => setPromoCodeForm((c) => ({ ...c, minOrderAmount: e.target.value }))}
+                    placeholder="0"
+                    className="rounded-xl border border-black/10 bg-white px-3.5 py-2.5 text-sm text-neutral-900 focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-400/20"
+                  />
+                </label>
+                <label className="grid min-w-0 gap-1.5 text-sm text-neutral-600">
+                  <span className="text-[11px] font-bold uppercase tracking-[0.1em] text-neutral-500">Válido desde</span>
+                  <input
+                    type="date"
+                    value={promoCodeForm.validFrom}
+                    onChange={(e) => setPromoCodeForm((c) => ({ ...c, validFrom: e.target.value }))}
+                    className="rounded-xl border border-black/10 bg-white px-3.5 py-2.5 text-sm text-neutral-900 focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-400/20"
+                  />
+                </label>
+                <label className="grid min-w-0 gap-1.5 text-sm text-neutral-600">
+                  <span className="text-[11px] font-bold uppercase tracking-[0.1em] text-neutral-500">Vence</span>
+                  <input
+                    type="date"
+                    value={promoCodeForm.validUntil}
+                    onChange={(e) => setPromoCodeForm((c) => ({ ...c, validUntil: e.target.value }))}
+                    className="rounded-xl border border-black/10 bg-white px-3.5 py-2.5 text-sm text-neutral-900 focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-400/20"
+                  />
+                </label>
+              </div>
+              <label className="grid min-w-0 gap-1.5 text-sm text-neutral-600">
+                <span className="text-[11px] font-bold uppercase tracking-[0.1em] text-neutral-500">Usos máximos (opcional)</span>
+                <input
+                  type="number"
+                  value={promoCodeForm.maxUses}
+                  onChange={(e) => setPromoCodeForm((c) => ({ ...c, maxUses: e.target.value }))}
+                  placeholder="Ilimitado"
+                  className="rounded-xl border border-black/10 bg-white px-3.5 py-2.5 text-sm text-neutral-900 focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-400/20"
+                />
+              </label>
+            </div>
+            <div className="mt-6 flex flex-col gap-2">
+              <button
+                onClick={() => void savePromoCode()}
+                disabled={promoCodeSaving}
+                className="w-full rounded-xl bg-emerald-600 py-3 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:opacity-50"
+              >
+                {promoCodeSaving ? 'Guardando...' : editingPromoCode ? 'Guardar cambios' : 'Crear cupón'}
+              </button>
+              <button
+                onClick={() => setPromoCodeModalOpen(false)}
+                className="w-full rounded-xl border border-black/10 bg-white py-3 text-sm font-semibold text-neutral-700 transition hover:bg-neutral-50"
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {showWhatsappConfirm && (
         <div className="fixed inset-0 z-[95] flex items-center justify-center bg-black/60 px-4 py-5 backdrop-blur-sm animate-fade-in"
           onClick={() => setShowWhatsappConfirm(false)}>

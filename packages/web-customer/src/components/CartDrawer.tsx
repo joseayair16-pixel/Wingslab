@@ -7,6 +7,44 @@ function formatCurrency(amount: number) {
   return '$' + Math.round(amount).toLocaleString('es-MX');
 }
 
+type CartItemLike = {
+  price: number | string;
+  discountPrice?: number | string | null;
+  quantity: number;
+  selectedOptions?: { price: number | string }[];
+  promoType?: string | null;
+  promoBuyQuantity?: number | null;
+  promoPayQuantity?: number | null;
+  sellBy?: string | null;
+};
+
+function getPaidUnits(item: CartItemLike) {
+  const buy = item.promoBuyQuantity ?? 0;
+  const pay = item.promoPayQuantity ?? 0;
+  const valid =
+    item.promoType === 'MULTI_BUY' &&
+    item.sellBy !== 'WEIGHT' &&
+    buy > 0 &&
+    pay > 0 &&
+    pay < buy &&
+    item.quantity >= buy;
+  if (!valid) return item.quantity;
+  const groups = Math.floor(item.quantity / buy);
+  const remainder = item.quantity % buy;
+  return groups * pay + remainder;
+}
+
+function getBasePrice(item: CartItemLike) {
+  const price = Number(item.price) || 0;
+  const base = item.discountPrice ? Number(item.discountPrice) || 0 : price;
+  return base;
+}
+
+function getLineTotal(item: CartItemLike) {
+  const optionsSum = (item.selectedOptions || []).reduce((s, o) => s + (Number(o.price) || 0), 0);
+  return getBasePrice(item) * getPaidUnits(item) + optionsSum * Math.max(0, item.quantity);
+}
+
 type CartDrawerProps = {
   isOpen: boolean;
   onClose: () => void;
@@ -17,6 +55,7 @@ type CartDrawerProps = {
   overrideDeliveryFee?: number;
   overrideServiceFee?: number;
   pickupOnly?: boolean;
+  freeDeliveryThreshold?: number | null;
 };
 
 export default memo(function CartDrawer({
@@ -29,6 +68,7 @@ export default memo(function CartDrawer({
   overrideDeliveryFee,
   overrideServiceFee,
   pickupOnly = false,
+  freeDeliveryThreshold,
 }: CartDrawerProps) {
   const cart = useCartStore(state => state.items);
   const updateCartItem = useCartStore(state => state.updateItem);
@@ -39,11 +79,7 @@ export default memo(function CartDrawer({
   const deliveryFee = overrideDeliveryFee ?? storeDeliveryFee;
 
   const cartSubtotal = useMemo(
-    () => cart.reduce((sum, item) => {
-      const basePrice = item.discountPrice ? Number(item.discountPrice) : Number(item.price);
-      const optionsPrice = (item.selectedOptions || []).reduce((s, o) => s + Number(o.price), 0);
-      return sum + (basePrice + optionsPrice) * Math.max(0, item.quantity);
-    }, 0),
+    () => cart.reduce((sum, item) => sum + getLineTotal(item), 0),
     [cart]
   );
 
@@ -52,7 +88,16 @@ export default memo(function CartDrawer({
     [cart]
   );
 
-  const orderTotal = Math.max(0, cartSubtotal + serviceFee + (fulfillmentType === 'PICKUP' ? 0 : deliveryFee));
+  const effectiveDeliveryFee =
+    fulfillmentType !== 'PICKUP' &&
+    !pickupOnly &&
+    freeDeliveryThreshold &&
+    freeDeliveryThreshold > 0 &&
+    cartSubtotal >= freeDeliveryThreshold
+      ? 0
+      : deliveryFee;
+
+  const orderTotal = Math.max(0, cartSubtotal + serviceFee + (fulfillmentType === 'PICKUP' ? 0 : effectiveDeliveryFee));
 
   if (!isOpen) return null;
 
@@ -98,12 +143,14 @@ export default memo(function CartDrawer({
             {cart.length ? (
               <div className="space-y-3">
                 {cart.map((item, idx) => {
-                  const itemUnitPrice = (() => {
-                    const base = item.discountPrice ? Number(item.discountPrice) : Number(item.price);
-                    const optionsSum = (item.selectedOptions || []).reduce((s, o) => s + Number(o.price), 0);
-                    return base + optionsSum;
-                  })();
-                  const lineTotal = itemUnitPrice * item.quantity;
+                  const itemUnitPrice = getBasePrice(item) + (item.selectedOptions || []).reduce((s, o) => s + Number(o.price), 0);
+                  const lineTotal = getLineTotal(item);
+                  const listPriceTotal = itemUnitPrice * Math.max(0, item.quantity);
+                  const itemSaving = Math.max(0, listPriceTotal - lineTotal);
+                  const hasMultiBuy = item.promoType === 'MULTI_BUY' && item.sellBy !== 'WEIGHT'
+                    && !!item.promoBuyQuantity && !!item.promoPayQuantity
+                    && item.promoPayQuantity < item.promoBuyQuantity
+                    && item.quantity >= (item.promoBuyQuantity || 0);
                   const isWeightItem = item.sellBy === 'WEIGHT';
 
                   return (
@@ -127,6 +174,18 @@ export default memo(function CartDrawer({
                               {formatCurrency(lineTotal)}
                             </span>
                           </div>
+                          {hasMultiBuy && (
+                            <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                              <span className="inline-flex items-center rounded-full bg-emerald-500 px-2 py-0.5 text-[10px] font-bold text-white">
+                                {item.promoBuyQuantity}x{item.promoPayQuantity}
+                              </span>
+                              {itemSaving > 0 && (
+                                <span className="text-[11px] font-semibold text-emerald-600">
+                                  Ahorras {formatCurrency(itemSaving)}
+                                </span>
+                              )}
+                            </div>
+                          )}
                           {item.selectedOptions && item.selectedOptions.length > 0 && (
                             <div className="mt-2 flex flex-wrap gap-1.5">
                               {item.selectedOptions.map((opt) => (
@@ -243,8 +302,18 @@ export default memo(function CartDrawer({
                     <span className="flex items-center gap-1">
                       <span className="text-[10px]">🛵</span> Envío
                     </span>
-                    <span className="font-medium text-neutral-700">{formatCurrency(deliveryFee)}</span>
+                    {freeDeliveryThreshold && deliveryFee > 0 && cartSubtotal >= freeDeliveryThreshold ? (
+                      <span className="font-bold text-emerald-600">Gratis</span>
+                    ) : (
+                      <span className="font-medium text-neutral-700">{formatCurrency(deliveryFee)}</span>
+                    )}
                   </div>
+                  )}
+                  {freeDeliveryThreshold && freeDeliveryThreshold > 0 && fulfillmentType !== 'PICKUP' && !pickupOnly && cartSubtotal < freeDeliveryThreshold && (
+                    <div className="flex items-center justify-between rounded-lg bg-emerald-50 px-2 py-1.5 text-[11px] font-semibold text-emerald-700">
+                      <span>Envio gratis desde {formatCurrency(freeDeliveryThreshold)}</span>
+                      <span className="text-emerald-500">Te faltan {formatCurrency(freeDeliveryThreshold - cartSubtotal)}</span>
+                    </div>
                   )}
                   <div className="flex items-center justify-between text-neutral-500">
                     <span className="flex items-center gap-1">

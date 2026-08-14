@@ -45,6 +45,7 @@ type OrderInput = {
   paymentProofUrl?: string;
   notes?: string;
   locationVerified?: boolean;
+  promoCode?: string;
 };
 
 type CreateOrderParams = {
@@ -480,6 +481,7 @@ export async function createOrderForCustomer({
   });
 
   let calculatedSubtotal = 0;
+  let multiBuySaving = 0;
 
   const itemsWithOptionsInfo = input.items.map((item) => {
     const product = productsById.get(item.productId);
@@ -551,6 +553,7 @@ export async function createOrderForCustomer({
     let unitPrice: number;
     let quantity: number;
     let weightG: number | null = null;
+    let itemSubtotal: number;
 
     if (sellBy === 'WEIGHT') {
       weightG = item.weightG || 0;
@@ -569,13 +572,37 @@ export async function createOrderForCustomer({
       const unitPricePerKg = product.discountPrice ?? (product as any).unitPrice ?? product.price;
       unitPrice = unitPricePerKg;
       quantity = weightG;
+      itemSubtotal = (unitPrice * weightG!) / 1000;
     } else {
       const basePrice = product.discountPrice ?? product.price;
-      unitPrice = basePrice + itemOptionsPrice;
+
+      // Promoción por cantidad (2x1, 3x2): por cada grupo de N artículos se paga M.
+      const promoType = (product as any).promoType;
+      const promoBuyQty = (product as any).promoBuyQuantity as number | null | undefined;
+      const promoPayQty = (product as any).promoPayQuantity as number | null | undefined;
+      const isMultiBuy =
+        promoType === 'MULTI_BUY' &&
+        promoBuyQty &&
+        promoPayQty &&
+        promoPayQty > 0 &&
+        promoPayQty < promoBuyQty &&
+        item.quantity >= promoBuyQty;
+
+      let paidUnits = item.quantity;
+      if (isMultiBuy) {
+        const groups = Math.floor(item.quantity / promoBuyQty);
+        const remainder = item.quantity % promoBuyQty;
+        paidUnits = groups * promoPayQty + remainder;
+        multiBuySaving += Math.round(basePrice * (item.quantity - paidUnits) * 100) / 100;
+      }
+
+      // El subtotal del ítem descuenta las unidades que se regalan (N×M con grupos completos)
+      // mientras que el precio por unidad sigue incluyendo las opciones a precio completo.
+      itemSubtotal = Math.round((basePrice * paidUnits + itemOptionsPrice * item.quantity) * 100) / 100;
+      unitPrice = Math.round((itemSubtotal / item.quantity) * 100) / 100;
       quantity = item.quantity;
     }
 
-    const itemSubtotal = sellBy === 'WEIGHT' ? (unitPrice * weightG!) / 1000 : unitPrice * quantity;
     calculatedSubtotal += itemSubtotal;
 
     return {
@@ -642,7 +669,79 @@ export async function createOrderForCustomer({
     }
   }
 
-  const totalAmount = subtotal + taxAmount + serviceFee + deliveryFee;
+  // ===== Promociones (acumulativo: multi-compra → cupón → % por monto mínimo → envío gratis) =====
+  let promoDiscountAmount = 0;
+  let appliedPromoCode: string | null = null;
+  const discountBreakdown: Record<string, number | string> = {};
+  if (multiBuySaving > 0) discountBreakdown.multiBuy = multiBuySaving;
+
+  // 1) Cupón por código
+  const rawPromoCode = input.promoCode?.trim() || '';
+  if (rawPromoCode) {
+    const promoCode = await prisma.promoCode.findFirst({
+      where: {
+        restaurantId: restaurant.id,
+        code: { equals: rawPromoCode.toUpperCase(), mode: 'insensitive' },
+        isActive: true,
+        AND: [
+          { OR: [{ validFrom: null }, { validFrom: { lte: new Date() } }] },
+          { OR: [{ validUntil: null }, { validUntil: { gte: new Date() } }] },
+        ],
+      },
+    });
+
+    if (!promoCode) {
+      throw new AppError(400, 'INVALID_PROMO_CODE', 'El código promocional no es válido.');
+    }
+    if (promoCode.maxUses != null && promoCode.usesCount >= promoCode.maxUses) {
+      throw new AppError(400, 'PROMO_CODE_EXHAUSTED', 'El código promocional ya no está disponible.');
+    }
+    if (promoCode.minOrderAmount != null && subtotal < promoCode.minOrderAmount) {
+      throw new AppError(
+        400,
+        'PROMO_CODE_MIN_ORDER',
+        `Este código aplica a partir de $${promoCode.minOrderAmount.toFixed(2)} de compra.`
+      );
+    }
+
+    if (promoCode.type === 'PERCENT') {
+      promoDiscountAmount = Math.round((subtotal * promoCode.value) / 100 * 100) / 100;
+    } else if (promoCode.type === 'AMOUNT') {
+      promoDiscountAmount = Math.min(promoCode.value, subtotal);
+    } else if (promoCode.type === 'FREE_DELIVERY') {
+      promoDiscountAmount = deliveryFee;
+    }
+    appliedPromoCode = promoCode.code;
+    discountBreakdown.coupon = {
+      type: promoCode.type,
+      value: promoCode.value,
+      discount: promoDiscountAmount,
+    } as any;
+  }
+
+  // 2) Descuento por monto mínimo del negocio
+  if (
+    restaurant.promoMinOrderPercent != null &&
+    restaurant.promoMinOrderAmount != null &&
+    subtotal >= restaurant.promoMinOrderAmount
+  ) {
+    const minOrderDiscount =
+      Math.round((subtotal * restaurant.promoMinOrderPercent) / 100 * 100) / 100;
+    promoDiscountAmount += minOrderDiscount;
+    discountBreakdown.minOrder = minOrderDiscount;
+  }
+
+  // 3) Envío gratis por umbral de subtotal
+  if (
+    !isPickup &&
+    restaurant.promoFreeDeliveryThreshold != null &&
+    subtotal >= restaurant.promoFreeDeliveryThreshold
+  ) {
+    deliveryFee = 0;
+    discountBreakdown.freeDelivery = 'true';
+  }
+
+  const totalAmount = subtotal - promoDiscountAmount + taxAmount + serviceFee + deliveryFee;
   const prepTimeMinutes = restaurant.maxDeliveryTime || 15;
   const pickupReadyAt = isPickup ? new Date(Date.now() + prepTimeMinutes * 60 * 1000) : null;
   const { estimatedDeliveryTime } = calculateOrderEta({
@@ -836,6 +935,11 @@ export async function createOrderForCustomer({
           deliveryFee,
           deliveryDistanceKm,
           totalAmount,
+          promoCode: appliedPromoCode,
+          promoDiscountAmount,
+          discountBreakdown: Object.keys(discountBreakdown).length
+            ? JSON.stringify(discountBreakdown)
+            : null,
           status: OrderStatus.PENDING,
           paymentMethod: input.paymentMethod,
           paymentStatus: PaymentStatus.PENDING,
@@ -886,6 +990,13 @@ export async function createOrderForCustomer({
           },
         },
       });
+
+      if (appliedPromoCode) {
+        await tx.promoCode.updateMany({
+          where: { restaurantId: restaurant.id, code: appliedPromoCode },
+          data: { usesCount: { increment: 1 } },
+        });
+      }
 
       logger.info('Order created', {
         orderId: order.id,

@@ -76,6 +76,9 @@ type PublicRestaurantDetail = {
   instagram?: string | null;
   facebook?: string | null;
   tiktok?: string | null;
+  promoFreeDeliveryThreshold?: number | null;
+  promoMinOrderAmount?: number | null;
+  promoMinOrderPercent?: number | null;
   categories: Array<{
     id: string;
     name: string;
@@ -96,6 +99,9 @@ type PublicRestaurantDetail = {
         imageZoom?: number | null;
         preparationTime: number;
         discountPrice?: number | null;
+        promoType?: 'MULTI_BUY' | null;
+        promoBuyQuantity?: number | null;
+        promoPayQuantity?: number | null;
         isAdultOnly?: boolean;
         optionGroups?: ProductOptionGroup[];
       }>;
@@ -119,6 +125,7 @@ type CheckoutForm = {
   paymentMethod: PaymentMethod;
   notes: string;
   storeNotes: string;
+  promoCode: string;
 };
 
 type DeliveryPreset = {
@@ -279,6 +286,7 @@ const defaultCheckoutForm: CheckoutForm = {
   paymentMethod: 'CASH',
   notes: '',
   storeNotes: '',
+  promoCode: '',
 };
 
 function getUserLocationQuery(): string {
@@ -895,6 +903,9 @@ export default function RestaurantPage({
     description: string;
     price: number;
     discountPrice?: number | null;
+    promoType?: 'MULTI_BUY' | null;
+    promoBuyQuantity?: number | null;
+    promoPayQuantity?: number | null;
     sellBy?: string;
     unitPrice?: number | null;
     id: string;
@@ -918,6 +929,9 @@ export default function RestaurantPage({
       description: product.description,
       price: product.price,
       discountPrice: product.discountPrice,
+      promoType: product.promoType,
+      promoBuyQuantity: product.promoBuyQuantity,
+      promoPayQuantity: product.promoPayQuantity,
       sellBy: product.sellBy,
       unitPrice: product.unitPrice,
       id: product.id,
@@ -1874,8 +1888,27 @@ export default function RestaurantPage({
   const discountAmount = useMemo(
     () => cart.reduce((sum, item) => {
       const price = toMoney(item.price);
-      const discountPrice = item.discountPrice ? toMoney(item.discountPrice) : price;
-      return sum + (price - discountPrice) * Math.max(0, item.quantity);
+      const basePrice = item.discountPrice ? toMoney(item.discountPrice) : price;
+      const discountPriceSaving = (price - basePrice) * Math.max(0, item.quantity);
+
+      let multiBuySaving = 0;
+      const buy = item.promoBuyQuantity ?? 0;
+      const pay = item.promoPayQuantity ?? 0;
+      if (
+        item.promoType === 'MULTI_BUY' &&
+        item.sellBy !== 'WEIGHT' &&
+        buy > 0 &&
+        pay > 0 &&
+        pay < buy &&
+        item.quantity >= buy
+      ) {
+        const groups = Math.floor(item.quantity / buy);
+        const remainder = item.quantity % buy;
+        const paidUnits = groups * pay + remainder;
+        multiBuySaving = basePrice * (item.quantity - paidUnits);
+      }
+
+      return sum + discountPriceSaving + multiBuySaving;
     }, 0),
     [cart]
   );
@@ -1947,6 +1980,7 @@ export default function RestaurantPage({
   const deliveryFee = useMemo(() => {
     if (fulfillmentType === 'PICKUP') return 0;
     if (!restaurant) return 0;
+    let fee = 0;
     if (
       typeof distanceKm === 'number' &&
       restaurant.pricingModel === 'distance' &&
@@ -1954,14 +1988,24 @@ export default function RestaurantPage({
       typeof restaurant.perKmRate === 'number'
     ) {
       const extraKm = Math.max(0, distanceKm - 1);
-      let fee = restaurant.baseRate + extraKm * restaurant.perKmRate;
+      fee = restaurant.baseRate + extraKm * restaurant.perKmRate;
       if (typeof restaurant.minDeliveryFee === 'number') fee = Math.max(fee, restaurant.minDeliveryFee);
       if (typeof restaurant.maxDeliveryFee === 'number') fee = Math.min(fee, restaurant.maxDeliveryFee);
-      return Math.round(fee * 100) / 100;
+    } else if (restaurant.hasOwnDelivery) {
+      fee = toMoney(restaurant.deliveryFee);
+    } else {
+      fee = toMoney(restaurant.effectiveDeliveryFee);
     }
-    if (restaurant.hasOwnDelivery) return toMoney(restaurant.deliveryFee);
-    return toMoney(restaurant.effectiveDeliveryFee);
-  }, [restaurant, distanceKm, fulfillmentType]);
+    const effectiveSubtotal = cartSubtotal - discountAmount;
+    if (
+      restaurant.promoFreeDeliveryThreshold != null &&
+      restaurant.promoFreeDeliveryThreshold > 0 &&
+      effectiveSubtotal >= restaurant.promoFreeDeliveryThreshold
+    ) {
+      fee = 0;
+    }
+    return Math.round(fee * 100) / 100;
+  }, [restaurant, distanceKm, fulfillmentType, cartSubtotal, discountAmount]);
 
   const orderTotal = Math.max(0, cartSubtotal - discountAmount + serviceFee + (fulfillmentType === 'PICKUP' ? 0 : deliveryFee));
   const checkoutValidationMessage = useMemo(() => {
@@ -1997,6 +2041,9 @@ function triggerHaptic(pattern: number | number[] = 10) {
       name: product.name,
       price: product.price,
       discountPrice: (product as any).discountPrice,
+      promoType: product.promoType,
+      promoBuyQuantity: product.promoBuyQuantity,
+      promoPayQuantity: product.promoPayQuantity,
       image: product.image,
       quantity: 1,
       specialInstructions: '',
@@ -2048,6 +2095,9 @@ function triggerHaptic(pattern: number | number[] = 10) {
       name: customizingProduct.name,
       price: itemPrice,
       discountPrice: customizingProduct.discountPrice,
+      promoType: customizingProduct.promoType,
+      promoBuyQuantity: customizingProduct.promoBuyQuantity,
+      promoPayQuantity: customizingProduct.promoPayQuantity,
       image: customizingProduct.image,
       quantity: customizingQuantity,
       specialInstructions: customizingInstructions,
@@ -2531,6 +2581,9 @@ function triggerHaptic(pattern: number | number[] = 10) {
         ...(paymentProofUrl ? { paymentProofUrl } : {}),
         ...(combinedNotes ? { notes: combinedNotes } : {}),
         locationVerified: !!currentLocation,
+        ...(normalizedCheckoutForm.promoCode.trim()
+          ? { promoCode: normalizedCheckoutForm.promoCode.trim().toUpperCase() }
+          : {}),
       };
 
       if (fulfillmentType !== 'PICKUP') {
@@ -3547,6 +3600,7 @@ function triggerHaptic(pattern: number | number[] = 10) {
         overrideServiceFee={serviceFee}
         overrideDeliveryFee={deliveryFee}
         pickupOnly={restaurant?.pickupOnly === true}
+        freeDeliveryThreshold={restaurant?.promoFreeDeliveryThreshold ?? null}
       />
 
       <div className={`fixed inset-0 z-50 transition-opacity duration-300 ${isCheckoutOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
@@ -4017,6 +4071,33 @@ function triggerHaptic(pattern: number | number[] = 10) {
                         value={checkoutForm.notes} 
                         onChange={(value) => setCheckoutForm((current) => ({ ...current, notes: value }))} 
                       />
+                      )}
+                    </div>
+                  </div>
+
+                  {/* ── PASO 2.5: CUPÓN ── */}
+                  <div className="rounded-[22px] border border-black/[0.04] bg-white p-4 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
+                    <div className="mb-4 flex items-center justify-between border-b border-black/[0.05] pb-3">
+                      <div className="flex items-center gap-2.5">
+                        <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[var(--accent)] text-[11px] font-black text-white">🎟️</span>
+                        <h3 className="text-[13px] font-bold tracking-tight text-neutral-900">Cupón de descuento</h3>
+                      </div>
+                    </div>
+                    <div className="space-y-3.5">
+                      <Field
+                        label="Código promocional"
+                        value={checkoutForm.promoCode}
+                        onChange={(value) => setCheckoutForm((current) => ({ ...current, promoCode: value.toUpperCase() }))}
+                        placeholder="Ej. VERANO10"
+                      />
+                      {checkoutForm.promoCode && (
+                        <button
+                          type="button"
+                          onClick={() => setCheckoutForm((current) => ({ ...current, promoCode: '' }))}
+                          className="text-[11px] font-semibold text-neutral-400 underline-offset-2 hover:text-neutral-600 hover:underline"
+                        >
+                          Quitar cupón
+                        </button>
                       )}
                     </div>
                   </div>
@@ -4638,6 +4719,44 @@ function triggerHaptic(pattern: number | number[] = 10) {
                       </div>
                     </div>
                   </div>
+
+                  {(() => {
+                  const promos: { icon: string; text: string }[] = [];
+                  if (
+                    restaurant.promoFreeDeliveryThreshold != null &&
+                    restaurant.promoFreeDeliveryThreshold > 0
+                  ) {
+                    promos.push({
+                      icon: '🛵',
+                      text: `Envío gratis desde ${formatCurrency(restaurant.promoFreeDeliveryThreshold)} de compra`,
+                    });
+                  }
+                  if (
+                    restaurant.promoMinOrderAmount != null &&
+                    restaurant.promoMinOrderAmount > 0 &&
+                    restaurant.promoMinOrderPercent != null &&
+                    restaurant.promoMinOrderPercent > 0
+                  ) {
+                    promos.push({
+                      icon: '🎉',
+                      text: `${restaurant.promoMinOrderPercent}% de descuento en pedidos desde ${formatCurrency(restaurant.promoMinOrderAmount)}`,
+                    });
+                  }
+                  if (!promos.length) return null;
+                  return (
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {promos.map((promo, index) => (
+                        <div
+                          key={index}
+                          className="flex items-center gap-2 rounded-full border border-emerald-200/70 bg-emerald-50/80 px-3.5 py-1.5 text-[12px] font-semibold text-emerald-800 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300"
+                        >
+                          <span className="text-sm">{promo.icon}</span>
+                          {promo.text}
+                        </div>
+                      ))}
+                    </div>
+                  );
+                  })()}
                 </div>
               </section>
 
@@ -4844,11 +4963,21 @@ function triggerHaptic(pattern: number | number[] = 10) {
                                   <span>-{Math.round((1 - product.discountPrice / product.price) * 100)}%</span>
                                 </div>
                               )}
+                              {getMultiBuyInfo(product).isMultiBuy && (
+                                <div className="absolute right-1.5 top-1.5 flex items-center gap-1 rounded-full bg-emerald-600/90 px-1.5 py-0.5 text-[8px] font-bold text-white shadow-sm">
+                                  <span>{getMultiBuyInfo(product).buy}x{getMultiBuyInfo(product).pay}</span>
+                                </div>
+                              )}
                             </div>
                             <div className="px-1.5 pb-1.5 pt-1">
                               <h3 className="truncate text-[11px] font-bold leading-tight text-neutral-900 dark:text-white">{product.name}</h3>
                               {product.sellBy === 'WEIGHT' ? (
                                 <p className="mt-0.5 text-[11px] font-bold text-neutral-900 dark:text-white">{formatCurrency(product.unitPrice || product.price)}/kg</p>
+                              ) : getMultiBuyInfo(product).isMultiBuy ? (
+                                <div className="mt-0.5 flex items-baseline gap-1">
+                                  <span className="text-xs font-bold text-emerald-600">{formatCurrency(getMultiBuyInfo(product).effectiveUnitPrice)}</span>
+                                  <span className="text-[9px] text-neutral-400 line-through dark:text-zinc-500">{formatCurrency(getMultiBuyInfo(product).basePrice)}</span>
+                                </div>
                               ) : product.discountPrice ? (
                                 <div className="mt-0.5 flex items-baseline gap-1">
                                   <span className="text-xs font-bold text-rose-600">{formatCurrency(product.discountPrice)}</span>
@@ -4909,11 +5038,21 @@ function triggerHaptic(pattern: number | number[] = 10) {
                                     <span>-{Math.round((1 - product.discountPrice / product.price) * 100)}%</span>
                                   </div>
                                 )}
+                                {getMultiBuyInfo(product).isMultiBuy && (
+                                  <div className="absolute right-1.5 top-1.5 flex items-center gap-1 rounded-full bg-emerald-600/90 px-2 py-0.5 text-[9px] font-bold text-white shadow-sm">
+                                    <span>{getMultiBuyInfo(product).buy}x{getMultiBuyInfo(product).pay}</span>
+                                  </div>
+                                )}
                               </div>
                               <div className="flex flex-1 flex-col p-3">
-                                 <h3 className="text-sm font-bold leading-snug text-neutral-900 line-clamp-2 dark:text-white">{product.name}</h3>
+<h3 className="text-sm font-bold leading-snug text-neutral-900 line-clamp-2 dark:text-white">{product.name}</h3>
                                 {product.sellBy === 'WEIGHT' ? (
                                   <p className="mt-0.5 text-xs font-semibold text-neutral-500 dark:text-zinc-400">{formatCurrency(product.unitPrice || product.price)}/kg</p>
+                                ) : getMultiBuyInfo(product).isMultiBuy ? (
+                                  <div className="mt-0.5 flex items-baseline gap-1.5">
+                                    <span className="text-xs font-bold text-emerald-600">{formatCurrency(getMultiBuyInfo(product).effectiveUnitPrice)}</span>
+                                    <span className="text-[10px] text-neutral-400 line-through dark:text-zinc-500">{formatCurrency(getMultiBuyInfo(product).basePrice)}</span>
+                                  </div>
                                 ) : product.discountPrice ? (
                                   <div className="mt-0.5 flex items-baseline gap-1.5">
                                     <span className="text-xs font-bold text-rose-600">{formatCurrency(product.discountPrice)}</span>
@@ -4984,11 +5123,21 @@ function triggerHaptic(pattern: number | number[] = 10) {
                                     <span>-{Math.round((1 - product.discountPrice / product.price) * 100)}%</span>
                                   </div>
                                 )}
+                                {getMultiBuyInfo(product).isMultiBuy && (
+                                  <div className="absolute right-1.5 top-1.5 flex items-center gap-1 rounded-full bg-emerald-600/90 px-2 py-0.5 text-[9px] font-bold text-white shadow-sm">
+                                    <span>{getMultiBuyInfo(product).buy}x{getMultiBuyInfo(product).pay}</span>
+                                  </div>
+                                )}
                               </div>
                               <div className="flex flex-1 flex-col p-3">
                                 <h3 className="text-sm font-bold leading-snug text-neutral-900 line-clamp-2 dark:text-white">{product.name}</h3>
                                 {product.sellBy === 'WEIGHT' ? (
                                   <p className="mt-0.5 text-xs font-semibold text-neutral-500 dark:text-zinc-400">{formatCurrency(product.unitPrice || product.price)}/kg</p>
+                                ) : getMultiBuyInfo(product).isMultiBuy ? (
+                                  <div className="mt-0.5 flex items-baseline gap-1.5">
+                                    <span className="text-xs font-bold text-emerald-600">{formatCurrency(getMultiBuyInfo(product).effectiveUnitPrice)}</span>
+                                    <span className="text-[10px] text-neutral-400 line-through dark:text-zinc-500">{formatCurrency(getMultiBuyInfo(product).basePrice)}</span>
+                                  </div>
                                 ) : product.discountPrice ? (
                                   <div className="mt-0.5 flex items-baseline gap-1.5">
                                     <span className="text-xs font-bold text-rose-600">{formatCurrency(product.discountPrice)}</span>
@@ -5101,6 +5250,11 @@ function triggerHaptic(pattern: number | number[] = 10) {
                                     <span>-{Math.round((1 - product.discountPrice / product.price) * 100)}%</span>
                                   </div>
                                 )}
+                                {getMultiBuyInfo(product).isMultiBuy && (
+                                  <div className="absolute right-1.5 top-1.5 z-10 flex items-center gap-0.5 rounded-full bg-emerald-600/90 px-1.5 py-0.5 text-[8px] font-bold text-white shadow-sm">
+                                    <span>{getMultiBuyInfo(product).buy}x{getMultiBuyInfo(product).pay}</span>
+                                  </div>
+                                )}
                               </div>
                               <div className="flex min-w-0 flex-1 flex-col">
                                 <div className="flex flex-col gap-0.5">
@@ -5111,6 +5265,11 @@ function triggerHaptic(pattern: number | number[] = 10) {
                                   <div className="mt-0.5">
                                     {product.sellBy === 'WEIGHT' ? (
                                       <span className="text-sm font-bold text-neutral-900 dark:text-white">{formatCurrency(product.unitPrice || product.price)}/kg</span>
+                                    ) : getMultiBuyInfo(product).isMultiBuy ? (
+                                      <div className="flex items-baseline gap-1.5">
+                                        <span className="text-sm font-bold text-emerald-600">{formatCurrency(getMultiBuyInfo(product).effectiveUnitPrice)}</span>
+                                        <span className="text-[10px] text-neutral-400 line-through dark:text-zinc-500">{formatCurrency(getMultiBuyInfo(product).basePrice)}</span>
+                                      </div>
                                     ) : product.discountPrice ? (
                                       <div className="flex items-baseline gap-1.5">
                                         <span className="text-sm font-bold text-rose-600">{formatCurrency(product.discountPrice)}</span>
@@ -5685,6 +5844,11 @@ function triggerHaptic(pattern: number | number[] = 10) {
                   -{Math.round((1 - previewProduct.discountPrice / previewProduct.price) * 100)}%
                 </div>
               )}
+              {getMultiBuyInfo(previewProduct).isMultiBuy && (
+                <div className="absolute right-4 top-4 z-10 rounded-full bg-emerald-600/90 px-3 py-1 text-[11px] font-bold text-white shadow-lg backdrop-blur-sm">
+                  {getMultiBuyInfo(previewProduct).buy}x{getMultiBuyInfo(previewProduct).pay}
+                </div>
+              )}
               {previewProduct.images.length > 1 && (
                 <>
                   <button
@@ -5725,6 +5889,16 @@ function triggerHaptic(pattern: number | number[] = 10) {
                 <div className="mt-5">
                   {previewProduct.sellBy === 'WEIGHT' ? (
                     <p className="text-2xl font-bold text-neutral-900 dark:text-white">{formatCurrency(previewProduct.unitPrice || previewProduct.price)}<span className="text-base font-medium text-neutral-500 dark:text-zinc-400">/kg</span></p>
+                  ) : getMultiBuyInfo(previewProduct).isMultiBuy ? (
+                    <div className="space-y-1">
+                      <div className="flex items-baseline gap-2.5">
+                        <span className="text-2xl font-bold text-emerald-600 dark:text-emerald-500">{formatCurrency(getMultiBuyInfo(previewProduct).effectiveUnitPrice)}</span>
+                        <span className="text-sm text-neutral-400 line-through dark:text-zinc-500">{formatCurrency(getMultiBuyInfo(previewProduct).basePrice)}</span>
+                      </div>
+                      <span className="inline-block rounded-full bg-emerald-50 px-2.5 py-0.5 text-[10px] font-bold text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400">
+                        Compra {getMultiBuyInfo(previewProduct).buy} paga {getMultiBuyInfo(previewProduct).pay} · ahorras {getMultiBuyInfo(previewProduct).discountPercent}%
+                      </span>
+                    </div>
                   ) : previewProduct.discountPrice ? (
                     <div className="space-y-1">
                       <div className="flex items-baseline gap-2.5">
@@ -6159,6 +6333,64 @@ function toMoney(value: number | null | undefined) {
   }
 
   return value;
+}
+
+type MultiBuyInfo = {
+  isMultiBuy: boolean;
+  buy?: number;
+  pay?: number;
+  basePrice: number;
+  effectiveUnitPrice: number;
+  discountPercent: number;
+  savingsPerGroup: number;
+};
+
+function getMultiBuyInfo(product: {
+  price: number;
+  discountPrice?: number | null;
+  promoType?: 'MULTI_BUY' | null;
+  promoBuyQuantity?: number | null;
+  promoPayQuantity?: number | null;
+  sellBy?: string;
+}): MultiBuyInfo {
+  const basePrice = product.discountPrice ?? product.price;
+  const buy = product.promoBuyQuantity ?? 0;
+  const pay = product.promoPayQuantity ?? 0;
+  const isMultiBuy =
+    product.promoType === 'MULTI_BUY' &&
+    product.sellBy !== 'WEIGHT' &&
+    buy > 0 &&
+    pay > 0 &&
+    pay < buy;
+
+  if (!isMultiBuy) {
+    return {
+      isMultiBuy: false,
+      basePrice,
+      effectiveUnitPrice: basePrice,
+      discountPercent: 0,
+      savingsPerGroup: 0,
+    };
+  }
+
+  const effectiveUnitPrice = (basePrice * pay) / buy;
+  const discountPercent = Math.round((1 - pay / buy) * 100);
+  return {
+    isMultiBuy,
+    buy,
+    pay,
+    basePrice,
+    effectiveUnitPrice,
+    discountPercent,
+    savingsPerGroup: basePrice * (buy - pay),
+  };
+}
+
+function getMultiBuySubtotal(basePrice: number, buy: number, pay: number, quantity: number): number {
+  const groups = Math.floor(quantity / buy);
+  const remainder = quantity % buy;
+  const paidUnits = groups * pay + remainder;
+  return (basePrice * paidUnits) / quantity;
 }
 
 function formatDate(date: string) {

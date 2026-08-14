@@ -49,6 +49,9 @@ const restaurantProfileSchema = z.object({
   instagram: z.string().nullable().optional(),
   facebook: z.string().nullable().optional(),
   tiktok: z.string().nullable().optional(),
+  promoFreeDeliveryThreshold: z.number().nonnegative().nullable().optional(),
+  promoMinOrderAmount: z.number().nonnegative().nullable().optional(),
+  promoMinOrderPercent: z.number().min(0).max(100).nullable().optional(),
 });
 
 const MAX_SHIFTS_PER_DAY = 2;
@@ -116,6 +119,9 @@ const productSchema = z.object({
   description: z.string().min(5, 'La descripcion es obligatoria.'),
   price: z.number().positive('El precio debe ser mayor a cero.'),
   discountPrice: z.number().positive().nullable().optional(),
+  promoType: z.enum(['MULTI_BUY']).nullable().optional(),
+  promoBuyQuantity: z.number().int().positive().nullable().optional(),
+  promoPayQuantity: z.number().int().positive().nullable().optional(),
   sellBy: z.enum(['UNIT', 'WEIGHT']).optional(),
   unitPrice: z.number().positive('El precio por kg debe ser mayor a cero.').nullable().optional(),
   minWeightG: z.number().int().positive().nullable().optional(),
@@ -136,6 +142,23 @@ const productSchema = z.object({
 
 const productAvailabilitySchema = z.object({
   isAvailable: z.boolean(),
+});
+
+const promoCodeSchema = z.object({
+  code: z
+    .string()
+    .min(2, 'El codigo debe tener al menos 2 caracteres.')
+    .max(30, 'El codigo no puede exceder 30 caracteres.')
+    .trim()
+    .transform((v) => v.toUpperCase()),
+  description: z.string().max(140).nullish(),
+  type: z.enum(['PERCENT', 'AMOUNT', 'FREE_DELIVERY']),
+  value: z.number().positive('El valor debe ser mayor a cero.'),
+  minOrderAmount: z.number().nonnegative().nullable().optional(),
+  validFrom: z.string().datetime().nullish().transform((v) => (v ? new Date(v) : undefined)),
+  validUntil: z.string().datetime().nullish().transform((v) => (v ? new Date(v) : undefined)),
+  maxUses: z.number().int().positive().nullable().optional(),
+  isActive: z.boolean().default(true),
 });
 
 const operationalStatusSchema = z.object({
@@ -1021,6 +1044,9 @@ export async function registerRestaurantPanelRoutes(fastify: FastifyInstance): P
           description: parsed.data.description,
           price: parsed.data.price,
           discountPrice: parsed.data.discountPrice || null,
+          promoType: parsed.data.promoType || null,
+          promoBuyQuantity: parsed.data.promoBuyQuantity || null,
+          promoPayQuantity: parsed.data.promoPayQuantity || null,
           sellBy: parsed.data.sellBy,
           unitPrice: parsed.data.sellBy === 'WEIGHT' ? parsed.data.unitPrice : null,
           minWeightG: parsed.data.sellBy === 'WEIGHT' ? parsed.data.minWeightG : null,
@@ -1131,6 +1157,9 @@ export async function registerRestaurantPanelRoutes(fastify: FastifyInstance): P
             description: item.description,
             price: item.price,
             discountPrice: item.discountPrice || null,
+            promoType: item.promoType || null,
+            promoBuyQuantity: item.promoBuyQuantity || null,
+            promoPayQuantity: item.promoPayQuantity || null,
             sellBy: item.sellBy,
             unitPrice: item.sellBy === 'WEIGHT' ? item.unitPrice : null,
             minWeightG: item.sellBy === 'WEIGHT' ? item.minWeightG : null,
@@ -1864,6 +1893,159 @@ export async function registerRestaurantPanelRoutes(fastify: FastifyInstance): P
       });
 
       return reply.send({ success: true, data: purchases });
+    });
+
+    // ===== Cupones (promocodes) =====
+    restaurant.get('/restaurant-panel/promocodes', async (request, reply) => {
+      const user = getAuthenticatedUser(request);
+      const ownedRestaurant = await getOwnedRestaurant(user.sub);
+      if (!ownedRestaurant) {
+        return reply.status(404).send({
+          success: false,
+          error: { code: 'RESTAURANT_NOT_FOUND', message: 'No se encontro el restaurante.' },
+        });
+      }
+
+      const promos = await prisma.promoCode.findMany({
+        where: { restaurantId: ownedRestaurant.id },
+        orderBy: { createdAt: 'desc' },
+      });
+
+      return reply.send({ success: true, data: promos });
+    });
+
+    restaurant.post('/restaurant-panel/promocodes', async (request, reply) => {
+      const parsed = parseBody(promoCodeSchema.safeParse(request.body));
+
+      if ('error' in parsed) {
+        return reply.status(400).send(parsed.error);
+      }
+
+      const user = getAuthenticatedUser(request);
+      const ownedRestaurant = await getOwnedRestaurant(user.sub);
+      if (!ownedRestaurant) {
+        return reply.status(404).send({
+          success: false,
+          error: { code: 'RESTAURANT_NOT_FOUND', message: 'No se encontro el restaurante.' },
+        });
+      }
+
+      const existing = await prisma.promoCode.findUnique({
+        where: {
+          restaurantId_code: {
+            restaurantId: ownedRestaurant.id,
+            code: parsed.data.code,
+          },
+        },
+      });
+      if (existing) {
+        return reply.status(409).send({
+          success: false,
+          error: { code: 'PROMO_CODE_EXISTS', message: 'Ya existe un cupon con ese codigo.' },
+        });
+      }
+
+      const promo = await prisma.promoCode.create({
+        data: {
+          restaurantId: ownedRestaurant.id,
+          code: parsed.data.code,
+          description: parsed.data.description ?? null,
+          type: parsed.data.type,
+          value: parsed.data.value,
+          minOrderAmount: parsed.data.minOrderAmount ?? null,
+          validFrom: parsed.data.validFrom ?? null,
+          validUntil: parsed.data.validUntil ?? null,
+          maxUses: parsed.data.maxUses ?? null,
+          isActive: parsed.data.isActive,
+        },
+      });
+
+      return reply.status(201).send({ success: true, data: promo });
+    });
+
+    restaurant.patch('/restaurant-panel/promocodes/:id', async (request, reply) => {
+      const params = z.object({ id: z.string().min(1) }).safeParse(request.params);
+      const parsed = parseBody(promoCodeSchema.partial().safeParse(request.body));
+
+      if (!params.success || 'error' in parsed) {
+        return reply.status(400).send((!params.success ? (params.error as any) : parsed.error));
+      }
+
+      const user = getAuthenticatedUser(request);
+      const ownedRestaurant = await getOwnedRestaurant(user.sub);
+      if (!ownedRestaurant) {
+        return reply.status(404).send({
+          success: false,
+          error: { code: 'RESTAURANT_NOT_FOUND', message: 'No se encontro el restaurante.' },
+        });
+      }
+
+      const promo = await prisma.promoCode.findFirst({
+        where: { id: params.data.id, restaurantId: ownedRestaurant.id },
+      });
+      if (!promo) {
+        return reply.status(404).send({
+          success: false,
+          error: { code: 'PROMO_CODE_NOT_FOUND', message: 'No se encontro el cupon.' },
+        });
+      }
+
+      if (parsed.data.code && parsed.data.code !== promo.code) {
+        const existing = await prisma.promoCode.findUnique({
+          where: {
+            restaurantId_code: {
+              restaurantId: ownedRestaurant.id,
+              code: parsed.data.code,
+            },
+          },
+        });
+        if (existing) {
+          return reply.status(409).send({
+            success: false,
+            error: { code: 'PROMO_CODE_EXISTS', message: 'Ya existe un cupon con ese codigo.' },
+          });
+        }
+      }
+
+      const updated = await prisma.promoCode.update({
+        where: { id: promo.id },
+        data: parsed.data as any,
+      });
+
+      return reply.send({ success: true, data: updated });
+    });
+
+    restaurant.delete('/restaurant-panel/promocodes/:id', async (request, reply) => {
+      const params = z.object({ id: z.string().min(1) }).safeParse(request.params);
+      if (!params.success) {
+        return reply.status(400).send({
+          success: false,
+          error: { code: 'INVALID_PARAMS', message: 'Parametros invalidos.' },
+        });
+      }
+
+      const user = getAuthenticatedUser(request);
+      const ownedRestaurant = await getOwnedRestaurant(user.sub);
+      if (!ownedRestaurant) {
+        return reply.status(404).send({
+          success: false,
+          error: { code: 'RESTAURANT_NOT_FOUND', message: 'No se encontro el restaurante.' },
+        });
+      }
+
+      const promo = await prisma.promoCode.findFirst({
+        where: { id: params.data.id, restaurantId: ownedRestaurant.id },
+      });
+      if (!promo) {
+        return reply.status(404).send({
+          success: false,
+          error: { code: 'PROMO_CODE_NOT_FOUND', message: 'No se encontro el cupon.' },
+        });
+      }
+
+      await prisma.promoCode.delete({ where: { id: promo.id } });
+
+      return reply.send({ success: true });
     });
   });
 }

@@ -809,9 +809,12 @@ export async function registerPublicRoutes(fastify: FastifyInstance): Promise<vo
           status: RestaurantStatus.ACTIVE,
           products: {
             some: {
-              discountPrice: { not: null },
               isAvailable: true,
               deleted: false,
+              OR: [
+                { discountPrice: { not: null } },
+                { promoType: { not: null } },
+              ],
             },
           },
         },
@@ -831,9 +834,12 @@ export async function registerPublicRoutes(fastify: FastifyInstance): Promise<vo
           operatingHours: true,
           products: {
             where: {
-              discountPrice: { not: null },
               isAvailable: true,
               deleted: false,
+              OR: [
+                { discountPrice: { not: null } },
+                { promoType: { not: null } },
+              ],
             },
             select: {
               id: true,
@@ -843,6 +849,9 @@ export async function registerPublicRoutes(fastify: FastifyInstance): Promise<vo
               discountPrice: true,
               image: true,
               categoryId: true,
+              promoType: true,
+              promoBuyQuantity: true,
+              promoPayQuantity: true,
             },
             orderBy: { createdAt: 'desc' },
           },
@@ -878,6 +887,9 @@ export async function registerPublicRoutes(fastify: FastifyInstance): Promise<vo
                 description: p.description,
                 price: p.price,
                 discountPrice: p.discountPrice,
+                promoType: p.promoType,
+                promoBuyQuantity: p.promoBuyQuantity,
+                promoPayQuantity: p.promoPayQuantity,
                 image: p.image,
                 categoryId: p.categoryId,
                 savings,

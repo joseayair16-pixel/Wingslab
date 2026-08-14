@@ -52,6 +52,7 @@ const createOrderSchema = z.object({
   paymentProofUrl: z.string().url('El comprobante debe ser una URL valida.').nullish().transform(v => v ?? undefined),
   notes: z.string().max(500).nullish().transform(v => v ?? undefined),
   locationVerified: z.boolean().optional().default(false),
+  promoCode: z.string().max(30).trim().optional().transform(v => v?.toUpperCase() ?? undefined),
 }).superRefine((data, context) => {
   if (data.fulfillmentType === 'DELIVERY' && !data.deliveryAddress) {
     context.addIssue({

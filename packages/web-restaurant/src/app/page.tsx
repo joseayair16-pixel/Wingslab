@@ -102,6 +102,9 @@ type RestaurantProfile = {
   facebook?: string | null;
   tiktok?: string | null;
   featuredFlyer?: string | null;
+  promoFreeDeliveryThreshold?: number | null;
+  promoMinOrderAmount?: number | null;
+  promoMinOrderPercent?: number | null;
 };
 
 type OperatingHourItem = {
@@ -226,6 +229,9 @@ type ProductItem = {
   description: string;
   price: number;
   discountPrice?: number | null;
+  promoType?: 'MULTI_BUY' | null;
+  promoBuyQuantity?: number | null;
+  promoPayQuantity?: number | null;
   sellBy?: 'UNIT' | 'WEIGHT';
   unitPrice?: number | null;
   minWeightG?: number | null;
@@ -355,6 +361,9 @@ type StoreProfileDraft = {
   instagram: string;
   facebook: string;
   tiktok: string;
+  promoFreeDeliveryThreshold: string;
+  promoMinOrderAmount: string;
+  promoMinOrderPercent: string;
 };
 type ProductDraft = {
   id?: string;
@@ -363,6 +372,9 @@ type ProductDraft = {
   description: string;
   price: string;
   discountPrice?: string;
+  promoType?: 'MULTI_BUY' | null;
+  promoBuyQuantity?: string;
+  promoPayQuantity?: string;
   sellBy: 'UNIT' | 'WEIGHT';
   unitPrice: string;
   minWeightG: string;
@@ -408,6 +420,9 @@ function buildEmptyProductDraft(
     description: '',
     price: '',
     discountPrice: '',
+    promoType: null,
+    promoBuyQuantity: '',
+    promoPayQuantity: '',
     sellBy: template?.sellBy || 'UNIT',
     unitPrice: template?.unitPrice || '',
     minWeightG: template?.minWeightG || '100',
@@ -811,6 +826,9 @@ const settingsTabs = [
   { key: 'preferencias',
     icon: (<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>),
     label: 'Preferencias', desc: 'Alertas y panel' },
+  { key: 'cupones',
+    icon: (<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M9 14l6-6m-5.5.5h.01m4.99 5h.01M5 13v6a2 2 0 002 2h10a2 2 0 002-2v-6m-2 0a2 2 0 110-4m-8 4a2 2 0 100-4m7 4V7a2 2 0 00-2-2H7a2 2 0 00-2 2v6" /></svg>),
+    label: 'Cupones', desc: 'Códigos y descuentos' },
 ];
 
 
@@ -1150,6 +1168,9 @@ export default function Home() {
     instagram: '',
     facebook: '',
     tiktok: '',
+    promoFreeDeliveryThreshold: '',
+    promoMinOrderAmount: '',
+    promoMinOrderPercent: '',
   });
   const [savingStoreProfile, setSavingStoreProfile] = useState(false);
   const [showSaveSuccessModal, setShowSaveSuccessModal] = useState(false);
@@ -2143,6 +2164,9 @@ export default function Home() {
       instagram: '',
       facebook: '',
       tiktok: '',
+      promoFreeDeliveryThreshold: '',
+      promoMinOrderAmount: '',
+      promoMinOrderPercent: '',
     });
     setIsCategoryModalOpen(false);
     setNewCategoryName('');
@@ -3014,6 +3038,9 @@ export default function Home() {
         instagram: profileData.data.instagram || '',
         facebook: profileData.data.facebook || '',
         tiktok: profileData.data.tiktok || '',
+        promoFreeDeliveryThreshold: profileData.data.promoFreeDeliveryThreshold?.toString() || '',
+        promoMinOrderAmount: profileData.data.promoMinOrderAmount?.toString() || '',
+        promoMinOrderPercent: profileData.data.promoMinOrderPercent?.toString() || '',
       });
       setOperatingHoursDraft(normalizeOperatingHours(profileData.data.operatingHours));
       setSelectedDriverByOrder((current) => {
@@ -4163,6 +4190,9 @@ export default function Home() {
       }
       if (minT !== undefined) body.minDeliveryTime = minT;
       if (maxT !== undefined) body.maxDeliveryTime = maxT;
+      body.promoFreeDeliveryThreshold = num(storeDraft.promoFreeDeliveryThreshold) ?? null;
+      body.promoMinOrderAmount = num(storeDraft.promoMinOrderAmount) ?? null;
+      body.promoMinOrderPercent = num(storeDraft.promoMinOrderPercent) ?? null;
       return body;
     }
 
@@ -4237,6 +4267,9 @@ export default function Home() {
         instagram: payload.data.instagram || '',
         facebook: payload.data.facebook || '',
         tiktok: payload.data.tiktok || '',
+        promoFreeDeliveryThreshold: payload.data.promoFreeDeliveryThreshold?.toString() || '',
+        promoMinOrderAmount: payload.data.promoMinOrderAmount?.toString() || '',
+        promoMinOrderPercent: payload.data.promoMinOrderPercent?.toString() || '',
       });
       setTransferBankName(payload.data.transferBankName || '');
       setTransferAccountNumber(payload.data.transferAccountNumber || '');
@@ -4431,6 +4464,9 @@ export default function Home() {
       description: product.description,
       price: String(product.price),
       discountPrice: product.discountPrice ? String(product.discountPrice) : '',
+      promoType: product.promoType || null,
+      promoBuyQuantity: product.promoBuyQuantity ? String(product.promoBuyQuantity) : '',
+      promoPayQuantity: product.promoPayQuantity ? String(product.promoPayQuantity) : '',
       sellBy: product.sellBy || 'UNIT',
       unitPrice: product.unitPrice ? String(product.unitPrice) : '',
       minWeightG: product.minWeightG ? String(product.minWeightG) : '100',
@@ -4481,6 +4517,9 @@ export default function Home() {
       description: product.description,
       price: String(product.price),
       discountPrice: product.discountPrice ? String(product.discountPrice) : '',
+      promoType: product.promoType || null,
+      promoBuyQuantity: product.promoBuyQuantity ? String(product.promoBuyQuantity) : '',
+      promoPayQuantity: product.promoPayQuantity ? String(product.promoPayQuantity) : '',
       sellBy: product.sellBy || 'UNIT',
       unitPrice: product.unitPrice ? String(product.unitPrice) : '',
       minWeightG: product.minWeightG ? String(product.minWeightG) : '100',
@@ -4806,6 +4845,18 @@ export default function Home() {
             description: productDraft.description.trim(),
             price: Number(productDraft.price),
             discountPrice: productDraft.discountPrice ? Number(productDraft.discountPrice) : null,
+            promoType:
+              productDraft.sellBy === 'UNIT' && productDraft.promoType === 'MULTI_BUY'
+                ? 'MULTI_BUY'
+                : null,
+            promoBuyQuantity:
+              productDraft.sellBy === 'UNIT' && productDraft.promoBuyQuantity
+                ? Number(productDraft.promoBuyQuantity)
+                : null,
+            promoPayQuantity:
+              productDraft.sellBy === 'UNIT' && productDraft.promoPayQuantity
+                ? Number(productDraft.promoPayQuantity)
+                : null,
             sellBy: productDraft.sellBy,
             unitPrice: productDraft.sellBy === 'WEIGHT' ? Number(productDraft.unitPrice) : null,
             minWeightG: productDraft.sellBy === 'WEIGHT' ? Number(productDraft.minWeightG) : null,
@@ -4900,6 +4951,18 @@ export default function Home() {
             description: productDraft.description.trim(),
             price: Number(productDraft.price),
             discountPrice: productDraft.discountPrice ? Number(productDraft.discountPrice) : null,
+            promoType:
+              productDraft.sellBy === 'UNIT' && productDraft.promoType === 'MULTI_BUY'
+                ? 'MULTI_BUY'
+                : null,
+            promoBuyQuantity:
+              productDraft.sellBy === 'UNIT' && productDraft.promoBuyQuantity
+                ? Number(productDraft.promoBuyQuantity)
+                : null,
+            promoPayQuantity:
+              productDraft.sellBy === 'UNIT' && productDraft.promoPayQuantity
+                ? Number(productDraft.promoPayQuantity)
+                : null,
             sellBy: productDraft.sellBy,
             unitPrice: productDraft.sellBy === 'WEIGHT' ? Number(productDraft.unitPrice) : null,
             minWeightG: productDraft.sellBy === 'WEIGHT' ? Number(productDraft.minWeightG) : null,
@@ -7751,6 +7814,49 @@ export default function Home() {
                         onChange={(value) => setProductDraft((current) => ({ ...current, discountPrice: value }))}
                         placeholder="0.00"
                       />
+
+                      {productDraft.sellBy === 'UNIT' && (
+                        <div className="sm:col-span-2 rounded-2xl border border-emerald-200/60 bg-emerald-50/40 p-4">
+                          <label className="flex items-center gap-2 text-[12px] font-bold uppercase tracking-[0.1em] text-emerald-700">
+                            <input
+                              type="checkbox"
+                              checked={productDraft.promoType === 'MULTI_BUY'}
+                              onChange={(event) =>
+                                setProductDraft((current) => ({
+                                  ...current,
+                                  promoType: event.target.checked ? 'MULTI_BUY' : null,
+                                  ...(event.target.checked
+                                    ? {}
+                                    : { promoBuyQuantity: '', promoPayQuantity: '' }),
+                                }))
+                              }
+                              className="h-4 w-4 accent-emerald-600"
+                            />
+                            Promoción por cantidad (2x1, 3x2...)
+                          </label>
+                          {productDraft.promoType === 'MULTI_BUY' && (
+                            <div className="mt-3 grid gap-4 sm:grid-cols-2">
+                              <Field
+                                label="Comprar (cantidad)"
+                                value={productDraft.promoBuyQuantity || ''}
+                                onChange={(value) => setProductDraft((current) => ({ ...current, promoBuyQuantity: value }))}
+                                placeholder="ej. 3"
+                                type="number"
+                              />
+                              <Field
+                                label="Pagar (cantidad)"
+                                value={productDraft.promoPayQuantity || ''}
+                                onChange={(value) => setProductDraft((current) => ({ ...current, promoPayQuantity: value }))}
+                                placeholder="ej. 2"
+                                type="number"
+                              />
+                            </div>
+                          )}
+                          <p className="mt-2 text-[11px] leading-snug text-neutral-500">
+                            El cliente ve "Comprar N, pagar M" y su ahorro automáticamente. Solo aplica a productos por pieza.
+                          </p>
+                        </div>
+                      )}
 
                       {productDraft.sellBy === 'WEIGHT' && (
                         <div className="sm:col-span-2 rounded-2xl border border-sky-200/50 bg-sky-50/50 p-4">

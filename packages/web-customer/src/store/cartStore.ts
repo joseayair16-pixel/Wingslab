@@ -15,6 +15,9 @@ export type CartItem = {
   name: string;
   price: number;
   discountPrice?: number | null;
+  promoType?: 'MULTI_BUY' | null;
+  promoBuyQuantity?: number | null;
+  promoPayQuantity?: number | null;
   image?: string | null;
   quantity: number;
   specialInstructions: string;
