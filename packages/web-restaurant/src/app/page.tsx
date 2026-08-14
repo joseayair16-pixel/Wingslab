@@ -10502,14 +10502,14 @@ export default function Home() {
                               </button>
                             </div>
 
-                            <div className="mt-5 grid gap-4 md:grid-cols-2">
+                            <div className="mt-5 grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3 xl:grid-cols-4">
                               {category.products.map((product) => (
                                 <article
                                   key={product.id}
                                   className="group overflow-hidden rounded-[32px] border border-sky-100/50 bg-white/70 backdrop-blur-md shadow-[0_4px_20px_rgba(14,165,233,0.03)] ring-1 ring-black/5 transition-all hover:scale-[1.02] hover:bg-white hover:shadow-[0_12px_32px_rgba(14,165,233,0.12)] hover:ring-sky-200/60"
                                 >
-                                  <div className="flex h-full flex-col gap-0 sm:flex-row">
-                                    <div className="relative h-48 w-full shrink-0 sm:h-auto sm:w-44 sm:aspect-square">
+                                  <div className="flex h-full flex-col">
+                                    <div className="relative aspect-[4/3] w-full shrink-0">
                                       {isSelectionMode ? (
                                         <button
                                           type="button"
@@ -10581,10 +10581,10 @@ export default function Home() {
                                       )}
                                     </div>
 
-                                    <div className="flex flex-1 flex-col justify-between p-5 sm:p-6">
+                                    <div className="flex flex-1 flex-col justify-between p-4 sm:p-5">
                                       <div>
-                                        <div className="flex items-start justify-between gap-3">
-                                          <h3 className="text-lg font-semibold text-neutral-950 flex items-center gap-2">
+                                        <div className="flex items-start justify-between gap-2">
+                                          <h3 className="flex items-center gap-2 text-base font-semibold text-neutral-950 sm:text-lg">
                                             {product.name}
                                             {product.isAdultOnly && (
                                               <span className="rounded bg-rose-100 px-1.5 py-0.5 text-[10px] font-bold text-rose-700 tracking-wider">
@@ -10600,8 +10600,8 @@ export default function Home() {
                                           {product.description}
                                         </p>
                                         {product.discountPrice ? (
-                                          <div className="mt-4 flex items-center gap-2">
-                                            <p className="text-xl font-bold text-sky-600">
+                                          <div className="mt-3 flex items-center gap-2">
+                                            <p className="text-lg font-bold text-sky-600 sm:text-xl">
                                               {formatCurrency(product.discountPrice)}
                                             </p>
                                             <p className="text-sm font-medium text-neutral-400 line-through">
@@ -10609,13 +10609,13 @@ export default function Home() {
                                             </p>
                                           </div>
                                         ) : (
-                                          <p className="mt-4 text-xl font-semibold text-neutral-950">
+                                          <p className="mt-3 text-lg font-semibold text-neutral-950 sm:text-xl">
                                             {formatCurrency(product.price)}
                                           </p>
                                         )}
                                       </div>
 
-                                      <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
+                                      <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
                                         <div className="flex flex-wrap items-center gap-2">
                                           <button
                                             type="button"
@@ -10698,13 +10698,13 @@ export default function Home() {
                               <button
                                 type="button"
                                 onClick={() => openProductModal(category.id)}
-                                className="group flex min-h-[320px] flex-col items-center justify-center rounded-[32px] border-2 border-dashed border-sky-200/60 bg-sky-50/20 text-center shadow-sm transition-all hover:border-sky-400 hover:bg-sky-50/60 hover:shadow-[0_12px_32px_rgba(14,165,233,0.1)]"
+                                className="group flex min-h-[200px] flex-col items-center justify-center rounded-[32px] border-2 border-dashed border-sky-200/60 bg-sky-50/20 text-center shadow-sm transition-all hover:border-sky-400 hover:bg-sky-50/60 hover:shadow-[0_12px_32px_rgba(14,165,233,0.1)] sm:min-h-[260px]"
                               >
-                                <span className="flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br from-sky-400 to-sky-500 text-3xl font-light text-white shadow-lg shadow-sky-500/20 transition-transform duration-300 group-hover:scale-110">
+                                <span className="flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-sky-400 to-sky-500 text-2xl font-light text-white shadow-lg shadow-sky-500/20 transition-transform duration-300 group-hover:scale-110 sm:h-16 sm:w-16 sm:text-3xl">
                                   +
                                 </span>
-                                <p className="mt-5 text-lg font-semibold text-sky-900">Agregar producto</p>
-                                <p className="mt-2 max-w-[18rem] text-[13px] leading-6 text-sky-700/70">
+                                <p className="mt-4 text-base font-semibold text-sky-900 sm:mt-5 sm:text-lg">Agregar producto</p>
+                                <p className="mt-2 max-w-[16rem] px-3 text-[12px] leading-6 text-sky-700/70 sm:max-w-[18rem] sm:text-[13px]">
                                   Crea un nuevo producto dentro de <span className="font-bold">{category.name}</span> con imagen, descripcion y costo.
                                 </p>
                               </button>
@@ -10747,13 +10747,18 @@ export default function Home() {
                                     )}
                                   </div>
                                   <div className="min-w-0 flex-1">
-                                    <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                                       <p className="truncate text-[15px] font-bold text-neutral-900">{product.name}</p>
+                                      <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-sky-50 px-2.5 py-0.5 text-[11px] font-bold text-sky-700 ring-1 ring-sky-200/70">
+                                        {categoryName}
+                                      </span>
                                       {!product.isAvailable ? (
                                         <span className="rounded-full bg-neutral-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-neutral-500">Agotado</span>
                                       ) : null}
                                     </div>
-                                    <p className="mt-0.5 truncate text-[13px] text-neutral-500">{categoryName}{product.description ? ` · ${product.description}` : ''}</p>
+                                    {product.description ? (
+                                      <p className="mt-1 truncate text-[13px] text-neutral-500">{product.description}</p>
+                                    ) : null}
                                   </div>
                                   <div className="flex items-center gap-4 sm:w-auto">
                                     <div className="flex items-center gap-1.5">

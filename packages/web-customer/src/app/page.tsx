@@ -6590,7 +6590,7 @@ export default function Home() {
                             onClick={() => setJoinRestGiro(opt.value)}
                             className={`flex items-center justify-center gap-1.5 rounded-xl px-3 py-2.5 text-xs font-bold transition-all active:scale-[0.98] ${
                               isActive
-                                ? 'bg-white text-neutral-950 shadow-sm ring-1 ring-black/5'
+                                ? 'bg-sky-500 text-white shadow-sm ring-1 ring-sky-600/40'
                                 : 'text-neutral-500 hover:text-neutral-800'
                             }`}
                           >
@@ -6621,7 +6621,7 @@ export default function Home() {
                     type="text"
                     value={joinRestLocation}
                     onChange={(e) => setJoinRestLocation(e.target.value)}
-                    placeholder="Calle, número y colonia"
+                    placeholder="Calle, número, colonia, ciudad o localidad"
                     autoComplete="off"
                     autoCorrect="off"
                     autoCapitalize="words"
