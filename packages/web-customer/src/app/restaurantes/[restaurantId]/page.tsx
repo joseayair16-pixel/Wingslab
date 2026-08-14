@@ -3952,7 +3952,7 @@ function triggerHaptic(pattern: number | number[] = 10) {
                       <div className="space-y-3.5">
                         <div className="flex items-center justify-between border-b border-black/[0.05] pb-3">
                           <div className="flex items-center gap-2.5">
-                            <svg className="h-5 w-5 text-[var(--accent)]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M9 14l6-6m-5.5.5h.01m4.99 5h.01M5 13v6a2 2 0 002 2h10a2 2 0 002-2v-6m-2 0a2 2 0 110-4m-8 4a2 2 0 100-4m7 4V7a2 2 0 00-2-2H7a2 2 0 00-2 2v6" /></svg>
+                            <span className="text-base leading-none">🎟️</span>
                             <h3 className="text-[13px] font-bold tracking-tight text-neutral-900">Cupón de descuento</h3>
                           </div>
                         </div>
@@ -3988,11 +3988,10 @@ function triggerHaptic(pattern: number | number[] = 10) {
                       <button
                         type="button"
                         onClick={() => setIsCouponOpen(true)}
-                        className="group relative flex w-full items-center justify-center gap-2 overflow-hidden rounded-2xl bg-gradient-to-br from-[var(--accent)] to-[var(--accent-strong)] px-4 py-3.5 text-sm font-bold text-white shadow-[0_8px_20px_-6px_rgba(14,165,233,0.45)] transition-all hover:shadow-[0_12px_24px_-8px_rgba(14,165,233,0.55)] hover:brightness-110 active:scale-[0.98]"
+                        className="group flex w-full items-center justify-center gap-2 rounded-2xl border-2 border-[var(--accent)]/40 bg-white px-4 py-3.5 text-sm font-bold text-[var(--accent-strong)] shadow-sm transition-all hover:border-[var(--accent)] hover:bg-sky-50/50 hover:shadow-[0_8px_20px_-8px_rgba(14,165,233,0.35)] active:scale-[0.98]"
                       >
-                        <div className="absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/20 to-transparent transition-transform duration-1000 group-hover:translate-x-full" />
-                        <svg className="relative z-10 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M9 14l6-6m-5.5.5h.01m4.99 5h.01M5 13v6a2 2 0 002 2h10a2 2 0 002-2v-6m-2 0a2 2 0 110-4m-8 4a2 2 0 100-4m7 4V7a2 2 0 00-2-2H7a2 2 0 00-2 2v6" /></svg>
-                        <span className="relative z-10">Tengo un cupón</span>
+                        <span className="text-base leading-none">🎟️</span>
+                        <span>Tengo un cupón</span>
                       </button>
                     )}
                   </div>

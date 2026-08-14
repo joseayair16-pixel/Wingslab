@@ -6439,12 +6439,12 @@ export default function Home() {
                 </div>
 
                 <div>
-                  <label className="text-[10px] font-bold uppercase tracking-widest text-neutral-400">Ubicación / Zona de Trabajo</label>
+                  <label className="text-[10px] font-bold uppercase tracking-widest text-neutral-400">Ciudad / Localidad</label>
                   <input
                     type="text"
                     value={joinDriverLocation}
                     onChange={(e) => setJoinDriverLocation(e.target.value)}
-                    placeholder="Ej. Colonia Centro, Norte de la Ciudad"
+                    placeholder="Ej. Puruarán, Morelia, Zitácuaro"
                     className="mt-2 w-full rounded-2xl border border-black/5 bg-neutral-50/50 focus:bg-white px-4 py-3 text-sm font-medium text-neutral-900 transition-colors focus:border-neutral-950 focus:outline-none focus:ring-1 focus:ring-neutral-950 placeholder:text-neutral-300"
                   />
                 </div>
