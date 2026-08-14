@@ -86,6 +86,11 @@ export function generateTicketHtml(order: any, restaurantName: string, dailyCoun
           <span>Subtotal:</span>
           <span>${formatCurrency(order.subtotal || 0)}</span>
         </div>
+        ${Number(order.promoDiscountAmount || 0) > 0 ? `
+        <div class="totals-row discount">
+          <span>Descuento:</span>
+          <span>-${formatCurrency(Number(order.promoDiscountAmount))}</span>
+        </div>` : ''}
         <div class="totals-row">
           <span>Envío:</span>
           <span>${formatCurrency(order.deliveryFee || 0)}</span>
@@ -208,6 +213,9 @@ export function generateTicketHtml(order: any, restaurantName: string, dailyCoun
         display: flex;
         justify-content: space-between;
         margin-bottom: 3px;
+      }
+      .totals-row.discount {
+        color: #0369a1;
       }
       .grand-total {
         font-size: 1.2rem;

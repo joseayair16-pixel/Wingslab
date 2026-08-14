@@ -178,6 +178,8 @@ type CustomerOrderDetail = {
   taxAmount: number;
   serviceFee: number;
   deliveryFee: number;
+  promoCode?: string | null;
+  promoDiscountAmount?: number | null;
   paymentMethod: PaymentMethod;
   paymentStatus: string;
   estimatedDeliveryTime: string;
@@ -5561,6 +5563,12 @@ function triggerHaptic(pattern: number | number[] = 10) {
                       <p>Tarifa de servicio</p>
                       <p className="font-medium text-neutral-900">{formatCurrency(activeOrderDetailsMap[selectedOrderId].serviceFee)}</p>
                     </div>
+                    {Number(activeOrderDetailsMap[selectedOrderId].promoDiscountAmount || 0) > 0 && (
+                      <div className="flex justify-between text-sky-700">
+                        <p>Descuento{activeOrderDetailsMap[selectedOrderId].promoCode ? ` (${activeOrderDetailsMap[selectedOrderId].promoCode})` : ''}</p>
+                        <p className="font-bold text-sky-700">-{formatCurrency(Number(activeOrderDetailsMap[selectedOrderId].promoDiscountAmount))}</p>
+                      </div>
+                    )}
                     <div className="flex justify-between font-bold text-neutral-900 text-lg pt-4 border-t border-dashed border-neutral-200 mt-4">
                       <p>Total a pagar</p>
                       <p>{formatCurrency(activeOrderDetailsMap[selectedOrderId].totalAmount)}</p>

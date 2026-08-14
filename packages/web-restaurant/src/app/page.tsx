@@ -134,6 +134,8 @@ type OrderItem = {
   deliveryFee: number;
   serviceFee?: number;
   platformFee?: number;
+  promoCode?: string | null;
+  promoDiscountAmount?: number | null;
   paymentMethod?: 'CASH' | 'TRANSFER' | 'CREDIT_CARD' | 'DEBIT_CARD' | 'DIGITAL_WALLET';
   paymentStatus?: 'PENDING' | 'COMPLETED' | 'FAILED';
   paymentProofUrl?: string | null;
@@ -9947,6 +9949,16 @@ export default function Home() {
                                       </>
                                     );
                                   })()}
+
+                                  {Number(order.promoDiscountAmount || 0) > 0 && (
+                                    <div className="mt-3 inline-flex flex-wrap items-center gap-1.5 rounded-xl border border-sky-100 bg-sky-50/60 px-3 py-2">
+                                      <span className="flex h-5 w-5 items-center justify-center rounded-full bg-sky-500 text-white">
+                                        <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 14l6-6m-5.5.5h.01m4.99 5h.01M5 13v6a2 2 0 002 2h10a2 2 0 002-2v-6m-2 0a2 2 0 110-4m-8 4a2 2 0 100-4m7 4V7a2 2 0 00-2-2H7a2 2 0 00-2 2v6" /></svg>
+                                      </span>
+                                      <span className="text-[11px] font-semibold text-neutral-500">Descuento aplicado</span>
+                                      <span className="text-[12px] font-bold text-sky-700">-{formatCurrency(Number(order.promoDiscountAmount))}</span>
+                                    </div>
+                                  )}
                                 </div>
                                 <div className="flex flex-col sm:flex-row sm:flex-wrap gap-2 items-stretch sm:items-center justify-end min-w-0" onClick={(e) => e.stopPropagation()}>
                                   {!isHelper && (order.status !== 'IN_TRANSIT' || (!hasOwnDelivery && !!order.driver)) ? (
