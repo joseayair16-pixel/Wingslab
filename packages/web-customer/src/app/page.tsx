@@ -4678,7 +4678,7 @@ export default function Home() {
         onFulfillmentTypeChange={handleFulfillmentChange}
         pickupOnly={isPickupOnly}
       />
-      <div className="mx-auto max-w-7xl px-4 py-4 md:px-6 md:py-5">
+      <div className={`mx-auto max-w-7xl px-4 md:px-6 ${activeSection === 'home' ? 'py-2 md:py-3' : 'py-4 md:py-5'}`}>
         {activeSection !== 'home' && activeSection !== 'profile' ? (
           <div className="mb-2 flex flex-col gap-2 lg:flex-row lg:items-end lg:justify-between animate-[fadeIn_0.4s_ease-out]">
             <div>

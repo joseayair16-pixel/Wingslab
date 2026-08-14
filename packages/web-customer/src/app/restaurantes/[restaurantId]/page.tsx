@@ -4748,40 +4748,25 @@ function triggerHaptic(pattern: number | number[] = 10) {
                     }
                     if (!promos.length) return null;
                     return (
-                      <div className="mt-4">
-                        <div className="relative overflow-hidden rounded-2xl border border-black/5 bg-white shadow-[0_4px_20px_rgba(0,0,0,0.04)] dark:border-zinc-800/60 dark:bg-neutral-900">
-                          <div className="absolute left-0 top-0 h-full w-[3px] bg-gradient-to-b from-sky-500 via-blue-500 to-purple-500" />
-                          <div className="px-4 py-4 sm:px-5">
-                            <div className="flex items-center gap-2">
-                              <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-sky-500 to-blue-600 text-white shadow-[0_4px_10px_-2px_rgba(2,132,199,0.4)]">
-                                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16.5 18.75h-9m9 0a3 3 0 013 3h7.5a3 3 0 013-3m-3 0a3 3 0 013-3h-9m-9 0a3 3 0 013-3h9m-9 0a3 3 0 013-3H9m12 0h3m-3 0a3 3 0 013-3h1.5c-1.89 0-3.6 1.065-4.5 2.7" /></svg>
-                              </div>
-                              <p className="text-[11px] font-black uppercase tracking-[0.18em] text-neutral-500 dark:text-zinc-400">
-                                Promociones del local
-                              </p>
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        {promos.map((promo) => (
+                          <div
+                            key={promo.key}
+                            className="flex items-center gap-2.5 rounded-full border border-sky-100 bg-gradient-to-br from-sky-50/90 to-blue-50/50 py-1.5 pl-2 pr-3.5 dark:border-sky-500/20 dark:from-sky-500/10 dark:to-blue-500/5"
+                          >
+                            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-sky-500 to-blue-600 text-white shadow-[0_4px_10px_-2px_rgba(2,132,199,0.5)]">
+                              {promo.icon === 'delivery' ? (
+                                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M5.6 17.4a2 2 0 104 0 2 2 0 00-4 0zm9.6 0a2 2 0 104 0 2 2 0 00-4 0zM3 7h3l1.5 7h8.2l1.8-4.5H8.5M15.5 9H19l1.6 2.8a3 3 0 01.4 1.5V14h-2M11 7l-1.5 3H7" /></svg>
+                              ) : (
+                                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M9 14l6-6m-5.5.5h.01m4.99 5h.01M5 13v6a2 2 0 002 2h10a2 2 0 002-2v-6m-2 0a2 2 0 110-4m-8 4a2 2 0 100-4m7 4V7a2 2 0 00-2-2H7a2 2 0 00-2 2v6" /></svg>
+                              )}
                             </div>
-                            <div className="mt-3 grid gap-2.5 sm:grid-cols-2">
-                              {promos.map((promo) => (
-                                <div
-                                  key={promo.key}
-                                  className="flex items-center gap-3 rounded-xl border border-sky-100 bg-gradient-to-br from-sky-50/90 to-blue-50/50 px-3.5 py-3 dark:border-sky-500/20 dark:from-sky-500/10 dark:to-blue-500/5"
-                                >
-                                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-sky-500 to-blue-600 text-white shadow-[0_6px_14px_-4px_rgba(2,132,199,0.5)]">
-                                    {promo.icon === 'delivery' ? (
-                                      <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M8.25 18.75a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h6m-9 0H3.375a1.125 1.125 0 01-1.125-1.125V14.25m17.25 4.5a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h1.125c.621 0 1.129-.504 1.09-1.124a17.902 17.902 0 00-3.213-9.193 2.056 2.056 0 00-1.58-.86H14.25M16.5 18.75h-2.25m0-11.177v-.958c0-.568-.422-1.048-.987-1.106a48.554 48.554 0 00-10.026 0 1.106 1.106 0 00-.987 1.106v7.635m12-6.677v6.677m0 4.5v-4.5m0 0h-12" /></svg>
-                                    ) : (
-                                      <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M9 14l6-6m-5.5.5h.01m4.99 5h.01M5 13v6a2 2 0 002 2h10a2 2 0 002-2v-6m-2 0a2 2 0 110-4m-8 4a2 2 0 100-4m7 4V7a2 2 0 00-2-2H7a2 2 0 00-2 2v6" /></svg>
-                                    )}
-                                  </div>
-                                  <div className="min-w-0 flex-1">
-                                    <p className="truncate text-[13px] font-bold text-neutral-900 dark:text-white">{promo.title}</p>
-                                    <p className="mt-0.5 truncate text-[11px] font-medium text-neutral-500 dark:text-zinc-400">{promo.subtitle}</p>
-                                  </div>
-                                </div>
-                              ))}
+                            <div className="min-w-0">
+                              <p className="truncate text-[12px] font-bold text-neutral-900 dark:text-white">{promo.title}</p>
+                              <p className="truncate text-[11px] font-medium text-neutral-500 dark:text-zinc-400">{promo.subtitle}</p>
                             </div>
                           </div>
-                        </div>
+                        ))}
                       </div>
                     );
                   })()}
