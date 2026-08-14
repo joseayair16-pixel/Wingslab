@@ -80,6 +80,99 @@ export async function registerOrderRoutes(fastify: FastifyInstance): Promise<voi
     customer.addHook('preHandler', authenticate);
     customer.addHook('preHandler', authorize([UserRole.CUSTOMER]));
 
+    customer.post('/pedidos/validar-cupon', {
+      config: {
+        rateLimit: {
+          max: 20,
+          timeWindow: '1 minute',
+        },
+      },
+    }, async (request, reply) => {
+      const validateCouponSchema = z.object({
+        restaurantId: z.string().min(1, 'El restaurante es obligatorio.'),
+        promoCode: z.string().max(30).trim().transform(v => v.toUpperCase()),
+        subtotal: z.number().nonnegative(),
+        isPickup: z.boolean().optional().default(false),
+        deliveryFee: z.number().nonnegative().optional().default(0),
+      });
+
+      const parsed = validateCouponSchema.safeParse(request.body);
+      if (!parsed.success) {
+        return reply.status(400).send({
+          success: false,
+          error: {
+            code: 'INVALID_PAYLOAD',
+            message: parsed.error.issues[0]?.message || 'Datos invalidos.',
+          },
+        });
+      }
+
+      const { restaurantId, promoCode, subtotal, isPickup, deliveryFee } = parsed.data;
+
+      const restaurant = await prisma.restaurant.findUnique({ where: { id: restaurantId } });
+      if (!restaurant) {
+        return reply.status(404).send({
+          success: false,
+          error: { code: 'RESTAURANT_NOT_FOUND', message: 'El restaurante no existe.' },
+        });
+      }
+
+      const promo = await prisma.promoCode.findFirst({
+        where: {
+          restaurantId: restaurant.id,
+          code: { equals: promoCode, mode: 'insensitive' },
+          isActive: true,
+          AND: [
+            { OR: [{ validFrom: null }, { validFrom: { lte: new Date() } }] },
+            { OR: [{ validUntil: null }, { validUntil: { gte: new Date() } }] },
+          ],
+        },
+      });
+
+      if (!promo) {
+        return reply.status(400).send({
+          success: false,
+          error: { code: 'INVALID_PROMO_CODE', message: 'El código promocional no es válido.' },
+        });
+      }
+      if (promo.maxUses != null && promo.usesCount >= promo.maxUses) {
+        return reply.status(400).send({
+          success: false,
+          error: { code: 'PROMO_CODE_EXHAUSTED', message: 'El código promocional ya no está disponible.' },
+        });
+      }
+      if (promo.minOrderAmount != null && subtotal < promo.minOrderAmount) {
+        return reply.status(400).send({
+          success: false,
+          error: {
+            code: 'PROMO_CODE_MIN_ORDER',
+            message: `Este código aplica a partir de $${promo.minOrderAmount.toFixed(2)} de compra.`,
+          },
+        });
+      }
+
+      let discount = 0;
+      if (promo.type === 'PERCENT') {
+        discount = Math.round((subtotal * promo.value) / 100 * 100) / 100;
+      } else if (promo.type === 'AMOUNT') {
+        discount = Math.min(promo.value, subtotal);
+      } else if (promo.type === 'FREE_DELIVERY') {
+        discount = isPickup ? 0 : deliveryFee;
+      }
+
+      return reply.status(200).send({
+        success: true,
+        data: {
+          code: promo.code,
+          type: promo.type,
+          value: promo.value,
+          description: promo.description,
+          minOrderAmount: promo.minOrderAmount,
+          discount: discount,
+        },
+      });
+    });
+
     customer.post('/pedidos', {
       config: {
         rateLimit: {

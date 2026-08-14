@@ -789,6 +789,9 @@ export default function RestaurantPage({
   useEffect(() => { setMounted(true); }, []);
   const cart: CartItem[] = mounted && cartRestaurantId === params.restaurantId ? cartItems : [];
   const [checkoutForm, setCheckoutForm] = useState<CheckoutForm>(defaultCheckoutForm);
+  const [promoCodeState, setPromoCodeState] = useState<'idle' | 'validating' | 'valid' | 'invalid'>('idle');
+  const [promoCodeInfo, setPromoCodeInfo] = useState<{ code: string; type: 'PERCENT' | 'AMOUNT' | 'FREE_DELIVERY'; value: number; discount: number; description?: string | null } | null>(null);
+  const [promoCodeError, setPromoCodeError] = useState('');
   const [loadingRestaurant, setLoadingRestaurant] = useState(true);
   const [creatingOrder, setCreatingOrder] = useState(false);
   const [isCartOpen, setIsCartOpen] = useState(false);
@@ -2007,7 +2010,7 @@ export default function RestaurantPage({
     return Math.round(fee * 100) / 100;
   }, [restaurant, distanceKm, fulfillmentType, cartSubtotal, discountAmount]);
 
-  const orderTotal = Math.max(0, cartSubtotal - discountAmount + serviceFee + (fulfillmentType === 'PICKUP' ? 0 : deliveryFee));
+  const orderTotal = Math.max(0, cartSubtotal - discountAmount - (promoCodeState === 'valid' && promoCodeInfo ? promoCodeInfo.discount : 0) + serviceFee + (fulfillmentType === 'PICKUP' ? 0 : deliveryFee));
   const checkoutValidationMessage = useMemo(() => {
     return getCheckoutValidationMessage(checkoutForm, cart, restaurant, token, Boolean(transferProofSource));
   }, [cart, checkoutForm, restaurant, token, transferProofSource]);
@@ -2420,6 +2423,46 @@ function triggerHaptic(pattern: number | number[] = 10) {
     };
   }
 
+  async function validatePromoCode() {
+    const code = checkoutForm.promoCode.trim().toUpperCase();
+    if (!code) return;
+    if (!restaurant) {
+      setPromoCodeState('invalid');
+      setPromoCodeError('Selecciona un restaurante primero.');
+      return;
+    }
+    setPromoCodeState('validating');
+    setPromoCodeError('');
+    setPromoCodeInfo(null);
+    try {
+      const effectiveSubtotal = Math.max(0, cartSubtotal - discountAmount);
+      const payload = await requestJson<{
+        success: true;
+        data: { code: string; type: 'PERCENT' | 'AMOUNT' | 'FREE_DELIVERY'; value: number; description?: string | null; minOrderAmount?: number | null; discount: number };
+      }>({
+        apiBase,
+        path: '/pedidos/validar-cupon',
+        token,
+        options: {
+          method: 'POST',
+          body: JSON.stringify({
+            restaurantId: restaurant.id,
+            promoCode: code,
+            subtotal: effectiveSubtotal,
+            isPickup: fulfillmentType === 'PICKUP',
+            deliveryFee: deliveryFee,
+          }),
+        },
+        fallbackMessage: 'No se pudo validar el cupón.',
+      });
+      setPromoCodeState('valid');
+      setPromoCodeInfo(payload.data);
+    } catch (e: any) {
+      setPromoCodeState('invalid');
+      setPromoCodeError(e instanceof Error ? e.message : 'El código promocional no es válido.');
+    }
+  }
+
   async function createOrder() {
     if (creatingOrderRef.current || creatingOrder || !restaurant) {
       return;
@@ -2663,7 +2706,10 @@ function triggerHaptic(pattern: number | number[] = 10) {
       }
 
       clearCartAction();
-      setCheckoutForm((prev) => ({ ...prev, notes: '', storeNotes: '' }));
+      setCheckoutForm((prev) => ({ ...prev, notes: '', storeNotes: '', promoCode: '' }));
+      setPromoCodeState('idle');
+      setPromoCodeInfo(null);
+      setPromoCodeError('');
       setIsCheckoutOpen(false);
       setTransferProofName('');
       setTransferProofSource('');
@@ -4084,16 +4130,75 @@ function triggerHaptic(pattern: number | number[] = 10) {
                       </div>
                     </div>
                     <div className="space-y-3.5">
-                      <Field
-                        label="Código promocional"
-                        value={checkoutForm.promoCode}
-                        onChange={(value) => setCheckoutForm((current) => ({ ...current, promoCode: value.toUpperCase() }))}
-                        placeholder="Ej. VERANO10"
-                      />
+                      <div className="flex gap-2">
+                        <div className="flex-1">
+                          <Field
+                            label="Código promocional"
+                            value={checkoutForm.promoCode}
+                            onChange={(value) => {
+                              setCheckoutForm((current) => ({ ...current, promoCode: value.toUpperCase() }));
+                              setPromoCodeState('idle');
+                              setPromoCodeInfo(null);
+                              setPromoCodeError('');
+                            }}
+                            placeholder="Ej. VERANO10"
+                          />
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => void validatePromoCode()}
+                          disabled={!checkoutForm.promoCode.trim() || promoCodeState === 'validating'}
+                          className="mt-6 inline-flex h-[46px] shrink-0 items-center justify-center gap-1.5 rounded-xl bg-neutral-950 px-4 text-sm font-bold text-white transition hover:bg-neutral-800 active:scale-[0.97] disabled:cursor-not-allowed disabled:bg-neutral-200 disabled:text-neutral-400"
+                        >
+                          {promoCodeState === 'validating' ? (
+                            <svg className="h-4 w-4 animate-spin text-white" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                          ) : promoCodeState === 'valid' ? (
+                            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+                          ) : (
+                            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-5.2-5.2m1.7-4.3a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+                          )}
+                          {promoCodeState === 'validating' ? 'Validando...' : promoCodeState === 'valid' ? 'Aplicado' : 'Aplicar'}
+                        </button>
+                      </div>
+
+                      {promoCodeState === 'valid' && promoCodeInfo && (
+                        <div className="flex items-start gap-2.5 rounded-xl border border-emerald-200 bg-emerald-50 px-3.5 py-3">
+                          <svg className="mt-0.5 h-4 w-4 shrink-0 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                          <div className="min-w-0">
+                            <p className="text-xs font-bold text-emerald-700">
+                              Cupón {promoCodeInfo.code} aplicado
+                              {promoCodeInfo.type === 'PERCENT' && ` · ${promoCodeInfo.value}% OFF`}
+                              {promoCodeInfo.type === 'AMOUNT' && ` · -$${promoCodeInfo.value}`}
+                              {promoCodeInfo.type === 'FREE_DELIVERY' && ' · Envío gratis'}
+                            </p>
+                            {promoCodeInfo.discount > 0 && (
+                              <p className="mt-0.5 text-[11px] font-semibold text-emerald-600">
+                                Descuento: -{formatCurrency(promoCodeInfo.discount)}
+                              </p>
+                            )}
+                            {promoCodeInfo.description && (
+                              <p className="mt-0.5 text-[11px] text-emerald-600/80">{promoCodeInfo.description}</p>
+                            )}
+                          </div>
+                        </div>
+                      )}
+
+                      {promoCodeState === 'invalid' && (
+                        <div className="flex items-start gap-2.5 rounded-xl border border-rose-200 bg-rose-50 px-3.5 py-3">
+                          <svg className="mt-0.5 h-4 w-4 shrink-0 text-rose-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" /></svg>
+                          <p className="text-xs font-medium text-rose-600">{promoCodeError || 'El código promocional no es válido.'}</p>
+                        </div>
+                      )}
+
                       {checkoutForm.promoCode && (
                         <button
                           type="button"
-                          onClick={() => setCheckoutForm((current) => ({ ...current, promoCode: '' }))}
+                          onClick={() => {
+                            setCheckoutForm((current) => ({ ...current, promoCode: '' }));
+                            setPromoCodeState('idle');
+                            setPromoCodeInfo(null);
+                            setPromoCodeError('');
+                          }}
                           className="text-[11px] font-semibold text-neutral-400 underline-offset-2 hover:text-neutral-600 hover:underline"
                         >
                           Quitar cupón
