@@ -3964,8 +3964,8 @@ function triggerHaptic(pattern: number | number[] = 10) {
                             <h3 className="text-[13px] font-bold tracking-tight text-neutral-900">Cupón de descuento</h3>
                           </div>
                         </div>
-                        <div className="flex gap-2">
-                          <div className="flex-1">
+                        <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
+                          <div className="min-w-0 flex-1">
                             <Field
                               label="Código promocional"
                               value={checkoutForm.promoCode}
@@ -3981,7 +3981,7 @@ function triggerHaptic(pattern: number | number[] = 10) {
                             type="button"
                             onClick={() => void validatePromoCode()}
                             disabled={!checkoutForm.promoCode.trim() || promoCodeState === 'validating'}
-                            className="mt-6 inline-flex h-[46px] shrink-0 items-center justify-center gap-1.5 rounded-xl bg-neutral-950 px-4 text-sm font-bold text-white transition hover:bg-neutral-800 active:scale-[0.97] disabled:cursor-not-allowed disabled:bg-neutral-200 disabled:text-neutral-400"
+                            className="inline-flex h-[46px] w-full shrink-0 items-center justify-center gap-1.5 rounded-xl bg-neutral-950 px-4 text-sm font-bold text-white transition hover:bg-neutral-800 active:scale-[0.97] disabled:cursor-not-allowed disabled:bg-neutral-200 disabled:text-neutral-400 sm:mt-6 sm:w-auto"
                           >
                             {promoCodeState === 'validating' ? (
                               <svg className="h-4 w-4 animate-spin text-white" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>

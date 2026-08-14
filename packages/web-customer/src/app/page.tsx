@@ -3302,6 +3302,9 @@ export default function Home() {
         console.log(`[Socket.io] Evento recibido: "${eventName}"`, payload);
 
         void loadDashboardRef.current(true);
+        // Refrescar el detalle del pedido activo para que el banner de estado se
+        // actualice en tiempo real sin depender solo de loadDashboard.
+        void refreshActiveOrderDetailsRef.current();
         if (payload.orderId) {
           console.log(`[Socket.io] Cargando detalles de pedido para ID: ${payload.orderId}`);
           setSelectedOrderId(payload.orderId);

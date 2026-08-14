@@ -19,28 +19,11 @@ self.addEventListener('push', function (event) {
   };
 
   event.waitUntil(
-    self.clients
-      .matchAll({ type: 'window', includeUncontrolled: true })
-      .then(function (clients) {
-        // Si la app está visible en primer plano, la app ya reproduce el audio
-        // (socket + Web Audio). Silenciar la notificación del sistema evita el
-        // doble sonido/vibración. En segundo plano/cerrada sí suena el OS.
-        const focused = clients.some(function (client) {
-          return 'visibilityState' in client && client.visibilityState === 'visible';
-        });
-        if (focused) {
-          options.silent = true;
-          delete options.vibrate;
-        }
-        return self.registration.showNotification(title, options).catch(function () {
-          if (options.icon) delete options.icon;
-          if (options.badge) delete options.badge;
-          return self.registration.showNotification(title, options).catch(function () {});
-        });
-      })
-      .catch(function () {
-        return self.registration.showNotification(title, options).catch(function () {});
-      })
+    self.registration.showNotification(title, options).catch(function () {
+      if (options.icon) delete options.icon;
+      if (options.badge) delete options.badge;
+      return self.registration.showNotification(title, options).catch(function () {});
+    })
   );
 });
 
