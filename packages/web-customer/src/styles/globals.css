@@ -247,3 +247,12 @@ input, select, textarea {
 .max-h-dvh {
   max-height: 100dvh;
 }
+
+@keyframes couponFeedbackProgress {
+  from {
+    width: 100%;
+  }
+  to {
+    width: 0%;
+  }
+}

@@ -791,8 +791,9 @@ export default function RestaurantPage({
   const [checkoutForm, setCheckoutForm] = useState<CheckoutForm>(defaultCheckoutForm);
   const [promoCodeState, setPromoCodeState] = useState<'idle' | 'validating' | 'valid' | 'invalid'>('idle');
   const [promoCodeInfo, setPromoCodeInfo] = useState<{ code: string; type: 'PERCENT' | 'AMOUNT' | 'FREE_DELIVERY'; value: number; discount: number; description?: string | null } | null>(null);
-  const [promoCodeError, setPromoCodeError] = useState('');
   const [isCouponOpen, setIsCouponOpen] = useState(false);
+  const [couponFeedback, setCouponFeedback] = useState<{ tone: 'success' | 'error'; title: string; message?: string } | null>(null);
+  const couponFeedbackTimerRef = useRef<number | null>(null);
   const [loadingRestaurant, setLoadingRestaurant] = useState(true);
   const [creatingOrder, setCreatingOrder] = useState(false);
   const [isCartOpen, setIsCartOpen] = useState(false);
@@ -1030,7 +1031,7 @@ export default function RestaurantPage({
         if (savedProfileAddress) {
           try {
             const parsed = JSON.parse(savedProfileAddress) as Partial<CheckoutForm>;
-            const { notes: _notes, storeNotes: _storeNotes, ...safeParsed } = parsed;
+            const { notes: _notes, storeNotes: _storeNotes, promoCode: _promoCode, ...safeParsed } = parsed;
             setCheckoutForm((current) => ({
               ...current,
               ...safeParsed,
@@ -2418,16 +2419,26 @@ function triggerHaptic(pattern: number | number[] = 10) {
     };
   }
 
+  function showCouponFeedback(tone: 'success' | 'error', title: string, message?: string) {
+    if (couponFeedbackTimerRef.current) {
+      window.clearTimeout(couponFeedbackTimerRef.current);
+    }
+    setCouponFeedback({ tone, title, message });
+    couponFeedbackTimerRef.current = window.setTimeout(() => {
+      setCouponFeedback(null);
+      couponFeedbackTimerRef.current = null;
+    }, 2000);
+  }
+
   async function validatePromoCode() {
     const code = checkoutForm.promoCode.trim().toUpperCase();
     if (!code) return;
     if (!restaurant) {
       setPromoCodeState('invalid');
-      setPromoCodeError('Selecciona un restaurante primero.');
+      showCouponFeedback('error', 'No se pudo validar el cupón', 'Selecciona un restaurante primero.');
       return;
     }
     setPromoCodeState('validating');
-    setPromoCodeError('');
     setPromoCodeInfo(null);
     try {
       const effectiveSubtotal = Math.max(0, cartSubtotal - discountAmount);
@@ -2452,9 +2463,17 @@ function triggerHaptic(pattern: number | number[] = 10) {
       });
       setPromoCodeState('valid');
       setPromoCodeInfo(payload.data);
+      const typeLabel =
+        payload.data.type === 'PERCENT'
+          ? `${payload.data.value}% de descuento`
+          : payload.data.type === 'AMOUNT'
+            ? `-${formatCurrency(payload.data.discount)} en tu pedido`
+            : 'Envío gratis';
+      showCouponFeedback('success', `Cupón ${payload.data.code} aplicado`, typeLabel);
     } catch (e: any) {
       setPromoCodeState('invalid');
-      setPromoCodeError(e instanceof Error ? e.message : 'El código promocional no es válido.');
+      const msg = e instanceof Error ? e.message : 'El código promocional no es válido.';
+      showCouponFeedback('error', 'Cupón no válido', msg);
     }
   }
 
@@ -2619,8 +2638,8 @@ function triggerHaptic(pattern: number | number[] = 10) {
         ...(paymentProofUrl ? { paymentProofUrl } : {}),
         ...(combinedNotes ? { notes: combinedNotes } : {}),
         locationVerified: !!currentLocation,
-        ...(normalizedCheckoutForm.promoCode.trim()
-          ? { promoCode: normalizedCheckoutForm.promoCode.trim().toUpperCase() }
+        ...(promoCodeState === 'valid' && promoCodeInfo
+          ? { promoCode: promoCodeInfo.code }
           : {}),
       };
 
@@ -2657,7 +2676,10 @@ function triggerHaptic(pattern: number | number[] = 10) {
 
       setCheckoutForm(normalizedCheckoutForm);
       if (typeof window !== 'undefined') {
-        window.localStorage.setItem(profileAddressStorageKey, JSON.stringify(normalizedCheckoutForm));
+        // No persistimos el cupón: el código de un pedido anterior no debe
+        // re-aplicarse solo en pedidos futuros (debe validarse con "Aplicar").
+        const { promoCode: _promoCode, ...checkoutToPersist } = normalizedCheckoutForm;
+        window.localStorage.setItem(profileAddressStorageKey, JSON.stringify(checkoutToPersist));
       }
 
       try {
@@ -2704,8 +2726,12 @@ function triggerHaptic(pattern: number | number[] = 10) {
       setCheckoutForm((prev) => ({ ...prev, notes: '', storeNotes: '', promoCode: '' }));
       setPromoCodeState('idle');
       setPromoCodeInfo(null);
-      setPromoCodeError('');
       setIsCouponOpen(false);
+      setCouponFeedback(null);
+      if (couponFeedbackTimerRef.current) {
+        window.clearTimeout(couponFeedbackTimerRef.current);
+        couponFeedbackTimerRef.current = null;
+      }
       setIsCheckoutOpen(false);
       setTransferProofName('');
       setTransferProofSource('');
@@ -4087,7 +4113,6 @@ function triggerHaptic(pattern: number | number[] = 10) {
                             setCheckoutForm((current) => ({ ...current, promoCode: '' }));
                             setPromoCodeState('idle');
                             setPromoCodeInfo(null);
-                            setPromoCodeError('');
                             setIsCouponOpen(false);
                           }}
                           className="text-[11px] font-semibold text-neutral-400 underline-offset-2 hover:text-neutral-600 hover:underline"
@@ -4112,7 +4137,6 @@ function triggerHaptic(pattern: number | number[] = 10) {
                                 setCheckoutForm((current) => ({ ...current, promoCode: value.toUpperCase() }));
                                 setPromoCodeState('idle');
                                 setPromoCodeInfo(null);
-                                setPromoCodeError('');
                               }}
                               placeholder="Ej. VERANO10"
                             />
@@ -4131,13 +4155,6 @@ function triggerHaptic(pattern: number | number[] = 10) {
                             {promoCodeState === 'validating' ? 'Validando...' : 'Aplicar'}
                           </button>
                         </div>
-
-                        {promoCodeState === 'invalid' && (
-                          <div className="flex items-start gap-2.5 rounded-xl border border-rose-200 bg-rose-50 px-3.5 py-3">
-                            <svg className="mt-0.5 h-4 w-4 shrink-0 text-rose-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" /></svg>
-                            <p className="text-xs font-medium text-rose-600">{promoCodeError || 'El código promocional no es válido.'}</p>
-                          </div>
-                        )}
                       </div>
                     ) : (
                       <button
@@ -5854,6 +5871,51 @@ function triggerHaptic(pattern: number | number[] = 10) {
           <span className="font-medium">{toastMsg}</span>
         </div>
       ) : null}
+
+      {/* Feedback profesional del cupón (modal auto-cierra a los 2s) */}
+      {couponFeedback && (
+        <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/40 px-4 backdrop-blur-[2px] animate-fade-in" onClick={() => setCouponFeedback(null)}>
+          <div className="relative w-full max-w-[340px] overflow-hidden rounded-[28px] border border-white/60 bg-white shadow-[0_32px_90px_-16px_rgba(15,15,15,0.35)] animate-scale-up" onClick={(e) => e.stopPropagation()}>
+            <button
+              type="button"
+              onClick={() => setCouponFeedback(null)}
+              className="absolute right-3 top-3 z-20 flex h-7 w-7 items-center justify-center rounded-full bg-black/15 text-white transition hover:bg-black/25 active:scale-90"
+              aria-label="Cerrar"
+            >
+              <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+            </button>
+
+            <div className={`relative overflow-hidden px-6 pb-5 pt-7 text-center ${couponFeedback.tone === 'success' ? 'bg-gradient-to-br from-sky-500 via-sky-600 to-blue-600' : 'bg-gradient-to-br from-rose-500 via-rose-600 to-red-600'}`}>
+              <div className="absolute -right-6 -top-6 h-32 w-32 rounded-full bg-white/10 blur-2xl" />
+              <div className="absolute -bottom-8 -left-6 h-28 w-28 rounded-full bg-white/10 blur-2xl" />
+              <div className="relative z-10 mx-auto mb-3 flex h-16 w-16 items-center justify-center rounded-full bg-white/15 text-white ring-1 ring-white/25 backdrop-blur-md">
+                {couponFeedback.tone === 'success' ? (
+                  <svg className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                ) : (
+                  <svg className="h-8 w-8" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 14l6-6m-5.5.5h.01m4.99 5h.01M5 13v6a2 2 0 002 2h10a2 2 0 002-2v-6m-2 0a2 2 0 110-4m-8 4a2 2 0 100-4m7 4V7a2 2 0 00-2-2H7a2 2 0 00-2 2v6" /></svg>
+                )}
+              </div>
+              <p className="relative z-10 text-lg font-black tracking-[-0.02em] text-white">{couponFeedback.title}</p>
+            </div>
+
+            <div className="px-6 py-5 text-center">
+              {couponFeedback.message ? (
+                <p className="text-[13px] font-medium leading-relaxed text-neutral-600">{couponFeedback.message}</p>
+              ) : (
+                <p className="text-[13px] font-medium leading-relaxed text-neutral-400">Tu cupón se ha tenido en cuenta en este pedido.</p>
+              )}
+            </div>
+
+            <div className="h-1 w-full overflow-hidden bg-neutral-100">
+              <div
+                key={couponFeedback.title}
+                className={`h-full ${couponFeedback.tone === 'success' ? 'bg-gradient-to-r from-sky-500 to-blue-600' : 'bg-gradient-to-r from-rose-500 to-red-600'}`}
+                style={{ animation: 'couponFeedbackProgress 2s linear forwards' }}
+              />
+            </div>
+          </div>
+        </div>
+      )}
 
       <audio id="customer-alert-audio" src="/sounds/notifica.wav" preload="auto"></audio>
       <audio id="chat-message-audio" src="/sounds/mensaje.wav" preload="auto"></audio>

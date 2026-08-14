@@ -5706,28 +5706,6 @@ export default function Home() {
       .filter((category) => category.products.length > 0);
   }, [storeCategories, storeSearchQuery]);
 
-  const categoryNameById = useMemo(() => {
-    const map = new Map<string, string>();
-    categories.forEach((category) => map.set(category.id, category.name));
-    return map;
-  }, [categories]);
-
-  const flatProductRows = useMemo(() => {
-    const query = storeSearchQuery.trim().toLowerCase();
-    const items = products.map((product) => ({
-      product,
-      categoryName: categoryNameById.get(product.categoryId) || 'Sin categoría',
-    }));
-    if (!query) {
-      return items;
-    }
-    return items.filter(
-      ({ product }) =>
-        product.name.toLowerCase().includes(query) ||
-        (product.description || '').toLowerCase().includes(query),
-    );
-  }, [products, storeSearchQuery, categoryNameById]);
-
   const selectedProductCount = selectedProductIds.size;
 
   function toggleProductSelection(productId: string) {
@@ -10825,95 +10803,135 @@ export default function Home() {
                         ) : null}
                       </div>
                       ) : (
-                        <div className="overflow-hidden rounded-[28px] border border-sky-100/60 bg-white/80 shadow-[0_10px_30px_rgba(15,15,15,0.04)]">
-                          {flatProductRows.length === 0 ? (
-                            <EmptyState text={storeSearchQuery.trim() ? 'No hay resultados para tu busqueda.' : 'Aun no tienes productos. Agrega el primero o importa tu menu.'} />
+                        <div className="space-y-6">
+                          {filteredStoreCategories.length === 0 ? (
+                            <div className="overflow-hidden rounded-[28px] border border-sky-100/60 bg-white/80 shadow-[0_10px_30px_rgba(15,15,15,0.04)]">
+                              <EmptyState text={storeSearchQuery.trim() ? 'No hay resultados para tu busqueda.' : 'Aun no tienes productos. Agrega el primero o importa tu menu.'} />
+                            </div>
                           ) : (
-                            <div className="divide-y divide-black/5">
-                              {flatProductRows.map(({ product, categoryName }) => (
-                                <div
-                                  key={product.id}
-                                  className={`flex flex-col gap-3 px-4 py-3.5 transition hover:bg-sky-50/40 sm:flex-row sm:items-center sm:gap-4 ${selectedProductIds.has(product.id) ? 'bg-sky-50/60' : ''}`}
-                                >
-                                  {isSelectionMode ? (
+                            filteredStoreCategories.map((category) => (
+                              <section key={category.id} className="overflow-hidden rounded-[28px] border border-sky-100/60 bg-white/80 shadow-[0_10px_30px_rgba(15,15,15,0.04)]">
+                                <div className="flex flex-col gap-2 border-b border-black/5 px-4 py-3.5 sm:flex-row sm:items-center sm:justify-between sm:px-5">
+                                  <div className="flex items-center gap-3">
+                                    <h3 className="text-[15px] font-bold tracking-tight text-neutral-900">{category.name}</h3>
+                                    <span className="inline-flex items-center rounded-full bg-sky-50 px-2.5 py-0.5 text-[11px] font-bold text-sky-700 ring-1 ring-sky-200/70">
+                                      {category.products.length} producto{category.products.length === 1 ? '' : 's'}
+                                    </span>
+                                  </div>
+                                  <div className="flex items-center gap-2">
                                     <button
                                       type="button"
-                                      onClick={() => toggleProductSelection(product.id)}
-                                      className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-md border-2 transition ${selectedProductIds.has(product.id) ? 'border-sky-500 bg-sky-500 text-white' : 'border-neutral-300 bg-white text-transparent hover:border-sky-300'}`}
-                                      aria-label={selectedProductIds.has(product.id) ? `Quitar ${product.name} de la selección` : `Seleccionar ${product.name}`}
+                                      onClick={() => openProductModal(category.id)}
+                                      className="inline-flex items-center gap-1.5 rounded-full bg-neutral-950 px-3.5 py-2 text-[12px] font-bold text-white transition hover:bg-neutral-800 active:scale-[0.97]"
                                     >
-                                      <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
+                                      <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" /></svg>
+                                      Agregar producto
                                     </button>
-                                  ) : null}
-                                  <div className="h-14 w-14 shrink-0 overflow-hidden rounded-2xl border border-black/5 bg-neutral-100">
-                                    {product.image ? (
-                                      <img src={product.image} alt={product.name} className="h-full w-full object-cover" loading="lazy" />
-                                    ) : (
-                                      <div className="flex h-full w-full items-center justify-center text-lg font-bold text-neutral-300">{product.name.charAt(0).toUpperCase()}</div>
-                                    )}
-                                  </div>
-                                  <div className="min-w-0 flex-1">
-                                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                                      <p className="truncate text-[15px] font-bold text-neutral-900">{product.name}</p>
-                                      <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-sky-50 px-2.5 py-0.5 text-[11px] font-bold text-sky-700 ring-1 ring-sky-200/70">
-                                        {categoryName}
-                                      </span>
-                                      {!product.isAvailable ? (
-                                        <span className="rounded-full bg-neutral-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-neutral-500">Agotado</span>
-                                      ) : null}
-                                    </div>
-                                    {product.description ? (
-                                      <p className="mt-1 truncate text-[13px] text-neutral-500">{product.description}</p>
-                                    ) : null}
-                                  </div>
-                                  <div className="flex items-center gap-4 sm:w-auto">
-                                    <div className="flex items-center gap-1.5">
-                                      <span className="text-[11px] font-bold uppercase tracking-wide text-neutral-400">$</span>
-                                      <span className="text-[15px] font-bold text-neutral-900">{product.discountPrice ? formatCurrency(product.discountPrice) : formatCurrency(product.price)}</span>
-                                    </div>
                                     <button
                                       type="button"
-                                      role="switch"
-                                      aria-checked={product.isAvailable}
-                                      onClick={() => void toggleProductAvailability(product)}
-                                      disabled={activeAvailabilityProductId === product.id}
-                                      className={`relative inline-flex h-10 w-[68px] items-center rounded-full border px-1 transition ${product.isAvailable ? 'border-emerald-300 bg-emerald-500' : 'border-neutral-300 bg-neutral-300'} disabled:cursor-not-allowed disabled:opacity-60`}
+                                      onClick={() => void deleteCategory(category.id, category.name, category.products.length)}
+                                      disabled={Boolean(activeActionKey) || category.products.length > 0}
+                                      title={category.products.length > 0 ? 'Primero elimina o mueve sus productos.' : `Eliminar categoria ${category.name}`}
+                                      className="inline-flex items-center gap-1.5 rounded-full border border-black/10 bg-white px-3.5 py-2 text-[12px] font-semibold text-neutral-700 transition hover:border-rose-200 hover:bg-rose-50 hover:text-rose-700 disabled:cursor-not-allowed disabled:border-black/5 disabled:bg-neutral-100 disabled:text-neutral-400"
                                     >
-                                      <span className={`inline-flex h-8 w-8 items-center justify-center rounded-full bg-white text-[10px] font-bold uppercase tracking-[0.08em] text-neutral-700 shadow-sm transition ${product.isAvailable ? 'translate-x-[26px]' : 'translate-x-0'}`}>
-                                        {product.isAvailable ? 'On' : 'Off'}
-                                      </span>
+                                      <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.9} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6M9 7V4a1 1 0 011-1h4a1 1 0 011 1v3m-7 0h8" /></svg>
+                                      {activeActionKey === `category:${category.id}:delete` ? 'Eliminando...' : 'Eliminar'}
                                     </button>
-                                    <div className="flex items-center gap-1.5">
-                                      <button
-                                        type="button"
-                                        onClick={() => openEditProductModal(product)}
-                                        className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-black/10 bg-white text-neutral-800 transition hover:bg-neutral-100"
-                                        aria-label={`Editar ${product.name}`}
-                                      >
-                                        <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.9} d="M15.232 5.232l3.536 3.536M9 17l-4 1 1-4L15.5 4.5a2.121 2.121 0 013 3L9 17z" /></svg>
-                                      </button>
-                                      <button
-                                        type="button"
-                                        onClick={() => openDuplicateProductModal(product)}
-                                        className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-sky-100 bg-sky-50 text-sky-600 transition hover:bg-sky-100"
-                                        aria-label={`Duplicar ${product.name}`}
-                                        title="Duplicar producto"
-                                      >
-                                        <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.9} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
-                                      </button>
-                                      <button
-                                        type="button"
-                                        onClick={() => openDeleteProductModal(product)}
-                                        className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-rose-200 bg-rose-50 text-rose-600 transition hover:bg-rose-100"
-                                        aria-label={`Eliminar ${product.name}`}
-                                      >
-                                        <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.9} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6M9 7V4a1 1 0 011-1h4a1 1 0 011 1v3m-7 0h8" /></svg>
-                                      </button>
-                                    </div>
                                   </div>
                                 </div>
-                              ))}
-                            </div>
+                                <div className="divide-y divide-black/5">
+                                  {category.products.length === 0 ? (
+                                    <div className="px-4 py-6 text-center text-[13px] text-neutral-400">
+                                      Esta categoria no tiene productos aun.
+                                    </div>
+                                  ) : (
+                                    category.products.map((product) => (
+                                      <div
+                                        key={product.id}
+                                        className={`flex flex-col gap-3 px-4 py-3.5 transition hover:bg-sky-50/40 sm:flex-row sm:items-center sm:gap-4 ${selectedProductIds.has(product.id) ? 'bg-sky-50/60' : ''}`}
+                                      >
+                                        {isSelectionMode ? (
+                                          <button
+                                            type="button"
+                                            onClick={() => toggleProductSelection(product.id)}
+                                            className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-md border-2 transition ${selectedProductIds.has(product.id) ? 'border-sky-500 bg-sky-500 text-white' : 'border-neutral-300 bg-white text-transparent hover:border-sky-300'}`}
+                                            aria-label={selectedProductIds.has(product.id) ? `Quitar ${product.name} de la selección` : `Seleccionar ${product.name}`}
+                                          >
+                                            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
+                                          </button>
+                                        ) : null}
+                                        <div className="h-14 w-14 shrink-0 overflow-hidden rounded-2xl border border-black/5 bg-neutral-100">
+                                          {product.image ? (
+                                            <img src={product.image} alt={product.name} className="h-full w-full object-cover" loading="lazy" />
+                                          ) : (
+                                            <div className="flex h-full w-full items-center justify-center text-lg font-bold text-neutral-300">{product.name.charAt(0).toUpperCase()}</div>
+                                          )}
+                                        </div>
+                                        <div className="min-w-0 flex-1">
+                                          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                                            <p className="truncate text-[15px] font-bold text-neutral-900">{product.name}</p>
+                                            <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-sky-50 px-2.5 py-0.5 text-[11px] font-bold text-sky-700 ring-1 ring-sky-200/70">
+                                              {category.name}
+                                            </span>
+                                            {!product.isAvailable ? (
+                                              <span className="rounded-full bg-neutral-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-neutral-500">Agotado</span>
+                                            ) : null}
+                                          </div>
+                                          {product.description ? (
+                                            <p className="mt-1 truncate text-[13px] text-neutral-500">{product.description}</p>
+                                          ) : null}
+                                        </div>
+                                        <div className="flex items-center gap-4 sm:w-auto">
+                                          <div className="flex items-center gap-1.5">
+                                            <span className="text-[11px] font-bold uppercase tracking-wide text-neutral-400">$</span>
+                                            <span className="text-[15px] font-bold text-neutral-900">{product.discountPrice ? formatCurrency(product.discountPrice) : formatCurrency(product.price)}</span>
+                                          </div>
+                                          <button
+                                            type="button"
+                                            role="switch"
+                                            aria-checked={product.isAvailable}
+                                            onClick={() => void toggleProductAvailability(product)}
+                                            disabled={activeAvailabilityProductId === product.id}
+                                            className={`relative inline-flex h-10 w-[68px] items-center rounded-full border px-1 transition ${product.isAvailable ? 'border-emerald-300 bg-emerald-500' : 'border-neutral-300 bg-neutral-300'} disabled:cursor-not-allowed disabled:opacity-60`}
+                                          >
+                                            <span className={`inline-flex h-8 w-8 items-center justify-center rounded-full bg-white text-[10px] font-bold uppercase tracking-[0.08em] text-neutral-700 shadow-sm transition ${product.isAvailable ? 'translate-x-[26px]' : 'translate-x-0'}`}>
+                                              {product.isAvailable ? 'On' : 'Off'}
+                                            </span>
+                                          </button>
+                                          <div className="flex items-center gap-1.5">
+                                            <button
+                                              type="button"
+                                              onClick={() => openEditProductModal(product)}
+                                              className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-black/10 bg-white text-neutral-800 transition hover:bg-neutral-100"
+                                              aria-label={`Editar ${product.name}`}
+                                            >
+                                              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.9} d="M15.232 5.232l3.536 3.536M9 17l-4 1 1-4L15.5 4.5a2.121 2.121 0 013 3L9 17z" /></svg>
+                                            </button>
+                                            <button
+                                              type="button"
+                                              onClick={() => openDuplicateProductModal(product)}
+                                              className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-sky-100 bg-sky-50 text-sky-600 transition hover:bg-sky-100"
+                                              aria-label={`Duplicar ${product.name}`}
+                                              title="Duplicar producto"
+                                            >
+                                              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.9} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
+                                            </button>
+                                            <button
+                                              type="button"
+                                              onClick={() => openDeleteProductModal(product)}
+                                              className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-rose-200 bg-rose-50 text-rose-600 transition hover:bg-rose-100"
+                                              aria-label={`Eliminar ${product.name}`}
+                                            >
+                                              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.9} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6M9 7V4a1 1 0 011-1h4a1 1 0 011 1v3m-7 0h8" /></svg>
+                                            </button>
+                                          </div>
+                                        </div>
+                                      </div>
+                                    ))
+                                  )}
+                                </div>
+                              </section>
+                            ))
                           )}
                         </div>
                       )}
