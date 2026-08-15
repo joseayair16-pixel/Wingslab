@@ -627,6 +627,7 @@ export default function RestaurantPage({
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(() => searchParams?.checkout === 'true');
   const [cartJustUpdated, setCartJustUpdated] = useState(false);
+  const [cartPulse, setCartPulse] = useState(false);
   const [transferProofName, setTransferProofName] = useState('');
   const [transferProofSource, setTransferProofSource] = useState('');
   const [error, setError] = useState('');
@@ -1700,6 +1701,21 @@ export default function RestaurantPage({
       window.clearTimeout(timeoutId);
     };
   }, [cartJustUpdated]);
+
+  useEffect(() => {
+    if (!cart.length || isCartOpen) {
+      return;
+    }
+
+    const intervalId = window.setInterval(() => {
+      setCartPulse(true);
+      window.setTimeout(() => setCartPulse(false), 1200);
+    }, 5000);
+
+    return () => {
+      window.clearInterval(intervalId);
+    };
+  }, [cart.length, isCartOpen]);
 
   const cartSubtotal = useMemo(
     () => cart.reduce((sum, item) => {
@@ -5687,7 +5703,7 @@ function triggerHaptic(pattern: number | number[] = 10) {
             onClick={() => setIsCartOpen(true)}
             className={`group relative flex w-full items-center justify-between overflow-hidden rounded-full bg-neutral-950 px-5 py-3.5 shadow-[0_8px_30px_rgb(0,0,0,0.2)] transition-all hover:scale-[1.02] active:scale-[0.98] active-scale ${
               cartJustUpdated ? 'scale-[1.05] ring-4 ring-[#0ea5e9]/40' : ''
-            }`}
+            } ${cartPulse ? 'scale-[1.04] ring-4 ring-[#0ea5e9]/40 animate-cart-pulse' : ''}`}
           >
             {/* Pulsing background effect */}
             <div className="absolute inset-0 -z-10 animate-[pulse_2s_ease-in-out_infinite] bg-neutral-800 opacity-50" />
@@ -5710,6 +5726,21 @@ function triggerHaptic(pattern: number | number[] = 10) {
           </button>
         </div>
       )}
+
+      <style>{`
+        @keyframes cartPulse {
+          0%, 100% { transform: scale(1); }
+          10% { transform: scale(1.04); }
+          20% { transform: scale(1.02); }
+          30% { transform: scale(1.05); }
+          40% { transform: scale(1.02); }
+          55% { transform: scale(1.04); }
+          70% { transform: scale(1); }
+        }
+        .animate-cart-pulse {
+          animation: cartPulse 1.2s ease-in-out;
+        }
+      `}</style>
 
       {toastMsg ? (
         <div className={`fixed bottom-6 left-1/2 -translate-x-1/2 z-50 rounded-2xl border px-5 py-3 text-sm shadow-[0_4px_16px_rgba(0,0,0,0.08)] flex items-center gap-2 ${

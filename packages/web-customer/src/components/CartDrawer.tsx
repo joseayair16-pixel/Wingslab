@@ -396,12 +396,12 @@ export default memo(function CartDrawer({
                   type="button"
                   onClick={onProceedToCheckout}
                   disabled={!isRestaurantOpen}
-                  className="group relative flex overflow-hidden items-center justify-center gap-2 rounded-xl bg-sky-500 px-6 py-3 text-sm font-bold text-white shadow-[0_4px_16px_-4px_rgba(14,165,233,0.45)] transition-all hover:bg-sky-400 hover:shadow-[0_8px_24px_-6px_rgba(14,165,233,0.55)] active:scale-[0.97] disabled:cursor-not-allowed disabled:bg-neutral-100 disabled:text-neutral-400 disabled:shadow-none animate-pulse-glow"
+                  className="group relative flex overflow-hidden items-center justify-center gap-2 rounded-xl bg-sky-500 px-7 py-4 text-[15px] font-bold text-white shadow-[0_4px_16px_-4px_rgba(14,165,233,0.45)] transition-all hover:bg-sky-400 hover:shadow-[0_8px_24px_-6px_rgba(14,165,233,0.55)] active:scale-[0.97] disabled:cursor-not-allowed disabled:bg-neutral-100 disabled:text-neutral-400 disabled:shadow-none animate-pulse-glow"
                 >
                   <div className="absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/20 to-transparent transition-transform duration-1000 group-hover:translate-x-full disabled:hidden" />
                   <span className="relative flex items-center justify-center gap-2">
                     Completar pedido
-                    <svg className="h-4 w-4 shrink-0 animate-arrow-slide group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg className="h-5 w-5 shrink-0 animate-arrow-slide group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" />
                     </svg>
                   </span>
