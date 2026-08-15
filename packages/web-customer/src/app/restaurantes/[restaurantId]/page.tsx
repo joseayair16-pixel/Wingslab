@@ -684,6 +684,8 @@ export default function RestaurantPage({
   }, [searchParams, restaurant]);
 
   const [transientNotice, setTransientNotice] = useState<TransientNotice | null>(null);
+  // Latido del banner de pedido activo al crear un pedido (scroll + animación).
+  const [orderCreatedPulse, setOrderCreatedPulse] = useState(false);
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
   const [isRatingModalOpen, setIsRatingModalOpen] = useState(false);
   const [orderToRate, setOrderToRate] = useState<string | null>(null);
@@ -712,6 +714,7 @@ export default function RestaurantPage({
   const recentNoticeKeysRef = useRef<string[]>([]);
   const lastActiveOrderStatusRef = useRef<string>('');
   const recentCreatedOrderRef = useRef<{ id: string; orderReference: string; paymentMethod?: string } | null>(null);
+  const orderCreatedPulseTimerRef = useRef<number | null>(null);
   const loadActiveOrdersRef = useRef<() => void>(() => {});
   const creatingOrderRef = useRef(false);
   const clientOrderKeyRef = useRef('');
@@ -2583,6 +2586,20 @@ function triggerHaptic(pattern: number | number[] = 10) {
         tone: 'success',
       });
       triggerHaptic([30, 50, 30]); // Double vibration
+
+      // Lleva al usuario arriba para ver el banner del pedido activo y lo "late".
+      if (typeof window !== 'undefined') {
+        window.setTimeout(() => {
+          window.scrollTo({ top: 0, left: 0, behavior: 'smooth' });
+        }, 60);
+      }
+      setOrderCreatedPulse(true);
+      if (orderCreatedPulseTimerRef.current) {
+        window.clearTimeout(orderCreatedPulseTimerRef.current);
+      }
+      orderCreatedPulseTimerRef.current = window.setTimeout(() => {
+        setOrderCreatedPulse(false);
+      }, 1600);
     } catch (requestError) {
       if (requestError instanceof ApiRequestError && ['OUT_OF_DELIVERY_RANGE', 'CUSTOMER_TOO_FAR_FROM_DELIVERY_ADDRESS', 'CUSTOMER_LOCATION_REQUIRED', 'CUSTOMER_LOCATION_INVALID', 'CUSTOMER_LOCATION_LOW_ACCURACY'].includes(requestError.code || '')) {
         setDeliveryErrorModal(requestError.message);
@@ -2834,7 +2851,7 @@ function triggerHaptic(pattern: number | number[] = 10) {
               )}
 
               {/* Contenedor del Banner */}
-              <div className="transition-all duration-300">
+              <div className={`transition-all duration-300 ${orderCreatedPulse ? 'animate-order-heartbeat' : ''}`}>
                 {activeOrder && (
                   <CompactActiveOrderBanner
                     order={activeOrder}
