@@ -326,7 +326,7 @@ export function CheckoutView({
                       <p className="text-xs text-neutral-500 mt-0.5">"{item.specialInstructions}"</p>
                     )}
                   </div>
-                  <span className="font-semibold text-neutral-900">{formatCurrency(item.price * item.quantity)}</span>
+                  <span className="font-semibold text-neutral-900">{formatCurrency((item.discountPrice ? Number(item.discountPrice) : Number(item.price)) * item.quantity)}</span>
                 </div>
               ))}
             </div>
@@ -345,6 +345,17 @@ export function CheckoutView({
                 <span className="font-semibold text-neutral-900">{formatCurrency(deliveryFee)}</span>
               </div>
             </div>
+            {cart.reduce(
+              (sum, item) => sum + Math.max(0, (Number(item.price) - (item.discountPrice ? Number(item.discountPrice) : Number(item.price))) * item.quantity),
+              0
+            ) > 0 && (
+              <div className="mb-4 flex justify-between text-sm text-emerald-600">
+                <span>Descuento</span>
+                <span className="font-semibold">
+                  -{formatCurrency(cart.reduce((sum, item) => sum + Math.max(0, (Number(item.price) - (item.discountPrice ? Number(item.discountPrice) : Number(item.price))) * item.quantity), 0))}
+                </span>
+              </div>
+            )}
 
             <div className="mb-4">
               <label className="text-sm font-semibold text-neutral-800">Notas para el restaurante</label>

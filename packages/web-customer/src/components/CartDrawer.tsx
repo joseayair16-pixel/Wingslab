@@ -40,6 +40,12 @@ function getBasePrice(item: CartItemLike) {
   return base;
 }
 
+function getListLineTotal(item: CartItemLike) {
+  const price = Number(item.price) || 0;
+  const optionsSum = (item.selectedOptions || []).reduce((s, o) => s + (Number(o.price) || 0), 0);
+  return (price + optionsSum) * Math.max(0, item.quantity);
+}
+
 function getLineTotal(item: CartItemLike) {
   const optionsSum = (item.selectedOptions || []).reduce((s, o) => s + (Number(o.price) || 0), 0);
   return getBasePrice(item) * getPaidUnits(item) + optionsSum * Math.max(0, item.quantity);
@@ -85,6 +91,11 @@ export default memo(function CartDrawer({
 
   const totalProducts = useMemo(
     () => cart.reduce((sum, item) => sum + Math.max(0, item.quantity), 0),
+    [cart]
+  );
+
+  const savingsTotal = useMemo(
+    () => cart.reduce((sum, item) => sum + Math.max(0, getListLineTotal(item) - getLineTotal(item)), 0),
     [cart]
   );
 
@@ -144,9 +155,11 @@ export default memo(function CartDrawer({
               <div className="space-y-3">
                 {cart.map((item, idx) => {
                   const itemUnitPrice = getBasePrice(item) + (item.selectedOptions || []).reduce((s, o) => s + Number(o.price), 0);
+                  const originalUnitPrice = Number(item.price) || 0;
+                  const originalLineTotal = getListLineTotal(item);
                   const lineTotal = getLineTotal(item);
-                  const listPriceTotal = itemUnitPrice * Math.max(0, item.quantity);
-                  const itemSaving = Math.max(0, listPriceTotal - lineTotal);
+                  const itemSaving = Math.max(0, originalLineTotal - lineTotal);
+                  const hasDirectDiscount = item.discountPrice != null && Number(item.discountPrice) < originalUnitPrice;
                   const hasMultiBuy = item.promoType === 'MULTI_BUY' && item.sellBy !== 'WEIGHT'
                     && !!item.promoBuyQuantity && !!item.promoPayQuantity
                     && item.promoPayQuantity < item.promoBuyQuantity
@@ -170,15 +183,29 @@ export default memo(function CartDrawer({
                         <div className="min-w-0 flex-1">
                           <div className="flex items-start justify-between gap-2">
                             <p className="font-semibold leading-snug text-neutral-900">{item.name}</p>
-                            <span className="shrink-0 rounded-lg bg-neutral-900 px-2.5 py-1 text-xs font-bold text-white shadow-sm">
-                              {formatCurrency(lineTotal)}
-                            </span>
-                          </div>
-                          {hasMultiBuy && (
-                            <div className="mt-2 flex flex-wrap items-center gap-1.5">
-                              <span className="inline-flex items-center rounded-full bg-emerald-500 px-2 py-0.5 text-[10px] font-bold text-white">
-                                {item.promoBuyQuantity}x{item.promoPayQuantity}
+                            <div className="flex shrink-0 flex-col items-end gap-1">
+                              <span className="rounded-lg bg-neutral-900 px-2.5 py-1 text-xs font-bold text-white shadow-sm">
+                                {formatCurrency(lineTotal)}
                               </span>
+                              {hasDirectDiscount && (
+                                <span className="text-[10px] font-semibold text-neutral-400 line-through">
+                                  {formatCurrency(originalLineTotal)}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                          {(hasMultiBuy || hasDirectDiscount) && (
+                            <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                              {hasDirectDiscount && (
+                                <span className="inline-flex items-center rounded-full bg-emerald-500 px-2 py-0.5 text-[10px] font-bold text-white">
+                                  −{Math.round((1 - (Number(item.discountPrice) || 0) / originalUnitPrice) * 100)}%
+                                </span>
+                              )}
+                              {hasMultiBuy && (
+                                <span className="inline-flex items-center rounded-full bg-emerald-500 px-2 py-0.5 text-[10px] font-bold text-white">
+                                  {item.promoBuyQuantity}x{item.promoPayQuantity}
+                                </span>
+                              )}
                               {itemSaving > 0 && (
                                 <span className="text-[11px] font-semibold text-emerald-600">
                                   Ahorras {formatCurrency(itemSaving)}
@@ -285,12 +312,14 @@ export default memo(function CartDrawer({
             <div className="sticky bottom-0 z-10 border-t border-black/[0.04] bg-white/90 px-4 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] backdrop-blur-xl sm:px-5">
               <div className="rounded-2xl bg-gradient-to-b from-neutral-50 to-neutral-100/60 p-3 ring-1 ring-black/[0.04]">
                 <div className="space-y-1.5 text-xs">
-                  <div className="flex items-center justify-between text-neutral-500">
+                  {savingsTotal > 0 && (
+                  <div className="flex items-center justify-between text-emerald-600">
                     <span className="flex items-center gap-1">
-                      <span className="text-[10px]"><svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /></svg></span> Productos
+                      <span className="text-[10px]"><svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m-8 4l-4 4V5a2 2 0 012-2h16a2 2 0 012 2v16a2 2 0 01-2 2H8.586a2 2 0 01-1.414-.586zM12 8.5a2 2 0 100-4 2 2 0 000 4zm0 6a2 2 0 100-4 2 2 0 000 4zm0 6a2 2 0 100-4 2 2 0 000 4z" /></svg></span> Descuento
                     </span>
-                    <span className="font-medium text-neutral-700">{totalProducts}</span>
+                    <span className="font-bold text-emerald-600">-{formatCurrency(savingsTotal)}</span>
                   </div>
+                  )}
                   <div className="flex items-center justify-between text-neutral-500">
                     <span className="flex items-center gap-1">
                       <span className="text-[10px]"><svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 6v12m-3-2.818l.879.659c1.171.879 3.07.879 4.242 0 1.172-.879 1.172-2.303 0-3.182C13.536 12.219 12.768 12 12 12c-.725 0-1.45-.22-2.003-.659-1.106-.879-1.106-2.303 0-3.182s2.9-.879 4.006 0l.415.33M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg></span> Subtotal
