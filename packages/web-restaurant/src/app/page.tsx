@@ -5797,8 +5797,8 @@ export default function Home() {
             {/* CONTENT */}
             {isSelectingPrepTime ? (
               <>
-              <div className="min-h-0 flex-1 overflow-y-auto px-5 py-8 sm:px-10 flex flex-col items-center justify-center text-center">
-                <div className="max-w-sm w-full space-y-6">
+              <div className="min-h-0 flex-1 overflow-y-auto px-5 py-8 sm:px-10 flex flex-col items-center text-center">
+                <div className="my-auto w-full max-w-sm space-y-6">
                   <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-sky-100 ring-8 ring-sky-50">
                     <svg className="h-10 w-10 text-sky-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -5854,7 +5854,7 @@ export default function Home() {
                               >
                                 <span className="text-sm font-black">{option.label}</span>
                                 {!option.isToday && (
-                                  <span className="text-[10px] font-bold uppercase tracking-wider opacity-60 mt-0.5">
+                                  <span className="text-[9px] sm:text-[10px] font-bold uppercase tracking-wider opacity-60 mt-0.5">
                                     {new Date(`${option.value}T00:00:00`).toLocaleDateString('es-MX', { day: 'numeric', month: 'short' })}
                                   </span>
                                 )}
@@ -5881,7 +5881,7 @@ export default function Home() {
                                 key={m}
                                 type="button"
                                 onClick={() => setScheduledMeridiem(m)}
-                                className={`rounded-xl px-4 py-2.5 text-sm font-black transition ${scheduledMeridiem === m ? 'bg-white text-sky-700 shadow-sm' : 'text-sky-600 hover:text-sky-800'}`}
+                                className={`rounded-xl px-3 py-2.5 text-sm font-black transition sm:px-4 ${scheduledMeridiem === m ? 'bg-white text-sky-700 shadow-sm' : 'text-sky-600 hover:text-sky-800'}`}
                               >
                                 {m}
                               </button>
@@ -5933,8 +5933,8 @@ export default function Home() {
 
                   </div>
               </div>
-              <div className="shrink-0 border-t border-black/5 bg-white px-5 py-3 sm:px-8 shadow-[0_-8px_30px_rgba(0,0,0,0.06)]">
-                <div className="flex flex-col gap-3">
+<div className="shrink-0 border-t border-black/5 bg-white px-5 py-3 sm:px-8 shadow-[0_-8px_30px_rgba(0,0,0,0.06)]">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
                     <button
                       type="button"
                       onClick={() => {
@@ -5994,13 +5994,27 @@ export default function Home() {
                           return s !== null && s.getTime() > Date.now();
                         })())
                       }
-                      className="w-full rounded-full bg-sky-600 px-5 py-4 text-sm font-bold text-white shadow-[0_4px_12px_rgba(2,132,199,0.3)] transition hover:bg-sky-700 hover:shadow-[0_8px_20px_rgba(2,132,199,0.4)] disabled:opacity-70 disabled:cursor-not-allowed"
+                      className="w-full rounded-full bg-sky-600 px-5 py-4 text-sm font-bold text-white shadow-[0_4px_12px_rgba(2,132,199,0.3)] transition hover:bg-sky-700 hover:shadow-[0_8px_20px_rgba(2,132,199,0.4)] disabled:opacity-70 disabled:cursor-not-allowed sm:flex-1 sm:order-2"
                     >
                       {activeActionKey === `${activeIncomingOrder.id}:accept`
                         ? 'Aceptando...'
                         : isScheduledMode
                           ? 'Confirmar y Programar Entrega'
                           : 'Confirmar y Aceptar Pedido'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsSelectingPrepTime(false);
+                        setIsScheduledMode(false);
+                        setScheduledDeliveryDate('');
+                        setScheduledDeliveryTime('');
+                        setScheduledMeridiem('PM');
+                      }}
+                      disabled={Boolean(activeActionKey)}
+                      className="w-full rounded-full border border-neutral-200 bg-white px-5 py-3.5 text-sm font-bold text-neutral-600 transition hover:bg-neutral-50 sm:w-auto sm:px-6 sm:order-1"
+                    >
+                      Volver al pedido
                     </button>
                     <button
                       type="button"
