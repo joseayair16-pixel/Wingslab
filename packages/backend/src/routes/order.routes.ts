@@ -11,6 +11,7 @@ import { getOrCreateRequestContext } from '../utils/request-context';
 import { createOrderForCustomer } from '../services/order.service';
 import { sendPushNotification } from '../services/notification.service';
 import { enqueueRestaurantOrder, requestOrderCancellation, retractCancellationRequest } from '../services/order-workflow.service';
+import { createTransferRefundTicket } from '../services/refund-ticket.service';
 import { sendWhatsAppNewOrder } from '../services/whatsapp.service';
 
 const createOrderSchema = z.object({
@@ -712,6 +713,8 @@ export async function registerOrderRoutes(fastify: FastifyInstance): Promise<voi
             notes: cancellationReason,
           },
         });
+
+        await createTransferRefundTicket(prisma, order.id, cancellationReason);
 
         // Notify restaurant via socket
         emitNotification(

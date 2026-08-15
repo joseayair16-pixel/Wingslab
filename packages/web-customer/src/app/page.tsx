@@ -955,12 +955,6 @@ export default function Home() {
   const [orders, setOrders] = useState<CustomerOrderListItem[]>([]);
   const [selectedOrderId, setSelectedOrderId] = useState('');
   const [selectedOrder, setSelectedOrder] = useState<CustomerOrderDetail | null>(null);
-  const [refundContact, setRefundContact] = useState('');
-  const [refundProofName, setRefundProofName] = useState('');
-  const [refundProofSource, setRefundProofSource] = useState('');
-  const [submittingRefundReport, setSubmittingRefundReport] = useState(false);
-  const [refundReportSuccess, setRefundReportSuccess] = useState(false);
-  const [refundError, setRefundError] = useState('');
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const [isSupportModalOpen, setIsSupportModalOpen] = useState(false);
   const [isSupportSuccessModalOpen, setIsSupportSuccessModalOpen] = useState(false);
@@ -1211,16 +1205,6 @@ export default function Home() {
       .catch(() => {});
   }, [orders, token, apiBase, cancelledOrderNotice]);
 
-  useEffect(() => {
-    if (!isDetailModalOpen) {
-      setRefundContact('');
-      setRefundProofName('');
-      setRefundProofSource('');
-      setSubmittingRefundReport(false);
-      setRefundReportSuccess(false);
-      setRefundError('');
-    }
-  }, [isDetailModalOpen]);
   const addressMapRef = useRef<any>(null);
   const placesServiceRef = useRef<any>(null);
   const autocompleteSessionTokenRef = useRef<any>(null);
@@ -5637,169 +5621,17 @@ export default function Home() {
                     </div>
                   )}
 
-                  {/* Reporte de Reembolso por Transferencia si el pedido fue rechazado */}
+                  {/* Reembolso por Transferencia si el pedido fue rechazado */}
                   {selectedOrder.status === 'REJECTED' && selectedOrder.paymentMethod === 'TRANSFER' && (
-                    <div className="border-t border-rose-100 pt-5 space-y-4">
-                      {refundReportSuccess ? (
-                        <div className="bg-emerald-50/60 border border-emerald-100 rounded-2xl p-5 text-center space-y-3 shadow-[0_8px_30px_rgba(20,184,166,0.05)] backdrop-blur animate-scale-up">
-                          <div className="mx-auto h-12 w-12 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-600 border border-emerald-200">
-                            <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.2} d="M5 13l4 4L19 7" />
-                            </svg>
-                          </div>
-                          <div>
-                            <h4 className="text-base font-bold text-neutral-950">¡Reporte de Reembolso Enviado!</h4>
-                            <p className="mt-1 text-xs text-neutral-600 leading-relaxed">
-                              Tu reporte ha sido registrado con éxito. El administrador revisará tu comprobante y se pondrá en contacto contigo a través de tu medio de contacto para realizar el reembolso de inmediato.
-                            </p>
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="bg-rose-50/50 border border-rose-100/70 rounded-2xl p-5 space-y-4 backdrop-blur shadow-sm">
-                          <div className="flex gap-3">
-                            <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-rose-100 text-rose-600 border border-rose-200/50">
-                              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                              </svg>
-                            </div>
-                            <div>
-                              <h4 className="text-sm font-bold text-rose-950">Reportar Pago por Transferencia</h4>
-                              <p className="text-xs text-rose-800/80 leading-normal mt-0.5">
-                                Este pedido fue rechazado por el restaurante. Como el pago se realizó mediante Transferencia Bancaria, proporciona tus datos de contacto y el comprobante para que el administrador te dé una solución y proceda con tu reembolso.
-                              </p>
-                            </div>
-                          </div>
-
-                          <div className="space-y-3.5 pt-1">
-                            <div>
-                              <label className="text-[10px] font-bold uppercase tracking-wider text-rose-800 block mb-1.5">
-                                Teléfono o Medio de Contacto
-                              </label>
-                              <input
-                                type="text"
-                                placeholder="Ej: Celular o Cuenta destino"
-                                value={refundContact}
-                                onChange={(e) => setRefundContact(e.target.value)}
-                                className="w-full bg-white border border-rose-200/60 rounded-xl px-4 py-2.5 text-xs text-neutral-800 placeholder:text-neutral-400 focus:outline-none focus:ring-2 focus:ring-rose-500/10 focus:border-rose-400 transition"
-                              />
-                            </div>
-
-                            <div>
-                              <label className="text-[10px] font-bold uppercase tracking-wider text-rose-800 block mb-1.5">
-                                Comprobante de Transferencia
-                              </label>
-                              <div className="relative group border border-dashed border-rose-200 hover:border-rose-400 bg-white/70 hover:bg-white transition rounded-xl p-4 flex flex-col items-center justify-center cursor-pointer text-center">
-                                <input
-                                  type="file"
-                                  accept="image/*"
-                                  onChange={async (e) => {
-                                    const file = e.target.files?.[0];
-                                    if (!file) return;
-                                    try {
-                                      const base64 = await convertImageFileToDataUrl(file, 900, 900, 0.7);
-                                      setRefundProofName(file.name);
-                                      setRefundProofSource(base64);
-                                      setRefundError('');
-                                    } catch (err: any) {
-                                      setRefundError(err.message || 'Error al procesar la imagen');
-                                    }
-                                  }}
-                                  className="absolute inset-0 opacity-0 cursor-pointer z-10"
-                                />
-                                {refundProofSource ? (
-                                  <div className="w-full relative z-0">
-                                    <div className="mx-auto h-20 w-20 overflow-hidden rounded-lg border border-neutral-100 bg-neutral-50 shadow-sm relative group-hover:opacity-90 transition">
-                                      <img src={refundProofSource} alt="Preview" className="h-full w-full object-cover" loading="lazy" decoding="async" />
-                                    </div>
-                                    <p className="mt-2 text-xs font-semibold text-rose-700 truncate max-w-xs mx-auto">{refundProofName || 'comprobante.jpg'}</p>
-                                    <p className="text-[9px] text-neutral-400">Toca para cambiar de imagen</p>
-                                  </div>
-                                ) : (
-                                  <div className="relative z-0">
-                                    <svg className="h-6 w-6 text-rose-500 mb-1 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                                    </svg>
-                                    <span className="text-xs font-bold text-rose-700 block">Subir captura del comprobante</span>
-                                    <span className="text-[9px] text-neutral-400 mt-0.5 block">Formatos: JPG, PNG. Máx 3MB</span>
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-
-                            {refundError && (
-                              <p className="text-xs font-semibold text-rose-600 bg-rose-50/50 p-2.5 rounded-xl border border-rose-100">
-                                ⚠️ {refundError}
-                              </p>
-                            )}
-
-                            <button
-                              type="button"
-                              disabled={submittingRefundReport || !refundContact.trim()}
-                              onClick={async () => {
-                                if (!refundContact.trim()) return;
-                                setSubmittingRefundReport(true);
-                                setRefundError('');
-                                try {
-                                  let proofUrl = selectedOrder.paymentProofUrl || '';
-                                  if (refundProofSource) {
-                                    proofUrl = await persistTransferProof({
-                                      apiBase,
-                                      token: token || '',
-                                      source: refundProofSource,
-                                      fileName: refundProofName
-                                    });
-                                  }
-
-                                  const response = await fetch(`${'/api'}/customer/support/tickets`, {
-                                    method: 'POST',
-                                    headers: {
-                                      'Content-Type': 'application/json',
-                                      'Authorization': `Bearer ${token || localStorage.getItem('sadel.customer.token')}`,
-                                    },
-                                    body: JSON.stringify({
-                                      type: 'ORDER',
-                                      subject: `Reembolso por Transferencia - Pedido #${selectedOrder.orderReference}`,
-                                      description: `Contacto de reembolso: ${refundContact}\nComprobante de pago: ${proofUrl || 'No proporcionado'}\n\nDetalles adicionales: El restaurante rechazó el pedido #${selectedOrder.orderReference} pagado por transferencia de ${formatCurrency(selectedOrder.totalAmount)}.`,
-                                      storeName: selectedOrder.restaurant.name,
-                                      orderNumber: selectedOrder.orderReference
-                                    }),
-                                  });
-
-                                  const data = await response.json();
-                                  if (data.success) {
-                                    setRefundReportSuccess(true);
-                                  } else {
-                                    setRefundError(data.error?.message || 'No se pudo enviar el reporte.');
-                                  }
-                                } catch (err: any) {
-                                  console.error(err);
-                                  setRefundError('Error de red al enviar el reporte. Por favor inténtalo de nuevo.');
-                                } finally {
-                                  setSubmittingRefundReport(false);
-                                }
-                              }}
-                              className="w-full rounded-xl bg-rose-600 hover:bg-rose-700 disabled:opacity-50 disabled:cursor-not-allowed active:scale-[0.98] text-white py-3 text-xs font-bold shadow-md shadow-rose-600/10 hover:shadow-rose-600/25 transition flex items-center justify-center gap-2"
-                            >
-                              {submittingRefundReport ? (
-                                <>
-                                  <svg className="animate-spin h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
-                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                                  </svg>
-                                  Enviando reporte...
-                                </>
-                              ) : (
-                                <>
-                                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-                                  </svg>
-                                  Enviar reporte de reembolso
-                                </>
-                              )}
-                            </button>
-                          </div>
-                        </div>
-                      )}
+                    <div className="border-t border-rose-100 pt-5 space-y-3">
+                      <div className="rounded-2xl bg-neutral-50 p-4 border border-neutral-200/60 text-left">
+                        <p className="text-sm font-semibold text-neutral-800 leading-relaxed">
+                          Tu pago fue por transferencia. Serás contactado para coordinar la devolución.
+                        </p>
+                      </div>
+                      <p className="text-xs text-neutral-500 leading-relaxed">
+                        Nuestro equipo de soporte revisará tu pedido y se pondrá en contacto contigo y con el restaurante para procesar el reembolso.
+                      </p>
                     </div>
                   )}
 
@@ -7251,8 +7083,8 @@ function TransientNoticeBanner({
   notice,
   onClose,
   onRefundAction: _onRefundAction,
-  apiBase,
-  token,
+  apiBase: _apiBase,
+  token: _token,
 }: {
   notice: TransientNotice;
   onClose: () => void;
@@ -7281,13 +7113,6 @@ function TransientNoticeBanner({
   const s = styles[notice.tone];
 
   const isTransferRefund = notice.tone === 'danger' && notice.paymentMethod === 'TRANSFER' && notice.orderId;
-
-  const [contact, setContact] = useState('');
-  const [proofName, setProofName] = useState('');
-  const [proofSource, setProofSource] = useState('');
-  const [submitting, setSubmitting] = useState(false);
-  const [success, setSuccess] = useState(false);
-  const [errorMsg, setErrorMsg] = useState('');
 
   return (
     <div className="fixed inset-0 z-[90] flex items-center justify-center px-4">
@@ -7327,181 +7152,23 @@ function TransientNoticeBanner({
         <p className="mt-2 text-sm text-neutral-500 leading-relaxed">{notice.description}</p>
 
         {isTransferRefund ? (
-          success ? (
-            <div className="mt-6 w-full text-center">
-              <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-full bg-emerald-100 text-emerald-600 border border-emerald-200">
-                <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.2} d="M5 13l4 4L19 7" />
-                </svg>
-              </div>
-              <p className="mt-3 text-sm font-bold text-neutral-900">¡Reporte Enviado!</p>
-              <p className="mt-1 text-xs text-neutral-500 leading-relaxed max-w-[280px] mx-auto">
-                Tu reporte ha sido registrado con éxito. El administrador revisará tu comprobante y se pondrá en contacto contigo para realizar el reembolso.
+          <div className="mt-6 w-full">
+            <div className="rounded-2xl bg-neutral-50 p-4 border border-neutral-200/60 text-left">
+              <p className="text-sm font-semibold text-neutral-800 leading-relaxed">
+                Tu pago fue por transferencia. Serás contactado para coordinar la devolución.
               </p>
-              <button
-                type="button"
-                onClick={onClose}
-                className="mt-5 w-full rounded-full bg-neutral-950 px-6 py-3.5 text-xs font-bold text-white shadow-lg shadow-neutral-950/25 transition-all hover:bg-neutral-800 hover:shadow-xl active:scale-[0.97]"
-              >
-                Entendido
-              </button>
             </div>
-          ) : (
-            <div className="w-full mt-5 space-y-3.5">
-              <div className="rounded-2xl bg-neutral-50 p-4 border border-neutral-200/60 text-left">
-                <p className="text-sm font-semibold text-neutral-800 leading-relaxed">
-                  Tu pago fue por transferencia. Para procesar el reembolso, comparte tus datos de contacto y el comprobante.
-                </p>
-              </div>
-
-              <div className="w-full text-left">
-                <label className="text-[10px] font-bold uppercase tracking-wider text-neutral-600 block mb-1.5">
-                  Teléfono o medio de contacto
-                </label>
-                <input
-                  type="text"
-                  placeholder="Celular o cuenta destino"
-                  value={contact}
-                  onChange={(e) => setContact(e.target.value)}
-                  className="w-full bg-white border border-neutral-200 rounded-xl px-4 py-3 text-sm text-neutral-800 placeholder:text-neutral-400 focus:outline-none focus:ring-2 focus:ring-neutral-950/10 focus:border-neutral-400 transition"
-                />
-              </div>
-
-              <div className="w-full text-left">
-                <label className="text-[10px] font-bold uppercase tracking-wider text-neutral-600 block mb-1.5">
-                  Comprobante de transferencia
-                </label>
-                <div className="relative group border border-dashed border-neutral-200 hover:border-neutral-400 bg-white/70 hover:bg-white transition rounded-xl p-3 flex flex-col items-center justify-center cursor-pointer text-center">
-                  <input
-                    type="file"
-                    accept="image/*"
-                    onChange={async (e) => {
-                      const file = e.target.files?.[0];
-                      if (!file) return;
-                      try {
-                        const base64 = await convertImageFileToDataUrl(file, 900, 900, 0.7);
-                        setProofName(file.name);
-                        setProofSource(base64);
-                        setErrorMsg('');
-                      } catch (err: any) {
-                        setErrorMsg(err.message || 'Error al procesar la imagen');
-                      }
-                    }}
-                    className="absolute inset-0 opacity-0 cursor-pointer z-10"
-                  />
-                  {proofSource ? (
-                    <div className="w-full relative z-0">
-                      <div className="mx-auto h-16 w-16 overflow-hidden rounded-lg border border-neutral-100 bg-neutral-50 shadow-sm relative group-hover:opacity-90 transition">
-                        <img src={proofSource} alt="Preview" className="h-full w-full object-cover" loading="lazy" decoding="async" />
-                      </div>
-                      <p className="mt-1 text-[11px] font-semibold text-neutral-700 truncate max-w-xs mx-auto">{proofName || 'comprobante.jpg'}</p>
-                      <p className="text-[9px] text-neutral-400">Toca para cambiar</p>
-                    </div>
-                  ) : (
-                    <div className="relative z-0">
-                      <svg className="h-5 w-5 text-neutral-400 mb-1 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                      </svg>
-                      <span className="text-[11px] font-bold text-neutral-600 block">Subir comprobante</span>
-                      <span className="text-[8px] text-neutral-400 mt-0.5 block">JPG, PNG. Máx 3MB</span>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {errorMsg && (
-                <p className="w-full text-left text-[11px] font-semibold text-amber-600 bg-amber-50/50 p-2 rounded-lg border border-amber-100">
-                  {errorMsg}
-                </p>
-              )}
-
-              <div className="mt-4 flex flex-col gap-2 w-full">
-                <button
-                  type="button"
-                  disabled={submitting || !contact.trim()}
-                  onClick={async () => {
-                    if (!contact.trim()) return;
-                    setSubmitting(true);
-                    setErrorMsg('');
-                    try {
-                      let uploadedUrl = '';
-                      if (proofSource) {
-                        uploadedUrl = await persistTransferProof({
-                          apiBase: apiBase || '/api',
-                          token: token || localStorage.getItem('sadel.customer.token') || '',
-                          source: proofSource,
-                          fileName: proofName,
-                        });
-                      }
-
-                      const response = await fetch(`${apiBase || '/api'}/customer/support/tickets`, {
-                        method: 'POST',
-                        headers: {
-                          'Content-Type': 'application/json',
-                          'Authorization': `Bearer ${token || localStorage.getItem('sadel.customer.token')}`,
-                        },
-                        body: JSON.stringify({
-                          type: 'ORDER',
-                          subject: `Reembolso por Transferencia - Pedido #${notice.orderReference || notice.orderId || 'SAD'}`,
-                          description: `Contacto de reembolso: ${contact}\nComprobante de pago: ${uploadedUrl || 'No proporcionado'}\n\nDetalles adicionales: El restaurante rechazó el pedido #${notice.orderReference || notice.orderId || 'SAD'} pagado por transferencia.`,
-                          storeName: 'SaDeL',
-                          orderNumber: notice.orderReference || notice.orderId || 'SAD',
-                        }),
-                      });
-
-                      if (response.status === 404) {
-                        const localTicketsStr = localStorage.getItem('local_support_tickets');
-                        const localTickets = localTicketsStr ? JSON.parse(localTicketsStr) : [];
-                        const newTicket = {
-                          id: `local_${Date.now()}`,
-                          type: 'ORDER',
-                          storeName: 'SaDeL',
-                          orderNumber: notice.orderReference || notice.orderId || 'SAD',
-                          description: `Contacto de reembolso: ${contact}\nComprobante de pago: ${uploadedUrl || 'No proporcionado'}\n\nDetalles adicionales: El restaurante rechazó el pedido #${notice.orderReference || notice.orderId || 'SAD'} pagado por transferencia.`,
-                          createdAt: new Date().toISOString(),
-                        };
-                        localStorage.setItem('local_support_tickets', JSON.stringify([newTicket, ...localTickets]));
-                        setSuccess(true);
-                        return;
-                      }
-
-                      const data = await response.json();
-                      if (data.success) {
-                        setSuccess(true);
-                      } else {
-                        setErrorMsg(data.error?.message || 'No se pudo enviar el reporte.');
-                      }
-                    } catch (err: any) {
-                      console.error(err);
-                      setErrorMsg('Error de red al enviar el reporte. Por favor inténtalo de nuevo.');
-                    } finally {
-                      setSubmitting(false);
-                    }
-                  }}
-                  className="w-full rounded-full bg-neutral-950 hover:bg-neutral-800 disabled:opacity-40 disabled:cursor-not-allowed active:scale-[0.97] text-white py-3 text-sm font-bold shadow-lg shadow-neutral-950/20 transition flex items-center justify-center gap-2"
-                >
-                  {submitting ? (
-                    <>
-                      <svg className="animate-spin h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                      </svg>
-                      Enviando reporte...
-                    </>
-                  ) : (
-                    'Enviar reporte de reembolso'
-                  )}
-                </button>
-                <button
-                  type="button"
-                  onClick={onClose}
-                  className="w-full rounded-full border border-neutral-200 bg-transparent px-6 py-3 text-sm font-semibold text-neutral-600 transition hover:bg-neutral-50 active:scale-[0.97]"
-                >
-                  Cerrar
-                </button>
-              </div>
-            </div>
-          )
+            <p className="mt-3 text-xs text-neutral-500 leading-relaxed">
+              Nuestro equipo de soporte revisará tu pedido y se pondrá en contacto contigo y con el restaurante para procesar el reembolso.
+            </p>
+            <button
+              type="button"
+              onClick={onClose}
+              className="mt-5 w-full rounded-full bg-neutral-950 px-6 py-3.5 text-xs font-bold text-white shadow-lg shadow-neutral-950/25 transition-all hover:bg-neutral-800 hover:shadow-xl active:scale-[0.97]"
+            >
+              Entendido
+            </button>
+          </div>
         ) : (
           notice.requiresAcknowledgement && (
             <button
@@ -7699,29 +7366,6 @@ function calculateHaversineDistance(lat1: number, lon1: number, lat2: number, lo
 
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   return R * c;
-}
-
-async function persistTransferProof(params: {
-  apiBase: string;
-  token: string;
-  source: string;
-  fileName?: string;
-}) {
-  if (!params.source.startsWith('data:')) {
-    return params.source;
-  }
-
-  const uploaded = await uploadMediaAsset({
-    apiBase: params.apiBase,
-    token: params.token,
-    kind: 'payment-proof',
-    source: params.source,
-    fileName: params.fileName,
-    fallbackMessage: 'No se pudo subir el comprobante de transferencia.',
-    fallbackToSource: true,
-  });
-
-  return uploaded.url;
 }
 
 function PasswordToggleButton({ show, onToggle }: { show: boolean; onToggle: () => void }) {

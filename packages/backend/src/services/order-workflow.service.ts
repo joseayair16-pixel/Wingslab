@@ -24,6 +24,7 @@ import { appEvents } from '../utils/events';
 import { calculateOrderEta, estimateDeliveryTravelMinutes } from '../utils/order-eta';
 import { sendPushNotification } from './notification.service';
 import { sendWhatsAppDriverDemand } from './whatsapp.service';
+import { createTransferRefundTicket } from './refund-ticket.service';
 
 type WorkflowParams = {
   prisma: PrismaClient;
@@ -489,6 +490,16 @@ export async function updateOrderStatusByRestaurant({
       toStatus: nextStatus,
     });
 
+    if (nextStatus === OrderStatus.REJECTED || nextStatus === OrderStatus.CANCELLED) {
+      await createTransferRefundTicket(
+        tx,
+        order.id,
+        nextStatus === OrderStatus.REJECTED
+          ? 'El restaurante rechazó el pedido.'
+          : 'El restaurante canceló el pedido.'
+      );
+    }
+
     appEvents.emit('order.status_changed', {
       orderId: order.id,
       status: nextStatus,
@@ -648,6 +659,12 @@ export async function respondToCancellationRequest(
           data: { availability: 'AVAILABLE' as any },
         });
       }
+
+      await createTransferRefundTicket(
+        tx,
+        order.id,
+        `Cancelación aprobada (solicitada por el cliente). ${note ? `Nota: ${note}` : ''}`
+      );
     });
 
     return { customerUserId: order.customer.userId, driverUserId: order.driver?.userId ?? null };
@@ -727,6 +744,8 @@ export async function cancelOrderByRestaurant(
         data: { availability: 'AVAILABLE' as any },
       });
     }
+
+    await createTransferRefundTicket(tx, order.id, `Cancelado por el restaurante. ${reason}`);
 
     return { customerUserId: order.customer.userId, driverUserId: order.driver?.userId ?? null };
   });

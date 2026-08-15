@@ -5,6 +5,7 @@ import { authenticate, authorize } from '../middleware/auth';
 import { OrderStatus, UserRole } from '@prisma/client';
 import { emitNotification } from '../services/socket.service';
 import { sendPushNotification } from '../services/notification.service';
+import { createTransferRefundTicket } from '../services/refund-ticket.service';
 
 const querySchema = z.object({
   status: z.nativeEnum(OrderStatus).optional(),
@@ -241,6 +242,8 @@ export const registerAdminOrdersRoutes = async (fastify: FastifyInstance) => {
             },
           });
 
+          await createTransferRefundTicket(tx, id, `Cancelado por un administrador. ${reason}`);
+
           return canceled;
         });
 
@@ -357,6 +360,7 @@ export const registerAdminOrdersRoutes = async (fastify: FastifyInstance) => {
             await tx.orderTracking.create({
               data: { orderId: id, status: 'CANCELLED', notes: `Cancelado por admin ${adminId} (entrega atascada): ${reason}` },
             });
+            await createTransferRefundTicket(tx, id, `Cancelado por un administrador (entrega atascada). ${reason}`);
             return { status: 'CANCELLED', message: 'Order cancelled. Customer should be refunded.' };
           }
 
