@@ -1147,6 +1147,7 @@ export default function Home() {
   const [isScheduledMode, setIsScheduledMode] = useState(false);
   const [scheduledDeliveryDate, setScheduledDeliveryDate] = useState('');
   const [scheduledDeliveryTime, setScheduledDeliveryTime] = useState('');
+  const [scheduledMeridiem, setScheduledMeridiem] = useState<'AM' | 'PM'>('PM');
   const [storeDraft, setStoreDraft] = useState<StoreProfileDraft>({
     name: '',
     description: '',
@@ -3546,6 +3547,7 @@ export default function Home() {
       setIsScheduledMode(false);
       setScheduledDeliveryDate('');
       setScheduledDeliveryTime('');
+      setScheduledMeridiem('PM');
       return;
     }
 
@@ -3553,6 +3555,7 @@ export default function Home() {
     setIsScheduledMode(false);
     setScheduledDeliveryDate('');
     setScheduledDeliveryTime('');
+    setScheduledMeridiem('PM');
     // El countdown vive en <IncomingOrderCountdown> (timer aislado) para no
     // re-renderizar toda la página cada segundo.
   }, [activeIncomingOrder?.id]);
@@ -5793,6 +5796,7 @@ export default function Home() {
 
             {/* CONTENT */}
             {isSelectingPrepTime ? (
+              <>
               <div className="min-h-0 flex-1 overflow-y-auto px-5 py-8 sm:px-10 flex flex-col items-center justify-center text-center">
                 <div className="max-w-sm w-full space-y-6">
                   <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-sky-100 ring-8 ring-sky-50">
@@ -5831,37 +5835,78 @@ export default function Home() {
                   )}
 
                   {isScheduledMode ? (
-                    <div className="space-y-4 pt-2">
-                      <label className="grid gap-2 text-left text-sm">
+                    <div className="space-y-5 pt-2">
+                      <div className="text-left">
                         <span className="text-xs font-bold uppercase tracking-wider text-neutral-600">Fecha de entrega</span>
-                        <input
-                          type="date"
-                          value={scheduledDeliveryDate}
-                          min={new Date().toISOString().split('T')[0]}
-                          onChange={(e) => setScheduledDeliveryDate(e.target.value)}
-                          className="w-full rounded-2xl border border-sky-200/60 bg-white px-5 py-3.5 text-sm font-medium text-neutral-900 outline-none transition focus:border-sky-400 focus:ring-4 focus:ring-sky-500/20"
-                        />
-                      </label>
-                      <label className="grid gap-2 text-left text-sm">
+                        <div className="mt-2 grid grid-cols-4 gap-2 sm:grid-cols-7">
+                          {buildScheduleDayOptions().map((option) => {
+                            const selected = scheduledDeliveryDate === option.value;
+                            return (
+                              <button
+                                key={option.value}
+                                type="button"
+                                onClick={() => setScheduledDeliveryDate(option.value)}
+                                className={`flex flex-col items-center justify-center rounded-2xl border-2 px-1 py-3 text-center transition ${
+                                  selected
+                                    ? 'border-sky-600 bg-sky-50 text-sky-700 shadow-sm'
+                                    : 'border-neutral-100 bg-white text-neutral-700 hover:border-sky-300 hover:bg-sky-50/50'
+                                }`}
+                              >
+                                <span className="text-sm font-black">{option.label}</span>
+                                {!option.isToday && (
+                                  <span className="text-[10px] font-bold uppercase tracking-wider opacity-60 mt-0.5">
+                                    {new Date(`${option.value}T00:00:00`).toLocaleDateString('es-MX', { day: 'numeric', month: 'short' })}
+                                  </span>
+                                )}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                      <div className="text-left">
                         <span className="text-xs font-bold uppercase tracking-wider text-neutral-600">Hora de entrega</span>
-                        <input
-                          type="time"
-                          value={scheduledDeliveryTime}
-                          onChange={(e) => setScheduledDeliveryTime(e.target.value)}
-                          className="w-full rounded-2xl border border-sky-200/60 bg-white px-5 py-3.5 text-sm font-medium text-neutral-900 outline-none transition focus:border-sky-400 focus:ring-4 focus:ring-sky-500/20"
-                        />
-                      </label>
-                      {scheduledDeliveryDate && scheduledDeliveryTime && (() => {
-                        const scheduled = new Date(`${scheduledDeliveryDate}T${scheduledDeliveryTime}`);
+                        <div className="mt-2 flex items-center gap-2">
+                          <input
+                            type="text"
+                            inputMode="numeric"
+                            placeholder="06:30"
+                            maxLength={5}
+                            value={scheduledDeliveryTime}
+                            onChange={(e) => setScheduledDeliveryTime(e.target.value.replace(/[^0-9:]/g, ''))}
+                            className="w-full rounded-2xl border border-sky-200/60 bg-white px-5 py-3.5 text-center text-lg font-bold tracking-[0.15em] text-neutral-900 outline-none transition focus:border-sky-400 focus:ring-4 focus:ring-sky-500/20"
+                          />
+                          <div className="flex shrink-0 rounded-2xl border border-sky-200/60 bg-sky-50/40 p-1">
+                            {(['AM', 'PM'] as const).map((m) => (
+                              <button
+                                key={m}
+                                type="button"
+                                onClick={() => setScheduledMeridiem(m)}
+                                className={`rounded-xl px-4 py-2.5 text-sm font-black transition ${scheduledMeridiem === m ? 'bg-white text-sky-700 shadow-sm' : 'text-sky-600 hover:text-sky-800'}`}
+                              >
+                                {m}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                      {(() => {
+                        const scheduled = buildScheduledDeliveryDate(scheduledDeliveryDate, scheduledDeliveryTime, scheduledMeridiem);
+                        if (!scheduled) {
+                          return (
+                            <p className="text-xs font-bold text-neutral-500 bg-neutral-100 rounded-xl px-4 py-2 text-left">
+                              Escribe la hora en formato 12h, por ejemplo 06:30.
+                            </p>
+                          );
+                        }
                         if (scheduled <= new Date()) {
                           return (
-                            <p className="text-xs font-bold text-rose-600 bg-rose-50 rounded-xl px-4 py-2">
+                            <p className="text-xs font-bold text-rose-600 bg-rose-50 rounded-xl px-4 py-2 text-left">
                               La fecha y hora deben ser posteriores al momento actual.
                             </p>
                           );
                         }
                         return (
-                          <p className="text-xs font-bold text-emerald-600 bg-emerald-50 rounded-xl px-4 py-2">
+                          <p className="text-xs font-bold text-emerald-600 bg-emerald-50 rounded-xl px-4 py-2 text-left">
                             El cliente verá: <span className="font-black">{scheduled.toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long' })} a las {scheduled.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })}</span>
                           </p>
                         );
@@ -5886,13 +5931,17 @@ export default function Home() {
                     </div>
                   )}
 
-                  <div className="flex flex-col gap-3 pt-6">
+                  </div>
+              </div>
+              <div className="shrink-0 border-t border-black/5 bg-white px-5 py-3 sm:px-8 shadow-[0_-8px_30px_rgba(0,0,0,0.06)]">
+                <div className="flex flex-col gap-3">
                     <button
                       type="button"
                       onClick={() => {
-                        const isScheduled = isScheduledMode && scheduledDeliveryDate && scheduledDeliveryTime;
+                        const scheduled = buildScheduledDeliveryDate(scheduledDeliveryDate, scheduledDeliveryTime, scheduledMeridiem);
+                        const isScheduled = isScheduledMode && scheduled !== null && scheduled.getTime() > Date.now();
                         if (isScheduled) {
-                          const scheduledAt = new Date(`${scheduledDeliveryDate}T${scheduledDeliveryTime}`).toISOString();
+                          const scheduledAt = scheduled!.toISOString();
                           const onAccept = () => void runOrderAction(activeIncomingOrder.id, 'accept', { scheduledDeliveryAt: scheduledAt });
                           if (activeIncomingOrder.paymentMethod === 'TRANSFER') {
                             setTransferConfirmationOrder({
@@ -5907,6 +5956,7 @@ export default function Home() {
                                 setIsScheduledMode(false);
                                 setScheduledDeliveryDate('');
                                 setScheduledDeliveryTime('');
+                                setScheduledMeridiem('PM');
                               },
                             });
                           } else {
@@ -5915,6 +5965,7 @@ export default function Home() {
                             setIsScheduledMode(false);
                             setScheduledDeliveryDate('');
                             setScheduledDeliveryTime('');
+                            setScheduledMeridiem('PM');
                           }
                         } else {
                           const onAccept = () => void runOrderAction(activeIncomingOrder.id, 'accept', { preparationTimeMinutes: selectedPreparationTime });
@@ -5938,7 +5989,10 @@ export default function Home() {
                       }}
                       disabled={
                         Boolean(activeActionKey) ||
-                        (isScheduledMode && (!scheduledDeliveryDate || !scheduledDeliveryTime))
+                        (isScheduledMode && !(() => {
+                          const s = buildScheduledDeliveryDate(scheduledDeliveryDate, scheduledDeliveryTime, scheduledMeridiem);
+                          return s !== null && s.getTime() > Date.now();
+                        })())
                       }
                       className="w-full rounded-full bg-sky-600 px-5 py-4 text-sm font-bold text-white shadow-[0_4px_12px_rgba(2,132,199,0.3)] transition hover:bg-sky-700 hover:shadow-[0_8px_20px_rgba(2,132,199,0.4)] disabled:opacity-70 disabled:cursor-not-allowed"
                     >
@@ -5955,6 +6009,7 @@ export default function Home() {
                         setIsScheduledMode(false);
                         setScheduledDeliveryDate('');
                         setScheduledDeliveryTime('');
+                        setScheduledMeridiem('PM');
                       }}
                       disabled={Boolean(activeActionKey)}
                       className="w-full rounded-full border border-neutral-200 bg-white px-5 py-3.5 text-sm font-bold text-neutral-600 transition hover:bg-neutral-50"
@@ -5962,8 +6017,8 @@ export default function Home() {
                       {profile?.businessType === 'RESTAURANT' ? 'Volver a la comanda' : 'Volver al pedido'}
                     </button>
                   </div>
-                </div>
               </div>
+              </>
             ) : (
               <><div className="min-h-0 flex-1 overflow-y-auto px-5 py-5 sm:px-8">
               <div className="grid gap-6 lg:grid-cols-[minmax(0,1.5fr)_320px]">
@@ -14408,6 +14463,54 @@ function formatCalendarDate(date: Date) {
     day: 'numeric',
     month: 'long',
   }).format(date);
+}
+
+type ScheduleDayOption = {
+  value: string;
+  label: string;
+  isToday: boolean;
+};
+
+function buildScheduleDayOptions(): ScheduleDayOption[] {
+  const options: ScheduleDayOption[] = [];
+  const today = new Date();
+
+  for (let i = 0; i < 7; i++) {
+    const day = new Date(today);
+    day.setDate(today.getDate() + i);
+    const value = `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, '0')}-${String(day.getDate()).padStart(2, '0')}`;
+
+    if (i === 0) {
+      options.push({ value, label: 'Hoy', isToday: true });
+    } else if (i === 1) {
+      options.push({ value, label: 'Mañana', isToday: false });
+    } else {
+      options.push({ value, label: formatWeekday(day), isToday: false });
+    }
+  }
+
+  return options;
+}
+
+function parseScheduleTime12h(time: string, meridiem: 'AM' | 'PM'): string | null {
+  const match = time.trim().match(/^(\d{1,2}):(\d{2})$/);
+  if (!match) return null;
+  const hour = parseInt(match[1], 10);
+  const minute = parseInt(match[2], 10);
+  if (hour < 1 || hour > 12 || minute < 0 || minute > 59) return null;
+
+  let hour24 = hour;
+  if (meridiem === 'PM' && hour !== 12) hour24 = hour + 12;
+  if (meridiem === 'AM' && hour === 12) hour24 = 0;
+
+  return `${String(hour24).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
+}
+
+function buildScheduledDeliveryDate(date: string, time: string, meridiem: 'AM' | 'PM'): Date | null {
+  const time24 = parseScheduleTime12h(time, meridiem);
+  if (!time24) return null;
+  const scheduled = new Date(`${date}T${time24}`);
+  return Number.isNaN(scheduled.getTime()) ? null : scheduled;
 }
 
 function formatCountdown(remainingMs: number) {

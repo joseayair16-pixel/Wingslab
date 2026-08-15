@@ -1,4 +1,7 @@
+'use client';
+
 import { memo } from 'react';
+import { SaDelLogo } from './SaDelLogo';
 
 type RatingModalProps = {
   open: boolean;
@@ -12,6 +15,8 @@ type RatingModalProps = {
   onSkip: () => void;
   onSubmit: () => void;
 };
+
+const STAR_BASE = 'M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z';
 
 export default memo(function RatingModal({
   open,
@@ -29,71 +34,95 @@ export default memo(function RatingModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 px-4 py-6" onClick={(e) => e.stopPropagation()}>
-      <div className="bg-white rounded-2xl border border-black/[0.03] shadow-[0_4px_24px_rgba(0,0,0,0.08)] p-6 w-full max-w-md h-fit max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-        <div className="text-center mb-6">
-          <div className="w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-4">
-            <span className="text-3xl">{isPickup ? (
-              <svg className="h-8 w-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15.75 10.5V6a3.75 3.75 0 10-7.5 0v4.5m11.356-1.993l1.263 12c.07.665-.45 1.243-1.119 1.243H4.25a1.125 1.125 0 01-1.12-1.243l1.264-12A1.125 1.125 0 015.513 7.5h12.974c.576 0 1.059.435 1.119 1.007zM8.625 10.5a.375.375 0 11-.75 0 .375.375 0 01.75 0zm7.5 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z" /></svg>
-            ) : '🎉'}</span>
-          </div>
-          <h3 className="text-2xl font-semibold text-neutral-950">{isPickup ? '¡Pedido recogido!' : '¡Tu pedido ha llegado!'}</h3>
-          <p className="text-sm text-neutral-500">{isPickup ? 'Gracias por tu compra. ¿Nos ayudas a mejorar calificando tu experiencia?' : (bizType && bizType !== 'RESTAURANT' ? '¡Disfruta tu pedido! ¿Nos ayudas a mejorar calificando tu experiencia?' : '¡Buen provecho! ¿Nos ayudas a mejorar calificando tu experiencia?')}</p>
-        </div>
-
-        <div className="space-y-6">
-          {/* Calificación Restaurante */}
-          <div>
-            <label className="text-sm font-medium text-neutral-700 block mb-2 text-center">{bizType && bizType !== 'RESTAURANT' ? '¿Qué tal estuvo tu pedido?' : '¿Qué tal estuvo la comida?'}</label>
-            <div className="flex gap-2 justify-center">
-              {[1, 2, 3, 4, 5].map((star) => (
-                <button
-                  key={star}
-                  type="button"
-                  onClick={() => onRestaurantRatingChange(star)}
-                  className={`text-3xl transition ${restaurantRating >= star ? 'text-amber-400' : 'text-neutral-200'}`}
-                >
-                  ★
-                </button>
-              ))}
+      <div className="w-full max-w-md h-fit max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+        <div className="relative overflow-hidden rounded-3xl border border-white/60 bg-white shadow-[0_24px_80px_-24px_rgba(2,132,199,0.35),0_8px_32px_rgba(0,0,0,0.12)]">
+          {/* Header con degradado premium */}
+          <div className="relative overflow-hidden bg-gradient-to-br from-sky-500 via-sky-600 to-blue-600 px-6 pb-14 pt-8 text-center">
+            <div className="pointer-events-none absolute -left-10 -top-12 h-40 w-40 rounded-full bg-white/10 blur-2xl"></div>
+            <div className="pointer-events-none absolute -right-8 -top-8 h-32 w-32 rounded-full bg-white/10 blur-2xl"></div>
+            <div className="mx-auto mb-4 flex w-fit items-center gap-2 rounded-full border border-white/25 bg-white/15 px-4 py-1.5 backdrop-blur-md">
+              <SaDelLogo className="h-5 w-auto object-contain" />
             </div>
+            <div className="relative mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-white/95 text-3xl shadow-lg shadow-sky-900/20 ring-1 ring-white/60">
+              {isPickup ? (
+                <svg className="h-8 w-8 text-sky-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15.75 10.5V6a3.75 3.75 0 10-7.5 0v4.5m11.356-1.993l1.263 12c.07.665-.45 1.243-1.119 1.243H4.25a1.125 1.125 0 01-1.12-1.243l1.264-12A1.125 1.125 0 015.513 7.5h12.974c.576 0 1.059.435 1.119 1.007zM8.625 10.5a.375.375 0 11-.75 0 .375.375 0 01.75 0zm7.5 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z" /></svg>
+              ) : (
+                <svg className="h-8 w-8 text-sky-600" fill="currentColor" viewBox="0 0 24 24"><path d={STAR_BASE} /></svg>
+              )}
+            </div>
+            <h3 className="relative mt-5 text-2xl font-black tracking-tight text-white">
+              {isPickup ? '¡Pedido recogido!' : '¡Tu pedido ha llegado!'}
+            </h3>
+            <p className="relative mx-auto mt-2 max-w-xs text-sm font-medium leading-relaxed text-sky-50/95">
+              {isPickup ? 'Gracias por comprar con SaDeL. Tu opinión nos ayuda a mejorar cada día.' : (bizType && bizType !== 'RESTAURANT' ? '¡Disfruta tu pedido! Gracias por confiar en SaDeL.' : '¡Buen provecho! Gracias por pedir con SaDeL.')}
+            </p>
           </div>
 
-          {/* Calificación Repartidor (solo delivery) */}
-          {!isPickup && (
-            <div>
-              <label className="text-sm font-medium text-neutral-700 block mb-2 text-center">¿Qué tal el servicio de entrega?</label>
+          {/* Contenido */}
+          <div className="space-y-5 px-6 pb-6 pt-5">
+            <div className="rounded-2xl border border-neutral-100 bg-neutral-50/60 px-4 py-4">
+              <label className="text-sm font-bold text-neutral-800 block mb-2 text-center">
+                {bizType && bizType !== 'RESTAURANT' ? '¿Qué tal estuvo tu pedido?' : '¿Qué tal estuvo la comida?'}
+              </label>
               <div className="flex gap-2 justify-center">
                 {[1, 2, 3, 4, 5].map((star) => (
                   <button
                     key={star}
                     type="button"
-                    onClick={() => onDriverRatingChange(star)}
-                    className={`text-3xl transition ${driverRating >= star ? 'text-amber-400' : 'text-neutral-200'}`}
+                    aria-label={`${star} estrellas`}
+                    onClick={() => onRestaurantRatingChange(star)}
+                    className={`transition-all duration-150 hover:scale-125 active:scale-95 ${
+                      restaurantRating >= star ? 'text-amber-400 drop-shadow-[0_2px_6px_rgba(251,191,36,0.5)]' : 'text-neutral-200 hover:text-amber-300'
+                    }`}
                   >
-                    ★
+                    <svg className="h-8 w-8" fill="currentColor" viewBox="0 0 24 24"><path d={STAR_BASE} /></svg>
                   </button>
                 ))}
               </div>
             </div>
-          )}
 
-          {/* Botones */}
-          <div className="flex gap-3">
-            <button
-              type="button"
-              onClick={onSkip}
-              className="flex-1 rounded-full bg-neutral-50 text-sm font-semibold text-neutral-600 py-3 transition hover:bg-neutral-100"
-            >
-              Saltar
-            </button>
-            <button
-              type="button"
-              onClick={onSubmit}
-              disabled={restaurantRating === 0 || submitting}
-              className="flex-1 rounded-full bg-emerald-600 text-sm font-semibold text-white py-3 transition hover:bg-emerald-500 disabled:bg-emerald-200 disabled:cursor-not-allowed"
-            >
-              Enviar calificación
-            </button>
+            {!isPickup && (
+              <div className="rounded-2xl border border-neutral-100 bg-neutral-50/60 px-4 py-4">
+                <label className="text-sm font-bold text-neutral-800 block mb-2 text-center">¿Qué tal el servicio de entrega?</label>
+                <div className="flex gap-2 justify-center">
+                  {[1, 2, 3, 4, 5].map((star) => (
+                    <button
+                      key={star}
+                      type="button"
+                      aria-label={`${star} estrellas`}
+                      onClick={() => onDriverRatingChange(star)}
+                      className={`transition-all duration-150 hover:scale-125 active:scale-95 ${
+                        driverRating >= star ? 'text-amber-400 drop-shadow-[0_2px_6px_rgba(251,191,36,0.5)]' : 'text-neutral-200 hover:text-amber-300'
+                      }`}
+                    >
+                      <svg className="h-8 w-8" fill="currentColor" viewBox="0 0 24 24"><path d={STAR_BASE} /></svg>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={onSkip}
+                disabled={submitting}
+                className="flex-1 rounded-full border border-neutral-200 bg-white text-sm font-bold text-neutral-600 py-3 transition hover:bg-neutral-50 hover:text-neutral-800 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                Saltar
+              </button>
+              <button
+                type="button"
+                onClick={onSubmit}
+                disabled={restaurantRating === 0 || submitting}
+                className="flex-1 rounded-full bg-gradient-to-r from-sky-500 to-blue-600 text-sm font-bold text-white py-3 shadow-[0_8px_20px_-6px_rgba(2,132,199,0.5)] transition hover:from-sky-600 hover:to-blue-700 hover:shadow-[0_10px_24px_-6px_rgba(2,132,199,0.6)] disabled:cursor-not-allowed disabled:from-neutral-200 disabled:to-neutral-200 disabled:shadow-none"
+              >
+                {submitting ? 'Enviando...' : 'Enviar calificación'}
+              </button>
+            </div>
+            <p className="text-center text-[11px] font-medium text-neutral-400">
+              Tu calificación ayuda a otros usuarios de SaDeL
+            </p>
           </div>
         </div>
       </div>
