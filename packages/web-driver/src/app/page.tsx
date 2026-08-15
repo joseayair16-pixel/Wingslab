@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { SaDelLogo } from '../components/SaDelLogo';
 import { IncomingOrderModal } from '../components/IncomingOrderModal';
 import DriverNavigationMap from '../components/DriverNavigationMap';
+import DriverTurnByTurnOverlay from '../components/DriverTurnByTurnOverlay';
 import PushEnableBanner from '../components/PushEnableBanner';
 import { useForegroundPolling } from '../hooks/useForegroundPolling';
 import { io } from 'socket.io-client';
@@ -514,6 +515,8 @@ export default function Home() {
   const [showRestaurantContact, setShowRestaurantContact] = useState(false);
   const [selectedOrderDetail, setSelectedOrderDetail] = useState<DriverOrder | null>(null);
   const [navigationMapOpenFor, setNavigationMapOpenFor] = useState<Record<string, 'pickup' | 'delivery' | null>>({});
+  // Navegación turn-by-turn in-app (overlay full-screen) para el repartidor.
+  const [turnByTurnFor, setTurnByTurnFor] = useState<Record<string, 'pickup' | 'delivery' | null>>({});
   const [tripStartedForOrderId, setTripStartedForOrderId] = useState<string | null>(null);
 
   // Reloj para la cuenta regresiva de entrega sin contacto (10 min transfer / 15 min cash)
@@ -2771,6 +2774,34 @@ export default function Home() {
                 return (
                   <div key={order.id} className={isQueued ? "px-4 py-2 space-y-3" : "w-full flex-grow flex flex-col"}>
 
+                    {/* Navegación turn-by-turn in-app (overlay full-screen) */}
+                    {turnByTurnFor[order.id] === 'pickup' && order.restaurant.latitude && order.restaurant.longitude && (
+                      <DriverTurnByTurnOverlay
+                        origin={null}
+                        destination={{
+                          lat: order.restaurant.latitude,
+                          lng: order.restaurant.longitude,
+                          label: order.restaurant.name,
+                          emoji: '🏪',
+                        }}
+                        dark={darkMode}
+                        onExit={() => setTurnByTurnFor((prev) => ({ ...prev, [order.id]: null }))}
+                      />
+                    )}
+                    {turnByTurnFor[order.id] === 'delivery' && order.latitude && order.longitude && (
+                      <DriverTurnByTurnOverlay
+                        origin={null}
+                        destination={{
+                          lat: order.latitude,
+                          lng: order.longitude,
+                          label: customerAddressStr,
+                          emoji: '🏠',
+                        }}
+                        dark={darkMode}
+                        onExit={() => setTurnByTurnFor((prev) => ({ ...prev, [order.id]: null }))}
+                      />
+                    )}
+
                     {/* QUEUE BADGE for non-active orders */}
                     {isQueued && (
                       <div className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs font-bold ${
@@ -2859,16 +2890,14 @@ export default function Home() {
                               {/* Quick actions row */}
                               <div className="grid grid-cols-2 gap-2">
                                 {restaurantQuery && (
-                                  <a
-                                    href={`https://www.google.com/maps/search/?api=1&query=${restaurantQuery}`}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    onClick={(e) => { e.stopPropagation(); triggerHaptic(20); }}
+                                  <button
+                                    type="button"
+                                    onClick={(e) => { e.stopPropagation(); triggerHaptic(20); setTurnByTurnFor((prev) => ({ ...prev, [order.id]: 'pickup' })); }}
                                     className="flex items-center justify-center gap-2 py-3.5 rounded-2xl border border-neutral-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-xs font-bold text-neutral-700 dark:text-zinc-300 shadow-sm transition active:scale-[0.97]"
                                   >
                                     <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/><circle cx="12" cy="9" r="2.5"/></svg>
                                     Navegar
-                                  </a>
+                                  </button>
                                 )}
                                 <button
                                   type="button"
@@ -3315,16 +3344,14 @@ export default function Home() {
 
                             {/* ── Maps button ── */}
                             {customerQuery && (
-                              <a
-                                href={`https://www.google.com/maps/search/?api=1&query=${customerQuery}`}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                onClick={(e) => { e.stopPropagation(); triggerHaptic(20); }}
+                              <button
+                                type="button"
+                                onClick={(e) => { e.stopPropagation(); triggerHaptic(20); setTurnByTurnFor((prev) => ({ ...prev, [order.id]: 'delivery' })); }}
                                 className="flex items-center justify-center gap-2.5 w-full py-4 rounded-2xl bg-sky-500 text-white text-sm font-bold shadow-lg shadow-sky-500/30 hover:bg-sky-400 transition active:scale-[0.97]"
                               >
                                 <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/><circle cx="12" cy="9" r="2.5"/></svg>
-                                Abrir en Google Maps
-                              </a>
+                                Navegar al domicilio
+                              </button>
                             )}
 
                             {/* ── Mapa embebido de navegación (opcional) — entrega ── */}

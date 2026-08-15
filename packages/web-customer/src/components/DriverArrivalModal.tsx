@@ -59,6 +59,13 @@ export default function DriverArrivalModal() {
   const [modalOpen, setModalOpen] = useState(false);
   const lastCheckedRef = useRef<Record<string, number>>({});
 
+  // Pantallas del repartidor propio/red: el modal de llegada es SOLO del comensal.
+  const [pathname, setPathname] = useState('');
+  useEffect(() => {
+    setPathname(window.location.pathname);
+  }, []);
+  const isDeliveryScreen = pathname.startsWith('/reparto/');
+
   const { playLlegue } = useCustomerSounds();
 
   const openArrivalModal = (order: DriverArrivedOrder) => {
@@ -72,7 +79,7 @@ export default function DriverArrivalModal() {
 
   // Polling global: detecta la llegada del repartidor sin importar la ruta.
   useEffect(() => {
-    if (!token || !sessionUser || sessionUser.role !== 'CUSTOMER') return;
+    if (!token || !sessionUser || sessionUser.role !== 'CUSTOMER' || isDeliveryScreen) return;
 
     const checkArrival = async () => {
       try {
@@ -125,7 +132,7 @@ export default function DriverArrivalModal() {
 
   // Socket global: reacción inmediata al evento de llegada (además del polling).
   useEffect(() => {
-    if (!token || !sessionUser || sessionUser.role !== 'CUSTOMER') return;
+    if (!token || !sessionUser || sessionUser.role !== 'CUSTOMER' || isDeliveryScreen) return;
 
     const socket = io(process.env.NEXT_PUBLIC_SOCKET_URL || 'https://sadel-production.up.railway.app', {
       path: '/socket.io',
@@ -176,7 +183,7 @@ export default function DriverArrivalModal() {
     };
   }, [apiBase, token, sessionUser]);
 
-  if (!modalOpen || !arrivedOrder) return null;
+  if (!modalOpen || !arrivedOrder || isDeliveryScreen) return null;
 
   const ackAndClose = () => {
     setModalOpen(false);

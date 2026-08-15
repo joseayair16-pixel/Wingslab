@@ -9,6 +9,7 @@
 
 import { useEffect, useState } from 'react';
 import DeliveryRouteMap from '../../../../components/DeliveryRouteMap';
+import DriverTurnByTurnOverlay from '../../../../components/DriverTurnByTurnOverlay';
 
 interface DeliveryTicketData {
   id: string;
@@ -85,6 +86,8 @@ export default function DeliveryTicketPage({ params }: PageProps) {
   const [waitingHandoverTokens, setWaitingHandoverTokens] = useState<string[]>([]);
   // Posición GPS actual del repartidor (para el mapa de navegación en la app).
   const [driverPos, setDriverPos] = useState<{ lat: number; lng: number } | null>(null);
+  // Navegación turn-by-turn in-app: destino 'pickup' (restaurante) o 'delivery' (domicilio).
+  const [navOpenFor, setNavOpenFor] = useState<'pickup' | 'delivery' | null>(null);
 
   // Dark mode automático por preferencia del sistema
   const [darkMode, setDarkMode] = useState(false);
@@ -1457,6 +1460,19 @@ export default function DeliveryTicketPage({ params }: PageProps) {
 
           {/* Mapa de la recogida */}
           <div className={`mt-3 rounded-[28px] border p-5 shadow-[0_4px_24px_rgba(0,0,0,0.015)] ${cardBg} ${cardBorder}`}>
+            {currentTicket.restaurant.latitude && currentTicket.restaurant.longitude && (
+              <button
+                type="button"
+                onClick={() => { triggerHaptic([40]); setNavOpenFor('pickup'); }}
+                className="w-full mb-3 flex items-center justify-center gap-2 rounded-2xl bg-sky-500 py-3.5 text-sm font-black text-white shadow-lg shadow-sky-500/30 transition active:scale-[0.97] hover:bg-sky-400"
+              >
+                <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z" />
+                  <circle cx="12" cy="9" r="2.5" />
+                </svg>
+                Navegar al restaurante
+              </button>
+            )}
             <div className="flex flex-col sm:flex-row gap-2.5">
               <a
                 href={pickupMapsUrl}
@@ -1513,6 +1529,21 @@ export default function DeliveryTicketPage({ params }: PageProps) {
             ¡Llegué al restaurante!
           </button>
         </main>
+
+        {navOpenFor === 'pickup' && currentTicket.restaurant.latitude && currentTicket.restaurant.longitude && (
+          <DriverTurnByTurnOverlay
+            origin={driverPos}
+            destination={{
+              lat: currentTicket.restaurant.latitude,
+              lng: currentTicket.restaurant.longitude,
+              label: pickupName,
+              emoji: '🏪',
+            }}
+            initialDriverPos={driverPos}
+            dark={darkMode}
+            onExit={() => setNavOpenFor(null)}
+          />
+        )}
       </div>
     );
   }
@@ -1628,7 +1659,21 @@ export default function DeliveryTicketPage({ params }: PageProps) {
           )}
 
           {/* Botones GPS y Waze */}
-          <div className="mt-4 flex gap-2.5">
+          <div className="mt-4">
+            {addressObj.latitude && addressObj.longitude && (
+              <button
+                type="button"
+                onClick={() => { triggerHaptic([40]); setNavOpenFor('delivery'); }}
+                className="w-full mb-2.5 flex items-center justify-center gap-2 rounded-2xl bg-sky-500 py-3.5 text-sm font-black text-white shadow-lg shadow-sky-500/30 transition active:scale-[0.97] hover:bg-sky-400"
+              >
+                <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z" />
+                  <circle cx="12" cy="9" r="2.5" />
+                </svg>
+                Navegar al domicilio
+              </button>
+            )}
+            <div className="flex gap-2.5">
             <a
               href={googleMapsUrl}
               target="_blank"
@@ -1663,6 +1708,7 @@ export default function DeliveryTicketPage({ params }: PageProps) {
                 Waze
               </a>
             )}
+          </div>
           </div>
         </div>
 
@@ -1992,6 +2038,21 @@ export default function DeliveryTicketPage({ params }: PageProps) {
         )}
 
       </main>
+
+      {navOpenFor === 'delivery' && addressObj.latitude && addressObj.longitude && (
+        <DriverTurnByTurnOverlay
+          origin={driverPos}
+          destination={{
+            lat: addressObj.latitude,
+            lng: addressObj.longitude,
+            label: `${addressObj.street} ${addressObj.number}, ${addressObj.neighborhood}, ${addressObj.city}`,
+            emoji: '🏠',
+          }}
+          initialDriverPos={driverPos}
+          dark={darkMode}
+          onExit={() => setNavOpenFor(null)}
+        />
+      )}
     </div>
   );
 }
