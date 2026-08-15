@@ -1042,6 +1042,7 @@ export default function Home() {
   const seenLiveEventKeysRef = useRef<string[]>([]);
   const [isSideMenuOpen, setIsSideMenuOpen] = useState(false);
   const [isCartOpen, setIsCartOpen] = useState(false);
+  const [cartPulse, setCartPulse] = useState(false);
   const [userRegion, setUserRegion] = useState('Mi ciudad');
   const [pullDistance, setPullDistance] = useState(0);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -1427,6 +1428,21 @@ export default function Home() {
       }
     };
   }, []);
+
+  useEffect(() => {
+    if (!cart.length || isCartOpen) {
+      return;
+    }
+
+    const intervalId = window.setInterval(() => {
+      setCartPulse(true);
+      window.setTimeout(() => setCartPulse(false), 1200);
+    }, 5000);
+
+    return () => {
+      window.clearInterval(intervalId);
+    };
+  }, [cart.length, isCartOpen]);
 
   const sortedOrders = useMemo(() => {
     let filtered = [...orders];
@@ -6350,7 +6366,9 @@ export default function Home() {
           <button
             type="button"
             onClick={() => setIsCartOpen(true)}
-            className="group relative flex w-full items-center justify-between overflow-hidden rounded-full bg-neutral-950 px-5 py-3.5 shadow-[0_8px_30px_rgb(0,0,0,0.2)] transition-all hover:scale-[1.02] active:scale-[0.98]"
+            className={`group relative flex w-full items-center justify-between overflow-hidden rounded-full bg-neutral-950 px-5 py-3.5 shadow-[0_8px_30px_rgb(0,0,0,0.2)] transition-all hover:scale-[1.02] active:scale-[0.98] ${
+              cartPulse ? 'scale-[1.04] ring-4 ring-[#0ea5e9]/40 animate-cart-pulse' : ''
+            }`}
           >
             {/* Pulsing background effect */}
             <div className="absolute inset-0 -z-10 animate-[pulse_2s_ease-in-out_infinite] bg-neutral-800 opacity-50" />
@@ -6373,6 +6391,21 @@ export default function Home() {
           </button>
         </div>
       )}
+
+      <style>{`
+        @keyframes cartPulse {
+          0%, 100% { transform: scale(1); }
+          10% { transform: scale(1.04); }
+          20% { transform: scale(1.02); }
+          30% { transform: scale(1.05); }
+          40% { transform: scale(1.02); }
+          55% { transform: scale(1.04); }
+          70% { transform: scale(1); }
+        }
+        .animate-cart-pulse {
+          animation: cartPulse 1.2s ease-in-out;
+        }
+      `}</style>
 
       {/* Modal de propuesta de programación de entrega */}
       {scheduleProposalOrder && (
