@@ -5056,9 +5056,7 @@ export default function Home() {
             buildRestaurantInitials={buildRestaurantInitials}
             formatDeliverySummary={formatDeliverySummary}
             activeZones={activeZones}
-            selectedZoneName={selectedZoneName}
             onZoneSelect={handleZoneSelect}
-            onResetZone={handleResetZone}
             onJoinClick={() => setIsJoinRestModalOpen(true)}
             hasMoreRestaurants={hasMoreRestaurants}
             onLoadMoreRestaurants={loadMoreRestaurants}
@@ -6359,6 +6357,20 @@ export default function Home() {
             </div>
           </div>
         )}
+
+      {activeSection === 'home' && selectedZoneName && cart.length === 0 && !isCartOpen && !isSideMenuOpen && !isZonesModalOpen && (
+        <button
+          type="button"
+          onClick={handleResetZone}
+          className="fixed bottom-6 left-1/2 z-[46] -translate-x-1/2 inline-flex items-center gap-2 rounded-full border border-black/5 bg-white/90 px-5 py-3 text-sm font-semibold text-neutral-600 shadow-lg backdrop-blur-lg transition-all duration-200 hover:-translate-y-0.5 hover:border-sky-200/50 hover:text-sky-700 hover:shadow-[0_8px_24px_rgba(14,165,233,0.15)] active:scale-[0.97]"
+        >
+          <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M9 15 3 9m0 0 6-6M3 9h12a6 6 0 0 1 0 12h-3" />
+          </svg>
+          Cambiar zona
+          <span className="ml-0.5 font-bold text-neutral-800">{selectedZoneName}</span>
+        </button>
+      )}
 
       {/* Floating Checkout Button */}
       {cart.length > 0 && !isCartOpen && (
