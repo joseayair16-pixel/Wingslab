@@ -158,12 +158,7 @@ export default memo(function CartDrawer({
                   const originalUnitPrice = Number(item.price) || 0;
                   const originalLineTotal = getListLineTotal(item);
                   const lineTotal = getLineTotal(item);
-                  const itemSaving = Math.max(0, originalLineTotal - lineTotal);
                   const hasDirectDiscount = item.discountPrice != null && Number(item.discountPrice) < originalUnitPrice;
-                  const hasMultiBuy = item.promoType === 'MULTI_BUY' && item.sellBy !== 'WEIGHT'
-                    && !!item.promoBuyQuantity && !!item.promoPayQuantity
-                    && item.promoPayQuantity < item.promoBuyQuantity
-                    && item.quantity >= (item.promoBuyQuantity || 0);
                   const isWeightItem = item.sellBy === 'WEIGHT';
 
                   return (
@@ -188,31 +183,12 @@ export default memo(function CartDrawer({
                                 {formatCurrency(lineTotal)}
                               </span>
                               {hasDirectDiscount && (
-                                <span className="text-[10px] font-semibold text-neutral-400 line-through">
-                                  {formatCurrency(originalLineTotal)}
-                                </span>
+<span className="text-[11px] font-semibold text-neutral-500 line-through decoration-[1.5px] decoration-rose-400/70">
+                                {formatCurrency(originalLineTotal)}
+                              </span>
                               )}
                             </div>
                           </div>
-                          {(hasMultiBuy || hasDirectDiscount) && (
-                            <div className="mt-2 flex flex-wrap items-center gap-1.5">
-                              {hasDirectDiscount && (
-                                <span className="inline-flex items-center rounded-full bg-emerald-500 px-2 py-0.5 text-[10px] font-bold text-white">
-                                  −{Math.round((1 - (Number(item.discountPrice) || 0) / originalUnitPrice) * 100)}%
-                                </span>
-                              )}
-                              {hasMultiBuy && (
-                                <span className="inline-flex items-center rounded-full bg-emerald-500 px-2 py-0.5 text-[10px] font-bold text-white">
-                                  {item.promoBuyQuantity}x{item.promoPayQuantity}
-                                </span>
-                              )}
-                              {itemSaving > 0 && (
-                                <span className="text-[11px] font-semibold text-emerald-600">
-                                  Ahorras {formatCurrency(itemSaving)}
-                                </span>
-                              )}
-                            </div>
-                          )}
                           {item.selectedOptions && item.selectedOptions.length > 0 && (
                             <div className="mt-2 flex flex-wrap gap-1.5">
                               {item.selectedOptions.map((opt) => (
@@ -226,11 +202,11 @@ export default memo(function CartDrawer({
                             </div>
                           )}
                           {isWeightItem && item.weightG ? (
-                            <p className="mt-1.5 text-[11px] text-neutral-400">
+                            <p className="mt-1.5 text-[11px] font-semibold text-neutral-600">
                               {item.weightG >= 1000 ? `${item.weightG / 1000}kg` : `${item.weightG}g`} · {formatCurrency(item.unitPrice || 0)}/kg
                             </p>
                           ) : (
-                            <p className="mt-1.5 text-[11px] text-neutral-400">
+                            <p className="mt-1.5 text-[11px] font-bold text-neutral-700">
                               {formatCurrency(itemUnitPrice)} c/u
                             </p>
                           )}
