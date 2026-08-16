@@ -532,7 +532,11 @@ export const CompactActiveOrderBanner = memo(function CompactActiveOrderBanner({
             type="button"
             onClick={onOpenChat}
             title="Chat"
-            className="relative flex items-center justify-center w-9 h-9 rounded-full bg-sky-500 hover:bg-sky-600 active:scale-95 text-white shadow-sm transition-all"
+            className={`relative flex items-center justify-center w-9 h-9 rounded-full text-white shadow-sm transition-all active:scale-95 ${
+              delayState.isDelayed
+                ? 'bg-red-500 hover:bg-red-600 animate-order-delay-attention'
+                : 'bg-sky-500 hover:bg-sky-600'
+            }`}
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
@@ -554,7 +558,7 @@ export const CompactActiveOrderBanner = memo(function CompactActiveOrderBanner({
         </div>
       </div>
 
-      {/* Estado de retraso: reaseguro + CTA de contacto */}
+      {/* Estado de retraso: reaseguro (el chat se resalta en la esquina) */}
       {delayState.isDelayed && delayState.referenceTime && (
         <div className="mt-3 rounded-2xl border border-amber-200 bg-amber-50/70 px-3.5 py-3">
           <div className="flex items-start gap-2.5">
@@ -578,18 +582,6 @@ export const CompactActiveOrderBanner = memo(function CompactActiveOrderBanner({
               )}
             </div>
           </div>
-          <button
-            type="button"
-            onClick={onOpenChat}
-            className={`mt-2.5 w-full flex items-center justify-center gap-2 rounded-full py-2.5 text-xs font-bold text-white shadow-sm transition-all hover:opacity-90 active:scale-[0.97] ${
-              delayState.level === 1 ? 'bg-amber-500' : 'bg-red-500'
-            }`}
-          >
-            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-            </svg>
-            Contactar al negocio
-          </button>
         </div>
       )}
 
