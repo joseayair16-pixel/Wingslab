@@ -1078,17 +1078,15 @@ export default function RestaurantPage({
           }
         }
 
-        // Solo mostrar modal de calificación una vez (evita que reaparezca al recargar)
+        // El modal de calificación persiste hasta que el usuario califique o salte.
         const unratedOrder = ordersPayload.data.items.find(
           (order) =>
             !order.review &&
             !localStorage.getItem(`sadel_dismissed_rating_${order.id}`) &&
-            !localStorage.getItem(`sadel_prompted_rating_${order.id}`) &&
             (normalizeOrderStatusValue(order.status) === 'DELIVERED' ||
              normalizeOrderStatusValue(order.status) === 'COMPLETED')
         );
         if (unratedOrder) {
-          try { localStorage.setItem(`sadel_prompted_rating_${unratedOrder.id}`, 'true'); } catch {}
           setOrderToRate(unratedOrder.id);
           setRatingBusinessType((unratedOrder as any).restaurant?.businessType || null);
           setRatingIsPickup(normalizeOrderStatusValue(unratedOrder.status) === 'COMPLETED');
@@ -1266,8 +1264,7 @@ export default function RestaurantPage({
         }
 
         if (eventName === 'order:delivered' && payload.orderId) {
-          if (localStorage.getItem(`sadel_dismissed_rating_${payload.orderId}`) ||
-              localStorage.getItem(`sadel_prompted_rating_${payload.orderId}`)) return;
+          if (localStorage.getItem(`sadel_dismissed_rating_${payload.orderId}`)) return;
           setOrderToRate(payload.orderId);
           const order = activeOrderDetailsMapRef.current[payload.orderId];
           setRatingBusinessType(order?.restaurant?.businessType || null);
@@ -1279,8 +1276,7 @@ export default function RestaurantPage({
           const existing = activeOrderDetailsMapRef.current[payload.orderId];
           const isPickup = existing?.fulfillmentType === 'PICKUP';
           if (isPickup) {
-            if (localStorage.getItem(`sadel_dismissed_rating_${payload.orderId}`) ||
-                localStorage.getItem(`sadel_prompted_rating_${payload.orderId}`)) return;
+            if (localStorage.getItem(`sadel_dismissed_rating_${payload.orderId}`)) return;
             setOrderToRate(payload.orderId);
             setRatingBusinessType(existing?.restaurant?.businessType || null);
             setRatingIsPickup(true);
@@ -1289,8 +1285,7 @@ export default function RestaurantPage({
         }
 
         if (eventName === 'order:completed' && payload.orderId) {
-          if (localStorage.getItem(`sadel_dismissed_rating_${payload.orderId}`) ||
-              localStorage.getItem(`sadel_prompted_rating_${payload.orderId}`)) return;
+          if (localStorage.getItem(`sadel_dismissed_rating_${payload.orderId}`)) return;
           setOrderToRate(payload.orderId);
           const order = activeOrderDetailsMapRef.current[payload.orderId];
           setRatingBusinessType(order?.restaurant?.businessType || null);

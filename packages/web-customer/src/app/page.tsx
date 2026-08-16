@@ -1975,7 +1975,6 @@ export default function Home() {
         (order) =>
           !order.review &&
           !localStorage.getItem(`sadel_dismissed_rating_${order.id}`) &&
-          !localStorage.getItem(`sadel_prompted_rating_${order.id}`) &&
           (normalizeOrderStatusValue(order.status) === 'DELIVERED' ||
            normalizeOrderStatusValue(order.status) === 'COMPLETED')
       );
@@ -1985,7 +1984,6 @@ export default function Home() {
         // ser lo que el cliente vea para ponerse al corriente.
         const currentDebt = await checkCustomerDebt();
         if (currentDebt?.hasDebt) return;
-        try { localStorage.setItem(`sadel_prompted_rating_${unratedOrder.id}`, 'true'); } catch {}
         setOrderToRate(unratedOrder.id);
         setRatingBusinessType((unratedOrder as any).restaurant?.businessType || null);
         setRatingIsPickup(normalizeOrderStatusValue(unratedOrder.status) === 'COMPLETED');
@@ -3119,8 +3117,7 @@ export default function Home() {
             });
           }
         } else if (eventName === 'order:delivered' && payload.orderId) {
-          if (localStorage.getItem(`sadel_dismissed_rating_${payload.orderId}`) ||
-              localStorage.getItem(`sadel_prompted_rating_${payload.orderId}`)) return;
+          if (localStorage.getItem(`sadel_dismissed_rating_${payload.orderId}`)) return;
           try {
             if (window.localStorage.getItem('customerAlertSoundEnabled') !== 'false') {
               void playLlegue();
@@ -3139,16 +3136,14 @@ export default function Home() {
           const pickedOrder = orders.find((o: any) => o.id === payload.orderId);
           const isPickupOrder = (pickedOrder as any)?.fulfillmentType === 'PICKUP';
           if (isPickupOrder) {
-            if (localStorage.getItem(`sadel_dismissed_rating_${payload.orderId}`) ||
-                localStorage.getItem(`sadel_prompted_rating_${payload.orderId}`)) return;
+            if (localStorage.getItem(`sadel_dismissed_rating_${payload.orderId}`)) return;
             setOrderToRate(payload.orderId);
             setRatingBusinessType((pickedOrder as any)?.restaurant?.businessType || null);
             setRatingIsPickup(true);
             setIsRatingModalOpen(true);
           }
         } else if (eventName === 'order:completed' && payload.orderId) {
-          if (localStorage.getItem(`sadel_dismissed_rating_${payload.orderId}`) ||
-              localStorage.getItem(`sadel_prompted_rating_${payload.orderId}`)) return;
+          if (localStorage.getItem(`sadel_dismissed_rating_${payload.orderId}`)) return;
           setOrderToRate(payload.orderId);
           const completedOrder = orders.find((o: any) => o.id === payload.orderId);
           setRatingBusinessType((completedOrder as any)?.restaurant?.businessType || null);
