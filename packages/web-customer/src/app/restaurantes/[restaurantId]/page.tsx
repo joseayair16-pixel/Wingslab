@@ -4599,7 +4599,7 @@ function triggerHaptic(pattern: number | number[] = 10) {
           </div>
         ) : restaurant ? (
           <div className="space-y-6">
-            <div className="space-y-3">
+            <div className="space-y-0">
               <section className={`-mx-4 ${error ? 'mt-4' : 'mt-0'} lg:mx-0 lg:mt-0 overflow-hidden border-y border-black/5 dark:border-zinc-900/80 bg-[var(--menu-surface)] dark:bg-[var(--menu-surface-dark)] shadow-[0_18px_60px_rgba(15,15,15,0.05)] dark:shadow-none lg:rounded-[32px] lg:border lg:border-black/5 lg:dark:border-zinc-900/80`}>
                 <div className="relative">
                   {restaurant.coverImage ? (
@@ -4784,7 +4784,7 @@ function triggerHaptic(pattern: number | number[] = 10) {
                 return null;
               })()}
 
-              <div data-sticky-header className="sticky top-[calc(env(safe-area-inset-top)+72px)] z-20 -mx-4 bg-[var(--menu-surface)] shadow-[0_6px_20px_rgba(0,0,0,0.04)] border-b border-black/[0.04] md:-mx-6 lg:-mx-7 dark:bg-[var(--menu-surface-dark)] dark:border-zinc-800/60">
+              <div data-sticky-header className="sticky top-[calc(env(safe-area-inset-top)+72px)] z-20 -mx-4 mb-6 bg-[var(--menu-surface)] shadow-[0_6px_20px_rgba(0,0,0,0.04)] border-b border-black/[0.04] md:-mx-6 lg:-mx-7 dark:bg-[var(--menu-surface-dark)] dark:border-zinc-800/60">
                 <div className="px-4 py-2.5 md:px-6 lg:px-7">
                   <div className="relative w-full">
                     <input
