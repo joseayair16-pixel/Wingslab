@@ -13,7 +13,7 @@ import {
   type SoundName,
 } from '@sadel/shared';
 
-const CUSTOMER_SOUNDS: SoundName[] = ['notifica', 'mensaje', 'llegue'];
+const CUSTOMER_SOUNDS: SoundName[] = ['mensaje', 'llegue'];
 
 /**
  * Hook compartido de efectos de sonido para la app del comensal.
@@ -33,11 +33,11 @@ export function useCustomerSounds() {
     };
   }, []);
 
-  /** Alerta general (pedidos, cancelaciones, rechazos). */
+  /** Alerta general (rechazos y cancelaciones). Usa el pop de mensaje. */
   const playAlert = (): void => {
     if (!isSoundEnabled()) return;
     void warmup().finally(() => {
-      play('notifica');
+      play('mensaje');
       vibrate([200, 100, 200]);
     });
   };
@@ -62,7 +62,7 @@ export function useCustomerSounds() {
   /** Reproductor mínimo para desbloquear el audio al activar el toggle. */
   const unlock = (): void => {
     void warmup().finally(() => {
-      play('notifica');
+      play('mensaje');
     });
   };
 

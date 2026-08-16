@@ -1691,7 +1691,7 @@ export default function Home() {
         document.documentElement.classList.remove('dark');
       }
 
-      preloadAll(['notifica', 'mensaje', 'rezagado']);
+      preloadAll(['notifica', 'mensaje', 'llegue', 'rezagado']);
 
       // Cross-tab sound dedup: listen for alerts from other tabs
       try {
@@ -2404,6 +2404,13 @@ export default function Home() {
     return result === 'played';
   }, [isOrderAlertSoundEnabled]);
 
+  const playDriverArrivedAlert = useCallback(async () => {
+    if (!isOrderAlertSoundEnabled) return false;
+    const result = play('llegue');
+    setOrderAlertAudioState(getAudioState());
+    return result === 'played';
+  }, [isOrderAlertSoundEnabled]);
+
   // Alerta de apoyo continua: mientras haya una solicitud sin responder, suena
   // cada pocos segundos y se actualiza el countdown visible del modal.
   useEffect(() => {
@@ -3079,11 +3086,11 @@ export default function Home() {
 
     if (eventName === 'order:driver-arrived-restaurant' && payload.orderId) {
       setDriverArrivedOrders((prev) => ({ ...prev, [payload.orderId!]: true }));
+      void playDriverArrivedAlert();
       if (payload.isSupportDelivery) {
         if (payload.driverName) {
           setSupportAliadoNamesByOrder((prev) => ({ ...prev, [payload.orderId!]: payload.driverName }));
         }
-        void playIncomingOrderAlert();
         pushToast('info', '🛵 Repartidor de apoyo',
           payload.driverName
             ? `${payload.driverName} llegó a tu local. Entrégalo para iniciar la entrega.`

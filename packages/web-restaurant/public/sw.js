@@ -3,6 +3,7 @@ const PRECACHE_URLS = [
   '/',
   '/sounds/notifica.wav',
   '/sounds/mensaje.wav',
+  '/sounds/llegue.wav',
   '/sounds/rezagado.wav',
   '/SaDeL.png',
   '/app-icon-192.png',

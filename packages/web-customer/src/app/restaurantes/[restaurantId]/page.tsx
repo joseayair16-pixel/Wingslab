@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { AuthUser, clearStoredSession, readStoredSession, requestJson, submitReview, uploadMediaAsset, convertImageFileToDataUrl, getOrderStatusLabel, isRestaurant, ApiRequestError, isAuthRequestError, setGlobalSessionExpiredHandler } from '@sadel/shared';
 import { io } from 'socket.io-client';
 import { AuthModal } from '../../../components/AuthModal';
-import { CompactActiveOrderBanner, formatEstimatedArrivalMinutes } from '../../../components/CompactActiveOrderBanner';
+import { CompactActiveOrderBanner, computeDelayState, formatEstimatedArrivalMinutes, formatOverdueMinutes } from '../../../components/CompactActiveOrderBanner';
 import RatingModal from '../../../components/RatingModal';
 import { useForegroundPolling } from '../../../hooks/useForegroundPolling';
 import { SaDelLoader } from '../../../components/SaDelLoader';
@@ -1408,7 +1408,7 @@ export default function RestaurantPage({
         }
 
         if (
-          ['order:ready', 'order:driver_arrived', 'order:driver-arrived', 'order:delivered'].includes(eventName)
+          ['order:ready', 'order:driver_arrived', 'order:driver-arrived', 'order:delivered', 'order:in-transit', 'order:eta-updated'].includes(eventName)
         ) {
           try {
             if (window.localStorage.getItem('customerAlertSoundEnabled') !== 'false') {
@@ -1418,9 +1418,7 @@ export default function RestaurantPage({
         }
 
         if (
-          ['order:rejected', 'order:cancellation-approved', 'order:cancellation-rejected'].includes(eventName) ||
-          eventName === 'order:in-transit' ||
-          eventName === 'order:eta-updated'
+          ['order:rejected', 'order:cancellation-approved', 'order:cancellation-rejected'].includes(eventName)
         ) {
           try {
             if (window.localStorage.getItem('customerAlertSoundEnabled') !== 'false') {
@@ -5447,6 +5445,54 @@ function triggerHaptic(pattern: number | number[] = 10) {
                 {/* ETA — se muestra mientras el pedido no ha terminado */}
                 {(() => {
                   const orderDetail = activeOrderDetailsMap[selectedOrderId];
+                  const delayState = computeDelayState(orderDetail, Date.now());
+                  if (delayState.isDelayed && delayState.referenceTime) {
+                    return (
+                      <div className="flex items-start gap-3 p-4 rounded-2xl border border-red-200 bg-red-50/70 shadow-sm">
+                        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-red-500 text-white">
+                          <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+                          </svg>
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-[10px] font-bold uppercase tracking-widest text-red-600">Va con retraso</p>
+                          <p className="text-sm font-bold text-neutral-900">
+                            Lleva {formatOverdueMinutes(delayState.minutesOverdue)} de retraso
+                          </p>
+                          <p className="text-xs text-neutral-600 mt-1 leading-snug">
+                            {delayState.level === 3
+                              ? 'Lo sentimos mucho. Estamos trabajando para que llegue lo antes posible.'
+                              : 'Estamos trabajando en tu pedido. Gracias por tu paciencia.'}
+                          </p>
+                          {delayState.isScheduled && (
+                            <p className="text-[11px] text-neutral-400 line-through mt-1">
+                              Programada: {new Date(delayState.referenceTime).toLocaleDateString('es-MX', {
+                                weekday: 'long', day: 'numeric', month: 'long'
+                              })} ·{' '}
+                              {new Date(delayState.referenceTime).toLocaleTimeString('es-MX', {
+                                hour: '2-digit', minute: '2-digit'
+                              })}
+                            </p>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSelectedOrderId(selectedOrderId);
+                              setIsChatOpen(true);
+                              setIsDetailModalOpen(false);
+                              void loadChatMessages(selectedOrderId);
+                            }}
+                            className="mt-3 w-full flex items-center justify-center gap-2 rounded-full bg-red-500 hover:bg-red-600 py-2.5 text-xs font-bold text-white shadow-sm transition-all active:scale-[0.97]"
+                          >
+                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                            </svg>
+                            Contactar al negocio
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  }
                   const etaText = formatEstimatedArrivalMinutes(
                     orderDetail.estimatedDeliveryTime,
                     orderDetail.status,

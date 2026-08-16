@@ -31,6 +31,73 @@ export type CompactOrderDetail = {
   } | null;
   scheduledDeliveryAt?: string | null;
   scheduledDeliveryCustomerAcceptedAt?: string | null;
+  etaExtendedMinutes?: number;
+  preparationDeadlineAt?: string | null;
+};
+
+export type DelayLevel = 1 | 2 | 3;
+
+export type DelayState = {
+  isDelayed: boolean;
+  level: DelayLevel | 0;
+  minutesOverdue: number;
+  referenceTime: Date | null;
+  isScheduled: boolean;
+};
+
+const DELAY_GRACE_MINUTES = 5;
+const TERMINAL_STATUSES = ['DELIVERED', 'CANCELLED', 'REJECTED', 'DRIVER_ARRIVED'];
+
+export function computeDelayState(order: CompactOrderDetail, now: number): DelayState {
+  if (TERMINAL_STATUSES.includes(order.status)) {
+    return { isDelayed: false, level: 0, minutesOverdue: 0, referenceTime: null, isScheduled: false };
+  }
+
+  const referenceIso = order.scheduledDeliveryAt || order.estimatedDeliveryTime;
+  if (!referenceIso) {
+    return { isDelayed: false, level: 0, minutesOverdue: 0, referenceTime: null, isScheduled: false };
+  }
+
+  const referenceTime = new Date(referenceIso);
+  if (Number.isNaN(referenceTime.getTime())) {
+    return { isDelayed: false, level: 0, minutesOverdue: 0, referenceTime: null, isScheduled: false };
+  }
+
+  const minutesOverdue = Math.floor((now - referenceTime.getTime()) / 60000);
+  if (minutesOverdue < DELAY_GRACE_MINUTES) {
+    return { isDelayed: false, level: 0, minutesOverdue, referenceTime, isScheduled: !!order.scheduledDeliveryAt };
+  }
+
+  const level: DelayLevel = minutesOverdue < 15 ? 1 : minutesOverdue < 30 ? 2 : 3;
+  return { isDelayed: true, level, minutesOverdue, referenceTime, isScheduled: !!order.scheduledDeliveryAt };
+}
+
+export function formatOverdueMinutes(minutes: number): string {
+  if (minutes < 60) return `+${minutes} min`;
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return m > 0 ? `+${h} h ${m} min` : `+${h} h`;
+}
+
+const DELAY_PILL_STYLES: Record<number, { wrap: string; icon: string; text: string; iconPath: string }> = {
+  1: {
+    wrap: 'bg-amber-50 border-amber-200',
+    icon: 'text-amber-600',
+    text: 'text-amber-900',
+    iconPath: 'M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z',
+  },
+  2: {
+    wrap: 'bg-red-50 border-red-200',
+    icon: 'text-red-600',
+    text: 'text-red-900',
+    iconPath: 'M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z',
+  },
+  3: {
+    wrap: 'bg-red-50 border-red-300',
+    icon: 'text-red-600',
+    text: 'text-red-900',
+    iconPath: 'M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z',
+  },
 };
 
 export type TimelineStep = {
@@ -355,6 +422,7 @@ export const CompactActiveOrderBanner = memo(function CompactActiveOrderBanner({
     currentOrder.restaurant?.businessType,
     currentOrder.fulfillmentType
   );
+  const delayState = computeDelayState(currentOrder, currentTimestamp);
   const showTrackingWidget = ['PENDING', 'CONFIRMED', 'PREPARING', 'READY', 'PICKED_UP', 'IN_TRANSIT', 'DRIVER_ARRIVED'].includes(activeStatus);
 
   // Calcular el progreso de la barra
@@ -385,8 +453,17 @@ export const CompactActiveOrderBanner = memo(function CompactActiveOrderBanner({
             </div>
             {!['DELIVERED', 'CANCELLED', 'REJECTED'].includes(activeStatus) && (
               <span className="absolute -top-0.5 -right-0.5 flex h-3 w-3">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500 border-2 border-white"></span>
+                {delayState.isDelayed ? (
+                  <>
+                    <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${delayState.level === 1 ? 'bg-amber-400' : 'bg-red-400'}`}></span>
+                    <span className={`relative inline-flex rounded-full h-3 w-3 border-2 border-white ${delayState.level === 1 ? 'bg-amber-500' : 'bg-red-500'}`}></span>
+                  </>
+                ) : (
+                  <>
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500 border-2 border-white"></span>
+                  </>
+                )}
               </span>
             )}
           </div>
@@ -394,7 +471,16 @@ export const CompactActiveOrderBanner = memo(function CompactActiveOrderBanner({
           {/* Info condensada */}
           <div className="min-w-0">
             <p className="text-sm font-bold text-neutral-900 truncate">{activeStep?.label || 'Procesando'}</p>
-            {order?.scheduledDeliveryAt && !order?.scheduledDeliveryCustomerAcceptedAt ? (
+            {delayState.isDelayed && delayState.referenceTime ? (
+              <div className={`mt-1 inline-flex max-w-full items-center gap-1.5 rounded-full border px-2.5 py-1 ${DELAY_PILL_STYLES[delayState.level].wrap}`}>
+                <svg className={`w-3 h-3 shrink-0 ${DELAY_PILL_STYLES[delayState.level].icon}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={DELAY_PILL_STYLES[delayState.level].iconPath} />
+                </svg>
+                <span className={`text-[11px] font-bold truncate ${DELAY_PILL_STYLES[delayState.level].text}`}>
+                  Va con retraso · {formatOverdueMinutes(delayState.minutesOverdue)}
+                </span>
+              </div>
+            ) : order?.scheduledDeliveryAt && !order?.scheduledDeliveryCustomerAcceptedAt ? (
               <div className="mt-1 inline-flex max-w-full items-center gap-1.5 rounded-full bg-amber-50 border border-amber-200 px-2.5 py-1">
                 <svg className="w-3 h-3 text-amber-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <circle cx="12" cy="12" r="8" strokeWidth={2} />
@@ -468,6 +554,45 @@ export const CompactActiveOrderBanner = memo(function CompactActiveOrderBanner({
         </div>
       </div>
 
+      {/* Estado de retraso: reaseguro + CTA de contacto */}
+      {delayState.isDelayed && delayState.referenceTime && (
+        <div className="mt-3 rounded-2xl border border-amber-200 bg-amber-50/70 px-3.5 py-3">
+          <div className="flex items-start gap-2.5">
+            <svg className={`w-4 h-4 shrink-0 mt-0.5 ${DELAY_PILL_STYLES[delayState.level].icon}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={DELAY_PILL_STYLES[delayState.level].iconPath} />
+            </svg>
+            <div className="min-w-0">
+              <p className="text-xs font-bold text-neutral-900">
+                Tu pedido va con retraso {delayState.level === 3 ? 'mayor al esperado' : ''}
+              </p>
+              <p className="text-[11px] text-neutral-600 mt-0.5 leading-snug">
+                {delayState.level === 3
+                  ? 'Lo sentimos mucho. Estamos trabajando para que llegue lo antes posible.'
+                  : 'Estamos trabajando en tu pedido. Gracias por tu paciencia.'}
+              </p>
+              {delayState.isScheduled && (
+                <p className="text-[11px] text-neutral-400 line-through mt-1 truncate">
+                  Programada: {formatScheduleDateLabel(delayState.referenceTime.toISOString(), currentTimestamp)} ·{' '}
+                  {delayState.referenceTime.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })}
+                </p>
+              )}
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={onOpenChat}
+            className={`mt-2.5 w-full flex items-center justify-center gap-2 rounded-full py-2.5 text-xs font-bold text-white shadow-sm transition-all hover:opacity-90 active:scale-[0.97] ${
+              delayState.level === 1 ? 'bg-amber-500' : 'bg-red-500'
+            }`}
+          >
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+            </svg>
+            Contactar al negocio
+          </button>
+        </div>
+      )}
+
       {/* PIN de recolección para pickup */}
       {isPickup && order?.pickupPin && ['READY', 'PICKED_UP', 'IN_TRANSIT'].includes(activeStatus) && (
         <div className="mt-3 flex items-center justify-center gap-2 py-2 px-3 bg-emerald-50/60 border border-emerald-200/60 rounded-xl">
@@ -504,7 +629,9 @@ export const CompactActiveOrderBanner = memo(function CompactActiveOrderBanner({
       <div className="mt-3 mb-1">
         <div className="h-1 w-full bg-neutral-100 rounded-full overflow-hidden">
           <div
-            className="h-full bg-neutral-900 rounded-full transition-all duration-700 ease-out"
+            className={`h-full rounded-full transition-all duration-700 ease-out ${
+              delayState.isDelayed ? (delayState.level === 1 ? 'bg-amber-500' : 'bg-red-500') : 'bg-neutral-900'
+            }`}
             style={{ width: `${progressPercent}%` }}
           />
         </div>
