@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { ensureGoogleMapsScript, getGoogleMaps } from '../lib/googleMaps';
 
 type Point = { lat: number; lng: number };
 
@@ -47,51 +48,6 @@ const DARK_STYLES: unknown[] = [
   { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#1b2027' }] },
   { featureType: 'water', elementType: 'labels.text.fill', stylers: [{ color: '#3f4a59' }] },
 ];
-
-let mapsScriptPromise: Promise<void> | null = null;
-
-function loadGoogleMaps(): Promise<void> {
-  if (typeof window === 'undefined') return Promise.resolve();
-  if ((window as any).google?.maps) return Promise.resolve();
-  if (mapsScriptPromise) return mapsScriptPromise;
-
-  const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || '';
-  mapsScriptPromise = new Promise<void>((resolve, reject) => {
-    const previousCallback = (window as any).__onSadelNavMapsLoaded;
-    (window as any).__onSadelNavMapsLoaded = () => {
-      if (typeof previousCallback === 'function') previousCallback();
-      resolve();
-    };
-
-    const existing = document.querySelector('script[data-sadel-nav-maps]');
-    if (existing) {
-      (window as any).google ? resolve() : waitForGoogle(resolve);
-      return;
-    }
-
-    const script = document.createElement('script');
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&callback=__onSadelNavMapsLoaded&loading=async`;
-    script.async = true;
-    script.defer = true;
-    script.dataset.sadelNavMaps = '1';
-    script.onerror = () => {
-      mapsScriptPromise = null;
-      reject(new Error('No se pudo cargar Google Maps'));
-    };
-    document.head.appendChild(script);
-  });
-
-  return mapsScriptPromise;
-}
-
-function waitForGoogle(resolve: () => void, attempts = 0) {
-  if ((window as any).google?.maps) {
-    resolve();
-    return;
-  }
-  if (attempts > 20) return;
-  setTimeout(() => waitForGoogle(resolve, attempts + 1), 250);
-}
 
 function buildPinIcon(google: any, emoji: string, bg: string) {
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="40" height="48" viewBox="0 0 40 48"><path d="M20 1C11.7 1 5 7.7 5 16c0 9 15 31 15 31s15-22 15-31C35 7.7 28.3 1 20 1Z" fill="${bg}" stroke="#ffffff" stroke-width="2"/><circle cx="20" cy="15.5" r="10.5" fill="#ffffff"/><text x="20" y="19.5" font-size="12" text-anchor="middle">${emoji}</text></svg>`;
@@ -228,12 +184,12 @@ export default function DriverTurnByTurnOverlay({
   // Cargar Google Maps de forma perezosa (reutiliza el script si ya existe).
   useEffect(() => {
     let cancelled = false;
-    loadGoogleMaps()
-      .then(() => {
-        if (!cancelled) setMapReady(true);
-      })
-      .catch(() => {
-        if (!cancelled) setLoadError(true);
+    ensureGoogleMapsScript()
+      .then((g) => {
+        if (!cancelled) {
+          if (g) setMapReady(true);
+          else setLoadError(true);
+        }
       });
     return () => {
       cancelled = true;
@@ -286,19 +242,9 @@ export default function DriverTurnByTurnOverlay({
   useEffect(() => {
     if (!mapReady) return;
 
-    let attempts = 0;
-    let initTimer: ReturnType<typeof setTimeout> | null = null;
+    let cancelled = false;
 
-    const createMap = () => {
-      const google = (window as any).google;
-      if (!google?.maps) {
-        if (attempts < 10) {
-          attempts += 1;
-          initTimer = setTimeout(createMap, 300);
-        }
-        return;
-      }
-
+    const createMap = (google: any) => {
       const mapEl = document.getElementById(mapElIdRef.current);
       if (!mapEl || mapRef.current) return;
 
@@ -340,16 +286,19 @@ export default function DriverTurnByTurnOverlay({
       requestRoute();
     };
 
-    initTimer = setTimeout(createMap, 60);
+    void ensureGoogleMapsScript().then((google) => {
+      if (cancelled || !google) return;
+      createMap(google);
+    });
 
     return () => {
-      if (initTimer) clearTimeout(initTimer);
+      cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mapReady, dark]);
 
   const requestRoute = () => {
-    const google = (window as any).google;
+    const google = getGoogleMaps();
     const map = mapRef.current;
     const dest = destinationRef.current;
     if (!google?.maps || !map || !dest) return;
@@ -478,7 +427,7 @@ export default function DriverTurnByTurnOverlay({
   // Auto-follow: mover marcador y centrar el mapa con el repartidor.
   useEffect(() => {
     if (!driverPos) return;
-    const google = (window as any).google;
+    const google = getGoogleMaps();
 
     if (driverMarkerRef.current) {
       driverMarkerRef.current.setPosition({ lat: driverPos.lat, lng: driverPos.lng });

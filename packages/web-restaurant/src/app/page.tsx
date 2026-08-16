@@ -38,6 +38,7 @@ import { SettingsSection } from '../components/sections/SettingsSection';
 import { FeaturedSection } from '../components/sections/FeaturedSection';
 import PushEnableBanner from '../components/PushEnableBanner';
 import { createPlacesSource } from '../lib/places';
+import { ensureGoogleMapsScript, getGoogleMaps } from '../lib/googleMaps';
 
 type OrderStatus =
   | 'PENDING'
@@ -1844,13 +1845,9 @@ export default function Home() {
       return;
     }
 
-    const timer = setTimeout(() => {
-      const google = (window as any).google;
-      if (!google || !google.maps) {
-        console.warn("Google Maps not loaded");
-        return;
-      }
+    let cancelled = false;
 
+    const initSettingsMap = (google: any) => {
       const lat = parseFloat(storeDraft.latitude) || 19.4326;
       const lng = parseFloat(storeDraft.longitude) || -99.1332;
 
@@ -1911,10 +1908,15 @@ export default function Home() {
         settingsMapRef.current.setCenter(pos);
         settingsMarkerRef.current.setPosition(pos);
       }
-    }, 150);
+    };
+
+    void ensureGoogleMapsScript().then((google) => {
+      if (cancelled || !google) return;
+      initSettingsMap(google);
+    });
 
     return () => {
-      clearTimeout(timer);
+      cancelled = true;
     };
   }, [activeSection, activeSettingsTab, storeDraft.latitude, storeDraft.longitude]);
 

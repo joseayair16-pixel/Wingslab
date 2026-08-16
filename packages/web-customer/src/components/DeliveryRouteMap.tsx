@@ -6,6 +6,7 @@
 /* eslint-disable @typescript-eslint/no-unsafe-call */
 
 import { useEffect, useRef, useState } from 'react';
+import { ensureGoogleMapsScript, getGoogleMaps } from '../lib/googleMaps';
 
 export type MapPoint = {
   lat: number;
@@ -36,23 +37,6 @@ const MAP_STYLES: unknown[] = [
   { featureType: 'water', elementType: 'labels.text.fill', stylers: [{ color: '#a3b4c9' }] },
 ];
 
-function waitForGoogle(resolve: () => void, attempts = 0) {
-  if ((window as any).google?.maps) {
-    resolve();
-    return;
-  }
-  if (attempts > 40) return;
-  setTimeout(() => waitForGoogle(resolve, attempts + 1), 250);
-}
-
-// El script de Google Maps lo carga globalmente el layout de web-customer.
-function getGoogleMaps(): Promise<any> {
-  if ((window as any).google?.maps) return Promise.resolve();
-  if ((window as any).__tokenMapsReady) return (window as any).__tokenMapsReady;
-  (window as any).__tokenMapsReady = new Promise<void>((resolve) => waitForGoogle(resolve));
-  return (window as any).__tokenMapsReady;
-}
-
 function buildPinIcon(google: any, emoji: string, bg: string) {
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="40" height="48" viewBox="0 0 40 48"><path d="M20 1C11.7 1 5 7.7 5 16c0 9 15 31 15 31s15-22 15-31C35 7.7 28.3 1 20 1Z" fill="${bg}" stroke="#ffffff" stroke-width="2"/><circle cx="20" cy="15.5" r="10.5" fill="#ffffff"/><text x="20" y="19.5" font-size="12" text-anchor="middle">${emoji}</text></svg>`;
   return {
@@ -67,13 +51,14 @@ export default function DeliveryRouteMap({ origin, destination, userPos, height 
   const [google, setGoogle] = useState<any>(null);
 
   useEffect(() => {
-    if ((window as any).google?.maps) {
-      setGoogle((window as any).google);
+    const existing = getGoogleMaps();
+    if (existing) {
+      setGoogle(existing);
       return;
     }
     let cancelled = false;
-    void getGoogleMaps().then(() => {
-      if (!cancelled) setGoogle((window as any).google);
+    void ensureGoogleMapsScript().then((g) => {
+      if (!cancelled) setGoogle(g);
     });
     return () => {
       cancelled = true;

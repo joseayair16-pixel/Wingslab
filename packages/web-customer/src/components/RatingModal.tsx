@@ -1,7 +1,6 @@
 'use client';
 
 import { memo } from 'react';
-import { SaDelLogo } from './SaDelLogo';
 
 type RatingModalProps = {
   open: boolean;
@@ -35,25 +34,20 @@ export default memo(function RatingModal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 px-4 py-6" onClick={(e) => e.stopPropagation()}>
       <div className="w-full max-w-md h-fit max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-        <div className="relative overflow-hidden rounded-3xl border border-white/60 bg-white shadow-[0_24px_80px_-24px_rgba(2,132,199,0.35),0_8px_32px_rgba(0,0,0,0.12)]">
-          {/* Header con degradado premium */}
-          <div className="relative overflow-hidden bg-gradient-to-br from-sky-500 via-sky-600 to-blue-600 px-6 pb-14 pt-8 text-center">
-            <div className="pointer-events-none absolute -left-10 -top-12 h-40 w-40 rounded-full bg-white/10 blur-2xl"></div>
-            <div className="pointer-events-none absolute -right-8 -top-8 h-32 w-32 rounded-full bg-white/10 blur-2xl"></div>
-            <div className="mx-auto mb-4 flex w-fit items-center gap-2 rounded-full border border-white/25 bg-white/15 px-4 py-1.5 backdrop-blur-md">
-              <SaDelLogo className="h-5 w-auto object-contain" />
-            </div>
-            <div className="relative mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-white/95 text-3xl shadow-lg shadow-sky-900/20 ring-1 ring-white/60">
+        <div className="relative overflow-hidden rounded-3xl border border-neutral-100 bg-white shadow-[0_16px_60px_-16px_rgba(15,23,42,0.25),0_4px_16px_rgba(0,0,0,0.08)]">
+          {/* Encabezado limpio */}
+          <div className="px-6 pb-2 pt-8 text-center">
+            <div className="relative mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-emerald-50 ring-8 ring-emerald-50/40">
               {isPickup ? (
-                <svg className="h-8 w-8 text-sky-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15.75 10.5V6a3.75 3.75 0 10-7.5 0v4.5m11.356-1.993l1.263 12c.07.665-.45 1.243-1.119 1.243H4.25a1.125 1.125 0 01-1.12-1.243l1.264-12A1.125 1.125 0 015.513 7.5h12.974c.576 0 1.059.435 1.119 1.007zM8.625 10.5a.375.375 0 11-.75 0 .375.375 0 01.75 0zm7.5 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z" /></svg>
+                <svg className="h-8 w-8 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15.75 10.5V6a3.75 3.75 0 10-7.5 0v4.5m11.356-1.993l1.263 12c.07.665-.45 1.243-1.119 1.243H4.25a1.125 1.125 0 01-1.12-1.243l1.264-12A1.125 1.125 0 015.513 7.5h12.974c.576 0 1.059.435 1.119 1.007zM8.625 10.5a.375.375 0 11-.75 0 .375.375 0 01.75 0zm7.5 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z" /></svg>
               ) : (
-                <svg className="h-8 w-8 text-sky-600" fill="currentColor" viewBox="0 0 24 24"><path d={STAR_BASE} /></svg>
+                <span className="text-3xl leading-none">🎉</span>
               )}
             </div>
-            <h3 className="relative mt-5 text-2xl font-black tracking-tight text-white">
+            <h3 className="mt-5 text-xl font-black tracking-tight text-neutral-950">
               {isPickup ? '¡Pedido recogido!' : '¡Tu pedido ha llegado!'}
             </h3>
-            <p className="relative mx-auto mt-2 max-w-xs text-sm font-medium leading-relaxed text-sky-50/95">
+            <p className="mx-auto mt-2 max-w-xs text-sm leading-relaxed text-neutral-500">
               {isPickup ? 'Gracias por comprar con SaDeL. Tu opinión nos ayuda a mejorar cada día.' : (bizType && bizType !== 'RESTAURANT' ? '¡Disfruta tu pedido! Gracias por confiar en SaDeL.' : '¡Buen provecho! Gracias por pedir con SaDeL.')}
             </p>
           </div>

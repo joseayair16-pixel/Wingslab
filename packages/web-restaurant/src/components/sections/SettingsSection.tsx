@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { requestJson, MENU_THEMES, getMenuThemeById } from '@sadel/shared';
+import { getGoogleMaps } from '../../lib/googleMaps';
 
 type SuccessResponse<T> = {
   success: true;
@@ -861,7 +862,7 @@ export const SettingsSection = React.memo(function SettingsSection({
                           key={suggestion.place_id}
                           type="button"
                           onClick={() => {
-                            const google = (window as any).google;
+                            const google = getGoogleMaps();
                             if (!google || !google.maps || !google.maps.places) return;
 
                             if (!placesServiceRef.current) {

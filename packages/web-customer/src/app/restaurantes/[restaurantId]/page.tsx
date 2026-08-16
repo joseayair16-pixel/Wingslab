@@ -6,6 +6,7 @@ import { AuthUser, clearStoredSession, readStoredSession, requestJson, submitRev
 import { io } from 'socket.io-client';
 import { AuthModal } from '../../../components/AuthModal';
 import { CompactActiveOrderBanner, computeDelayState, formatEstimatedArrivalMinutes, formatOverdueMinutes } from '../../../components/CompactActiveOrderBanner';
+import { ensureGoogleMapsScript, getGoogleMaps } from '../../../lib/googleMaps';
 import RatingModal from '../../../components/RatingModal';
 import { useForegroundPolling } from '../../../hooks/useForegroundPolling';
 import { SaDelLoader } from '../../../components/SaDelLoader';
@@ -1503,13 +1504,9 @@ export default function RestaurantPage({
       return;
     }
 
-    const timer = setTimeout(() => {
-      const google = (window as any).google;
-      if (!google || !google.maps) {
-        console.warn("Google Maps not loaded");
-        return;
-      }
+    let cancelled = false;
 
+    const initCheckoutMap = (google: any) => {
       const lat = parseFloat(checkoutForm.latitude) || 19.4326;
       const lng = parseFloat(checkoutForm.longitude) || -99.1332;
 
@@ -1612,9 +1609,16 @@ export default function RestaurantPage({
           }
         });
       }
-    }, 150);
+    };
 
-    return () => clearTimeout(timer);
+    void ensureGoogleMapsScript().then((google) => {
+      if (cancelled || !google) return;
+      initCheckoutMap(google);
+    });
+
+    return () => {
+      cancelled = true;
+    };
   }, [isCheckoutOpen, isAddingNewAddress, newAddressStep, showMapForAddress, checkoutForm.latitude, checkoutForm.longitude]);
 
   useEffect(() => {
@@ -2187,7 +2191,7 @@ function triggerHaptic(pattern: number | number[] = 10) {
         }));
 
         try {
-            const google = (window as any).google;
+            const google = getGoogleMaps();
             if (!google) throw new Error("Google Maps not loaded");
 
             const geocoder = new google.maps.Geocoder();
@@ -6492,7 +6496,7 @@ function handleSelectSuggestion(
   setAddressSuggestions: any,
   setNewAddressStep: any
 ) {
-  const google = (window as any).google;
+  const google = getGoogleMaps();
   if (!google || !google.maps || !google.maps.places || !suggestion.place_id) return;
 
   if (!placesService) {

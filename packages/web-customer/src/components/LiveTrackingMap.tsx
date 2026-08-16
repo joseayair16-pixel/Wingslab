@@ -1,5 +1,6 @@
 import React, { memo, useEffect, useRef, useState } from 'react';
 import { getOrderStatusLabel } from '@sadel/shared';
+import { ensureGoogleMapsScript, getGoogleMaps, waitForGoogleMaps } from '../lib/googleMaps';
 
 type Point = { lat: number; lng: number };
 
@@ -142,19 +143,9 @@ export default memo(function LiveTrackingMap({
 
     if (!orderId || (!storeLat && !destLat)) return;
 
-    let attempts = 0;
-    let initTimer: ReturnType<typeof setTimeout> | null = null;
+    let cancelled = false;
 
-    const createMap = () => {
-      const google = (window as any).google;
-      if (!google?.maps) {
-        if (attempts < 10) {
-          attempts += 1;
-          initTimer = setTimeout(createMap, 300);
-        }
-        return;
-      }
-
+    const createMap = (google: any) => {
       const mapEl = document.getElementById(`map-tracking-${orderId}`);
       if (!mapEl) return;
       if (initOrderIdRef.current === orderId && mapRef.current) return;
@@ -217,10 +208,13 @@ export default memo(function LiveTrackingMap({
     };
 
     clearMapObjects();
-    initTimer = setTimeout(createMap, 60);
+    void ensureGoogleMapsScript().then((google) => {
+      if (cancelled || !google) return;
+      createMap(google);
+    });
 
     return () => {
-      if (initTimer) clearTimeout(initTimer);
+      cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [order?.id]);
@@ -228,7 +222,7 @@ export default memo(function LiveTrackingMap({
   // Reajustar al cambiar tamaño de la ventana
   useEffect(() => {
     const handleResize = () => {
-      const google = (window as any).google;
+      const google = getGoogleMaps();
       if (google?.maps && mapRef.current) {
         google.maps.event.trigger(mapRef.current, 'resize');
       }
@@ -239,7 +233,7 @@ export default memo(function LiveTrackingMap({
 
   // Marcador del repartidor + rastro real (polyline) con glide suave
   useEffect(() => {
-    const google = (window as any).google;
+    const google = getGoogleMaps();
     const map = mapRef.current;
 
     if (!google?.maps || !mapReady || !map || !driverLocation || !order) {

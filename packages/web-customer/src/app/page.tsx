@@ -29,6 +29,7 @@ import { RestaurantSearchBar } from '../components/RestaurantSearchBar';
 import { SaDelLogo } from '../components/SaDelLogo';
 import { SaDelLoader } from '../components/SaDelLoader';
 import { CompactActiveOrderBanner, computeDelayState, formatEstimatedArrivalMinutes, formatOverdueMinutes } from '../components/CompactActiveOrderBanner';
+import { ensureGoogleMapsScript, getGoogleMaps } from '../lib/googleMaps';
 import { ScheduleProposalModal } from '../components/ScheduleProposalModal';
 import { type Billboard } from '../components/BillboardCarousel';
 import { createPlacesSource } from '../lib/places';
@@ -600,7 +601,7 @@ export default function Home() {
   }
 
   function selectSuggestion(suggestion: any) {
-    const google = (window as any).google;
+    const google = getGoogleMaps();
     if (!google || !google.maps || !google.maps.places || !suggestion.place_id) return;
 
     if (!placesServiceRef.current) {
@@ -682,7 +683,7 @@ export default function Home() {
   }
 
   function selectFallbackSuggestion(suggestion: any) {
-    const google = (window as any).google;
+    const google = getGoogleMaps();
     if (!google || !google.maps || !google.maps.places || !suggestion.place_id) return;
 
     if (!placesServiceRef.current) {
@@ -740,7 +741,7 @@ export default function Home() {
       }
       
       try {
-        const google = (window as any).google;
+        const google = getGoogleMaps();
         if (!google) throw new Error("Google Maps not loaded");
 
         const geocoder = new google.maps.Geocoder();
@@ -2123,7 +2124,7 @@ export default function Home() {
           let address = 'Ubicación actual';
           const tryGeocode = async () => {
             try {
-              const google = (window as any).google;
+              const google = getGoogleMaps();
               if (google) {
                 const geocoder = new google.maps.Geocoder();
                 await new Promise<void>((resolve) => {
@@ -2516,7 +2517,7 @@ export default function Home() {
           } catch (e) { }
           const { latitude, longitude, accuracy } = position.coords;
           try {
-            const google = (window as any).google;
+            const google = getGoogleMaps();
             if (!google) throw new Error("Google Maps not loaded");
 
             const geocoder = new google.maps.Geocoder();
@@ -2879,12 +2880,9 @@ export default function Home() {
       return;
     }
 
-    let initTimer: any;
-    
-    const tryInitMap = () => {
-      const google = (window as any).google;
-      if (!google || !google.maps) return;
+    let cancelled = false;
 
+    const tryInitMap = (google: any) => {
       const lat = parseFloat(String(profileAddress.latitude)) || 19.4326;
       const lng = parseFloat(String(profileAddress.longitude)) || -99.1332;
 
@@ -2918,10 +2916,13 @@ export default function Home() {
       }
     };
 
-    initTimer = setTimeout(tryInitMap, 300);
+    void ensureGoogleMapsScript().then((google) => {
+      if (cancelled || !google) return;
+      tryInitMap(google);
+    });
 
     return () => {
-      clearTimeout(initTimer);
+      cancelled = true;
     };
   }, [isEditingAddress, profileAddress.latitude, profileAddress.longitude]);
 
@@ -3710,7 +3711,7 @@ export default function Home() {
   }
 
   function updateAddressMarker(lat: number, lng: number) {
-    const google = (window as any).google;
+    const google = getGoogleMaps();
     if (!google || !addressMapRef.current) return;
 
     if (addressMarkerRef.current) {
@@ -3820,7 +3821,7 @@ export default function Home() {
                 navigator.geolocation.getCurrentPosition(async (position) => {
                   const { latitude, longitude, accuracy } = position.coords;
                   try {
-                    const google = (window as any).google;
+                    const google = getGoogleMaps();
                     if (!google) throw new Error("Google Maps not loaded");
 
                     const geocoder = new google.maps.Geocoder();
