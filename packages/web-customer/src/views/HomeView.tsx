@@ -264,6 +264,7 @@ export const HomeView = React.memo(function HomeView({
         )}
 
         {/* Category selector */}
+        {filteredCategories.length > 0 && (
         <section className="-mx-4 rounded-none border-y border-black/5 bg-white px-4 py-3 shadow-[0_18px_60px_rgba(15,15,15,0.05)] md:mx-0 md:rounded-[24px] md:border md:border-black/5 md:px-5 md:py-3">
           <div className="-mx-1 overflow-x-auto px-1 pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             <div className="flex min-w-max gap-1.5 sm:gap-2">
@@ -293,6 +294,7 @@ export const HomeView = React.memo(function HomeView({
             </div>
           </div>
         </section>
+        )}
         </div>
 
         {featuredRestaurants && featuredRestaurants.length > 0 && (
