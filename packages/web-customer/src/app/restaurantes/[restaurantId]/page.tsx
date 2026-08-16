@@ -2886,7 +2886,7 @@ function triggerHaptic(pattern: number | number[] = 10) {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4h2l.4 2M7 14h10l4-8H5.4M7 14l-1.5 2.5A1 1 0 006.4 18H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
               </svg>
               {cart.length > 0 && !isCartOpen ? (
-                 <span className={`absolute -right-1 -top-1 flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-[var(--menu-accent)] px-1 text-[11px] font-bold text-white shadow-sm ${
+                 <span className={`absolute -right-1 -top-1 flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-sky-500 px-1 text-[11px] font-bold text-white shadow-sm ${
                   cartJustUpdated ? 'animate-pulse' : ''
                 }`}>
                   {totalProducts}
@@ -3043,7 +3043,7 @@ function triggerHaptic(pattern: number | number[] = 10) {
                               <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold ${
                                 isRequirementMet
                                   ? 'bg-emerald-100 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400'
-                                  : 'bg-[var(--menu-accent-soft)] dark:bg-sky-900/30 text-[var(--menu-accent-hover)] dark:text-sky-400'
+                                  : 'bg-sky-100 dark:bg-sky-900/30 text-sky-600 dark:text-sky-400'
                               }`}>
                                 {isRequirementMet ? 'Listo' : 'Faltan datos'}
                               </span>
@@ -3075,7 +3075,7 @@ function triggerHaptic(pattern: number | number[] = 10) {
                                 }}
                                 className={`flex w-full items-center justify-between gap-4 rounded-2xl border p-4 text-left transition ${
                                   isChecked
-                                    ? 'border-[var(--menu-accent)]/30 bg-[var(--menu-accent-soft)]/40 dark:bg-sky-900/10'
+                                    ? 'border-sky-400/30 bg-sky-100/40 dark:bg-sky-900/10'
                                     : 'border-black/5 dark:border-zinc-800 hover:bg-neutral-50 dark:hover:bg-neutral-800/40'
                                 } ${(!opt.isAvailable || isSelectionDisabled) ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'}`}
                               >
@@ -3083,7 +3083,7 @@ function triggerHaptic(pattern: number | number[] = 10) {
                                   {isSingleSelection ? (
                                     <div className={`flex h-5 w-5 items-center justify-center rounded-full border transition ${
                                       isChecked
-                                        ? 'border-[var(--menu-accent)] bg-[var(--menu-accent)] text-white'
+                                        ? 'border-sky-500 bg-sky-500 text-white'
                                         : 'border-black/20 dark:border-zinc-700 bg-white dark:bg-neutral-800'
                                     }`}>
                                       {isChecked && <div className="h-2 w-2 rounded-full bg-white" />}
@@ -3091,7 +3091,7 @@ function triggerHaptic(pattern: number | number[] = 10) {
                                   ) : (
                                     <div className={`flex h-5 w-5 items-center justify-center rounded-lg border transition ${
                                       isChecked
-                                        ? 'border-[var(--menu-accent)] bg-[var(--menu-accent)] text-white'
+                                        ? 'border-sky-500 bg-sky-500 text-white'
                                         : 'border-black/20 dark:border-zinc-700 bg-white dark:bg-neutral-800'
                                     }`}>
                                       {isChecked && (
@@ -3148,7 +3148,7 @@ function triggerHaptic(pattern: number | number[] = 10) {
                               onClick={() => setCustomizingWeight(p)}
                               className={`rounded-full border px-4 py-2 text-sm font-semibold transition-all ${
                                 customizingWeight === p
-                                  ? 'border-sky-400 bg-sky-50 text-[var(--menu-accent-strong)]'
+                                  ? 'border-sky-400 bg-sky-50 text-sky-600'
                                   : 'border-black/5 bg-white text-neutral-600 hover:bg-neutral-50'
                               }`}
                             >
@@ -3441,7 +3441,7 @@ function triggerHaptic(pattern: number | number[] = 10) {
                         pickupReadyOrder.paymentMethod === 'CASH'
                           ? 'bg-amber-100 text-amber-800 border border-amber-200'
                           : pickupReadyOrder.paymentMethod === 'TRANSFER'
-                            ? 'bg-[var(--menu-accent-soft-strong)] text-[var(--menu-accent-strong)] border border-sky-200'
+                            ? 'bg-sky-100 text-sky-700 border border-sky-200'
                             : 'bg-green-100 text-green-800 border border-green-200'
                       }`}>
                         {pickupReadyOrder.paymentMethod === 'CASH' ? <><svg className="h-3.5 w-3.5 inline-block align-text-bottom" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 6v12m-3-2.818l.879.659c1.171.879 3.07.879 4.242 0 1.172-.879 1.172-2.303 0-3.182C13.536 12.219 12.768 12 12 12c-.725 0-1.45-.22-2.003-.659-1.106-.879-1.106-2.303 0-3.182s2.9-.879 4.006 0l.415.33M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg> Efectivo</> : pickupReadyOrder.paymentMethod === 'TRANSFER' ? <><svg className="h-3.5 w-3.5 inline-block align-text-bottom" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M2.25 21h19.5m-18-18v18m10.5-18v18m6-13.5V21M6.75 6.75h.75m-.75 3h.75m-.75 3h.75m3-6h.75m-.75 3h.75m-.75 3h.75M6.75 21v-3.375c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21M3 3h12m-.75 4.5H21m-3.75 3.75h.008v.008h-.008v-.008zm0 3h.008v.008h-.008v-.008zm0 3h.008v.008h-.008v-.008z" /></svg> Transferencia</> : '💳 Pago Online'}
@@ -3472,7 +3472,7 @@ function triggerHaptic(pattern: number | number[] = 10) {
                     href={`https://www.google.com/maps/dir/?api=1&destination=${pickupReadyOrder.restaurant.latitude},${pickupReadyOrder.restaurant.longitude}`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="w-full flex items-center justify-center gap-2.5 rounded-full border-2 border-sky-200 bg-sky-50 py-3.5 text-sm font-bold text-[var(--menu-accent-strong)] shadow-sm transition hover:bg-[var(--menu-accent-soft-strong)] hover:shadow-md active:scale-[0.97]"
+                    className="w-full flex items-center justify-center gap-2.5 rounded-full border-2 border-sky-200 bg-sky-50 py-3.5 text-sm font-bold text-sky-600 shadow-sm transition hover:bg-sky-100 hover:shadow-md active:scale-[0.97]"
                   >
                     <svg className="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.828 0l-4.243-4.243a8 8 0 1111.314 0z" />
@@ -4836,12 +4836,12 @@ function triggerHaptic(pattern: number | number[] = 10) {
                             onClick={() => scrollToCategory(category.id)}
                             className={`relative px-4 py-2 text-[13px] font-semibold transition-all duration-200 ${
                               isActive
-                                ? 'text-[var(--accent)] dark:text-sky-400'
+                                ? 'text-[var(--menu-accent)] dark:text-sky-400'
                                 : 'text-neutral-500 hover:text-neutral-800 dark:text-zinc-400 dark:hover:text-zinc-100'
                             }`}
                           >
                             {category.name}
-                            <span className={`absolute bottom-0 left-1/2 h-[3px] rounded-full bg-[var(--accent)] transition-all duration-300 ${
+                            <span className={`absolute bottom-0 left-1/2 h-[3px] rounded-full bg-[var(--menu-accent)] transition-all duration-300 ${
                               isActive ? 'w-5/6 -translate-x-1/2' : 'w-0 -translate-x-1/2'
                             }`} />
                           </button>
@@ -4942,7 +4942,7 @@ function triggerHaptic(pattern: number | number[] = 10) {
                 >
                   <div className="flex items-center justify-between gap-4 mb-2">
                     <h2 className="text-2xl font-bold tracking-[-0.03em] text-neutral-950 dark:text-white">{category.name}</h2>
-                    <span className="shrink-0 rounded-full bg-gradient-to-r from-sky-50 to-white px-3 py-1.5 text-[11px] font-bold text-[var(--accent)] border border-sky-100/60 shadow-[0_2px_8px_rgba(14,165,233,0.08)] sm:text-xs">
+                    <span className="shrink-0 rounded-full bg-gradient-to-r from-sky-50 to-white px-3 py-1.5 text-[11px] font-bold text-[var(--menu-accent)] border border-sky-100/60 shadow-[0_2px_8px_rgba(14,165,233,0.08)] sm:text-xs">
                       {category.products.length} productos
                     </span>
                   </div>

@@ -672,6 +672,7 @@ export async function createOrderForCustomer({
   // ===== Promociones (acumulativo: multi-compra → cupón → % por monto mínimo → envío gratis) =====
   let promoDiscountAmount = 0;
   let appliedPromoCode: string | null = null;
+  let freeDeliveryGranted = false;
   const discountBreakdown: Record<string, number | string> = {};
   if (multiBuySaving > 0) discountBreakdown.multiBuy = multiBuySaving;
 
@@ -710,6 +711,7 @@ export async function createOrderForCustomer({
       promoDiscountAmount = Math.min(promoCode.value, subtotal);
     } else if (promoCode.type === 'FREE_DELIVERY') {
       promoDiscountAmount = deliveryFee;
+      freeDeliveryGranted = true;
     }
     appliedPromoCode = promoCode.code;
     discountBreakdown.coupon = {
@@ -734,10 +736,12 @@ export async function createOrderForCustomer({
   // 3) Envío gratis por umbral de subtotal
   if (
     !isPickup &&
+    !freeDeliveryGranted &&
     restaurant.promoFreeDeliveryThreshold != null &&
     subtotal >= restaurant.promoFreeDeliveryThreshold
   ) {
-    deliveryFee = 0;
+    promoDiscountAmount += deliveryFee;
+    freeDeliveryGranted = true;
     discountBreakdown.freeDelivery = 'true';
   }
 
