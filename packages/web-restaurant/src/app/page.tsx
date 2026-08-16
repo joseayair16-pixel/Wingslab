@@ -676,6 +676,8 @@ const liveEvents = [
   'order:queue-next',
   'order:cancellation-requested',
   'order:cancellation-request-retracted',
+  'order:schedule-accepted',
+  'order:schedule-rejected',
 ] as const;
 
 
@@ -5872,7 +5874,7 @@ export default function Home() {
                             placeholder="06:30"
                             maxLength={5}
                             value={scheduledDeliveryTime}
-                            onChange={(e) => setScheduledDeliveryTime(e.target.value.replace(/[^0-9:]/g, ''))}
+                            onChange={(e) => setScheduledDeliveryTime(formatScheduleTimeMask(scheduledDeliveryTime, e.target.value))}
                             className="w-full rounded-2xl border border-sky-200/60 bg-white px-5 py-3.5 text-center text-lg font-bold tracking-[0.15em] text-neutral-900 outline-none transition focus:border-sky-400 focus:ring-4 focus:ring-sky-500/20"
                           />
                           <div className="flex shrink-0 rounded-2xl border border-sky-200/60 bg-sky-50/40 p-1">
@@ -5881,7 +5883,7 @@ export default function Home() {
                                 key={m}
                                 type="button"
                                 onClick={() => setScheduledMeridiem(m)}
-                                className={`rounded-xl px-3 py-2.5 text-sm font-black transition sm:px-4 ${scheduledMeridiem === m ? 'bg-white text-sky-700 shadow-sm' : 'text-sky-600 hover:text-sky-800'}`}
+                                className={`rounded-xl px-3 py-2.5 text-sm font-black transition sm:px-4 ${scheduledMeridiem === m ? 'bg-sky-600 text-white shadow-md' : 'text-sky-600 hover:text-sky-800'}`}
                               >
                                 {m}
                               </button>
@@ -14353,6 +14355,14 @@ function buildRestaurantLiveMessage(
     return `El cliente retiró la solicitud de cancelación de ${orderLabel}.`;
   }
 
+  if (eventName === 'order:schedule-accepted') {
+    return `📅 El cliente aceptó la fecha programada de ${orderLabel}.`;
+  }
+
+  if (eventName === 'order:schedule-rejected') {
+    return `❌ El cliente no aceptó la fecha programada de ${orderLabel}; el pedido fue cancelado.`;
+  }
+
   return `${orderLabel} quedó entregado.`;
 }
 
@@ -14504,6 +14514,18 @@ function buildScheduleDayOptions(): ScheduleDayOption[] {
   }
 
   return options;
+}
+
+function formatScheduleTimeMask(prevValue: string, rawValue: string): string {
+  const isBackspace = rawValue.length < prevValue.length;
+  const prevDigits = prevValue.replace(/\D/g, '');
+  const nextDigits = rawValue.replace(/\D/g, '');
+  const digits = isBackspace ? prevDigits.slice(0, -1) : nextDigits.slice(0, 4);
+  if (!digits) return '';
+
+  const hour = digits.slice(0, 2).padStart(2, '0');
+  const minute = digits.slice(2);
+  return minute ? `${hour}:${minute}` : `${hour}:`;
 }
 
 function parseScheduleTime12h(time: string, meridiem: 'AM' | 'PM'): string | null {

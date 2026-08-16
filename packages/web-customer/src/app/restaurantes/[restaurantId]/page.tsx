@@ -110,6 +110,7 @@ type PublicRestaurantDetail = {
 
 import { usePushNotifications } from '../../../hooks/usePushNotifications';
 import { useCustomerSounds } from '../../../hooks/useCustomerSounds';
+import { ScheduleProposalModal } from '../../../components/ScheduleProposalModal';
 import { useCartStore, type CartItem } from '../../../store/cartStore';
 
 type CheckoutForm = {
@@ -245,6 +246,8 @@ type CustomerOrderDetail = {
   cancellationReason?: string | null;
   cancelledBy?: string | null;
   fulfillmentType?: 'DELIVERY' | 'PICKUP';
+  scheduledDeliveryAt?: string | null;
+  scheduledDeliveryCustomerAcceptedAt?: string | null;
 };
 
 type PaginatedOrdersResponse = {
@@ -728,6 +731,7 @@ export default function RestaurantPage({
   }, [cartItems]);
 
   const [pickupReadyOrder, setPickupReadyOrder] = useState<CustomerOrderDetail | null>(null);
+  const [scheduleProposalOrder, setScheduleProposalOrder] = useState<CustomerOrderDetail | null>(null);
   const [copiedField, setCopiedField] = useState<'account' | 'beneficiary' | 'amount' | null>(null);
 
   // Image preview modal for store products
@@ -1207,6 +1211,9 @@ export default function RestaurantPage({
       'order:pin-reset',
       'order_chat:message_received',
       'order:driver-location',
+      'order:schedule-proposal',
+      'order:schedule-accepted',
+      'order:schedule-rejected',
     ];
 
     for (const eventName of liveEvents) {
@@ -1366,6 +1373,38 @@ export default function RestaurantPage({
               setPickupReadyOrder(res.data);
             }
           }).catch(() => {});
+        }
+
+        if (eventName === 'order:schedule-proposal' && payload.orderId) {
+          try {
+            if (window.localStorage.getItem('customerAlertSoundEnabled') !== 'false') {
+              void playLlegue();
+            }
+            if (navigator.vibrate) navigator.vibrate([300, 100, 300]);
+          } catch (e) {}
+          requestJson<{ success: true; data: CustomerOrderDetail }>({
+            apiBase,
+            path: `/me/pedidos/${payload.orderId}`,
+            token,
+          }).then((detailRes) => {
+            if (detailRes.success) {
+              setScheduleProposalOrder(detailRes.data);
+            }
+          }).catch(() => {});
+        }
+
+        if (eventName === 'order:schedule-accepted') {
+          setScheduleProposalOrder(null);
+          showTransientNotice({
+            key: `schedule-accepted:${payload.orderId}`,
+            title: 'Fecha confirmada',
+            description: 'La fecha de entrega ha sido confirmada exitosamente.',
+            tone: 'success',
+          });
+        }
+
+        if (eventName === 'order:schedule-rejected') {
+          setScheduleProposalOrder(null);
         }
 
         if (
@@ -3446,6 +3485,23 @@ function triggerHaptic(pattern: number | number[] = 10) {
           </div>
         )}
 
+      {scheduleProposalOrder && (
+        <ScheduleProposalModal
+          order={scheduleProposalOrder}
+          apiBase={apiBase}
+          token={token}
+          formatCurrency={formatCurrency}
+          onClose={() => setScheduleProposalOrder(null)}
+          showNotice={showTransientNotice}
+          onAccepted={() => {
+            window.dispatchEvent(new CustomEvent('order-updated'));
+          }}
+          onRejected={() => {
+            window.dispatchEvent(new CustomEvent('order-updated'));
+          }}
+        />
+      )}
+
       <CartDrawer
         isOpen={isCartOpen}
         onClose={() => setIsCartOpen(false)}
@@ -5350,6 +5406,33 @@ function triggerHaptic(pattern: number | number[] = 10) {
                     <StatusBadge status={activeOrderDetailsMap[selectedOrderId].status} businessType={activeOrderDetailsMap[selectedOrderId].restaurant?.businessType} />
                   </div>
                 </div>
+
+                {/* Entrega programada */}
+                {activeOrderDetailsMap[selectedOrderId].scheduledDeliveryAt && (
+                  <div className={`flex items-center gap-3 p-4 rounded-2xl border shadow-sm ${activeOrderDetailsMap[selectedOrderId].scheduledDeliveryCustomerAcceptedAt ? 'bg-emerald-50 border-emerald-100' : 'bg-amber-50 border-amber-100'}`}>
+                    <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-white ${activeOrderDetailsMap[selectedOrderId].scheduledDeliveryCustomerAcceptedAt ? 'bg-emerald-600' : 'bg-amber-500'}`}>
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <circle cx="12" cy="12" r="8" strokeWidth={2} />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 7v5l3 3" />
+                      </svg>
+                    </div>
+                    <div className="min-w-0">
+                      <p className={`text-[10px] font-bold uppercase tracking-widest ${activeOrderDetailsMap[selectedOrderId].scheduledDeliveryCustomerAcceptedAt ? 'text-emerald-600' : 'text-amber-600'}`}>
+                        {activeOrderDetailsMap[selectedOrderId].scheduledDeliveryCustomerAcceptedAt ? 'Entrega programada' : 'Fecha programada'}
+                      </p>
+                      <p className="text-sm font-black text-neutral-900 leading-snug">
+                        {new Date(activeOrderDetailsMap[selectedOrderId].scheduledDeliveryAt!).toLocaleDateString('es-MX', {
+                          weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'
+                        })}
+                      </p>
+                      <p className="text-sm font-bold text-neutral-600">
+                        {new Date(activeOrderDetailsMap[selectedOrderId].scheduledDeliveryAt!).toLocaleTimeString('es-MX', {
+                          hour: '2-digit', minute: '2-digit'
+                        })}
+                      </p>
+                    </div>
+                  </div>
+                )}
 
                 {/* Mensaje de Smart Stacking */}
                 {(activeOrderDetailsMap[selectedOrderId] as any).isSecondInRoute && (

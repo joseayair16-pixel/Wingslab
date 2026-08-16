@@ -60,6 +60,21 @@ export function getEtaWindowMinutes(status: string) {
   return { early: 0, late: 0 };
 }
 
+export function formatScheduleDateLabel(isoDate: string | null | undefined, now: number): string {
+  if (!isoDate) return '';
+  const scheduled = new Date(isoDate);
+  if (Number.isNaN(scheduled.getTime())) return '';
+
+  const today = new Date(now);
+  const scheduledDate = new Date(scheduled.getFullYear(), scheduled.getMonth(), scheduled.getDate());
+  const todayDate = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+
+  const diffDays = Math.round((scheduledDate.getTime() - todayDate.getTime()) / (24 * 60 * 60 * 1000));
+  if (diffDays === 0) return 'Hoy';
+  if (diffDays === 1) return 'Mañana';
+  return scheduled.toLocaleDateString('es-MX', { day: 'numeric', month: 'short' });
+}
+
 export function formatEstimatedArrivalMinutes(
   estimatedDeliveryTime: string | undefined,
   status: string,
@@ -380,40 +395,30 @@ export const CompactActiveOrderBanner = memo(function CompactActiveOrderBanner({
           <div className="min-w-0">
             <p className="text-sm font-bold text-neutral-900 truncate">{activeStep?.label || 'Procesando'}</p>
             {order?.scheduledDeliveryAt && !order?.scheduledDeliveryCustomerAcceptedAt ? (
-              <div className="mt-1 rounded-lg bg-amber-50 border border-amber-200 px-3 py-2 shadow-sm">
-                <p className="text-[10px] font-bold uppercase tracking-wider text-amber-700">Fecha programada</p>
-                <p className="text-sm font-black text-amber-900 leading-tight">
-                  {new Date(order.scheduledDeliveryAt).toLocaleDateString('es-MX', {
-                    weekday: 'long', day: 'numeric', month: 'long'
-                  })}
-                </p>
-                <div className="flex items-center gap-1.5 mt-0.5">
-                  <svg className="w-3.5 h-3.5 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <div className="mt-1 rounded-lg bg-amber-50 border border-amber-200 px-2.5 py-1.5 shadow-sm min-w-0">
+                <p className="text-[9px] font-bold uppercase tracking-wider text-amber-700 truncate">Fecha programada</p>
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <svg className="w-3 h-3 text-amber-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <circle cx="12" cy="12" r="8" strokeWidth={2} />
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 7v5l3 3" />
                   </svg>
-                  <span className="text-xs font-bold text-amber-800">
-                    {new Date(order.scheduledDeliveryAt).toLocaleTimeString('es-MX', {
+                  <span className="text-xs font-black text-amber-900 truncate">
+                    {formatScheduleDateLabel(order.scheduledDeliveryAt, currentTimestamp)} · {new Date(order.scheduledDeliveryAt).toLocaleTimeString('es-MX', {
                       hour: '2-digit', minute: '2-digit'
                     })}
                   </span>
                 </div>
               </div>
             ) : order?.scheduledDeliveryAt && order?.scheduledDeliveryCustomerAcceptedAt ? (
-              <div className="mt-1 rounded-lg bg-emerald-50 border border-emerald-200 px-3 py-2 shadow-sm">
-                <p className="text-[10px] font-bold uppercase tracking-wider text-emerald-700">Entrega programada</p>
-                <p className="text-sm font-black text-emerald-900 leading-tight">
-                  {new Date(order.scheduledDeliveryAt).toLocaleDateString('es-MX', {
-                    weekday: 'long', day: 'numeric', month: 'long'
-                  })}
-                </p>
-                <div className="flex items-center gap-1.5 mt-0.5">
-                  <svg className="w-3.5 h-3.5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <div className="mt-1 rounded-lg bg-emerald-50 border border-emerald-200 px-2.5 py-1.5 shadow-sm min-w-0">
+                <p className="text-[9px] font-bold uppercase tracking-wider text-emerald-700 truncate">Entrega programada</p>
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <svg className="w-3 h-3 text-emerald-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <circle cx="12" cy="12" r="8" strokeWidth={2} />
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 7v5l3 3" />
                   </svg>
-                  <span className="text-xs font-bold text-emerald-800">
-                    {new Date(order.scheduledDeliveryAt).toLocaleTimeString('es-MX', {
+                  <span className="text-xs font-black text-emerald-900 truncate">
+                    {formatScheduleDateLabel(order.scheduledDeliveryAt, currentTimestamp)} · {new Date(order.scheduledDeliveryAt).toLocaleTimeString('es-MX', {
                       hour: '2-digit', minute: '2-digit'
                     })}
                   </span>
