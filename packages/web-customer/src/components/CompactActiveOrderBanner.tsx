@@ -395,34 +395,28 @@ export const CompactActiveOrderBanner = memo(function CompactActiveOrderBanner({
           <div className="min-w-0">
             <p className="text-sm font-bold text-neutral-900 truncate">{activeStep?.label || 'Procesando'}</p>
             {order?.scheduledDeliveryAt && !order?.scheduledDeliveryCustomerAcceptedAt ? (
-              <div className="mt-1 rounded-lg bg-amber-50 border border-amber-200 px-2.5 py-1.5 shadow-sm min-w-0">
-                <p className="text-[9px] font-bold uppercase tracking-wider text-amber-700 truncate">Fecha programada</p>
-                <div className="flex items-center gap-1.5 min-w-0">
-                  <svg className="w-3 h-3 text-amber-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <circle cx="12" cy="12" r="8" strokeWidth={2} />
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 7v5l3 3" />
-                  </svg>
-                  <span className="text-xs font-black text-amber-900 truncate">
-                    {formatScheduleDateLabel(order.scheduledDeliveryAt, currentTimestamp)} · {new Date(order.scheduledDeliveryAt).toLocaleTimeString('es-MX', {
-                      hour: '2-digit', minute: '2-digit'
-                    })}
-                  </span>
-                </div>
+              <div className="mt-1 inline-flex max-w-full items-center gap-1.5 rounded-full bg-amber-50 border border-amber-200 px-2.5 py-1">
+                <svg className="w-3 h-3 text-amber-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <circle cx="12" cy="12" r="8" strokeWidth={2} />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 7v5l3 3" />
+                </svg>
+                <span className="text-[11px] font-bold text-amber-900 truncate">
+                  {formatScheduleDateLabel(order.scheduledDeliveryAt, currentTimestamp)} · {new Date(order.scheduledDeliveryAt).toLocaleTimeString('es-MX', {
+                    hour: '2-digit', minute: '2-digit'
+                  })}
+                </span>
               </div>
             ) : order?.scheduledDeliveryAt && order?.scheduledDeliveryCustomerAcceptedAt ? (
-              <div className="mt-1 rounded-lg bg-emerald-50 border border-emerald-200 px-2.5 py-1.5 shadow-sm min-w-0">
-                <p className="text-[9px] font-bold uppercase tracking-wider text-emerald-700 truncate">Entrega programada</p>
-                <div className="flex items-center gap-1.5 min-w-0">
-                  <svg className="w-3 h-3 text-emerald-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <circle cx="12" cy="12" r="8" strokeWidth={2} />
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 7v5l3 3" />
-                  </svg>
-                  <span className="text-xs font-black text-emerald-900 truncate">
-                    {formatScheduleDateLabel(order.scheduledDeliveryAt, currentTimestamp)} · {new Date(order.scheduledDeliveryAt).toLocaleTimeString('es-MX', {
-                      hour: '2-digit', minute: '2-digit'
-                    })}
-                  </span>
-                </div>
+              <div className="mt-1 inline-flex max-w-full items-center gap-1.5 rounded-full bg-emerald-50 border border-emerald-200 px-2.5 py-1">
+                <svg className="w-3 h-3 text-emerald-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <circle cx="12" cy="12" r="8" strokeWidth={2} />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 7v5l3 3" />
+                </svg>
+                <span className="text-[11px] font-bold text-emerald-900 truncate">
+                  {formatScheduleDateLabel(order.scheduledDeliveryAt, currentTimestamp)} · {new Date(order.scheduledDeliveryAt).toLocaleTimeString('es-MX', {
+                    hour: '2-digit', minute: '2-digit'
+                  })}
+                </span>
               </div>
             ) : dynamicRemainingText ? (
               <p className="text-xs text-neutral-500 mt-0.5 truncate">{dynamicRemainingText}</p>

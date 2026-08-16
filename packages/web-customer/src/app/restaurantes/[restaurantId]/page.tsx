@@ -4541,7 +4541,7 @@ function triggerHaptic(pattern: number | number[] = 10) {
         </div>
       )}
 
-      <div className="mx-auto max-w-7xl px-4 py-5 md:px-6 md:py-8">
+      <div className="mx-auto max-w-7xl px-4 pb-5 pt-0 md:px-6 md:pb-8 md:pt-0">
 
         {error ? (
           <div className="mt-5">
@@ -4599,7 +4599,7 @@ function triggerHaptic(pattern: number | number[] = 10) {
           </div>
         ) : restaurant ? (
           <div className="space-y-6">
-            <div className="space-y-6">
+            <div className="space-y-3">
               <section className={`-mx-4 ${error ? 'mt-4' : 'mt-0'} lg:mx-0 lg:mt-0 overflow-hidden border-y border-black/5 dark:border-zinc-900/80 bg-[var(--menu-surface)] dark:bg-[var(--menu-surface-dark)] shadow-[0_18px_60px_rgba(15,15,15,0.05)] dark:shadow-none lg:rounded-[32px] lg:border lg:border-black/5 lg:dark:border-zinc-900/80`}>
                 <div className="relative">
                   {restaurant.coverImage ? (
@@ -4643,7 +4643,7 @@ function triggerHaptic(pattern: number | number[] = 10) {
                   </div>
                 </div>
 
-                <div className="relative px-4 pb-4 pt-0 text-sm text-neutral-600 dark:text-neutral-300 md:px-6 md:pb-5 lg:px-7 lg:pt-5">
+                <div className="relative px-4 pb-2 pt-0 text-sm text-neutral-600 dark:text-neutral-300 md:px-6 md:pb-3 lg:px-7 lg:pt-5">
                   <div className="-mt-14 flex flex-col items-center text-center lg:hidden">
                     <div className="flex h-24 w-24 items-center justify-center overflow-hidden rounded-[22px] border-4 border-white dark:border-neutral-900 bg-white dark:bg-neutral-900 shadow-[0_8px_20px_rgba(15,15,15,0.14)] dark:shadow-none">
                       {restaurant.logo ? (
