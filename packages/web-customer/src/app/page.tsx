@@ -1044,6 +1044,7 @@ export default function Home() {
   const [isSideMenuOpen, setIsSideMenuOpen] = useState(false);
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [cartPulse, setCartPulse] = useState(false);
+  const [hideCartButton, setHideCartButton] = useState(false);
   const [userRegion, setUserRegion] = useState('Mi ciudad');
   const [pullDistance, setPullDistance] = useState(0);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -1056,6 +1057,19 @@ export default function Home() {
   const transientNoticeTimeoutRef = useRef<number | null>(null);
   const recentNoticeKeysRef = useRef<string[]>([]);
   const orderStatusSnapshotRef = useRef<Record<string, string>>({});
+
+  // Ocultar el botón flotante de carrito al llegar al fondo de la página para
+  // no tapar el contenido del footer; reaparece al hacer scroll hacia arriba.
+  useEffect(() => {
+    const handleScroll = () => {
+      const scrolledToBottom =
+        window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 80;
+      setHideCartButton(scrolledToBottom);
+    };
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    handleScroll();
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -6466,7 +6480,9 @@ export default function Home() {
 
       {/* Floating Checkout Button */}
       {cart.length > 0 && !isCartOpen && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[45] w-[calc(100%-2rem)] max-w-sm pointer-events-auto pb-[env(safe-area-inset-bottom)]">
+        <div className={`fixed bottom-6 left-1/2 -translate-x-1/2 z-[45] w-[calc(100%-2rem)] max-w-sm pointer-events-auto pb-[env(safe-area-inset-bottom)] transition-all duration-300 ${
+          hideCartButton ? 'pointer-events-none translate-y-24 opacity-0' : ''
+        }`}>
           <button
             type="button"
             onClick={() => setIsCartOpen(true)}

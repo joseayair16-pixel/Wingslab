@@ -632,6 +632,20 @@ export default function RestaurantPage({
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(() => searchParams?.checkout === 'true');
   const [cartJustUpdated, setCartJustUpdated] = useState(false);
   const [cartPulse, setCartPulse] = useState(false);
+  const [hideCartButton, setHideCartButton] = useState(false);
+
+  // Ocultar el botón flotante de carrito al llegar al fondo de la página para
+  // no tapar las redes sociales del footer; reaparece al hacer scroll hacia arriba.
+  useEffect(() => {
+    const handleScroll = () => {
+      const scrolledToBottom =
+        window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 80;
+      setHideCartButton(scrolledToBottom);
+    };
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    handleScroll();
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
   const [transferProofName, setTransferProofName] = useState('');
   const [transferProofSource, setTransferProofSource] = useState('');
   const [error, setError] = useState('');
@@ -5825,7 +5839,9 @@ function triggerHaptic(pattern: number | number[] = 10) {
 
       {/* Floating Checkout Button */}
       {cart.length > 0 && !isCartOpen && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[45] w-[calc(100%-2rem)] max-w-sm pointer-events-auto pb-[env(safe-area-inset-bottom)]">
+        <div className={`fixed bottom-6 left-1/2 -translate-x-1/2 z-[45] w-[calc(100%-2rem)] max-w-sm pointer-events-auto pb-[env(safe-area-inset-bottom)] transition-all duration-300 ${
+          hideCartButton ? 'pointer-events-none translate-y-24 opacity-0' : ''
+        }`}>
           <button
             type="button"
             onClick={() => setIsCartOpen(true)}
