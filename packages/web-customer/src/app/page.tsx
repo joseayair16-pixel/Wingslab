@@ -5084,7 +5084,7 @@ export default function Home() {
                 <div className="md:col-span-5 space-y-3 text-left">
                   <SaDelLogo className="h-8 w-auto object-contain" />
                   <p className="text-xs text-neutral-500 font-medium leading-relaxed max-w-sm mt-3">
-                    Conectando los mejores platillos de tu zona con un servicio de entrega rápido, transparente y confiable.
+                    Lo mejor de tu localidad, directo a tu puerta. Tus restaurantes y comercios favoritos en minutos. Pídelo por SaDeL.
                   </p>
                 </div>
 

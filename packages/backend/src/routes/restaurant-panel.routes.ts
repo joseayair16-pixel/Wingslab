@@ -407,6 +407,7 @@ export async function registerRestaurantPanelRoutes(fastify: FastifyInstance): P
           totalAmount: true,
           serviceFee: true,
           platformFee: true,
+          whatsappFee: true,
           createdAt: true,
           customer: {
             select: {
@@ -489,6 +490,7 @@ export async function registerRestaurantPanelRoutes(fastify: FastifyInstance): P
           totalAmount: true,
           serviceFee: true,
           platformFee: true,
+          whatsappFee: true,
           createdAt: true,
           customer: {
             select: {

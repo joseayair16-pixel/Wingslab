@@ -9,7 +9,7 @@ import { logger } from '../utils/logger';
 import { buildApartmentWhere } from '../utils/address';
 import { calculateOrderEta } from '../utils/order-eta';
 
-const WHATSAPP_NOTIFICATION_FEE = 1;
+const WHATSAPP_NOTIFICATION_FEE = 0.5;
 
 type OrderInput = {
   restaurantId: string;

@@ -12390,9 +12390,15 @@ export default function Home() {
                                 <span className="text-[10px] text-sky-600 font-semibold">Plataforma:</span>
                                 <span className="font-bold tabular-nums">${(order.platformFee || 0).toFixed(2)}</span>
                               </p>
+                              {order.whatsappFee > 0 && (
+                                <p className="flex justify-between gap-3 sm:gap-4 mt-0.5">
+                                  <span className="text-[10px] text-sky-600 font-semibold">WhatsApp:</span>
+                                  <span className="font-bold tabular-nums">${(order.whatsappFee || 0).toFixed(2)}</span>
+                                </p>
+                              )}
                               <div className="border-t border-sky-200/50 mt-1 pt-1 flex justify-between gap-3 sm:gap-4 font-black">
                                 <span className="text-[10px] text-sky-700">Comisión Total:</span>
-                                <span className="tabular-nums">${((order.serviceFee || 0) + (order.platformFee || 0)).toFixed(2)}</span>
+                                <span className="tabular-nums">${((order.serviceFee || 0) + (order.platformFee || 0) + (order.whatsappFee || 0)).toFixed(2)}</span>
                               </div>
                             </div>
                           </div>
@@ -12494,9 +12500,15 @@ export default function Home() {
                                 <span className="text-[10px] text-sky-600 font-semibold">Plataforma:</span>
                                 <span className="font-bold tabular-nums">${(order.platformFee || 0).toFixed(2)}</span>
                               </p>
+                              {order.whatsappFee > 0 && (
+                                <p className="flex justify-between gap-3 sm:gap-4 mt-0.5">
+                                  <span className="text-[10px] text-sky-600 font-semibold">WhatsApp:</span>
+                                  <span className="font-bold tabular-nums">${(order.whatsappFee || 0).toFixed(2)}</span>
+                                </p>
+                              )}
                               <div className="border-t border-sky-200/50 mt-1 pt-1 flex justify-between gap-3 sm:gap-4 font-black">
                                 <span className="text-[10px] text-sky-700">Comisión Total:</span>
-                                <span className="tabular-nums">${((order.serviceFee || 0) + (order.platformFee || 0)).toFixed(2)}</span>
+                                <span className="tabular-nums">${((order.serviceFee || 0) + (order.platformFee || 0) + (order.whatsappFee || 0)).toFixed(2)}</span>
                               </div>
                             </div>
                           </div>

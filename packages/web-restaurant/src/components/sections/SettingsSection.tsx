@@ -1441,7 +1441,7 @@ export const SettingsSection = React.memo(function SettingsSection({
                 />
                 <ToggleField
                   label="Notificaciones por WhatsApp"
-                  description="Recibe un mensaje en WhatsApp cuando llegue un pedido nuevo (costo $1 MXN por pedido). Configura tu número en el perfil."
+                  description="Recibe un mensaje en WhatsApp cuando llegue un pedido nuevo (costo $0.50 MXN por pedido). Configura tu número en el perfil."
                   checked={!!storeDraft.whatsappNotifications}
                   onChange={async (checked: boolean) => {
                     if (checked) {
@@ -1901,7 +1901,7 @@ export const SettingsSection = React.memo(function SettingsSection({
             <div className="mt-4 rounded-2xl border border-emerald-100 bg-emerald-50 p-4">
               <div className="flex items-center justify-between">
                 <span className="text-sm font-semibold text-neutral-800">Costo por pedido</span>
-                <span className="text-sm font-bold text-neutral-900">$1.00 MXN</span>
+                <span className="text-sm font-bold text-neutral-900">$0.50 MXN</span>
               </div>
               <p className="mt-1 text-xs text-neutral-500">
                 Este cargo se suma a tu tarifa de uso y aparecerá en tu liquidación semanal. Solo se cobra cuando se envía el mensaje de un pedido.
