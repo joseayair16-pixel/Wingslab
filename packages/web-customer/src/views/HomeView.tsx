@@ -285,7 +285,7 @@ export const HomeView = React.memo(function HomeView({
                       : 'bg-neutral-100 text-neutral-500 shadow-[inset_0_1px_0_rgba(255,255,255,0.6)] group-hover:bg-neutral-200 group-hover:text-neutral-700 group-hover:scale-105'
                       }`}
                     >
-                      <CategoryIcon name={category.icon} className="h-[22px] w-[22px]" />
+                      <CategoryIcon name={category.icon} className="h-[24px] w-[24px] sm:h-[26px] sm:w-[26px] md:h-[30px] md:w-[30px]" />
                     </span>
                     <span className={`w-full truncate text-[10px] font-semibold leading-3 transition-colors duration-300 sm:text-[11px] md:text-xs ${isActive ? 'text-sky-700' : 'text-neutral-600 group-hover:text-neutral-900'}`}>
                       {category.name}
