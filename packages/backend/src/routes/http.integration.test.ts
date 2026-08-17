@@ -37,6 +37,18 @@ describe('http integration contracts', () => {
       driver: null,
       order: null,
     } as any);
+    jest.spyOn(prisma.order, 'findUnique').mockImplementation(async ({ where }: { where?: { id?: string } } = {}) => {
+      if (where?.id === 'order-1' || where?.id === 'order-10') {
+        return {
+          supportRestaurantId: null,
+          status: OrderStatus.READY,
+          driverId: null,
+          fulfillmentType: 'DELIVERY',
+          restaurant: { hasOwnDelivery: false },
+        } as never;
+      }
+      return null as never;
+    });
   });
 
   afterEach(() => {

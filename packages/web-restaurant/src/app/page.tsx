@@ -651,7 +651,6 @@ const preparationTimePresets: Array<{
     { value: 45, label: '45 min', description: 'Volumen muy alto o platillos complejos.' },
     { value: 60, label: '1 h', description: 'Pico extremo de operaciones.' },
   ];
-const assignableStatuses: OrderStatus[] = ['CONFIRMED', 'PREPARING', 'READY'];
 const orderStatusOptions: Array<{ label: string; value: 'ACTIVE' | 'REJECTED' | 'CANCELLED' | 'DELIVERED' | 'COMPLETED' }> = [
   { label: 'En preparacion', value: 'ACTIVE' },
   { label: 'Entregados / Recogidos', value: 'DELIVERED' },
@@ -9222,9 +9221,9 @@ export default function Home() {
                                 : getRestaurantActions(order, hasOwnDelivery));
                           const selectedDriverId = selectedDriverByOrder[order.id] || '';
                           const canAssignDriver =
-                            hasOwnDelivery &&
+                            !hasOwnDelivery &&
+                            order.status === 'READY' &&
                             !order.driver &&
-                            assignableStatuses.includes(order.status) &&
                             drivers.length > 0;
 
                           return (
@@ -9959,11 +9958,14 @@ export default function Home() {
                                 </div>
                               </div>
 
-                              {/* Asignar Repartidor (Si aplica) */}
+                              {/* Asignar Repartidor (Solo emergencia: pedido listo sin repartidor) */}
                               {canAssignDriver ? (
-                                <div className="mt-3 grid gap-3 rounded-[24px] border border-emerald-100 bg-emerald-50 p-4 md:grid-cols-[1fr_auto] md:items-end" onClick={(e) => e.stopPropagation()}>
-                                  <label className="grid gap-2 text-sm text-emerald-700">
-                                    <span className="font-medium">Asignar repartidor</span>
+                                <div className="mt-3 grid gap-3 rounded-[24px] border border-amber-200 bg-amber-50 p-4 md:grid-cols-[1fr_auto] md:items-end" onClick={(e) => e.stopPropagation()}>
+                                  <label className="grid gap-2 text-sm text-amber-800">
+                                    <span className="font-semibold flex items-center gap-1.5">
+                                      <span className="text-base">⚠️</span> Asignar repartidor (emergencia)
+                                    </span>
+                                    <span className="text-xs font-normal text-amber-600">El pedido está listo sin repartidor. Elige uno disponible para no retrasar la entrega.</span>
                                     <select
                                       value={selectedDriverId}
                                       onChange={(event) =>
@@ -9972,7 +9974,7 @@ export default function Home() {
                                           [order.id]: event.target.value,
                                         }))
                                       }
-                                      className="rounded-2xl border border-emerald-200 bg-white px-4 py-3 text-neutral-950 outline-none transition focus:border-emerald-300"
+                                      className="rounded-2xl border border-amber-200 bg-white px-4 py-3 text-neutral-950 outline-none transition focus:border-amber-300"
                                     >
                                       <option value="">
                                         Selecciona un repartidor disponible
@@ -9988,7 +9990,7 @@ export default function Home() {
                                     type="button"
                                     onClick={() => void assignDriver(order.id)}
                                     disabled={activeActionKey === `${order.id}:assign` || !selectedDriverId}
-                                    className="rounded-full border border-sky-300 bg-sky-500 px-4 py-3 font-semibold text-white shadow-[0_12px_30px_rgba(14,165,233,0.22)] transition hover:bg-sky-400 disabled:cursor-not-allowed disabled:border-black/5 disabled:bg-neutral-300 disabled:shadow-none"
+                                    className="rounded-full border border-amber-300 bg-amber-500 px-4 py-3 font-semibold text-white shadow-[0_12px_30px_rgba(245,158,11,0.22)] transition hover:bg-amber-400 disabled:cursor-not-allowed disabled:border-black/5 disabled:bg-neutral-300 disabled:shadow-none"
                                   >
                                     {activeActionKey === `${order.id}:assign`
                                       ? 'Asignando...'

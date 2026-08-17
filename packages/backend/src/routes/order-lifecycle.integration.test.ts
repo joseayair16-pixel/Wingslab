@@ -446,6 +446,21 @@ describe('order lifecycle integration flow', () => {
 
       return null as never;
     });
+
+    const orderFindUniqueSpy = jest.spyOn(prisma.order, 'findUnique') as unknown as jest.Mock;
+    orderFindUniqueSpy.mockImplementation(async ({ where }: { where?: { id?: string } }) => {
+      if (where?.id === state.orderId) {
+        return {
+          supportRestaurantId: null,
+          status: state.status,
+          driverId: state.driverAssigned ? state.driverId : null,
+          fulfillmentType: 'DELIVERY',
+          restaurant: { hasOwnDelivery: false },
+        } as never;
+      }
+
+      return null as never;
+    });
   });
 
   afterEach(() => {

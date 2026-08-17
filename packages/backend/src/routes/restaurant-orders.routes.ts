@@ -810,8 +810,24 @@ export async function registerRestaurantOrderRoutes(fastify: FastifyInstance): P
       try {
         const targetOrder = await prisma.order.findUnique({
           where: { id: params.data.id },
-          select: { supportRestaurantId: true },
+          select: {
+            supportRestaurantId: true,
+            status: true,
+            driverId: true,
+            fulfillmentType: true,
+            restaurant: { select: { hasOwnDelivery: true } },
+          },
         });
+
+        if (!targetOrder) {
+          return reply.status(404).send({
+            success: false,
+            error: {
+              code: 'ORDER_NOT_FOUND',
+              message: 'No se encontro el pedido.',
+            },
+          });
+        }
 
         if (targetOrder?.supportRestaurantId) {
           return reply.status(400).send({
@@ -819,6 +835,47 @@ export async function registerRestaurantOrderRoutes(fastify: FastifyInstance): P
             error: {
               code: 'ALREADY_SUPPORTED',
               message: 'Este pedido ya fue aceptado por un restaurante aliado y no puede asignarse a un repartidor.',
+            },
+          });
+        }
+
+        // Asignación manual SOLO como emergencia: pedido listo sin repartidor y que usa la red SaDeL.
+        if (targetOrder.fulfillmentType === 'PICKUP') {
+          return reply.status(400).send({
+            success: false,
+            error: {
+              code: 'PICKUP_ORDER',
+              message: 'No se puede asignar un repartidor a un pedido para recoger en tienda.',
+            },
+          });
+        }
+
+        if (targetOrder.restaurant.hasOwnDelivery) {
+          return reply.status(400).send({
+            success: false,
+            error: {
+              code: 'OWN_DELIVERY_ORDER',
+              message: 'Este restaurante maneja reparto propio para este pedido.',
+            },
+          });
+        }
+
+        if (targetOrder.status !== OrderStatus.READY) {
+          return reply.status(400).send({
+            success: false,
+            error: {
+              code: 'ORDER_NOT_READY',
+              message: 'La asignacion manual de repartidor solo esta disponible para pedidos listos sin repartidor asignado.',
+            },
+          });
+        }
+
+        if (targetOrder.driverId) {
+          return reply.status(400).send({
+            success: false,
+            error: {
+              code: 'DRIVER_ALREADY_ASSIGNED',
+              message: 'Este pedido ya tiene un repartidor asignado.',
             },
           });
         }
