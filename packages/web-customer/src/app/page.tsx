@@ -150,6 +150,7 @@ type CustomerOrderListItem = {
     longitude?: number;
   };
   fulfillmentType?: 'DELIVERY' | 'PICKUP';
+  noDriversAvailable?: boolean;
   address: {
     street: string;
     number: string;
@@ -239,6 +240,7 @@ type CustomerOrderDetail = {
   fulfillmentType?: 'DELIVERY' | 'PICKUP';
   scheduledDeliveryAt?: string | null;
   scheduledDeliveryCustomerAcceptedAt?: string | null;
+  noDriversAvailable?: boolean;
 };
 
 type PaginatedOrdersResponse = {
@@ -275,7 +277,7 @@ type TransientNotice = {
   id: string;
   title: string;
   description: string;
-  tone: 'success' | 'danger' | 'info';
+  tone: 'success' | 'danger' | 'info' | 'warning';
   requiresAcknowledgement?: boolean;
   dismissible?: boolean;
   orderId?: string;
@@ -418,6 +420,8 @@ const liveEvents = [
   'order:schedule-proposal',
   'order:schedule-accepted',
   'order:schedule-rejected',
+  'order:no-drivers-available',
+  'order:delay',
 ] as const;
 
 function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
@@ -3211,6 +3215,28 @@ export default function Home() {
         } else if (eventName === 'order:schedule-rejected') {
           setScheduleProposalOrder(null);
           window.dispatchEvent(new CustomEvent('order-updated'));
+        } else if (eventName === 'order:no-drivers-available') {
+          const matchingOrder = orders.find((o) => o.id === payload.orderId);
+          showTransientNotice({
+            key: `socket-no-drivers:${liveEventKey}`,
+            title: '⏳ Buscando repartidor',
+            description: `Tu pedido de ${matchingOrder?.restaurant?.name || 'tu restaurante'} aún no tiene repartidor asignado, pero seguiremos intentando. Gracias por tu paciencia.`,
+            tone: 'info',
+            requiresAcknowledgement: false,
+            orderReference: matchingOrder?.orderReference,
+            orderId: payload.orderId,
+          });
+        } else if (eventName === 'order:delay') {
+          const matchingOrder = orders.find((o) => o.id === payload.orderId);
+          showTransientNotice({
+            key: `socket-delay:${liveEventKey}`,
+            title: '⏰ Tu pedido va con retraso',
+            description: `Tu pedido de ${matchingOrder?.restaurant?.name || 'tu restaurante'} va con retraso. El negocio ya fue notificado y está trabajando en ello.`,
+            tone: 'warning',
+            requiresAcknowledgement: false,
+            orderReference: matchingOrder?.orderReference,
+            orderId: payload.orderId,
+          });
         } else if (eventName === 'order:ready') {
           try {
             if (window.localStorage.getItem('customerAlertSoundEnabled') !== 'false') {
@@ -3668,7 +3694,7 @@ export default function Home() {
     key: string;
     title: string;
     description: string;
-    tone: 'success' | 'danger' | 'info';
+    tone: 'success' | 'danger' | 'info' | 'warning';
     requiresAcknowledgement?: boolean;
     dismissible?: boolean;
     orderId?: string;
@@ -5496,6 +5522,38 @@ export default function Home() {
                       </div>
                     )}
 
+                    {/* Sin repartidor disponible: informar proactivamente */}
+                    {selectedOrder.noDriversAvailable && ['CONFIRMED', 'PREPARING', 'READY'].includes(selectedOrder.status) && (
+                      <div className="flex items-start gap-3 p-4 rounded-2xl border border-amber-300 bg-amber-50/80 shadow-sm">
+                        <span className="relative flex h-3 w-3 mt-1 shrink-0">
+                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                          <span className="relative inline-flex rounded-full h-3 w-3 bg-amber-500"></span>
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-[10px] font-bold uppercase tracking-widest text-amber-600">Buscando repartidor</p>
+                          <p className="text-sm font-bold text-neutral-900">
+                            Todavía no hay un repartidor disponible para tu pedido.
+                          </p>
+                          <p className="text-xs text-neutral-600 mt-1 leading-snug">
+                            Estamos trabajando para asignarlo lo antes posible. No canceles tu pedido, llegará.
+                          </p>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              useChatStore.getState().openChat(selectedOrder.id);
+                              setIsDetailModalOpen(false);
+                            }}
+                            className="mt-3 w-full flex items-center justify-center gap-2 rounded-full bg-amber-500 hover:bg-amber-600 py-2.5 text-xs font-bold text-white shadow-sm transition-all active:scale-[0.97]"
+                          >
+                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                            </svg>
+                            Contactar al negocio
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
                     {/* Mensaje de Batch */}
                     {selectedOrder.batchId && selectedOrder.deliverySequence && selectedOrder.status === 'IN_TRANSIT' && (
                       <div className="flex items-center gap-3 p-4 bg-amber-50 rounded-2xl border border-amber-100 text-amber-800 text-sm">
@@ -7141,6 +7199,11 @@ function TransientNoticeBanner({
       badge: 'bg-sky-50 text-sky-700 border-sky-200',
       label: 'Información',
     },
+    warning: {
+      iconCircle: 'bg-amber-50 text-amber-600 border-amber-200',
+      badge: 'bg-amber-50 text-amber-700 border-amber-200',
+      label: 'Aviso',
+    },
   } as const;
 
   const s = styles[notice.tone];
@@ -7279,6 +7342,8 @@ const notificationTitleMap: Record<(typeof liveEvents)[number], string> = {
   'order:schedule-proposal': 'Propuesta de fecha de entrega',
   'order:schedule-accepted': 'Fecha de entrega confirmada',
   'order:schedule-rejected': 'Fecha de entrega rechazada',
+  'order:no-drivers-available': 'Buscando repartidor',
+  'order:delay': 'Tu pedido va con retraso',
 };
 
 function isActiveOrderStatus(status: string) {
@@ -7319,6 +7384,18 @@ function buildNotificationMessage(
 
   if (eventName === 'order:cancelled') {
     return 'Tu pedido fue cancelado. Revisa el motivo en tu app.';
+  }
+
+  if (eventName === 'order:schedule-rejected') {
+    return 'La fecha de entrega fue rechazada.';
+  }
+
+  if (eventName === 'order:no-drivers-available') {
+    return 'Tu pedido aún no tiene repartidor asignado. Seguiremos intentando asignarlo lo antes posible.';
+  }
+
+  if (eventName === 'order:delay') {
+    return 'Tu pedido va con retraso. El negocio ya fue notificado y está trabajando para que llegue lo antes posible.';
   }
 
   return payload.orderId

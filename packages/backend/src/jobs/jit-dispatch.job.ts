@@ -2,7 +2,7 @@ import cron from 'node-cron';
 import { FastifyInstance } from 'fastify';
 import { OrderStatus } from '@prisma/client';
 import { prisma } from '../config/database';
-import { autoAssignDriver } from '../services/order-workflow.service';
+import { autoAssignDriver, notifyCustomerNoDriversAvailable } from '../services/order-workflow.service';
 import { emitNotification } from '../services/socket.service';
 import { logger } from '../utils/logger';
 
@@ -89,48 +89,54 @@ export function startJitDispatchJob(fastify: FastifyInstance) {
           // Utilizar la misma función de asignación (incluye reglas estrictas y relajadas)
           const assignResult = await autoAssignDriver(prisma, order.id, order.restaurant.userId);
           
-          if (assignResult.success && assignResult.driver && assignResult.order) {
-            const updatedOrder = assignResult.order;
-            logger.info(`[JIT-Dispatch] Asignado exitosamente a repartidor ${assignResult.driver.id} para pedido ${order.id}`);
-            
-            // Emitir evento a driver
-            emitNotification(
-              fastify.io,
-              assignResult.driver.userId,
-              'DRIVER',
-              'order:assigned',
-              {
-                orderId: updatedOrder.id,
-                orderReference: updatedOrder.orderReference,
-                restaurantName: order.restaurant.name,
-                customerName: order.customer.user.name,
-              }
-            );
+            if (assignResult.success && assignResult.driver && assignResult.order) {
+              const updatedOrder = assignResult.order;
+              logger.info(`[JIT-Dispatch] Asignado exitosamente a repartidor ${assignResult.driver.id} para pedido ${order.id}`);
+              
+              // Emitir evento a driver
+              emitNotification(
+                fastify.io,
+                assignResult.driver.userId,
+                'DRIVER',
+                'order:assigned',
+                {
+                  orderId: updatedOrder.id,
+                  orderReference: updatedOrder.orderReference,
+                  restaurantName: order.restaurant.name,
+                  customerName: order.customer.user.name,
+                }
+              );
 
-            // Notificar cliente
-            emitNotification(
-              fastify.io,
-              order.customer.user.id,
-              'CUSTOMER',
-              'order:driver-assigned',
-              {
-                orderId: updatedOrder.id,
-                driverName: assignResult.driver.user.name,
-              }
-            );
+              // Notificar cliente
+              emitNotification(
+                fastify.io,
+                order.customer.user.id,
+                'CUSTOMER',
+                'order:driver-assigned',
+                {
+                  orderId: updatedOrder.id,
+                  driverName: assignResult.driver.user.name,
+                }
+              );
 
-            // Notificar restaurante
-            emitNotification(
-              fastify.io,
-              order.restaurant.userId,
-              'RESTAURANT',
-              'order:driver-assigned',
-              {
-                orderId: updatedOrder.id,
-                driverName: assignResult.driver.user.name,
-              }
-            );
-          } else {
+              // Notificar restaurante
+              emitNotification(
+                fastify.io,
+                order.restaurant.userId,
+                'RESTAURANT',
+                'order:driver-assigned',
+                {
+                  orderId: updatedOrder.id,
+                  driverName: assignResult.driver.user.name,
+                }
+              );
+            } else if (assignResult.alreadyAssigned) {
+              // Otro proceso concurrente ya asignó este pedido a un
+              // repartidor. No marcar como "sin repartidor".
+              logger.info(
+                `[JIT-Dispatch] Pedido ${order.id} ya fue asignado por otro proceso; se omite noDriversAvailable.`
+              );
+            } else {
             // Si falla, revisamos si ya habíamos notificado
             const currentOrderData = await prisma.order.findUnique({
               where: { id: order.id },
@@ -142,7 +148,7 @@ export function startJitDispatchJob(fastify: FastifyInstance) {
                 where: { id: order.id },
                 data: { noDriversAvailable: true },
               });
-              
+
               emitNotification(
                 fastify.io,
                 order.restaurant.userId,
@@ -155,6 +161,8 @@ export function startJitDispatchJob(fastify: FastifyInstance) {
                     : 'Tu pedido está por estar listo, pero no hay repartidores disponibles en este momento.',
                 }
               );
+
+              notifyCustomerNoDriversAvailable(fastify.io, order);
             }
           }
         } catch (err) {

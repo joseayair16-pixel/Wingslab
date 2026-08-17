@@ -18,6 +18,7 @@ import {
   sweepUnassignedOrdersForRegion,
   incrementDriverRejection,
   getDriverRejectionCount,
+  notifyCustomerNoDriversAvailable,
 } from '../services/order-workflow.service';
 import { getOrCreateRequestContext } from '../utils/request-context';
 import { sendPushNotification } from '../services/notification.service';
@@ -2120,47 +2121,53 @@ export async function registerDriverPanelRoutes(fastify: FastifyInstance): Promi
               order.restaurant.userId,
               driver.id
             );
-            if (assignResult.success && assignResult.driver && assignResult.order) {
-              const newOrder = assignResult.order;
+                if (assignResult.success && assignResult.driver && assignResult.order) {
+                  const newOrder = assignResult.order;
 
-              emitNotification(
-                fastify.io,
-                assignResult.driver.userId,
-                'DRIVER',
-                'order:assigned',
-                {
-                  orderId: newOrder.id,
-                  orderReference: newOrder.orderReference,
-                  restaurantName: newOrder.restaurant.name,
-                  customerName: newOrder.customer.user.name,
-                },
-                { requestId: requestContext.requestId, orderId: newOrder.id }
-              );
+                  emitNotification(
+                    fastify.io,
+                    assignResult.driver.userId,
+                    'DRIVER',
+                    'order:assigned',
+                    {
+                      orderId: newOrder.id,
+                      orderReference: newOrder.orderReference,
+                      restaurantName: newOrder.restaurant.name,
+                      customerName: newOrder.customer.user.name,
+                    },
+                    { requestId: requestContext.requestId, orderId: newOrder.id }
+                  );
 
-              emitNotification(
-                fastify.io,
-                order.restaurant.userId,
-                'RESTAURANT',
-                'order:driver-assigned',
-                {
-                  orderId: newOrder.id,
-                  driverName: assignResult.driver.user.name,
-                },
-                { requestId: requestContext.requestId, orderId: newOrder.id }
-              );
+                  emitNotification(
+                    fastify.io,
+                    order.restaurant.userId,
+                    'RESTAURANT',
+                    'order:driver-assigned',
+                    {
+                      orderId: newOrder.id,
+                      driverName: assignResult.driver.user.name,
+                    },
+                    { requestId: requestContext.requestId, orderId: newOrder.id }
+                  );
 
-              emitNotification(
-                fastify.io,
-                newOrder.customer.user.id,
-                'CUSTOMER',
-                'order:driver-assigned',
-                {
-                  orderId: newOrder.id,
-                  driverName: assignResult.driver.user.name,
-                },
-                { requestId: requestContext.requestId, orderId: newOrder.id }
-              );
-            } else {
+                  emitNotification(
+                    fastify.io,
+                    newOrder.customer.user.id,
+                    'CUSTOMER',
+                    'order:driver-assigned',
+                    {
+                      orderId: newOrder.id,
+                      driverName: assignResult.driver.user.name,
+                    },
+                    { requestId: requestContext.requestId, orderId: newOrder.id }
+                  );
+                } else if (assignResult.alreadyAssigned) {
+                  // Otro proceso concurrente ya asignó el pedido a otro
+                  // repartidor. No marcar como "sin repartidor".
+                  request.log.info(
+                    `Order ${params.data.id} was already assigned by another process after release; skipping noDriversAvailable.`
+                  );
+                } else {
               await prisma.order.update({
                 where: { id: params.data.id },
                 data: { noDriversAvailable: true },
@@ -2178,6 +2185,8 @@ export async function registerDriverPanelRoutes(fastify: FastifyInstance): Promi
                 },
                 { requestId: requestContext.requestId, orderId: params.data.id }
               );
+
+              notifyCustomerNoDriversAvailable(fastify.io, order);
             }
           } catch (assignErr) {
             console.error('Failed to auto-reassign driver on release:', assignErr);

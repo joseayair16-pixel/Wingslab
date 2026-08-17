@@ -5,6 +5,7 @@ import { prisma } from '../config/database';
 import { sendPushNotification } from '../services/notification.service';
 import { emitNotification } from '../services/socket.service';
 import { logger } from '../utils/logger';
+import { getBusinessRef } from '../utils/restaurant';
 
 const RESTAURANT_LEVELS_MINUTES = [5, 10, 20, 35];
 const STORE_LEVELS_MINUTES = [5];
@@ -84,6 +85,12 @@ export function startOverduePreparationJob(fastify: FastifyInstance) {
         },
         include: {
           restaurant: { select: { id: true, userId: true, name: true, businessType: true } },
+          customer: {
+            select: {
+              userId: true,
+              user: { select: { id: true } },
+            },
+          },
         },
         take: 100,
       });
@@ -141,6 +148,35 @@ export function startOverduePreparationJob(fastify: FastifyInstance) {
             maxLevel,
             businessType: order.restaurant.businessType,
           });
+
+          // Notificar al cliente proactivamente en niveles altos de retraso
+          // (>= 2) para reducir reclamos: el cliente sabe que su pedido va con
+          // retraso y que el negocio ya fue alertado.
+          if (level >= 2) {
+            const customerUserId = order.customer?.user?.id || order.customer?.userId;
+            if (customerUserId) {
+              try {
+                await sendPushNotification(customerUserId, {
+                  title: level >= 3 ? '🚨 Tu pedido va con retraso' : '⏰ Tu pedido va con retraso',
+                  body: `Tu pedido de ${order.restaurant.name} lleva ${minutes} min de retraso. El ${getBusinessRef(order.restaurant.businessType)} ya fue notificado y está trabajando en ello.`,
+                  icon: PUSH_ICON_URL,
+                  badge: PUSH_ICON_URL,
+                  tag: `overdue-customer-${order.id}`,
+                  vibrate: [500, 200, 500],
+                  requireInteraction: true,
+                  data: { orderId: order.id, event: 'order:delay', url: `/?orderId=${order.id}` },
+                });
+
+                emitNotification(fastify.io, customerUserId, 'CUSTOMER', 'order:delay', {
+                  orderId: order.id,
+                  minutesOverdue: minutes,
+                  level,
+                });
+              } catch (custPushErr) {
+                logger.warn(`[OverduePreparation] Error al notificar retraso al cliente ${customerUserId}:`, custPushErr);
+              }
+            }
+          }
 
           await prisma.order.update({
             where: { id: order.id },

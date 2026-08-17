@@ -7,7 +7,7 @@ import {
   PaymentMethod,
   PaymentStatus,
 } from '@prisma/client';
-import { AppError } from '../errors/app-error';
+import { AppError, isAppError } from '../errors/app-error';
 import {
   driverScopedOrderSelect,
   restaurantOrderWorkflowSelect,
@@ -23,6 +23,7 @@ import { logger } from '../utils/logger';
 import { appEvents } from '../utils/events';
 import { calculateOrderEta, estimateDeliveryTravelMinutes } from '../utils/order-eta';
 import { sendPushNotification } from './notification.service';
+import { emitNotification } from './socket.service';
 import { sendWhatsAppDriverDemand } from './whatsapp.service';
 import { createTransferRefundTicket } from './refund-ticket.service';
 
@@ -197,10 +198,11 @@ export async function getActiveSinceMs(orderId: string): Promise<number | null> 
 
 // ====== Redis-Backed Driver Rejection Tracking ======
 // Tracks how many times a driver has rejected an order.
-// Max 2 rejections before permanent exclusion.
-// Keys: rejection:{orderId}:{driverId} → count (TTL: 1 hour)
+// Max 2 rejections before temporary exclusion (15 min TTL) para que el pool
+// nunca quede "congelado": si todos rechazan 2 veces, se reintenta al expirar.
+// Keys: rejection:{orderId}:{driverId} → count (TTL: 15 minutes)
 
-const REJECTION_TTL = 3600;
+const REJECTION_TTL = 900;
 
 export async function getDriverRejectionCount(orderId: string, driverId: string): Promise<number> {
   try {
@@ -840,13 +842,34 @@ export async function assignDriverToOrder({
       );
     }
 
-    const updated = await tx.order.update({
-      where: { id: order.id },
+    // Asignación atómica: solo se asigna si el pedido sigue SIN repartidor.
+    // Esto evita que dos procesos concurrentes (JIT job, sweep, auto-assign,
+    // asignación manual) asignen el mismo pedido a 2 repartidores distintos
+    // (carrera TOCTOU). updateMany con driverId: null es atómico a nivel de
+    // fila en la base de datos: si otra transacción ya asignó, count = 0.
+    const claimed = await tx.order.updateMany({
+      where: {
+        id: order.id,
+        driverId: null,
+        status: { in: [OrderStatus.CONFIRMED, OrderStatus.PREPARING, OrderStatus.READY] },
+      },
       data: {
         driverId: driver.id,
         driverAssignedAt: new Date(),
         isAcceptedByDriver: false,
       },
+    });
+
+    if (claimed.count === 0) {
+      throw createDomainError(
+        409,
+        'ORDER_ALREADY_ASSIGNED',
+        'El pedido ya tiene un repartidor asignado o ya no es asignable.'
+      );
+    }
+
+    const updated = await tx.order.findUniqueOrThrow({
+      where: { id: order.id },
       select: restaurantOrderWorkflowSelect,
     });
 
@@ -1336,33 +1359,52 @@ export async function updateOrderStatusByDriver({
       });
 
       if (pendingOrderInRegion) {
-        await tx.order.update({
-          where: { id: pendingOrderInRegion.id },
+        // Asignación atómica: evita que otro proceso (JIT job, sweep,
+        // asignación manual) asigne el mismo pedido a otro repartidor en
+        // paralelo. Si otra transacción ganó la carrera, count = 0 y
+        // simplemente se omite este pedido.
+        const claimed = await tx.order.updateMany({
+          where: {
+            id: pendingOrderInRegion.id,
+            driverId: null,
+            status: { in: [OrderStatus.CONFIRMED, OrderStatus.PREPARING, OrderStatus.READY] },
+          },
           data: {
             driverId: driver.id,
           },
         });
 
-        await tx.orderTracking.create({
-          data: {
+        if (claimed.count > 0) {
+          await tx.orderTracking.create({
+            data: {
+              orderId: pendingOrderInRegion.id,
+              status: OrderStatus.CONFIRMED,
+              notes: `Repartidor auto-asignado por cola libre (Estrategia Anti-Rezago): ${driver.user.name}`,
+            },
+          });
+
+          await tx.driver.update({
+            where: { id: driver.id },
+            data: {
+              availability: DriverAvailability.BUSY,
+            },
+          });
+
+          appEvents.emit('order.driver_auto_assigned_on_free_slot', {
             orderId: pendingOrderInRegion.id,
-            status: OrderStatus.CONFIRMED,
-            notes: `Repartidor auto-asignado por cola libre (Estrategia Anti-Rezago): ${driver.user.name}`,
-          },
-        });
-
-        await tx.driver.update({
-          where: { id: driver.id },
-          data: {
-            availability: DriverAvailability.BUSY,
-          },
-        });
-
-        appEvents.emit('order.driver_auto_assigned_on_free_slot', {
-          orderId: pendingOrderInRegion.id,
-          driverId: driver.id,
-          restaurantUserId: pendingOrderInRegion.restaurant.userId,
-        });
+            driverId: driver.id,
+            restaurantUserId: pendingOrderInRegion.restaurant.userId,
+          });
+        } else {
+          // Otra transacción concurrente ya asignó el pedido pendiente a otro
+          // repartidor. Este repartidor queda libre para futuros pedidos.
+          await tx.driver.update({
+            where: { id: driver.id },
+            data: {
+              availability: DriverAvailability.AVAILABLE,
+            },
+          });
+        }
       } else {
         await tx.driver.update({
           where: { id: driver.id },
@@ -1834,12 +1876,19 @@ export async function getAvailableDriversForRestaurant(
   });
 }
 
+export type AutoAssignResult = {
+  success: boolean;
+  alreadyAssigned?: boolean;
+  driver?: { id: string; userId: string; user: { name: string } };
+  order?: any;
+};
+
 export async function autoAssignDriver(
   prisma: PrismaClient,
   orderId: string,
   restaurantUserId: string,
   excludeDriverId?: string
-) {
+): Promise<AutoAssignResult> {
   const orderType = await prisma.order.findUnique({
     where: { id: orderId },
     select: { fulfillmentType: true, supportRestaurantId: true },
@@ -1863,11 +1912,12 @@ export async function autoAssignDriver(
   const excludeDriverIdsArray = Array.from(excludeIds);
 
   const tryAssign = async (
-    drivers: { id: string; userId: string; user: { name: string } }[]
+    drivers: { id: string; userId: string; user: { name: string } }[],
+    options: { allowOverload?: boolean } = {}
   ): Promise<{
     driver: { id: string; userId: string; user: { name: string } };
     order: any;
-  } | null> => {
+  } | 'ALREADY_ASSIGNED' | null> => {
     for (const candidate of drivers) {
       const activeAcceptedCount = await prisma.order.count({
         where: {
@@ -1877,14 +1927,28 @@ export async function autoAssignDriver(
         },
       });
 
-      if (activeAcceptedCount >= 3) continue;
+      // En pase normal, cada repartidor lleva máx. 3 pedidos activos.
+      // En el pase de "overload" (emergencia) se permite exceder el tope
+      // para evitar pedidos rezagados sin repartidor.
+      if (activeAcceptedCount >= 3 && !options.allowOverload) continue;
 
-      const assignedOrder = await assignDriverToOrder({
-        prisma,
-        restaurantUserId,
-        orderId,
-        driverId: candidate.id,
-      });
+      let assignedOrder: any;
+      try {
+        assignedOrder = await assignDriverToOrder({
+          prisma,
+          restaurantUserId,
+          orderId,
+          driverId: candidate.id,
+        });
+      } catch (assignErr) {
+        // Otra transacción concurrente (JIT job, sweep, asignación manual)
+        // ya asignó este pedido a otro repartidor. No es un fallo: hay que
+        // detener la cascada sin marcarlo como "sin repartidor".
+        if (isAppError(assignErr) && assignErr.code === 'ORDER_ALREADY_ASSIGNED') {
+          return 'ALREADY_ASSIGNED';
+        }
+        throw assignErr;
+      }
 
       try {
         const existingOrders = await prisma.order.findMany({
@@ -1999,6 +2063,9 @@ export async function autoAssignDriver(
       false
     )
   );
+  if (strictResult === 'ALREADY_ASSIGNED') {
+    return { success: true as const, alreadyAssigned: true as const };
+  }
   if (strictResult) return { success: true as const, ...strictResult };
 
   const relaxedResult = await tryAssign(
@@ -2010,9 +2077,87 @@ export async function autoAssignDriver(
       true
     )
   );
+  if (relaxedResult === 'ALREADY_ASSIGNED') {
+    return { success: true as const, alreadyAssigned: true as const };
+  }
   if (relaxedResult) return { success: true as const, ...relaxedResult };
 
+  // ── Degradación progresiva (emergencia) ───────────────────────────────
+  // Si estricto y relajado fallaron, primero relajamos el tope de pedidos
+  // activos (permite repartidores con 3+ pedidos), y después intentamos con
+  // repartidores de la misma zona aunque estén BUSY sin pedidos activos o
+  // con rutas incompatibles. Con esto el pool nunca queda "congelado".
+
+  const overloadedResult = await tryAssign(
+    await getAvailableDriversForRestaurant(
+      prisma,
+      restaurantUserId,
+      orderId,
+      excludeDriverIdsArray,
+      true
+    ),
+    { allowOverload: true }
+  );
+  if (overloadedResult === 'ALREADY_ASSIGNED') {
+    return { success: true as const, alreadyAssigned: true as const };
+  }
+  if (overloadedResult) return { success: true as const, ...overloadedResult };
+
+  const lastResortResult = await tryAssign(
+    await getAnyDriverForRestaurant(
+      prisma,
+      restaurantUserId,
+      excludeDriverIdsArray
+    ),
+    { allowOverload: true }
+  );
+  if (lastResortResult === 'ALREADY_ASSIGNED') {
+    return { success: true as const, alreadyAssigned: true as const };
+  }
+  if (lastResortResult) return { success: true as const, ...lastResortResult };
+
   return { success: false as const };
+}
+
+/**
+ * Último recurso de auto-asignación: repartidores ACTIVE de la misma zona
+ * (incluso OFFLINE no se consideran, pero sí BUSY sin pedidos activos y
+ * AVAILABLE que hayan sido excluidos por smart-stacking estricto).
+ * Ignora disponibilidad para no dejar pedidos sin repartidor.
+ */
+async function getAnyDriverForRestaurant(
+  prisma: PrismaClient,
+  restaurantUserId: string,
+  excludeDriverIds: string[]
+) {
+  const restaurant = await prisma.restaurant.findUnique({
+    where: { userId: restaurantUserId },
+  });
+  if (!restaurant || restaurant.status !== RestaurantStatus.ACTIVE) {
+    return [];
+  }
+
+  const drivers = await prisma.driver.findMany({
+    where: {
+      region: restaurant.region,
+      status: DriverStatus.ACTIVE,
+      availability: { in: [DriverAvailability.AVAILABLE, DriverAvailability.BUSY] },
+      id: excludeDriverIds.length > 0 ? { notIn: excludeDriverIds } : undefined,
+    },
+    include: {
+      user: {
+        select: { id: true, name: true, phone: true },
+      },
+    },
+    orderBy: [{ rating: 'desc' }, { totalDeliveries: 'desc' }],
+    take: 10,
+  });
+
+  return drivers.map((d) => ({
+    id: d.id,
+    userId: d.userId,
+    user: { id: d.user.id, name: d.user.name },
+  }));
 }
 
 export async function sweepUnassignedOrdersForRegion(prisma: PrismaClient, region: string) {
@@ -2057,6 +2202,10 @@ export async function sweepUnassignedOrdersForRegion(prisma: PrismaClient, regio
           order: updatedOrder,
           driver: assignResult.driver,
         });
+      } else if (assignResult.alreadyAssigned) {
+        // Otro proceso concurrente ya asignó el pedido a un repartidor.
+        // No contarlo como pendiente ni marcarlo como "sin repartidor".
+        logger.info(`Order ${order.id} already assigned by another process; sweep skips it.`);
       } else {
         pendingCount += 1;
       }
@@ -2109,7 +2258,7 @@ export async function notifyOfflineDriversOfDemand(
 
   // Umbral mínimo de pedidos sin repartidor para disparar el aviso.
   const threshold =
-    parseInt(String(process.env.DRIVER_DEMAND_THRESHOLD || '2'), 10) || 2;
+    parseInt(String(process.env.DRIVER_DEMAND_THRESHOLD || '1'), 10) || 1;
   if (pendingCount < threshold) return 0;
 
   const appUrl = getDriverAppUrl();
@@ -2154,4 +2303,48 @@ export async function notifyOfflineDriversOfDemand(
   }
 
   return sentCount;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Aviso al cliente cuando un pedido de entrega no tiene repartidor disponible.
+// Notifica por socket + push para reducir reclamos por "pedido sin actualización".
+// ─────────────────────────────────────────────────────────────────────────────
+export function notifyCustomerNoDriversAvailable(
+  io: import('socket.io').Server,
+  order: {
+    id: string;
+    restaurant?: { name?: string; businessType?: string } | null;
+    customer?: { user?: { id?: string; name?: string } } | null;
+  }
+): void {
+  const customerUserId = order.customer?.user?.id;
+  if (!customerUserId) return;
+
+  const businessRef = order.restaurant?.businessType !== 'RESTAURANT' ? 'tu negocio' : 'tu restaurante';
+
+  emitNotification(
+    io,
+    customerUserId,
+    'CUSTOMER',
+    'order:no-drivers-available',
+    {
+      orderId: order.id,
+      message: `Todavía no hay un repartidor disponible para tu pedido, pero seguiremos intentando asignarlo. Gracias por tu paciencia.`,
+    }
+  );
+
+  void sendPushNotification(customerUserId, {
+    title: '⏳ Buscando repartidor',
+    body: `Tu pedido de ${businessRef} aún no tiene repartidor asignado. Estamos trabajando para asignarlo lo antes posible.`,
+    icon: '/app-icon-192.png',
+    badge: '/badge.png',
+    vibrate: [500, 200, 500],
+    requireInteraction: true,
+    tag: `no-drivers-${order.id}`,
+    data: {
+      orderId: order.id,
+      event: 'order:no-drivers-available',
+      url: `/?orderId=${order.id}`,
+    },
+  });
 }

@@ -33,6 +33,7 @@ export type CompactOrderDetail = {
   scheduledDeliveryCustomerAcceptedAt?: string | null;
   etaExtendedMinutes?: number;
   preparationDeadlineAt?: string | null;
+  noDriversAvailable?: boolean;
 };
 
 export type DelayLevel = 1 | 2 | 3;
@@ -471,7 +472,15 @@ export const CompactActiveOrderBanner = memo(function CompactActiveOrderBanner({
           {/* Info condensada */}
           <div className="min-w-0">
             <p className="text-sm font-bold text-neutral-900 truncate">{activeStep?.label || 'Procesando'}</p>
-            {delayState.isDelayed && delayState.referenceTime ? (
+            {currentOrder.noDriversAvailable && !delayState.isDelayed && ['CONFIRMED', 'PREPARING', 'READY'].includes(activeStatus) ? (
+              <div className="mt-1 inline-flex max-w-full items-center gap-1.5 rounded-full border border-amber-300 bg-amber-50 px-2.5 py-1">
+                <span className="relative flex h-2 w-2 shrink-0">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
+                </span>
+                <span className="text-[11px] font-bold text-amber-900 truncate">Buscando repartidor disponible…</span>
+              </div>
+            ) : delayState.isDelayed && delayState.referenceTime ? (
               <div className={`mt-1 inline-flex max-w-full items-center gap-1.5 rounded-full border px-2.5 py-1 ${DELAY_PILL_STYLES[delayState.level].wrap}`}>
                 <svg className={`w-3 h-3 shrink-0 ${DELAY_PILL_STYLES[delayState.level].icon}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={DELAY_PILL_STYLES[delayState.level].iconPath} />

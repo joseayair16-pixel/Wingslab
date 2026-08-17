@@ -161,6 +161,7 @@ type CustomerOrderListItem = {
     longitude?: number;
   };
   fulfillmentType?: 'DELIVERY' | 'PICKUP';
+  noDriversAvailable?: boolean;
   address: {
     street: string;
     number: string;
@@ -246,6 +247,7 @@ type CustomerOrderDetail = {
   cancellationRequestedAt?: string | null;
   cancellationReason?: string | null;
   cancelledBy?: string | null;
+  noDriversAvailable?: boolean;
   fulfillmentType?: 'DELIVERY' | 'PICKUP';
   scheduledDeliveryAt?: string | null;
   scheduledDeliveryCustomerAcceptedAt?: string | null;
@@ -1227,6 +1229,8 @@ export default function RestaurantPage({
       'order:schedule-proposal',
       'order:schedule-accepted',
       'order:schedule-rejected',
+      'order:no-drivers-available',
+      'order:delay',
     ];
 
     for (const eventName of liveEvents) {
@@ -5454,6 +5458,46 @@ function triggerHaptic(pattern: number | number[] = 10) {
                     </p>
                   </div>
                 )}
+
+                {/* Sin repartidor disponible: informar proactivamente */}
+                {(() => {
+                  const orderDetail = activeOrderDetailsMap[selectedOrderId];
+                  if (orderDetail?.noDriversAvailable && ['CONFIRMED', 'PREPARING', 'READY'].includes(orderDetail.status)) {
+                    return (
+                      <div className="flex items-start gap-3 p-4 rounded-2xl border border-amber-300 bg-amber-50/80 shadow-sm">
+                        <span className="relative flex h-3 w-3 mt-1 shrink-0">
+                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                          <span className="relative inline-flex rounded-full h-3 w-3 bg-amber-500"></span>
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-[10px] font-bold uppercase tracking-widest text-amber-600">Buscando repartidor</p>
+                          <p className="text-sm font-bold text-neutral-900">
+                            Todavía no hay un repartidor disponible para tu pedido.
+                          </p>
+                          <p className="text-xs text-neutral-600 mt-1 leading-snug">
+                            Estamos trabajando para asignarlo lo antes posible. No canceles tu pedido, llegará.
+                          </p>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSelectedOrderId(selectedOrderId);
+                              setIsChatOpen(true);
+                              setIsDetailModalOpen(false);
+                              void loadChatMessages(selectedOrderId);
+                            }}
+                            className="mt-3 w-full flex items-center justify-center gap-2 rounded-full bg-amber-500 hover:bg-amber-600 py-2.5 text-xs font-bold text-white shadow-sm transition-all active:scale-[0.97]"
+                          >
+                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                            </svg>
+                            Contactar al negocio
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  }
+                  return null;
+                })()}
 
                 {/* ETA — se muestra mientras el pedido no ha terminado */}
                 {(() => {

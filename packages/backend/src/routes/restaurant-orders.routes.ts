@@ -20,6 +20,7 @@ import {
   dequeueRestaurantOrder,
   respondToCancellationRequest,
   cancelOrderByRestaurant,
+  notifyCustomerNoDriversAvailable,
 } from '../services/order-workflow.service';
 import { restaurantOrderListSelect } from '../services/order-selects';
 import { getOrCreateRequestContext } from '../utils/request-context';
@@ -592,6 +593,13 @@ export async function registerRestaurantOrderRoutes(fastify: FastifyInstance): P
                   );
 
                   request.log.info(`Auto-assigned driver ${assignResult.driver.id} to order ${params.data.id} in background.`);
+                } else if (assignResult.alreadyAssigned) {
+                  // Otro proceso (JIT job, sweep, asignación manual) ya
+                  // asignó este pedido a un repartidor. No marcar como
+                  // "sin repartidor".
+                  request.log.info(
+                    `Order ${params.data.id} was already assigned by another process; skipping noDriversAvailable.`
+                  );
                 } else {
                   // No drivers found: update database
                   await prisma.order.update({
@@ -616,6 +624,9 @@ export async function registerRestaurantOrderRoutes(fastify: FastifyInstance): P
                       orderId: params.data.id,
                     }
                   );
+
+                  // Notify customer too (socket + push) para evitar reclamos
+                  notifyCustomerNoDriversAvailable(fastify.io, order);
 
                   request.log.info(`No drivers found for order ${params.data.id} in background.`);
                 }
