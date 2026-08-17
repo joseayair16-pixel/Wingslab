@@ -1058,7 +1058,6 @@ export default function Home() {
   const [fallbackSuggestions, setFallbackSuggestions] = useState<any[]>([]);
   const [isSearchingFallback, setIsSearchingFallback] = useState(false);
   const fallbackSearchSourceRef = useRef<ReturnType<typeof createPlacesSource> | null>(null);
-  const touchStartY = useRef(0);
   const sideMenuRef = useRef<HTMLDivElement | null>(null);
   const transientNoticeTimeoutRef = useRef<number | null>(null);
   const recentNoticeKeysRef = useRef<string[]>([]);
@@ -1238,44 +1237,89 @@ export default function Home() {
   const [driverLocation, setDriverLocation] = useState<{ lat: number; lng: number } | null>(null);
   const socketRef = useRef<any>(null);
 
-  const handleTouchStart = (e: React.TouchEvent) => {
-    if (window.scrollY === 0) {
-      touchStartY.current = e.touches[0].clientY;
+  const handlePullToRefresh = useCallback(() => {
+    setIsRefreshing(true);
+    // Además de recargar datos, fuerza el chequeo de una versión nueva de la PWA:
+    // si el Service Worker detecta cambios, el controllerchange recargará la app.
+    if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
+      navigator.serviceWorker
+        .getRegistration()
+        .then((reg) => {
+          void reg?.update().catch(() => {});
+        })
+        .catch(() => {});
     }
-  };
+    // Recarga completa: garantiza datos frescos y la última versión de la PWA,
+    // y deja que el indicador se vea un instante antes de recargar.
+    window.setTimeout(() => {
+      window.location.reload();
+    }, 350);
+  }, []);
 
-  const handleTouchMove = (e: React.TouchEvent) => {
-    if (touchStartY.current === 0) return;
-    const currentY = e.touches[0].clientY;
-    const distance = currentY - touchStartY.current;
-    if (distance > 0 && window.scrollY === 0) {
-      setPullDistance(Math.min(distance * 0.5, 80));
-    }
-  };
+  useEffect(() => {
+    if (typeof window === 'undefined' || !('ontouchstart' in window)) return;
 
-  const handleTouchEnd = () => {
-    if (pullDistance > 40) {
-      setIsRefreshing(true);
-      // Además de recargar datos, fuerza el chequeo de una versión nueva de la PWA:
-      // si el Service Worker detecta cambios, el controllerchange recargará la app.
-      if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
-        navigator.serviceWorker
-          .getRegistration()
-          .then((reg) => {
-            void reg?.update().catch(() => {});
-          })
-          .catch(() => {});
+    let startY = -1;
+    let tracking = false;
+    let reloading = false;
+
+    const atTop = () => {
+      const docEl = document.documentElement;
+      const scrollTop = window.pageYOffset || docEl.scrollTop || 0;
+      return scrollTop <= 1;
+    };
+
+    const onTouchStart = (e: TouchEvent) => {
+      if (reloading) return;
+      if (!atTop()) return;
+      // Evita arrancar el gesto dentro de contenedores scrolleables (menús, modales, carruseles).
+      const target = e.target as HTMLElement | null;
+      if (target && target.closest('.overflow-x-auto, .overflow-y-auto, .overflow-auto, [data-no-pull]')) return;
+      startY = e.touches[0]?.clientY ?? -1;
+      tracking = true;
+    };
+
+    const onTouchMove = (e: TouchEvent) => {
+      if (!tracking || reloading) return;
+      if (!atTop()) {
+        tracking = false;
+        setPullDistance(0);
+        return;
       }
-      // Recarga completa: garantiza datos frescos y la última versión de la PWA,
-      // y deja que el indicador se vea un instante antes de recargar.
-      window.setTimeout(() => {
-        window.location.reload();
-      }, 350);
-    } else {
-      setPullDistance(0);
-    }
-    touchStartY.current = 0;
-  };
+      const currentY = e.touches[0]?.clientY ?? -1;
+      if (startY < 0 || currentY < 0) return;
+      const distance = currentY - startY;
+      if (distance <= 0) return;
+      e.preventDefault();
+      setPullDistance(Math.min(distance * 0.5, 80));
+    };
+
+    const onTouchEnd = () => {
+      if (!tracking || reloading) return;
+      tracking = false;
+      setPullDistance((current) => {
+        if (current > 40) {
+          reloading = true;
+          handlePullToRefresh();
+          return current;
+        }
+        return 0;
+      });
+      startY = -1;
+    };
+
+    window.addEventListener('touchstart', onTouchStart, { passive: true });
+    window.addEventListener('touchmove', onTouchMove, { passive: false });
+    window.addEventListener('touchend', onTouchEnd, { passive: true });
+    window.addEventListener('touchcancel', onTouchEnd, { passive: true });
+
+    return () => {
+      window.removeEventListener('touchstart', onTouchStart);
+      window.removeEventListener('touchmove', onTouchMove);
+      window.removeEventListener('touchend', onTouchEnd);
+      window.removeEventListener('touchcancel', onTouchEnd);
+    };
+  }, [handlePullToRefresh]);
 
   useEffect(() => {
     try {
@@ -4022,9 +4066,6 @@ export default function Home() {
   return (
     <main
       className={`relative min-h-[100dvh] bg-[#fafafa] text-neutral-900 transition-colors duration-300 ${isCartOpen || isSideMenuOpen ? 'overflow-hidden' : ''}`}
-      onTouchStart={handleTouchStart}
-      onTouchMove={handleTouchMove}
-      onTouchEnd={handleTouchEnd}
     >
       <div className={`fixed inset-0 z-[9999] bg-white transition-opacity duration-700 pointer-events-none ${isTransitioning ? 'opacity-100' : 'opacity-0'}`} />
       {/* Pull to refresh indicator */}

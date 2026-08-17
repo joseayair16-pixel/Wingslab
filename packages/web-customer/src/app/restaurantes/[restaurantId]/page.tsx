@@ -714,7 +714,6 @@ export default function RestaurantPage({
   const [isSubmittingRating, setIsSubmittingRating] = useState(false);
   const [pullDistance, setPullDistance] = useState(0);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const touchStartY = useRef(0);
   const [addresses, setAddresses] = useState<any[]>([]);
   const [selectedAddressId, setSelectedAddressId] = useState<string | null>(null);
   const [showMapForAddress, setShowMapForAddress] = useState<string | null>(null);
@@ -801,42 +800,86 @@ export default function RestaurantPage({
     }, 1500);
   };
 
-  const handleTouchStart = (e: React.TouchEvent) => {
-    if (window.scrollY === 0) {
-      touchStartY.current = e.touches[0].clientY;
+  const handlePullToRefresh = useCallback(() => {
+    setIsRefreshing(true);
+    // Fuerza el chequeo de una versión nueva de la PWA además del refresco de datos.
+    if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
+      navigator.serviceWorker
+        .getRegistration()
+        .then((reg) => {
+          void reg?.update().catch(() => {});
+        })
+        .catch(() => {});
     }
-  };
+    // Recarga completa: garantiza el menú más reciente y la última versión de la PWA.
+    window.setTimeout(() => {
+      window.location.reload();
+    }, 350);
+  }, []);
 
-  const handleTouchMove = (e: React.TouchEvent) => {
-    if (touchStartY.current === 0) return;
-    const currentY = e.touches[0].clientY;
-    const distance = currentY - touchStartY.current;
-    if (distance > 0 && window.scrollY === 0) {
-      setPullDistance(Math.min(distance * 0.5, 80));
-    }
-  };
+  useEffect(() => {
+    if (typeof window === 'undefined' || !('ontouchstart' in window)) return;
 
-  const handleTouchEnd = () => {
-    if (pullDistance > 40) {
-      setIsRefreshing(true);
-      // Fuerza el chequeo de una versión nueva de la PWA además del refresco de datos.
-      if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
-        navigator.serviceWorker
-          .getRegistration()
-          .then((reg) => {
-            void reg?.update().catch(() => {});
-          })
-          .catch(() => {});
+    let startY = -1;
+    let tracking = false;
+    let reloading = false;
+
+    const atTop = () => {
+      const docEl = document.documentElement;
+      const scrollTop = window.pageYOffset || docEl.scrollTop || 0;
+      return scrollTop <= 1;
+    };
+
+    const onTouchStart = (e: TouchEvent) => {
+      if (reloading) return;
+      if (!atTop()) return;
+      const target = e.target as HTMLElement | null;
+      if (target && target.closest('.overflow-x-auto, .overflow-y-auto, .overflow-auto, [data-no-pull]')) return;
+      startY = e.touches[0]?.clientY ?? -1;
+      tracking = true;
+    };
+
+    const onTouchMove = (e: TouchEvent) => {
+      if (!tracking || reloading) return;
+      if (!atTop()) {
+        tracking = false;
+        setPullDistance(0);
+        return;
       }
-      // Recarga completa: garantiza el menú más reciente y la última versión de la PWA.
-      window.setTimeout(() => {
-        window.location.reload();
-      }, 350);
-    } else {
-      setPullDistance(0);
-    }
-    touchStartY.current = 0;
-  };
+      const currentY = e.touches[0]?.clientY ?? -1;
+      if (startY < 0 || currentY < 0) return;
+      const distance = currentY - startY;
+      if (distance <= 0) return;
+      e.preventDefault();
+      setPullDistance(Math.min(distance * 0.5, 80));
+    };
+
+    const onTouchEnd = () => {
+      if (!tracking || reloading) return;
+      tracking = false;
+      setPullDistance((current) => {
+        if (current > 40) {
+          reloading = true;
+          handlePullToRefresh();
+          return current;
+        }
+        return 0;
+      });
+      startY = -1;
+    };
+
+    window.addEventListener('touchstart', onTouchStart, { passive: true });
+    window.addEventListener('touchmove', onTouchMove, { passive: false });
+    window.addEventListener('touchend', onTouchEnd, { passive: true });
+    window.addEventListener('touchcancel', onTouchEnd, { passive: true });
+
+    return () => {
+      window.removeEventListener('touchstart', onTouchStart);
+      window.removeEventListener('touchmove', onTouchMove);
+      window.removeEventListener('touchend', onTouchEnd);
+      window.removeEventListener('touchcancel', onTouchEnd);
+    };
+  }, [handlePullToRefresh]);
 
   const deliveryPreset = useMemo(
     () => getDeliveryPreset(sessionUser?.region || restaurant?.region),
@@ -2777,9 +2820,6 @@ function triggerHaptic(pattern: number | number[] = 10) {
     <main
       className="min-h-[100dvh] bg-[var(--menu-bg)] text-neutral-900 transition-colors duration-500 dark:bg-[var(--menu-bg-dark)] dark:text-zinc-100"
       style={{ background: 'var(--menu-bg)', backgroundAttachment: 'fixed' }}
-      onTouchStart={handleTouchStart}
-      onTouchMove={handleTouchMove}
-      onTouchEnd={handleTouchEnd}
     >
       {/* Pull to refresh indicator */}
       <div
