@@ -2,6 +2,7 @@ import React, { memo, useRef, useState } from 'react';
 import { CustomerProfileAddress } from '../app/page';
 import { useStore } from '../store';
 import { uploadMediaAsset, requestJson, persistStoredSession, convertImageFileToDataUrl } from '@sadel/shared';
+import { ChevronRight, Info, Trash2 } from 'lucide-react';
 
 interface ProfileViewProps {
   sessionUser: any;
@@ -367,9 +368,7 @@ export const ProfileView = memo(function ProfileView({
                 {/* Mapa */}
                 <div id="map-address" className="h-[215px] w-full rounded-2xl border border-black/10 shadow-inner overflow-hidden z-0" />
                 <p className="flex items-start gap-1.5 px-1 text-[12px] font-medium text-neutral-500">
-                  <svg className="h-4 w-4 text-orange-500 shrink-0 mt-px" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
+                  <Info className="h-4 w-4 text-orange-500 shrink-0 mt-px" />
                   Arrastra el pin para marcar el punto exacto de entrega
                 </p>
 
@@ -444,7 +443,7 @@ export const ProfileView = memo(function ProfileView({
                             className="p-2.5 rounded-full hover:bg-rose-50 text-neutral-300 hover:text-rose-600 transition-colors"
                             aria-label="Eliminar dirección"
                           >
-                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                            <Trash2 className="w-5 h-5" />
                           </button>
                         </div>
                       </div>
@@ -587,7 +586,7 @@ export const ProfileView = memo(function ProfileView({
                   <p className="text-[15px] font-bold text-neutral-900 group-hover:text-indigo-900 transition-colors">Cambiar contraseña</p>
                 </div>
                 <div className="h-8 w-8 rounded-full bg-white border border-black/5 flex items-center justify-center text-neutral-400 group-hover:text-indigo-600 group-hover:border-indigo-200 transition-all shadow-sm">
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+                  <ChevronRight className="w-4 h-4" />
                 </div>
               </div>
               <div className="px-6 py-5 flex items-center justify-between hover:bg-rose-50/40 cursor-pointer transition-colors group" onClick={() => clearSession('Has cerrado sesión.')}>

@@ -1,4 +1,5 @@
 'use client';
+import { X } from 'lucide-react';
 
 import { usePathname } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
@@ -234,9 +235,7 @@ export default function InstallAppButton() {
             aria-label="Descartar"
             className="flex h-7 w-7 items-center justify-center rounded-full text-neutral-400 transition hover:bg-neutral-100 hover:text-neutral-600"
           >
-            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-            </svg>
+            <X className="h-4 w-4" />
           </button>
         </div>
       </div>
@@ -252,9 +251,7 @@ export default function InstallAppButton() {
                 aria-label="Cerrar"
                 className="flex h-8 w-8 items-center justify-center rounded-full text-neutral-400 hover:bg-neutral-100 hover:text-neutral-600"
               >
-                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                </svg>
+                <X className="h-4 w-4" />
               </button>
             </div>
             <p className="mb-4 text-sm leading-relaxed text-neutral-600">

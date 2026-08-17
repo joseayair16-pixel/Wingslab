@@ -1,4 +1,5 @@
 'use client';
+import { Check, ChevronRight, ChevronUp, Clock, Mail, RefreshCw, User, X } from 'lucide-react';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { SaDelLogo } from '../components/SaDelLogo';
@@ -2427,15 +2428,7 @@ export default function Home() {
         style={{ transform: `translateY(${Math.max(0, pullDistance - 40)}px)` }}
       >
         <div className="rounded-full bg-white dark:bg-zinc-950 p-2 shadow-lg border border-black/5 dark:border-zinc-900 flex items-center justify-center">
-          <svg
-            className={`h-5 w-5 text-neutral-700 dark:text-indigo-400 ${isRefreshing ? 'animate-spin' : ''}`}
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-            style={{ transform: isRefreshing ? 'none' : `rotate(${pullDistance * 4}deg)` }}
-          >
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-          </svg>
+          <RefreshCw strokeWidth={2.5} />
         </div>
       </div>
 
@@ -2841,9 +2834,7 @@ export default function Home() {
                             {order.customer.user?.name && (
                               <div className="flex items-center gap-2 mt-2">
                                 <div className="flex items-center justify-center w-6 h-6 rounded-full bg-sky-100 dark:bg-sky-500/20 text-sky-600 dark:text-sky-400 shrink-0">
-                                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                                  </svg>
+                                  <User className="w-3.5 h-3.5" strokeWidth={2.5} />
                                 </div>
                                 <p className="text-base font-bold text-neutral-700 dark:text-zinc-300 truncate">
                                   {order.customer.user.name}
@@ -3333,7 +3324,7 @@ export default function Home() {
                                 <span className="text-[10px] font-bold uppercase tracking-widest text-white/40">Llevar a domicilio</span>
                                 <span className="flex items-center gap-1.5 text-xs font-semibold text-white/50">
                                   {order.customer.user?.name || 'Cliente'}
-                                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5"><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" /></svg>
+                                  <ChevronRight className="w-3.5 h-3.5" />
                                 </span>
                               </div>
                               <p className="text-2xl font-black leading-tight text-white">{customerAddressStr}</p>
@@ -3467,15 +3458,7 @@ export default function Home() {
                                   <span className="flex items-center gap-2">
                                     <span className="text-base">🏪</span> {isStore ? 'Tienda' : 'Restaurante'}
                                   </span>
-                                  <svg
-                                    className={`w-4 h-4 transition-transform duration-200 ${showRestaurantContact ? 'rotate-180' : ''}`}
-                                    fill="none"
-                                    viewBox="0 0 24 24"
-                                    stroke="currentColor"
-                                    strokeWidth="2.5"
-                                  >
-                                    <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-                                  </svg>
+                                  <ChevronUp />
                                 </button>
                                 <div
                                   className={`grid transition-all duration-200 overflow-hidden ${showRestaurantContact ? 'grid-rows-[1fr] opacity-100 mt-2' : 'grid-rows-[0fr] opacity-0'}`}
@@ -4753,9 +4736,7 @@ export default function Home() {
               </svg>
             ) : (driverProfile?.availability === 'AVAILABLE' || driverProfile?.availability === 'BUSY') ? (
               <>
-                <svg className="h-7 w-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
-                </svg>
+                <X className="h-7 w-7 text-white" strokeWidth={2.5} />
                 <span className="text-[9px] font-black text-white/90 uppercase tracking-wider leading-none">Pausar</span>
               </>
             ) : (
@@ -4852,7 +4833,7 @@ export default function Home() {
               {/* Bank details */}
               <div className="rounded-[20px] border border-black/5 dark:border-zinc-800 bg-neutral-50 dark:bg-zinc-900/50 p-1">
                 <div className="flex items-center gap-2 border-b border-black/5 dark:border-zinc-800 px-4 py-3">
-                  <svg className="h-4 w-4 text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" /></svg>
+                  <Mail className="h-4 w-4 text-neutral-400" />
                   <span className="text-[10px] font-bold uppercase tracking-wider text-neutral-500 dark:text-zinc-400">Datos Bancarios</span>
                 </div>
                 {bankDetailsError ? (
@@ -4904,7 +4885,7 @@ export default function Home() {
                         disabled={uploadingProof}
                         className="absolute top-3 right-3 bg-black/60 text-white rounded-full p-1.5 hover:bg-black/80 transition disabled:opacity-50"
                       >
-                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                        <X className="w-3.5 h-3.5" />
                       </button>
                     </div>
                     <button
@@ -5024,9 +5005,7 @@ export default function Home() {
             </button>
             <div className="text-center">
               <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-900/30 mb-4">
-                <svg className="h-8 w-8 text-emerald-600 dark:text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
-                </svg>
+                <Check className="h-8 w-8 text-emerald-600 dark:text-emerald-400" strokeWidth={2.5} />
               </div>
               <h3 className="text-lg font-black text-neutral-900 dark:text-zinc-50">¡Listo!</h3>
               <p className="mt-2 text-sm text-neutral-500 dark:text-zinc-400 leading-relaxed">
@@ -5249,7 +5228,7 @@ export default function Home() {
                 <span className={`text-[9px] font-black uppercase tracking-wider flex items-center gap-1.5 ${
                   selectedHistoryOrder.noShowReleasedAt ? 'text-rose-600 dark:text-rose-400' : 'text-sky-600 dark:text-sky-400'
                 }`}>
-                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                  <Clock className="w-3 h-3" strokeWidth={2.5} />
                   {selectedHistoryOrder.noShowReleasedAt ? 'Liberado — cliente no salió' : 'Entregado'}
                 </span>
                 <span className="text-xs font-bold text-neutral-800 dark:text-zinc-200">

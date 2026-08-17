@@ -1,4 +1,5 @@
 'use client';
+import { X } from 'lucide-react';
 
 import { useEffect, useState } from 'react';
 
@@ -146,9 +147,7 @@ export default function PushEnableBanner({ visible, onEnable }: Props) {
               aria-label="Descartar"
               className="flex h-6 w-6 items-center justify-center rounded-full text-white/70 transition hover:bg-white/15 hover:text-white"
             >
-              <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-              </svg>
+              <X className="h-3.5 w-3.5" />
             </button>
           </div>
         </div>

@@ -1,4 +1,5 @@
 'use client';
+import { Clock } from 'lucide-react';
 
 import React, { useMemo } from 'react';
 
@@ -350,7 +351,7 @@ export const DashboardSection = React.memo(function DashboardSection({
               className="group flex w-full items-center gap-3 rounded-[20px] border border-orange-200 bg-gradient-to-r from-orange-50 to-amber-50/60 px-5 py-3.5 text-left shadow-[0_4px_16px_rgba(251,146,60,0.10)] transition-all duration-200 hover:border-orange-300 hover:shadow-[0_8px_24px_rgba(251,146,60,0.15)] hover:-translate-y-0.5"
             >
               <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-orange-500 text-white shadow-[0_4px_10px_rgba(251,146,60,0.35)]">
-                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                <Clock className="h-4 w-4" strokeWidth={2.2} />
               </span>
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-bold text-orange-900">
@@ -398,7 +399,7 @@ export const DashboardSection = React.memo(function DashboardSection({
               </span>
               {profile?.autoOpenEnabled && (
                 <span className="inline-flex items-center gap-1 rounded-full border border-sky-200 bg-sky-50 px-2.5 py-1 text-xs font-semibold text-sky-700" title="Tu negocio se abre solo a la hora de apertura de cada día.">
-                  <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                  <Clock className="h-3 w-3" />
                   Apertura automática
                 </span>
               )}

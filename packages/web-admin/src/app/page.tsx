@@ -1,4 +1,5 @@
 'use client';
+import { AlertTriangle, Check, ChevronUp, Plus, RefreshCw, X } from 'lucide-react';
 
 import { SaDelLogo } from '../components/SaDelLogo';
 import Link from 'next/link';
@@ -3700,7 +3701,7 @@ export default function Home() {
                           onClick={() => setSelectedOrderId('')}
                           className="rounded-full p-2 text-neutral-500 hover:bg-neutral-100"
                         >
-                          <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                          <X className="h-5 w-5" />
                         </button>
                       </div>
                       
@@ -3992,9 +3993,7 @@ export default function Home() {
                       <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent translate-x-[-100%] transition-transform duration-700 ease-out group-hover:translate-x-[100%]" />
                       <span className="relative flex items-center justify-center gap-2">
                         Agregar nuevo
-                        <svg className="h-4 w-4 transition-transform group-hover:rotate-90" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                        </svg>
+                        <Plus className="h-4 w-4 transition-transform group-hover:rotate-90" />
                       </span>
                     </button>
                   </div>
@@ -4106,7 +4105,7 @@ export default function Home() {
                     >
                       <span className="relative z-10 flex items-center gap-2">
                         Agregar repartidor
-                        <svg className="h-4 w-4 transition-transform group-hover:translate-x-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4"/></svg>
+                        <Plus className="h-4 w-4 transition-transform group-hover:translate-x-1" />
                       </span>
                     </button>
                   </div>
@@ -4141,7 +4140,7 @@ export default function Home() {
                       <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-neutral-400">Anomalías (Suspendidos)</p>
                       <p className="mt-3 text-3xl font-semibold tracking-tight text-neutral-900">{driverOverview?.suspendedDrivers || 0}</p>
                       <p className="mt-2 flex items-center gap-1.5 text-xs font-medium text-amber-600">
-                        <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+                        <AlertTriangle className="h-3.5 w-3.5" />
                         {driverOverview?.driversWithExpiredLicense || 0} licencias críticas
                       </p>
                     </div>
@@ -4191,7 +4190,7 @@ export default function Home() {
                           onClick={() => { setDriverFilters({ search: '', status: '', availability: '', region: '', debt: '' }); }}
                           className="inline-flex items-center gap-1 rounded-full border border-black/10 px-3 py-1 text-xs font-semibold text-neutral-500 transition hover:bg-neutral-100 hover:text-neutral-900"
                         >
-                          <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" /></svg>
+                          <X className="h-3 w-3" strokeWidth={2.5} />
                           Limpiar filtros
                         </button>
                       )}
@@ -4408,7 +4407,7 @@ export default function Home() {
                           return (
                             <div className="animate-fade-in flex items-start gap-4 rounded-[28px] border border-rose-200 bg-rose-50/50 p-5 shadow-sm ring-1 ring-inset ring-rose-500/10">
                               <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-rose-100 text-rose-600">
-                                <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+                                <AlertTriangle className="h-5 w-5" strokeWidth={2.5} />
                               </div>
                               <div>
                                 <h4 className="font-bold text-rose-900">Anomalía Operativa Detectada</h4>
@@ -4856,7 +4855,7 @@ export default function Home() {
                                     </p>
                                   </div>
                                   <div className={`flex h-8 w-8 items-center justify-center rounded-full bg-neutral-100 text-neutral-500 transition-transform ${showDriverOrderHistory ? 'rotate-180' : ''}`}>
-                                    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                                    <ChevronUp className="h-4 w-4" />
                                   </div>
                                 </button>
                               </div>
@@ -6309,7 +6308,7 @@ export default function Home() {
                                 <option value="DRIVER">Solo Repartidores</option>
                               </select>
                               <div className="absolute inset-y-0 right-4 flex items-center pointer-events-none text-neutral-400">
-                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" /></svg>
+                                <ChevronUp className="w-4 h-4" />
                               </div>
                             </div>
                           </div>
@@ -6328,7 +6327,7 @@ export default function Home() {
                                 ))}
                               </select>
                               <div className="absolute inset-y-0 right-4 flex items-center pointer-events-none text-neutral-400">
-                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" /></svg>
+                                <ChevronUp className="w-4 h-4" />
                               </div>
                             </div>
                           </div>
@@ -7032,9 +7031,7 @@ export default function Home() {
                   className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-black/10 bg-white text-neutral-700 transition hover:bg-neutral-50"
                   aria-label="Cerrar menu"
                 >
-                  <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M6 6l12 12M18 6L6 18" />
-                  </svg>
+                  <X className="h-5 w-5" strokeWidth={1.8} />
                 </button>
               </div>
               <p className="mt-4 truncate text-sm font-medium text-neutral-500">{adminUser.name}</p>
@@ -7108,9 +7105,7 @@ export default function Home() {
                 className="flex-shrink-0 inline-flex h-8 w-8 items-center justify-center rounded-lg border border-black/10 bg-white text-neutral-700 transition hover:bg-neutral-50 disabled:cursor-not-allowed disabled:opacity-60"
                 aria-label="Cerrar formulario"
               >
-                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 6l12 12M18 6L6 18" />
-                </svg>
+                <X className="h-4 w-4" />
               </button>
             </div>
 
@@ -7386,9 +7381,7 @@ export default function Home() {
                 className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-black/10 bg-white text-neutral-700 transition hover:bg-neutral-50 disabled:cursor-not-allowed disabled:opacity-60"
                 aria-label="Cerrar formulario de zona"
               >
-                <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M6 6l12 12M18 6L6 18" />
-                </svg>
+                <X className="h-5 w-5" strokeWidth={1.8} />
               </button>
             </div>
 
@@ -7595,9 +7588,7 @@ export default function Home() {
                   className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-neutral-100 text-neutral-500 transition hover:bg-neutral-200 hover:text-neutral-900 disabled:cursor-not-allowed disabled:opacity-50"
                   aria-label="Cerrar modal"
                 >
-                  <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
+                  <X className="h-5 w-5" />
                 </button>
               </div>
 
@@ -7808,7 +7799,7 @@ export default function Home() {
                 onClick={() => setViewingDriverProofUrl(null)}
                 className="flex h-9 w-9 items-center justify-center rounded-full bg-white border border-black/5 text-neutral-500 hover:bg-neutral-100 transition shadow-sm"
               >
-                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                <X className="h-4 w-4" />
               </button>
             </div>
             <div className="relative flex flex-1 items-center justify-center overflow-auto bg-neutral-100/50 p-6 min-h-[40vh]">
@@ -7854,7 +7845,7 @@ export default function Home() {
                 onClick={() => setViewingCustomerProofUrl(null)}
                 className="flex h-9 w-9 items-center justify-center rounded-full bg-white border border-black/5 text-neutral-500 hover:bg-neutral-100 transition shadow-sm"
               >
-                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                <X className="h-4 w-4" />
               </button>
             </div>
             <div className="relative flex flex-1 items-center justify-center overflow-auto bg-neutral-100/50 p-6 min-h-[40vh]">
@@ -8104,9 +8095,7 @@ function StuckOrdersPanel({ apiBase, token }: { apiBase: string; token: string }
           </p>
         </div>
         <button onClick={loadOrders} className="flex items-center gap-2 rounded-full border border-black/10 bg-white px-5 py-3 text-sm font-semibold text-neutral-700 hover:bg-neutral-50 transition">
-          <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-          </svg>
+          <RefreshCw className="h-4 w-4" strokeWidth={2.5} />
           Actualizar
         </button>
       </div>
@@ -8114,9 +8103,7 @@ function StuckOrdersPanel({ apiBase, token }: { apiBase: string; token: string }
       {orders.length === 0 ? (
         <div className="rounded-[32px] border border-emerald-100 bg-emerald-50/50 p-12 text-center">
           <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100">
-            <svg className="h-8 w-8 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-            </svg>
+            <Check className="h-8 w-8 text-emerald-600" />
           </div>
           <h3 className="text-xl font-bold text-emerald-800">No hay entregas atascadas</h3>
           <p className="mt-2 text-emerald-600">Todos los pedidos activos fluyen con normalidad.</p>

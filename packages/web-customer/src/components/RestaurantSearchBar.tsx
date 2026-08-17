@@ -1,5 +1,6 @@
 import React, { memo, useState, useEffect } from 'react';
 import { useStore } from '../store';
+import { Search, X } from 'lucide-react';
 
 export const RestaurantSearchBar = memo(function RestaurantSearchBar() {
   const globalQuery = useStore((state) => state.searchQuery);
@@ -45,14 +46,10 @@ export const RestaurantSearchBar = memo(function RestaurantSearchBar() {
             className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-neutral-400 hover:text-neutral-700 transition-colors rounded-full hover:bg-neutral-100"
             aria-label="Limpiar búsqueda"
           >
-            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
+            <X className="h-4 w-4" />
           </button>
         ) : (
-          <svg className="pointer-events-none absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M21 21l-5.2-5.2m1.7-4.3a7 7 0 11-14 0 7 7 0 0114 0z" />
-          </svg>
+          <Search className="pointer-events-none absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-400" strokeWidth={1.8} />
         )}
       </div>
 

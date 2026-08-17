@@ -1,4 +1,5 @@
 'use client';
+import { AlertTriangle, Check, ChevronLeft, ChevronRight, Clock, Info, Mail, MapPin, MessageCircle, RefreshCw, User, X } from 'lucide-react';
 
 import React, { useCallback, useEffect, useMemo, useRef, useState, useDeferredValue } from 'react';
 import { useRouter } from 'next/navigation';
@@ -3954,9 +3955,7 @@ export default function Home() {
               }}
               className="flex w-full items-center justify-center gap-3 rounded-2xl bg-[#161616] px-5 py-3.5 text-sm font-semibold text-white transition hover:bg-neutral-800 active:scale-[0.98]"
             >
-              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.828 0l-4.243-4.243a8 8 0 1111.314 0z" />
-              </svg>
+              <MapPin className="h-5 w-5" strokeWidth={1.8} />
               Usar mi ubicación
             </button>
 
@@ -4032,15 +4031,7 @@ export default function Home() {
         style={{ transform: `translateY(${Math.max(0, pullDistance - 40)}px)` }}
       >
         <div className="rounded-full bg-white p-2 shadow-lg border border-black/5 flex items-center justify-center">
-          <svg
-            className={`h-5 w-5 text-neutral-600 ${isRefreshing ? 'animate-spin' : ''}`}
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-            style={{ transform: isRefreshing ? 'none' : `rotate(${pullDistance * 4}deg)` }}
-          >
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-          </svg>
+          <RefreshCw />
         </div>
       </div>
 
@@ -4097,9 +4088,7 @@ export default function Home() {
                   aria-label="Cerrar bienvenida"
                   className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-neutral-400 transition-colors hover:bg-neutral-100 hover:text-neutral-700"
                 >
-                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
+                  <X className="h-4 w-4" strokeWidth={2.5} />
                 </button>
               </div>
               <div className="h-1 w-full overflow-hidden rounded-full bg-neutral-100">
@@ -4119,17 +4108,11 @@ export default function Home() {
             : 'border-emerald-100 bg-emerald-50 text-emerald-700'
         }`}>
           {toastData.type === 'error' ? (
-            <svg className="h-4 w-4 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-            </svg>
+            <AlertTriangle className="h-4 w-4 text-red-500" />
           ) : toastData.type === 'info' ? (
-            <svg className="h-4 w-4 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
+            <Info className="h-4 w-4 text-blue-500" />
           ) : (
-            <svg className="h-4 w-4 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-            </svg>
+            <Check className="h-4 w-4 text-emerald-500" />
           )}
           <span className="font-medium">{toastMessage}</span>
         </div>
@@ -4186,9 +4169,7 @@ export default function Home() {
                     className="relative inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-black/10 bg-white text-neutral-800 shadow-sm transition hover:bg-neutral-50 active:scale-95 overflow-hidden"
                     aria-label="Iniciar sesión"
                   >
-                    <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                    </svg>
+                    <User className="h-5 w-5" strokeWidth={1.8} />
                   </button>
                 )}
 
@@ -4234,9 +4215,7 @@ export default function Home() {
                   className="absolute -left-3 md:-left-5 top-1/2 -translate-y-1/2 z-10 flex h-8 w-8 items-center justify-center rounded-full border border-black/10 bg-white/90 text-neutral-800 shadow-md backdrop-blur transition hover:bg-neutral-50 active:scale-95"
                   aria-label="Pedido anterior"
                 >
-                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 19l-7-7 7-7" />
-                  </svg>
+                  <ChevronLeft className="h-4 w-4" strokeWidth={2.5} />
                 </button>
               )}
 
@@ -4272,9 +4251,7 @@ export default function Home() {
                   className="absolute -right-3 md:-right-5 top-1/2 -translate-y-1/2 z-10 flex h-8 w-8 items-center justify-center rounded-full border border-black/10 bg-white/90 text-neutral-800 shadow-md backdrop-blur transition hover:bg-neutral-50 active:scale-95"
                   aria-label="Siguiente pedido"
                 >
-                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" />
-                  </svg>
+                  <ChevronRight className="h-4 w-4" strokeWidth={2.5} />
                 </button>
               )}
             </div>
@@ -4317,9 +4294,7 @@ export default function Home() {
               className="inline-flex h-8 w-8 items-center justify-center rounded-xl border border-black/8 bg-white text-neutral-500 transition hover:bg-neutral-50"
               aria-label="Cerrar"
             >
-              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 6l12 12M18 6L6 18" />
-              </svg>
+              <X className="h-4 w-4" />
             </button>
           </div>
 
@@ -4358,9 +4333,7 @@ export default function Home() {
                   <div className="relative z-10 flex-1">
                     <div className="flex items-center gap-2">
                       <div className="flex h-8 w-8 items-center justify-center rounded-full bg-sky-500/10 ring-1 ring-sky-500/25 dark:bg-sky-400/10 dark:ring-sky-400/25">
-                        <svg className="h-4 w-4 text-sky-600 dark:text-sky-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                        </svg>
+                        <User className="h-4 w-4 text-sky-600 dark:text-sky-400" />
                       </div>
                       <p className="text-sm font-semibold text-neutral-900 dark:text-white">Iniciar sesión</p>
                     </div>
@@ -4369,9 +4342,7 @@ export default function Home() {
                     </p>
                   </div>
                   <div className="relative z-10 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-sky-500/10 ring-1 ring-sky-500/25 dark:bg-sky-400/10 dark:ring-sky-400/25 transition-transform duration-200 group-hover:translate-x-0.5 group-active:translate-x-1">
-                    <svg className="h-4 w-4 text-sky-600 dark:text-sky-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                    </svg>
+                    <ChevronRight className="h-4 w-4 text-sky-600 dark:text-sky-400" />
                   </div>
                 </div>
               </button>
@@ -4398,9 +4369,7 @@ export default function Home() {
                 activeSection === 'profile' ? 'bg-sky-50 text-sky-700' : 'text-neutral-600 hover:bg-neutral-50 hover:text-neutral-900'
               }`}
             >
-              <svg className={`h-5 w-5 ${activeSection === 'profile' ? 'text-sky-500' : 'text-neutral-400'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-              </svg>
+              <User strokeWidth={1.8} />
               <span>Mi perfil</span>
             </button>
             <button
@@ -4411,9 +4380,7 @@ export default function Home() {
               }`}
             >
               <div className="flex items-center gap-3">
-                <svg className={`h-5 w-5 ${activeSection === 'history' ? 'text-sky-500' : 'text-neutral-400'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
+                <Clock strokeWidth={1.8} />
                 <span>Historial</span>
               </div>
               <span className={`text-[11px] font-medium ${activeSection === 'history' ? 'text-sky-500' : 'text-neutral-400'}`}>{orderStats.total}</span>
@@ -4749,9 +4716,7 @@ export default function Home() {
                     {supportError && (
                       <div className="mb-6 rounded-2xl bg-rose-50 border border-rose-100 p-4 flex items-start gap-3 animate-fade-in">
                         <div className="text-rose-500 shrink-0 mt-0.5">
-                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                          </svg>
+                          <AlertTriangle className="w-5 h-5" />
                         </div>
                         <p className="text-sm font-medium text-rose-800">{supportError}</p>
                       </div>
@@ -5049,9 +5014,7 @@ export default function Home() {
               <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4 py-6">
                 <div className="w-full max-w-sm rounded-[32px] bg-white p-8 text-center shadow-[0_30px_100px_rgba(0,0,0,0.2)] animate-scale-up">
                   <div className="mx-auto mb-5 flex h-20 w-20 items-center justify-center rounded-full bg-emerald-50 text-emerald-500 shadow-inner">
-                    <svg className="h-10 w-10" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="3">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                    </svg>
+                    <Check className="h-10 w-10" />
                   </div>
                   <h3 className="text-2xl font-black tracking-tight text-neutral-900 mb-2">¡Reporte Enviado!</h3>
                   <p className="text-sm font-medium text-neutral-500 mb-8 leading-relaxed">
@@ -5159,9 +5122,7 @@ export default function Home() {
                         <p className="text-[10px] text-neutral-500 font-semibold mt-0.5">Registra tu negocio y vende más</p>
                       </div>
                       <div className="text-neutral-300 group-hover:text-sky-1000 transition-colors pl-1">
-                        <svg className="w-4 h-4 transform group-hover:translate-x-0.5 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.5">
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-                        </svg>
+                        <ChevronRight className="w-4 h-4 transform group-hover:translate-x-0.5 transition-transform" />
                       </div>
                     </button>
 
@@ -5179,9 +5140,7 @@ export default function Home() {
                         <p className="text-[10px] text-neutral-500 font-semibold mt-0.5">Entrega pedidos con tu moto</p>
                       </div>
                       <div className="text-neutral-300 group-hover:text-sky-1000 transition-colors pl-1">
-                        <svg className="w-4 h-4 transform group-hover:translate-x-0.5 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.5">
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-                        </svg>
+                        <ChevronRight className="w-4 h-4 transform group-hover:translate-x-0.5 transition-transform" />
                       </div>
                     </button>
 
@@ -5545,9 +5504,7 @@ export default function Home() {
                             }}
                             className="mt-3 w-full flex items-center justify-center gap-2 rounded-full bg-amber-500 hover:bg-amber-600 py-2.5 text-xs font-bold text-white shadow-sm transition-all active:scale-[0.97]"
                           >
-                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-                            </svg>
+                            <MessageCircle className="w-3.5 h-3.5" />
                             Contactar al negocio
                           </button>
                         </div>
@@ -5603,9 +5560,7 @@ export default function Home() {
                                 }}
                                 className="mt-3 w-full flex items-center justify-center gap-2 rounded-full bg-red-500 hover:bg-red-600 py-2.5 text-xs font-bold text-white shadow-sm transition-all active:scale-[0.97]"
                               >
-                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-                                </svg>
+                                <MessageCircle className="w-3.5 h-3.5" />
                                 Contactar al negocio
                               </button>
                             </div>
@@ -5694,7 +5649,7 @@ export default function Home() {
                         </div>
                         <div className="flex items-start gap-3">
                           <div className="mt-0.5 flex h-8 w-8 items-center justify-center rounded-full bg-neutral-100 text-neutral-600 shrink-0">
-                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/></svg>
+                            <Mail className="w-4 h-4" />
                           </div>
                           <div className="text-sm">
                             <p className="font-medium text-neutral-900">{selectedOrder.paymentMethod === 'CASH' ? 'Efectivo' : 'Transferencia'}</p>
@@ -5716,7 +5671,7 @@ export default function Home() {
                         </div>
                         <div className="flex items-start gap-3">
                           <div className="mt-0.5 flex h-8 w-8 items-center justify-center rounded-full bg-neutral-100 text-neutral-600 shrink-0">
-                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/></svg>
+                            <Mail className="w-4 h-4" />
                           </div>
                           <div className="text-sm">
                             <p className="font-medium text-neutral-900">{selectedOrder.paymentMethod === 'CASH' ? 'Efectivo' : 'Transferencia'}</p>
@@ -6078,9 +6033,7 @@ export default function Home() {
                   onClick={() => setIsReorderModalOpen(false)}
                   className="text-neutral-400 hover:text-neutral-600 transition"
                 >
-                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
-                  </svg>
+                  <X className="w-6 h-6" />
                 </button>
               </div>
 
@@ -6177,9 +6130,7 @@ export default function Home() {
                 onClick={() => setShowPromoModal(false)}
                 className="absolute -top-3 -right-3 z-10 flex h-9 w-9 items-center justify-center rounded-full bg-white text-neutral-900 shadow-xl transition hover:scale-110 active:scale-95"
               >
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                </svg>
+                <X className="w-4 h-4" strokeWidth={2.5} />
               </button>
               <img
                 src={promoImageUrl}
@@ -6503,9 +6454,7 @@ export default function Home() {
               onClick={(e) => e.stopPropagation()}
             >
               <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-[#06c167]/10 mb-6">
-                <svg className="h-8 w-8 text-[#06c167]" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.5">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                </svg>
+                <Check className="h-8 w-8 text-[#06c167]" />
               </div>
               <h3 className="text-2xl font-bold tracking-tight text-neutral-900 mb-2">¡Solicitud Enviada!</h3>
               <p className="text-sm text-neutral-500 mb-8 leading-relaxed">
@@ -6562,9 +6511,7 @@ export default function Home() {
               <span className="text-sm font-bold text-white">
                 ${(cartSubtotal).toFixed(2)}
               </span>
-              <svg className="h-4 w-4 text-white/70 transition-transform group-hover:translate-x-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-              </svg>
+              <ChevronRight className="h-4 w-4 text-white/70 transition-transform group-hover:translate-x-1" />
             </div>
           </button>
         </div>
@@ -6692,7 +6639,7 @@ export default function Home() {
                             title="Copiar"
                           >
                             {copiedDebtField === 'account' ? (
-                              <svg className="h-3.5 w-3.5 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+                              <Check className="h-3.5 w-3.5 text-emerald-500" strokeWidth={3} />
                             ) : (
                               <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}><rect x="9" y="9" width="13" height="13" rx="2" ry="2" /><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1" /></svg>
                             )}
@@ -6715,7 +6662,7 @@ export default function Home() {
                             title="Copiar"
                           >
                             {copiedDebtField === 'beneficiary' ? (
-                              <svg className="h-3.5 w-3.5 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+                              <Check className="h-3.5 w-3.5 text-emerald-500" strokeWidth={3} />
                             ) : (
                               <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}><rect x="9" y="9" width="13" height="13" rx="2" ry="2" /><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1" /></svg>
                             )}

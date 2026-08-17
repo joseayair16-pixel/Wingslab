@@ -1,4 +1,5 @@
 import React from 'react';
+import { Check } from 'lucide-react';
 
 export interface CheckoutViewProps {
   openDashboardSection: (section: any) => void;
@@ -83,9 +84,7 @@ export function CheckoutView({
           >
             {!isPickup && (
               <span className="absolute -top-2 -right-2 flex h-5 w-5 items-center justify-center rounded-full bg-white shadow-md ring-2 ring-sky-500">
-                <svg className="h-3 w-3 text-sky-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={4}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                </svg>
+                <Check className="h-3 w-3 text-sky-500" strokeWidth={4} />
               </span>
             )}
             <span className="text-2xl">🛵</span>
@@ -105,9 +104,7 @@ export function CheckoutView({
           >
             {isPickup && (
               <span className="absolute -top-2 -right-2 flex h-5 w-5 items-center justify-center rounded-full bg-white shadow-md ring-2 ring-sky-500">
-                <svg className="h-3 w-3 text-sky-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={4}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                </svg>
+                <Check className="h-3 w-3 text-sky-500" strokeWidth={4} />
               </span>
             )}
             <span className="text-2xl">🏪</span>
@@ -380,9 +377,7 @@ export function CheckoutView({
               onClick={handlePlaceOrder}
               className="w-full rounded-full bg-sky-500 py-3.5 text-sm font-semibold text-white transition hover:bg-sky-600 flex items-center justify-center gap-2 active-scale shadow-[0_12px_32px_rgba(135,206,235,0.2)]"
             >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-              </svg>
+              <Check className="w-5 h-5" />
               Confirmar y Pedir
             </button>
           </div>

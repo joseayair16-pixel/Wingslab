@@ -1,4 +1,5 @@
 'use client';
+import { ChevronLeft } from 'lucide-react';
 
 import Link from 'next/link';
 import { SaDelLogo } from '../../components/SaDelLogo';
@@ -15,9 +16,7 @@ export default function PrivacyPage() {
               className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-black/10 bg-white text-neutral-800 shadow-sm transition hover:bg-neutral-50 active:scale-95 animate-fade-in"
               aria-label="Volver al inicio"
             >
-              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.5">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-              </svg>
+              <ChevronLeft className="h-4 w-4" />
             </Link>
             <SaDelLogo className="h-7 w-auto object-contain" />
           </div>

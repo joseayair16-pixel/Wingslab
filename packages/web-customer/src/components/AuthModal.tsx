@@ -1,4 +1,5 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { X } from 'lucide-react';
 import {
   ApiResponse,
   AuthResponse,
@@ -465,9 +466,7 @@ export const AuthModal = memo(function AuthModal({ isOpen, onClose, onSuccess, a
           className="absolute right-5 top-5 z-10 flex h-10 w-10 items-center justify-center rounded-full bg-neutral-100 hover:bg-neutral-200 text-neutral-600 transition active:scale-95"
           aria-label="Cerrar modal de autenticación"
         >
-          <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
-          </svg>
+          <X className="h-5 w-5" strokeWidth={2.5} />
         </button>
 
         {/* Content Container */}

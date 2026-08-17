@@ -1,4 +1,5 @@
 'use client';
+import { Check, ChevronLeft, ChevronRight, Minus, Plus, Trash2, X } from 'lucide-react';
 
 import { memo, useMemo } from 'react';
 import { useCartStore } from '../store/cartStore';
@@ -143,9 +144,7 @@ export default memo(function CartDrawer({
               className="flex h-10 w-10 items-center justify-center rounded-full bg-neutral-100 text-neutral-500 transition-all hover:bg-neutral-200 hover:text-neutral-700 active:scale-90"
               aria-label="Cerrar carrito"
             >
-              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
+              <X className="h-5 w-5" />
             </button>
           </div>
 
@@ -222,13 +221,9 @@ export default memo(function CartDrawer({
                             aria-label={`Quitar una unidad de ${item.name}`}
                           >
                             {item.quantity === 1 ? (
-                              <svg className="h-3 w-3 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                              </svg>
+                              <Trash2 className="h-3 w-3 text-red-500" />
                             ) : (
-                              <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M20 12H4" />
-                              </svg>
+                              <Minus className="h-3 w-3" strokeWidth={2.5} />
                             )}
                           </button>
                           <span className="flex h-7 w-7 items-center justify-center text-xs font-bold text-neutral-900">{item.quantity}</span>
@@ -238,9 +233,7 @@ export default memo(function CartDrawer({
                             className="flex h-7 w-7 items-center justify-center rounded-full text-neutral-500 transition-all hover:bg-white hover:text-neutral-800 hover:shadow-sm active:scale-90"
                             aria-label={`Agregar una unidad de ${item.name}`}
                           >
-                            <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
-                            </svg>
+                            <Plus className="h-3 w-3" strokeWidth={2.5} />
                           </button>
                         </div>
 
@@ -273,9 +266,7 @@ export default memo(function CartDrawer({
                     className="group relative mt-8 inline-flex items-center gap-2 overflow-hidden rounded-full bg-neutral-900 px-8 py-3.5 text-[15px] font-bold text-white shadow-[0_8px_20px_rgba(0,0,0,0.16)] transition-all duration-300 hover:-translate-y-0.5 hover:shadow-[0_12px_28px_rgba(0,0,0,0.22)] active:scale-[0.98]"
                   >
                     <span className="relative z-10">Explorar menú</span>
-                    <svg className="relative z-10 h-4 w-4 transition-transform duration-300 group-hover:translate-x-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" />
-                    </svg>
+                    <ChevronRight className="relative z-10 h-4 w-4 transition-transform duration-300 group-hover:translate-x-1" strokeWidth={2.5} />
                     <div className="absolute inset-0 bg-gradient-to-r from-neutral-800 to-neutral-900 opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
                   </button>
                 </div>
@@ -353,9 +344,7 @@ export default memo(function CartDrawer({
                 >
                   {fulfillmentType === 'DELIVERY' && (
                     <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-white shadow-sm">
-                      <svg className="h-2.5 w-2.5 text-sky-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={4}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                      </svg>
+                      <Check className="h-2.5 w-2.5 text-sky-500" strokeWidth={4} />
                     </span>
                   )}
                   <span>🛵</span> Enviar a domicilio
@@ -371,9 +360,7 @@ export default memo(function CartDrawer({
                 >
                   {fulfillmentType === 'PICKUP' && (
                     <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-white shadow-sm">
-                      <svg className="h-2.5 w-2.5 text-sky-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={4}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                      </svg>
+                      <Check className="h-2.5 w-2.5 text-sky-500" strokeWidth={4} />
                     </span>
                   )}
                   <span><svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13.5 21v-7.5a.75.75 0 01.75-.75h3a.75.75 0 01.75.75V21m-4.5 0H2.36m11.14 0H18m0 0h3.64m-1.39 0V9.349m-16.5 11.65V9.35m0 0a3.001 3.001 0 003.75-.615A2.993 2.993 0 009.75 9.75c.896 0 1.7-.393 2.25-1.016a2.993 2.993 0 002.25 1.016c.896 0 1.7-.393 2.25-1.016a3.001 3.001 0 003.75.614m-16.5 0a3.004 3.004 0 01-.621-4.72L4.318 3.44A1.5 1.5 0 015.378 3h13.243a1.5 1.5 0 011.06.44l1.19 1.189a3 3 0 01-.621 4.72m-13.5 8.65h3.75a.75.75 0 00.75-.75V13.5a.75.75 0 00-.75-.75H6.75a.75.75 0 00-.75.75v3.75c0 .415.336.75.75.75z" /></svg></span> Recoger en tienda
@@ -387,9 +374,7 @@ export default memo(function CartDrawer({
                   onClick={onClose}
                   className="group flex items-center justify-center gap-1.5 rounded-xl border border-black/[0.06] bg-white px-4 py-2.5 text-sm font-semibold text-neutral-700 shadow-sm transition-all hover:bg-neutral-50 hover:shadow active:scale-[0.97]"
                 >
-                  <svg className="h-3.5 w-3.5 text-neutral-400 transition-transform group-hover:-translate-x-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                  </svg>
+                  <ChevronLeft className="h-3.5 w-3.5 text-neutral-400 transition-transform group-hover:-translate-x-0.5" />
                   Seguir comprando
                 </button>
                 <button
@@ -401,9 +386,7 @@ export default memo(function CartDrawer({
                   <div className="absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/20 to-transparent transition-transform duration-1000 group-hover:translate-x-full disabled:hidden" />
                   <span className="relative flex items-center justify-center gap-2">
                     Completar pedido
-                    <svg className="h-5 w-5 shrink-0 animate-arrow-slide group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" />
-                    </svg>
+                    <ChevronRight className="h-5 w-5 shrink-0 animate-arrow-slide group-hover:translate-x-1 transition-transform" strokeWidth={2.5} />
                   </span>
                 </button>
               </div>

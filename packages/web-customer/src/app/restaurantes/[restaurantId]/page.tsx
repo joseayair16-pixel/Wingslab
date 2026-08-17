@@ -1,4 +1,5 @@
 'use client';
+import { AlertTriangle, Check, ChevronLeft, ChevronRight, Mail, MessageCircle, Minus, Plus, RefreshCw, Search, Tag, Trash2, User, X } from 'lucide-react';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
@@ -371,9 +372,7 @@ function CarouselOrGrid({
         onClick={() => scrollByAmount(1)}
         className={`absolute right-3 top-1/2 z-20 hidden h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-white/95 text-neutral-600 shadow-lg shadow-black/10 ring-1 ring-black/5 backdrop-blur transition-all duration-200 hover:bg-white hover:text-neutral-900 active:scale-90 sm:flex ${canRight ? 'opacity-100' : 'pointer-events-none opacity-0'}`}
       >
-        <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" />
-        </svg>
+        <ChevronRight className="h-4 w-4" strokeWidth={2.5} />
       </button>
       <button
         type="button"
@@ -381,9 +380,7 @@ function CarouselOrGrid({
         onClick={() => scrollByAmount(-1)}
         className={`absolute left-3 top-1/2 z-20 hidden h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-white/95 text-neutral-600 shadow-lg shadow-black/10 ring-1 ring-black/5 backdrop-blur transition-all duration-200 hover:bg-white hover:text-neutral-900 active:scale-90 sm:flex ${canLeft ? 'opacity-100' : 'pointer-events-none opacity-0'}`}
       >
-        <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 19l-7-7 7-7" />
-        </svg>
+        <ChevronLeft className="h-4 w-4" strokeWidth={2.5} />
       </button>
     </div>
   );
@@ -2798,15 +2795,7 @@ function triggerHaptic(pattern: number | number[] = 10) {
         style={{ transform: `translateY(${Math.max(0, pullDistance - 40)}px)` }}
       >
         <div className="rounded-full bg-white p-2 shadow-lg border border-black/5 flex items-center justify-center">
-          <svg
-            className={`h-5 w-5 text-neutral-600 ${isRefreshing ? 'animate-spin' : ''}`}
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-            style={{ transform: isRefreshing ? 'none' : `rotate(${pullDistance * 4}deg)` }}
-          >
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-          </svg>
+          <RefreshCw />
         </div>
       </div>
 
@@ -2839,9 +2828,7 @@ function triggerHaptic(pattern: number | number[] = 10) {
               className="inline-flex h-11 w-11 items-center justify-center rounded-full border transition-all border-black/10 bg-white text-neutral-800 shadow-sm hover:bg-neutral-50 dark:bg-neutral-900 dark:border-white/10 dark:text-neutral-200"
               aria-label="Volver al inicio"
             >
-              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 19l-7-7 7-7" />
-              </svg>
+              <ChevronLeft className="h-5 w-5" strokeWidth={2.5} />
             </button>
 
             <div className="min-w-0 flex-1 relative flex items-center">
@@ -2872,9 +2859,7 @@ function triggerHaptic(pattern: number | number[] = 10) {
                 className="relative inline-flex h-11 w-11 items-center justify-center rounded-full border transition-all overflow-hidden active:scale-95 active-scale border-black/10 bg-white text-neutral-800 shadow-sm hover:bg-neutral-50 dark:bg-neutral-900 dark:border-white/10 dark:text-neutral-200"
                 aria-label="Iniciar sesión"
               >
-                <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                </svg>
+                <User className="h-5 w-5" />
               </button>
             )}
 
@@ -2914,9 +2899,7 @@ function triggerHaptic(pattern: number | number[] = 10) {
                   className="absolute -left-3 md:-left-5 top-1/2 -translate-y-1/2 z-10 flex h-8 w-8 items-center justify-center rounded-full border border-black/10 bg-white/90 text-neutral-800 shadow-md backdrop-blur transition hover:bg-neutral-50 active:scale-95 active-scale"
                   aria-label="Pedido anterior"
                 >
-                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 19l-7-7 7-7" />
-                  </svg>
+                  <ChevronLeft className="h-4 w-4" strokeWidth={2.5} />
                 </button>
               )}
 
@@ -2953,9 +2936,7 @@ function triggerHaptic(pattern: number | number[] = 10) {
                   className="absolute -right-3 md:-right-5 top-1/2 -translate-y-1/2 z-10 flex h-8 w-8 items-center justify-center rounded-full border border-black/10 bg-white/90 text-neutral-800 shadow-md backdrop-blur transition hover:bg-neutral-50 active:scale-95 active-scale"
                   aria-label="Siguiente pedido"
                 >
-                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" />
-                  </svg>
+                  <ChevronRight className="h-4 w-4" strokeWidth={2.5} />
                 </button>
               )}
             </div>
@@ -2997,9 +2978,7 @@ function triggerHaptic(pattern: number | number[] = 10) {
                 className="absolute top-4 right-4 z-10 flex h-10 w-10 items-center justify-center rounded-full bg-black/40 hover:bg-black/60 text-white backdrop-blur transition shadow-md"
                 aria-label="Cerrar personalización"
               >
-                <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
-                </svg>
+                <X className="h-5 w-5" strokeWidth={2.5} />
               </button>
 
               {/* Imagen y Detalles del Producto */}
@@ -3099,9 +3078,7 @@ function triggerHaptic(pattern: number | number[] = 10) {
                                         : 'border-black/20 dark:border-zinc-700 bg-white dark:bg-neutral-800'
                                     }`}>
                                       {isChecked && (
-                                        <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                                        </svg>
+                                        <Check className="h-3.5 w-3.5" strokeWidth={3} />
                                       )}
                                     </div>
                                   )}
@@ -3583,9 +3560,7 @@ function triggerHaptic(pattern: number | number[] = 10) {
                   className="flex h-10 w-10 items-center justify-center rounded-full bg-neutral-100 text-neutral-500 transition-all hover:bg-neutral-200 hover:text-neutral-700 active:scale-90"
                   aria-label="Cerrar checkout"
                 >
-                  <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
+                  <X className="h-5 w-5" />
                 </button>
               </div>
 
@@ -4090,7 +4065,7 @@ function triggerHaptic(pattern: number | number[] = 10) {
                             {promoCodeState === 'validating' ? (
                               <svg className="h-4 w-4 animate-spin text-white" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
                             ) : (
-                              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-5.2-5.2m1.7-4.3a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+                              <Search className="h-4 w-4" />
                             )}
                             {promoCodeState === 'validating' ? 'Validando...' : 'Aplicar'}
                           </button>
@@ -4183,9 +4158,7 @@ function triggerHaptic(pattern: number | number[] = 10) {
                                       title="Copiar"
                                     >
                                       {copiedField === 'account' ? (
-                                        <svg className="h-3.5 w-3.5 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-                                          <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                                        </svg>
+                                        <Check className="h-3.5 w-3.5 text-emerald-500" strokeWidth={3} />
                                       ) : (
                                         <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
                                           <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
@@ -4206,9 +4179,7 @@ function triggerHaptic(pattern: number | number[] = 10) {
                                       title="Copiar"
                                     >
                                       {copiedField === 'beneficiary' ? (
-                                        <svg className="h-3.5 w-3.5 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-                                          <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                                        </svg>
+                                        <Check className="h-3.5 w-3.5 text-emerald-500" strokeWidth={3} />
                                       ) : (
                                         <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
                                           <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
@@ -4337,9 +4308,7 @@ function triggerHaptic(pattern: number | number[] = 10) {
                       }}
                       className="group flex items-center justify-center gap-1.5 rounded-2xl bg-neutral-100/80 px-4 py-3.5 text-sm font-semibold text-neutral-600 transition-all hover:bg-neutral-200/80 active:scale-[0.97] active-scale shrink-0"
                     >
-                      <svg className="h-4 w-4 text-neutral-500 transition-transform group-hover:-translate-x-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 19l-7-7 7-7" />
-                      </svg>
+                      <ChevronLeft className="h-4 w-4 text-neutral-500 transition-transform group-hover:-translate-x-0.5" strokeWidth={2.5} />
                       <span className="hidden sm:inline">Volver</span>
                     </button>
                     
@@ -4352,9 +4321,7 @@ function triggerHaptic(pattern: number | number[] = 10) {
                         <div className="absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/20 to-transparent transition-transform duration-1000 group-hover:translate-x-full" />
                         <span className="relative flex items-center justify-center gap-2">
                           Iniciar sesión
-                          <svg className="h-4 w-4 transition-transform group-hover:translate-x-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
-                          </svg>
+                          <Check className="h-4 w-4 transition-transform group-hover:translate-x-0.5" strokeWidth={2.5} />
                         </span>
                       </button>
                     ) : (
@@ -4374,9 +4341,7 @@ function triggerHaptic(pattern: number | number[] = 10) {
                         <span className="relative flex items-center justify-center gap-2">
                           {creatingOrder ? 'Procesando...' : `Confirmar • ${formatCurrency(orderTotal)}`}
                           {!creatingOrder && (
-                            <svg className="h-4 w-4 transition-transform group-hover:translate-x-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
-                            </svg>
+                            <Check className="h-4 w-4 transition-transform group-hover:translate-x-1" strokeWidth={2.5} />
                           )}
                         </span>
                       </button>
@@ -4764,7 +4729,7 @@ function triggerHaptic(pattern: number | number[] = 10) {
                               {promo.icon === 'delivery' ? (
                                 <span className="text-[13px] leading-none">🛵</span>
                               ) : (
-                                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M9 14l6-6m-5.5.5h.01m4.99 5h.01M5 13v6a2 2 0 002 2h10a2 2 0 002-2v-6m-2 0a2 2 0 110-4m-8 4a2 2 0 100-4m7 4V7a2 2 0 00-2-2H7a2 2 0 00-2 2v6" /></svg>
+                                <Tag className="h-4 w-4" strokeWidth={1.8} />
                               )}
                             </div>
                             <div className="min-w-0">
@@ -4816,14 +4781,10 @@ function triggerHaptic(pattern: number | number[] = 10) {
                         className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-neutral-400 hover:text-neutral-700 transition-colors rounded-full hover:bg-neutral-100 dark:text-zinc-500 dark:hover:text-zinc-200 dark:hover:bg-zinc-800"
                         aria-label="Limpiar búsqueda"
                       >
-                        <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                        </svg>
+                        <X className="h-4 w-4" />
                       </button>
                     ) : (
-                      <svg className="pointer-events-none absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-400 dark:text-zinc-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M21 21l-5.2-5.2m1.7-4.3a7 7 0 11-14 0 7 7 0 0114 0z" />
-                      </svg>
+                      <Search className="pointer-events-none absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-400 dark:text-zinc-500" strokeWidth={1.8} />
                     )}
                   </div>
                 </div>
@@ -4861,9 +4822,7 @@ function triggerHaptic(pattern: number | number[] = 10) {
                 searchResults.length === 0 ? (
                   <div className="flex flex-col items-center justify-center py-16 text-center">
                     <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-neutral-100">
-                      <svg className="h-7 w-7 text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M21 21l-5.2-5.2m1.7-4.3a7 7 0 11-14 0 7 7 0 0114 0z" />
-                      </svg>
+                      <Search className="h-7 w-7 text-neutral-400" strokeWidth={1.8} />
                     </div>
                     <p className="text-lg font-semibold text-neutral-700">Sin resultados</p>
                     <p className="mt-1 text-sm text-neutral-500">No encontramos productos que coincidan con tu búsqueda.</p>
@@ -4907,14 +4866,14 @@ function triggerHaptic(pattern: number | number[] = 10) {
                                   <div className="flex items-center gap-0.5 rounded-full border border-black/[0.06] bg-neutral-50 p-0.5 dark:border-zinc-700 dark:bg-neutral-800">
                                     <button type="button" onClick={() => { if (product.optionGroups?.length) { decreaseQuantityForProduct(product.id); } else { updateCartItem(product.id, { quantity: quantity - 1 }); } }} className="flex h-7 w-7 items-center justify-center rounded-full text-neutral-500 transition-all hover:bg-white active:scale-90 dark:text-zinc-300 dark:hover:bg-zinc-700">
                                       {quantity === 1 ? (
-                                        <svg className="h-3 w-3 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                                        <Trash2 className="h-3 w-3 text-red-500" />
                                       ) : (
-                                        <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M20 12H4" /></svg>
+                                        <Minus className="h-3 w-3" strokeWidth={2.5} />
                                       )}
                                     </button>
                                     <span className="flex h-7 w-7 items-center justify-center text-xs font-bold text-neutral-900 dark:text-white">{quantity}</span>
                                     <button type="button" onClick={() => addToCart(product)} className="flex h-7 w-7 items-center justify-center rounded-full text-neutral-500 transition-all hover:bg-white active:scale-90 dark:text-zinc-300 dark:hover:bg-zinc-700">
-                                      <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" /></svg>
+                                      <Plus className="h-3 w-3" strokeWidth={2.5} />
                                     </button>
                                   </div>
                                 ) : (
@@ -5015,14 +4974,14 @@ function triggerHaptic(pattern: number | number[] = 10) {
                                   <div className="flex w-fit items-center gap-0.5 rounded-lg border border-black/[0.06] bg-neutral-50 p-0.5 dark:border-zinc-700 dark:bg-neutral-800">
                                     <button type="button" onClick={() => { if (product.optionGroups?.length) { decreaseQuantityForProduct(product.id); } else { updateCartItem(product.id, { quantity: quantity - 1 }); } }} className="flex h-5 w-5 items-center justify-center rounded-md text-neutral-500 transition-all hover:bg-white active:scale-90 dark:text-zinc-300 dark:hover:bg-zinc-700" aria-label={`Quitar una unidad de ${product.name}`}>
                                       {quantity === 1 ? (
-                                        <svg className="h-2.5 w-2.5 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                                        <Trash2 className="h-2.5 w-2.5 text-red-500" />
                                       ) : (
-                                        <svg className="h-2 w-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M20 12H4" /></svg>
+                                        <Minus className="h-2 w-2" strokeWidth={2.5} />
                                       )}
                                     </button>
                                     <span className="flex h-5 w-5 items-center justify-center text-[10px] font-bold text-neutral-900 dark:text-white">{quantity}</span>
                                     <button type="button" onClick={() => addToCart(product)} className="flex h-5 w-5 items-center justify-center rounded-md text-neutral-500 transition-all hover:bg-white active:scale-90 dark:text-zinc-300 dark:hover:bg-zinc-700" aria-label={`Agregar una unidad de ${product.name}`}>
-                                      <svg className="h-2 w-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" /></svg>
+                                      <Plus className="h-2 w-2" strokeWidth={2.5} />
                                     </button>
                                   </div>
                                 ) : (
@@ -5099,14 +5058,14 @@ function triggerHaptic(pattern: number | number[] = 10) {
                                     <div className="flex w-fit items-center gap-0.5 rounded-full border border-black/[0.06] bg-neutral-50 p-0.5 dark:border-zinc-700 dark:bg-neutral-800">
                                       <button type="button" onClick={() => { if (product.optionGroups?.length) { decreaseQuantityForProduct(product.id); } else { updateCartItem(product.id, { quantity: quantity - 1 }); } }} className="flex h-7 w-7 items-center justify-center rounded-full text-neutral-500 transition-all hover:bg-white active:scale-90 dark:text-zinc-300 dark:hover:bg-zinc-700" aria-label={`Quitar una unidad de ${product.name}`}>
                                         {quantity === 1 ? (
-                                          <svg className="h-3 w-3 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                                          <Trash2 className="h-3 w-3 text-red-500" />
                                         ) : (
-                                          <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M20 12H4" /></svg>
+                                          <Minus className="h-3 w-3" strokeWidth={2.5} />
                                         )}
                                       </button>
                                       <span className="flex h-7 w-7 items-center justify-center text-xs font-bold text-neutral-900 dark:text-white">{quantity}</span>
                                       <button type="button" onClick={() => addToCart(product)} className="flex h-7 w-7 items-center justify-center rounded-full text-neutral-500 transition-all hover:bg-white active:scale-90 dark:text-zinc-300 dark:hover:bg-zinc-700" aria-label={`Agregar una unidad de ${product.name}`}>
-                                        <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" /></svg>
+                                        <Plus className="h-3 w-3" strokeWidth={2.5} />
                                       </button>
                                     </div>
                                   ) : (
@@ -5184,14 +5143,14 @@ function triggerHaptic(pattern: number | number[] = 10) {
                                     <div className="flex w-fit items-center gap-0.5 rounded-full border border-black/[0.06] bg-neutral-50 p-0.5 dark:border-zinc-700 dark:bg-neutral-800">
                                       <button type="button" onClick={() => { if (product.optionGroups?.length) { decreaseQuantityForProduct(product.id); } else { updateCartItem(product.id, { quantity: quantity - 1 }); } }} className="flex h-7 w-7 items-center justify-center rounded-full text-neutral-500 transition-all hover:bg-white active:scale-90 dark:text-zinc-300 dark:hover:bg-zinc-700" aria-label={`Quitar una unidad de ${product.name}`}>
                                         {quantity === 1 ? (
-                                          <svg className="h-3 w-3 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                                          <Trash2 className="h-3 w-3 text-red-500" />
                                         ) : (
-                                          <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M20 12H4" /></svg>
+                                          <Minus className="h-3 w-3" strokeWidth={2.5} />
                                         )}
                                       </button>
                                       <span className="flex h-7 w-7 items-center justify-center text-xs font-bold text-neutral-900 dark:text-white">{quantity}</span>
                                       <button type="button" onClick={() => addToCart(product)} className="flex h-7 w-7 items-center justify-center rounded-full text-neutral-500 transition-all hover:bg-white active:scale-90 dark:text-zinc-300 dark:hover:bg-zinc-700" aria-label={`Agregar una unidad de ${product.name}`}>
-                                        <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" /></svg>
+                                        <Plus className="h-3 w-3" strokeWidth={2.5} />
                                       </button>
                                     </div>
                                   ) : (
@@ -5304,14 +5263,14 @@ function triggerHaptic(pattern: number | number[] = 10) {
                                     <div className="flex w-fit items-center gap-0.5 rounded-full border border-black/[0.06] bg-neutral-50 p-0.5 dark:border-zinc-700 dark:bg-neutral-800">
                                       <button type="button" onClick={() => { if (product.optionGroups?.length) { decreaseQuantityForProduct(product.id); } else { updateCartItem(product.id, { quantity: quantity - 1 }); } }} className="flex h-7 w-7 items-center justify-center rounded-full text-neutral-500 transition-all hover:bg-white active:scale-90 dark:text-zinc-300 dark:hover:bg-zinc-700" aria-label={`Quitar una unidad de ${product.name}`}>
                                         {quantity === 1 ? (
-                                          <svg className="h-3 w-3 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                                          <Trash2 className="h-3 w-3 text-red-500" />
                                         ) : (
-                                          <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M20 12H4" /></svg>
+                                          <Minus className="h-3 w-3" strokeWidth={2.5} />
                                         )}
                                       </button>
                                       <span className="flex h-7 w-7 items-center justify-center text-xs font-bold text-neutral-900 dark:text-white">{quantity}</span>
                                       <button type="button" onClick={() => addToCart(product)} className="flex h-7 w-7 items-center justify-center rounded-full text-neutral-500 transition-all hover:bg-white active:scale-90 dark:text-zinc-300 dark:hover:bg-zinc-700" aria-label={`Agregar una unidad de ${product.name}`}>
-                                        <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" /></svg>
+                                        <Plus className="h-3 w-3" strokeWidth={2.5} />
                                       </button>
                                     </div>
                                   ) : (
@@ -5487,9 +5446,7 @@ function triggerHaptic(pattern: number | number[] = 10) {
                             }}
                             className="mt-3 w-full flex items-center justify-center gap-2 rounded-full bg-amber-500 hover:bg-amber-600 py-2.5 text-xs font-bold text-white shadow-sm transition-all active:scale-[0.97]"
                           >
-                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-                            </svg>
+                            <MessageCircle className="w-3.5 h-3.5" />
                             Contactar al negocio
                           </button>
                         </div>
@@ -5541,9 +5498,7 @@ function triggerHaptic(pattern: number | number[] = 10) {
                             }}
                             className="mt-3 w-full flex items-center justify-center gap-2 rounded-full bg-red-500 hover:bg-red-600 py-2.5 text-xs font-bold text-white shadow-sm transition-all active:scale-[0.97]"
                           >
-                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-                            </svg>
+                            <MessageCircle className="w-3.5 h-3.5" />
                             Contactar al negocio
                           </button>
                         </div>
@@ -5643,7 +5598,7 @@ function triggerHaptic(pattern: number | number[] = 10) {
                     </div>
                     <div className="flex items-start gap-3">
                       <div className="mt-0.5 flex h-8 w-8 items-center justify-center rounded-full bg-neutral-100 text-neutral-600 shrink-0">
-                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/></svg>
+                        <Mail className="w-4 h-4" />
                       </div>
                       <div className="text-sm">
                         <p className="font-medium text-neutral-900">{activeOrderDetailsMap[selectedOrderId].paymentMethod === 'CASH' ? 'Efectivo' : 'Transferencia'}</p>
@@ -5665,7 +5620,7 @@ function triggerHaptic(pattern: number | number[] = 10) {
                     </div>
                     <div className="flex items-start gap-3">
                       <div className="mt-0.5 flex h-8 w-8 items-center justify-center rounded-full bg-neutral-100 text-neutral-600 shrink-0">
-                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/></svg>
+                        <Mail className="w-4 h-4" />
                       </div>
                       <div className="text-sm">
                         <p className="font-medium text-neutral-900">{activeOrderDetailsMap[selectedOrderId].paymentMethod === 'CASH' ? 'Efectivo' : 'Transferencia'}</p>
@@ -5798,9 +5753,7 @@ function triggerHaptic(pattern: number | number[] = 10) {
                 className="p-2 hover:bg-neutral-100 rounded-full transition-colors"
                 onClick={() => setIsChatOpen(false)}
               >
-                <svg className="w-6 h-6 text-neutral-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
-                </svg>
+                <X className="w-6 h-6 text-neutral-500" />
               </button>
             </div>
 
@@ -5907,9 +5860,7 @@ function triggerHaptic(pattern: number | number[] = 10) {
               <span className="text-sm font-bold text-white">
                 ${(cartSubtotal - discountAmount).toFixed(2)}
               </span>
-              <svg className="h-4 w-4 text-white/70 transition-transform group-hover:translate-x-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-              </svg>
+              <ChevronRight className="h-4 w-4 text-white/70 transition-transform group-hover:translate-x-1" />
             </div>
           </button>
         </div>
@@ -5937,13 +5888,9 @@ function triggerHaptic(pattern: number | number[] = 10) {
             : 'border-emerald-100 bg-emerald-50 text-emerald-700'
         }`}>
           {toastType === 'error' ? (
-            <svg className="h-4 w-4 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-            </svg>
+            <AlertTriangle className="h-4 w-4 text-red-500" />
           ) : (
-            <svg className="h-4 w-4 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-            </svg>
+            <Check className="h-4 w-4 text-emerald-500" />
           )}
           <span className="font-medium">{toastMsg}</span>
         </div>
@@ -5959,7 +5906,7 @@ function triggerHaptic(pattern: number | number[] = 10) {
               className="absolute right-3 top-3 z-20 flex h-7 w-7 items-center justify-center rounded-full bg-black/15 text-white transition hover:bg-black/25 active:scale-90"
               aria-label="Cerrar"
             >
-              <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+              <X className="h-3.5 w-3.5" strokeWidth={2.5} />
             </button>
 
             <div className={`relative overflow-hidden px-6 pb-5 pt-7 text-center ${couponFeedback.tone === 'success' ? 'bg-gradient-to-br from-sky-500 via-sky-600 to-blue-600' : 'bg-gradient-to-br from-rose-500 via-rose-600 to-red-600'}`}>
@@ -5969,7 +5916,7 @@ function triggerHaptic(pattern: number | number[] = 10) {
                 {couponFeedback.tone === 'success' ? (
                   <svg className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                 ) : (
-                  <svg className="h-8 w-8" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 14l6-6m-5.5.5h.01m4.99 5h.01M5 13v6a2 2 0 002 2h10a2 2 0 002-2v-6m-2 0a2 2 0 110-4m-8 4a2 2 0 100-4m7 4V7a2 2 0 00-2-2H7a2 2 0 00-2 2v6" /></svg>
+                  <Tag className="h-8 w-8" />
                 )}
               </div>
               <p className="relative z-10 text-lg font-black tracking-[-0.02em] text-white">{couponFeedback.title}</p>
@@ -6017,7 +5964,7 @@ function triggerHaptic(pattern: number | number[] = 10) {
               onClick={() => setPreviewProduct(null)}
               className="absolute right-3 top-3 z-20 flex h-8 w-8 items-center justify-center rounded-full bg-white/90 text-neutral-700 shadow-md backdrop-blur-sm transition hover:bg-white hover:scale-105 active:scale-95 dark:bg-neutral-800/90 dark:text-zinc-300 dark:hover:bg-neutral-700"
             >
-              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+              <X className="h-4 w-4" />
             </button>
 
             {/* Image section */}
@@ -6054,14 +6001,14 @@ function triggerHaptic(pattern: number | number[] = 10) {
                     onClick={() => setPreviewIndex((prev) => (prev - 1 + previewProduct.images.length) % previewProduct.images.length)}
                     className="absolute left-2 top-1/2 z-10 -translate-y-1/2 flex h-9 w-9 items-center justify-center rounded-full bg-white/80 text-neutral-700 shadow-md backdrop-blur-sm transition hover:bg-white hover:scale-105 active:scale-95 dark:bg-neutral-900/80 dark:text-zinc-300 dark:hover:bg-neutral-800"
                   >
-                    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 19l-7-7 7-7" /></svg>
+                    <ChevronLeft className="h-4 w-4" strokeWidth={2.5} />
                   </button>
                   <button
                     type="button"
                     onClick={() => setPreviewIndex((prev) => (prev + 1) % previewProduct.images.length)}
                     className="absolute right-2 top-1/2 z-10 -translate-y-1/2 flex h-9 w-9 items-center justify-center rounded-full bg-white/80 text-neutral-700 shadow-md backdrop-blur-sm transition hover:bg-white hover:scale-105 active:scale-95 dark:bg-neutral-900/80 dark:text-zinc-300 dark:hover:bg-neutral-800"
                   >
-                    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" /></svg>
+                    <ChevronRight className="h-4 w-4" strokeWidth={2.5} />
                   </button>
                   <div className="absolute bottom-4 left-1/2 z-10 flex -translate-x-1/2 gap-1.5">
                     {previewProduct.images.map((_, idx) => (
@@ -6139,9 +6086,9 @@ function triggerHaptic(pattern: number | number[] = 10) {
                             className="flex h-10 w-10 items-center justify-center rounded-lg text-neutral-500 transition hover:bg-white hover:text-neutral-800 active:scale-90 dark:text-zinc-300 dark:hover:bg-neutral-700 dark:hover:text-zinc-100"
                           >
                             {qty === 1 ? (
-                              <svg className="h-4 w-4 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                              <Trash2 className="h-4 w-4 text-red-500" />
                             ) : (
-                              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M20 12H4" /></svg>
+                              <Minus className="h-4 w-4" strokeWidth={2.5} />
                             )}
                           </button>
                           <span className="flex h-10 w-10 items-center justify-center text-base font-bold text-neutral-900 dark:text-white">{qty}</span>
@@ -6150,7 +6097,7 @@ function triggerHaptic(pattern: number | number[] = 10) {
                             onClick={() => addToCart(previewProduct as any)}
                             className="flex h-10 w-10 items-center justify-center rounded-lg text-neutral-500 transition hover:bg-white hover:text-neutral-800 active:scale-90 dark:text-zinc-300 dark:hover:bg-neutral-700 dark:hover:text-zinc-100"
                           >
-                            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" /></svg>
+                            <Plus className="h-4 w-4" strokeWidth={2.5} />
                           </button>
                         </div>
                       )}

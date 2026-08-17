@@ -1,4 +1,5 @@
 'use client';
+import { X } from 'lucide-react';
 
 import Link from 'next/link';
 import { SaDelLogo } from '../../../components/SaDelLogo';
@@ -1407,9 +1408,7 @@ export default function RestaurantDetailPage() {
                 onClick={() => setProofUrlModal(null)}
                 className="flex h-9 w-9 items-center justify-center rounded-full bg-white border border-black/5 text-neutral-500 hover:bg-neutral-100 transition shadow-sm"
               >
-                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
+                <X className="h-4 w-4" />
               </button>
             </div>
             

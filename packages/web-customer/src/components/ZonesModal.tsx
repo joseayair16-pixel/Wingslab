@@ -1,4 +1,5 @@
 import { memo } from 'react';
+import { Check, ChevronRight, X } from 'lucide-react';
 
 type Zone = {
   regionCode: string;
@@ -46,9 +47,7 @@ export const ZonesModal = memo(function ZonesModal({
             aria-label="Cerrar"
             className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-neutral-100 text-neutral-500 transition hover:bg-neutral-200"
           >
-            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M6 6l12 12M18 6L6 18" />
-            </svg>
+            <X className="h-4 w-4" />
           </button>
         </div>
 
@@ -102,16 +101,12 @@ export const ZonesModal = memo(function ZonesModal({
                     {isCurrent ? (
                       <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-sky-500 px-3 py-1.5 text-[11px] font-bold text-white shadow-sm">
                         Explorando
-                        <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                        </svg>
+                        <Check className="h-3 w-3" strokeWidth={3} />
                       </span>
                     ) : (
                       <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-neutral-100 px-3 py-1.5 text-[11px] font-bold text-neutral-700 transition-colors group-hover:bg-sky-100 group-hover:text-sky-700">
                         Explorar
-                        <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-                        </svg>
+                        <ChevronRight className="h-3 w-3" strokeWidth={2.5} />
                       </span>
                     )}
                   </button>

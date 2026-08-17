@@ -1,4 +1,5 @@
 'use client';
+import { Check, Info, Tag } from 'lucide-react';
 
 import React, { useEffect, useState } from 'react';
 import { requestJson, MENU_THEMES, getMenuThemeById } from '@sadel/shared';
@@ -690,9 +691,7 @@ export const SettingsSection = React.memo(function SettingsSection({
                           style={{ backgroundColor: color }}
                         >
                           {isSelected && (
-                            <svg className="h-4 w-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3.5}>
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                            </svg>
+                            <Check className="h-4 w-4 text-white" strokeWidth={3.5} />
                           )}
                         </button>
                       );
@@ -739,7 +738,7 @@ export const SettingsSection = React.memo(function SettingsSection({
                       />
                       <span className="flex items-center gap-1.5 text-xs font-bold text-neutral-800">
                         {!storeDraft.menuTheme && (
-                          <svg className="h-3.5 w-3.5 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+                          <Check className="h-3.5 w-3.5 text-emerald-600" strokeWidth={3} />
                         )}
                         Por defecto
                       </span>
@@ -758,7 +757,7 @@ export const SettingsSection = React.memo(function SettingsSection({
                           <span className="h-14 w-full rounded-xl border border-black/5" style={{ background: theme.gradientLight }} />
                           <span className="flex items-center gap-1.5 text-xs font-bold text-neutral-800">
                             {isSelected && (
-                              <svg className="h-3.5 w-3.5 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+                              <Check className="h-3.5 w-3.5 text-emerald-600" strokeWidth={3} />
                             )}
                             {theme.name}
                           </span>
@@ -916,7 +915,7 @@ export const SettingsSection = React.memo(function SettingsSection({
                   />
                 </div>
                 <div className="sm:col-span-2 rounded-[16px] border border-black/5 bg-neutral-50 p-3 text-xs text-neutral-500 flex items-center gap-2">
-                  <svg className="w-4 h-4 text-neutral-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                  <Info className="w-4 h-4 text-neutral-400 shrink-0" strokeWidth={1.8} />
                   Mueve el marcador en el mapa para ajustar la ubicación exacta. Las coordenadas se actualizan solas.
                 </div>
                 <div className="sm:col-span-2">
@@ -1607,7 +1606,7 @@ export const SettingsSection = React.memo(function SettingsSection({
                     <div>
                       <div className="flex items-center gap-2.5">
                         <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-600 text-white shadow-[0_6px_16px_-4px_rgba(16,185,129,0.4)]">
-                          <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M9 14l6-6m-5.5.5h.01m4.99 5h.01M5 13v6a2 2 0 002 2h10a2 2 0 002-2v-6m-2 0a2 2 0 110-4m-8 4a2 2 0 100-4m7 4V7a2 2 0 00-2-2H7a2 2 0 00-2 2v6" /></svg>
+                          <Tag className="h-5 w-5" strokeWidth={1.8} />
                         </div>
                         <div>
                           <h4 className="text-[15px] font-black tracking-[-0.02em] text-neutral-950">Cupones de descuento</h4>
@@ -1634,7 +1633,7 @@ export const SettingsSection = React.memo(function SettingsSection({
                 ) : promoCodes.length === 0 ? (
                   <div className="rounded-[20px] border border-dashed border-black/10 bg-neutral-50 p-10 text-center">
                     <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-white text-neutral-400 shadow-sm">
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M9 14l6-6m-5.5.5h.01m4.99 5h.01M5 13v6a2 2 0 002 2h10a2 2 0 002-2v-6m-2 0a2 2 0 110-4m-8 4a2 2 0 100-4m7 4V7a2 2 0 00-2-2H7a2 2 0 00-2 2v6" /></svg>
+                      <Tag className="w-5 h-5" strokeWidth={1.8} />
                     </div>
                     <p className="text-sm font-semibold text-neutral-700">Aún no tienes cupones</p>
                     <p className="mt-1 text-xs text-neutral-500">Crea tu primer código de descuento para ofrecer promociones a tus clientes.</p>
@@ -1730,7 +1729,7 @@ export const SettingsSection = React.memo(function SettingsSection({
             <div className="flex shrink-0 items-center justify-between gap-3 border-b border-neutral-100 px-5 py-4 sm:px-7">
               <div className="flex items-center gap-3 min-w-0">
                 <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-neutral-100 text-neutral-500">
-                  <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M9 14l6-6m-5.5.5h.01m4.99 5h.01M5 13v6a2 2 0 002 2h10a2 2 0 002-2v-6m-2 0a2 2 0 110-4m-8 4a2 2 0 100-4m7 4V7a2 2 0 00-2-2H7a2 2 0 00-2 2v6" /></svg>
+                  <Tag className="h-5 w-5" strokeWidth={1.8} />
                 </div>
                 <div className="min-w-0">
                   <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-neutral-400">Cupones</p>
@@ -1779,7 +1778,7 @@ export const SettingsSection = React.memo(function SettingsSection({
                     </label>
                   </div>
                   <div className="mt-3 flex items-start gap-2.5 rounded-xl border border-neutral-100 bg-neutral-50 px-4 py-3">
-                    <svg className="mt-0.5 h-4 w-4 shrink-0 text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                    <Info className="mt-0.5 h-4 w-4 shrink-0 text-neutral-400" strokeWidth={1.8} />
                     <p className="text-xs leading-relaxed text-neutral-500">{PROMO_CODE_TYPE_LABELS[promoCodeForm.type].hint}</p>
                   </div>
                 </div>

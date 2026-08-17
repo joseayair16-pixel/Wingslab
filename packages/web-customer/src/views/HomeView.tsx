@@ -3,6 +3,7 @@ import React, { useMemo, useState } from 'react';
 import { useStore } from '../store';
 import { StoreCategoryItem } from '../app/page';
 import { BillboardCarousel, type Billboard } from '../components/BillboardCarousel';
+import { ChevronRight, ChevronUp } from 'lucide-react';
 
 const isRestaurantType = (type?: string | null) => !type || type === 'RESTAURANT';
 
@@ -449,9 +450,7 @@ export const HomeView = React.memo(function HomeView({
                   )}
                 </div>
               </div>
-              <svg className="w-5 h-5 text-neutral-500 transition group-open:rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M19 9l-7 7-7-7" />
-              </svg>
+              <ChevronUp className="w-5 h-5 text-neutral-500 transition group-open:rotate-180" strokeWidth={1.8} />
             </summary>
             <div className="-mx-4 px-4 sm:mx-0 sm:px-0 mt-4 flex gap-2 overflow-x-auto pb-2 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:flex-wrap sm:overflow-visible sm:pb-0">
               <button
@@ -625,9 +624,7 @@ export const HomeView = React.memo(function HomeView({
                         </div>
                       </div>
                       {/* Arrow */}
-                      <svg className="h-4 w-4 shrink-0 text-neutral-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                      </svg>
+                      <ChevronRight className="h-4 w-4 shrink-0 text-neutral-300" />
                     </div>
 
                     {/* Matching Products List (Horizontal Scroll) */}

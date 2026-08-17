@@ -1,4 +1,5 @@
 'use client';
+import { AlertTriangle, Check, ChevronUp, Clock, Info, Mail, MessageCircle, Minus, Pencil, Plus, RefreshCw, Tag, Trash2, User, X } from 'lucide-react';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { io } from 'socket.io-client';
@@ -828,10 +829,10 @@ const settingsTabs = [
     icon: (<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M13 16V6a1 1 0 00-1-1H4a1 1 0 00-1 1v10a1 1 0 001 1h1m8-1a1 1 0 01-1 1H9m4-1V8a1 1 0 011-1h2.586a1 1 0 01.707.293l3.414 3.414a1 1 0 01.293.707V16a1 1 0 01-1 1h-1m-6-1a1 1 0 001 1h1M5 17a2 2 0 104 0m-4 0a2 2 0 114 0m6 0a2 2 0 104 0m-4 0a2 2 0 114 0" /></svg>),
     label: 'Entrega', desc: 'Modalidad, tiempos y costos' },
   { key: 'horarios',
-    icon: (<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>),
+    icon: (<Clock className="w-4 h-4" strokeWidth={1.8} />),
     label: 'Horarios', desc: 'Días y horas de servicio' },
   { key: 'pagos',
-    icon: (<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" /></svg>),
+    icon: (<Mail className="w-4 h-4" strokeWidth={1.8} />),
     label: 'Métodos de pago', desc: 'Transferencias y cuenta bancaria' },
   { key: 'seguridad',
     icon: (<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>),
@@ -840,7 +841,7 @@ const settingsTabs = [
     icon: (<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>),
     label: 'Preferencias', desc: 'Alertas y panel' },
   { key: 'cupones',
-    icon: (<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M9 14l6-6m-5.5.5h.01m4.99 5h.01M5 13v6a2 2 0 002 2h10a2 2 0 002-2v-6m-2 0a2 2 0 110-4m-8 4a2 2 0 100-4m7 4V7a2 2 0 00-2-2H7a2 2 0 00-2 2v6" /></svg>),
+    icon: (<Tag className="w-4 h-4" strokeWidth={1.8} />),
     label: 'Cupones', desc: 'Códigos y descuentos' },
 ];
 
@@ -5741,15 +5742,7 @@ export default function Home() {
         style={{ transform: `translateY(${Math.max(0, pullDistance - 40)}px)` }}
       >
         <div className="rounded-full bg-white p-2 shadow-lg border border-black/5 flex items-center justify-center">
-          <svg
-            className={`h-5 w-5 text-neutral-600 ${isRefreshing ? 'animate-spin' : ''}`}
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-            style={{ transform: isRefreshing ? 'none' : `rotate(${pullDistance * 4}deg)` }}
-          >
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-          </svg>
+          <RefreshCw />
         </div>
       </div>
 
@@ -5810,9 +5803,7 @@ export default function Home() {
               <div className="min-h-0 flex-1 overflow-y-auto px-5 py-8 sm:px-10 flex flex-col items-center text-center">
                 <div className="my-auto w-full max-w-sm space-y-6">
                   <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-sky-100 ring-8 ring-sky-50">
-                    <svg className="h-10 w-10 text-sky-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
+                    <Clock className="h-10 w-10 text-sky-600" />
                   </div>
                   <div>
                     <h3 className="text-2xl font-black tracking-tight text-neutral-900">{profile?.businessType === 'RESTAURANT' ? 'Tiempo de preparación' : (isScheduledMode ? 'Programar entrega' : 'Tiempo estimado')}</h3>
@@ -6114,7 +6105,7 @@ export default function Home() {
                     {parseStoreNotes(activeIncomingOrder.notes) && (
                       <div className="mt-6 rounded-2xl bg-rose-50 border-2 border-rose-200 p-5 shadow-sm">
                         <p className="text-xs font-black uppercase tracking-[0.2em] text-rose-600 mb-2 flex items-center gap-2">
-                          <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+                          <AlertTriangle className="h-4 w-4" strokeWidth={2.5} />
                           Notas generales del pedido
                         </p>
                         <p className="text-base font-bold leading-relaxed text-rose-950 whitespace-pre-wrap">
@@ -7263,9 +7254,7 @@ export default function Home() {
           />
           <div className="relative w-full max-w-[360px] rounded-[32px] bg-white p-8 text-center shadow-[0_32px_64px_rgba(0,0,0,0.1)]">
             <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-green-50 text-green-500 ring-8 ring-green-50/50">
-              <svg className="h-10 w-10" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M5 13l4 4L19 7" />
-              </svg>
+              <Check className="h-10 w-10" />
             </div>
             <h3 className="mb-3 text-[22px] font-bold tracking-tight text-neutral-900">Cambios guardados</h3>
             <p className="mb-8 text-[15px] leading-relaxed text-neutral-500">
@@ -7314,9 +7303,7 @@ export default function Home() {
           <div className="relative w-full max-w-[420px] rounded-[32px] bg-white p-6 shadow-[0_28px_90px_rgba(15,15,15,0.34)] border border-black/5">
             <div className="text-center">
               <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-neutral-100 text-neutral-500">
-                <svg className="h-7 w-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M20 12H4" />
-                </svg>
+                <Minus className="h-7 w-7" strokeWidth={1.8} />
               </div>
               <h3 className="mt-4 text-xl font-bold tracking-tight text-neutral-900">¿Cerrar negocio?</h3>
               <p className="mt-2 text-sm leading-relaxed text-neutral-500">
@@ -7483,7 +7470,7 @@ export default function Home() {
                   className="group inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-sky-50 text-sky-600 transition-all hover:bg-sky-100 hover:text-sky-900 sm:h-12 sm:w-12"
                   aria-label="Cerrar"
                 >
-                  <svg className="h-5 w-5 transition-transform duration-300 group-hover:rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" /></svg>
+                  <X className="h-5 w-5 transition-transform duration-300 group-hover:rotate-90" strokeWidth={2.5} />
                 </button>
               </div>
             </div>
@@ -8014,7 +8001,7 @@ export default function Home() {
                       }}
                       className="group flex items-center gap-1.5 rounded-full bg-gradient-to-r from-sky-50 to-white px-3 py-1.5 text-xs font-bold text-sky-600 border border-sky-100/60 shadow-[0_2px_8px_rgba(14,165,233,0.08)] transition hover:bg-sky-50 hover:text-sky-700"
                     >
-                      <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" /></svg>
+                      <Plus className="h-4 w-4" strokeWidth={2.5} />
                       Añadir Grupo
                     </button>
                   </div>
@@ -8047,7 +8034,7 @@ export default function Home() {
                               className="rounded-full bg-white p-1.5 text-neutral-400 shadow-sm ring-1 ring-black/5 transition hover:bg-rose-50 hover:text-rose-600"
                               title="Eliminar grupo"
                             >
-                              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                              <Trash2 className="h-4 w-4" />
                             </button>
                           </div>
                           
@@ -8197,7 +8184,7 @@ export default function Home() {
                                         }}
                                         className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-white text-neutral-400 shadow-sm ring-1 ring-black/5 transition hover:bg-rose-50 hover:text-rose-600 sm:opacity-0 sm:group-hover/opt:opacity-100"
                                       >
-                                        <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                                        <X className="h-4 w-4" />
                                       </button>
                                     )}
                                   </div>
@@ -8290,7 +8277,7 @@ export default function Home() {
                   className="group inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-sky-50 text-sky-600 transition-all hover:bg-sky-100 hover:text-sky-900 sm:h-12 sm:w-12"
                   aria-label="Cerrar importación"
                 >
-                  <svg className="h-5 w-5 transition-transform duration-300 group-hover:rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" /></svg>
+                  <X className="h-5 w-5 transition-transform duration-300 group-hover:rotate-90" strokeWidth={2.5} />
                 </button>
               </div>
             </div>
@@ -8300,9 +8287,9 @@ export default function Home() {
                 <div className="mx-auto max-w-[520px] py-8 text-center">
                   <div className={`mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-full ring-8 ${importResult.created > 0 ? 'bg-emerald-50 text-emerald-500 ring-emerald-50/50' : 'bg-amber-50 text-amber-500 ring-amber-50/50'}`}>
                     {importResult.skipped === 0 ? (
-                      <svg className="h-10 w-10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" /></svg>
+                      <Check className="h-10 w-10" strokeWidth={2.5} />
                     ) : (
-                      <svg className="h-10 w-10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                      <Info className="h-10 w-10" />
                     )}
                   </div>
                   <h3 className="mb-2 text-[22px] font-bold tracking-tight text-neutral-900">
@@ -8800,9 +8787,7 @@ export default function Home() {
                     onClick={() => setIsLoginModalOpen(false)}
                     className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-neutral-400 transition hover:bg-neutral-100 hover:text-neutral-600"
                   >
-                    <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                    </svg>
+                    <X className="h-5 w-5" />
                   </button>
                 </div>
 
@@ -9009,9 +8994,7 @@ export default function Home() {
                               ? 'bg-rose-600 shadow-[0_4px_12px_rgba(225,29,72,0.3)] animate-pulse'
                               : 'bg-amber-600 shadow-[0_4px_12px_rgba(217,119,6,0.3)]'
                           }`}>
-                            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                            </svg>
+                            <AlertTriangle className="h-5 w-5" />
                           </span>
                           <div>
                             <p className="text-sm font-bold">
@@ -9345,9 +9328,7 @@ export default function Home() {
                                 {/* Fila 2: Cuerpo */}
                                 <div className="grid gap-2 text-sm text-neutral-600 mb-4">
                                   <p className="flex items-center gap-2">
-                                    <svg className="w-4 h-4 text-neutral-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                                    </svg>
+                                    <User className="w-4 h-4 text-neutral-400 shrink-0" />
                                     {order.customer?.user?.name || 'Cliente SaDeL'}
                                   </p>
                                   <p className="flex items-center gap-2">
@@ -9794,7 +9775,7 @@ export default function Home() {
                                   {Number(order.promoDiscountAmount || 0) > 0 && (
                                     <div className="mt-3 inline-flex flex-wrap items-center gap-1.5 rounded-xl border border-sky-100 bg-sky-50/60 px-3 py-2">
                                       <span className="flex h-5 w-5 items-center justify-center rounded-full bg-sky-500 text-white">
-                                        <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 14l6-6m-5.5.5h.01m4.99 5h.01M5 13v6a2 2 0 002 2h10a2 2 0 002-2v-6m-2 0a2 2 0 110-4m-8 4a2 2 0 100-4m7 4V7a2 2 0 00-2-2H7a2 2 0 00-2 2v6" /></svg>
+                                        <Tag className="h-3 w-3" strokeWidth={2.5} />
                                       </span>
                                       <span className="text-[11px] font-semibold text-neutral-500">Descuento aplicado</span>
                                       <span className="text-[12px] font-bold text-sky-700">-{formatCurrency(Number(order.promoDiscountAmount))}</span>
@@ -10119,14 +10100,7 @@ export default function Home() {
                               onClick={openCoverImageModal}
                               className="inline-flex items-center gap-2 rounded-full bg-white/92 px-4 py-2.5 text-sm font-semibold text-neutral-800 shadow-[0_10px_20px_rgba(15,15,15,0.12)] transition hover:bg-white"
                             >
-                              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                  strokeWidth={1.9}
-                                  d="M15.232 5.232l3.536 3.536M9 17l-4 1 1-4L15.5 4.5a2.121 2.121 0 013 3L9 17z"
-                                />
-                              </svg>
+                              <Pencil className="h-4 w-4" strokeWidth={1.9} />
                               Editar portada
                             </button>
                           </div>
@@ -10150,14 +10124,7 @@ export default function Home() {
                                   className="absolute bottom-1.5 right-1.5 inline-flex h-8 w-8 items-center justify-center rounded-full bg-white/95 text-sky-600 shadow-md transition hover:bg-white hover:text-sky-800 hover:scale-110"
                                   aria-label="Editar logo"
                                 >
-                                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path
-                                      strokeLinecap="round"
-                                      strokeLinejoin="round"
-                                      strokeWidth={2}
-                                      d="M15.232 5.232l3.536 3.536M9 17l-4 1 1-4L15.5 4.5a2.121 2.121 0 013 3L9 17z"
-                                    />
-                                  </svg>
+                                  <Pencil className="h-4 w-4" />
                                 </button>
                               </div>
                               <div className="mb-2 text-white text-shadow-sm">
@@ -10192,14 +10159,7 @@ export default function Home() {
                                 className="absolute bottom-1 right-1 inline-flex h-8 w-8 items-center justify-center rounded-full bg-white/95 text-sky-600 shadow-md transition hover:bg-white hover:text-sky-800 hover:scale-110"
                                 aria-label="Editar logo"
                               >
-                                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                    strokeWidth={2}
-                                    d="M15.232 5.232l3.536 3.536M9 17l-4 1 1-4L15.5 4.5a2.121 2.121 0 013 3L9 17z"
-                                  />
-                                </svg>
+                                <Pencil className="h-4 w-4" />
                               </button>
                             </div>
                             <p className="mt-4 text-3xl font-bold tracking-tight text-neutral-950">
@@ -10244,9 +10204,7 @@ export default function Home() {
                                   : 'bg-neutral-100/80 text-neutral-500 ring-black/5 hover:bg-neutral-200'
                                 }`}
                             >
-                              <svg className={`h-4 w-4 transition-transform group-hover:scale-110 ${profile.status === 'ACTIVE' && profile.isAcceptingOrders ? 'text-emerald-500' : profile.status === 'SUSPENDED' ? 'text-amber-500' : 'text-neutral-400'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                              </svg>
+                              <Clock />
                               <span>
                                 {getRestaurantOperationalStatusLabel(
                                   profile.status,
@@ -10294,7 +10252,7 @@ export default function Home() {
                                 className="absolute right-2 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-full text-neutral-400 transition hover:bg-neutral-200 hover:text-neutral-700"
                                 aria-label="Limpiar búsqueda"
                               >
-                                <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" /></svg>
+                                <X className="h-3.5 w-3.5" strokeWidth={2.5} />
                               </button>
                             ) : null}
                           </div>
@@ -10404,9 +10362,7 @@ export default function Home() {
                                       className="p-1.5 rounded-full hover:bg-neutral-100 text-neutral-500 hover:text-sky-600 transition"
                                       title="Bajar categoría"
                                     >
-                                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                                      </svg>
+                                      <ChevronUp className="w-4 h-4" />
                                     </button>
                                   </div>
                                 </div>
@@ -10457,7 +10413,7 @@ export default function Home() {
                                           className={`absolute left-3 top-3 z-10 flex h-9 w-9 items-center justify-center rounded-full border-2 shadow-md transition ${selectedProductIds.has(product.id) ? 'border-sky-500 bg-sky-500 text-white' : 'border-white bg-white/90 text-transparent hover:border-sky-300 hover:text-sky-200'}`}
                                           aria-label={selectedProductIds.has(product.id) ? `Quitar ${product.name} de la selección` : `Seleccionar ${product.name}`}
                                         >
-                                          <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
+                                          <Check className="h-5 w-5" strokeWidth={3} />
                                         </button>
                                       ) : null}
                                       {product.image ? (
@@ -10581,14 +10537,7 @@ export default function Home() {
                                             className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-black/10 bg-white text-neutral-800 transition hover:bg-neutral-100"
                                             aria-label={`Editar ${product.name}`}
                                           >
-                                            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                              <path
-                                                strokeLinecap="round"
-                                                strokeLinejoin="round"
-                                                strokeWidth={1.9}
-                                                d="M15.232 5.232l3.536 3.536M9 17l-4 1 1-4L15.5 4.5a2.121 2.121 0 013 3L9 17z"
-                                              />
-                                            </svg>
+                                            <Pencil className="h-4 w-4" strokeWidth={1.9} />
                                           </button>
                                           <button
                                             type="button"
@@ -10612,14 +10561,7 @@ export default function Home() {
                                             className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-rose-200 bg-rose-50 text-rose-600 transition hover:bg-rose-100"
                                             aria-label={`Eliminar ${product.name}`}
                                           >
-                                            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                              <path
-                                                strokeLinecap="round"
-                                                strokeLinejoin="round"
-                                                strokeWidth={1.9}
-                                                d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6M9 7V4a1 1 0 011-1h4a1 1 0 011 1v3m-7 0h8"
-                                              />
-                                            </svg>
+                                            <Trash2 className="h-4 w-4" strokeWidth={1.9} />
                                           </button>
                                         </div>
                                         <span className="text-sm text-neutral-400">
@@ -10680,7 +10622,7 @@ export default function Home() {
                                       onClick={() => openProductModal(category.id)}
                                       className="inline-flex items-center gap-1.5 rounded-full bg-neutral-950 px-3.5 py-2 text-[12px] font-bold text-white transition hover:bg-neutral-800 active:scale-[0.97]"
                                     >
-                                      <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" /></svg>
+                                      <Plus className="h-3.5 w-3.5" strokeWidth={2.5} />
                                       Agregar producto
                                     </button>
                                     <button
@@ -10690,7 +10632,7 @@ export default function Home() {
                                       title={category.products.length > 0 ? 'Primero elimina o mueve sus productos.' : `Eliminar categoria ${category.name}`}
                                       className="inline-flex items-center gap-1.5 rounded-full border border-black/10 bg-white px-3.5 py-2 text-[12px] font-semibold text-neutral-700 transition hover:border-rose-200 hover:bg-rose-50 hover:text-rose-700 disabled:cursor-not-allowed disabled:border-black/5 disabled:bg-neutral-100 disabled:text-neutral-400"
                                     >
-                                      <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.9} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6M9 7V4a1 1 0 011-1h4a1 1 0 011 1v3m-7 0h8" /></svg>
+                                      <Trash2 className="h-3.5 w-3.5" strokeWidth={1.9} />
                                       {activeActionKey === `category:${category.id}:delete` ? 'Eliminando...' : 'Eliminar'}
                                     </button>
                                   </div>
@@ -10713,7 +10655,7 @@ export default function Home() {
                                             className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-md border-2 transition ${selectedProductIds.has(product.id) ? 'border-sky-500 bg-sky-500 text-white' : 'border-neutral-300 bg-white text-transparent hover:border-sky-300'}`}
                                             aria-label={selectedProductIds.has(product.id) ? `Quitar ${product.name} de la selección` : `Seleccionar ${product.name}`}
                                           >
-                                            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
+                                            <Check className="h-4 w-4" strokeWidth={3} />
                                           </button>
                                         ) : null}
                                         <div className="h-14 w-14 shrink-0 overflow-hidden rounded-2xl border border-black/5 bg-neutral-100">
@@ -10761,7 +10703,7 @@ export default function Home() {
                                               className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-black/10 bg-white text-neutral-800 transition hover:bg-neutral-100"
                                               aria-label={`Editar ${product.name}`}
                                             >
-                                              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.9} d="M15.232 5.232l3.536 3.536M9 17l-4 1 1-4L15.5 4.5a2.121 2.121 0 013 3L9 17z" /></svg>
+                                              <Pencil className="h-4 w-4" strokeWidth={1.9} />
                                             </button>
                                             <button
                                               type="button"
@@ -10778,7 +10720,7 @@ export default function Home() {
                                               className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-rose-200 bg-rose-50 text-rose-600 transition hover:bg-rose-100"
                                               aria-label={`Eliminar ${product.name}`}
                                             >
-                                              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.9} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6M9 7V4a1 1 0 011-1h4a1 1 0 011 1v3m-7 0h8" /></svg>
+                                              <Trash2 className="h-4 w-4" strokeWidth={1.9} />
                                             </button>
                                           </div>
                                         </div>
@@ -11216,9 +11158,7 @@ export default function Home() {
                         <div className="mb-6 flex flex-wrap items-center gap-3 rounded-2xl border border-sky-100 bg-sky-50/40 px-5 py-4">
                           <div className="flex items-center gap-2.5">
                             <div className="flex h-9 w-9 items-center justify-center rounded-full bg-sky-100 text-sky-600">
-                              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
-                              </svg>
+                              <Mail className="h-4 w-4" />
                             </div>
                             <div>
                               <p className="text-xs font-semibold text-sky-700">Transferencia</p>
@@ -11443,9 +11383,7 @@ export default function Home() {
                       ) : chatMessages.length === 0 ? (
                         <div className="flex flex-col items-center justify-center flex-1 py-12 px-6 text-center space-y-4">
                           <div className="h-16 w-16 bg-neutral-200/40 rounded-full flex items-center justify-center text-neutral-400 border border-neutral-200/30">
-                            <svg className="h-8 w-8 text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-                            </svg>
+                            <MessageCircle className="h-8 w-8 text-neutral-400" />
                           </div>
                           <div>
                             <p className="text-sm font-bold text-neutral-700">Sin mensajes en esta orden</p>
@@ -11736,9 +11674,7 @@ export default function Home() {
                   className="absolute top-4 right-4 z-10 rounded-full bg-white/10 p-3 text-white backdrop-blur-md transition hover:bg-white/20 hover:scale-105 active:scale-95 shadow-lg"
                   aria-label="Cerrar vista"
                 >
-                  <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 6l12 12M18 6L6 18" />
-                  </svg>
+                  <X className="h-6 w-6" />
                 </button>
                 <img
                   src={zoomedImageUrl}
@@ -11872,9 +11808,7 @@ export default function Home() {
               <div className="relative w-full max-w-[500px] overflow-hidden rounded-[28px] bg-white p-6 shadow-[0_32px_110px_rgba(15,15,15,0.35)] border border-black/5 animate-scale-up">
                 <div className="text-center">
                   <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-amber-50 text-amber-600 mb-4 border border-amber-100 animate-pulse">
-                    <svg className="h-7 w-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                    </svg>
+                    <AlertTriangle className="h-7 w-7" />
                   </div>
                   <h3 className="text-xl font-bold text-neutral-950 tracking-tight">
                     ¿Ya revisaste tu cuenta bancaria?
@@ -11885,9 +11819,7 @@ export default function Home() {
 
                   <div className="mt-5 rounded-2xl bg-amber-50/70 p-4 border border-amber-100/60 text-left">
                     <div className="flex gap-2">
-                      <svg className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                      </svg>
+                      <Info className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
                       <p className="text-xs text-amber-800 leading-relaxed font-semibold">
                         Asegúrate de que la transferencia se refleje en tus saldos actuales de tu banca móvil. Los comprobantes editados o falsos son comunes y pueden causar pérdidas para el negocio.
                       </p>
@@ -11949,9 +11881,7 @@ export default function Home() {
               <div className="relative w-full max-w-[500px] overflow-hidden rounded-[28px] bg-white p-6 shadow-[0_32px_110px_rgba(15,15,15,0.35)] border border-black/5 animate-scale-up">
                 <div className="text-center">
                   <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-rose-50 text-rose-600 mb-4 border border-rose-100 animate-pulse">
-                    <svg className="h-7 w-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                    </svg>
+                    <AlertTriangle className="h-7 w-7" />
                   </div>
                   <h3 className="text-xl font-bold text-neutral-950 tracking-tight">
                     ¿Marcar como entregado?
@@ -11962,9 +11892,7 @@ export default function Home() {
 
                   <div className="mt-5 rounded-2xl bg-rose-50/70 p-4 border border-rose-100/60 text-left">
                     <div className="flex gap-2.5">
-                      <svg className="h-5 w-5 text-rose-600 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                      </svg>
+                      <Info className="h-5 w-5 text-rose-600 shrink-0 mt-0.5" />
                       <div className="text-xs text-rose-800 leading-relaxed space-y-1.5 font-medium">
                         <p>
                           El flujo normal requiere que sea el <strong className="font-bold">repartidor asignado</strong> quien marque la entrega utilizando la geolocalización y el NIP correspondiente del comensal.
@@ -12016,9 +11944,7 @@ export default function Home() {
               <div className="relative w-full max-w-[460px] overflow-hidden rounded-[28px] bg-white p-6 shadow-[0_32px_110px_rgba(15,15,15,0.35)] border border-black/5 animate-scale-up">
                 <div className="text-center">
                   <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-amber-50 text-amber-600 mb-4 border border-amber-100">
-                    <svg className="h-7 w-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                    </svg>
+                    <AlertTriangle className="h-7 w-7" />
                   </div>
                   <h3 className="text-xl font-bold text-neutral-950 tracking-tight">
                     ¿Quitar repartidor?
@@ -12067,9 +11993,7 @@ export default function Home() {
               <div className="relative w-full max-w-[500px] overflow-hidden rounded-[28px] bg-white p-6 shadow-[0_32px_110px_rgba(15,15,15,0.35)] border border-black/5 animate-scale-up">
                 <div className="text-center">
                   <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-rose-50 text-rose-600 mb-4 border border-rose-100 animate-pulse">
-                    <svg className="h-7 w-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                    </svg>
+                    <AlertTriangle className="h-7 w-7" />
                   </div>
                   <h3 className="text-xl font-bold text-neutral-950 tracking-tight">
                     🚨 Reembolso Requerido
@@ -12147,9 +12071,7 @@ export default function Home() {
                       className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-black/10 bg-white text-neutral-700 transition hover:bg-neutral-50"
                       aria-label="Cerrar menu"
                     >
-                      <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M6 6l12 12M18 6L6 18" />
-                      </svg>
+                      <X className="h-5 w-5" strokeWidth={1.8} />
                     </button>
                   </div>
                   <p className="mt-4 truncate text-sm font-medium text-neutral-500">{restaurantName}</p>
@@ -12348,9 +12270,7 @@ export default function Home() {
                     className="inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-black/10 bg-white text-neutral-700 transition hover:bg-neutral-50"
                     aria-label="Cerrar aviso"
                   >
-                    <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M6 6l12 12M18 6L6 18" />
-                    </svg>
+                    <X className="h-5 w-5" strokeWidth={1.8} />
                   </button>
                 </div>
 
@@ -12615,9 +12535,7 @@ export default function Home() {
 
                   <div className="mt-5 rounded-2xl bg-amber-50/70 p-4 border border-amber-100/60 text-left">
                     <div className="flex gap-2.5">
-                      <svg className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                      </svg>
+                      <Info className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
                       <div className="text-xs text-amber-800 leading-relaxed space-y-2 font-medium">
                         <p>Al cancelar:</p>
                         <ul className="list-disc pl-4 space-y-1">
@@ -12711,9 +12629,7 @@ export default function Home() {
 
                   <div className="mt-5 rounded-2xl bg-amber-50/70 p-4 border border-amber-100/60 text-left">
                     <div className="flex gap-2.5">
-                      <svg className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                      </svg>
+                      <Info className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
                       <p className="text-xs font-semibold text-amber-800 leading-relaxed">
                         {cancelRequestModalOrder.status === 'PREPARING'
                           ? 'El pedido ya está en preparación. Si lo cancelas perderás los ingredientes y el tiempo invertido. Puedes rechazar la solicitud.'
@@ -12802,7 +12718,7 @@ export default function Home() {
                     className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-neutral-100 text-neutral-500 transition hover:bg-neutral-200 hover:text-neutral-900 active:scale-95"
                     title="Cerrar"
                   >
-                    <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                    <X className="h-5 w-5" />
                   </button>
                 </div>
 
@@ -12837,7 +12753,7 @@ export default function Home() {
                   {/* Digital Receipt (Bank Details) */}
                   <div className="rounded-[24px] border border-black/5 bg-neutral-50">
                     <div className="flex items-center gap-2 border-b border-black/5 px-4 py-3">
-                      <svg className="h-4 w-4 shrink-0 text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" /></svg>
+                      <Mail className="h-4 w-4 shrink-0 text-neutral-400" />
                       <span className="text-xs font-bold uppercase tracking-wider text-neutral-500">Datos Bancarios</span>
                     </div>
                     <div className="divide-y divide-black/5">
@@ -12904,7 +12820,7 @@ export default function Home() {
                             disabled={uploadingProof}
                             className="absolute right-4 top-4 flex h-8 w-8 items-center justify-center rounded-full bg-black/50 text-white backdrop-blur-md transition hover:bg-black/70 disabled:opacity-50"
                           >
-                            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                            <X className="h-4 w-4" />
                           </button>
                         </div>
                         
@@ -13004,9 +12920,7 @@ export default function Home() {
                     className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-black/5 bg-white text-neutral-500 transition hover:bg-neutral-100 hover:text-neutral-900 active:scale-95 shadow-sm"
                     aria-label="Cerrar modal"
                   >
-                    <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M6 6l12 12M18 6L6 18" />
-                    </svg>
+                    <X className="h-5 w-5" strokeWidth={1.8} />
                   </button>
                 </div>
 
@@ -13365,9 +13279,7 @@ export default function Home() {
                                 ¿Qué hago si se cae el Internet en la cocina?
                               </span>
                               <span className="transition duration-300 group-open:rotate-180 shrink-0 ml-2">
-                                <svg className="h-4.5 w-4.5 text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                                </svg>
+                                <ChevronUp className="h-4.5 w-4.5 text-neutral-400" />
                               </span>
                             </summary>
                             <div className="mt-4 text-xs sm:text-sm text-neutral-600 leading-relaxed border-t border-neutral-100 pt-4 font-medium pl-10">
@@ -13388,9 +13300,7 @@ export default function Home() {
                                 ¿Cómo procedo si el repartidor asignado se demora demasiado?
                               </span>
                               <span className="transition duration-300 group-open:rotate-180 shrink-0 ml-2">
-                                <svg className="h-4.5 w-4.5 text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                                </svg>
+                                <ChevronUp className="h-4.5 w-4.5 text-neutral-400" />
                               </span>
                             </summary>
                             <div className="mt-4 text-xs sm:text-sm text-neutral-600 leading-relaxed border-t border-neutral-100 pt-4 font-medium pl-10">
@@ -13409,9 +13319,7 @@ export default function Home() {
                                 ¿Qué hago ante una disputa sobre especificaciones de un platillo?
                               </span>
                               <span className="transition duration-300 group-open:rotate-180 shrink-0 ml-2">
-                                <svg className="h-4.5 w-4.5 text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                                </svg>
+                                <ChevronUp className="h-4.5 w-4.5 text-neutral-400" />
                               </span>
                             </summary>
                             <div className="mt-4 text-xs sm:text-sm text-neutral-600 leading-relaxed border-t border-neutral-100 pt-4 font-medium pl-10">
@@ -13476,9 +13384,7 @@ export default function Home() {
                         </div>
 
                         <div className="rounded-[24px] border border-rose-200 bg-rose-50/40 p-4 text-xs text-rose-950 flex gap-3 font-medium leading-relaxed">
-                          <svg className="h-5 w-5 text-rose-600 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                          </svg>
+                          <AlertTriangle className="h-5 w-5 text-rose-600 shrink-0 mt-0.5" />
                           <div>
                             <span className="font-bold block text-rose-900">Alerta de Fraude Común (Transferencias Programadas):</span>
                             Muchos estafadores programan transferencias para el día siguiente, le toman captura, y después las cancelan antes de que se ejecuten. Siempre valida que el dinero esté realmente abonado y disponible en tu app bancaria antes de entregar el producto.
@@ -13736,9 +13642,7 @@ export default function Home() {
               onClick={() => setShowPromoModal(false)}
               className="absolute top-4 right-4 z-10 flex h-8 w-8 items-center justify-center rounded-full bg-black/50 text-white backdrop-blur transition hover:bg-black/70 hover:scale-110"
             >
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-              </svg>
+              <X className="w-4 h-4" strokeWidth={2.5} />
             </button>
             <div className="relative w-full overflow-hidden bg-transparent">
               <img

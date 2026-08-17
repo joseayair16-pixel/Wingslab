@@ -1,4 +1,5 @@
 'use client';
+import { X } from 'lucide-react';
 
 import React, { memo, useEffect, useRef } from 'react';
 import { useChatStore } from '../store/chatStore';
@@ -55,9 +56,7 @@ export const ChatPanel = memo(function ChatPanel({ order, token, apiBase, onClos
             className="p-2 hover:bg-neutral-100 rounded-full transition-colors"
             onClick={onClose}
           >
-            <svg className="w-6 h-6 text-neutral-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
-            </svg>
+            <X className="w-6 h-6 text-neutral-500" />
           </button>
         </div>
 
