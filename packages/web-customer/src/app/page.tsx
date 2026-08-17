@@ -5468,7 +5468,7 @@ export default function Home() {
                     )}
 
                     {/* Sin repartidor disponible: informar proactivamente */}
-                    {selectedOrder.noDriversAvailable && ['CONFIRMED', 'PREPARING', 'READY'].includes(selectedOrder.status) && (
+                    {selectedOrder.noDriversAvailable && selectedOrder.status === 'READY' && (
                       <div className="flex items-start gap-3 p-4 rounded-2xl border border-amber-300 bg-amber-50/80 shadow-sm">
                         <span className="relative flex h-3 w-3 mt-1 shrink-0">
                           <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>

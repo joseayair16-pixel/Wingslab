@@ -5397,7 +5397,7 @@ function triggerHaptic(pattern: number | number[] = 10) {
                 {/* Sin repartidor disponible: informar proactivamente */}
                 {(() => {
                   const orderDetail = activeOrderDetailsMap[selectedOrderId];
-                  if (orderDetail?.noDriversAvailable && ['CONFIRMED', 'PREPARING', 'READY'].includes(orderDetail.status)) {
+                  if (orderDetail?.noDriversAvailable && orderDetail.status === 'READY') {
                     return (
                       <div className="flex items-start gap-3 p-4 rounded-2xl border border-amber-300 bg-amber-50/80 shadow-sm">
                         <span className="relative flex h-3 w-3 mt-1 shrink-0">

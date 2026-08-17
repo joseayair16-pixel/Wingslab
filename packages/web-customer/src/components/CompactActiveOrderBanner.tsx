@@ -473,7 +473,7 @@ export const CompactActiveOrderBanner = memo(function CompactActiveOrderBanner({
           {/* Info condensada */}
           <div className="min-w-0">
             <p className="text-sm font-bold text-neutral-900 truncate">{activeStep?.label || 'Procesando'}</p>
-            {currentOrder.noDriversAvailable && !delayState.isDelayed && ['CONFIRMED', 'PREPARING', 'READY'].includes(activeStatus) ? (
+            {currentOrder.noDriversAvailable && !delayState.isDelayed && activeStatus === 'READY' ? (
               <div className="mt-1 inline-flex max-w-full items-center gap-1.5 rounded-full border border-amber-300 bg-amber-50 px-2.5 py-1">
                 <span className="relative flex h-2 w-2 shrink-0">
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
