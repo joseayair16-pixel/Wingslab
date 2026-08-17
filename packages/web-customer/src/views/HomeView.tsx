@@ -270,7 +270,7 @@ export const HomeView = React.memo(function HomeView({
         <section className="-mx-4 rounded-none border-y border-black/5 bg-white px-4 py-3 shadow-[0_18px_60px_rgba(15,15,15,0.05)] md:mx-0 md:rounded-[24px] md:border md:border-black/5 md:px-5 md:py-3">
           <div className="-mx-1 overflow-x-auto px-1 pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             <div className="flex min-w-max gap-1.5 sm:gap-2">
-              {[{ id: 'all', name: 'Todo', icon: businessTypeFilter === 'stores' ? 'Store' : businessTypeFilter === 'all' ? 'LayoutGrid' : 'UtensilsCrossed', keywords: [], isActive: true, order: 0 } as StoreCategoryItem, ...filteredCategories].map((category) => {
+              {[{ id: 'all', name: 'Todo', icon: businessTypeFilter === 'stores' ? 'fluent-emoji-flat:convenience-store' : businessTypeFilter === 'all' ? 'fluent-emoji-flat:globe-showing-americas' : 'fluent-emoji-flat:chopsticks', keywords: [], isActive: true, order: 0 } as StoreCategoryItem, ...filteredCategories].map((category) => {
                 const isActive = selectedCategory === category.id;
 
                 return (

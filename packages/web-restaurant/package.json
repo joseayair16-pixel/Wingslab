@@ -10,6 +10,8 @@
     "type-check": "tsc --noEmit"
   },
   "dependencies": {
+    "@iconify-json/fluent-emoji-flat": "^1.2.5",
+    "@iconify/react": "^6.0.2",
     "@sadel/shared": "1.0.0",
     "axios": "^1.6.5",
     "lucide-react": "^1.31.0",

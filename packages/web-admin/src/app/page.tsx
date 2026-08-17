@@ -145,16 +145,31 @@ type StoreCategoryItem = {
 };
 
 const CATEGORY_ICON_OPTIONS = [
-  'Store', 'Gift', 'Pizza', 'Fish', 'Salad', 'Drumstick', 'CupSoda', 'Hamburger',
-  'Sandwich', 'Beef', 'Cake', 'Tag', 'Soup', 'ChefHat', 'Utensils', 'UtensilsCrossed',
-  'Sprout', 'Leaf', 'CookingPot', 'Shrimp', 'Flame', 'Flag', 'EggFried', 'Zap',
-  'Coffee', 'Cherry', 'Milk', 'GlassWater', 'IceCreamCone', 'Croissant', 'Wheat',
-  'Banana', 'Truck', 'Apple', 'Egg', 'Grape', 'Bird', 'Cookie', 'Donut', 'Citrus',
-  'Ham', 'Globe', 'Feather', 'Palmtree', 'Dessert', 'Shirt', 'Monitor', 'Heart',
-  'Flower', 'Sparkles', 'PawPrint', 'BookOpen', 'ShoppingBag', 'ToyBrick', 'Dumbbell',
-  'Home', 'Baby', 'Pill', 'Flower2', 'Weight', 'ShoppingCart', 'Package', 'Building',
-  'Boxes', 'Crown', 'Building2', 'Star', 'Martini', 'Beer', 'Wine', 'FlaskConical',
-  'ShowerHead',
+  'fluent-emoji-flat:convenience-store', 'fluent-emoji-flat:wrapped-gift', 'fluent-emoji-flat:pizza',
+  'fluent-emoji-flat:sushi', 'fluent-emoji-flat:green-salad', 'fluent-emoji-flat:poultry-leg',
+  'fluent-emoji-flat:bubble-tea', 'fluent-emoji-flat:hamburger', 'fluent-emoji-flat:sandwich',
+  'fluent-emoji-flat:cut-of-meat', 'fluent-emoji-flat:birthday-cake', 'fluent-emoji-flat:label',
+  'fluent-emoji-flat:shallow-pan-of-food', 'fluent-emoji-flat:taco', 'fluent-emoji-flat:takeout-box',
+  'fluent-emoji-flat:chopsticks', 'fluent-emoji-flat:carrot', 'fluent-emoji-flat:leafy-green',
+  'fluent-emoji-flat:spaghetti', 'fluent-emoji-flat:fish', 'fluent-emoji-flat:hot-pepper',
+  'fluent-emoji-flat:popcorn', 'fluent-emoji-flat:pancakes', 'fluent-emoji-flat:french-fries',
+  'fluent-emoji-flat:hot-beverage', 'fluent-emoji-flat:bento-box', 'fluent-emoji-flat:pot-of-food',
+  'fluent-emoji-flat:cup-with-straw', 'fluent-emoji-flat:ice-cream', 'fluent-emoji-flat:croissant',
+  'fluent-emoji-flat:bowl-with-spoon', 'fluent-emoji-flat:pineapple', 'fluent-emoji-flat:flatbread',
+  'fluent-emoji-flat:stuffed-flatbread', 'fluent-emoji-flat:cooking', 'fluent-emoji-flat:steaming-bowl',
+  'fluent-emoji-flat:chicken', 'fluent-emoji-flat:dumpling', 'fluent-emoji-flat:doughnut',
+  'fluent-emoji-flat:baguette-bread', 'fluent-emoji-flat:meat-on-bone', 'fluent-emoji-flat:globe-showing-americas',
+  'fluent-emoji-flat:curry-rice', 'fluent-emoji-flat:falafel', 'fluent-emoji-flat:burrito',
+  'fluent-emoji-flat:t-shirt', 'fluent-emoji-flat:laptop', 'fluent-emoji-flat:red-heart',
+  'fluent-emoji-flat:bouquet', 'fluent-emoji-flat:lipstick', 'fluent-emoji-flat:paw-prints',
+  'fluent-emoji-flat:books', 'fluent-emoji-flat:shopping-bags', 'fluent-emoji-flat:game-die',
+  'fluent-emoji-flat:person-lifting-weights', 'fluent-emoji-flat:house', 'fluent-emoji-flat:baby-bottle',
+  'fluent-emoji-flat:pill', 'fluent-emoji-flat:lotion-bottle', 'fluent-emoji-flat:flexed-biceps',
+  'fluent-emoji-flat:shopping-cart', 'fluent-emoji-flat:high-voltage', 'fluent-emoji-flat:gem-stone',
+  'fluent-emoji-flat:department-store', 'fluent-emoji-flat:card-file-box', 'fluent-emoji-flat:crown',
+  'fluent-emoji-flat:office-building', 'fluent-emoji-flat:sparkles', 'fluent-emoji-flat:cocktail-glass',
+  'fluent-emoji-flat:beer-mug', 'fluent-emoji-flat:wine-glass', 'fluent-emoji-flat:clinking-glasses',
+  'fluent-emoji-flat:soap',
 ];
 
 type RegionItem = {
@@ -7294,7 +7309,7 @@ export default function Home() {
                         value={editingCategory.icon}
                         onChange={(e) => setEditingCategory({ ...editingCategory, icon: e.target.value })}
                         className="w-full bg-transparent text-neutral-900 focus:outline-none"
-                        placeholder="Nombre del icono (Ej. Hamburger)"
+                        placeholder="Nombre del icono (Ej. fluent-emoji-flat:hamburger)"
                       />
                     </div>
                     <div className="mt-2 flex max-h-40 flex-wrap gap-1 overflow-y-auto rounded-xl border border-black/10 bg-neutral-50 p-2">
