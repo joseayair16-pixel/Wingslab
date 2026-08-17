@@ -9,6 +9,7 @@ const orderBaseScalarSelect = {
   addressId: true,
   supportRestaurantId: true,
   isSupportRequested: true,
+  supportRequestedAt: true,
   supportCount: true,
   supportRejectionCount: true,
   supportAttempts: true,

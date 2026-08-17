@@ -1780,6 +1780,7 @@ export async function registerRestaurantOrderRoutes(fastify: FastifyInstance): P
           where: { id: order.id },
           data: {
             isSupportRequested: true,
+            supportRequestedAt: new Date(),
             supportCount: nearbyRestaurants.length,
             supportRejectionCount: 0,
             supportAttempts: { increment: 1 },
@@ -1866,6 +1867,7 @@ export async function registerRestaurantOrderRoutes(fastify: FastifyInstance): P
                 where: { id: order.id },
                 data: {
                   isSupportRequested: false,
+                  supportRequestedAt: null,
                 },
               });
 
@@ -2001,6 +2003,7 @@ export async function registerRestaurantOrderRoutes(fastify: FastifyInstance): P
             supportRestaurantId: supportRestaurant.id,
             notes: newNotes,
             isSupportRequested: false,
+            supportRequestedAt: null,
             noDriversAvailable: false,
           },
         });

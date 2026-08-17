@@ -53,9 +53,68 @@ export function startJitDispatchJob(fastify: FastifyInstance) {
         });
       }
 
-      // 2. JIT Buffer: 8 minutos (5 min trayecto + 3 min gracia) para nuevos pedidos
+      // 2. Resolver solicitudes de apoyo a red vencidas (crash-safe).
+      // Antes esto dependía de un setTimeout en memoria del proceso: si el server
+      // se reiniciaba, "isSupportRequested" quedaba activo para siempre y el pedido
+      // se atrapaba sin botones. Aquí se garantiza el cierre aunque se reinicie.
+      const SUPPORT_WAIT_MS = 2 * 60 * 1000;
+      const supportCutoff = new Date(now.getTime() - SUPPORT_WAIT_MS);
+      const expiredSupportOrders = await prisma.order.findMany({
+        where: {
+          isSupportRequested: true,
+          supportRestaurantId: null,
+          supportRequestedAt: { lte: supportCutoff },
+          driverId: null,
+        },
+        select: {
+          id: true,
+          orderReference: true,
+          supportAttempts: true,
+          restaurant: { select: { userId: true, name: true } },
+        },
+      });
+
+      for (const supportOrder of expiredSupportOrders) {
+        try {
+          const attemptsUsed = supportOrder.supportAttempts ?? 0;
+          const attemptsLeft = Math.max(0, 2 - attemptsUsed);
+          const exhausted = attemptsLeft === 0;
+
+          await prisma.order.update({
+            where: { id: supportOrder.id },
+            data: {
+              isSupportRequested: false,
+              supportRequestedAt: null,
+            },
+          });
+
+          emitNotification(
+            fastify.io,
+            supportOrder.restaurant.userId,
+            'RESTAURANT',
+            exhausted ? 'order:support-exhausted' : 'order:support-rejected-all',
+            {
+              orderId: supportOrder.id,
+              supportAttempts: attemptsUsed,
+              attemptsLeft,
+              exhausted,
+              message: exhausted
+                ? `Nadie aceptó tu solicitud de apoyo y agotaste tus 2 intentos para el pedido ${supportOrder.orderReference}. Entrega tú mismo el pedido.`
+                : `Nadie aceptó tu solicitud de apoyo para el pedido ${supportOrder.orderReference}. Puedes reintentar (te queda${attemptsLeft === 1 ? '' : 'n'} ${attemptsLeft} intento${attemptsLeft === 1 ? '' : 's'}) o entregarlo tú mismo.`,
+            },
+            {
+              requestId: `jit-support-timeout-${supportOrder.id}`,
+              orderId: supportOrder.id,
+            }
+          );
+          logger.info(`[JIT-Dispatch] Solicitud de apoyo vencida resuelta para pedido ${supportOrder.id}`);
+        } catch (err) {
+          logger.error(`[JIT-Dispatch] Error resolviendo apoyo vencido del pedido ${supportOrder.id}:`, err);
+        }
+      }
+
+      // 3. JIT Buffer: 8 minutos (5 min trayecto + 3 min gracia) para nuevos pedidos
       const JIT_BUFFER_MS = 8 * 60 * 1000;
-      
       const targetTime = new Date(now.getTime() + JIT_BUFFER_MS);
 
       const pendingDispatchOrders = await prisma.order.findMany({

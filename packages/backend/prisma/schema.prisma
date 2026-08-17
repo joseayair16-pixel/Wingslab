@@ -420,6 +420,7 @@ model Order {
   supportRestaurantId   String?
   supportRestaurant     Restaurant? @relation("SupportRestaurant", fields: [supportRestaurantId], references: [id])
   isSupportRequested    Boolean     @default(false)
+  supportRequestedAt    DateTime?
   supportCount          Int         @default(0)
   supportRejectionCount Int         @default(0)
   supportAttempts       Int         @default(0)

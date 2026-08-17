@@ -131,6 +131,7 @@ type OrderItem = {
   restaurantId?: string;
   supportRestaurantId?: string | null;
   isSupportRequested?: boolean;
+  supportRequestedAt?: string | null;
   supportCount?: number;
   supportRejectionCount?: number;
   supportAttempts?: number;
@@ -2442,6 +2443,22 @@ export default function Home() {
     };
   }, [supportRequestsQueue.length, playIncomingOrderAlert]);
 
+  // Ticker global (1s) para el countdown de "esperando respuesta de la red" en
+  // las tarjetas de pedido. Independiente del loop de sonido para que el countdown
+  // avance incluso sin solicitudes de apoyo en cola.
+  const supportWaitTickRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  useEffect(() => {
+    const tick = () => setSupportCountdownNow(Date.now());
+    tick();
+    supportWaitTickRef.current = setInterval(tick, 1000);
+    return () => {
+      if (supportWaitTickRef.current) {
+        clearInterval(supportWaitTickRef.current);
+        supportWaitTickRef.current = null;
+      }
+    };
+  }, []);
+
   // Auto-rechazo del modal cuando se agotan los 2 minutos sin responder
   useEffect(() => {
     const headItem = supportRequestsQueue[0];
@@ -3078,6 +3095,7 @@ export default function Home() {
       if ((payload as any).supportRestaurantName) {
         setSupportAliadoNamesByOrder((prev) => ({ ...prev, [(payload as any).orderId]: (payload as any).supportRestaurantName }));
       }
+      void loadOrdersOnly();
     }
 
     if (eventName === 'order:created') {
@@ -3593,6 +3611,28 @@ export default function Home() {
 
     resolvedIncomingOrderIdsRef.current = [...resolvedIncomingOrderIdsRef.current.slice(-79), orderId];
     setIncomingOrderQueue((current) => current.filter((queuedId) => queuedId !== orderId));
+
+    // Optimistic UI: al solicitar apoyo, el panel de "esperando respuesta" debe
+    // aparecer de inmediato (el evento de socket puede tardar o no llegar).
+    if (actionKey === 'solicitarApoyo') {
+      setOrders((current) =>
+        current.map((o) =>
+          o.id === orderId
+            ? {
+                ...o,
+                isSupportRequested: true,
+                supportRequestedAt: new Date().toISOString(),
+                supportAttempts: (o.supportAttempts ?? 0) + 1,
+              }
+            : o
+        )
+      );
+      setSupportNotifyByOrder((prev) => {
+        const next = { ...prev };
+        delete next[orderId];
+        return next;
+      });
+    }
 
     if (orderId.startsWith('mock-order-')) {
       setOrders((current) =>
@@ -9984,8 +10024,34 @@ export default function Home() {
                               ) : null}
 
                               {/* Boton de Emergencia: Asumir Reparto o Pedir Apoyo (solo delivery) */}
-                              {((order as any).fulfillmentType !== 'PICKUP' && !order.supportRestaurantId && !order.isSupportRequested && (order.status === 'READY' || ((order.status === 'CONFIRMED' || order.status === 'PREPARING') && order.noDriversAvailable)) && !order.driver) ? (
+                              {((order as any).fulfillmentType !== 'PICKUP' && !order.supportRestaurantId && (order.status === 'READY' || ((order.status === 'CONFIRMED' || order.status === 'PREPARING') && order.noDriversAvailable)) && !order.driver) ? (
                                 <div className="flex flex-col gap-2 mt-2" onClick={(e) => e.stopPropagation()}>
+                                  {/* Esperando respuesta de la red: solo informativo, nunca bloquea acciones */}
+                                  {order.isSupportRequested && order.supportRequestedAt && (
+                                    <div className="rounded-[16px] border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-800">
+                                      <div className="flex items-center gap-2">
+                                        <span className="relative flex h-2.5 w-2.5 shrink-0">
+                                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-sky-400 opacity-75"></span>
+                                          <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-sky-500"></span>
+                                        </span>
+                                        <div className="min-w-0 flex-1">
+                                          <p className="font-semibold">Esperando respuesta de la red…</p>
+                                          <p className="text-xs text-sky-600 mt-0.5">
+                                            {(() => {
+                                              const elapsedMs = Math.max(0, supportCountdownNow - new Date(order.supportRequestedAt!).getTime());
+                                              const remainingMs = Math.max(0, 2 * 60 * 1000 - elapsedMs);
+                                              const secs = Math.ceil(remainingMs / 1000);
+                                              const mm = Math.floor(secs / 60);
+                                              const ss = secs % 60;
+                                              return remainingMs <= 0
+                                                ? 'Finalizando solicitud…'
+                                                : `Si nadie responde en ${mm}:${String(ss).padStart(2, '0')} min, el pedido queda para ti.`;
+                                            })()}
+                                          </p>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  )}
                                   {supportNotifyHere ? (
                                     <div className="rounded-[16px] border border-rose-100 bg-rose-50 px-4 py-3 text-sm text-rose-800">
                                       <div className="flex items-center gap-2">
@@ -10000,7 +10066,7 @@ export default function Home() {
                                             </p>
                                           )}
                                         </div>
-                                        {!supportNotifyHere.exhausted && (
+                                        {!supportNotifyHere.exhausted && !order.isSupportRequested && (
                                           <button
                                             type="button"
                                             onClick={() => void runOrderAction(order.id, 'solicitarApoyo')}
@@ -10024,7 +10090,7 @@ export default function Home() {
                                         ? 'Procesando...'
                                         : '🚴‍♂️ Ir a entregar'}
                                     </button>
-                                    {!profile?.hasOwnDelivery && !supportExhaustedHere && !supportNotifyHere?.exhausted && (
+                                    {!profile?.hasOwnDelivery && !supportExhaustedHere && !supportNotifyHere?.exhausted && !order.isSupportRequested && (
                                       <button
                                         type="button"
                                         onClick={() => void runOrderAction(order.id, 'solicitarApoyo')}
