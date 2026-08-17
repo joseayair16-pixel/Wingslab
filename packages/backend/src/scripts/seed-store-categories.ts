@@ -65,7 +65,6 @@ async function main() {
           color: cat.color,
           keywords: cat.keywords,
           order: cat.order,
-          isActive: true,
         },
       });
       updated++;
