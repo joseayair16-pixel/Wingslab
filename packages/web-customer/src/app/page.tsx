@@ -1254,7 +1254,7 @@ export default function Home() {
   };
 
   const handleTouchEnd = () => {
-    if (pullDistance > 60) {
+    if (pullDistance > 40) {
       setIsRefreshing(true);
       // Además de recargar datos, fuerza el chequeo de una versión nueva de la PWA:
       // si el Service Worker detecta cambios, el controllerchange recargará la app.
@@ -1266,10 +1266,11 @@ export default function Home() {
           })
           .catch(() => {});
       }
-      void loadDashboard().then(() => {
-        setIsRefreshing(false);
-        setPullDistance(0);
-      });
+      // Recarga completa: garantiza datos frescos y la última versión de la PWA,
+      // y deja que el indicador se vea un instante antes de recargar.
+      window.setTimeout(() => {
+        window.location.reload();
+      }, 350);
     } else {
       setPullDistance(0);
     }
@@ -4032,7 +4033,7 @@ export default function Home() {
         style={{ transform: `translateY(${Math.max(0, pullDistance - 40)}px)` }}
       >
         <div className="rounded-full bg-white p-2 shadow-lg border border-black/5 flex items-center justify-center">
-          <RefreshCw />
+          <RefreshCw className={`h-5 w-5 ${isRefreshing ? 'animate-spin' : ''}`} />
         </div>
       </div>
 

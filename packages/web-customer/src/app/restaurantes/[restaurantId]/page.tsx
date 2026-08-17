@@ -817,7 +817,7 @@ export default function RestaurantPage({
   };
 
   const handleTouchEnd = () => {
-    if (pullDistance > 60) {
+    if (pullDistance > 40) {
       setIsRefreshing(true);
       // Fuerza el chequeo de una versión nueva de la PWA además del refresco de datos.
       if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
@@ -828,18 +828,10 @@ export default function RestaurantPage({
           })
           .catch(() => {});
       }
-      void requestJson<{ success: true; data: PublicRestaurantDetail }>({
-        apiBase,
-        path: `/restaurantes/${params.restaurantId}${getUserLocationQuery()}`,
-        fallbackMessage: 'No se pudo cargar el menu del restaurante.',
-      }).then((payload) => {
-        setRawRestaurant(payload.data);
-        setIsRefreshing(false);
-        setPullDistance(0);
-      }).catch(() => {
-        setIsRefreshing(false);
-        setPullDistance(0);
-      });
+      // Recarga completa: garantiza el menú más reciente y la última versión de la PWA.
+      window.setTimeout(() => {
+        window.location.reload();
+      }, 350);
     } else {
       setPullDistance(0);
     }
@@ -2795,7 +2787,7 @@ function triggerHaptic(pattern: number | number[] = 10) {
         style={{ transform: `translateY(${Math.max(0, pullDistance - 40)}px)` }}
       >
         <div className="rounded-full bg-white p-2 shadow-lg border border-black/5 flex items-center justify-center">
-          <RefreshCw />
+          <RefreshCw className={`h-5 w-5 ${isRefreshing ? 'animate-spin' : ''}`} />
         </div>
       </div>
 
