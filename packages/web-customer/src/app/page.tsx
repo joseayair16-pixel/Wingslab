@@ -1,5 +1,5 @@
 'use client';
-import { AlertTriangle, Bike, Check, ChevronLeft, ChevronRight, Clock, Home as HomeIcon, Info, LifeBuoy, LogOut, Mail, MapPin, Menu, MessageCircle, Moon, RefreshCw, ShoppingBag, ShoppingBasket, User, X } from 'lucide-react';
+import { AlertTriangle, Bike, Check, ChevronLeft, ChevronRight, Clock, Home as HomeIcon, Info, LifeBuoy, LogOut, Mail, MapPin, Menu, MessageCircle, Moon, RefreshCw, ShoppingBag, User, X } from 'lucide-react';
 
 import React, { useCallback, useEffect, useMemo, useRef, useState, useDeferredValue } from 'react';
 import { useRouter } from 'next/navigation';
@@ -26,6 +26,7 @@ import { useCartStore, type CartItem } from '../store/cartStore';
 import { useChatStore } from '../store/chatStore';
 import dynamic from 'next/dynamic';
 import { useStore } from '../store';
+import { CartIcon } from '../components/CartIcon';
 import { RestaurantSearchBar } from '../components/RestaurantSearchBar';
 import { SaDelLogo } from '../components/SaDelLogo';
 import { SaDelLoader } from '../components/SaDelLoader';
@@ -4177,7 +4178,7 @@ export default function Home() {
                   className={`relative inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-black/10 bg-white text-neutral-800 shadow-sm transition hover:bg-neutral-50 ${cart.length > 0 ? 'animate-[pulse_2s_ease-in-out_infinite]' : ''}`}
                   aria-label="Abrir carrito"
                 >
-                  <ShoppingBasket className="h-5 w-5" strokeWidth={1.8} />
+                  <CartIcon className="h-5 w-5" strokeWidth={1.8} />
                   {cart.length > 0 && !isCartOpen ? (
                     <span className="absolute -right-1 -top-1 flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-sky-500 px-1 text-[11px] font-bold text-white shadow-sm">
                       {cart.length}
