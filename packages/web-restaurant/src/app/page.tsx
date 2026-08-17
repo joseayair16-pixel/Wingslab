@@ -5943,8 +5943,22 @@ export default function Home() {
 
                   </div>
               </div>
-<div className="shrink-0 border-t border-black/5 bg-white px-5 py-3 sm:px-8 shadow-[0_-8px_30px_rgba(0,0,0,0.06)]">
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+<div className="shrink-0 border-t border-black/5 bg-white px-5 py-4 sm:px-8 shadow-[0_-8px_30px_rgba(0,0,0,0.06)]">
+                <div className="flex flex-col-reverse gap-3 sm:flex-row sm:items-center">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsSelectingPrepTime(false);
+                        setIsScheduledMode(false);
+                        setScheduledDeliveryDate('');
+                        setScheduledDeliveryTime('');
+                        setScheduledMeridiem('PM');
+                      }}
+                      disabled={Boolean(activeActionKey)}
+                      className="w-full rounded-full border border-neutral-200 bg-white px-6 py-3.5 text-sm font-bold text-neutral-600 transition hover:bg-neutral-50 hover:text-neutral-800 active:scale-[0.98] disabled:opacity-70 disabled:cursor-not-allowed sm:w-auto"
+                    >
+                      Volver
+                    </button>
                     <button
                       type="button"
                       onClick={() => {
@@ -6004,41 +6018,13 @@ export default function Home() {
                           return s !== null && s.getTime() > Date.now();
                         })())
                       }
-                      className="w-full rounded-full bg-sky-600 px-5 py-4 text-sm font-bold text-white shadow-[0_4px_12px_rgba(2,132,199,0.3)] transition hover:bg-sky-700 hover:shadow-[0_8px_20px_rgba(2,132,199,0.4)] disabled:opacity-70 disabled:cursor-not-allowed sm:flex-1 sm:order-2"
+                      className="w-full rounded-full bg-sky-600 px-5 py-4 text-sm font-bold text-white shadow-[0_4px_12px_rgba(2,132,199,0.3)] transition hover:bg-sky-700 hover:shadow-[0_8px_20px_rgba(2,132,199,0.4)] active:scale-[0.98] disabled:opacity-70 disabled:cursor-not-allowed sm:flex-1"
                     >
                       {activeActionKey === `${activeIncomingOrder.id}:accept`
                         ? 'Aceptando...'
                         : isScheduledMode
                           ? 'Confirmar y Programar Entrega'
                           : 'Confirmar y Aceptar Pedido'}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setIsSelectingPrepTime(false);
-                        setIsScheduledMode(false);
-                        setScheduledDeliveryDate('');
-                        setScheduledDeliveryTime('');
-                        setScheduledMeridiem('PM');
-                      }}
-                      disabled={Boolean(activeActionKey)}
-                      className="w-full rounded-full border border-neutral-200 bg-white px-5 py-3.5 text-sm font-bold text-neutral-600 transition hover:bg-neutral-50 sm:w-auto sm:px-6 sm:order-1"
-                    >
-                      Volver al pedido
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setIsSelectingPrepTime(false);
-                        setIsScheduledMode(false);
-                        setScheduledDeliveryDate('');
-                        setScheduledDeliveryTime('');
-                        setScheduledMeridiem('PM');
-                      }}
-                      disabled={Boolean(activeActionKey)}
-                      className="w-full rounded-full border border-neutral-200 bg-white px-5 py-3.5 text-sm font-bold text-neutral-600 transition hover:bg-neutral-50"
-                    >
-                      {profile?.businessType === 'RESTAURANT' ? 'Volver a la comanda' : 'Volver al pedido'}
                     </button>
                   </div>
               </div>
