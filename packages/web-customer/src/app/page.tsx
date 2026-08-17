@@ -1,5 +1,5 @@
 'use client';
-import { AlertTriangle, Check, ChevronLeft, ChevronRight, Clock, Info, Mail, MapPin, MessageCircle, RefreshCw, User, X } from 'lucide-react';
+import { AlertTriangle, Check, ChevronLeft, ChevronRight, Clock, Home as HomeIcon, Info, LifeBuoy, LogOut, Mail, MapPin, Menu, MessageCircle, Moon, RefreshCw, ShoppingCart, User, X } from 'lucide-react';
 
 import React, { useCallback, useEffect, useMemo, useRef, useState, useDeferredValue } from 'react';
 import { useRouter } from 'next/navigation';
@@ -4135,9 +4135,7 @@ export default function Home() {
                   className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-black/10 bg-white text-neutral-800 shadow-sm transition hover:bg-neutral-50"
                   aria-label="Abrir menu principal"
                 >
-                  <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M4 7h16M4 12h16M4 17h16" />
-                  </svg>
+                  <Menu className="h-5 w-5" strokeWidth={1.8} />
                 </button>
 
                 <button
@@ -4179,9 +4177,7 @@ export default function Home() {
                   className={`relative inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-black/10 bg-white text-neutral-800 shadow-sm transition hover:bg-neutral-50 ${cart.length > 0 ? 'animate-[pulse_2s_ease-in-out_infinite]' : ''}`}
                   aria-label="Abrir carrito"
                 >
-                  <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M3 4h2l.4 2M7 14h10l4-8H5.4M7 14l-1.5 2.5A1 1 0 006.4 18H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
-                  </svg>
+                  <ShoppingCart className="h-5 w-5" strokeWidth={1.8} />
                   {cart.length > 0 && !isCartOpen ? (
                     <span className="absolute -right-1 -top-1 flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-sky-500 px-1 text-[11px] font-bold text-white shadow-sm">
                       {cart.length}
@@ -4357,9 +4353,7 @@ export default function Home() {
                 activeSection === 'home' ? 'bg-sky-50 text-sky-700' : 'text-neutral-600 hover:bg-neutral-50 hover:text-neutral-900'
               }`}
             >
-              <svg className={`h-5 w-5 ${activeSection === 'home' ? 'text-sky-500' : 'text-neutral-400'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
-              </svg>
+              <HomeIcon className={`h-5 w-5 ${activeSection === 'home' ? 'text-sky-500' : 'text-neutral-400'}`} strokeWidth={1.8} />
               <span>Ver tiendas</span>
             </button>
             <button
@@ -4369,7 +4363,7 @@ export default function Home() {
                 activeSection === 'profile' ? 'bg-sky-50 text-sky-700' : 'text-neutral-600 hover:bg-neutral-50 hover:text-neutral-900'
               }`}
             >
-              <User strokeWidth={1.8} />
+              <User className={`h-5 w-5 ${activeSection === 'profile' ? 'text-sky-500' : 'text-neutral-400'}`} strokeWidth={1.8} />
               <span>Mi perfil</span>
             </button>
             <button
@@ -4380,7 +4374,7 @@ export default function Home() {
               }`}
             >
               <div className="flex items-center gap-3">
-                <Clock strokeWidth={1.8} />
+                <Clock className={`h-5 w-5 ${activeSection === 'history' ? 'text-sky-500' : 'text-neutral-400'}`} strokeWidth={1.8} />
                 <span>Historial</span>
               </div>
               <span className={`text-[11px] font-medium ${activeSection === 'history' ? 'text-sky-500' : 'text-neutral-400'}`}>{orderStats.total}</span>
@@ -4392,9 +4386,7 @@ export default function Home() {
                 exploringZone ? 'bg-sky-50 text-sky-700' : 'text-neutral-600 hover:bg-neutral-50 hover:text-neutral-900'
               }`}
             >
-              <svg className={`h-5 w-5 ${exploringZone ? 'text-sky-500' : 'text-neutral-400'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5a2.5 2.5 0 110-5 2.5 2.5 0 010 5z" />
-              </svg>
+              <MapPin className={`h-5 w-5 ${exploringZone ? 'text-sky-500' : 'text-neutral-400'}`} strokeWidth={1.8} />
               <span>Explorar</span>
               {exploringZone && selectedZoneName && (
                 <span className="ml-auto inline-flex max-w-[110px] items-center rounded-full bg-sky-500 px-2 py-0.5 text-[10px] font-bold text-white">
@@ -4409,9 +4401,7 @@ export default function Home() {
                 activeSection === 'support' ? 'bg-sky-50 text-sky-700' : 'text-neutral-600 hover:bg-neutral-50 hover:text-neutral-900'
               }`}
             >
-              <svg className={`h-5 w-5 ${activeSection === 'support' ? 'text-sky-500' : 'text-neutral-400'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M18.364 5.636l-3.536 3.536m0 5.656l3.536 3.536M9.172 9.172L5.636 5.636m3.536 9.192l-3.536 3.536M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-5 0a4 4 0 11-8 0 4 4 0 018 0z" />
-              </svg>
+              <LifeBuoy className={`h-5 w-5 ${activeSection === 'support' ? 'text-sky-500' : 'text-neutral-400'}`} strokeWidth={1.8} />
               <span>Soporte</span>
             </button>
           </div>
@@ -4419,9 +4409,7 @@ export default function Home() {
           <div className="border-t border-black/[0.04] px-4 py-4 space-y-1.5">
             <div className="flex items-center justify-between rounded-2xl border border-black/5 bg-white px-4 py-3 text-sm font-semibold text-neutral-700">
               <div className="flex items-center gap-3">
-                <svg className="h-5 w-5 text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
-                </svg>
+                <Moon className="h-5 w-5 text-neutral-400" strokeWidth={1.8} />
                 <span>Modo Oscuro</span>
               </div>
               <button
@@ -4445,9 +4433,7 @@ export default function Home() {
                 className="flex w-full items-center justify-between rounded-2xl border border-black/5 bg-white px-4 py-3 text-sm font-semibold text-neutral-700 hover:bg-neutral-50 transition"
               >
                 <div className="flex items-center gap-3">
-                  <svg className="h-5 w-5 text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-                  </svg>
+                  <LogOut className="h-5 w-5 text-neutral-400" strokeWidth={1.8} />
                   <span>Cerrar sesión</span>
                 </div>
               </button>
