@@ -1,5 +1,5 @@
 'use client';
-import { Check, ChevronLeft, ChevronRight, Minus, Plus, Trash2, X } from 'lucide-react';
+import { BadgePercent, Bike, Check, ChevronLeft, ChevronRight, DollarSign, Minus, Plus, Receipt, ShoppingBag, ShoppingCart, Store, Trash2, Utensils, Wallet, X } from 'lucide-react';
 
 import { memo, useMemo } from 'react';
 import { useCartStore } from '../store/cartStore';
@@ -124,9 +124,7 @@ export default memo(function CartDrawer({
           <div className="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-black/[0.04] bg-white px-5 py-4 sm:px-6">
             <div className="flex items-center gap-3.5">
               <div className="relative flex h-12 w-12 items-center justify-center rounded-[18px] bg-gradient-to-br from-neutral-900 to-neutral-700 text-white shadow-lg shadow-neutral-900/20">
-                <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M3 4h2l.4 2M7 14h10l4-8H5.4M7 14l-1.5 2.5A1 1 0 006.4 18H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
-                </svg>
+                <ShoppingCart className="h-5 w-5" strokeWidth={1.8} />
                 {totalProducts > 0 && (
                   <span className="absolute -right-1.5 -top-1.5 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-accent px-1 text-[10px] font-bold text-white shadow-md shadow-accent/30">
                     {totalProducts}
@@ -170,8 +168,8 @@ export default memo(function CartDrawer({
                         {item.image ? (
                           <img src={item.image} className="h-14 w-14 shrink-0 rounded-2xl object-cover" alt={item.name} loading="lazy" decoding="async" />
                         ) : (
-                          <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-sky-100 to-sky-50 text-2xl">
-                            🍽️
+                          <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-sky-100 to-sky-50 text-sky-400">
+                            <Utensils className="h-6 w-6" />
                           </div>
                         )}
                         <div className="min-w-0 flex-1">
@@ -254,7 +252,7 @@ export default memo(function CartDrawer({
                 <div className="w-full max-w-[320px] relative z-10">
                   <div className="mx-auto flex h-24 w-24 items-center justify-center rounded-[32px] bg-gradient-to-br from-white to-sky-50/50 shadow-[0_8px_32px_rgba(14,165,233,0.15)] border border-white">
                     <div className="absolute inset-0 rounded-[32px] border border-sky-200/30" />
-                    <span className="text-[42px] drop-shadow-sm">🛒</span>
+                    <ShoppingCart className="h-[42px] w-[42px] text-sky-200" strokeWidth={1.5} />
                   </div>
                   <h3 className="mt-8 text-2xl font-black tracking-[-0.03em] text-neutral-900">Tu carrito está vacío</h3>
                   <p className="mt-2 text-[15px] font-medium leading-relaxed text-neutral-500">
@@ -282,21 +280,21 @@ export default memo(function CartDrawer({
                   {savingsTotal > 0 && (
                   <div className="flex items-center justify-between text-emerald-600">
                     <span className="flex items-center gap-1">
-                      <span className="text-[10px]"><svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m-8 4l-4 4V5a2 2 0 012-2h16a2 2 0 012 2v16a2 2 0 01-2 2H8.586a2 2 0 01-1.414-.586zM12 8.5a2 2 0 100-4 2 2 0 000 4zm0 6a2 2 0 100-4 2 2 0 000 4zm0 6a2 2 0 100-4 2 2 0 000 4z" /></svg></span> Descuento
+                      <span className="text-[10px]"><BadgePercent className="h-3.5 w-3.5" strokeWidth={1.5} /></span> Descuento
                     </span>
                     <span className="font-bold text-emerald-600">-{formatCurrency(savingsTotal)}</span>
                   </div>
                   )}
                   <div className="flex items-center justify-between text-neutral-500">
                     <span className="flex items-center gap-1">
-                      <span className="text-[10px]"><svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 6v12m-3-2.818l.879.659c1.171.879 3.07.879 4.242 0 1.172-.879 1.172-2.303 0-3.182C13.536 12.219 12.768 12 12 12c-.725 0-1.45-.22-2.003-.659-1.106-.879-1.106-2.303 0-3.182s2.9-.879 4.006 0l.415.33M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg></span> Subtotal
+                      <span className="text-[10px]"><DollarSign className="h-3.5 w-3.5" strokeWidth={1.5} /></span> Subtotal
                     </span>
                     <span className="font-medium text-neutral-700">{formatCurrency(cartSubtotal)}</span>
                   </div>
                   {fulfillmentType !== 'PICKUP' && !pickupOnly && (
                   <div className="flex items-center justify-between text-neutral-500">
                     <span className="flex items-center gap-1">
-                      <span className="text-[10px]">🛵</span> Envío
+                      <span className="text-[10px]"><Bike className="h-3.5 w-3.5" strokeWidth={1.5} /></span> Envío
                     </span>
                     {freeDeliveryThreshold && deliveryFee > 0 && cartSubtotal >= freeDeliveryThreshold ? (
                       <span className="font-bold text-emerald-600">Gratis</span>
@@ -313,14 +311,14 @@ export default memo(function CartDrawer({
                   )}
                   <div className="flex items-center justify-between text-neutral-500">
                     <span className="flex items-center gap-1">
-                      <span className="text-[10px]"><svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M10.5 1.5H8.25A2.25 2.25 0 006 3.75v16.5a2.25 2.25 0 002.25 2.25h7.5A2.25 2.25 0 0018 20.25V3.75a2.25 2.25 0 00-2.25-2.25H13.5m-3 0V3h3V1.5m-3 0h3m-3 18.75h3" /></svg></span> Servicio
+                      <span className="text-[10px]"><Receipt className="h-3.5 w-3.5" strokeWidth={1.5} /></span> Servicio
                     </span>
                     <span className="font-medium text-neutral-700">{formatCurrency(serviceFee)}</span>
                   </div>
                 </div>
                 <div className="mt-2 flex items-center justify-between rounded-xl bg-neutral-900 px-3.5 py-2.5 shadow-lg shadow-neutral-900/15">
                   <span className="flex items-center gap-1.5 text-xs font-semibold text-neutral-300">
-                    <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M2.25 8.25h19.5M2.25 9h19.5m-16.5 5.25h6m-6 2.25h3m-3.75 3h15a2.25 2.25 0 002.25-2.25V6.75A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25v10.5A2.25 2.25 0 004.5 19.5z" /></svg>
+                    <Wallet className="h-3.5 w-3.5" strokeWidth={1.5} />
                     Total a pagar
                   </span>
                   <span className="text-base font-extrabold tracking-tight text-white">{formatCurrency(orderTotal)}</span>
@@ -329,7 +327,7 @@ export default memo(function CartDrawer({
 
               {pickupOnly ? (
                 <div className="mt-2 flex items-center justify-center gap-2 rounded-xl border border-sky-200 bg-sky-50/70 px-3 py-2.5 text-[11px] font-bold text-sky-700">
-                  🛍️ Solo recoger en tienda
+                  <ShoppingBag className="h-3.5 w-3.5" strokeWidth={1.5} /> Solo recoger en tienda
                 </div>
               ) : (
               <div className="mt-2 grid grid-cols-2 gap-1 rounded-xl bg-neutral-100 p-0.5">
@@ -347,7 +345,7 @@ export default memo(function CartDrawer({
                       <Check className="h-2.5 w-2.5 text-sky-500" strokeWidth={4} />
                     </span>
                   )}
-                  <span>🛵</span> Enviar a domicilio
+                  <Bike className="h-3.5 w-3.5" strokeWidth={1.5} /> Enviar a domicilio
                 </button>
                 <button
                   type="button"
@@ -363,7 +361,7 @@ export default memo(function CartDrawer({
                       <Check className="h-2.5 w-2.5 text-sky-500" strokeWidth={4} />
                     </span>
                   )}
-                  <span><svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13.5 21v-7.5a.75.75 0 01.75-.75h3a.75.75 0 01.75.75V21m-4.5 0H2.36m11.14 0H18m0 0h3.64m-1.39 0V9.349m-16.5 11.65V9.35m0 0a3.001 3.001 0 003.75-.615A2.993 2.993 0 009.75 9.75c.896 0 1.7-.393 2.25-1.016a2.993 2.993 0 002.25 1.016c.896 0 1.7-.393 2.25-1.016a3.001 3.001 0 003.75.614m-16.5 0a3.004 3.004 0 01-.621-4.72L4.318 3.44A1.5 1.5 0 015.378 3h13.243a1.5 1.5 0 011.06.44l1.19 1.189a3 3 0 01-.621 4.72m-13.5 8.65h3.75a.75.75 0 00.75-.75V13.5a.75.75 0 00-.75-.75H6.75a.75.75 0 00-.75.75v3.75c0 .415.336.75.75.75z" /></svg></span> Recoger en tienda
+                  <Store className="h-3.5 w-3.5" strokeWidth={1.5} /> Recoger en tienda
                 </button>
               </div>
               )}

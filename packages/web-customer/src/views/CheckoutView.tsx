@@ -1,5 +1,5 @@
 import React from 'react';
-import { Check } from 'lucide-react';
+import { ArrowLeft, Banknote, Bike, Check, CreditCard, Landmark, MapPin, Phone, Store } from 'lucide-react';
 
 export interface CheckoutViewProps {
   openDashboardSection: (section: any) => void;
@@ -63,9 +63,7 @@ export function CheckoutView({
           onClick={() => openDashboardSection('home')}
           className="text-sm font-semibold text-neutral-600 hover:text-neutral-900 flex items-center gap-1"
         >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-          </svg>
+          <ArrowLeft className="w-4 h-4" strokeWidth={2} />
           Volver a tiendas
         </button>
       </div>
@@ -87,7 +85,7 @@ export function CheckoutView({
                 <Check className="h-3 w-3 text-sky-500" strokeWidth={4} />
               </span>
             )}
-            <span className="text-2xl">🛵</span>
+            <Bike className="h-7 w-7" strokeWidth={1.5} />
             <div className="text-left">
               <p className={`text-sm font-bold ${!isPickup ? 'text-white' : 'text-neutral-700'}`}>Enviar a domicilio</p>
               <p className={`text-[11px] ${!isPickup ? 'text-sky-100' : 'text-neutral-400'}`}>Recibe en tu puerta</p>
@@ -107,7 +105,7 @@ export function CheckoutView({
                 <Check className="h-3 w-3 text-sky-500" strokeWidth={4} />
               </span>
             )}
-            <span className="text-2xl">🏪</span>
+            <Store className="h-7 w-7" strokeWidth={1.5} />
             <div className="text-left">
               <p className={`text-sm font-bold ${isPickup ? 'text-white' : 'text-neutral-700'}`}>Recoger en tienda</p>
               <p className={`text-[11px] ${isPickup ? 'text-sky-100' : 'text-neutral-400'}`}>Pasa por tu pedido</p>
@@ -124,18 +122,18 @@ export function CheckoutView({
             /* Información del restaurante para recoger en tienda */
             <div className="bg-white rounded-2xl border border-black/[0.03] shadow-[0_2px_12px_rgba(0,0,0,0.03)] p-6">
               <h3 className="text-lg font-semibold text-neutral-950 mb-4 flex items-center gap-2">
-                <span className="text-2xl">🏪</span> Recoger en
+                <Store className="h-5 w-5" strokeWidth={1.5} /> Recoger en
               </h3>
               <div className="rounded-xl bg-neutral-50 border border-black/5 p-4 space-y-2">
                 <p className="font-bold text-neutral-900 text-base">{selectedRestaurant?.name || 'Restaurante'}</p>
                 {selectedRestaurant?.address && (
                   <p className="text-sm text-neutral-600 flex items-start gap-1.5">
-                    <span>📍</span> {selectedRestaurant.address}
+                    <MapPin className="h-4 w-4 shrink-0 text-neutral-400" strokeWidth={1.5} /> {selectedRestaurant.address}
                   </p>
                 )}
                 {selectedRestaurant?.contactPhone && (
                   <p className="text-sm text-neutral-600 flex items-center gap-1.5">
-                    <span>📞</span> {selectedRestaurant.contactPhone}
+                    <Phone className="h-4 w-4 shrink-0 text-neutral-400" strokeWidth={1.5} /> {selectedRestaurant.contactPhone}
                   </p>
                 )}
                 <p className="text-[11px] text-neutral-400 mt-1">
@@ -147,7 +145,7 @@ export function CheckoutView({
             /* Direcciones para delivery */
             <div className="bg-white rounded-2xl border border-black/[0.03] shadow-[0_2px_12px_rgba(0,0,0,0.03)] p-6">
               <h3 className="text-lg font-semibold text-neutral-950 mb-4 flex items-center gap-2">
-                <span className="text-2xl">📍</span> ¿A dónde enviamos tu pedido?
+                <MapPin className="h-5 w-5" strokeWidth={1.5} /> ¿A dónde enviamos tu pedido?
               </h3>
               
               {addresses.length === 0 ? (
@@ -206,7 +204,7 @@ export function CheckoutView({
           {/* Opciones de Pago */}
           <div className="bg-white rounded-2xl border border-black/[0.03] shadow-[0_2px_12px_rgba(0,0,0,0.03)] p-6">
             <h3 className="text-lg font-semibold text-neutral-950 mb-4 flex items-center gap-2">
-              <span className="text-2xl">💳</span> ¿Cómo quieres pagar?
+              <CreditCard className="h-5 w-5" strokeWidth={1.5} /> ¿Cómo quieres pagar?
             </h3>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -220,7 +218,7 @@ export function CheckoutView({
               >
                 <div className="flex items-center gap-3">
                   <div className="flex h-10 w-10 items-center justify-center rounded-full bg-green-100 text-green-600 text-xl">
-                    💵
+                    <Banknote className="h-5 w-5" strokeWidth={1.5} />
                   </div>
                   <div>
                     <p className="text-sm font-semibold text-neutral-800">Efectivo</p>
@@ -246,7 +244,7 @@ export function CheckoutView({
               >
                 <div className="flex items-center gap-3">
                   <div className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-100 text-blue-600 text-xl">
-                    🏦
+                    <Landmark className="h-5 w-5" strokeWidth={1.5} />
                   </div>
                   <div>
                     <p className="text-sm font-semibold text-neutral-800">Transferencia</p>
