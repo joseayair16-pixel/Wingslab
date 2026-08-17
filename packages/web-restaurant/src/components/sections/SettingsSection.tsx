@@ -4,6 +4,7 @@ import { Check, Info, Tag } from 'lucide-react';
 import React, { useEffect, useState } from 'react';
 import { requestJson, MENU_THEMES, getMenuThemeById } from '@sadel/shared';
 import { getGoogleMaps } from '../../lib/googleMaps';
+import { CategoryIcon } from '../CategoryIcon';
 
 type SuccessResponse<T> = {
   success: true;
@@ -811,7 +812,7 @@ export const SettingsSection = React.memo(function SettingsSection({
                                 : 'border-black/10 bg-white text-neutral-700 hover:border-black/20 hover:bg-neutral-50'
                             }`}
                           >
-                            <span className="text-lg">{cat.icon}</span>
+                            <CategoryIcon name={cat.icon} className="h-5 w-5 shrink-0" />
                             <span className="truncate text-sm font-medium leading-tight">{cat.name}</span>
                           </button>
                         );

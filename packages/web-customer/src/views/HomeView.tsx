@@ -3,6 +3,7 @@ import React, { useMemo, useState } from 'react';
 import { useStore } from '../store';
 import { StoreCategoryItem } from '../app/page';
 import { BillboardCarousel, type Billboard } from '../components/BillboardCarousel';
+import { CategoryIcon } from '../components/CategoryIcon';
 import { ChevronRight, ChevronUp } from 'lucide-react';
 
 const isRestaurantType = (type?: string | null) => !type || type === 'RESTAURANT';
@@ -269,7 +270,7 @@ export const HomeView = React.memo(function HomeView({
         <section className="-mx-4 rounded-none border-y border-black/5 bg-white px-4 py-3 shadow-[0_18px_60px_rgba(15,15,15,0.05)] md:mx-0 md:rounded-[24px] md:border md:border-black/5 md:px-5 md:py-3">
           <div className="-mx-1 overflow-x-auto px-1 pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             <div className="flex min-w-max gap-1.5 sm:gap-2">
-              {[{ id: 'all', name: 'Todo', icon: businessTypeFilter === 'stores' ? '🏪' : businessTypeFilter === 'all' ? '📋' : '🍽️', keywords: [], isActive: true, order: 0 } as StoreCategoryItem, ...filteredCategories].map((category) => {
+              {[{ id: 'all', name: 'Todo', icon: businessTypeFilter === 'stores' ? 'Store' : businessTypeFilter === 'all' ? 'LayoutGrid' : 'UtensilsCrossed', keywords: [], isActive: true, order: 0 } as StoreCategoryItem, ...filteredCategories].map((category) => {
                 const isActive = selectedCategory === category.id;
 
                 return (
@@ -284,7 +285,7 @@ export const HomeView = React.memo(function HomeView({
                       : 'bg-neutral-100 text-neutral-500 shadow-[inset_0_1px_0_rgba(255,255,255,0.6)] group-hover:bg-neutral-200 group-hover:text-neutral-700 group-hover:scale-105'
                       }`}
                     >
-                      {category.icon}
+                      <CategoryIcon name={category.icon} className="h-[22px] w-[22px]" />
                     </span>
                     <span className={`w-full truncate text-[10px] font-semibold leading-3 transition-colors duration-300 sm:text-[11px] md:text-xs ${isActive ? 'text-sky-700' : 'text-neutral-600 group-hover:text-neutral-900'}`}>
                       {category.name}

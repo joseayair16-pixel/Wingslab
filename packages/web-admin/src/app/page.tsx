@@ -2,6 +2,7 @@
 import { AlertTriangle, Check, ChevronUp, Plus, RefreshCw, X } from 'lucide-react';
 
 import { SaDelLogo } from '../components/SaDelLogo';
+import { CategoryIcon } from '../components/CategoryIcon';
 import Link from 'next/link';
 import { FormEvent, useCallback, useEffect, useRef, useState } from 'react';
 import { Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, ComposedChart, PieChart, Pie, Cell } from 'recharts';
@@ -142,6 +143,19 @@ type StoreCategoryItem = {
   isActive: boolean;
   order: number;
 };
+
+const CATEGORY_ICON_OPTIONS = [
+  'Store', 'Gift', 'Pizza', 'Fish', 'Salad', 'Drumstick', 'CupSoda', 'Hamburger',
+  'Sandwich', 'Beef', 'Cake', 'Tag', 'Soup', 'ChefHat', 'Utensils', 'UtensilsCrossed',
+  'Sprout', 'Leaf', 'CookingPot', 'Shrimp', 'Flame', 'Flag', 'EggFried', 'Zap',
+  'Coffee', 'Cherry', 'Milk', 'GlassWater', 'IceCreamCone', 'Croissant', 'Wheat',
+  'Banana', 'Truck', 'Apple', 'Egg', 'Grape', 'Bird', 'Cookie', 'Donut', 'Citrus',
+  'Ham', 'Globe', 'Feather', 'Palmtree', 'Dessert', 'Shirt', 'Monitor', 'Heart',
+  'Flower', 'Sparkles', 'PawPrint', 'BookOpen', 'ShoppingBag', 'ToyBrick', 'Dumbbell',
+  'Home', 'Baby', 'Pill', 'Flower2', 'Weight', 'ShoppingCart', 'Package', 'Building',
+  'Boxes', 'Crown', 'Building2', 'Star', 'Martini', 'Beer', 'Wine', 'FlaskConical',
+  'ShowerHead',
+];
 
 type RegionItem = {
   id: string;
@@ -6751,10 +6765,10 @@ export default function Home() {
                         <div className="flex items-start justify-between">
                           <div className="flex items-center gap-3">
                             <div
-                              className="flex h-12 w-12 items-center justify-center rounded-xl text-2xl shadow-sm"
+                              className="flex h-12 w-12 items-center justify-center rounded-xl shadow-sm"
                               style={{ backgroundColor: category.color || '#faf7f1' }}
                             >
-                              {category.icon}
+                              <CategoryIcon name={category.icon} className="h-6 w-6" />
                             </div>
                             <div>
                               <h3 className="font-semibold text-neutral-900">{category.name}</h3>
@@ -7271,15 +7285,35 @@ export default function Home() {
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-semibold text-neutral-700 mb-1">Emoji / Icono</label>
-                    <input
-                      type="text"
-                      required
-                      value={editingCategory.icon}
-                      onChange={(e) => setEditingCategory({ ...editingCategory, icon: e.target.value })}
-                      className="w-full rounded-xl border border-black/10 bg-white px-4 py-2.5 text-neutral-900 shadow-sm focus:border-neutral-900 focus:outline-none focus:ring-1 focus:ring-neutral-900"
-                      placeholder="Ej. 🍔"
-                    />
+                    <label className="block text-sm font-semibold text-neutral-700 mb-1">Icono</label>
+                    <div className="flex items-center gap-3 rounded-xl border border-black/10 bg-white px-4 py-2.5 shadow-sm">
+                      <CategoryIcon name={editingCategory.icon} className="h-6 w-6 text-neutral-700" />
+                      <input
+                        type="text"
+                        required
+                        value={editingCategory.icon}
+                        onChange={(e) => setEditingCategory({ ...editingCategory, icon: e.target.value })}
+                        className="w-full bg-transparent text-neutral-900 focus:outline-none"
+                        placeholder="Nombre del icono (Ej. Hamburger)"
+                      />
+                    </div>
+                    <div className="mt-2 flex max-h-40 flex-wrap gap-1 overflow-y-auto rounded-xl border border-black/10 bg-neutral-50 p-2">
+                      {CATEGORY_ICON_OPTIONS.map((iconName) => (
+                        <button
+                          key={iconName}
+                          type="button"
+                          onClick={() => setEditingCategory({ ...editingCategory, icon: iconName })}
+                          className={`flex h-9 w-9 items-center justify-center rounded-lg transition ${
+                            editingCategory.icon === iconName
+                              ? 'bg-neutral-900 text-white'
+                              : 'bg-white text-neutral-600 hover:bg-neutral-200'
+                          }`}
+                          title={iconName}
+                        >
+                          <CategoryIcon name={iconName} className="h-5 w-5" />
+                        </button>
+                      ))}
+                    </div>
                   </div>
                   <div>
                     <label className="block text-sm font-semibold text-neutral-700 mb-1">Color de Fondo (Hex)</label>
