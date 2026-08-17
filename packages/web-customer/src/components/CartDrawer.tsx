@@ -1,5 +1,5 @@
 'use client';
-import { BadgePercent, Bike, Check, ChevronLeft, ChevronRight, DollarSign, Minus, Plus, Receipt, ShoppingBag, ShoppingCart, Store, Trash2, Utensils, Wallet, X } from 'lucide-react';
+import { BadgePercent, Bike, Check, ChevronLeft, ChevronRight, DollarSign, Minus, Plus, Receipt, ShoppingBag, ShoppingBasket, Store, Trash2, Utensils, Wallet, X } from 'lucide-react';
 
 import { memo, useMemo } from 'react';
 import { useCartStore } from '../store/cartStore';
@@ -124,7 +124,7 @@ export default memo(function CartDrawer({
           <div className="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-black/[0.04] bg-white px-5 py-4 sm:px-6">
             <div className="flex items-center gap-3.5">
               <div className="relative flex h-12 w-12 items-center justify-center rounded-[18px] bg-gradient-to-br from-neutral-900 to-neutral-700 text-white shadow-lg shadow-neutral-900/20">
-                <ShoppingCart className="h-5 w-5" strokeWidth={1.8} />
+                <ShoppingBasket className="h-5 w-5" strokeWidth={1.8} />
                 {totalProducts > 0 && (
                   <span className="absolute -right-1.5 -top-1.5 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-accent px-1 text-[10px] font-bold text-white shadow-md shadow-accent/30">
                     {totalProducts}
@@ -252,7 +252,7 @@ export default memo(function CartDrawer({
                 <div className="w-full max-w-[320px] relative z-10">
                   <div className="mx-auto flex h-24 w-24 items-center justify-center rounded-[32px] bg-gradient-to-br from-white to-sky-50/50 shadow-[0_8px_32px_rgba(14,165,233,0.15)] border border-white">
                     <div className="absolute inset-0 rounded-[32px] border border-sky-200/30" />
-                    <ShoppingCart className="h-[42px] w-[42px] text-sky-200" strokeWidth={1.5} />
+                    <ShoppingBasket className="h-[42px] w-[42px] text-sky-200" strokeWidth={1.5} />
                   </div>
                   <h3 className="mt-8 text-2xl font-black tracking-[-0.03em] text-neutral-900">Tu carrito está vacío</h3>
                   <p className="mt-2 text-[15px] font-medium leading-relaxed text-neutral-500">
