@@ -21,6 +21,7 @@ import {
   respondToCancellationRequest,
   cancelOrderByRestaurant,
   notifyCustomerNoDriversAvailable,
+  computeInTransitEta,
 } from '../services/order-workflow.service';
 import { restaurantOrderListSelect } from '../services/order-selects';
 import { getOrCreateRequestContext } from '../utils/request-context';
@@ -1018,6 +1019,8 @@ export async function registerRestaurantOrderRoutes(fastify: FastifyInstance): P
             status: OrderStatus.IN_TRANSIT,
             driverId: null, // Asegurar que no tenga repartidor asignado
             deliveredByRestaurant: true,
+            inTransitAt: new Date(),
+            estimatedDeliveryTime: computeInTransitEta(order.restaurant, order),
           },
           include: {
             customer: {
@@ -2250,6 +2253,7 @@ export async function registerRestaurantOrderRoutes(fastify: FastifyInstance): P
           data: {
             status: OrderStatus.IN_TRANSIT,
             inTransitAt: new Date(),
+            estimatedDeliveryTime: computeInTransitEta(order.restaurant, order),
           },
           include: {
             customer: {

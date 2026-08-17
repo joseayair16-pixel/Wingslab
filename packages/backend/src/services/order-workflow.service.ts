@@ -301,6 +301,21 @@ function calculateInTransitEta(order: {
   return new Date(Date.now() + minutes * 60 * 1000);
 }
 
+export function computeInTransitEta(
+  restaurant: {
+    latitude?: number | null;
+    longitude?: number | null;
+    maxDeliveryTime?: number | null;
+  },
+  destination: { latitude: number | null; longitude: number | null }
+): Date {
+  return calculateInTransitEta({
+    latitude: destination.latitude,
+    longitude: destination.longitude,
+    restaurant,
+  });
+}
+
 export function canRestaurantTransitionTo(
   currentStatus: OrderStatus,
   nextStatus: OrderStatus

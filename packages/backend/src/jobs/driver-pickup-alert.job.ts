@@ -17,25 +17,29 @@ export function startDriverPickupAlertJob(_fastify: FastifyInstance) {
       const lateOrders = await prisma.order.findMany({
         where: {
           readyAt: { not: null, lt: cutoff },
-          driverId: { not: null },
-          driverArrivedAt: null,
           status: OrderStatus.READY,
+          // Sin repartidor SaDeL asignado aún (o con repartidor que no ha llegado):
+          // cubre tanto a un conductor SaDeL como al personal del restaurante
+          // (reparto propio/apoyo) que aún no recoge el pedido listo.
+          driverArrivedAt: null,
         },
         include: {
           restaurant: {
-            select: { name: true },
+            select: { userId: true, name: true, hasOwnDelivery: true },
           },
           driver: {
             select: { userId: true },
           },
+          supportRestaurant: {
+            select: { userId: true, name: true },
+          },
+          DeliveryToken: true,
         },
       });
 
       if (lateOrders.length === 0) return;
 
       for (const order of lateOrders) {
-        if (!order.driver?.userId) continue;
-
         const minutesLate = Math.floor((now.getTime() - order.readyAt!.getTime()) / 60000);
 
         if (order.lastPickupAlertedAt) {
@@ -43,18 +47,38 @@ export function startDriverPickupAlertJob(_fastify: FastifyInstance) {
           if (elapsedSinceLastAlert < MIN_ALERT_INTERVAL_MS) continue;
         }
 
+        // Destinatario de la alerta:
+        //  - SaDeL: el conductor asignado (order.driver).
+        //  - Reparto propio/apoyo: el restaurante que realiza la entrega
+        //    (aliado si hay supportRestaurantId, si no el propio restaurante).
+        const driverUserId = order.driver?.userId;
+        const isOwnOrSupport =
+          order.deliveredByRestaurant ||
+          Boolean(order.supportRestaurantId) ||
+          Boolean(order.DeliveryToken);
+        const recipientUserId =
+          driverUserId ||
+          (isOwnOrSupport
+            ? (order.supportRestaurant?.userId ?? order.restaurant?.userId)
+            : undefined);
+        if (!recipientUserId) continue;
+
+        const delivererName = driverUserId
+          ? 'repartidor'
+          : (order.supportRestaurant?.name ?? order.restaurant?.name) || 'repartidor';
+
         const alertTitle = minutesLate >= 10
-          ? '⚠️ Pedido esperando - Retraso crítico'
+          ? '📦 Pedido esperando por ti'
           : minutesLate >= 7
-            ? '⏰ Pedido listo - Dirígete al restaurante'
-            : '🕐 Pedido listo - Recógelo ahora';
+            ? '🕐 Tu pedido está listo'
+            : '✅ Pedido listo para recoger';
 
         const alertBody = minutesLate >= 10
-          ? `El pedido de ${order.restaurant.name} lleva ${minutesLate} min listo. Tu retraso está afectando el servicio. Dirígete al restaurante AHORA.`
-          : `El pedido de ${order.restaurant.name} lleva ${minutesLate} min listo. Por favor pasa a recogerlo.`;
+          ? `El pedido de ${order.restaurant.name} te espera hace ${minutesLate} min. El cliente agradecerá tu pronta llegada.`
+          : `El pedido de ${order.restaurant.name} está listo. Cuando puedas, pasa a recogerlo.`;
 
         try {
-          await sendPushNotification(order.driver.userId, {
+          await sendPushNotification(recipientUserId, {
             title: alertTitle,
             body: alertBody,
             icon: '/app-icon-192.png',
@@ -73,9 +97,9 @@ export function startDriverPickupAlertJob(_fastify: FastifyInstance) {
             data: { lastPickupAlertedAt: now },
           });
 
-          logger.info(`[DriverPickupAlert] Alerta enviada al repartidor ${order.driver.userId} para pedido ${order.id} (${minutesLate} min tarde)`);
+          logger.info(`[DriverPickupAlert] Alerta enviada a ${recipientUserId} para pedido ${order.id} (${minutesLate} min tarde, ${delivererName})`);
         } catch (pushErr) {
-          logger.error(`[DriverPickupAlert] Error enviando alerta al repartidor ${order.driver.userId} para pedido ${order.id}:`, pushErr);
+          logger.error(`[DriverPickupAlert] Error enviando alerta a ${recipientUserId} para pedido ${order.id}:`, pushErr);
         }
       }
     } catch (error) {
@@ -83,5 +107,5 @@ export function startDriverPickupAlertJob(_fastify: FastifyInstance) {
     }
   });
 
-  logger.info('[DriverPickupAlert] Tarea programada iniciada (cada 30 segundos). Alerta a repartidores con 5+ min de retraso en recogida.');
+  logger.info('[DriverPickupAlert] Tarea programada iniciada (cada 30 segundos). Alerta a repartidores (SaDeL, propio y apoyo) con 5+ min de retraso en recogida.');
 }

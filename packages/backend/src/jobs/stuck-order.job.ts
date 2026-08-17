@@ -26,18 +26,30 @@ export function startStuckOrderJob(fastify: FastifyInstance) {
         customer: { select: { userId: true, user: { select: { name: true, phone: true } } } },
       };
 
-      const [stuckPickup, stuckTransit] = await Promise.all([
+      const [stuckPickup, stuckTransitRaw] = await Promise.all([
         prisma.order.findMany({
           where: { status: 'PICKED_UP' as any, pickedUpAt: { lt: pickupCutoff } },
           include: baseInclude,
           take: 100,
         }),
         prisma.order.findMany({
-          where: { status: 'IN_TRANSIT' as any, estimatedDeliveryTime: { lt: transitCutoff } },
+          where: {
+            status: 'IN_TRANSIT' as any,
+            inTransitAt: { not: null },
+            estimatedDeliveryTime: { lt: transitCutoff },
+          },
           include: baseInclude,
-          take: 100,
+          take: 200,
         }),
       ]);
+
+      // Solo considerar entregas cuyo ETA fue recalculado al salir (mayor que la
+      // salida). El ETA original del pedido (calculado al crearlo) puede estar
+      // vencido antes de siquiera asignar repartidor: eso NO es retraso real.
+      const stuckTransit = stuckTransitRaw.filter((order: any) => {
+        if (!order.inTransitAt || !order.estimatedDeliveryTime) return false;
+        return new Date(order.estimatedDeliveryTime).getTime() > new Date(order.inTransitAt).getTime();
+      });
 
       const allStuck: any[] = [...stuckPickup, ...stuckTransit];
       if (allStuck.length === 0) return;
@@ -57,7 +69,17 @@ export function startStuckOrderJob(fastify: FastifyInstance) {
 
           const minutesStuck = order.status === 'PICKED_UP'
             ? Math.floor((now.getTime() - new Date(order.pickedUpAt).getTime()) / 60000)
-            : Math.floor((now.getTime() - new Date(order.estimatedDeliveryTime).getTime()) / 60000);
+            : (() => {
+                // Retraso de entrega: excedente sobre el ETA recalculado cuando el
+                // repartidor SALIÓ del restaurante. Nunca el ETA original del pedido
+                // (calculado al crearlo), que puede ya estar vencido antes de asignar
+                // repartidor y dispararía alertas falsas. El filtro ya garantiza que
+                // estimatedDeliveryTime > inTransitAt (ETA recalculado).
+                const etaOverrun = order.estimatedDeliveryTime
+                  ? Math.floor((now.getTime() - new Date(order.estimatedDeliveryTime).getTime()) / 60000)
+                  : 0;
+                return Math.max(0, etaOverrun);
+              })();
 
           // ── Destinatarios ──────────────────────────────────────────────
           // Reparto SaDeL: el conductor asignado (order.driver).
@@ -88,10 +110,10 @@ export function startStuckOrderJob(fastify: FastifyInstance) {
           if (currentLevel === 0) {
             if (driverUserId) {
               await sendPushNotification(driverUserId, {
-                title: '⚠️ ¿Problemas con la entrega?',
+                title: '🕐 Tu entrega va más lenta de lo esperado',
                 body: order.status === 'PICKED_UP'
-                  ? `Recogiste el pedido de ${order.restaurant.name} hace ${minutesStuck} min pero no has salido a ruta. ¿Necesitas ayuda?`
-                  : `Llevas ${minutesStuck} min de retraso entregando el pedido de ${order.restaurant.name}. Contacta a soporte.`,
+                  ? `Recogiste el pedido de ${order.restaurant.name} hace ${minutesStuck} min y aún no inicias la ruta. ¿Necesitas ayuda con la dirección?`
+                  : `El pedido de ${order.restaurant.name} va con ${minutesStuck} min de retraso. Si tienes un imprevisto, avísanos por soporte.`,
                 icon: PUSH_ICON_URL,
                 badge: PUSH_ICON_URL,
                 vibrate: [500, 200, 500, 200, 500],
@@ -110,10 +132,10 @@ export function startStuckOrderJob(fastify: FastifyInstance) {
               // Reparto propio / apoyo: sin conductor catalogado, se alerta al
               // restaurante cuyo personal está realizando la entrega.
               await sendPushNotification(delivererUserId, {
-                title: '⚠️ ¿Problemas con la entrega?',
+                title: '🕐 Entrega en curso con retraso',
                 body: order.status === 'PICKED_UP'
-                  ? `El pedido de ${order.restaurant.name} se recogió hace ${minutesStuck} min pero no ha salido a ruta. Verifica a tu repartidor.`
-                  : `Tu repartidor lleva ${minutesStuck} min de retraso entregando el pedido de ${order.restaurant.name}. Verifica la entrega.`,
+                  ? `El pedido de ${order.restaurant.name} se recogió hace ${minutesStuck} min y aún no sale a ruta. Verifica con tu personal.`
+                  : `Tu repartidor lleva ${minutesStuck} min de retraso entregando el pedido de ${order.restaurant.name}. ¿Puedes verificar la entrega?`,
                 icon: PUSH_ICON_URL,
                 badge: PUSH_ICON_URL,
                 vibrate: [500, 200, 500, 200, 500],
