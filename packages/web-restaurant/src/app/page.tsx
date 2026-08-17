@@ -17,7 +17,6 @@ import {
   requestJson,
   uploadMediaAsset,
   convertImageFileToDataUrl,
-  preload,
   preloadAll,
   warmup,
   play,
@@ -39,7 +38,7 @@ import { SettingsSection } from '../components/sections/SettingsSection';
 import { FeaturedSection } from '../components/sections/FeaturedSection';
 import PushEnableBanner from '../components/PushEnableBanner';
 import { createPlacesSource } from '../lib/places';
-import { ensureGoogleMapsScript, getGoogleMaps } from '../lib/googleMaps';
+import { ensureGoogleMapsScript } from '../lib/googleMaps';
 
 type OrderStatus =
   | 'PENDING'
@@ -2379,7 +2378,7 @@ export default function Home() {
     setToasts((current) => current.filter((toast) => toast.id !== id));
   }
 
-  const warmOrderAlertAudio = useCallback(async (interactive: boolean) => {
+  const warmOrderAlertAudio = useCallback(async () => {
     const ok = await warmup();
     setOrderAlertAudioState(getAudioState());
     return ok;
@@ -2480,7 +2479,7 @@ export default function Home() {
 
       if (checked) {
         hasShownOrderAlertBlockedToastRef.current = false;
-        void warmOrderAlertAudio(true);
+        void warmOrderAlertAudio();
       }
     },
     [warmOrderAlertAudio]

@@ -13,7 +13,6 @@ export type TurnByTurnDestination = {
 };
 
 type Props = {
-  origin: Point | null;
   destination: TurnByTurnDestination;
   initialDriverPos?: Point | null;
   onExit: () => void;
@@ -119,7 +118,6 @@ function formatDistance(m: number): string {
 }
 
 export default function DriverTurnByTurnOverlay({
-  origin,
   destination,
   initialDriverPos,
   onExit,
@@ -147,7 +145,6 @@ export default function DriverTurnByTurnOverlay({
   const [loadError, setLoadError] = useState(false);
   const [gpsError, setGpsError] = useState(false);
   const [driverPos, setDriverPos] = useState<Point | null>(initialDriverPos || null);
-  const [routeInfo, setRouteInfo] = useState<{ distanceM: number; durationMin: number } | null>(null);
   const [nav, setNav] = useState<{
     emoji: string;
     text: string;
@@ -345,10 +342,6 @@ export default function DriverTurnByTurnOverlay({
 
         const leg = result.routes?.[0]?.legs?.[0];
         if (leg?.distance?.value != null && leg?.duration?.value != null) {
-          setRouteInfo({
-            distanceM: leg.distance.value,
-            durationMin: Math.round(leg.duration.value / 60),
-          });
           stepTotalDistRef.current = leg.distance.value;
           stepDurationMinRef.current = Math.round(leg.duration.value / 60);
         }

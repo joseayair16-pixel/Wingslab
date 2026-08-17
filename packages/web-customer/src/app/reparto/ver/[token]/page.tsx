@@ -1532,7 +1532,6 @@ export default function DeliveryTicketPage({ params }: PageProps) {
 
         {navOpenFor === 'pickup' && currentTicket.restaurant.latitude && currentTicket.restaurant.longitude && (
           <DriverTurnByTurnOverlay
-            origin={driverPos}
             destination={{
               lat: currentTicket.restaurant.latitude,
               lng: currentTicket.restaurant.longitude,
@@ -2041,7 +2040,6 @@ export default function DeliveryTicketPage({ params }: PageProps) {
 
       {navOpenFor === 'delivery' && addressObj.latitude && addressObj.longitude && (
         <DriverTurnByTurnOverlay
-          origin={driverPos}
           destination={{
             lat: addressObj.latitude,
             lng: addressObj.longitude,

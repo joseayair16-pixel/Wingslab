@@ -1,6 +1,6 @@
 import React, { memo, useEffect, useRef, useState } from 'react';
 import { getOrderStatusLabel } from '@sadel/shared';
-import { ensureGoogleMapsScript, getGoogleMaps, waitForGoogleMaps } from '../lib/googleMaps';
+import { ensureGoogleMapsScript, getGoogleMaps } from '../lib/googleMaps';
 
 type Point = { lat: number; lng: number };
 

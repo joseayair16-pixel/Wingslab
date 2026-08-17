@@ -513,7 +513,7 @@ export default function RestaurantPage({
     }
   }, []);
 
-  const { playAlert, playLlegue, playChat, unlock } = useCustomerSounds();
+  const { playAlert, playLlegue, playChat } = useCustomerSounds();
 
   const isChatOpenRef = useRef(isChatOpen);
   const selectedOrderIdRef = useRef(selectedOrderId);
@@ -6364,13 +6364,6 @@ function getMultiBuyInfo(product: {
     discountPercent,
     savingsPerGroup: basePrice * (buy - pay),
   };
-}
-
-function getMultiBuySubtotal(basePrice: number, buy: number, pay: number, quantity: number): number {
-  const groups = Math.floor(quantity / buy);
-  const remainder = quantity % buy;
-  const paidUnits = groups * pay + remainder;
-  return (basePrice * paidUnits) / quantity;
 }
 
 function formatDate(date: string) {
