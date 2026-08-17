@@ -375,6 +375,46 @@ export default function RestaurantDetailPage() {
     }
   }
 
+  async function deleteRestaurant() {
+    if (!restaurant) {
+      return;
+    }
+
+    const confirmationMessage =
+      `¿Eliminar permanentemente el restaurante "${restaurant.name}"?\n\n` +
+      'Esta accion borra de forma definitiva el restaurante, su cuenta, productos, categorias, pedidos, historial de facturacion y toda la informacion asociada. Esta accion no se puede deshacer.';
+
+    if (!window.confirm(confirmationMessage)) {
+      return;
+    }
+
+    setActiveStatusUpdate('DELETED');
+    setError('');
+    setAuthMessage('');
+
+    try {
+      await requestJson<{ success: true }>({
+        apiBase,
+        path: `/admin/restaurantes/${restaurantId}`,
+        token,
+        options: {
+          method: 'DELETE',
+        },
+        fallbackMessage: 'No se pudo eliminar el restaurante.',
+      });
+
+      setAuthMessage('Restaurante eliminado permanentemente.');
+      window.location.href = '/?section=restaurants';
+    } catch (requestError) {
+      setError(
+        requestError instanceof Error
+          ? requestError.message
+          : 'No se pudo eliminar el restaurante.'
+      );
+      setActiveStatusUpdate(null);
+    }
+  }
+
   async function settleRestaurantDebt() {
     setSettlingBilling(true);
     setError('');
@@ -1349,16 +1389,14 @@ export default function RestaurantDetailPage() {
                         {activeStatusUpdate === 'SUSPENDED' ? 'Suspendiendo...' : 'Suspender restaurante'}
                       </button>
                     ) : null}
-                    {restaurant.status !== 'DELETED' ? (
-                      <button
-                        type="button"
-                        onClick={() => void updateRestaurantStatus('DELETED')}
-                        disabled={activeStatusUpdate === 'DELETED'}
-                        className="rounded-full border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-800 transition hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-50"
-                      >
-                        {activeStatusUpdate === 'DELETED' ? 'Eliminando...' : 'Eliminar restaurante'}
-                      </button>
-                    ) : null}
+                    <button
+                      type="button"
+                      onClick={() => void deleteRestaurant()}
+                      disabled={activeStatusUpdate === 'DELETED'}
+                      className="rounded-full border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-800 transition hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {activeStatusUpdate === 'DELETED' ? 'Eliminando...' : 'Eliminar restaurante'}
+                    </button>
                   </div>
                 </PanelCard>
 

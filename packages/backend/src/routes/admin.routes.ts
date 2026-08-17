@@ -1981,6 +1981,95 @@ export async function registerAdminRoutes(fastify: FastifyInstance): Promise<voi
       });
     });
 
+    admin.delete('/admin/restaurantes/:id', async (request, reply) => {
+      const params = z
+        .object({
+          id: z.string().min(1, 'El id es obligatorio.'),
+        })
+        .safeParse(request.params);
+
+      if (!params.success) {
+        return reply.status(400).send({
+          success: false,
+          error: {
+            code: 'INVALID_REQUEST',
+            message: params.error.issues[0]?.message || 'Parametros invalidos.',
+          },
+        });
+      }
+
+      const restaurant = await prisma.restaurant.findUnique({
+        where: { id: params.data.id },
+        select: { id: true, userId: true, name: true },
+      });
+
+      if (!restaurant) {
+        return reply.status(404).send({
+          success: false,
+          error: {
+            code: 'RESTAURANT_NOT_FOUND',
+            message: 'No se encontro el restaurante.',
+          },
+        });
+      }
+
+      try {
+        await prisma.$transaction(async (tx) => {
+          const orderIds = (
+            await tx.order.findMany({
+              where: {
+                OR: [{ restaurantId: restaurant.id }, { supportRestaurantId: restaurant.id }],
+              },
+              select: { id: true },
+            })
+          ).map((order) => order.id);
+
+          if (orderIds.length > 0) {
+            await tx.customerBillingSettlement.deleteMany({
+              where: { orderId: { in: orderIds } },
+            });
+            await tx.transaction.deleteMany({
+              where: { orderId: { in: orderIds } },
+            });
+            await tx.review.deleteMany({
+              where: { orderId: { in: orderIds } },
+            });
+            await tx.order.deleteMany({
+              where: { id: { in: orderIds } },
+            });
+          }
+
+          await tx.review.deleteMany({
+            where: { restaurantId: restaurant.id },
+          });
+          await tx.favoriteRestaurant.deleteMany({
+            where: { restaurantId: restaurant.id },
+          });
+          await tx.transaction.deleteMany({
+            where: { restaurantId: restaurant.id },
+          });
+
+          await tx.user.delete({
+            where: { id: restaurant.userId },
+          });
+        });
+      } catch (error) {
+        request.log.error({ err: error, restaurantId: restaurant.id }, 'Error al eliminar restaurante');
+        return reply.status(500).send({
+          success: false,
+          error: {
+            code: 'DELETE_FAILED',
+            message: 'No se pudo eliminar el restaurante y sus datos asociados.',
+          },
+        });
+      }
+
+      return reply.send({
+        success: true,
+        data: { id: restaurant.id, name: restaurant.name },
+      });
+    });
+
     admin.post('/admin/restaurantes/:id/billing/settle', async (request, reply) => {
       const params = z.object({ id: z.string().min(1, 'El id es obligatorio.') }).safeParse(request.params);
       const parsed = settleRestaurantBillingSchema.safeParse(request.body || {});
