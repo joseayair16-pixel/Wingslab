@@ -34,11 +34,25 @@ public class MainActivity extends BridgeActivity {
                 .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
                 .build();
 
-        createChannel(manager, "notifica", "Pedido nuevo", R.raw.notifica, NotificationManager.IMPORTANCE_HIGH, attrs);
         createChannel(manager, "llegue", "Repartidor llegó", R.raw.llegue, NotificationManager.IMPORTANCE_HIGH, attrs);
         createChannel(manager, "rezagado", "Pedido rezagado", R.raw.rezagado, NotificationManager.IMPORTANCE_HIGH, attrs);
         createChannel(manager, "mensaje", "Mensaje de chat", R.raw.mensaje, NotificationManager.IMPORTANCE_DEFAULT, attrs);
-        createChannel(manager, "default", "Notificaciones generales", R.raw.notifica, NotificationManager.IMPORTANCE_DEFAULT, attrs);
+        // El comensal nunca recibe "nuevo pedido" (ese sonido es del restaurante/repartidor).
+        // El canal default queda silencioso para que las notificaciones generales no suenen
+        // como pedido nuevo en la app nativa.
+        createSilentChannel(manager, "default", "Notificaciones generales", NotificationManager.IMPORTANCE_DEFAULT);
+    }
+
+    private void createSilentChannel(
+            NotificationManager manager,
+            String id,
+            String name,
+            int importance) {
+        NotificationChannel channel = new NotificationChannel(id, name, importance);
+        channel.setDescription("Canal " + name + " de SaDeL");
+        channel.enableVibration(true);
+        channel.setSound(null, null);
+        manager.createNotificationChannel(channel);
     }
 
     private void createChannel(
