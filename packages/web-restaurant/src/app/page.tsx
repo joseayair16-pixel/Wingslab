@@ -3963,6 +3963,13 @@ export default function Home() {
 
   async function assignDriver(orderId: string) {
     const driverId = selectedDriverByOrder[orderId];
+    const targetOrder = ordersRef.current.find((o) => o.id === orderId);
+
+    if (targetOrder?.fulfillmentType === 'PICKUP') {
+      const message = 'Este pedido es de recoger en tienda; no requiere repartidor.';
+      pushToast('error', 'Pedido sin reparto', message);
+      return;
+    }
 
     if (!driverId) {
       const message = 'Selecciona un repartidor antes de asignarlo.';
@@ -9327,6 +9334,7 @@ export default function Home() {
                           const selectedDriverId = selectedDriverByOrder[order.id] || '';
                           const canAssignDriver =
                             !hasOwnDelivery &&
+                            order.fulfillmentType !== 'PICKUP' &&
                             order.status === 'READY' &&
                             !order.driver &&
                             drivers.length > 0;
