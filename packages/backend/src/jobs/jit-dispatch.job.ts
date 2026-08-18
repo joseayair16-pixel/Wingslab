@@ -21,10 +21,17 @@ export function startJitDispatchJob(fastify: FastifyInstance) {
           driverAssignedAt: { lt: twoMinutesAgo },
           status: { in: [OrderStatus.CONFIRMED, OrderStatus.PREPARING, OrderStatus.READY] },
         },
+        include: {
+          restaurant: { select: { userId: true, name: true } },
+          driver: { select: { userId: true, user: { select: { name: true } } } },
+        },
       });
 
       for (const order of expiredAssignedOrders) {
         logger.info(`[JIT-Dispatch] Repartidor no aceptó el pedido ${order.id} a tiempo. Expulsando...`);
+        const driverName = order.driver?.user?.name || 'El repartidor';
+        const requestId = `jit-auto-unassign-${order.id}`;
+
         await prisma.$transaction(async (tx) => {
           // Desvincular al repartidor
           await tx.order.update({
@@ -51,6 +58,48 @@ export function startJitDispatchJob(fastify: FastifyInstance) {
             },
           });
         });
+
+        // Notificar al restaurante en tiempo real para que el panel se actualice
+        // de inmediato (evita que muestre "Asignado (Esperando confirmación)"
+        // hasta un refresco manual).
+        emitNotification(
+          fastify.io,
+          order.restaurant?.userId,
+          'RESTAURANT',
+          'order:driver-auto-unassigned',
+          {
+            orderId: order.id,
+            orderReference: order.orderReference,
+            status: order.status,
+            driverName,
+            message: `El repartidor ${driverName} no aceptó el pedido ${order.orderReference} a tiempo; se le desvinculó automáticamente y el pedido quedó disponible para reasignar.`,
+          },
+          {
+            requestId,
+            orderId: order.id,
+          }
+        );
+
+        // Notificar al repartidor expulsado para que su panel quede sincronizado
+        // (el pedido pendiente de aceptar desaparece de su ruta).
+        if (order.driver?.userId) {
+          emitNotification(
+            fastify.io,
+            order.driver.userId,
+            'DRIVER',
+            'order:driver-auto-unassigned',
+            {
+              orderId: order.id,
+              orderReference: order.orderReference,
+              status: 'reject',
+              message: `El pedido ${order.orderReference} fue desasignado porque no lo aceptaste a tiempo.`,
+            },
+            {
+              requestId,
+              orderId: order.id,
+            }
+          );
+        }
       }
 
       // 2. Resolver solicitudes de apoyo a red vencidas (crash-safe).

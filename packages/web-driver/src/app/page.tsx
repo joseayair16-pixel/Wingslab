@@ -232,6 +232,7 @@ const liveEvents = [
   'order:ready',
   'order:picked-up',
   'order:driver-rejected',
+  'order:driver-auto-unassigned',
   'order:delivered',
 ] as const;
 
@@ -1638,9 +1639,23 @@ export default function Home() {
       void loadDashboard();
     });
 
+    // Handler DEDICADO para order:driver-auto-unassigned — el pedido pendiente
+    // de aceptar debe salir de la ruta de inmediato (modal de aceptar se cierra).
+    socket.on('order:driver-auto-unassigned', (payload: { orderId?: string; orderReference?: string; status?: string }) => {
+      const liveEventKey = buildLiveEventKey('order:driver-auto-unassigned', payload);
+      if (seenLiveEventKeysRef.current.includes(liveEventKey)) return;
+      seenLiveEventKeysRef.current = [...seenLiveEventKeysRef.current.slice(-39), liveEventKey];
+      const liveMessage = buildDriverLiveMessage('order:driver-auto-unassigned', payload);
+      setAuthMessage(liveMessage);
+      pushToast('info', 'Pedido desasignado', liveMessage);
+      void loadPendingOrders();
+      void loadDashboard();
+    });
+
     // Handler GENERAL para el resto de eventos en vivo
     for (const eventName of liveEvents) {
       if (eventName === 'order:assigned') continue; // ya se manejó arriba
+      if (eventName === 'order:driver-auto-unassigned') continue; // ya se manejó arriba
       socket.on(
         eventName,
         (payload: { orderId?: string; orderReference?: string; restaurantName?: string; status?: string }) => {
@@ -5652,6 +5667,10 @@ function buildDriverLiveMessage(
 
   if (eventName === 'order:driver-rejected') {
     return `El folio ${orderLabel} fue desasignado o rechazado de tu ruta.`;
+  }
+
+  if (eventName === 'order:driver-auto-unassigned') {
+    return `El folio ${orderLabel} fue desasignado porque no lo aceptaste a tiempo.`;
   }
 
   return `El folio ${orderLabel} ha finalizado su entrega con éxito.`;

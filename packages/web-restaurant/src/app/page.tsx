@@ -674,6 +674,7 @@ const liveEvents = [
   'order:created',
   'order:driver-accepted',
   'order:driver-rejected',
+  'order:driver-auto-unassigned',
   'order:picked-up',
   'order:in-transit',
   'order:eta-updated',
@@ -3204,6 +3205,17 @@ export default function Home() {
             ? `${payload.driverName} llegó a tu local. Entrégalo para iniciar la entrega.`
             : 'El repartidor de apoyo llegó a tu local. Entrégalo para iniciar la entrega.');
       }
+    }
+
+    if (eventName === 'order:driver-auto-unassigned' && payload.orderId) {
+      // El repartidor no aceptó a tiempo y fue desvinculado: refrescar pedidos
+      // para que reaparezcan las opciones de reasignar / apoyo / entrega propia.
+      setDriverArrivedOrders((prev) => {
+        const next = { ...prev };
+        delete next[payload.orderId!];
+        return next;
+      });
+      void loadOrdersOnly();
     }
 
     if (eventName === 'order:picked-up' && payload.orderId) {
@@ -14385,6 +14397,11 @@ function buildRestaurantLiveMessage(
 
   if (eventName === 'order:driver-rejected') {
     return `Se rechazó la asignación de ${orderLabel}; revisa la salida.`;
+  }
+
+  if (eventName === 'order:driver-auto-unassigned') {
+    const driverName = (payload as any).driverName || 'El repartidor';
+    return `${driverName} no aceptó ${orderLabel} a tiempo; se le desvinculó y quedó disponible para reasignar.`;
   }
 
   if (eventName === 'order:picked-up') {
