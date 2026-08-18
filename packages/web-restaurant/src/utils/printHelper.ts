@@ -1,4 +1,34 @@
+import { isNativePlatform, nativePrintHtml } from '../lib/native';
+
 export async function printHtmlString(htmlString: string, title = 'Impresión') {
+  if (isNativePlatform()) {
+    // En la app nativa el diálogo web de impresión no existe; se usa el
+    // PrintManager de Android. Si falla, se intenta el flujo web como fallback.
+    const printed = await nativePrintHtml(`<!DOCTYPE html>
+        <html>
+          <head>
+            <title>${title}</title>
+            <meta charset="utf-8">
+            <style>
+              @page {
+                margin: 0; /* Important for thermal printers */
+              }
+              body {
+                margin: 0;
+                padding: 10px;
+                background-color: white;
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+              }
+            </style>
+          </head>
+          <body>
+            ${htmlString}
+          </body>
+        </html>`);
+    if (printed) return;
+  }
+
   return new Promise<void>((resolve, reject) => {
     try {
       const iframe = document.createElement('iframe');

@@ -39,6 +39,17 @@ import { FeaturedSection } from '../components/sections/FeaturedSection';
 import PushEnableBanner from '../components/PushEnableBanner';
 import { createPlacesSource } from '../lib/places';
 import { ensureGoogleMapsScript } from '../lib/googleMaps';
+import {
+  isNativePlatform,
+  checkNativePushPermission,
+  requestNativePushPermission,
+  registerNativePush,
+  onNativeNotificationTap,
+  nativeGeoWatch,
+  nativeKeepAwake,
+  nativeAllowSleep,
+  nativeHaptic,
+} from '../lib/native';
 
 type OrderStatus =
   | 'PENDING'
@@ -796,7 +807,12 @@ const restaurantActionMap: Record<
 } as const;
 
 function triggerHaptic(pattern: number | number[] = 10) {
-  if (typeof window !== 'undefined' && navigator.vibrate) {
+  if (typeof window === 'undefined') return;
+  if (isNativePlatform()) {
+    nativeHaptic(pattern);
+    return;
+  }
+  if (navigator.vibrate) {
     navigator.vibrate(pattern);
   }
 }
@@ -1360,13 +1376,14 @@ export default function Home() {
       return;
     }
 
-    if (typeof window === 'undefined' || !navigator.geolocation) {
+    if (typeof window === 'undefined') {
       return;
     }
 
     const GEO_PAUSE_KEY = 'sadel.restaurant.geoPausedUntil';
 
     let watchId: number | null = null;
+    let nativeWatch: { clear: () => void } | null = null;
     let cancelled = false;
     let consecutiveFailures = 0;
     let lastErrorLogAt = 0;
@@ -1435,6 +1452,10 @@ export default function Home() {
         navigator.geolocation.clearWatch(watchId);
         watchId = null;
       }
+      if (nativeWatch) {
+        nativeWatch.clear();
+        nativeWatch = null;
+      }
     };
 
     const maybeLogGeoError = (error: GeolocationPositionError) => {
@@ -1486,7 +1507,7 @@ export default function Home() {
       }
     };
 
-    const startWatching = () => {
+    const startWatching = async () => {
       stopWatching();
       if (cancelled || document.visibilityState === 'hidden') return;
 
@@ -1495,6 +1516,28 @@ export default function Home() {
 
       const pausedUntil = readPausedUntil();
       if (Date.now() < pausedUntil) return;
+
+      if (isNativePlatform()) {
+        // En la app nativa se usa el GPS del plugin (con permiso runtime);
+        // si no hay plugin disponible, se cae al watch del navegador.
+        nativeWatch = await nativeGeoWatch(onPositionSuccess, onPositionError, {
+          enableHighAccuracy: true,
+          timeout: 20000,
+          maximumAge: 10000,
+        });
+        if (!nativeWatch) {
+          watchId = navigator.geolocation.watchPosition(
+            onPositionSuccess,
+            onPositionError,
+            {
+              enableHighAccuracy: true,
+              timeout: 20000,
+              maximumAge: 10000,
+            }
+          );
+        }
+        return;
+      }
 
       // Alta precisión: rastreo activo solo al entregar.
       watchId = navigator.geolocation.watchPosition(
@@ -1732,7 +1775,19 @@ export default function Home() {
     // sesión anterior. El primer permiso (estado 'default') debe pedirse desde un
     // gesto del usuario (banner "Activar notificaciones"); pedirlo al cargar la
     // página es ignorado en silencio por iOS y Chrome.
-    if (token && typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
+    if (!token || typeof window === 'undefined') return;
+
+    if (isNativePlatform()) {
+      // En la app nativa el permiso se consulta vía plugin (sin diálogo) y el
+      // token FCM se re-sincroniza con el backend en cada arranque.
+      let cancelled = false;
+      checkNativePushPermission().then((granted) => {
+        if (!cancelled && granted) void subscribeToPush(token);
+      });
+      return () => { cancelled = true; };
+    }
+
+    if ('Notification' in window && Notification.permission === 'granted') {
       void subscribeToPush(token);
     }
   }, [token]);
@@ -1789,6 +1844,21 @@ export default function Home() {
       navigator.serviceWorker.removeEventListener('message', handleSWMessage);
     };
   }, [navigateToOrder]);
+
+  // En la app nativa, el toque de una notificación FCM llega por el plugin de
+  // Capacitor (no hay service worker): navegar al pedido correspondiente.
+  useEffect(() => {
+    if (typeof window === 'undefined' || !isNativePlatform() || !token) return;
+
+    const off = onNativeNotificationTap(({ orderId, action }) => {
+      if (!orderId) return;
+      if (action === 'extend-eta') {
+        pendingEtaExtensionOrderIdRef.current = orderId;
+      }
+      navigateToOrder(orderId);
+    });
+    return off;
+  }, [token, navigateToOrder]);
 
   // Buscar en IndexedDB si postMessage se perdió (fallback para notificaciones)
   useEffect(() => {
@@ -2002,7 +2072,26 @@ export default function Home() {
     | { ok: true }
     | { ok: false; reason: 'DENIED' | 'BLOCKED' | 'INSECURE' | 'NOT_SUPPORTED' | 'VAPID_NOT_CONFIGURED' | 'SUBSCRIBE_FAILED' | 'UNKNOWN' }
   > => {
-    if (typeof window === 'undefined' || !('serviceWorker' in navigator) || !('Notification' in window)) {
+    if (typeof window === 'undefined') {
+      return { ok: false, reason: 'NOT_SUPPORTED' };
+    }
+
+    // App nativa (WebView Capacitor): no hay serviceWorker ni Notification web,
+    // se usa FCM con el permiso y el token del plugin.
+    if (isNativePlatform()) {
+      const permission = await requestNativePushPermission();
+      if (permission !== 'granted') {
+        return { ok: false, reason: permission === 'unavailable' ? 'NOT_SUPPORTED' : 'DENIED' };
+      }
+      const result = await registerNativePush(apiBase, tokenToUse);
+      if (!result.ok) {
+        console.error('[Push] FCM registration failed:', result.reason);
+        return { ok: false, reason: 'SUBSCRIBE_FAILED' };
+      }
+      return { ok: true };
+    }
+
+    if (!('serviceWorker' in navigator) || !('Notification' in window)) {
       return { ok: false, reason: 'NOT_SUPPORTED' };
     }
 
@@ -3498,6 +3587,10 @@ export default function Home() {
   useEffect(() => {
     async function acquireWakeLock() {
       try {
+        if (isNativePlatform()) {
+          nativeKeepAwake();
+          return;
+        }
         if ('wakeLock' in navigator && !wakeLockRef.current) {
           wakeLockRef.current = await (navigator as any).wakeLock.request('screen');
         }
@@ -3506,6 +3599,10 @@ export default function Home() {
 
     async function releaseWakeLock() {
       try {
+        if (isNativePlatform()) {
+          nativeAllowSleep();
+          return;
+        }
         if (wakeLockRef.current) {
           await wakeLockRef.current.release();
           wakeLockRef.current = null;

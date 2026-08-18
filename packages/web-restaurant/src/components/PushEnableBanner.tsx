@@ -3,6 +3,8 @@ import { X } from 'lucide-react';
 
 import { useEffect, useState } from 'react';
 
+import { isNativePlatform, nativeOpenBatterySettings } from '../lib/native';
+
 type EnableStatus = 'DENIED' | 'BLOCKED' | 'INSECURE' | 'NOT_SUPPORTED' | 'VAPID_NOT_CONFIGURED' | 'SUBSCRIBE_FAILED' | 'UNKNOWN';
 
 type EnableResult =
@@ -113,6 +115,15 @@ export default function PushEnableBanner({ visible, onEnable }: Props) {
               : 'Activa las notificaciones para no perderte ningún pedido.'}
           </p>
           <div className="flex shrink-0 items-center gap-2">
+            {isNativePlatform() && (
+              <button
+                type="button"
+                onClick={() => nativeOpenBatterySettings()}
+                className="rounded-full bg-white/15 px-3.5 py-1.5 text-xs font-bold text-white transition hover:bg-white/25 active:scale-95"
+              >
+                🔋 Batería
+              </button>
+            )}
             {!iosTooOld && (
               <button
                 type="button"
