@@ -1,8 +1,12 @@
 'use client';
-import { X } from 'lucide-react';
+import { BellRing, X } from 'lucide-react';
 import { useState } from 'react';
 
-import { isNativePlatform, nativeOpenBatterySettings } from '../lib/native';
+import {
+  isNativePlatform,
+  nativeOpenBatterySettings,
+  nativeOpenNotificationSettings,
+} from '../lib/native';
 
 const STORAGE_KEY = 'sadel-customer-push-banner-dismissed';
 
@@ -34,10 +38,61 @@ export default function PushEnableBanner({
   // hook ya lo expone normalizado: 'granted' / 'default' / 'denied'.
   if (permission === 'denied') {
     return (
-      <div className="fixed inset-x-0 top-0 z-[9991] bg-amber-50 px-4 py-2.5 text-center text-xs font-medium text-amber-800 shadow-sm border-b border-amber-100">
-        {isNativePlatform()
-          ? 'Notificaciones desactivadas. Actívalas desde los Ajustes del sistema → Apps → SaDeL.'
-          : 'Notificaciones bloqueadas. Para activarlas: toca el ícono 🔒 (o ℹ️) junto a la URL y habilita «Notificaciones».'}
+      <div className="fixed inset-0 z-[9991] flex items-end justify-center p-0 max-sm:items-end sm:items-center sm:p-4">
+        <div className="absolute inset-0 bg-black/60 backdrop-blur-md" />
+        <div className="relative w-full max-w-md overflow-hidden rounded-t-[32px] rounded-b-none bg-white p-6 pb-[calc(1.5rem+env(safe-area-inset-bottom))] shadow-[0_32px_64px_-12px_rgba(0,0,0,0.18)] sm:rounded-[32px] sm:pb-6">
+          <button
+            type="button"
+            onClick={() => {
+              window.localStorage.setItem(STORAGE_KEY, 'true');
+              setDismissed(true);
+            }}
+            aria-label="Cerrar"
+            className="absolute right-5 top-5 z-10 flex h-10 w-10 items-center justify-center rounded-full bg-neutral-100 text-neutral-600 transition hover:bg-neutral-200 active:scale-95"
+          >
+            <X className="h-5 w-5" strokeWidth={2.5} />
+          </button>
+
+          <div className="flex flex-col items-center pt-2 text-center">
+            <div className="flex h-16 w-16 items-center justify-center rounded-3xl bg-amber-100 text-3xl">
+              🔕
+            </div>
+            <h3 className="mt-5 text-2xl font-bold tracking-[-0.03em] text-neutral-950">
+              Notificaciones desactivadas
+            </h3>
+            <p className="mt-2 text-sm leading-relaxed text-neutral-500">
+              Para volver a recibir el estado de tus pedidos y avisos de tu repartidor,
+              actívalas desde los ajustes del sistema.
+            </p>
+
+            <div className="mt-6 grid w-full gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  if (isNativePlatform()) {
+                    nativeOpenNotificationSettings();
+                  } else {
+                    window.localStorage.setItem(STORAGE_KEY, 'true');
+                    setDismissed(true);
+                  }
+                }}
+                className="w-full rounded-2xl bg-[#0a0a0a] py-3.5 text-sm font-semibold text-[#ffffff] transition-all duration-200 hover:bg-[#262626] hover:shadow-[0_8px_24px_rgba(10,10,10,0.12)] active:scale-[0.98]"
+              >
+                {isNativePlatform() ? 'Abrir ajustes del sistema' : 'Entendido'}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  window.localStorage.setItem(STORAGE_KEY, 'true');
+                  setDismissed(true);
+                }}
+                className="w-full rounded-2xl border border-black/[0.08] bg-white py-3.5 text-sm font-semibold text-[#171717] transition-all duration-200 hover:bg-neutral-50 active:scale-[0.98] shadow-sm"
+              >
+                Ahora no
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
     );
   }
@@ -46,22 +101,67 @@ export default function PushEnableBanner({
   if (permission !== 'default' && permission !== 'granted') return null;
 
   return (
-    <div className="fixed inset-x-0 top-0 z-[9991] bg-sky-600 px-4 py-2.5 text-white shadow-md">
-      <div className="mx-auto flex max-w-5xl flex-col gap-1">
-        <div className="flex items-center justify-between gap-3">
-          <p className="text-xs font-semibold leading-snug sm:text-sm">
-            🔔 Activa las notificaciones para no perderte el estado de tus pedidos y a tu repartidor.
+    <div className="fixed inset-0 z-[9991] flex items-end justify-center p-0 max-sm:items-end sm:items-center sm:p-4 animate-[fadeIn_0.2s_ease-out]">
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-md" />
+      <div className="relative w-full max-w-md overflow-hidden rounded-t-[32px] rounded-b-none bg-white p-6 pb-[calc(1.5rem+env(safe-area-inset-bottom))] shadow-[0_32px_64px_-12px_rgba(0,0,0,0.18)] sm:rounded-[32px] sm:pb-6 animate-[slideUp_0.3s_cubic-bezier(0.16,1,0.3,1)] max-sm:animate-[slideUp_0.3s_cubic-bezier(0.16,1,0.3,1)]">
+        <button
+          type="button"
+          onClick={() => {
+            window.localStorage.setItem(STORAGE_KEY, 'true');
+            setDismissed(true);
+          }}
+          aria-label="Cerrar"
+          className="absolute right-5 top-5 z-10 flex h-10 w-10 items-center justify-center rounded-full bg-neutral-100 text-neutral-600 transition hover:bg-neutral-200 active:scale-95"
+        >
+          <X className="h-5 w-5" strokeWidth={2.5} />
+        </button>
+
+        <div className="flex flex-col items-center pt-2 text-center">
+          <div className="flex h-16 w-16 items-center justify-center rounded-3xl bg-sky-100">
+            <BellRing className="h-8 w-8 text-sky-600" strokeWidth={2} />
+          </div>
+          <h3 className="mt-5 text-2xl font-bold tracking-[-0.03em] text-neutral-950">
+            No te pierdas nada
+          </h3>
+          <p className="mt-2 text-sm leading-relaxed text-neutral-500">
+            Activa las notificaciones para enterarte al instante de lo que pasa
+            con tu pedido.
           </p>
-          <div className="flex shrink-0 items-center gap-2">
-            {isNativePlatform() && (
-              <button
-                type="button"
-                onClick={() => nativeOpenBatterySettings()}
-                className="rounded-full bg-white/15 px-3.5 py-1.5 text-xs font-bold text-white transition hover:bg-white/25 active:scale-95"
-              >
-                🔋 Batería
-              </button>
-            )}
+
+          <ul className="mt-5 w-full space-y-3 text-left">
+            <li className="flex items-start gap-3">
+              <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-xs font-bold text-emerald-600">
+                ✓
+              </span>
+              <span className="text-sm font-medium text-neutral-700">
+                Estado de tu pedido en tiempo real
+              </span>
+            </li>
+            <li className="flex items-start gap-3">
+              <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-xs font-bold text-emerald-600">
+                ✓
+              </span>
+              <span className="text-sm font-medium text-neutral-700">
+                Cuándo llega tu repartidor
+              </span>
+            </li>
+            <li className="flex items-start gap-3">
+              <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-xs font-bold text-emerald-600">
+                ✓
+              </span>
+              <span className="text-sm font-medium text-neutral-700">
+                Mensajes del restaurante o la tienda
+              </span>
+            </li>
+          </ul>
+
+          {errorMessage && (
+            <p className="mt-4 w-full rounded-2xl bg-red-50 px-4 py-2.5 text-xs font-semibold text-red-600">
+              {errorMessage}
+            </p>
+          )}
+
+          <div className="mt-7 grid w-full gap-3">
             <button
               type="button"
               disabled={busy}
@@ -76,26 +176,36 @@ export default function PushEnableBanner({
                   setBusy(false);
                 }
               }}
-              className="rounded-full bg-white px-3.5 py-1.5 text-xs font-bold text-sky-700 transition hover:bg-sky-50 active:scale-95 disabled:opacity-60"
+              className="w-full rounded-2xl bg-[#0a0a0a] py-3.5 text-sm font-semibold text-[#ffffff] transition-all duration-200 hover:bg-[#262626] hover:shadow-[0_8px_24px_rgba(10,10,10,0.12)] disabled:cursor-not-allowed disabled:bg-neutral-100 disabled:text-neutral-400 disabled:shadow-none active:scale-[0.98]"
             >
-              {busy ? 'Activando...' : 'Activar'}
+              {busy ? 'Activando...' : 'Activar notificaciones'}
             </button>
-            <button
-              type="button"
-              onClick={() => {
-                window.localStorage.setItem(STORAGE_KEY, 'true');
-                setDismissed(true);
-              }}
-              aria-label="Descartar"
-              className="flex h-6 w-6 items-center justify-center rounded-full text-white/70 transition hover:bg-white/15 hover:text-white"
-            >
-              <X className="h-3.5 w-3.5" />
-            </button>
+            <div className="flex items-center justify-center gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  window.localStorage.setItem(STORAGE_KEY, 'true');
+                  setDismissed(true);
+                }}
+                className="py-2 text-xs font-semibold text-neutral-500 transition hover:text-neutral-800"
+              >
+                Ahora no
+              </button>
+              {isNativePlatform() && (
+                <span className="text-neutral-300">·</span>
+              )}
+              {isNativePlatform() && (
+                <button
+                  type="button"
+                  onClick={() => nativeOpenBatterySettings()}
+                  className="py-2 text-xs font-semibold text-neutral-500 transition hover:text-neutral-800"
+                >
+                  🔋 Revisar batería
+                </button>
+              )}
+            </div>
           </div>
         </div>
-        {errorMessage && (
-          <p className="text-[11px] font-semibold text-amber-100">{errorMessage}</p>
-        )}
       </div>
     </div>
   );

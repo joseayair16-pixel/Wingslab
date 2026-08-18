@@ -347,3 +347,10 @@ export function nativeOpenBatterySettings(): void {
   if (!B) return;
   try { B.openBatterySettings().catch(() => { /* noop */ }); } catch { /* noop */ }
 }
+
+/** Abre los ajustes de notificaciones de la app (permiso denegado). */
+export function nativeOpenNotificationSettings(): void {
+  const B = plugin('BatteryHelper');
+  if (!B) return;
+  try { B.openNotificationSettings().catch(() => { /* noop */ }); } catch { /* noop */ }
+}

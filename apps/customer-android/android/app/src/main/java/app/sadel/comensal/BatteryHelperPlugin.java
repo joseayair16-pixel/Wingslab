@@ -62,4 +62,32 @@ public class BatteryHelperPlugin extends Plugin {
             call.reject(e.getMessage());
         }
     }
+
+    /**
+     * Abre los ajustes de notificaciones de la app (usado cuando el permiso de
+     * notificaciones quedó denegado y hay que reactivarlo desde el sistema).
+     */
+    @PluginMethod
+    public void openNotificationSettings(PluginCall call) {
+        try {
+            Intent intent = new Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS);
+            intent.putExtra(Settings.EXTRA_APP_PACKAGE, getContext().getPackageName());
+            if (getContext().getPackageManager().resolveActivity(intent, 0) != null) {
+                getContext().startActivity(intent);
+                call.resolve();
+                return;
+            }
+
+            Intent fallback = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS);
+            fallback.setData(Uri.parse("package:" + getContext().getPackageName()));
+            if (getContext().getPackageManager().resolveActivity(fallback, 0) != null) {
+                getContext().startActivity(fallback);
+                call.resolve();
+            } else {
+                call.resolve();
+            }
+        } catch (Exception e) {
+            call.reject(e.getMessage());
+        }
+    }
 }
