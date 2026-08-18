@@ -17,6 +17,17 @@ out/
 .env.*.local
 .env.*.vault
 
+# Android signing & Firebase (never commit)
+android-keystore/
+*.keystore
+google-services.json
+*-firebase-adminsdk-*.json
+
+# Android / Capacitor build artifacts
+**/.gradle/
+**/local.properties
+apps/restaurant-android/android/capacitor-cordova-android-plugins/
+
 # Database backups
 backups/
 

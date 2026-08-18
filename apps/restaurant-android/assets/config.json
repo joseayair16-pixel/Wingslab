@@ -1,0 +1,8 @@
+{
+  "icon": {
+    "android": {
+      "foreground": "assets/icon-foreground.png",
+      "background": "assets/icon-background.png"
+    }
+  }
+}

@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">SaDeL Restaurant</string>
+    <string name="title_activity_main">SaDeL Restaurant</string>
+    <string name="package_name">app.sadel.restaurant</string>
+    <string name="custom_url_scheme">app.sadel.restaurant</string>
+</resources>
