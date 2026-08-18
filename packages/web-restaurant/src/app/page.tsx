@@ -9330,7 +9330,7 @@ export default function Home() {
                                 ? (order.status === 'READY' && driverArrivedOrders[order.id]
                                     ? ['handover'] as Array<keyof typeof restaurantActionMap>
                                     : [])
-                                : getRestaurantActions(order, hasOwnDelivery));
+                                : getRestaurantActions(order, hasOwnDelivery, Boolean(driverArrivedOrders[order.id])));
                           const selectedDriverId = selectedDriverByOrder[order.id] || '';
                           const canAssignDriver =
                             !hasOwnDelivery &&
@@ -14450,7 +14450,11 @@ function buildRestaurantLiveMessage(
 }
 
 
-function getRestaurantActions(order: OrderItem, hasOwnDelivery: boolean): Array<keyof typeof restaurantActionMap> {
+function getRestaurantActions(
+  order: OrderItem,
+  hasOwnDelivery: boolean,
+  driverArrived?: boolean,
+): Array<keyof typeof restaurantActionMap> {
   const status = order.status;
   if (status === 'PENDING') {
     return ['accept', 'reject'];
@@ -14461,7 +14465,10 @@ function getRestaurantActions(order: OrderItem, hasOwnDelivery: boolean): Array<
   }
 
   if (status === 'READY') {
-    if (!hasOwnDelivery && order.driver) {
+    // El handover ("Confirmar entrega") solo se habilita cuando el repartidor
+    // YA llegó al restaurante: es el momento en que entrega el PIN de
+    // recolección. Sin llegada (solo "asignado") no debe ofrecerse.
+    if (!hasOwnDelivery && order.driver && (driverArrived || order.driverArrivedAt)) {
       return ['handover'];
     }
   }
