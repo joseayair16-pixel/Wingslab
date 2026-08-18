@@ -1,6 +1,7 @@
 import webpush from 'web-push';
 import { prisma } from '../config/database';
 import { logger } from '../utils/logger';
+import { sendFcmNotification } from './fcm.service';
 
 let vapidConfigured = false;
 
@@ -140,64 +141,82 @@ export const sendPushNotification = async (
   payload: NotificationPayload,
   options?: PushOptions
 ) => {
-  if (!vapidConfigured) {
-    logger.error(`[PushService] Intento de enviar push sin VAPID configurado (userId=${userId}, title="${payload.title}")`);
-    return { success: false, reason: 'VAPID_NOT_CONFIGURED' };
+  const [subscriptions, fcmTokens] = await Promise.all([
+    prisma.pushSubscription.findMany({ where: { userId } }),
+    prisma.fcmToken.findMany({ where: { userId } }),
+  ]);
+
+  const webPushEnabled = vapidConfigured && subscriptions.length > 0;
+  const fcmEnabled = fcmTokens.length > 0;
+
+  if (!webPushEnabled && !fcmEnabled) {
+    if (vapidConfigured) {
+      logger.info(`[PushService] Sin suscripciones push ni tokens FCM para usuario ${userId}`);
+    } else {
+      logger.error(`[PushService] Intento de enviar push sin VAPID configurado (userId=${userId}, title="${payload.title}")`);
+    }
+    return { success: false, reason: vapidConfigured ? 'NO_SUBSCRIPTIONS' : 'VAPID_NOT_CONFIGURED' };
   }
 
-  const subscriptions = await prisma.pushSubscription.findMany({
-    where: { userId },
-  });
+  let webPushResult: { success: boolean; totalSent: number; totalAttempted: number } | null = null;
+  let fcmResult: { success: boolean; totalSent: number; totalAttempted: number } | null = null;
 
-  if (subscriptions.length === 0) {
-    logger.info(`[PushService] Sin suscripciones push para usuario ${userId}`);
-    return { success: false, reason: 'NO_SUBSCRIPTIONS' };
-  }
+  if (webPushEnabled) {
+    const payloadString = JSON.stringify(payload);
+    const ttl = options?.ttl ?? 86400;
+    const urgency = options?.urgency ?? determineUrgency(payload);
 
-  const payloadString = JSON.stringify(payload);
-  const ttl = options?.ttl ?? 86400;
-  const urgency = options?.urgency ?? determineUrgency(payload);
+    const results = await Promise.allSettled(
+      subscriptions.map(async (sub) => {
+        const pushSubscription = {
+          endpoint: sub.endpoint,
+          keys: { p256dh: sub.p256dh, auth: sub.auth },
+        };
 
-  const results = await Promise.allSettled(
-    subscriptions.map(async (sub) => {
-      const pushSubscription = {
-        endpoint: sub.endpoint,
-        keys: { p256dh: sub.p256dh, auth: sub.auth },
-      };
+        try {
+          await sendWithRetry(pushSubscription, payloadString, { ttl, urgency });
+          return { success: true, endpoint: sub.endpoint };
+        } catch (error: any) {
+          logger.error(`[PushService] Fallo definitivo al enviar push a ${sub.endpoint}`, {
+            error: error.message,
+            statusCode: error.statusCode,
+            title: payload.title,
+            userId,
+          });
 
-      try {
-        await sendWithRetry(pushSubscription, payloadString, { ttl, urgency });
-        return { success: true, endpoint: sub.endpoint };
-      } catch (error: any) {
-        logger.error(`[PushService] Fallo definitivo al enviar push a ${sub.endpoint}`, {
-          error: error.message,
-          statusCode: error.statusCode,
-          title: payload.title,
-          userId,
-        });
+          if (isExpiredSubscription(error)) {
+            await prisma.pushSubscription.delete({ where: { id: sub.id } });
+            logger.info(`[PushService] Suscripción expirada eliminada: ${sub.id}`);
+          }
 
-        if (isExpiredSubscription(error)) {
-          await prisma.pushSubscription.delete({ where: { id: sub.id } });
-          logger.info(`[PushService] Suscripción expirada eliminada: ${sub.id}`);
+          throw error;
         }
+      })
+    );
 
-        throw error;
-      }
-    })
-  );
+    const successful = results.filter((r) => r.status === 'fulfilled').length;
+    const failed = results.filter((r) => r.status === 'rejected').length;
+    webPushResult = { success: successful > 0, totalSent: successful, totalAttempted: subscriptions.length };
 
-  const successful = results.filter((r) => r.status === 'fulfilled').length;
-  const failed = results.filter((r) => r.status === 'rejected').length;
+    if (failed > 0) {
+      logger.warn(`[PushService] WebPush: ${successful}/${subscriptions.length} exitosos, ${failed} fallidos — usuario ${userId}, título "${payload.title}"`);
+    } else if (successful > 0) {
+      logger.info(`[PushService] WebPush: ${successful}/${subscriptions.length} exitosos — usuario ${userId}, título "${payload.title}"`);
+    }
+  }
 
-  if (failed > 0) {
-    logger.warn(`[PushService] Resumen: ${successful}/${subscriptions.length} exitosos, ${failed} fallidos — usuario ${userId}, título "${payload.title}"`);
-  } else if (successful > 0) {
-    logger.info(`[PushService] Resumen: ${successful}/${subscriptions.length} exitosos — usuario ${userId}, título "${payload.title}"`);
+  if (fcmEnabled) {
+    try {
+      fcmResult = await sendFcmNotification(userId, payload);
+    } catch (error: any) {
+      logger.error(`[PushService] FCM falló por completo — usuario ${userId}, título "${payload.title}": ${error?.message || 'desconocido'}`);
+      fcmResult = { success: false, totalSent: 0, totalAttempted: fcmTokens.length };
+    }
   }
 
   return {
-    success: successful > 0,
-    totalSent: successful,
-    totalAttempted: subscriptions.length,
+    success: (webPushResult?.success || fcmResult?.success) || false,
+    totalSent: (webPushResult?.totalSent || 0) + (fcmResult?.totalSent || 0),
+    totalAttempted: (webPushResult?.totalAttempted || 0) + (fcmResult?.totalAttempted || 0),
   };
 };

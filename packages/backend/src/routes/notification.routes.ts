@@ -11,6 +11,11 @@ const subscribeSchema = z.object({
   }),
 });
 
+const fcmTokenSchema = z.object({
+  token: z.string().min(1),
+  platform: z.string().max(50).optional(),
+});
+
 export async function registerNotificationRoutes(fastify: FastifyInstance): Promise<void> {
   fastify.post('/notifications/subscribe', async (request, reply) => {
     try {
@@ -66,6 +71,63 @@ export async function registerNotificationRoutes(fastify: FastifyInstance): Prom
         error: {
           code: 'SERVER_ERROR',
           message: 'No se pudo guardar la suscripción.',
+        },
+      });
+    }
+  });
+
+  fastify.post('/notifications/fcm-token', async (request, reply) => {
+    try {
+      await request.jwtVerify();
+    } catch {
+      return reply.status(401).send({
+        success: false,
+        error: {
+          code: 'UNAUTHORIZED',
+          message: 'Debes iniciar sesión para registrar tu dispositivo.',
+        },
+      });
+    }
+
+    const parsed = fcmTokenSchema.safeParse(request.body);
+
+    if (!parsed.success) {
+      return reply.status(400).send({
+        success: false,
+        error: {
+          code: 'INVALID_PAYLOAD',
+          message: 'Token FCM inválido.',
+        },
+      });
+    }
+
+    const payload = request.user as { sub: string };
+    const { token, platform } = parsed.data;
+
+    try {
+      await prisma.fcmToken.upsert({
+        where: { token },
+        update: {
+          userId: payload.sub,
+          platform: platform || 'android',
+        },
+        create: {
+          userId: payload.sub,
+          token,
+          platform: platform || 'android',
+        },
+      });
+
+      return reply.send({
+        success: true,
+        message: 'Token FCM registrado correctamente.',
+      });
+    } catch (error) {
+      return reply.status(500).send({
+        success: false,
+        error: {
+          code: 'SERVER_ERROR',
+          message: 'No se pudo registrar el token FCM.',
         },
       });
     }

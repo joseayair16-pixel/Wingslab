@@ -30,6 +30,7 @@ model User {
   customer          Customer?
   driver            Driver?
   pushSubscriptions PushSubscription[]
+  fcmTokens         FcmToken[]
   sentMessages      OrderMessage[]
   refreshTokens     RefreshToken[]
 
@@ -868,6 +869,22 @@ model PushSubscription {
   endpoint String @unique
   p256dh   String
   auth     String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+}
+
+// Tokens de dispositivos móviles (FCM) para la app nativa Android.
+// Aditivo: convive con PushSubscription (web-push) sin tocarlo.
+model FcmToken {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  token     String   @unique
+  platform  String   @default("android")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

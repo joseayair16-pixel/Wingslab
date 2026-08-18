@@ -1,6 +1,7 @@
 import cron from 'node-cron';
 import { prisma } from '../config/database';
 import { probePushSubscription } from '../services/notification.service';
+import { probeFcmToken, isFcmConfigured } from '../services/fcm.service';
 import { logger } from '../utils/logger';
 
 // Umbral de antigüedad: solo probamos endpoints que no se han re-sincronizado
@@ -52,6 +53,48 @@ async function cleanupStalePushSubscriptions() {
   return deleted.count;
 }
 
+/**
+ * Elimina tokens FCM de dispositivos abandonados (mayores a STALE_DAYS sin
+ * re-sincronizarse). Un token re-sincronizado en cada arranque de la app
+ * nativa actualiza su updatedAt; los que no lo hacen probablemente murieron.
+ */
+async function cleanupStaleFcmTokens(): Promise<number> {
+  if (!isFcmConfigured()) return 0;
+
+  const cutoff = new Date(Date.now() - STALE_DAYS * 24 * 60 * 60 * 1000);
+  const stale = await prisma.fcmToken.findMany({
+    where: { updatedAt: { lte: cutoff } },
+    select: { id: true, token: true },
+  });
+
+  if (stale.length === 0) return 0;
+
+  const deadIds: string[] = [];
+  for (let i = 0; i < stale.length; i += BATCH_SIZE) {
+    const batch = stale.slice(i, i + BATCH_SIZE);
+    const results = await Promise.all(
+      batch.map(async (t) => {
+        try {
+          const alive = await probeFcmToken(t.token);
+          return alive ? null : t.id;
+        } catch {
+          return null; // error no concluyente: no borrar
+        }
+      })
+    );
+    for (const id of results) {
+      if (id) deadIds.push(id);
+    }
+  }
+
+  if (deadIds.length === 0) return 0;
+
+  const deleted = await prisma.fcmToken.deleteMany({
+    where: { id: { in: deadIds } },
+  });
+  return deleted.count;
+}
+
 export function startCleanupPushSubscriptionsJob() {
   cron.schedule('0 4 * * 1', async () => {
     try {
@@ -61,6 +104,15 @@ export function startCleanupPushSubscriptionsJob() {
       }
     } catch (err) {
       logger.error('[CleanupPush] Error en limpieza de suscripciones push:', err);
+    }
+
+    try {
+      const deletedFcm = await cleanupStaleFcmTokens();
+      if (deletedFcm > 0) {
+        logger.info(`[CleanupPush] ${deletedFcm} tokens FCM obsoletos eliminados.`);
+      }
+    } catch (err) {
+      logger.error('[CleanupPush] Error en limpieza de tokens FCM:', err);
     }
   });
 }
