@@ -1,4 +1,10 @@
 import { useState, useEffect, useCallback } from 'react';
+import {
+  checkNativePushPermission,
+  isNativePlatform,
+  registerNativePush,
+  requestNativePushPermission,
+} from '../lib/native';
 
 const API_URL = '/api';
 
@@ -60,7 +66,21 @@ export const usePushNotifications = () => {
   // y se calcula del lado del cliente tras montar.
   const [pushSupportIssue, setPushSupportIssue] = useState<string | null>(null);
 
+  // Dentro del WebView de la app nativa NO existe web-push (service worker /
+  // pushManager): las notificaciones van por FCM nativo. Este flag corta todo
+  // el flujo web-push para no registrar suscripciones duplicadas en el mismo
+  // dispositivo (FCM + web-push al mismo usuario).
+  const isNative = typeof window !== 'undefined' && isNativePlatform();
+
   useEffect(() => {
+    if (isNative) {
+      // Consultar el permiso nativo sin mostrar el diálogo (FCM).
+      checkNativePushPermission().then((granted) => {
+        setPermission(granted ? 'granted' : 'default');
+        setIsSubscribed(granted);
+      });
+      return;
+    }
     setPushSupportIssue(getPushSupportIssue());
     if (typeof window !== 'undefined' && 'Notification' in window) {
       setPermission(Notification.permission);
@@ -74,11 +94,39 @@ export const usePushNotifications = () => {
         });
       }
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const subscribe = useCallback(async (tokenOverride?: string) => {
     try {
-      if (typeof window === 'undefined' || !('Notification' in window)) {
+      if (typeof window === 'undefined') {
+        return;
+      }
+
+      if (isNative) {
+        // App nativa: pedir permiso FCM y registrar el token en el backend.
+        const perm = await requestNativePushPermission();
+        if (perm !== 'granted') {
+          setPermission('default');
+          throw new Error('Permiso de notificación no concedido');
+        }
+        setPermission('granted');
+        try { localStorage.removeItem('sadel.push_optout'); } catch { /* noop */ }
+
+        const token = tokenOverride || localStorage.getItem('sadel.customer.token') || '';
+        const result = await registerNativePush(API_URL, token);
+        if (result.ok) {
+          setIsSubscribed(true);
+          return;
+        }
+        throw new Error(
+          result.reason === 'NOT_SUPPORTED'
+            ? 'Este dispositivo no soporta notificaciones nativas.'
+            : 'No se pudo registrar el token de notificaciones en el servidor.',
+        );
+      }
+
+      if (!('Notification' in window)) {
         return;
       }
 
@@ -172,6 +220,12 @@ export const usePushNotifications = () => {
     // Marca el opt-out para que la auto-re-sincronización no lo vuelva a
     // suscribir en segundo plano: solo se reactiva con un gesto explícito.
     try { localStorage.setItem('sadel.push_optout', 'true'); } catch { /* noop */ }
+    if (isNative) {
+      // La app nativa no puede "des-suscribir" el token FCM del dispositivo:
+      // basta con el opt-out local para que el re-sync no lo vuelva a registrar.
+      setIsSubscribed(false);
+      return;
+    }
     if (subscription) {
       await subscription.unsubscribe();
       setSubscription(null);
@@ -183,6 +237,7 @@ export const usePushNotifications = () => {
   // worker nos avisa para volver a suscribirnos con un endpoint nuevo. El permiso ya
   // fue concedido antes, así que esto no requiere gesto del usuario.
   useEffect(() => {
+    if (isNative) return;
     if (typeof window === 'undefined' || !('serviceWorker' in navigator)) return;
 
     const onMessage = (event: MessageEvent) => {

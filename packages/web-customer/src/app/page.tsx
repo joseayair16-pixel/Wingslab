@@ -20,6 +20,15 @@ import {
   convertImageFileToDataUrl,
 } from '@sadel/shared';
 import { usePushNotifications } from '../hooks/usePushNotifications';
+import {
+  isNativePlatform,
+  nativeAllowSleep,
+  nativeGetCurrentPosition,
+  nativeGeoWatch,
+  nativeHaptic,
+  nativeKeepAwake,
+  onNativeNotificationTap,
+} from '../lib/native';
 import { useForegroundPolling } from '../hooks/useForegroundPolling';
 import { useCustomerSounds } from '../hooks/useCustomerSounds';
 import { useCartStore, type CartItem } from '../store/cartStore';
@@ -31,6 +40,7 @@ import { RestaurantSearchBar } from '../components/RestaurantSearchBar';
 import { SaDelLogo } from '../components/SaDelLogo';
 import { SaDelLoader } from '../components/SaDelLoader';
 import { CompactActiveOrderBanner, computeDelayState, formatEstimatedArrivalMinutes, formatOverdueMinutes } from '../components/CompactActiveOrderBanner';
+import PushEnableBanner from '../components/PushEnableBanner';
 import { ensureGoogleMapsScript, getGoogleMaps } from '../lib/googleMaps';
 import { ScheduleProposalModal } from '../components/ScheduleProposalModal';
 import { type Billboard } from '../components/BillboardCarousel';
@@ -2566,10 +2576,12 @@ export default function Home() {
   }, [loadDashboard, token, sessionUser]);
 
   useEffect(() => {
-    async function tryUpdateFromGeolocation() {      if (!navigator.geolocation) return null;
+    async function tryUpdateFromGeolocation() {
+      const native = isNativePlatform();
+      if (!native && !navigator.geolocation) return null;
 
-      return new Promise((resolve) => {
-        navigator.geolocation.getCurrentPosition(async (position) => {
+      const tryWith = (position: GeolocationPosition) =>
+        new Promise((resolve) => {
           setLocationDenied(false);
           setLocationSource('gps');
           setSelectedZoneName(null);
@@ -2603,6 +2615,29 @@ export default function Home() {
             }
             resolve(loc);
           }
+        });
+
+      if (native) {
+        // App nativa: usar el plugin de geolocalización (más confiable y
+        // preciso en Android). Si falla, caer al navegador como respaldo.
+        try {
+          const position = await nativeGetCurrentPosition({ enableHighAccuracy: false, timeout: 10000, maximumAge: 60000 });
+          if (position) return tryWith(position);
+        } catch (e) {
+          try {
+            if ((e as any)?.code === 1) {
+              setLocationDenied(true);
+              try { localStorage.setItem('locationDenied', '1'); } catch (e) { }
+            }
+          } catch (e) { }
+          return null;
+        }
+        if (!navigator.geolocation) return null;
+      }
+
+      return new Promise((resolve) => {
+        navigator.geolocation.getCurrentPosition((position) => {
+          void tryWith(position).then(resolve);
         }, (err) => {
           // Permission denied
           try {
@@ -2671,6 +2706,7 @@ export default function Home() {
   // Watch position to detect when user enters/exits delivery range
   useEffect(() => {
     let watchId: number | null = null;
+    let nativeWatch: { clear: () => void } | null = null;
     let lastPosition: { lat: number; lng: number } | null = null;
     let lastReloadAt = 0;
     let isFirstCallback = true;
@@ -2678,8 +2714,69 @@ export default function Home() {
     const RELOAD_COOLDOWN_MS = 30000;
     const MAX_ACCURACY_M = 500;
 
+    const onPosition = (position: GeolocationPosition) => {
+      if (exploringZoneRef.current) return;
+      const { latitude, longitude, accuracy } = position.coords;
+      if (accuracy > MAX_ACCURACY_M) return;
+
+      if (isFirstCallback) {
+        isFirstCallback = false;
+        lastPosition = { lat: latitude, lng: longitude };
+        return;
+      }
+
+      if (!lastPosition) return;
+      const dist = haversineKm(lastPosition.lat, lastPosition.lng, latitude, longitude);
+      if (dist * 1000 < MIN_DISTANCE_M) return;
+
+      const now = Date.now();
+      if (now - lastReloadAt < RELOAD_COOLDOWN_MS) return;
+      lastReloadAt = now;
+      lastPosition = { lat: latitude, lng: longitude };
+
+      const loc = { latitude, longitude, accuracy, address: 'Ubicación actual', ts: now };
+      userLocationRef.current = loc;
+      setUserLocation(loc);
+      setLocationDenied(false);
+      setLocationSource('gps');
+      setSelectedZoneName(null);
+      try {
+        localStorage.setItem('userLocation', JSON.stringify(loc));
+        localStorage.removeItem('locationDenied');
+        localStorage.removeItem('selectedZoneName');
+        localStorage.setItem('locationSource', 'gps');
+      } catch (e) { }
+    };
+
+    const onError = (err: GeolocationPositionError) => {
+      if (err && err.code === 1) {
+        setLocationDenied(true);
+        try { localStorage.setItem('locationDenied', '1'); } catch (e) { }
+        if (nativeWatch) {
+          nativeWatch.clear();
+          nativeWatch = null;
+        }
+        if (watchId !== null) {
+          navigator.geolocation.clearWatch(watchId);
+          watchId = null;
+        }
+      }
+    };
+
     async function startWatch() {
-      if (!navigator.geolocation) return;
+      if (!navigator.geolocation && !isNativePlatform()) return;
+
+      // App nativa: usar el plugin de geolocalización con vigilancia nativa.
+      if (isNativePlatform()) {
+        nativeWatch = await nativeGeoWatch(onPosition, onError, {
+          enableHighAccuracy: false,
+          timeout: 15000,
+          maximumAge: 60000,
+        });
+        if (nativeWatch) return;
+        if (!navigator.geolocation) return;
+      }
+
       if (
         typeof navigator.permissions !== 'undefined' &&
         typeof navigator.permissions.query === 'function'
@@ -2693,52 +2790,11 @@ export default function Home() {
         }
       }
 
-      watchId = navigator.geolocation.watchPosition(
-        (position) => {
-          if (exploringZoneRef.current) return;
-          const { latitude, longitude, accuracy } = position.coords;
-          if (accuracy > MAX_ACCURACY_M) return;
-
-          if (isFirstCallback) {
-            isFirstCallback = false;
-            lastPosition = { lat: latitude, lng: longitude };
-            return;
-          }
-
-          if (!lastPosition) return;
-          const dist = haversineKm(lastPosition.lat, lastPosition.lng, latitude, longitude);
-          if (dist * 1000 < MIN_DISTANCE_M) return;
-
-          const now = Date.now();
-          if (now - lastReloadAt < RELOAD_COOLDOWN_MS) return;
-          lastReloadAt = now;
-          lastPosition = { lat: latitude, lng: longitude };
-
-          const loc = { latitude, longitude, accuracy, address: 'Ubicación actual', ts: now };
-          userLocationRef.current = loc;
-          setUserLocation(loc);
-          setLocationDenied(false);
-          setLocationSource('gps');
-          setSelectedZoneName(null);
-          try {
-            localStorage.setItem('userLocation', JSON.stringify(loc));
-            localStorage.removeItem('locationDenied');
-            localStorage.removeItem('selectedZoneName');
-            localStorage.setItem('locationSource', 'gps');
-          } catch (e) { }
-        },
-        (err) => {
-          if (err && err.code === 1) {
-            setLocationDenied(true);
-            try { localStorage.setItem('locationDenied', '1'); } catch (e) { }
-            if (watchId !== null) {
-              navigator.geolocation.clearWatch(watchId);
-              watchId = null;
-            }
-          }
-        },
-        { enableHighAccuracy: false, timeout: 15000, maximumAge: 60000 },
-      );
+      watchId = navigator.geolocation.watchPosition(onPosition, onError, {
+        enableHighAccuracy: false,
+        timeout: 15000,
+        maximumAge: 60000,
+      });
     }
 
     startWatch();
@@ -2746,6 +2802,9 @@ export default function Home() {
     return () => {
       if (watchId !== null) {
         navigator.geolocation.clearWatch(watchId);
+      }
+      if (nativeWatch) {
+        nativeWatch.clear();
       }
     };
   }, []);
@@ -2772,6 +2831,23 @@ export default function Home() {
     document.addEventListener('visibilitychange', handleVisibility);
     return () => document.removeEventListener('visibilitychange', handleVisibility);
   }, [token, sessionUser, pushPermission, subscribePush]);
+
+  // Tap de notificación NATIVA (FCM): al tocar una notificación o abrir la app
+  // desde un deep-link, navegar directamente al pedido correspondiente.
+  useEffect(() => {
+    if (!token) return;
+    const cleanup = onNativeNotificationTap(({ orderId, section }) => {
+      if (section === 'history') {
+        setActiveSection('history');
+        return;
+      }
+      if (orderId) {
+        setSelectedOrderId(orderId);
+        setActiveSection('home');
+      }
+    });
+    return cleanup;
+  }, [token, setActiveSection]);
 
   // Leer orderId de la URL (cuando se da click a una notificación push)
   useEffect(() => {
@@ -2870,6 +2946,39 @@ export default function Home() {
     setIsTrackingEnabled(false);
     setDriverLocation(null);
   }, [carouselIndex]);
+
+  // Keep-awake nativo: mantener la pantalla encendida mientras se sigue al
+  // repartidor en vivo (mapa de seguimiento). En web se usa el Wake Lock API.
+  useEffect(() => {
+    if (!isTrackingEnabled || !pinnedOrder) {
+      if (isNativePlatform()) nativeAllowSleep();
+      return;
+    }
+    if (isNativePlatform()) {
+      nativeKeepAwake();
+      return;
+    }
+    let wakeLock: any = null;
+    let cancelled = false;
+    async function acquire() {
+      try {
+        if ('wakeLock' in navigator) {
+          wakeLock = await (navigator as any).wakeLock.request('screen');
+          wakeLock?.addEventListener?.('release', () => { wakeLock = null; });
+        }
+      } catch { /* noop */ }
+    }
+    void acquire();
+    const onVisibility = () => {
+      if (!cancelled && document.visibilityState === 'visible') void acquire();
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => {
+      cancelled = true;
+      document.removeEventListener('visibilitychange', onVisibility);
+      try { wakeLock?.release?.(); } catch { /* noop */ }
+    };
+  }, [isTrackingEnabled, pinnedOrder?.id]);
 
   // Suscripción condicional al WebSocket para recibir la ubicación del repartidor,
   // con snapshot inicial de la última posición persistida y fallback por polling
@@ -4098,6 +4207,16 @@ export default function Home() {
           token={token || undefined}
         />
       ) : null}
+
+      <PushEnableBanner
+        visible={isAuthenticated}
+        isSubscribed={isSubscribed}
+        permission={pushPermission}
+        pushSupportIssue={pushSupportIssue}
+        onEnable={async () => {
+          if (token) await subscribePush(token);
+        }}
+      />
 
       {welcomeUser ? (
         <>
@@ -7002,7 +7121,12 @@ const Panel = React.memo(function Panel({
 });
 
 function triggerHaptic(pattern: number | number[] = 10) {
-  if (typeof window !== 'undefined' && navigator.vibrate) {
+  if (typeof window === 'undefined') return;
+  if (isNativePlatform()) {
+    nativeHaptic(pattern);
+    return;
+  }
+  if (navigator.vibrate) {
     navigator.vibrate(pattern);
   }
 }

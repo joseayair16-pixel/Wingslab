@@ -27,6 +27,7 @@ google-services.json
 **/.gradle/
 **/local.properties
 apps/restaurant-android/android/capacitor-cordova-android-plugins/
+apps/customer-android/android/capacitor-cordova-android-plugins/
 
 # Database backups
 backups/
