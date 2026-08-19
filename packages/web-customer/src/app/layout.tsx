@@ -73,7 +73,7 @@ export const metadata: Metadata = {
   },
   icons: {
     icon: '/app-icon-192.png',
-    apple: '/app-icon-192.png',
+    apple: '/apple-touch-icon-180.png',
   },
   appleWebApp: {
     capable: true,

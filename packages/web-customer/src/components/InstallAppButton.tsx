@@ -310,10 +310,14 @@ export default function InstallAppButton() {
                 </span>
               </li>
             </ol>
+            <div className="mt-4 rounded-xl bg-amber-50 p-3 text-xs leading-relaxed text-amber-800">
+              Nota: en iPhone las notificaciones no reproducen sonido. La app te
+              avisará visualmente; en la app Android de SaDeL sí hay sonido.
+            </div>
             <button
               type="button"
               onClick={() => setShowIOSHelp(false)}
-              className="mt-6 w-full rounded-full bg-neutral-950 py-3 text-sm font-bold text-white transition hover:bg-neutral-800 active:scale-[0.98]"
+              className="mt-4 w-full rounded-full bg-neutral-950 py-3 text-sm font-bold text-white transition hover:bg-neutral-800 active:scale-[0.98]"
             >
               Entendido
             </button>
