@@ -1,8 +1,10 @@
 'use client';
-import { X } from 'lucide-react';
+import { Smartphone, X } from 'lucide-react';
 
 import { usePathname } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
+
+import { fetchPublishedAppVersion, isNativePlatform } from '../lib/native';
 
 type BeforeInstallPromptEvent = Event & {
   prompt: () => Promise<void>;
@@ -78,6 +80,8 @@ export default function InstallAppButton() {
   const [visible, setVisible] = useState(false);
   const [isIOS, setIsIOS] = useState(false);
   const [showIOSHelp, setShowIOSHelp] = useState(false);
+  const [isAndroid, setIsAndroid] = useState(false);
+  const [apkUrl, setApkUrl] = useState<string | null>(null);
   const [dismissState, setDismissState] = useState<DismissState>(() =>
     typeof window === 'undefined' ? { dismissCount: 0, lastDismissedAt: 0 } : readDismissState(),
   );
@@ -110,6 +114,15 @@ export default function InstallAppButton() {
     mq.addEventListener?.('change', onChange);
 
     setIsIOS(isIosDevice());
+
+    // Android en navegador (no dentro de la app nativa): ofrecer el APK nativo.
+    const ua = navigator.userAgent;
+    setIsAndroid(/Android/i.test(ua));
+    if (/Android/i.test(ua) && !isNativePlatform()) {
+      fetchPublishedAppVersion('/api')
+        .then((v) => { if (v?.url) setApkUrl(v.url); })
+        .catch(() => { /* sin APK publicado: seguir con PWA */ });
+    }
 
     const onBeforeInstallPrompt = (event: Event) => {
       event.preventDefault();
@@ -204,30 +217,48 @@ export default function InstallAppButton() {
     return () => window.removeEventListener('sadel:bottom-cta', onChange);
   }, []);
 
-  // Ya instalada, en cooldown, sin razón para mostrarse, o hay un CTA debajo.
-  if (isStandalone || !visible || bottomCtaVisible) return null;
+  // Ya instalada (PWA standalone o app nativa), en cooldown, sin razón para
+  // mostrarse, o hay un CTA debajo.
+  if (isStandalone || isNativePlatform() || !visible || bottomCtaVisible) return null;
 
-  // Android/Chrome: solo mostrar si el navegador ofrece instalación.
+  // Android: mostrar si hay APK nativo publicado o si el navegador ofrece PWA.
   // iOS: no existe beforeinstallprompt, así que siempre mostramos la guía.
-  const showBanner = isIOS || Boolean(deferredPrompt);
+  const showBanner = isIOS || Boolean(deferredPrompt) || (isAndroid && apkUrl !== null);
   if (!showBanner) return null;
+
+  // En Android, la app nativa es la opción principal; la PWA queda de
+  // respaldo si el APK no está publicado todavía.
+  const androidNative = isAndroid && apkUrl !== null;
+  const handleAndroidAction = () => {
+    if (androidNative) {
+      window.location.href = apkUrl!;
+      return;
+    }
+    void handleAndroidInstall();
+  };
 
   return (
     <>
       <div className="fixed inset-x-0 bottom-4 z-[9990] flex justify-center px-4 pb-[env(safe-area-inset-bottom)]">
         <div className="flex items-center gap-2.5 rounded-full border border-black/5 bg-white py-2 pl-3 pr-2 shadow-[0_12px_40px_-8px_rgba(15,15,15,0.25)]">
           <span className="flex h-9 w-9 items-center justify-center rounded-full bg-sky-100 text-sky-600">
-            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.8}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
-            </svg>
+            {androidNative ? (
+              <Smartphone className="h-5 w-5" />
+            ) : (
+              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.8}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
+              </svg>
+            )}
           </span>
-          <span className="text-sm font-semibold text-neutral-900">Instala SaDeL</span>
+          <span className="text-sm font-semibold text-neutral-900">
+            {androidNative ? 'Instala la app de SaDeL' : 'Instala SaDeL'}
+          </span>
           <button
             type="button"
-            onClick={isIOS ? () => setShowIOSHelp(true) : () => void handleAndroidInstall()}
+            onClick={isIOS ? () => setShowIOSHelp(true) : handleAndroidAction}
             className="rounded-full bg-neutral-950 px-4 py-2 text-xs font-bold text-white transition hover:bg-neutral-800 active:scale-95"
           >
-            Instalar
+            {androidNative ? 'Descargar' : 'Instalar'}
           </button>
           <button
             type="button"

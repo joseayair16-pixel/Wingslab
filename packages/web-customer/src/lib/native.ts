@@ -354,3 +354,59 @@ export function nativeOpenNotificationSettings(): void {
   if (!B) return;
   try { B.openNotificationSettings().catch(() => { /* noop */ }); } catch { /* noop */ }
 }
+
+// ---------------------------------------------------------------------------
+// Versión de la app (auto-actualización)
+// ---------------------------------------------------------------------------
+
+export type NativeAppVersion = {
+  versionName: string;
+  versionCode: number;
+};
+
+/**
+ * Lee la versión de la app nativa instalada (Capacitor App plugin).
+ * Devuelve `null` si no hay bridge nativo o el plugin no responde.
+ */
+export async function getNativeAppVersion(): Promise<NativeAppVersion | null> {
+  const App = plugin('App');
+  if (!App) return null;
+  try {
+    const info = await App.getInfo();
+    const versionCode = Number.parseInt(String(info?.build ?? ''), 10);
+    const versionName = String(info?.version ?? '');
+    if (!versionName || !Number.isFinite(versionCode)) return null;
+    return { versionName, versionCode };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Consulta la versión publicada del APK del comensal.
+ * Devuelve `null` si no hay release publicado o falla la petición.
+ */
+export async function fetchPublishedAppVersion(apiBase: string): Promise<{
+  versionName: string;
+  versionCode: number;
+  url: string;
+  changelog?: string;
+  required?: boolean;
+} | null> {
+  try {
+    const res = await fetch(`${apiBase}/app/version`);
+    if (!res.ok) return null;
+    const json = (await res.json()) as { success: boolean; data: any };
+    const d = json?.data;
+    if (!d || !d.url || !Number.isFinite(d.versionCode)) return null;
+    return {
+      versionName: String(d.versionName ?? ''),
+      versionCode: d.versionCode,
+      url: String(d.url),
+      changelog: d.changelog ? String(d.changelog) : undefined,
+      required: typeof d.required === 'boolean' ? d.required : undefined,
+    };
+  } catch {
+    return null;
+  }
+}

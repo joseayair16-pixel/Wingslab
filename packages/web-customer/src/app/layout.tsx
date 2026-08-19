@@ -4,6 +4,7 @@ import { Inter, Plus_Jakarta_Sans } from 'next/font/google';
 import '../styles/globals.css';
 import ServiceWorkerRegister from './ServiceWorkerRegister';
 import InstallAppButton from '../components/InstallAppButton';
+import AppUpdateBanner from '../components/AppUpdateBanner';
 import SplashScreen from '../components/SplashScreen';
 import DriverArrivalModal from '../components/DriverArrivalModal';
 
@@ -137,6 +138,7 @@ export default function RootLayout({
         />
         <ServiceWorkerRegister />
         <InstallAppButton />
+        <AppUpdateBanner />
         <SplashScreen />
         {children}
         <DriverArrivalModal />
