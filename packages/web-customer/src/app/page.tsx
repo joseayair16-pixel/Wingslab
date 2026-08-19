@@ -3438,12 +3438,8 @@ export default function Home() {
           'order:driver-arrived',
           'order:driver_arrived',
         ].includes(eventName)) {
-          try {
-            if (window.localStorage.getItem('customerAlertSoundEnabled') !== 'false') {
-              void playLlegue();
-            }
-            if (navigator.vibrate) navigator.vibrate([800, 400, 800, 400, 800]);
-          } catch (e) {}
+          // El sonido de llegada del repartidor lo reproduce UNA sola vez el
+          // DriverArrivalModal global (layout), para no duplicar el aviso.
         } else if (eventName === 'order:arrival-reminder') {
           try {
             if (window.localStorage.getItem('customerAlertSoundEnabled') !== 'false') {

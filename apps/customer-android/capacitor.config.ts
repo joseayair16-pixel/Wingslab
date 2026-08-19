@@ -15,7 +15,10 @@ const config: CapacitorConfig = {
   },
   plugins: {
     PushNotifications: {
-      presentationOptions: ['badge', 'sound', 'alert'],
+      // En foreground el sonido lo reproduce el WebView (socket.io) una sola vez.
+      // Si el sistema también sonara el canal nativo en foreground habría doble
+      // reproducción (sistema + web). En background el canal nativo suena normal.
+      presentationOptions: ['badge', 'alert'],
     },
   },
 };

@@ -58,6 +58,7 @@ export default function DriverArrivalModal() {
   const [arrivedOrder, setArrivedOrder] = useState<DriverArrivedOrder | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
   const lastCheckedRef = useRef<Record<string, number>>({});
+  const soundedOrderRef = useRef<Set<string>>(new Set());
 
   // Pantallas del repartidor propio/red: el modal de llegada es SOLO del comensal.
   const [pathname, setPathname] = useState('');
@@ -69,9 +70,16 @@ export default function DriverArrivalModal() {
   const { playLlegue } = useCustomerSounds();
 
   const openArrivalModal = (order: DriverArrivedOrder) => {
+    // Dedup de sonido: por pedido el sonido de llegada suena UNA sola vez,
+    // aunque el evento llegue por socket y por polling.
+    const alreadySounded = soundedOrderRef.current.has(order.id);
+    if (modalOpen && arrivedOrder?.id === order.id) return;
+    if (!alreadySounded) {
+      soundedOrderRef.current.add(order.id);
+      playLlegue();
+    }
     setArrivedOrder(order);
     setModalOpen(true);
-    playLlegue();
     try {
       localStorage.setItem('sadel_persistent_modal', JSON.stringify({ type: 'driver_arrived', orderId: order.id }));
     } catch {}

@@ -41,6 +41,9 @@ public class MainActivity extends BridgeActivity {
         // El canal default queda silencioso para que las notificaciones generales no suenen
         // como pedido nuevo en la app nativa.
         createSilentChannel(manager, "default", "Notificaciones generales", NotificationManager.IMPORTANCE_DEFAULT);
+        // Canal de seguridad: si el backend llegara a mapear una notificación al canal
+        // "notifica" (nuevo pedido), aquí nunca sonará como pedido nuevo y no fallará.
+        createSilentChannel(manager, "notifica", "Pedido nuevo (sin sonido)", NotificationManager.IMPORTANCE_DEFAULT);
     }
 
     private void createSilentChannel(

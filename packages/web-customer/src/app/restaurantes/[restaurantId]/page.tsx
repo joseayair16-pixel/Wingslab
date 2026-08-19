@@ -1454,7 +1454,7 @@ export default function RestaurantPage({
         }
 
         if (
-          ['order:ready', 'order:driver_arrived', 'order:driver-arrived', 'order:delivered', 'order:in-transit', 'order:eta-updated'].includes(eventName)
+          ['order:ready', 'order:delivered', 'order:in-transit', 'order:eta-updated'].includes(eventName)
         ) {
           try {
             if (window.localStorage.getItem('customerAlertSoundEnabled') !== 'false') {
