@@ -2,6 +2,10 @@ import webpush from 'web-push';
 import { prisma } from '../config/database';
 import { logger } from '../utils/logger';
 import { sendFcmNotification } from './fcm.service';
+import { enqueueNotificationRetry } from './notification-retry.service';
+import type { NotificationPayload, PushOptions } from './notification-types';
+
+export type { NotificationPayload, PushOptions };
 
 let vapidConfigured = false;
 
@@ -25,23 +29,6 @@ initVapid();
 export function isVapidConfigured(): boolean {
   return vapidConfigured;
 }
-
-export type NotificationPayload = {
-  title: string;
-  body: string;
-  icon?: string;
-  badge?: string;
-  tag?: string;
-  vibrate?: number[];
-  requireInteraction?: boolean;
-  sound?: string;
-  data?: Record<string, unknown>;
-};
-
-export type PushOptions = {
-  ttl?: number;
-  urgency?: 'very-low' | 'low' | 'normal' | 'high';
-};
 
 const RETRY_CONFIG = {
   maxAttempts: 3,
@@ -214,8 +201,19 @@ export const sendPushNotification = async (
     }
   }
 
+  const delivered = (webPushResult?.success || fcmResult?.success) || false;
+
+  // RED DE SEGURIDAD: si ningún canal entregó y no venimos de la propia cola
+  // de reintentos, encolamos el reenvío en diferido. Así un aviso crítico no
+  // se pierde por un bajón momentáneo de FCM/web-push: el job lo reintenta.
+  if (!delivered && !options?.skipRetryQueue) {
+    await enqueueNotificationRetry(userId, payload, 'Ningún canal entregó en el intento inicial').catch((err: any) => {
+      logger.error(`[PushService] No se pudo encolar reenvío para usuario ${userId}: ${err?.message || err}`);
+    });
+  }
+
   return {
-    success: (webPushResult?.success || fcmResult?.success) || false,
+    success: delivered,
     totalSent: (webPushResult?.totalSent || 0) + (fcmResult?.totalSent || 0),
     totalAttempted: (webPushResult?.totalAttempted || 0) + (fcmResult?.totalAttempted || 0),
   };

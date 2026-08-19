@@ -153,8 +153,40 @@ function stringifyData(data: Record<string, unknown>): Record<string, string> {
 }
 
 /**
- * Envía una notificación FCM a todos los tokens del usuario.
- * Los tokens inválidos (UNREGISTERED / INVALID_ARGUMENT) se eliminan.
+ * Errores transitorios de FCM que merecen reintento con backoff:
+ *  - rate-limit (429 / messaging/rate-exceeded)
+ *  - servidor ocupado / caída temporal (5xx / messaging/server-unavailable / messaging/internal-error)
+ *  - errores de red / timeout
+ */
+function isTransientFcmError(error: any): boolean {
+  if (!error) return false;
+  const code = error?.errorInfo?.code || error?.code || '';
+  if (code === 'messaging/server-unavailable' || code === 'messaging/internal-error' || code === 'messaging/rate-exceeded') {
+    return true;
+  }
+  const status = error?.status || error?.statusCode;
+  if (typeof status === 'number') {
+    if (status === 429 || status === 500 || status === 503) return true;
+  }
+  const message = String(error?.message || error?.errorInfo?.message || '');
+  return /network|timeout|ETIMEDOUT|ECONNRESET|ECONNREFUSED|EAI_AGAIN|socket hang up/i.test(message);
+}
+
+/** Backoff exponencial con jitter (evita thundering herd entre miles de tokens). */
+function delayWithBackoff(attempt: number): Promise<void> {
+  const baseMs = 1000;
+  const jitter = Math.random() * 500;
+  const delay = Math.min(baseMs * Math.pow(2, attempt - 1) + jitter, 10000);
+  return new Promise((resolve) => setTimeout(resolve, delay));
+}
+
+const FCM_MAX_ATTEMPTS = 3;
+
+/**
+ * Envía una notificación FCM a todos los tokens del usuario con reintentos
+ * robustos (backoff exponencial + jitter) ante errores transitorios de FCM
+ * (rate-limit, sobrecarga, red). Los tokens inválidos (UNREGISTERED /
+ * INVALID_ARGUMENT) se eliminan sin reintentar: re-intentarlos no tiene sentido.
  * Nunca lanza: los errores se loguean para no interrumpir el flujo web-push.
  */
 export async function sendFcmNotification(
@@ -180,27 +212,54 @@ export async function sendFcmNotification(
   const results = await Promise.allSettled(
     tokens.map(async (t) => {
       const msg = { ...message, token: t.token } as Message;
-      await messagingInstance!.send(msg);
-      sent += 1;
+      let lastError: any = null;
+
+      for (let attempt = 1; attempt <= FCM_MAX_ATTEMPTS; attempt++) {
+        try {
+          await messagingInstance!.send(msg);
+          sent += 1;
+          return { ok: true as const, tokenId: t.id };
+        } catch (error: any) {
+          lastError = error;
+          const code = error?.errorInfo?.code || error?.code || '';
+          // Token muerto: no tiene sentido reintentar; se elimina.
+          if (code === 'messaging/registration-token-not-registered' || code === 'messaging/invalid-argument') {
+            return { ok: false as const, tokenId: t.id, fatal: true as const, code, message: error?.message };
+          }
+          // Error transitorio: reintentar con backoff.
+          if (isTransientFcmError(error) && attempt < FCM_MAX_ATTEMPTS) {
+            await delayWithBackoff(attempt);
+            continue;
+          }
+          // Error definitivo no transitorio: fallar este token sin más.
+          return { ok: false as const, tokenId: t.id, fatal: false as const, code, message: error?.message };
+        }
+      }
+      return { ok: false as const, tokenId: t.id, fatal: false as const, code: lastError?.errorInfo?.code || lastError?.code || '', message: lastError?.message };
     })
   );
 
-  results.forEach((result, index) => {
-    const tokenId = tokens[index].id;
+  for (let i = 0; i < results.length; i++) {
+    const tokenRow = tokens[i];
+    const result = results[i];
+
     if (result.status === 'rejected') {
-      const error: any = result.reason;
-      const code = error?.errorInfo?.code || error?.code || '';
-      logger.error(
-        `[FcmService] Error enviando a token ${tokens[index].token.slice(0, 12)}… (${code}): ${error?.message || 'desconocido'}`
-      );
-      if (code === 'messaging/registration-token-not-registered' || code === 'messaging/invalid-argument') {
-        prisma.fcmToken
-          .delete({ where: { id: tokenId } })
-          .then(() => logger.info(`[FcmService] Token FCM inválido eliminado: ${tokenId}`))
-          .catch(() => undefined);
-      }
+      logger.error(`[FcmService] Fallo definitivo al enviar a token ${tokenRow.token.slice(0, 12)}… (${result.reason?.message || 'desconocido'})`);
+      continue;
     }
-  });
+
+    const r = result.value;
+    if (r.fatal) {
+      prisma.fcmToken
+        .delete({ where: { id: r.tokenId } })
+        .then(() => logger.info(`[FcmService] Token FCM inválido eliminado: ${r.tokenId}`))
+        .catch(() => undefined);
+    } else {
+      logger.warn(
+        `[FcmService] Error enviando a token ${tokenRow.token.slice(0, 12)}… (${r.code || 'unknown'}): ${r.message || 'desconocido'}`
+      );
+    }
+  }
 
   const totalAttempted = tokens.length;
   return { success: sent > 0, totalSent: sent, totalAttempted };

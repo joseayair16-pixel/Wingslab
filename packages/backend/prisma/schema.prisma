@@ -892,6 +892,33 @@ model FcmToken {
   @@index([userId])
 }
 
+// Cola de reenvío de notificaciones críticas. Si un push falla tras los
+// reintentos inmediatos (rate-limit, FCM caído, red), se persiste aquí y un
+// job lo reintenta en diferido hasta entregarse o expirar el TTL. Así nunca
+// se pierde un aviso importante aunque el servicio tenga un bajón momentáneo.
+model NotificationRetry {
+  id           String   @id @default(cuid())
+  userId       String
+
+  // Clave de dedupe `<orderId>:<evento>` para no acumular reintentos del
+  // mismo evento de un pedido. Null cuando no hay orderId identificable.
+  dedupeKey    String?  @unique
+
+  payload      String // JSON de NotificationPayload (title/body/data/sound/...)
+
+  attempts     Int      @default(0)
+  maxAttempts  Int      @default(10)
+  nextAttemptAt DateTime @default(now())
+  lastError    String?
+  expiresAt    DateTime
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([nextAttemptAt])
+  @@index([expiresAt])
+}
+
 // ============== Refresh Tokens ==============
 model RefreshToken {
   id        String    @id @default(cuid())
