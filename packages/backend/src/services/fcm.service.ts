@@ -107,7 +107,7 @@ export function buildFcmMessage(payload: NotificationPayload): BaseMessage {
         channelId: channelId || 'default',
         ...(payload.vibrate ? { vibrateTimingsMillis: payload.vibrate } : {}),
         sticky: payload.requireInteraction ?? true,
-        ...(payload.icon ? { icon: 'ic_stat_sadel' } : {}),
+        icon: 'ic_stat_sadel',
       },
     },
     data: {
