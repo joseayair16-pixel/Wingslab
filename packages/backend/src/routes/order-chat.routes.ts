@@ -222,6 +222,7 @@ export async function registerOrderChatRoutes(fastify: FastifyInstance): Promise
       void sendPushNotification(recipientUserId, {
         title: isCustomer ? `Mensaje de Comensal - Pedido #${order.orderReference}` : `Mensaje de ${order.restaurant.name}`,
         body: content,
+        sound: '/sounds/mensaje.wav',
         data: {
           orderId,
           type: 'new_chat_message',

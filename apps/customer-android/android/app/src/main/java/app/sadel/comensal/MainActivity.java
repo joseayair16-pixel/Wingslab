@@ -38,9 +38,9 @@ public class MainActivity extends BridgeActivity {
         createChannel(manager, "rezagado", "Pedido rezagado", R.raw.rezagado, NotificationManager.IMPORTANCE_HIGH, attrs);
         createChannel(manager, "mensaje", "Mensaje de chat", R.raw.mensaje, NotificationManager.IMPORTANCE_DEFAULT, attrs);
         // El comensal nunca recibe "nuevo pedido" (ese sonido es del restaurante/repartidor).
-        // El canal default queda silencioso para que las notificaciones generales no suenen
-        // como pedido nuevo en la app nativa.
-        createSilentChannel(manager, "default", "Notificaciones generales", NotificationManager.IMPORTANCE_DEFAULT);
+        // El canal default queda con llegue.wav para que CUALQUIER notificación de estado
+        // (sin sound explícito en el payload) suene una vez aunque la app esté cerrada.
+        createChannel(manager, "default", "Notificaciones generales", R.raw.llegue, NotificationManager.IMPORTANCE_HIGH, attrs);
         // Canal de seguridad: si el backend llegara a mapear una notificación al canal
         // "notifica" (nuevo pedido), aquí nunca sonará como pedido nuevo y no fallará.
         createSilentChannel(manager, "notifica", "Pedido nuevo (sin sonido)", NotificationManager.IMPORTANCE_DEFAULT);

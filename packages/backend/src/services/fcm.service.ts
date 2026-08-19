@@ -85,6 +85,29 @@ export function mapSoundToChannelId(sound?: string): string | undefined {
 }
 
 /**
+ * Deriva el sonido del evento cuando el payload no trae `sound`. Muchos pushes
+ * al comensal no especifican sonido (la web lo reproduce por socket.io), pero
+ * la app nativa necesita el channelId correcto para sonar aunque esté cerrada.
+ */
+function inferSoundFromEvent(payload: NotificationPayload): string | undefined {
+  const event = typeof payload.data?.event === 'string' ? payload.data.event : '';
+  const type = typeof payload.data?.type === 'string' ? payload.data.type : '';
+  if (type === 'new_chat_message') return '/sounds/mensaje.wav';
+  if (event === 'order:rezagado') return '/sounds/rezagado.wav';
+  if (event === 'order:cancellation-approved' || event === 'order:cancellation-rejected' || event === 'order:rejected') {
+    return '/sounds/mensaje.wav';
+  }
+  if (
+    event.startsWith('order:') ||
+    event.startsWith('order_chat:') ||
+    event === 'restaurant:order_ready'
+  ) {
+    return '/sounds/llegue.wav';
+  }
+  return undefined;
+}
+
+/**
  * Convierte un NotificationPayload (web-push) a un mensaje FCM.
  * - title/body → notification del sistema.
  * - sound → channelId (canal nativo con el .wav empaquetado).
@@ -94,7 +117,8 @@ export function mapSoundToChannelId(sound?: string): string | undefined {
  * - prioridad alta siempre (anti-Doze; la importancia de sonido la define el canal).
  */
 export function buildFcmMessage(payload: NotificationPayload): BaseMessage {
-  const channelId = mapSoundToChannelId(payload.sound);
+  const effectiveSound = payload.sound || inferSoundFromEvent(payload);
+  const channelId = mapSoundToChannelId(effectiveSound) || 'default';
 
   const message: BaseMessage = {
     notification: {
@@ -104,7 +128,7 @@ export function buildFcmMessage(payload: NotificationPayload): BaseMessage {
     android: {
       priority: 'high',
       notification: {
-        channelId: channelId || 'default',
+        channelId,
         ...(payload.vibrate ? { vibrateTimingsMillis: payload.vibrate } : {}),
         sticky: payload.requireInteraction ?? true,
         icon: 'ic_stat_sadel',
