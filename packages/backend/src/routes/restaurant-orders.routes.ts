@@ -1857,14 +1857,21 @@ export async function registerRestaurantOrderRoutes(fastify: FastifyInstance): P
               select: {
                 supportRestaurantId: true,
                 supportAttempts: true,
+                driverId: true,
                 restaurant: { select: { userId: true } },
                 orderReference: true,
               },
             });
 
             // Guarda anti-timers obsoletos: si el pedido fue reenviado (supportAttempts
-            // avanzó), este temporizador de la ronda anterior ya no debe notificar.
-            if (currentOrder && !currentOrder.supportRestaurantId && currentOrder.supportAttempts === attemptsUsed) {
+            // avanzó) o ya tiene un repartidor asignado (driverId), este temporizador
+            // de la ronda anterior ya no debe notificar "nadie aceptó".
+            if (
+              currentOrder &&
+              !currentOrder.supportRestaurantId &&
+              !currentOrder.driverId &&
+              currentOrder.supportAttempts === attemptsUsed
+            ) {
               // Nadie aceptó en 2 minutos!
               await prisma.order.update({
                 where: { id: order.id },

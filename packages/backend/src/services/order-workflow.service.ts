@@ -204,6 +204,19 @@ export async function getActiveSinceMs(orderId: string): Promise<number | null> 
 
 const REJECTION_TTL = 900;
 
+// Capacidad de pedidos activos por repartidor.
+// MAX_ACTIVE_ORDERS: tope normal (por defecto 3).
+// OVERLOAD_MAX_ACTIVE_ORDERS: tope máximo en el pase de emergencia (por defecto 5)
+// para evitar saturar a un único repartidor con todo el pool.
+export function getMaxActiveOrders(): number {
+  const n = parseInt(process.env.MAX_ACTIVE_ORDERS || '3', 10);
+  return Number.isFinite(n) && n > 0 ? n : 3;
+}
+function getOverloadMaxActiveOrders(): number {
+  const n = parseInt(process.env.OVERLOAD_MAX_ACTIVE_ORDERS || '5', 10);
+  return Number.isFinite(n) && n > 0 ? n : 5;
+}
+
 export async function getDriverRejectionCount(orderId: string, driverId: string): Promise<number> {
   try {
     const redis = getRedis();
@@ -1108,7 +1121,7 @@ export async function updateOrderStatusByDriver({
 
     if (
       driver.availability !== DriverAvailability.AVAILABLE &&
-      (driver.availability !== DriverAvailability.BUSY || activeOrdersCount >= 3)
+      (driver.availability !== DriverAvailability.BUSY || activeOrdersCount >= getMaxActiveOrders())
     ) {
       throw createDomainError(
         409,
@@ -1168,10 +1181,29 @@ export async function updateOrderStatusByDriver({
       // Registrar que este repartidor rechazo la orden (máximo 2 veces)
       await incrementDriverRejection(order.id, driver.id);
 
+      // Recalcular disponibilidad real: si aún tiene pedidos activos, sigue BUSY
+      const remainingActiveAfterReject = await tx.order.count({
+        where: {
+          driverId: driver.id,
+          id: { not: order.id },
+          status: {
+            in: [
+              OrderStatus.CONFIRMED,
+              OrderStatus.PREPARING,
+              OrderStatus.READY,
+              OrderStatus.PICKED_UP,
+              OrderStatus.IN_TRANSIT,
+            ],
+          },
+        },
+      });
+
       await tx.driver.update({
         where: { id: driver.id },
         data: {
-          availability: DriverAvailability.AVAILABLE,
+          availability: remainingActiveAfterReject > 0
+            ? DriverAvailability.BUSY
+            : DriverAvailability.AVAILABLE,
         },
       });
 
@@ -1187,6 +1219,7 @@ export async function updateOrderStatusByDriver({
         orderId: order.id,
         driverUserId,
         status: order.status,
+        remainingActiveAfterReject,
       });
 
       return updatedOrder;
@@ -1280,6 +1313,11 @@ export async function updateOrderStatusByDriver({
   }
 
   const isNoContactRelease = action === 'safe_place' || action === 'no_show';
+
+  // Bandera para disparar el reabastecimiento inmediato tras la transacción:
+  // cuando el repartidor entrega/libera un pedido pero aún le quedan activos
+  // (3→2 o 2→1), se le reasigna el siguiente pedido de la zona al instante.
+  let shouldRefillFreeSlot = false;
 
   return prisma.$transaction(async (tx) => {
     const currentOrder = await tx.order.findUnique({
@@ -1435,6 +1473,8 @@ export async function updateOrderStatusByDriver({
           availability: DriverAvailability.BUSY,
         },
       });
+      // El repartidor liberó un hueco (3→2 o 2→1): reabastecerlo al instante.
+      shouldRefillFreeSlot = true;
     }
 
     const deliveryTrackingNote =
@@ -1470,6 +1510,17 @@ export async function updateOrderStatusByDriver({
       toStatus: OrderStatus.DELIVERED,
     });
 
+    return updatedOrder;
+  }).then(async (updatedOrder) => {
+    // Reabastecimiento inmediato del hueco liberado (3→2 / 2→1), sin esperar
+    // el polling de 30 s del JIT. Best-effort: nunca bloquea la respuesta.
+    if (shouldRefillFreeSlot) {
+      try {
+        await refillDriverFreeSlot(prisma, driver.id);
+      } catch (refillErr) {
+        logger.warn(`[Refill] No se pudo reabastecer hueco del repartidor ${driver.id}:`, refillErr);
+      }
+    }
     return updatedOrder;
   });
 }
@@ -1944,8 +1995,10 @@ export async function autoAssignDriver(
 
       // En pase normal, cada repartidor lleva máx. 3 pedidos activos.
       // En el pase de "overload" (emergencia) se permite exceder el tope
-      // para evitar pedidos rezagados sin repartidor.
-      if (activeAcceptedCount >= 3 && !options.allowOverload) continue;
+      // normal, pero hasta un máximo configurable para evitar saturar a un
+      // único repartidor con todo el pool de pedidos.
+      const maxActive = options.allowOverload ? getOverloadMaxActiveOrders() : getMaxActiveOrders();
+      if (activeAcceptedCount >= maxActive) continue;
 
       let assignedOrder: any;
       try {
@@ -2173,6 +2226,149 @@ async function getAnyDriverForRestaurant(
     userId: d.userId,
     user: { id: d.user.id, name: d.user.name },
   }));
+}
+
+/**
+ * Reabastecimiento inmediato del hueco de un repartidor BUSY que acaba de
+ * liberar un pedido (3→2 o 2→1). Encuentra el siguiente pedido pendiente de su
+ * zona (FIFO por createdAt, dentro de la ventana JIT), valida la compatibilidad
+ * de ruta (smart stacking) y lo asigna de forma atómica a ESTE repartidor, sin
+ * esperar el polling de 30 s del JIT. Emite las notificaciones de asignación.
+ */
+export async function refillDriverFreeSlot(
+  prisma: PrismaClient,
+  driverId: string,
+  options: { emitNotifications?: boolean } = {}
+): Promise<{ order: any; driver: { id: string; userId: string; user: { name: string } } } | null> {
+  const driver = await prisma.driver.findUnique({
+    where: { id: driverId },
+    select: {
+      id: true,
+      region: true,
+      availability: true,
+      userId: true,
+      user: { select: { name: true } },
+    },
+  });
+  if (!driver || driver.availability === DriverAvailability.OFFLINE) return null;
+
+  const activeCount = await prisma.order.count({
+    where: {
+      driverId: driver.id,
+      isAcceptedByDriver: true,
+      status: {
+        in: [
+          OrderStatus.CONFIRMED,
+          OrderStatus.PREPARING,
+          OrderStatus.READY,
+          OrderStatus.PICKED_UP,
+          OrderStatus.IN_TRANSIT,
+        ],
+      },
+    },
+  });
+  // El repartidor ya está a tope; no hay hueco que reabastecer.
+  if (activeCount >= getMaxActiveOrders()) return null;
+
+  const jitTarget = new Date(Date.now() + 8 * 60 * 1000);
+  const pendingOrder = await prisma.order.findFirst({
+    where: {
+      driverId: null,
+      supportRestaurantId: null,
+      isSupportRequested: false,
+      fulfillmentType: 'DELIVERY',
+      status: { in: [OrderStatus.CONFIRMED, OrderStatus.PREPARING, OrderStatus.READY] },
+      restaurant: {
+        region: driver.region,
+        hasOwnDelivery: false,
+      },
+      OR: [
+        { preparationDeadlineAt: { lte: jitTarget } },
+        { preparationDeadlineAt: null, estimatedDeliveryTime: { lte: jitTarget } },
+        { noDriversAvailable: true },
+      ],
+    },
+    orderBy: { createdAt: 'asc' },
+    select: { id: true, restaurant: { select: { userId: true } } },
+  });
+
+  if (!pendingOrder) return null;
+
+  // Validar smart-stacking: que este repartidor (BUSY con pedidos) sea elegible
+  // para el nuevo pedido según proximidad/compatibilidad de ruta.
+  const eligible = await getAvailableDriversForRestaurant(
+    prisma,
+    pendingOrder.restaurant.userId,
+    pendingOrder.id,
+    [],
+    false
+  );
+  if (!eligible.some((d) => d.id === driver.id)) return null;
+
+  // Asignación atómica: solo se asigna si el pedido sigue sin repartidor.
+  // Se setea driverAssignedAt e isAcceptedByDriver:false para que el auto-expulsión
+  // del JIT (2 min sin aceptar) aplique también a los pedidos reabastecidos.
+  const claimed = await prisma.order.updateMany({
+    where: {
+      id: pendingOrder.id,
+      driverId: null,
+      status: { in: [OrderStatus.CONFIRMED, OrderStatus.PREPARING, OrderStatus.READY] },
+    },
+    data: {
+      driverId: driver.id,
+      driverAssignedAt: new Date(),
+      isAcceptedByDriver: false,
+    },
+  });
+  if (claimed.count === 0) return null;
+
+  // El repartidor ya tiene un pedido activo: marcarlo BUSY.
+  await prisma.driver.update({
+    where: { id: driver.id },
+    data: { availability: DriverAvailability.BUSY },
+  });
+
+  const order = await prisma.order.findUniqueOrThrow({
+    where: { id: pendingOrder.id },
+    select: restaurantOrderWorkflowSelect,
+  });
+
+  await prisma.orderTracking.create({
+    data: {
+      orderId: order.id,
+      status: order.status,
+      notes: `Repartidor auto-asignado por reabastecimiento de hueco: ${driver.user.name}`,
+    },
+  });
+
+  if (options.emitNotifications !== false) {
+    appEvents.emit('order.driver_auto_assigned_on_free_slot', {
+      orderId: order.id,
+      driverId: driver.id,
+      restaurantUserId: pendingOrder.restaurant.userId,
+    });
+    void sendPushNotification(driver.userId, {
+      title: '🛵 Nuevo pedido asignado',
+      body: `${order.restaurant.name} — Gana $${Number(order.deliveryFee || 0).toFixed(2)} · ${Number(order.deliveryDistanceKm || 0).toFixed(1)} km`,
+      icon: '/app-icon-192.png',
+      badge: '/badge.png',
+      vibrate: [500, 200, 500, 200, 500],
+      requireInteraction: true,
+      sound: '/sounds/notifica.wav',
+      data: {
+        orderId: order.id,
+        orderReference: order.orderReference,
+        url: `/?orderId=${order.id}`,
+      },
+      tag: `order-assigned-${order.id}`,
+    });
+  }
+
+  logger.info(`[Refill] Repartidor ${driver.id} reabastecido con pedido ${order.id}`);
+  return {
+    order,
+    driver: { id: driver.id, userId: driver.userId, user: { name: driver.user.name } },
+  };
 }
 
 export async function sweepUnassignedOrdersForRegion(prisma: PrismaClient, region: string) {

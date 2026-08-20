@@ -2193,6 +2193,18 @@ export async function registerDriverPanelRoutes(fastify: FastifyInstance): Promi
           }
         }, 300);
 
+        // Refill del hueco liberado por el repartidor (si aún tiene capacidad).
+        // El pedido liberado se reasigna en el setTimeout anterior; aquí se
+        // reabastece el hueco de ESTE repartidor con el siguiente pendiente.
+        setTimeout(async () => {
+          try {
+            const { refillDriverFreeSlot } = await import('../services/order-workflow.service');
+            await refillDriverFreeSlot(prisma, driver.id);
+          } catch (refillErr) {
+            console.error('Refill failed after driver release:', refillErr);
+          }
+        }, 350);
+
         return reply.send({
           success: true,
           data: order,

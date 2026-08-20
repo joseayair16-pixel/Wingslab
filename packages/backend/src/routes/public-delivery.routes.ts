@@ -178,6 +178,17 @@ export async function registerPublicDeliveryRoutes(fastify: FastifyInstance): Pr
 
       const order = dToken.order;
 
+      // Idempotencia: si el pedido ya fue entregado (vía QR, tablet o repartidor),
+      // responder éxito sin re-notificar ni volver a actualizar.
+      if (order.status === OrderStatus.DELIVERED) {
+        await (prisma as any).deliveryToken.delete({ where: { id: dToken.id } }).catch(() => undefined);
+        return reply.send({
+          success: true,
+          message: 'El pedido ya fue entregado.',
+          data: order,
+        });
+      }
+
       // Si el pedido tiene un PIN requerido por seguridad (solo para transferencias), es obligatorio proporcionarlo y debe coincidir exactamente
       if (order.paymentMethod === 'TRANSFER' && (order.handoverPin || order.deliveryPin)) {
         const providedPin = body.success ? body.data.pin : undefined;
@@ -193,12 +204,17 @@ export async function registerPublicDeliveryRoutes(fastify: FastifyInstance): Pr
       }
 
 
-      // 1. Actualizar el pedido en base de datos
+      // 1. Actualizar el pedido en base de datos.
+      //    En reparto propio con pago en efectivo el dinero ya fue cobrado por
+      //    el repartidor en la puerta: marcar el pago como COMPLETED (mismo
+      //    comportamiento que la tablet del restaurante). Transferencias y pagos
+      //    en línea quedan como estén (el cobro se confirma por otro medio).
       const updatedOrder = await prisma.order.update({
         where: { id: order.id },
         data: {
           status: OrderStatus.DELIVERED,
           deliveredAt: new Date(),
+          ...(order.paymentMethod === 'CASH' ? { paymentStatus: 'COMPLETED' } : {}),
         },
       });
 

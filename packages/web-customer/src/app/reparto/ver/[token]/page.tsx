@@ -7,9 +7,17 @@
 /* eslint-disable @typescript-eslint/no-unsafe-argument */
 /* eslint-disable react-hooks/exhaustive-deps */
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import DeliveryRouteMap from '../../../../components/DeliveryRouteMap';
 import DriverTurnByTurnOverlay from '../../../../components/DriverTurnByTurnOverlay';
+import { Html5Qrcode } from 'html5-qrcode';
+import {
+  optimizeRoute,
+  orderReferenceToTime,
+  reorderByTokens,
+  extractTokenFromRaw,
+  haversineKm,
+} from '../../../../lib/route-optimizer';
 
 interface DeliveryTicketData {
   id: string;
@@ -89,11 +97,58 @@ export default function DeliveryTicketPage({ params }: PageProps) {
   // Navegación turn-by-turn in-app: destino 'pickup' (restaurante) o 'delivery' (domicilio).
   const [navOpenFor, setNavOpenFor] = useState<'pickup' | 'delivery' | null>(null);
 
+  // Modal "Agregar entrega": escáner QR o pegar enlace
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [addMode, setAddMode] = useState<'qr' | 'link'>('qr');
+  const [linkInput, setLinkInput] = useState('');
+  const [addError, setAddError] = useState('');
+  const [adding, setAdding] = useState(false);
+  const scannerRef = useRef<Html5Qrcode | null>(null);
+  // Ref espejo del estado del modal para que los timers del escáner puedan
+  // comprobar si el modal sigue abierto antes de encender la cámara.
+  const addModalOpenRef = useRef(false);
+  const scannerContainerId = 'sadel-qr-reader';
+
+  // Ruta inteligente: orden optimizado de tokens activos (null = orden actual/ninguno)
+  const [routeOrder, setRouteOrder] = useState<string[] | null>(null);
+
+  // Métricas del turno: reloj en vivo y distancia recorrida acumulada (GPS).
+  const [shiftNow, setShiftNow] = useState(() => Date.now());
+  const [kmDriven, setKmDriven] = useState(0);
+  const lastGpsPosRef = useRef<{ lat: number; lng: number } | null>(null);
+
+  // Tick del reloj: refresca el tiempo de jornada cada 30s.
+  useEffect(() => {
+    const id = setInterval(() => setShiftNow(Date.now()), 30000);
+    return () => clearInterval(id);
+  }, []);
+
+  // Acumular kilómetros recorridos con cada actualización de GPS.
+  useEffect(() => {
+    if (!driverPos) return;
+    const prev = lastGpsPosRef.current;
+    if (prev) {
+      const d = haversineKm(prev.lat, prev.lng, driverPos.lat, driverPos.lng);
+      if (d > 0.01) {
+        setKmDriven((k) => k + d);
+      }
+    }
+    lastGpsPosRef.current = driverPos;
+  }, [driverPos]);
+
   // Dark mode automático por preferencia del sistema
   const [darkMode, setDarkMode] = useState(false);
   
   useEffect(() => {
     setIsMounted(true);
+    // Limpieza del escáner al desmontar la página.
+    return () => {
+      const sc = scannerRef.current;
+      if (sc) {
+        scannerRef.current = null;
+        try { void sc.stop().catch(() => {}); } catch (e) { /* sin cámara */ }
+      }
+    };
   }, []);
 
   const apiBase = '/api';
@@ -205,12 +260,14 @@ export default function DeliveryTicketPage({ params }: PageProps) {
 
       setDeliveries(currentList);
 
-      const activeDeliveries = currentList.filter(d => !d.delivered);
-      
-      if (activeDeliveries.length === 1 && token) {
+      // LANDING SIEMPRE EN EL DASHBOARD: la vista de detalle solo se abre al
+      // tocar una tarjeta. Única excepción: apoyo a red cuyo restaurante origen
+      // aún no confirma la entrega (debe ver la espera de inmediato al escanear).
+      const waitingHandoverForToken =
+        typeof window !== 'undefined' &&
+        localStorage.getItem(`sadel_pickupwaiting_${token || ''}`) === 'true';
+      if (token && waitingHandoverForToken) {
         setSelectedToken(token);
-      } else if (activeDeliveries.length === 0 && currentList.length === 1) {
-        setSelectedToken(currentList[0].token);
       } else {
         setSelectedToken(null);
       }
@@ -228,6 +285,53 @@ export default function DeliveryTicketPage({ params }: PageProps) {
       void loadAndSyncTicket();
     }
   }, [token]);
+
+  // Sincronización entre pestañas: si otra pestaña agrega/entrega/elimina un
+  // pedido, esta pestaña actualiza su lista al instante (storage event).
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const handleStorage = (e: StorageEvent) => {
+      if (e.key === 'sadel_scanned_deliveries') {
+        try {
+          const stored = e.newValue;
+          let parsed: ScannedDelivery[] = [];
+          if (stored) {
+            parsed = JSON.parse(stored) as ScannedDelivery[];
+            parsed = parsed.filter(item =>
+              !(item.delivered && Date.now() - item.scannedAt > 12 * 60 * 60 * 1000)
+            );
+          }
+          setDeliveries(parsed);
+        } catch (err) {
+          // JSON inválido desde otra pestaña: ignorar
+        }
+      } else if (e.key && e.key.startsWith('sadel_arrived_')) {
+        const tok = e.key.replace('sadel_arrived_', '');
+        if (e.newValue === 'true') {
+          setDeliveries(prev => {
+            const newList = prev.map(item =>
+              item.token === tok ? { ...item, arrived: true } : item
+            );
+            return newList;
+          });
+        }
+      } else if (e.key && e.key.startsWith('sadel_pickedup_')) {
+        const tok = e.key.replace('sadel_pickedup_', '');
+        if (e.newValue === 'true') {
+          setDeliveries(prev => {
+            const newList = prev.map(item =>
+              item.token === tok ? { ...item, pickedUp: true } : item
+            );
+            return newList;
+          });
+        }
+      }
+    };
+
+    window.addEventListener('storage', handleStorage);
+    return () => window.removeEventListener('storage', handleStorage);
+  }, []);
 
   // Sincronizar en segundo plano otros pedidos guardados
   useEffect(() => {
@@ -635,6 +739,233 @@ export default function DeliveryTicketPage({ params }: PageProps) {
     if (selectedToken === tokenToRemove) {
       setSelectedToken(null);
     }
+
+    // Si la ruta optimizada contenía el token eliminado, la descartamos para
+    // no dejar referencias huérfanas.
+    setRouteOrder(prev => prev ? prev.filter(t => t !== tokenToRemove) : prev);
+  };
+
+  // ──────────────────────────
+  // MODAL "AGREGAR ENTREGA" (escáner QR / pegar enlace)
+  // ──────────────────────────
+
+  // Detener la cámara del escáner de forma segura (no-op si nunca se inició).
+  const stopScanner = () => {
+    const sc = scannerRef.current;
+    if (sc) {
+      scannerRef.current = null;
+      try {
+        void sc.stop().catch(() => {});
+      } catch (e) {
+        // sin cámara activa: ignorar
+      }
+    }
+  };
+
+  const openAddModal = () => {
+    triggerHaptic([20]);
+    setAddMode('qr');
+    setLinkInput('');
+    setAddError('');
+    setAdding(false);
+    addModalOpenRef.current = true;
+    setShowAddModal(true);
+    // Iniciar la cámara tras un pequeño delay para que el contenedor exista.
+    setTimeout(() => {
+      if (addModalOpenRef.current) startScanner();
+    }, 150);
+  };
+
+  const closeAddModal = () => {
+    triggerHaptic([10]);
+    addModalOpenRef.current = false;
+    stopScanner();
+    setShowAddModal(false);
+    setAddError('');
+  };
+
+  // Arrancar el escáner HTML5-QRCode dentro del contenedor del modal.
+  const startScanner = () => {
+    if (typeof document === 'undefined') return;
+    if (!addModalOpenRef.current) return;
+    const el = document.getElementById(scannerContainerId);
+    if (!el) return;
+
+    stopScanner();
+    const scanner = new Html5Qrcode(scannerContainerId, { verbose: false });
+    scannerRef.current = scanner;
+
+    const config = { fps: 10, qrbox: { width: 220, height: 220 } };
+    scanner
+      .start(
+        { facingMode: 'environment' },
+        config,
+        async (decodedText) => {
+          // Decodificación exitosa: parsear el token y agregar la entrega.
+          const decodedToken = extractTokenFromRaw(decodedText);
+          if (!decodedToken) return;
+          stopScanner();
+          setShowAddModal(false);
+          setAddError('');
+          await addTokenToRoute(decodedToken, 'scanner');
+        },
+        (errorMessage: string) => {
+          // Errores de decodificación son normales (sin QR en cuadro): ignorar.
+          if (errorMessage && errorMessage.includes('NotFound')) {
+            // sin QR detectado: no molestar
+          }
+        }
+      )
+      .catch((err: any) => {
+        console.error('Error al iniciar el escáner:', err);
+        setAddError(
+          'No se pudo acceder a la cámara. Verifica los permisos o pega el enlace manualmente.'
+        );
+      });
+  };
+
+  // Cambiar entre pestañas QR / Link (reinicia el escáner según el modo).
+  const switchAddMode = (mode: 'qr' | 'link') => {
+    setAddMode(mode);
+    setAddError('');
+    if (mode === 'qr') {
+      setTimeout(() => {
+        if (addModalOpenRef.current) startScanner();
+      }, 100);
+    } else {
+      stopScanner();
+    }
+  };
+
+  // Agregar un token (de escáner o link) a la ruta del repartidor.
+  const addTokenToRoute = async (rawToken: string, _source: 'scanner' | 'link') => {
+    const cleanToken = extractTokenFromRaw(rawToken);
+    if (!cleanToken) {
+      setAddError('No se pudo reconocer el enlace. Pega la liga completa del QR.');
+      return;
+    }
+
+    // Dedupe: si el token ya está en la lista (activo o entregado), avisar.
+    const alreadyExists = deliveries.some((d) => d.token === cleanToken);
+    if (alreadyExists) {
+      setAddError('Esta entrega ya fue agregada a tu ruta.');
+      setAdding(false);
+      return;
+    }
+
+    try {
+      setAdding(true);
+      setAddError('');
+      const response = await fetch(`${apiBase}/public/delivery-ticket/${cleanToken}`);
+      const data = await response.json();
+      if (!response.ok || !data.success) {
+        throw new Error(data.error?.message || 'El enlace ya no está activo o ha expirado.');
+      }
+
+      const ticketData = data.data as DeliveryTicketData;
+      const isArrived = typeof window !== 'undefined'
+        ? localStorage.getItem(`sadel_arrived_${cleanToken}`) === 'true'
+        : false;
+      const isPickedUp = typeof window !== 'undefined'
+        ? localStorage.getItem(`sadel_pickedup_${cleanToken}`) === 'true'
+        : false;
+
+      const newDelivery: ScannedDelivery = {
+        token: cleanToken,
+        data: ticketData,
+        arrived: isArrived,
+        pickedUp: isPickedUp,
+        delivered: ticketData.status === 'DELIVERED',
+        scannedAt: Date.now(),
+        deliveredAt: ticketData.status === 'DELIVERED' ? Date.now() : undefined,
+      };
+
+      const newList = [...deliveries, newDelivery];
+      setDeliveries(newList);
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('sadel_scanned_deliveries', JSON.stringify(newList));
+      }
+
+      setLinkInput('');
+      setAdding(false);
+      setShowAddModal(false);
+      stopScanner();
+      triggerHaptic([50, 40, 50]);
+    } catch (err: any) {
+      console.error(err);
+      setAddError(err.message || 'No se pudo agregar la entrega.');
+      setAdding(false);
+    }
+  };
+
+  // Agregar desde el campo de texto (link pegado manualmente).
+  const handleAddByLink = () => {
+    triggerHaptic([20]);
+    void addTokenToRoute(linkInput, 'link');
+  };
+
+  // ──────────────────────────
+  // RUTA INTELIGENTE
+  // ──────────────────────────
+
+  // Orden activo de los pedidos según la ruta optimizada (si existe) o el
+  // orden natural de la lista (FIFO por hora de escaneo).
+  const getActiveOrdered = () => {
+    const active = deliveries.filter((d) => !d.delivered);
+    if (routeOrder && routeOrder.length > 0) {
+      return reorderByTokens(active, routeOrder);
+    }
+    return active;
+  };
+
+  // Optimizar la ruta desde el restaurante de origen (o posición del repartidor).
+  const handleOptimizeRoute = () => {
+    const active = deliveries.filter((d) => !d.delivered);
+    if (active.length < 2) return;
+
+    const origin =
+      driverPos ??
+      (() => {
+        const first = active[0];
+        if (first.data.restaurant.latitude && first.data.restaurant.longitude) {
+          return { lat: first.data.restaurant.latitude, lng: first.data.restaurant.longitude };
+        }
+        return null;
+      })();
+    if (!origin) return;
+
+    const points = active.map((d) => {
+      const lat = d.data.deliveryAddress.latitude;
+      const lng = d.data.deliveryAddress.longitude;
+      return {
+        token: d.token,
+        lat,
+        lng,
+        orderTime: orderReferenceToTime(d.data.orderReference) || d.scannedAt,
+      };
+    });
+
+    const result = optimizeRoute(origin, points);
+    setRouteOrder(result.orderedTokens);
+    triggerHaptic([50, 30, 80]);
+  };
+
+  const handleUndoRoute = () => {
+    setRouteOrder(null);
+    triggerHaptic([20]);
+  };
+
+  // Tap en una tarjeta: elegir ese pedido como siguiente parada (lo mueve al
+  // inicio de la ruta) y abre el detalle.
+  const handleChooseAsNext = (delivToken: string) => {
+    triggerHaptic([20]);
+    setSelectedToken(delivToken);
+    setRouteOrder(prev => {
+      if (!prev) return prev;
+      const next = prev.filter((t) => t !== delivToken);
+      next.unshift(delivToken);
+      return next;
+    });
   };
 
   const activeCount = deliveries.filter(d => !d.delivered).length;
@@ -691,7 +1022,7 @@ export default function DeliveryTicketPage({ params }: PageProps) {
   // VISTA 1: DASHBOARD MULTI-PEDIDO
   // ══════════════════════════════════════
   if (selectedToken === null) {
-    const activeList = deliveries.filter(d => !d.delivered);
+    const activeList = getActiveOrdered();
     const completedList = deliveries
       .filter(d => d.delivered)
       .sort((a, b) => {
@@ -703,12 +1034,23 @@ export default function DeliveryTicketPage({ params }: PageProps) {
     const totalCashAmount = activeList
       .filter(d => d.data.paymentMethod === 'CASH')
       .reduce((sum, d) => sum + d.data.totalAmount, 0);
+    const totalCashCollected = completedList
+      .filter(d => d.data.paymentMethod === 'CASH')
+      .reduce((sum, d) => sum + d.data.totalAmount, 0);
+    const firstScan = deliveries.length > 0
+      ? Math.min(...deliveries.map((d) => d.scannedAt || Date.now()))
+      : shiftNow;
+    const shiftMinutes = Math.max(0, Math.floor((shiftNow - firstScan) / 60000));
+    const shiftHours = Math.floor(shiftMinutes / 60);
+    const shiftMinLeft = shiftMinutes % 60;
+    const shiftTimeLabel = shiftHours > 0 ? `${shiftHours}h ${shiftMinLeft}min` : `${shiftMinutes}min`;
+    const nextStop = activeList.length > 0 ? activeList[0] : null;
 
     return (
       <div className={`min-h-[100dvh] font-sans antialiased pb-12 transition-colors duration-300 ${bg} ${textPrimary}`}>
         
-        {/* ── HEADER COMPACTO E INTELIGENTE ── */}
-<header className={`sticky top-0 z-50 border-b transition-all duration-300 pt-[env(safe-area-inset-top)] ${
+        {/* ── HEADER CON "AGREGAR ENTREGA" ── */}
+        <header className={`sticky top-0 z-50 border-b transition-all duration-300 pt-[env(safe-area-inset-top)] ${
           darkMode 
             ? 'bg-[#09090b] border-zinc-800/60' 
             : 'bg-white border-black/[0.04]'
@@ -727,21 +1069,24 @@ export default function DeliveryTicketPage({ params }: PageProps) {
               }`}>SaDeL Express</span>
             </div>
 
-            <div className={`flex items-center gap-2 rounded-full px-3 py-1 text-[11px] font-bold shadow-[0_2px_8px_rgba(0,0,0,0.02)] ${
-              darkMode ? 'bg-zinc-900 text-zinc-300 border border-zinc-800' : 'bg-neutral-900 text-white'
-            }`}>
-              <span className="relative flex h-2 w-2">
-                <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75 animate-ping" />
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-400" />
-              </span>
-              <span>{activeList.length} en ruta</span>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={openAddModal}
+                className={`flex items-center gap-1.5 rounded-full px-3.5 py-2 text-[11px] font-bold transition active:scale-95 active-scale shadow-sm bg-sky-600 text-white hover:bg-sky-500 shadow-[0_2px_10px_rgba(14,165,233,0.35)]`}
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="3" stroke="currentColor" className="w-3.5 h-3.5">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+                </svg>
+                <span>Agregar entrega</span>
+              </button>
             </div>
           </div>
         </header>
 
         <main className="mx-auto max-w-lg px-4 pb-20">
 
-          {/* ── PANEL "MI JORNADA" (Resumen Dinámico) ── */}
+          {/* ── PANEL "MI JORNADA" (Métricas reales del turno) ── */}
           <div className={`mt-4 rounded-[28px] p-5 shadow-[0_12px_40px_rgba(0,0,0,0.03)] border transition-all duration-300 ${
             darkMode 
               ? 'bg-gradient-to-br from-[#1e1b4b] to-[#0a0a0c] border-zinc-800/60 text-white' 
@@ -755,18 +1100,22 @@ export default function DeliveryTicketPage({ params }: PageProps) {
               <span className="text-xl">⚡</span>
             </div>
 
-            <div className="grid grid-cols-3 gap-2.5 mt-4">
-              <div className="rounded-2xl bg-white/10 p-3 backdrop-blur-sm">
+            <div className="grid grid-cols-4 gap-2.5 mt-4">
+              <div className="rounded-2xl bg-white/10 p-2.5 backdrop-blur-sm text-center">
+                <p className="text-[9px] font-bold uppercase tracking-wider opacity-85">Turno</p>
+                <p className="text-sm font-black mt-0.5 leading-tight">{shiftTimeLabel}</p>
+              </div>
+              <div className="rounded-2xl bg-white/10 p-2.5 backdrop-blur-sm text-center">
+                <p className="text-[9px] font-bold uppercase tracking-wider opacity-85">Km</p>
+                <p className="text-sm font-black mt-0.5 leading-tight">{kmDriven.toFixed(1)} km</p>
+              </div>
+              <div className="rounded-2xl bg-white/10 p-2.5 backdrop-blur-sm text-center">
                 <p className="text-[9px] font-bold uppercase tracking-wider opacity-85">Pendientes</p>
-                <p className="text-lg font-black mt-0.5">{activeList.length}</p>
+                <p className="text-sm font-black mt-0.5 leading-tight">{activeList.length}</p>
               </div>
-              <div className="rounded-2xl bg-white/10 p-3 backdrop-blur-sm">
+              <div className="rounded-2xl bg-white/10 p-2.5 backdrop-blur-sm text-center">
                 <p className="text-[9px] font-bold uppercase tracking-wider opacity-85">Entregados</p>
-                <p className="text-lg font-black mt-0.5">{completedList.length}</p>
-              </div>
-              <div className="rounded-2xl bg-white/10 p-3 backdrop-blur-sm">
-                <p className="text-[9px] font-bold uppercase tracking-wider opacity-85">Por Cobrar</p>
-                <p className="text-lg font-black mt-0.5">${totalCashAmount.toLocaleString('es-MX', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</p>
+                <p className="text-sm font-black mt-0.5 leading-tight">{completedList.length}</p>
               </div>
             </div>
 
@@ -785,10 +1134,28 @@ export default function DeliveryTicketPage({ params }: PageProps) {
                 </div>
               </div>
             )}
+
+            {/* Siguiente parada */}
+            {nextStop && (
+              <button
+                type="button"
+                onClick={() => setSelectedToken(nextStop.token)}
+                className="mt-4 w-full flex items-center gap-3 rounded-2xl bg-white/10 p-3 backdrop-blur-sm border border-white/10 text-left transition hover:bg-white/15 active:scale-[0.99] active-scale"
+              >
+                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/20 text-xs font-black">▶</span>
+                <span className="min-w-0 flex-1">
+                  <span className="block text-[10px] font-bold uppercase tracking-wider opacity-75">Siguiente parada</span>
+                  <span className="block text-sm font-bold truncate mt-0.5">{nextStop.data.customer.name}</span>
+                  <span className="block text-[11px] opacity-80 truncate mt-0.5">
+                    {nextStop.data.deliveryAddress.street} {nextStop.data.deliveryAddress.number}
+                  </span>
+                </span>
+              </button>
+            )}
           </div>
 
           {/* ── BANNER ALERTA DE COBRO EN EFECTIVO TOTAL ── */}
-          {totalCashAmount > 0 && (
+          {(totalCashAmount > 0 || totalCashCollected > 0) && (
             <div className={`mt-3 flex items-center gap-3 rounded-2xl px-4 py-3.5 border transition-all ${
               darkMode 
                 ? 'bg-amber-950/20 border-amber-900/30' 
@@ -797,12 +1164,78 @@ export default function DeliveryTicketPage({ params }: PageProps) {
               <span className="text-2xl">💵</span>
               <div className="flex-1 min-w-0">
                 <p className={`text-[10px] font-bold uppercase tracking-wider ${darkMode ? 'text-amber-400' : 'text-amber-700'}`}>
-                  Total de efectivo a liquidar
+                  {totalCashAmount > 0 ? 'Efectivo por cobrar' : 'Efectivo cobrado'}
                 </p>
                 <p className={`text-xl font-black tracking-tight mt-0.5 ${darkMode ? 'text-amber-300' : 'text-amber-950'}`}>
-                  ${totalCashAmount.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                  ${(totalCashAmount > 0 ? totalCashAmount : totalCashCollected).toLocaleString('es-MX', { minimumFractionDigits: 2 })}
                 </p>
               </div>
+              {totalCashAmount > 0 && (
+                <span className={`text-[10px] font-bold px-2 py-1 rounded-full ${
+                  darkMode ? 'bg-amber-400/10 text-amber-300' : 'bg-amber-100 text-amber-800'
+                }`}>
+                  {totalCashCollected > 0 ? `+${totalCashCollected.toLocaleString('es-MX', { minimumFractionDigits: 0 })} cobrado` : 'pendiente de cobro'}
+                </span>
+              )}
+            </div>
+          )}
+
+          {/* ── RUTA INTELIGENTE ── */}
+          {activeList.length >= 2 && (
+            <div className={`mt-4 rounded-2xl border p-4 transition-all ${
+              routeOrder && routeOrder.length > 0
+                ? (darkMode ? 'bg-emerald-950/20 border-emerald-900/40' : 'bg-emerald-50 border-emerald-200/60')
+                : (darkMode ? 'bg-zinc-900/40 border-zinc-800' : 'bg-white border-black/[0.04]')
+            }`}>
+              {routeOrder && routeOrder.length > 0 ? (
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-xl text-base ${
+                      darkMode ? 'bg-emerald-400/10 text-emerald-300' : 'bg-emerald-100 text-emerald-700'
+                    }`}>✨</span>
+                    <div className="min-w-0">
+                      <p className={`text-xs font-black uppercase tracking-wider ${darkMode ? 'text-emerald-300' : 'text-emerald-700'}`}>
+                        Ruta inteligente
+                      </p>
+                      <p className={`text-[11px] mt-0.5 truncate ${textSecondary}`}>
+                        {activeList.length} paradas en orden óptimo
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleUndoRoute}
+                    className={`shrink-0 rounded-xl px-3 py-2 text-[11px] font-bold transition active:scale-95 active-scale border ${
+                      darkMode ? 'border-zinc-700 text-zinc-300 hover:bg-zinc-800' : 'border-black/[0.08] text-neutral-600 hover:bg-neutral-100'
+                    }`}
+                  >
+                    Deshacer
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={handleOptimizeRoute}
+                  className="w-full flex items-center justify-between gap-3 text-left"
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-xl text-base ${
+                      darkMode ? 'bg-sky-400/10 text-sky-300' : 'bg-sky-50 text-sky-500'
+                    }`}>🧭</span>
+                    <div className="min-w-0">
+                      <p className={`text-xs font-black uppercase tracking-wider ${textPrimary}`}>
+                        Hacer tu ruta inteligente
+                      </p>
+                      <p className={`text-[11px] mt-0.5 truncate ${textSecondary}`}>
+                        Ordena las {activeList.length} entregas por cercanía y tiempo
+                      </p>
+                    </div>
+                  </div>
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="2.5" stroke="currentColor" className={`w-4 h-4 shrink-0 ${textTertiary}`}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5 21 12m0 0-7.5 7.5M21 12H3" />
+                  </svg>
+                </button>
+              )}
             </div>
           )}
 
@@ -821,8 +1254,15 @@ export default function DeliveryTicketPage({ params }: PageProps) {
                 </div>
                 <h3 className={`text-sm font-bold tracking-tight ${textPrimary}`}>¡Ruta completada!</h3>
                 <p className={`text-xs mt-1.5 max-w-[220px] mx-auto leading-relaxed ${textSecondary}`}>
-                  No tienes pedidos pendientes en tu jornada. Escanea un QR de entrega para comenzar.
+                  No tienes pedidos pendientes en tu jornada. Toca &quot;Agregar entrega&quot; para escanear un QR de entrega.
                 </p>
+                <button
+                  type="button"
+                  onClick={openAddModal}
+                  className="mt-4 rounded-2xl bg-sky-600 px-5 py-3 text-xs font-black uppercase tracking-wider text-white hover:bg-sky-500 transition active:scale-95 active-scale shadow-[0_4px_14px_rgba(14,165,233,0.3)]"
+                >
+                  + Agregar entrega
+                </button>
               </div>
             ) : (
               <div className="space-y-3.5">
@@ -857,15 +1297,17 @@ export default function DeliveryTicketPage({ params }: PageProps) {
                         </svg>
                       </button>
 
-                      {/* AREA PRINCIPAL CLICKABLE (Abre Detalles) */}
+                      {/* AREA PRINCIPAL CLICKABLE (Abre Detalles + elige como siguiente) */}
                       <div 
-                        onClick={() => { triggerHaptic([20]); setSelectedToken(deliv.token); }}
+                        onClick={() => handleChooseAsNext(deliv.token)}
                         className="cursor-pointer"
                       >
                         {/* Fila superior: Índice y Pago */}
                         <div className="flex items-center gap-3">
                           <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-black shadow-sm ${
-                            darkMode ? 'bg-sky-400/10 text-sky-300' : 'bg-sky-50 text-sky-500'
+                            index === 0
+                              ? (darkMode ? 'bg-emerald-400/20 text-emerald-300' : 'bg-emerald-500 text-white')
+                              : (darkMode ? 'bg-sky-400/10 text-sky-300' : 'bg-sky-50 text-sky-500')
                           }`}>
                             {index + 1}
                           </span>
@@ -1148,6 +1590,125 @@ export default function DeliveryTicketPage({ params }: PageProps) {
             </div>
           )}
         </main>
+
+        {/* ── MODAL "AGREGAR ENTREGA" ── */}
+        {showAddModal && (
+          <div className="fixed inset-0 z-[110] flex items-end sm:items-center justify-center p-4">
+            <style dangerouslySetInnerHTML={{ __html: `
+              @keyframes modalFadeIn {
+                from { opacity: 0; }
+                to { opacity: 1; }
+              }
+              @keyframes modalScaleUp {
+                from { transform: scale(0.96); opacity: 0; }
+                to { transform: scale(1); opacity: 1; }
+              }
+              .animate-modal-fade-in {
+                animation: modalFadeIn 0.2s ease-out forwards;
+              }
+              .animate-modal-scale-up {
+                animation: modalScaleUp 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+              }
+            `}} />
+
+            <div
+              className="absolute inset-0 bg-black/45 backdrop-blur-[2px] animate-modal-fade-in"
+              onClick={closeAddModal}
+            />
+
+            <div className={`relative w-full max-w-sm overflow-hidden rounded-[28px] border p-6 shadow-2xl animate-modal-scale-up ${cardBg} ${cardBorder}`}>
+              <div className="text-center">
+                <h3 className={`text-base font-extrabold tracking-tight ${textPrimary}`}>Agregar entrega</h3>
+                <p className={`mt-1.5 text-xs ${textSecondary}`}>
+                  Escanea el QR del pedido o pega el enlace para sumarlo a tu ruta.
+                </p>
+              </div>
+
+              {/* Selector de modo */}
+              <div className={`mt-4 grid grid-cols-2 gap-1 rounded-2xl p-1 border ${darkMode ? 'bg-zinc-900 border-zinc-800' : 'bg-neutral-100 border-black/[0.04]'}`}>
+                <button
+                  type="button"
+                  onClick={() => switchAddMode('qr')}
+                  className={`flex items-center justify-center gap-1.5 rounded-xl py-2.5 text-xs font-bold transition ${
+                    addMode === 'qr'
+                      ? 'bg-sky-600 text-white shadow-sm'
+                      : darkMode ? 'text-zinc-400' : 'text-neutral-500'
+                  }`}
+                >
+                  📷 Escanear QR
+                </button>
+                <button
+                  type="button"
+                  onClick={() => switchAddMode('link')}
+                  className={`flex items-center justify-center gap-1.5 rounded-xl py-2.5 text-xs font-bold transition ${
+                    addMode === 'link'
+                      ? 'bg-sky-600 text-white shadow-sm'
+                      : darkMode ? 'text-zinc-400' : 'text-neutral-500'
+                  }`}
+                >
+                  🔗 Pegar enlace
+                </button>
+              </div>
+
+              {/* Contenido según modo */}
+              {addMode === 'qr' ? (
+                <div className="mt-4">
+                  <div
+                    id={scannerContainerId}
+                    className="w-full overflow-hidden rounded-2xl border bg-black"
+                    style={{ minHeight: '220px' }}
+                  />
+                  <p className={`mt-2 text-center text-[10px] ${textTertiary}`}>
+                    Apunta la cámara al código QR del pedido.
+                  </p>
+                </div>
+              ) : (
+                <div className="mt-4">
+                  <input
+                    type="text"
+                    inputMode="url"
+                    value={linkInput}
+                    onChange={(e) => setLinkInput(e.target.value)}
+                    placeholder="Pega aquí el enlace del QR…"
+                    className={`w-full rounded-2xl border px-4 py-3.5 text-sm focus:outline-none focus:ring-2 focus:ring-sky-400/50 transition-all ${
+                      darkMode
+                        ? 'border-zinc-800 bg-[#0a0a0a] text-white placeholder:text-zinc-700'
+                        : 'border-neutral-200 bg-neutral-50 text-neutral-900 placeholder:text-neutral-400'
+                    }`}
+                  />
+                  <button
+                    type="button"
+                    disabled={adding || !linkInput.trim()}
+                    onClick={handleAddByLink}
+                    className="mt-3 w-full rounded-2xl bg-sky-600 py-3.5 text-xs font-black uppercase tracking-wider text-white hover:bg-sky-500 transition active:scale-[0.98] active-scale disabled:opacity-40 shadow-[0_4px_14px_0_rgba(14,165,233,0.3)]"
+                  >
+                    {adding ? 'Agregando…' : 'Agregar a la ruta'}
+                  </button>
+                </div>
+              )}
+
+              {addError && (
+                <div className={`mt-3 rounded-2xl px-4 py-3 text-xs font-semibold border ${
+                  darkMode ? 'bg-red-950/20 border-red-900/40 text-red-400' : 'bg-red-50 border-red-200/60 text-red-600'
+                }`}>
+                  {addError}
+                </div>
+              )}
+
+              <button
+                type="button"
+                onClick={closeAddModal}
+                className={`mt-4 w-full rounded-2xl border py-3 text-xs font-bold transition active:scale-[0.97] active-scale ${
+                  darkMode 
+                    ? 'border-zinc-800 text-zinc-300 bg-zinc-900/40 hover:bg-zinc-800' 
+                    : 'border-neutral-200 text-neutral-600 bg-neutral-50 hover:bg-neutral-100'
+                }`}
+              >
+                Cerrar
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     );
   }

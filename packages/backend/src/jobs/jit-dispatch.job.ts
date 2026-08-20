@@ -2,7 +2,11 @@ import cron from 'node-cron';
 import { FastifyInstance } from 'fastify';
 import { OrderStatus } from '@prisma/client';
 import { prisma } from '../config/database';
-import { autoAssignDriver, notifyCustomerNoDriversAvailable } from '../services/order-workflow.service';
+import {
+  autoAssignDriver,
+  incrementDriverRejection,
+  notifyCustomerNoDriversAvailable,
+} from '../services/order-workflow.service';
 import { emitNotification } from '../services/socket.service';
 import { logger } from '../utils/logger';
 
@@ -43,11 +47,30 @@ export function startJitDispatchJob(fastify: FastifyInstance) {
               noDriversAvailable: false, // Permitir que vuelva a buscar
             },
           });
-          // Liberar al repartidor
+          // Liberar al repartidor: recalcular su disponibilidad real en vez de
+          // marcarlo siempre AVAILABLE (si conserva otros pedidos activos debe
+          // permanecer BUSY para no recibir asignaciones incorrectas).
           if (order.driverId) {
+            const remainingActive = await tx.order.count({
+              where: {
+                driverId: order.driverId,
+                id: { not: order.id },
+                status: {
+                  in: [
+                    OrderStatus.CONFIRMED,
+                    OrderStatus.PREPARING,
+                    OrderStatus.READY,
+                    OrderStatus.PICKED_UP,
+                    OrderStatus.IN_TRANSIT,
+                  ],
+                },
+              },
+            });
             await tx.driver.update({
               where: { id: order.driverId },
-              data: { availability: 'AVAILABLE' }, // o mantener lo que tenía, pero AVAILABLE es seguro
+              data: {
+                availability: remainingActive > 0 ? 'BUSY' : 'AVAILABLE',
+              },
             });
           }
           await tx.orderTracking.create({
@@ -58,6 +81,12 @@ export function startJitDispatchJob(fastify: FastifyInstance) {
             },
           });
         });
+
+        // Registrar el rechazo del driver expulsado (máx. 2) para que el mismo
+        // pedido no se le reasigne en loop: con 2 rechazos queda excluido.
+        if (order.driverId) {
+          await incrementDriverRejection(order.id, order.driverId);
+        }
 
         // Notificar al restaurante en tiempo real para que el panel se actualice
         // de inmediato (evita que muestre "Asignado (Esperando confirmación)"
@@ -184,6 +213,7 @@ export function startJitDispatchJob(fastify: FastifyInstance) {
           restaurant: { select: { userId: true, name: true, businessType: true } },
           customer: { select: { user: true } }
         },
+        orderBy: { createdAt: 'asc' },
       });
 
       if (pendingDispatchOrders.length === 0) {
