@@ -507,10 +507,10 @@ export const SettingsSection = React.memo(function SettingsSection({
   return (
     <div className="flex flex-col gap-6 w-full max-w-[1400px] mx-auto min-w-0">
         {/* Cabecera Premium */}
-        <div className="relative overflow-hidden rounded-[32px] border border-white/60 bg-gradient-to-b from-white/95 to-white/70 px-6 py-6 shadow-[0_20px_60px_-15px_rgba(0,0,0,0.05)] backdrop-blur-xl md:px-8 md:py-8">
+        <div className="relative overflow-hidden rounded-[32px] border border-white/60 bg-gradient-to-b from-white/95 to-white/70 px-5 py-6 shadow-[0_20px_60px_-15px_rgba(0,0,0,0.05)] backdrop-blur-xl sm:px-6 md:px-8 md:py-8">
           <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-sky-500 via-blue-500 to-purple-500 opacity-20"></div>
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-5 relative z-10">
-            <div>
+            <div className="w-full min-w-0 sm:w-auto">
               <div className="inline-flex items-center gap-2 rounded-full bg-sky-100/50 px-3 py-1 mb-3">
                 <span className="h-1.5 w-1.5 rounded-full bg-sky-600 animate-pulse"></span>
                 <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-sky-700">Centro de Control</p>
@@ -523,7 +523,7 @@ export const SettingsSection = React.memo(function SettingsSection({
               onClick={handleGlobalSave}
               disabled={globalSaving || activeSettingsTab === 'preferencias' || activeSettingsTab === 'cupones'}
               title={activeSettingsTab === 'preferencias' ? 'Esta sección se guarda automáticamente' : activeSettingsTab === 'cupones' ? 'Los cupones se guardan uno por uno' : undefined}
-              className="group relative shrink-0 overflow-hidden rounded-full bg-neutral-950 px-6 py-3.5 text-sm font-bold text-white shadow-[0_8px_20px_rgba(15,15,15,0.2)] transition-all hover:-translate-y-0.5 hover:shadow-[0_12px_25px_rgba(15,15,15,0.3)] disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0"
+              className="group relative w-full sm:w-auto shrink-0 overflow-hidden rounded-full bg-neutral-950 px-6 py-3.5 text-sm font-bold text-white shadow-[0_8px_20px_rgba(15,15,15,0.2)] transition-all hover:-translate-y-0.5 hover:shadow-[0_12px_25px_rgba(15,15,15,0.3)] disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0"
             >
               <div className="absolute inset-0 bg-gradient-to-r from-sky-500/0 via-white/20 to-sky-500/0 -translate-x-full transition-transform duration-700 group-hover:translate-x-full"></div>
               <span className="relative z-10">{activeSettingsTab === 'preferencias' ? 'Se guarda automáticamente' : activeSettingsTab === 'cupones' ? 'Cupones' : globalLabel}</span>
@@ -535,7 +535,7 @@ export const SettingsSection = React.memo(function SettingsSection({
         <div className="flex flex-col gap-6 min-w-0">
           {/* Navegación Horizontal */}
           <nav className="w-full shrink-0 z-10">
-            <div className="flex gap-2 overflow-x-auto pb-4 scrollbar-hide flex-nowrap" style={{ WebkitOverflowScrolling: 'touch' }}>
+            <div className="flex gap-2 overflow-x-auto pb-4 scrollbar-none flex-nowrap -mx-1 px-1 snap-x snap-proximity" style={{ WebkitOverflowScrolling: 'touch', scrollPaddingLeft: '0.25rem', scrollPaddingRight: '0.25rem' }}>
               {settingsTabs.map((tab: any) => {
                 const isActive = activeSettingsTab === tab.key;
                 return (
@@ -543,21 +543,21 @@ export const SettingsSection = React.memo(function SettingsSection({
                     key={tab.key}
                     type="button"
                     onClick={() => setActiveSettingsTab(tab.key)}
-                    className={`group relative flex items-center gap-3 rounded-[20px] px-4 py-3 text-left transition-all duration-300 shrink-0 whitespace-nowrap active:scale-[0.98] ${
+                    className={`group relative flex items-center gap-2.5 rounded-[18px] px-3 py-2.5 text-left transition-all duration-300 shrink-0 whitespace-nowrap snap-start active:scale-[0.98] sm:gap-3 sm:rounded-[20px] sm:px-4 sm:py-3 ${
                       isActive
                         ? 'bg-gradient-to-br from-sky-600 to-blue-600 text-white shadow-[0_12px_30px_-10px_rgba(2,132,199,0.4)]'
                         : 'bg-white/50 text-neutral-600 hover:bg-white hover:shadow-sm hover:text-neutral-950 border border-transparent hover:border-black/5'
                     }`}
                   >
                     {isActive && (
-                      <div className="absolute inset-0 rounded-[20px] ring-1 ring-inset ring-white/20"></div>
+                      <div className="absolute inset-0 rounded-[18px] ring-1 ring-inset ring-white/20 sm:rounded-[20px]"></div>
                     )}
-                    <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl transition-colors duration-300 ${isActive ? 'bg-white/20 text-white' : 'bg-neutral-100 text-neutral-500 group-hover:bg-sky-50 group-hover:text-sky-600'}`}>
+                    <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl transition-colors duration-300 sm:h-10 sm:w-10 ${isActive ? 'bg-white/20 text-white' : 'bg-neutral-100 text-neutral-500 group-hover:bg-sky-50 group-hover:text-sky-600'}`}>
                       {tab.icon}
                     </div>
-                    <div className="min-w-0 flex-1 pr-2">
+                    <div className="min-w-0 flex-1 pr-1">
                       <span className={`block text-[13px] font-bold ${isActive ? 'text-white' : 'text-neutral-800'}`}>{tab.label}</span>
-                      <span className={`block text-[11px] font-medium leading-tight mt-0.5 ${isActive ? 'text-white/80' : 'text-neutral-400'}`}>{tab.desc}</span>
+                      <span className={`hidden sm:block text-[11px] font-medium leading-tight mt-0.5 ${isActive ? 'text-white/80' : 'text-neutral-400'}`}>{tab.desc}</span>
                     </div>
                   </button>
                 );
@@ -567,16 +567,16 @@ export const SettingsSection = React.memo(function SettingsSection({
 
           {/* Área de Contenido Glassmórfica */}
           <div className="min-w-0 flex-1 animate-fade-in">
-            <div className="relative rounded-[32px] border border-white/60 bg-white/70 p-6 shadow-[0_8px_40px_-12px_rgba(0,0,0,0.08)] backdrop-blur-2xl md:p-10 min-h-[500px]">
+            <div className="relative rounded-[32px] border border-white/60 bg-white/70 p-4 shadow-[0_8px_40px_-12px_rgba(0,0,0,0.08)] backdrop-blur-2xl sm:p-6 md:p-10 min-h-[500px]">
               
               {/* Encabezado de sección dinámico */}
-              <div className="mb-8 flex items-start sm:items-center gap-4 border-b border-black/5 pb-6">
-                <div className="flex h-14 w-14 items-center justify-center rounded-[20px] bg-gradient-to-br from-sky-100 to-blue-50 text-sky-600 border border-sky-200/50 shrink-0 shadow-inner">
-                  <span className="scale-125">{currentSettingsTab.icon}</span>
+              <div className="mb-6 sm:mb-8 flex items-start sm:items-center gap-3 sm:gap-4 border-b border-black/5 pb-5 sm:pb-6">
+                <div className="flex h-12 w-12 sm:h-14 sm:w-14 shrink-0 items-center justify-center rounded-[18px] sm:rounded-[20px] bg-gradient-to-br from-sky-100 to-blue-50 text-sky-600 border border-sky-200/50 shadow-inner">
+                  <span className="scale-110 sm:scale-125">{currentSettingsTab.icon}</span>
                 </div>
-                <div>
-                  <h3 className="text-xl font-black text-neutral-950 tracking-[-0.02em]">{currentSettingsTab.label}</h3>
-                  <p className="mt-1 text-sm font-medium text-neutral-500 max-w-xl leading-relaxed">{currentSettingsTab.desc}</p>
+                <div className="min-w-0">
+                  <h3 className="text-lg sm:text-xl font-black text-neutral-950 tracking-[-0.02em]">{currentSettingsTab.label}</h3>
+                  <p className="mt-0.5 sm:mt-1 text-sm font-medium text-neutral-500 max-w-xl leading-relaxed">{currentSettingsTab.desc}</p>
                 </div>
               </div>
 
@@ -698,7 +698,7 @@ export const SettingsSection = React.memo(function SettingsSection({
                       );
                     })}
                   </div>
-                  <div className="mt-4 flex items-center gap-3 rounded-2xl border border-black/5 bg-neutral-50 p-3">
+                  <div className="mt-4 flex flex-wrap items-center gap-2 sm:gap-3 rounded-2xl border border-black/5 bg-neutral-50 p-3">
                     <span className="text-[11px] font-bold uppercase tracking-wider text-neutral-400">Vista previa</span>
                     <span
                       className="inline-flex items-center gap-1.5 rounded-full px-4 py-2 text-xs font-bold text-white shadow-sm"
@@ -766,7 +766,7 @@ export const SettingsSection = React.memo(function SettingsSection({
                       );
                     })}
                   </div>
-                  <div className="mt-4 flex items-center gap-3 rounded-2xl border border-black/5 bg-neutral-50 p-3">
+                  <div className="mt-4 flex flex-wrap items-center gap-2 sm:gap-3 rounded-2xl border border-black/5 bg-neutral-50 p-3">
                     <span className="text-[11px] font-bold uppercase tracking-wider text-neutral-400">Vista previa</span>
                     <span
                       className="inline-flex items-center gap-1.5 rounded-full px-4 py-2 text-xs font-bold text-white shadow-sm"
@@ -832,7 +832,7 @@ export const SettingsSection = React.memo(function SettingsSection({
                     type="button"
                     onClick={() => void saveStoreProfile('perfil')}
                     disabled={savingStoreProfile}
-                    className="rounded-full bg-neutral-950 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-neutral-800 disabled:bg-neutral-300"
+                    className="w-full sm:w-auto rounded-full bg-neutral-950 px-5 py-3 text-sm font-semibold text-white transition hover:bg-neutral-800 disabled:bg-neutral-300"
                   >
                     {savingStoreProfile ? 'Guardando...' : 'Guardar perfil'}
                   </button>
@@ -938,7 +938,7 @@ export const SettingsSection = React.memo(function SettingsSection({
                     type="button"
                     onClick={() => void saveStoreProfile('ubicacion')}
                     disabled={savingStoreProfile}
-                    className="rounded-full bg-neutral-950 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-neutral-850 disabled:bg-neutral-300"
+                    className="w-full sm:w-auto rounded-full bg-neutral-950 px-5 py-3 text-sm font-semibold text-white transition hover:bg-neutral-800 disabled:bg-neutral-300"
                   >
                     {savingStoreProfile ? 'Guardando...' : 'Guardar ubicación'}
                   </button>
@@ -1108,7 +1108,7 @@ export const SettingsSection = React.memo(function SettingsSection({
                     type="button"
                     onClick={() => void saveStoreProfile('entrega')}
                     disabled={savingStoreProfile}
-                    className="rounded-full bg-neutral-950 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-neutral-800 disabled:bg-neutral-300"
+                    className="w-full sm:w-auto rounded-full bg-neutral-950 px-5 py-3 text-sm font-semibold text-white transition hover:bg-neutral-800 disabled:bg-neutral-300"
                   >
                     {savingStoreProfile ? 'Guardando...' : 'Guardar configuración de entrega'}
                   </button>
@@ -1141,7 +1141,7 @@ export const SettingsSection = React.memo(function SettingsSection({
                       <select
                         value={copySourceDay}
                         onChange={(e) => setCopySourceDay(Number(e.target.value))}
-                        className="rounded-[12px] border border-sky-200 bg-white px-2.5 py-1.5 text-[13px] font-medium text-neutral-900 outline-none transition-all duration-200 focus:border-sky-400 focus:ring-4 focus:ring-sky-400/20"
+                        className="rounded-[12px] border border-sky-200 bg-white px-2.5 py-2 text-base font-medium text-neutral-900 outline-none transition-all duration-200 focus:border-sky-400 focus:ring-4 focus:ring-sky-400/20 sm:text-[13px]"
                       >
                         {weekDayOptions.map((opt) => (
                           <option key={opt.dayOfWeek} value={opt.dayOfWeek}>
@@ -1153,7 +1153,7 @@ export const SettingsSection = React.memo(function SettingsSection({
                     <button
                       type="button"
                       onClick={applyToAllDays}
-                      className="rounded-full bg-neutral-950 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-neutral-800"
+                      className="w-full sm:w-auto rounded-full bg-neutral-950 px-5 py-3 text-sm font-semibold text-white transition hover:bg-neutral-800"
                     >
                       Aplicar a todos los dias
                     </button>
@@ -1261,7 +1261,7 @@ export const SettingsSection = React.memo(function SettingsSection({
                                           type="time"
                                           value={block.openTime}
                                           onChange={(e: any) => updateShift(day.dayOfWeek, block.shiftIndex, { openTime: e.target.value })}
-                                          className="w-full rounded-[12px] border border-black/5 bg-white px-2.5 py-1.5 text-[13px] font-medium text-neutral-900 outline-none transition-all duration-200 focus:border-sky-400 focus:ring-4 focus:ring-sky-400/20"
+                                          className="w-full rounded-[12px] border border-black/5 bg-white px-2.5 py-2.5 text-base text-neutral-900 outline-none transition-all duration-200 focus:border-sky-400 focus:ring-4 focus:ring-sky-400/20 sm:text-[13px]"
                                         />
                                       </div>
                                       <div>
@@ -1270,7 +1270,7 @@ export const SettingsSection = React.memo(function SettingsSection({
                                           type="time"
                                           value={block.closeTime}
                                           onChange={(e: any) => updateShift(day.dayOfWeek, block.shiftIndex, { closeTime: e.target.value })}
-                                          className="w-full rounded-[12px] border border-black/5 bg-white px-2.5 py-1.5 text-[13px] font-medium text-neutral-900 outline-none transition-all duration-200 focus:border-sky-400 focus:ring-4 focus:ring-sky-400/20"
+                                          className="w-full rounded-[12px] border border-black/5 bg-white px-2.5 py-2.5 text-base text-neutral-900 outline-none transition-all duration-200 focus:border-sky-400 focus:ring-4 focus:ring-sky-400/20 sm:text-[13px]"
                                         />
                                       </div>
                                     </div>
@@ -1303,7 +1303,7 @@ export const SettingsSection = React.memo(function SettingsSection({
                     type="button"
                     onClick={() => void saveOperatingHours()}
                     disabled={savingOperatingHours || hasInvalidHours}
-                    className="rounded-full bg-neutral-950 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-neutral-800 disabled:bg-neutral-300"
+                    className="w-full sm:w-auto rounded-full bg-neutral-950 px-5 py-3 text-sm font-semibold text-white transition hover:bg-neutral-800 disabled:bg-neutral-300"
                   >
                     {savingOperatingHours ? 'Guardando horarios...' : 'Guardar horarios'}
                   </button>
@@ -1357,7 +1357,7 @@ export const SettingsSection = React.memo(function SettingsSection({
                     type="button"
                     onClick={() => void saveStoreProfile('pagos')}
                     disabled={savingStoreProfile}
-                    className="rounded-full bg-neutral-950 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-neutral-800 disabled:bg-neutral-300"
+                    className="w-full sm:w-auto rounded-full bg-neutral-950 px-5 py-3 text-sm font-semibold text-white transition hover:bg-neutral-800 disabled:bg-neutral-300"
                   >
                     {savingStoreProfile ? 'Guardando...' : 'Guardar datos bancarios'}
                   </button>
@@ -1396,7 +1396,7 @@ export const SettingsSection = React.memo(function SettingsSection({
                   type="button"
                   onClick={() => void savePasswordChange()}
                   disabled={savingPassword}
-                  className="rounded-full bg-rose-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-rose-700 disabled:bg-neutral-300"
+                  className="w-full rounded-full bg-rose-600 px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-rose-700 disabled:bg-neutral-300"
                 >
                   {savingPassword ? 'Actualizando...' : 'Cambiar contraseña'}
                 </button>
@@ -1587,7 +1587,7 @@ export const SettingsSection = React.memo(function SettingsSection({
                     </div>
                   </div>
 
-                  <div className="mt-5 flex items-center justify-between gap-3 rounded-2xl border border-black/5 bg-neutral-50/80 px-4 py-3">
+                  <div className="mt-5 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 rounded-2xl border border-black/5 bg-neutral-50/80 px-4 py-3">
                     <p className="text-[11px] font-medium text-neutral-500">
                       Estas promociones son automáticas: tus clientes las ven sin necesidad de escribir ningún código.
                     </p>
@@ -1595,7 +1595,7 @@ export const SettingsSection = React.memo(function SettingsSection({
                       type="button"
                       onClick={() => void saveStoreProfile('entrega')}
                       disabled={savingStoreProfile}
-                      className="shrink-0 rounded-full bg-neutral-950 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-neutral-800 disabled:bg-neutral-300"
+                      className="shrink-0 rounded-full bg-neutral-950 px-5 py-3 text-sm font-semibold text-white transition hover:bg-neutral-800 disabled:bg-neutral-300"
                     >
                       {savingStoreProfile ? 'Guardando...' : 'Guardar promociones'}
                     </button>
@@ -1760,7 +1760,7 @@ export const SettingsSection = React.memo(function SettingsSection({
                       <select
                         value={promoCodeForm.type}
                         onChange={(e) => setPromoCodeForm((c) => ({ ...c, type: e.target.value as PromoCodeItem['type'] }))}
-                        className="rounded-xl border border-black/10 bg-white px-3.5 py-2.5 text-sm text-neutral-900 shadow-sm transition-all focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-400/20"
+                        className="rounded-xl border border-black/10 bg-white px-3.5 py-3 text-base text-neutral-900 shadow-sm transition-all focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-400/20 sm:text-sm"
                       >
                         <option value="PERCENT">Porcentaje (%)</option>
                         <option value="AMOUNT">Monto fijo ($)</option>
@@ -1774,7 +1774,7 @@ export const SettingsSection = React.memo(function SettingsSection({
                         value={promoCodeForm.value}
                         onChange={(e) => setPromoCodeForm((c) => ({ ...c, value: e.target.value }))}
                         placeholder={promoCodeForm.type === 'PERCENT' ? '15' : promoCodeForm.type === 'AMOUNT' ? '50' : '0'}
-                        className="rounded-xl border border-black/10 bg-white px-3.5 py-2.5 text-sm text-neutral-900 shadow-sm transition-all focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-400/20"
+                        className="rounded-xl border border-black/10 bg-white px-3.5 py-3 text-base text-neutral-900 shadow-sm transition-all focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-400/20 sm:text-sm"
                       />
                     </label>
                   </div>
@@ -1795,7 +1795,7 @@ export const SettingsSection = React.memo(function SettingsSection({
                       value={promoCodeForm.code}
                       onChange={(e) => setPromoCodeForm((c) => ({ ...c, code: e.target.value }))}
                       placeholder="ej. VERANO25"
-                      className="rounded-xl border border-black/10 bg-white px-4 py-3 font-mono text-sm font-bold uppercase tracking-wider text-neutral-900 shadow-sm transition-all focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-400/20"
+                      className="rounded-xl border border-black/10 bg-white px-4 py-3 font-mono text-base font-bold uppercase tracking-wider text-neutral-900 shadow-sm transition-all focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-400/20 sm:text-sm"
                     />
                   </label>
                   <label className="mt-4 grid min-w-0 gap-1.5 text-sm text-neutral-600">
@@ -1804,7 +1804,7 @@ export const SettingsSection = React.memo(function SettingsSection({
                       value={promoCodeForm.description}
                       onChange={(e) => setPromoCodeForm((c) => ({ ...c, description: e.target.value }))}
                       placeholder="ej. Promo de bienvenida"
-                      className="rounded-xl border border-black/10 bg-white px-4 py-3 text-sm text-neutral-900 shadow-sm transition-all focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-400/20"
+                      className="rounded-xl border border-black/10 bg-white px-4 py-3 text-base text-neutral-900 shadow-sm transition-all focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-400/20 sm:text-sm"
                     />
                   </label>
                 </div>
@@ -1822,7 +1822,7 @@ export const SettingsSection = React.memo(function SettingsSection({
                         value={promoCodeForm.minOrderAmount}
                         onChange={(e) => setPromoCodeForm((c) => ({ ...c, minOrderAmount: e.target.value }))}
                         placeholder="0"
-                        className="rounded-xl border border-black/10 bg-white px-3.5 py-2.5 text-sm text-neutral-900 shadow-sm transition-all focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-400/20"
+                        className="rounded-xl border border-black/10 bg-white px-3.5 py-3 text-base text-neutral-900 shadow-sm transition-all focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-400/20 sm:text-sm"
                       />
                     </label>
                     <label className="grid min-w-0 gap-1.5 text-sm text-neutral-600">
@@ -1832,7 +1832,7 @@ export const SettingsSection = React.memo(function SettingsSection({
                         value={promoCodeForm.maxUses}
                         onChange={(e) => setPromoCodeForm((c) => ({ ...c, maxUses: e.target.value }))}
                         placeholder="Ilimitado"
-                        className="rounded-xl border border-black/10 bg-white px-3.5 py-2.5 text-sm text-neutral-900 shadow-sm transition-all focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-400/20"
+                        className="rounded-xl border border-black/10 bg-white px-3.5 py-3 text-base text-neutral-900 shadow-sm transition-all focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-400/20 sm:text-sm"
                       />
                     </label>
                   </div>
@@ -1843,7 +1843,7 @@ export const SettingsSection = React.memo(function SettingsSection({
                         type="date"
                         value={promoCodeForm.validFrom}
                         onChange={(e) => setPromoCodeForm((c) => ({ ...c, validFrom: e.target.value }))}
-                        className="rounded-xl border border-black/10 bg-white px-3.5 py-2.5 text-sm text-neutral-900 shadow-sm transition-all focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-400/20"
+                        className="rounded-xl border border-black/10 bg-white px-3.5 py-3 text-base text-neutral-900 shadow-sm transition-all focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-400/20 sm:text-sm"
                       />
                     </label>
                     <label className="grid min-w-0 gap-1.5 text-sm text-neutral-600">
@@ -1852,7 +1852,7 @@ export const SettingsSection = React.memo(function SettingsSection({
                         type="date"
                         value={promoCodeForm.validUntil}
                         onChange={(e) => setPromoCodeForm((c) => ({ ...c, validUntil: e.target.value }))}
-                        className="rounded-xl border border-black/10 bg-white px-3.5 py-2.5 text-sm text-neutral-900 shadow-sm transition-all focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-400/20"
+                        className="rounded-xl border border-black/10 bg-white px-3.5 py-3 text-base text-neutral-900 shadow-sm transition-all focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-400/20 sm:text-sm"
                       />
                     </label>
                   </div>

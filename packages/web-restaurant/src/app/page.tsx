@@ -14031,7 +14031,7 @@ function Field({
           onChange={(event) => onChange(event.target.value)}
           onKeyDown={onKeyDown}
           placeholder={placeholder}
-          className={`block w-full min-w-0 rounded-[18px] border border-black/5 bg-neutral-100/50 py-3.5 text-[15px] font-medium text-neutral-950 shadow-inner outline-none transition-all duration-300 placeholder:text-neutral-400 hover:bg-neutral-100/80 focus:border-sky-400 focus:bg-white focus:ring-4 focus:ring-sky-400/20 focus:shadow-md ${isPassword ? 'px-5 pr-14' : 'px-5'}`}
+          className={`block w-full min-w-0 rounded-[18px] border border-black/5 bg-neutral-100/50 py-3.5 text-base font-medium text-neutral-950 shadow-inner outline-none transition-all duration-300 placeholder:text-neutral-400 hover:bg-neutral-100/80 focus:border-sky-400 focus:bg-white focus:ring-4 focus:ring-sky-400/20 focus:shadow-md sm:text-[15px] ${isPassword ? 'px-5 pr-14' : 'px-5'}`}
         />
         {isPassword && (
           <button
