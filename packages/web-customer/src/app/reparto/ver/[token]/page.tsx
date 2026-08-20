@@ -105,6 +105,10 @@ export default function DeliveryTicketPage({ params }: PageProps) {
   
   const [isMounted, setIsMounted] = useState(false);
   const [deliveries, setDeliveries] = useState<ScannedDelivery[]>([]);
+  const deliveriesRef = useRef<ScannedDelivery[]>([]);
+  useEffect(() => {
+    deliveriesRef.current = deliveries;
+  }, [deliveries]);
   const [selectedToken, setSelectedToken] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -299,8 +303,20 @@ export default function DeliveryTicketPage({ params }: PageProps) {
         if (typeof window !== 'undefined') {
           localStorage.setItem('sadel_scanned_deliveries', JSON.stringify(currentList));
         }
-      } else if (fetchErrMessage && currentList.length === 0) {
-        throw new Error(fetchErrMessage);
+      } else if (fetchErrMessage) {
+        // El token de la URL ya no existe en el backend (expiró, fue regenerado
+        // o la orden se eliminó). Si había una entrada obsoleta con ese token,
+        // eliminarla para que no quede atrapada en la ruta.
+        const hasStaleEntry = currentList.some(item => item.token === token);
+        if (hasStaleEntry) {
+          currentList = currentList.filter(item => item.token !== token);
+          if (typeof window !== 'undefined') {
+            localStorage.setItem('sadel_scanned_deliveries', JSON.stringify(currentList));
+          }
+        }
+        if (currentList.length === 0) {
+          throw new Error(fetchErrMessage);
+        }
       }
 
       setDeliveries(currentList);
@@ -378,21 +394,31 @@ export default function DeliveryTicketPage({ params }: PageProps) {
     return () => window.removeEventListener('storage', handleStorage);
   }, []);
 
-  // Sincronizar en segundo plano otros pedidos guardados
+  // Sincronizar en segundo plano las entregas guardadas (incluido el token de la
+  // URL) de forma periódica. Revalida el estado real contra el backend y elimina
+  // entradas obsoletas: tokens que ya no existen (404/410, expiraron o fueron
+  // regenerados) o entregas que llevan demasiados días activas sin entregarse.
   useEffect(() => {
-    if (deliveries.length > 1) {
-      const otherActiveDeliveries = deliveries.filter(d => d.token !== token && !d.delivered);
-      otherActiveDeliveries.forEach(async (delivery) => {
+    if (typeof window === 'undefined') return;
+
+    const MAX_ACTIVE_AGE = 24 * 60 * 60 * 1000; // 24h
+    const syncDeliveries = async () => {
+      const activeDeliveries = deliveriesRef.current.filter(d => !d.delivered);
+      if (activeDeliveries.length === 0) return;
+
+      const now = Date.now();
+      for (const delivery of activeDeliveries) {
         try {
           const response = await fetch(`${apiBase}/public/delivery-ticket/${delivery.token}`);
           const data = await response.json();
           if (response.ok && data.success) {
             const ticketData = data.data as DeliveryTicketData;
             setDeliveries(prev => {
+              if (!prev.some(item => item.token === delivery.token)) return prev;
+              const wasDelivered = prev.find(item => item.token === delivery.token)?.delivered ?? false;
+              const isNowDelivered = ticketData.status === 'DELIVERED';
               const newList = prev.map(item => {
                 if (item.token === delivery.token) {
-                  const wasDelivered = item.delivered;
-                  const isNowDelivered = ticketData.status === 'DELIVERED';
                   return {
                     ...item,
                     data: ticketData,
@@ -404,9 +430,7 @@ export default function DeliveryTicketPage({ params }: PageProps) {
                 }
                 return item;
               });
-              if (typeof window !== 'undefined') {
-                localStorage.setItem('sadel_scanned_deliveries', JSON.stringify(newList));
-              }
+              localStorage.setItem('sadel_scanned_deliveries', JSON.stringify(newList));
               return newList;
             });
           } else {
@@ -416,19 +440,34 @@ export default function DeliveryTicketPage({ params }: PageProps) {
             setDeliveries(prev => {
               if (!prev.some(item => item.token === delivery.token)) return prev;
               const newList = prev.filter(item => item.token !== delivery.token);
-              if (typeof window !== 'undefined') {
-                localStorage.setItem('sadel_scanned_deliveries', JSON.stringify(newList));
-              }
+              localStorage.setItem('sadel_scanned_deliveries', JSON.stringify(newList));
               return newList;
             });
           }
         } catch (e) {
           console.error(`Error al actualizar token ${delivery.token} en segundo plano:`, e);
         }
+      }
+
+      // Purga final: entregas activas demasiado antiguas (jornadas previas) que
+      // el backend sigue reportando como activas. Evita cards "atrapadas".
+      setDeliveries(prev => {
+        const purged = prev.filter(item => {
+          if (item.delivered) return true;
+          return now - (item.scannedAt || now) < MAX_ACTIVE_AGE;
+        });
+        if (purged.length !== prev.length) {
+          localStorage.setItem('sadel_scanned_deliveries', JSON.stringify(purged));
+        }
+        return purged;
       });
-    }
+    };
+
+    void syncDeliveries();
+    const id = setInterval(syncDeliveries, 30000);
+    return () => clearInterval(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [deliveries.length]);
+  }, [apiBase, token]);
 
   // Polling del repartidor de apoyo: mientras espera la confirmación del
   // restaurante origen (PIN/efectivo), consulta el estado del pedido. Cuando el
