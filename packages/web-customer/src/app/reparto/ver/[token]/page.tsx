@@ -1179,6 +1179,11 @@ export default function DeliveryTicketPage({ params }: PageProps) {
     const totalCashCollected = completedList
       .filter(d => d.data.paymentMethod === 'CASH')
       .reduce((sum, d) => sum + d.data.totalAmount, 0);
+    // Informativo: suma exacta del total de cada envío YA entregado en el turno.
+    // No afecta ganancias ni cobros (ese dinero es del restaurante); algunos
+    // restaurantes entregan los envíos a sus propios repartidores.
+    const totalDeliveredAmount = completedList
+      .reduce((sum, d) => sum + d.data.totalAmount, 0);
     // El "Turno" se ancla al scan más antiguo de las entregas AÚN ACTIVAS
     // (no entregadas). Si todas están entregadas, se toma el scan más reciente
     // como referencia para que el contador no se dispare con jornadas previas.
@@ -1279,6 +1284,18 @@ export default function DeliveryTicketPage({ params }: PageProps) {
                 <p className={`text-sm font-semibold tracking-tight mt-1 tabular-nums ${textPrimary}`}>{completedList.length}</p>
               </div>
             </div>
+
+            {/* Total generado de envíos entregados (informativo) */}
+            {totalDeliveredAmount > 0 && (
+              <div className="mt-5 flex items-center justify-between border-t border-neutral-100 pt-4 dark:border-zinc-800">
+                <span className={`text-[10px] font-medium uppercase tracking-wider ${textTertiary}`}>
+                  Total generado de envíos
+                </span>
+                <span className={`text-base font-semibold tabular-nums ${darkMode ? 'text-emerald-400' : 'text-emerald-600'}`}>
+                  ${totalDeliveredAmount.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                </span>
+              </div>
+            )}
 
             {/* Progress bar */}
             {deliveries.length > 0 && (
