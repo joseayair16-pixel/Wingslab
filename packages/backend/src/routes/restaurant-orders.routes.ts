@@ -164,41 +164,19 @@ export async function registerRestaurantOrderRoutes(fastify: FastifyInstance): P
           });
         }
 
-        // Obtener o generar/autocurar el token de reparto existente
-        let dToken = await (prisma as any).deliveryToken.findUnique({
-          where: { orderId: order.id },
-        });
-
-        const crypto = require('node:crypto');
-        const { hashToken } = require('../utils/crypto');
-        const tokenStr = crypto.randomBytes(32).toString('hex');
-        const hashedToken = hashToken(tokenStr);
-        const expiresAt = new Date();
-        expiresAt.setHours(expiresAt.getHours() + 3); // Vence en 3 horas
-
-        if (!dToken) {
-          dToken = await (prisma as any).deliveryToken.create({
-            data: {
-              orderId: order.id,
-              token: hashedToken,
-              expiresAt,
-            },
-          });
-        } else {
-          dToken = await (prisma as any).deliveryToken.update({
-            where: { id: dToken.id },
-            data: {
-              token: hashedToken,
-              expiresAt,
-            },
-          });
-        }
+        // Obtener o generar/autocurar el token de reparto existente. Si ya existe uno
+        // vigente se reutiliza (no se invalida el QR ya escaneado por el repartidor).
+        const { getOrCreateDeliveryToken } = require('../services/delivery-token.service');
+        const { tokenStr, expiresAt: tokenExpiresAt } = await getOrCreateDeliveryToken(
+          prisma,
+          order.id
+        );
 
         return reply.send({
           success: true,
           data: {
             token: tokenStr, // Devolver token en texto plano al cliente
-            expiresAt: dToken.expiresAt,
+            expiresAt: tokenExpiresAt,
             orderReference: order.orderReference,
             url: buildCustomerDeliveryUrl(tokenStr),
           },
@@ -1096,26 +1074,13 @@ export async function registerRestaurantOrderRoutes(fastify: FastifyInstance): P
           request.log.error(pushErr as any, `[Push] Error al enviar notificacion push al comensal ${updatedOrder.customer.user.id}`);
         }
 
-        // Generar un token de reparto seguro de un solo uso para código QR
-        const crypto = require('node:crypto');
-        const { hashToken } = require('../utils/crypto');
-        const tokenStr = crypto.randomBytes(32).toString('hex');
-        const hashedToken = hashToken(tokenStr);
-        const expiresAt = new Date();
-        expiresAt.setHours(expiresAt.getHours() + 3); // Vence en 3 horas
-
-        const dToken = await (prisma as any).deliveryToken.upsert({
-          where: { orderId: updatedOrder.id },
-          update: {
-            token: hashedToken,
-            expiresAt,
-          },
-          create: {
-            orderId: updatedOrder.id,
-            token: hashedToken,
-            expiresAt,
-          },
-        });
+        // Obtener o generar un token de reparto seguro de un solo uso para el QR.
+        // Si ya existe uno vigente se reutiliza (no se invalida el QR escaneado).
+        const { getOrCreateDeliveryToken } = require('../services/delivery-token.service');
+        const { tokenStr, expiresAt: tokenExpiresAt } = await getOrCreateDeliveryToken(
+          prisma,
+          updatedOrder.id
+        );
 
         return reply.send({
           success: true,
@@ -1123,7 +1088,7 @@ export async function registerRestaurantOrderRoutes(fastify: FastifyInstance): P
             ...updatedOrder,
             deliveryToken: {
               token: tokenStr, // Devolver token en texto plano al cliente
-              expiresAt: dToken.expiresAt,
+              expiresAt: tokenExpiresAt,
               url: buildCustomerDeliveryUrl(tokenStr),
             },
           },
@@ -2067,26 +2032,12 @@ export async function registerRestaurantOrderRoutes(fastify: FastifyInstance): P
         );
 
         // Generar un token de reparto seguro de un solo uso para que el restaurante aliado
-        // genere el QR de entrega (mismo mecanismo del reparto propio/express).
-        const crypto = require('node:crypto');
-        const { hashToken } = require('../utils/crypto');
-        const supportTokenStr = crypto.randomBytes(32).toString('hex');
-        const supportHashedToken = hashToken(supportTokenStr);
-        const supportTokenExpiresAt = new Date();
-        supportTokenExpiresAt.setHours(supportTokenExpiresAt.getHours() + 3); // Vence en 3 horas
-
-        const supportDToken = await (prisma as any).deliveryToken.upsert({
-          where: { orderId: order.id },
-          update: {
-            token: supportHashedToken,
-            expiresAt: supportTokenExpiresAt,
-          },
-          create: {
-            orderId: order.id,
-            token: supportHashedToken,
-            expiresAt: supportTokenExpiresAt,
-          },
-        });
+        // Obtener o generar el token de reparto para que el aliado genere el QR de
+        // entrega (mismo mecanismo del reparto propio/express). Si ya existe uno
+        // vigente se reutiliza (no se invalida el QR ya escaneado).
+        const { getOrCreateDeliveryToken } = require('../services/delivery-token.service');
+        const { tokenStr: supportTokenStr, expiresAt: supportTokenExpiresAt } =
+          await getOrCreateDeliveryToken(prisma, order.id);
 
         return reply.send({
           success: true,
@@ -2094,7 +2045,7 @@ export async function registerRestaurantOrderRoutes(fastify: FastifyInstance): P
             ...updatedOrder,
             deliveryToken: {
               token: supportTokenStr, // Token en texto plano para el QR
-              expiresAt: supportDToken.expiresAt,
+              expiresAt: supportTokenExpiresAt,
               url: buildCustomerDeliveryUrl(supportTokenStr),
             },
           },

@@ -395,7 +395,13 @@ export async function updateOrderStatusByRestaurant({
       order.status === OrderStatus.PENDING &&
       nextStatus === OrderStatus.CONFIRMED
     ) {
-      const elapsedMinutes = (Date.now() - new Date(order.createdAt).getTime()) / 60000;
+      // La ventana de 10 minutos para confirmar una transferencia se mide desde
+      // el momento en que el pedido quedó activo en la cola (activeSinceMs),
+      // no desde createdAt, para que coincida con el clock que usa el job de
+      // timeouts. Si nunca estuvo en cola, cae a createdAt.
+      const activeSinceMs = await getActiveSinceMs(order.id);
+      const effectiveStartMs = activeSinceMs ?? new Date(order.createdAt).getTime();
+      const elapsedMinutes = (Date.now() - effectiveStartMs) / 60000;
       if (elapsedMinutes > 10) {
         throw createDomainError(
           400,
@@ -403,6 +409,24 @@ export async function updateOrderStatusByRestaurant({
           'El tiempo límite de 10 minutos para confirmar el pago por transferencia ha expirado. Favor de rechazar la orden.'
         );
       }
+    }
+
+    // Bypass de pago: un pedido de transferencia solo puede avanzar a
+    // PREPARING/READY si el comprobante ya fue confirmado (paymentStatus=COMPLETED,
+    // que solo ocurre al pasar por CONFIRMED). Evita que un pedido llegue a
+    // entregarse con la transferencia pendiente de confirmar.
+    if (
+      order.paymentMethod === PaymentMethod.TRANSFER &&
+      order.paymentStatus !== PaymentStatus.COMPLETED &&
+      nextStatus !== OrderStatus.CONFIRMED &&
+      nextStatus !== OrderStatus.REJECTED &&
+      nextStatus !== OrderStatus.CANCELLED
+    ) {
+      throw createDomainError(
+        409,
+        'PAYMENT_NOT_CONFIRMED',
+        'Debes confirmar el comprobante de transferencia (aceptar el pedido) antes de prepararlo o entregarlo.'
+      );
     }
 
     const now = new Date();

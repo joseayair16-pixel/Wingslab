@@ -551,7 +551,6 @@ export async function createOrderForCustomer({
 
     const sellBy = (product as any).sellBy || 'UNIT';
     let unitPrice: number;
-    let quantity: number;
     let weightG: number | null = null;
     let itemSubtotal: number;
 
@@ -571,8 +570,12 @@ export async function createOrderForCustomer({
       }
       const unitPricePerKg = product.discountPrice ?? (product as any).unitPrice ?? product.price;
       unitPrice = unitPricePerKg;
-      quantity = weightG;
-      itemSubtotal = (unitPrice * weightG!) / 1000;
+      // El cliente cobra price = perKg × peso/1000 y lo multiplica por el nº de
+      // porciones (item.quantity). El backend debe replicar exactamente eso:
+      // subtotal = (precio/kg × gramos/1000) × porciones. Antes se ignoraba
+      // item.quantity (solo cobraba 1 porción) → fuga de ingresos en WEIGHT.
+      const portions = item.quantity || 1;
+      itemSubtotal = Math.round(((unitPrice * weightG!) / 1000) * portions * 100) / 100;
     } else {
       const basePrice = product.discountPrice ?? product.price;
 
@@ -600,7 +603,6 @@ export async function createOrderForCustomer({
       // mientras que el precio por unidad sigue incluyendo las opciones a precio completo.
       itemSubtotal = Math.round((basePrice * paidUnits + itemOptionsPrice * item.quantity) * 100) / 100;
       unitPrice = Math.round((itemSubtotal / item.quantity) * 100) / 100;
-      quantity = item.quantity;
     }
 
     calculatedSubtotal += itemSubtotal;

@@ -189,6 +189,17 @@ export async function registerPublicDeliveryRoutes(fastify: FastifyInstance): Pr
         });
       }
 
+      // Validación de estado: solo se puede entregar un pedido que ya está en ruta
+      // (listo, recogido o en tránsito). Evita entregar un pedido antes de tiempo
+      // (PENDING/CONFIRMED/PREPARING) o re-entregar uno ya completado/cancelado.
+      const DELIVERABLE_STATES: OrderStatus[] = ['READY', 'PICKED_UP', 'IN_TRANSIT'];
+      if (!DELIVERABLE_STATES.includes(order.status)) {
+        return reply.status(409).send({
+          success: false,
+          error: { code: 'INVALID_ORDER_STATE', message: 'El pedido aún no está listo para entregarse.' },
+        });
+      }
+
       // Si el pedido tiene un PIN requerido por seguridad (solo para transferencias), es obligatorio proporcionarlo y debe coincidir exactamente
       if (order.paymentMethod === 'TRANSFER' && (order.handoverPin || order.deliveryPin)) {
         const providedPin = body.success ? body.data.pin : undefined;
@@ -203,20 +214,41 @@ export async function registerPublicDeliveryRoutes(fastify: FastifyInstance): Pr
         }
       }
 
-
-      // 1. Actualizar el pedido en base de datos.
-      //    En reparto propio con pago en efectivo el dinero ya fue cobrado por
-      //    el repartidor en la puerta: marcar el pago como COMPLETED (mismo
-      //    comportamiento que la tablet del restaurante). Transferencias y pagos
-      //    en línea quedan como estén (el cobro se confirma por otro medio).
-      const updatedOrder = await prisma.order.update({
-        where: { id: order.id },
+      // Claim atómico anti-doble-entrega: solo un request puede transicionar el
+      // pedido a DELIVERED. Si dos POST llegan casi simultáneos, el segundo ve
+      // count=0 (el primero ya lo entregó) y responde sin re-notificar ni duplicar.
+      // En reparto propio con pago en efectivo el dinero ya fue cobrado por
+      // el repartidor en la puerta: marcar el pago como COMPLETED (mismo
+      // comportamiento que la tablet del restaurante). Transferencias y pagos
+      // en línea quedan como estén (el cobro se confirma por otro medio).
+      const claimed = await prisma.order.updateMany({
+        where: {
+          id: order.id,
+          status: { in: DELIVERABLE_STATES },
+        },
         data: {
           status: OrderStatus.DELIVERED,
           deliveredAt: new Date(),
           ...(order.paymentMethod === 'CASH' ? { paymentStatus: 'COMPLETED' } : {}),
         },
       });
+
+      if (claimed.count === 0) {
+        // Ya fue entregado/completado/cancelado por otro flujo (o carrera).
+        await (prisma as any).deliveryToken.delete({ where: { id: dToken.id } }).catch(() => undefined);
+        return reply.status(409).send({
+          success: false,
+          error: { code: 'ALREADY_DELIVERED', message: 'Este pedido ya fue entregado.' },
+        });
+      }
+
+      const updatedOrder = await prisma.order.findUnique({
+        where: { id: order.id },
+        include: {
+          restaurant: true,
+          customer: { include: { user: true } },
+        },
+      }) as any;
 
       // 2. Crear registro de tracking
       await prisma.orderTracking.create({

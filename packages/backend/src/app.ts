@@ -26,6 +26,7 @@ import { startJitDispatchJob } from './jobs/jit-dispatch.job';
 import { startRestaurantHoursJob } from './jobs/restaurant-hours.job';
 import { startDriverPickupAlertJob } from './jobs/driver-pickup-alert.job';
 import { startStuckOrderJob } from './jobs/stuck-order.job';
+import { startOwnDeliveryTimeoutJob } from './jobs/own-delivery-timeout.job';
 import { startDriverBillingCutoffJob } from './jobs/driver-billing-cutoff.job';
 import { scheduleDriverBillingOverdueCron, processOverdueDriverSettlements } from './jobs/driver-billing-overdue.job';
 import { startFeaturedExpirationJob } from './jobs/featured-expiration.job';
@@ -216,6 +217,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   startStuckOrderJob(fastify);
   startFeaturedExpirationJob(fastify);
   startPickupReadyJob(fastify);
+  startOwnDeliveryTimeoutJob(fastify);
   startCustomerPickupReminderJob(fastify);
   startCustomerArrivalReminderJob(fastify);
   startOverduePreparationJob(fastify);

@@ -984,7 +984,8 @@ model DeliveryToken {
   orderId String @unique
   order   Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
 
-  token     String   @unique
+  token     String   @unique // hash SHA-256 del token (para consumo seguro)
+  rawToken  String?  @unique // token en texto plano (para reutilizar el QR vigente); NULL en tokens previos
   expiresAt DateTime
 
   createdAt DateTime @default(now())

@@ -2,7 +2,7 @@ import cron from 'node-cron';
 import { FastifyInstance } from 'fastify';
 import { OrderStatus } from '@prisma/client';
 import { prisma } from '../config/database';
-import { updateOrderStatusByRestaurant, dequeueRestaurantOrder, getFirstInQueue, getActiveSinceMs, respondToCancellationRequest } from '../services/order-workflow.service';
+import { updateOrderStatusByRestaurant, dequeueRestaurantOrder, getFirstInQueue, getActiveSinceMs, respondToCancellationRequest, getRestaurantQueue } from '../services/order-workflow.service';
 import { emitNotification } from '../services/socket.service';
 import { sendPushNotification } from '../services/notification.service';
 import { logger } from '../utils/logger';
@@ -100,6 +100,22 @@ export function startOrderTimeoutJob(fastify: FastifyInstance) {
         ordersByRestaurant.set(order.restaurant.id, existing);
       }
 
+      // ── Queue sweep: purga de la cola Redis las órdenes que ya no están
+      // PENDING (aceptadas/rechazadas/canceladas). Si una orden quedó en la
+      // zset sin TTL por un dequeue fallido, bloquearía el timeout de todos
+      // los pedidos posteriores de ese restaurante. dequeueRestaurantOrder es
+      // idempotente, así que es seguro usarlo también como barrido.
+      for (const [restaurantId, orders] of ordersByRestaurant) {
+        const pendingIds = new Set(orders.map((o) => o.id));
+        const inQueue = await getRestaurantQueue(restaurantId);
+        for (const entry of inQueue) {
+          if (!pendingIds.has(entry.orderId)) {
+            logger.info(`[OrderTimeoutJob] Barrido: desencolando ${entry.orderId} que ya no está PENDING (restaurante ${restaurantId}).`);
+            await dequeueRestaurantOrder(restaurantId, entry.orderId);
+          }
+        }
+      }
+
       for (const [restaurantId, orders] of ordersByRestaurant) {
         // Determine which order is first in the queue
         const firstInQueueId = await getFirstInQueue(restaurantId);
@@ -188,6 +204,11 @@ async function rejectExpiredOrder(fastify: FastifyInstance, order: any) {
   logger.info(`[OrderTimeoutJob] El pedido ${order.id} (${order.orderReference}) expiró. Auto-rechazando...`);
   reminderSentLevel.delete(order.id);
 
+  // Dequeue y activar el siguiente SIEMPRE, aunque la transición falle (p.ej.
+  // carrera con la aceptación del restaurante): una orden que quedó en la cola
+  // sin TTL bloquearía el timeout de todos los pedidos posteriores de ese
+  // restaurante. dequeueRestaurantOrder es idempotente (zrem de un member
+  // inexistente no hace nada).
   try {
     await updateOrderStatusByRestaurant({
       prisma,
@@ -196,118 +217,119 @@ async function rejectExpiredOrder(fastify: FastifyInstance, order: any) {
       nextStatus: OrderStatus.REJECTED,
       trackingNote: 'Pedido rechazado automáticamente por falta de respuesta del restaurante en el tiempo límite.',
     });
+  } finally {
+    try {
+      await dequeueRestaurantOrder(order.restaurant.id, order.id);
+    } catch (dequeueErr) {
+      logger.error(`[OrderTimeoutJob] Error al desencolar pedido ${order.id}:`, dequeueErr);
+    }
+  }
 
-    // Dequeue and activate next in line
-    await dequeueRestaurantOrder(order.restaurant.id, order.id);
+  const requestId = crypto.randomBytes(8).toString('hex');
 
-    const requestId = crypto.randomBytes(8).toString('hex');
+  emitNotification(
+    fastify.io,
+    order.customer.user.id,
+    'CUSTOMER',
+    'order:rejected',
+    {
+      orderId: order.id,
+      status: OrderStatus.REJECTED,
+    },
+    {
+      requestId,
+      orderId: order.id,
+    }
+  );
 
-    emitNotification(
-      fastify.io,
-      order.customer.user.id,
-      'CUSTOMER',
-      'order:rejected',
-      {
+  emitNotification(
+    fastify.io,
+    order.restaurant.userId,
+    'RESTAURANT',
+    'order:rejected',
+    {
+      orderId: order.id,
+      status: OrderStatus.REJECTED,
+    },
+    {
+      requestId,
+      orderId: order.id,
+    }
+  );
+
+  try {
+    const businessType = order.restaurant.businessType;
+    const businessRef = isStore(businessType) ? 'tienda' : 'restaurante';
+    await sendPushNotification(order.customer.user.id, {
+      title: 'Pedido no aceptado a tiempo 😔',
+      body: `El ${businessRef} no pudo atender tu solicitud a tiempo y el pedido fue cancelado. ¡Intenta con otro ${businessRef} o más tarde!`,
+      icon: '/app-icon-192.png',
+      badge: '/badge.png',
+      vibrate: [800, 200, 800],
+      requireInteraction: true,
+      data: {
         orderId: order.id,
-        status: OrderStatus.REJECTED,
+        event: 'order:rejected',
+        url: `/?orderId=${order.id}`,
       },
-      {
-        requestId,
-        orderId: order.id,
-      }
-    );
+    });
+  } catch (pushErr) {
+    logger.error(`[OrderTimeoutJob] Fallo al enviar push notification al comensal ${order.customer.user.id}`, pushErr);
+  }
+
+  // ── Auto-close the business after losing an order to inactivity ──
+  const businessType = order.restaurant.businessType;
+  const businessRef = isStore(businessType) ? 'tienda' : 'restaurante';
+  try {
+    const closeResult = await prisma.restaurant.updateMany({
+      where: { id: order.restaurant.id, isAcceptingOrders: true },
+      data: {
+        isAcceptingOrders: false,
+        statusChangedAt: new Date(),
+        statusChangedBy: 'SYSTEM_ORDER_TIMEOUT_INACTIVITY',
+        statusReason: 'Hicimos una pausa porque un pedido no se respondió a tiempo. Puedes volver a abrir cuando quieras.',
+      },
+    });
+
+    if (closeResult.count === 0) {
+      logger.info(`[OrderTimeoutJob] ${order.restaurant.id} ya estaba cerrado o volvió a abrir; no se envía aviso de pausa.`);
+      return;
+    }
 
     emitNotification(
       fastify.io,
       order.restaurant.userId,
       'RESTAURANT',
-      'order:rejected',
+      'restaurant:auto_closed_inactivity',
+      { reason: 'order_timeout_inactivity' },
       {
-        orderId: order.id,
-        status: OrderStatus.REJECTED,
-      },
-      {
-        requestId,
+        requestId: crypto.randomBytes(8).toString('hex'),
         orderId: order.id,
       }
     );
 
     try {
-      const businessType = order.restaurant.businessType;
-      const businessRef = isStore(businessType) ? 'tienda' : 'restaurante';
-      await sendPushNotification(order.customer.user.id, {
-        title: 'Pedido no aceptado a tiempo 😔',
-        body: `El ${businessRef} no pudo atender tu solicitud a tiempo y el pedido fue cancelado. ¡Intenta con otro ${businessRef} o más tarde!`,
+      await sendPushNotification(order.restaurant.userId, {
+        title: 'Hicimos una pausa ☕',
+        body: `Un pedido no se respondió a tiempo y se canceló automáticamente. Pusimos tu ${businessRef} en pausa para que nadie más tenga que esperar. Cuando estés listo, vuelve a abrirlo cuando quieras.`,
         icon: '/app-icon-192.png',
         badge: '/badge.png',
-        vibrate: [800, 200, 800],
+        vibrate: [500, 200, 500],
         requireInteraction: true,
+        tag: `auto-closed-inactivity-${order.restaurant.id}`,
         data: {
-          orderId: order.id,
-          event: 'order:rejected',
-          url: `/?orderId=${order.id}`,
+          url: '/',
+          event: 'restaurant:auto_closed_inactivity',
         },
       });
     } catch (pushErr) {
-      logger.error(`[OrderTimeoutJob] Fallo al enviar push notification al comensal ${order.customer.user.id}`, pushErr);
+      logger.error(`[OrderTimeoutJob] Fallo al enviar push de pausa por inactividad a ${order.restaurant.userId}`, pushErr);
     }
 
-    // ── Auto-close the business after losing an order to inactivity ──
-    const businessType = order.restaurant.businessType;
-    const businessRef = isStore(businessType) ? 'tienda' : 'restaurante';
-    try {
-      const closeResult = await prisma.restaurant.updateMany({
-        where: { id: order.restaurant.id, isAcceptingOrders: true },
-        data: {
-          isAcceptingOrders: false,
-          statusChangedAt: new Date(),
-          statusChangedBy: 'SYSTEM_ORDER_TIMEOUT_INACTIVITY',
-          statusReason: 'Hicimos una pausa porque un pedido no se respondió a tiempo. Puedes volver a abrir cuando quieras.',
-        },
-      });
-
-      if (closeResult.count === 0) {
-        logger.info(`[OrderTimeoutJob] ${order.restaurant.id} ya estaba cerrado o volvió a abrir; no se envía aviso de pausa.`);
-        return;
-      }
-
-      emitNotification(
-        fastify.io,
-        order.restaurant.userId,
-        'RESTAURANT',
-        'restaurant:auto_closed_inactivity',
-        { reason: 'order_timeout_inactivity' },
-        {
-          requestId: crypto.randomBytes(8).toString('hex'),
-          orderId: order.id,
-        }
-      );
-
-      try {
-        await sendPushNotification(order.restaurant.userId, {
-          title: 'Hicimos una pausa ☕',
-          body: `Un pedido no se respondió a tiempo y se canceló automáticamente. Pusimos tu ${businessRef} en pausa para que nadie más tenga que esperar. Cuando estés listo, vuelve a abrirlo cuando quieras.`,
-          icon: '/app-icon-192.png',
-          badge: '/badge.png',
-          vibrate: [500, 200, 500],
-          requireInteraction: true,
-          tag: `auto-closed-inactivity-${order.restaurant.id}`,
-          data: {
-            url: '/',
-            event: 'restaurant:auto_closed_inactivity',
-          },
-        });
-      } catch (pushErr) {
-        logger.error(`[OrderTimeoutJob] Fallo al enviar push de pausa por inactividad a ${order.restaurant.userId}`, pushErr);
-      }
-
-      logger.info(`[OrderTimeoutJob] ${businessType === 'RESTAURANT' ? 'Restaurante' : 'Tienda'} ${order.restaurant.id} auto-cerrado por inactividad en el pedido ${order.id}.`);
-    } catch (closeErr) {
-      logger.error(`[OrderTimeoutJob] Error cerrando ${order.restaurant.id} por inactividad:`, closeErr);
-    }
-
-    logger.info(`[OrderTimeoutJob] Pedido ${order.id} auto-rechazado exitosamente.`);
-  } catch (err) {
-    logger.error(`[OrderTimeoutJob] Error rechazando pedido ${order.id}:`, err);
+    logger.info(`[OrderTimeoutJob] ${businessType === 'RESTAURANT' ? 'Restaurante' : 'Tienda'} ${order.restaurant.id} auto-cerrado por inactividad en el pedido ${order.id}.`);
+  } catch (closeErr) {
+    logger.error(`[OrderTimeoutJob] Error cerrando ${order.restaurant.id} por inactividad:`, closeErr);
   }
+
+  logger.info(`[OrderTimeoutJob] Pedido ${order.id} auto-rechazado exitosamente.`);
 }
