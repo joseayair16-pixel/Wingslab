@@ -37,10 +37,23 @@ export default function RootLayout({
       <head>
         <script
           dangerouslySetInnerHTML={{
-            __html: `(function(){try{var d=document.documentElement;var s=localStorage.getItem('darkMode');var isDark=s===null?window.matchMedia('(prefers-color-scheme: dark)').matches:s==='true';d.classList.toggle('dark',isDark);}catch(e){}})();`,
+            __html: `(function(){
+  try {
+    // Hard reset: la PWA SIEMPRE arranca en modo claro, sin importar el modo
+    // del sistema ni valores legados de localStorage. El modo oscuro es por
+    // sesión: solo se mantiene mientras el usuario no cierre/recargue la app.
+    var d = document.documentElement;
+    d.classList.remove('dark');
+    if (window.localStorage) {
+      try { window.localStorage.removeItem('darkMode'); } catch (e) {}
+    }
+    var cs = document.querySelector('meta[name="color-scheme"]');
+    if (cs) cs.setAttribute('content', 'light');
+  } catch (e) {}
+})();`,
           }}
         />
-        <meta name="color-scheme" content="light dark" />
+        <meta name="color-scheme" content="light" />
         <meta name="theme-color" content="#f6f6f4" />
       </head>
       <body>

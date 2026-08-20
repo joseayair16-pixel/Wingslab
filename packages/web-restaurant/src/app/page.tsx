@@ -1719,21 +1719,14 @@ export default function Home() {
     setCheckingAuth(false);
 
     if (typeof window !== 'undefined') {
-      // Elección explícita del usuario > preferencia del sistema.
-      const darkPref = window.localStorage.getItem('darkMode');
-      const isDark = darkPref === null
-        ? window.matchMedia('(prefers-color-scheme: dark)').matches
-        : darkPref === 'true';
+      // El modo oscuro es por sesión: siempre se inicia claro y solo se
+      // mantiene mientras el usuario no cierre/recargue la app. Estado del
+      // switch sincronizado con la clase real en <html>.
+      setIsDarkMode(document.documentElement.classList.contains('dark'));
 
       const savedSection = window.localStorage.getItem('restaurantActiveSection');
       if (savedSection) {
         setActiveSection(savedSection as RestaurantPortalSection);
-      }
-      setIsDarkMode(isDark);
-      if (isDark) {
-        document.documentElement.classList.add('dark');
-      } else {
-        document.documentElement.classList.remove('dark');
       }
 
       preloadAll(['notifica', 'mensaje', 'llegue', 'rezagado']);
@@ -9101,7 +9094,6 @@ export default function Home() {
                       onClick={() => {
                         const isDark = document.documentElement.classList.toggle('dark');
                         setIsDarkMode(isDark);
-                        window.localStorage.setItem('darkMode', isDark ? 'true' : 'false');
                         triggerHaptic(10);
                       }}
                       className={`relative inline-flex h-5 w-9 items-center rounded-full transition ${isDarkMode ? 'bg-sky-600' : 'bg-neutral-300'}`}
@@ -12333,7 +12325,6 @@ export default function Home() {
                         onClick={() => {
                           const isDark = document.documentElement.classList.toggle('dark');
                           setIsDarkMode(isDark);
-                          window.localStorage.setItem('darkMode', isDark ? 'true' : 'false');
                           triggerHaptic(10);
                         }}
                         className={`relative inline-flex h-5 w-9 items-center rounded-full transition ${isDarkMode ? 'bg-sky-600' : 'bg-neutral-300'}`}
