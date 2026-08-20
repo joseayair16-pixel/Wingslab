@@ -75,6 +75,31 @@ interface PageProps {
   };
 }
 
+// NORMALIZACIÓN ANTI-DUPLICADOS: el restaurante puede regenerar el QR de la
+// misma orden (asumir-reparto hace upsert y crea un token nuevo). Si el
+// repartidor escaneó dos QRs de la misma orden, hay dos entradas con tokens
+// distintos pero la misma orderReference. Conservamos la entrada más reciente
+// (mayor scannedAt) y descartamos el resto.
+function dedupeByOrderReference(list: ScannedDelivery[]): ScannedDelivery[] {
+  const latestByRef = new Map<string, ScannedDelivery>();
+  for (const item of list) {
+    const ref = item.data.orderReference;
+    if (!ref) {
+      continue;
+    }
+    const existing = latestByRef.get(ref);
+    if (!existing || (item.scannedAt || 0) > (existing.scannedAt || 0)) {
+      latestByRef.set(ref, item);
+    }
+  }
+  return list.filter((item) => {
+    const ref = item.data.orderReference;
+    if (!ref) return true;
+    const latest = latestByRef.get(ref);
+    return latest ? latest.token === item.token : false;
+  });
+}
+
 export default function DeliveryTicketPage({ params }: PageProps) {
   const token = params.token;
   
@@ -191,10 +216,14 @@ export default function DeliveryTicketPage({ params }: PageProps) {
         if (stored) {
           try {
             currentList = JSON.parse(stored) as ScannedDelivery[];
+            // Purga entradas obsoletas: entregadas hace más de 12h, o que llevan
+            // más de 24h activas sin entregarse (sobran de días/jornadas previas).
+            // Sin esta purga, el "Turno" se calcula desde scans antiguos y sale
+            // duraciones absurdas (p.ej. "88h 36min").
             currentList = currentList.filter(item => {
-              if (item.delivered && Date.now() - item.scannedAt > 12 * 60 * 60 * 1000) {
-                return false;
-              }
+              const age = Date.now() - item.scannedAt;
+              if (item.delivered && age > 12 * 60 * 60 * 1000) return false;
+              if (!item.delivered && age > 24 * 60 * 60 * 1000) return false;
               return true;
             });
           } catch (e) {
@@ -202,6 +231,10 @@ export default function DeliveryTicketPage({ params }: PageProps) {
           }
         }
       }
+
+      // Elimina duplicados de la misma orden escaneada con tokens distintos
+      // (QR regenerado por el restaurante).
+      currentList = dedupeByOrderReference(currentList);
 
       let fetchedTicket: DeliveryTicketData | null = null;
       let fetchErrMessage = '';
@@ -223,12 +256,24 @@ export default function DeliveryTicketPage({ params }: PageProps) {
 
       if (fetchedTicket && token) {
         const existingIndex = currentList.findIndex(item => item.token === token);
+        // La misma orden puede haberse escaneado antes con otro token (QR
+        // regenerado por el restaurante). En ese caso actualizamos esa entrada
+        // con el token nuevo y eliminamos la entrada duplicada.
+        const existingRefIndex = existingIndex >= 0
+          ? -1
+          : currentList.findIndex(
+              item => item.data.orderReference === fetchedTicket.orderReference
+            );
+        const targetIndex = existingIndex >= 0 ? existingIndex : existingRefIndex;
+
         const isArrived = typeof window !== 'undefined' 
-          ? localStorage.getItem(`sadel_arrived_${token}`) === 'true'
+          ? localStorage.getItem(`sadel_arrived_${token}`) === 'true' ||
+            (targetIndex >= 0 && currentList[targetIndex].arrived)
           : false;
 
         const isPickedUp = typeof window !== 'undefined' 
-          ? localStorage.getItem(`sadel_pickedup_${token}`) === 'true'
+          ? localStorage.getItem(`sadel_pickedup_${token}`) === 'true' ||
+            (targetIndex >= 0 && currentList[targetIndex].pickedUp)
           : false;
 
         const isDelivered = fetchedTicket.status === 'DELIVERED';
@@ -239,14 +284,14 @@ export default function DeliveryTicketPage({ params }: PageProps) {
           arrived: isArrived,
           pickedUp: isPickedUp,
           delivered: isDelivered,
-          scannedAt: existingIndex >= 0 ? currentList[existingIndex].scannedAt : Date.now(),
+          scannedAt: targetIndex >= 0 ? currentList[targetIndex].scannedAt : Date.now(),
           deliveredAt: isDelivered 
-            ? (existingIndex >= 0 ? (currentList[existingIndex].deliveredAt || Date.now()) : Date.now())
+            ? (targetIndex >= 0 ? (currentList[targetIndex].deliveredAt || Date.now()) : Date.now())
             : undefined,
         };
 
-        if (existingIndex >= 0) {
-          currentList[existingIndex] = updatedDelivery;
+        if (targetIndex >= 0) {
+          currentList[targetIndex] = updatedDelivery;
         } else {
           currentList.push(updatedDelivery);
         }
@@ -302,7 +347,7 @@ export default function DeliveryTicketPage({ params }: PageProps) {
               !(item.delivered && Date.now() - item.scannedAt > 12 * 60 * 60 * 1000)
             );
           }
-          setDeliveries(parsed);
+          setDeliveries(dedupeByOrderReference(parsed));
         } catch (err) {
           // JSON inválido desde otra pestaña: ignorar
         }
@@ -364,12 +409,25 @@ export default function DeliveryTicketPage({ params }: PageProps) {
               }
               return newList;
             });
+          } else {
+            // El token ya no existe en el backend (expiró, fue regenerado o la
+            // orden se eliminó): descartar la entrada obsoleta para que no se
+            // reintente y no genere 404 en consola ni datos fantasma en la ruta.
+            setDeliveries(prev => {
+              if (!prev.some(item => item.token === delivery.token)) return prev;
+              const newList = prev.filter(item => item.token !== delivery.token);
+              if (typeof window !== 'undefined') {
+                localStorage.setItem('sadel_scanned_deliveries', JSON.stringify(newList));
+              }
+              return newList;
+            });
           }
         } catch (e) {
           console.error(`Error al actualizar token ${delivery.token} en segundo plano:`, e);
         }
       });
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [deliveries.length]);
 
   // Polling del repartidor de apoyo: mientras espera la confirmación del
@@ -505,6 +563,9 @@ export default function DeliveryTicketPage({ params }: PageProps) {
     start();
     return () => {
       stop();
+      // Al dejar de rastrear, olvidamos la última posición para que al retomar
+      // el tracking no se cuente una distancia falsa desde un punto lejano.
+      lastGpsPosRef.current = null;
       document.removeEventListener('visibilitychange', handleVisibility);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -752,13 +813,16 @@ export default function DeliveryTicketPage({ params }: PageProps) {
   // Detener la cámara del escáner de forma segura (no-op si nunca se inició).
   const stopScanner = () => {
     const sc = scannerRef.current;
-    if (sc) {
-      scannerRef.current = null;
+    if (sc && sc.isScanning) {
       try {
-        void sc.stop().catch(() => {});
+        void sc.stop().then(() => {
+          try { sc.clear(); } catch (e) { /* sin cámara activa */ }
+        }).catch(() => {});
       } catch (e) {
         // sin cámara activa: ignorar
       }
+    } else if (sc) {
+      try { sc.clear(); } catch (e) { /* ya limpio */ }
     }
   };
 
@@ -785,15 +849,20 @@ export default function DeliveryTicketPage({ params }: PageProps) {
   };
 
   // Arrancar el escáner HTML5-QRCode dentro del contenedor del modal.
+  // Reutiliza la instancia existente si la hay: crear una nueva sobre el mismo
+  // contenedor sin liberar antes la cámara provoca "Camera already in use".
   const startScanner = () => {
     if (typeof document === 'undefined') return;
     if (!addModalOpenRef.current) return;
     const el = document.getElementById(scannerContainerId);
     if (!el) return;
 
-    stopScanner();
-    const scanner = new Html5Qrcode(scannerContainerId, { verbose: false });
-    scannerRef.current = scanner;
+    let scanner = scannerRef.current;
+    if (scanner && scanner.isScanning) return; // ya está escaneando
+    if (!scanner) {
+      scanner = new Html5Qrcode(scannerContainerId, { verbose: false });
+      scannerRef.current = scanner;
+    }
 
     const config = { fps: 10, qrbox: { width: 220, height: 220 } };
     scanner
@@ -802,11 +871,10 @@ export default function DeliveryTicketPage({ params }: PageProps) {
         config,
         async (decodedText) => {
           // Decodificación exitosa: parsear el token y agregar la entrega.
+          // No cerramos el modal aquí: lo cierra addTokenToRoute si tiene éxito,
+          // y si hay error (duplicado/expirado) el mensaje se ve dentro del modal.
           const decodedToken = extractTokenFromRaw(decodedText);
           if (!decodedToken) return;
-          stopScanner();
-          setShowAddModal(false);
-          setAddError('');
           await addTokenToRoute(decodedToken, 'scanner');
         },
         (errorMessage: string) => {
@@ -845,8 +913,22 @@ export default function DeliveryTicketPage({ params }: PageProps) {
       return;
     }
 
+    // Fuente de verdad: leemos la lista actual de localStorage para que el dedupe
+    // sea robusto ante re-renders pendientes o escaneos rápidos consecutivos.
+    let currentList: ScannedDelivery[] = [];
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem('sadel_scanned_deliveries');
+      if (stored) {
+        try {
+          currentList = JSON.parse(stored) as ScannedDelivery[];
+        } catch (e) {
+          currentList = [];
+        }
+      }
+    }
+
     // Dedupe: si el token ya está en la lista (activo o entregado), avisar.
-    const alreadyExists = deliveries.some((d) => d.token === cleanToken);
+    const alreadyExists = currentList.some((d) => d.token === cleanToken);
     if (alreadyExists) {
       setAddError('Esta entrega ya fue agregada a tu ruta.');
       setAdding(false);
@@ -863,6 +945,23 @@ export default function DeliveryTicketPage({ params }: PageProps) {
       }
 
       const ticketData = data.data as DeliveryTicketData;
+
+      // Dedupe por orden: el restaurante puede regenerar el QR y crear un token
+      // nuevo para la misma orden. Si ya tenemos esa orderReference, no se agrega
+      // (solo avisamos); así no aparecen pedidos duplicados en la ruta.
+      const existingRef = currentList.find(
+        (d) => d.data.orderReference === ticketData.orderReference
+      );
+      if (existingRef) {
+        setAddError(
+          existingRef.token === cleanToken
+            ? 'Esta entrega ya fue agregada a tu ruta.'
+            : 'Este pedido ya fue agregado con otro código QR.'
+        );
+        setAdding(false);
+        return;
+      }
+
       const isArrived = typeof window !== 'undefined'
         ? localStorage.getItem(`sadel_arrived_${cleanToken}`) === 'true'
         : false;
@@ -880,7 +979,7 @@ export default function DeliveryTicketPage({ params }: PageProps) {
         deliveredAt: ticketData.status === 'DELIVERED' ? Date.now() : undefined,
       };
 
-      const newList = [...deliveries, newDelivery];
+      const newList = [...currentList, newDelivery];
       setDeliveries(newList);
       if (typeof window !== 'undefined') {
         localStorage.setItem('sadel_scanned_deliveries', JSON.stringify(newList));
@@ -955,14 +1054,18 @@ export default function DeliveryTicketPage({ params }: PageProps) {
     triggerHaptic([20]);
   };
 
-  // Tap en una tarjeta: elegir ese pedido como siguiente parada (lo mueve al
-  // inicio de la ruta) y abre el detalle.
+// Tap en una tarjeta: elegir ese pedido como siguiente parada (lo mueve al
+// inicio de la ruta) y abre el detalle. Si aún no hay ruta optimizada, se
+// inicializa con el orden actual para que el tap tenga efecto inmediato.
   const handleChooseAsNext = (delivToken: string) => {
     triggerHaptic([20]);
     setSelectedToken(delivToken);
     setRouteOrder(prev => {
-      if (!prev) return prev;
-      const next = prev.filter((t) => t !== delivToken);
+      const base =
+        prev && prev.length > 0
+          ? prev
+          : deliveries.filter((d) => !d.delivered).map((d) => d.token);
+      const next = base.filter((t) => t !== delivToken);
       next.unshift(delivToken);
       return next;
     });
@@ -1037,9 +1140,17 @@ export default function DeliveryTicketPage({ params }: PageProps) {
     const totalCashCollected = completedList
       .filter(d => d.data.paymentMethod === 'CASH')
       .reduce((sum, d) => sum + d.data.totalAmount, 0);
-    const firstScan = deliveries.length > 0
-      ? Math.min(...deliveries.map((d) => d.scannedAt || Date.now()))
-      : shiftNow;
+    // El "Turno" se ancla al scan más antiguo de las entregas AÚN ACTIVAS
+    // (no entregadas). Si todas están entregadas, se toma el scan más reciente
+    // como referencia para que el contador no se dispare con jornadas previas.
+    const activeScanTimes = activeList
+      .map((d) => d.scannedAt || 0)
+      .filter((t) => t > 0);
+    const firstScan = activeScanTimes.length > 0
+      ? Math.min(...activeScanTimes)
+      : deliveries.length > 0
+        ? Math.max(...deliveries.map((d) => d.scannedAt || 0))
+        : shiftNow;
     const shiftMinutes = Math.max(0, Math.floor((shiftNow - firstScan) / 60000));
     const shiftHours = Math.floor(shiftMinutes / 60);
     const shiftMinLeft = shiftMinutes % 60;
@@ -1087,48 +1198,61 @@ export default function DeliveryTicketPage({ params }: PageProps) {
         <main className="mx-auto max-w-lg px-4 pb-20">
 
           {/* ── PANEL "MI JORNADA" (Métricas reales del turno) ── */}
-          <div className={`mt-4 rounded-[28px] p-5 shadow-[0_12px_40px_rgba(0,0,0,0.03)] border transition-all duration-300 ${
+          <div className={`mt-4 rounded-2xl border p-5 shadow-[0_1px_0_rgba(0,0,0,0.02),0_8px_24px_rgba(0,0,0,0.04)] transition-all ${
             darkMode 
-              ? 'bg-gradient-to-br from-[#1e1b4b] to-[#0a0a0c] border-zinc-800/60 text-white' 
-              : 'bg-gradient-to-br from-sky-400 to-sky-600 border-transparent text-white'
+              ? 'bg-zinc-900 border-zinc-800' 
+              : 'bg-white border-black/[0.06]'
           }`}>
-            <div className="flex items-center justify-between">
+            <div className="flex items-start justify-between">
               <div>
-                <p className="text-[10px] font-bold uppercase tracking-wider opacity-75">Mi Jornada</p>
-                <h2 className="text-xl font-extrabold tracking-tight mt-0.5">Resumen de Ruta</h2>
+                <p className={`text-[10px] font-semibold uppercase tracking-[0.18em] ${textTertiary}`}>
+                  Mi Jornada
+                </p>
+                <h2 className={`text-lg font-semibold tracking-tight mt-1 ${textPrimary}`}>
+                  Resumen de ruta
+                </h2>
               </div>
-              <span className="text-xl">⚡</span>
+              <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider ${
+                darkMode 
+                  ? 'border-emerald-500/20 bg-emerald-500/5 text-emerald-400' 
+                  : 'border-emerald-200/60 bg-emerald-50 text-emerald-700'
+              }`}>
+                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                En curso
+              </span>
             </div>
 
-            <div className="grid grid-cols-4 gap-2.5 mt-4">
-              <div className="rounded-2xl bg-white/10 p-2.5 backdrop-blur-sm text-center">
-                <p className="text-[9px] font-bold uppercase tracking-wider opacity-85">Turno</p>
-                <p className="text-sm font-black mt-0.5 leading-tight">{shiftTimeLabel}</p>
+            <div className="mt-5 grid grid-cols-4 divide-x divide-neutral-100 dark:divide-zinc-800">
+              <div className="pr-2">
+                <p className={`text-[10px] font-medium uppercase tracking-wider ${textTertiary}`}>Turno</p>
+                <p className={`text-sm font-semibold tracking-tight mt-1 tabular-nums ${textPrimary}`}>{shiftTimeLabel}</p>
               </div>
-              <div className="rounded-2xl bg-white/10 p-2.5 backdrop-blur-sm text-center">
-                <p className="text-[9px] font-bold uppercase tracking-wider opacity-85">Km</p>
-                <p className="text-sm font-black mt-0.5 leading-tight">{kmDriven.toFixed(1)} km</p>
+              <div className="px-2">
+                <p className={`text-[10px] font-medium uppercase tracking-wider ${textTertiary}`}>Km</p>
+                <p className={`text-sm font-semibold tracking-tight mt-1 tabular-nums ${textPrimary}`}>{kmDriven.toFixed(1)}</p>
               </div>
-              <div className="rounded-2xl bg-white/10 p-2.5 backdrop-blur-sm text-center">
-                <p className="text-[9px] font-bold uppercase tracking-wider opacity-85">Pendientes</p>
-                <p className="text-sm font-black mt-0.5 leading-tight">{activeList.length}</p>
+              <div className="px-2">
+                <p className={`text-[10px] font-medium uppercase tracking-wider ${textTertiary}`}>Pendientes</p>
+                <p className={`text-sm font-semibold tracking-tight mt-1 tabular-nums ${textPrimary}`}>{activeList.length}</p>
               </div>
-              <div className="rounded-2xl bg-white/10 p-2.5 backdrop-blur-sm text-center">
-                <p className="text-[9px] font-bold uppercase tracking-wider opacity-85">Entregados</p>
-                <p className="text-sm font-black mt-0.5 leading-tight">{completedList.length}</p>
+              <div className="pl-2">
+                <p className={`text-[10px] font-medium uppercase tracking-wider ${textTertiary}`}>Entregados</p>
+                <p className={`text-sm font-semibold tracking-tight mt-1 tabular-nums ${textPrimary}`}>{completedList.length}</p>
               </div>
             </div>
 
             {/* Progress bar */}
             {deliveries.length > 0 && (
-              <div className="mt-4">
-                <div className="flex justify-between text-[10px] font-bold uppercase tracking-wider opacity-75 mb-1.5">
-                  <span>Progreso de entrega</span>
-                  <span>{Math.round((completedList.length / deliveries.length) * 100)}%</span>
+              <div className="mt-5 border-t border-neutral-100 pt-4 dark:border-zinc-800">
+                <div className="flex items-center justify-between text-[10px] font-medium uppercase tracking-wider mb-2">
+                  <span className={textTertiary}>Progreso de entrega</span>
+                  <span className={`font-semibold tabular-nums ${textSecondary}`}>
+                    {Math.round((completedList.length / deliveries.length) * 100)}%
+                  </span>
                 </div>
-                <div className="h-1.5 w-full rounded-full bg-white/20 overflow-hidden">
+                <div className={`h-1 w-full overflow-hidden rounded-full ${darkMode ? 'bg-zinc-800' : 'bg-neutral-100'}`}>
                   <div 
-                    className="h-full bg-emerald-400 transition-all duration-500 rounded-full"
+                    className="h-full rounded-full bg-emerald-500 transition-all duration-500"
                     style={{ width: `${(completedList.length / deliveries.length) * 100}%` }}
                   />
                 </div>
@@ -1140,16 +1264,25 @@ export default function DeliveryTicketPage({ params }: PageProps) {
               <button
                 type="button"
                 onClick={() => setSelectedToken(nextStop.token)}
-                className="mt-4 w-full flex items-center gap-3 rounded-2xl bg-white/10 p-3 backdrop-blur-sm border border-white/10 text-left transition hover:bg-white/15 active:scale-[0.99] active-scale"
+                className={`mt-5 w-full flex items-center gap-3 rounded-xl border p-3 text-left transition active:scale-[0.99] active-scale ${
+                  darkMode 
+                    ? 'border-zinc-800 bg-zinc-800/30 hover:bg-zinc-800/60' 
+                    : 'border-black/[0.05] bg-neutral-50 hover:bg-neutral-100/70'
+                }`}
               >
-                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/20 text-xs font-black">▶</span>
+                <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[11px] font-semibold ${
+                  darkMode ? 'bg-sky-400/10 text-sky-300' : 'bg-sky-50 text-sky-600'
+                }`}>1</span>
                 <span className="min-w-0 flex-1">
-                  <span className="block text-[10px] font-bold uppercase tracking-wider opacity-75">Siguiente parada</span>
-                  <span className="block text-sm font-bold truncate mt-0.5">{nextStop.data.customer.name}</span>
-                  <span className="block text-[11px] opacity-80 truncate mt-0.5">
+                  <span className={`block text-[10px] font-medium uppercase tracking-wider ${textTertiary}`}>Siguiente parada</span>
+                  <span className={`block text-sm font-semibold truncate mt-0.5 ${textPrimary}`}>{nextStop.data.customer.name}</span>
+                  <span className={`block text-[11px] truncate mt-0.5 ${textSecondary}`}>
                     {nextStop.data.deliveryAddress.street} {nextStop.data.deliveryAddress.number}
                   </span>
                 </span>
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor" className={`w-4 h-4 shrink-0 ${textTertiary}`}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5 21 12m0 0-7.5 7.5M21 12H3" />
+                </svg>
               </button>
             )}
           </div>

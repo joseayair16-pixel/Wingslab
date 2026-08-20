@@ -88,7 +88,7 @@ export function optimizeRoute(
   const fromOrigin = points.map((p) => haversineKm(origin.lat, origin.lng, p.lat, p.lng));
 
   // Semilla greedy: partir del destino más cercano al origen y encadenar por
-  // vecino más cercano, con desempate FIFO.
+  // vecino más cercano, con desempate FIFO cuando las distancias son casi iguales.
   const order: number[] = [];
   const visited = new Set<number>();
   let current = -1; // -1 = origen
@@ -98,13 +98,17 @@ export function optimizeRoute(
     for (let i = 0; i < n; i++) {
       if (visited.has(i)) continue;
       const d = current === -1 ? fromOrigin[i] : dist[current][i];
-      // Desempate por distancia: si está casi igual (±15%), gana el más antiguo.
-      if (
-        d < bestDist * 0.85 ||
-        (d <= bestDist * 1.15 && points[i].orderTime < (order.length > 0 ? points[order[order.length - 1]].orderTime : Infinity))
-      ) {
-        bestDist = d;
+      if (bestIdx === -1) {
         bestIdx = i;
+        bestDist = d;
+      } else if (d < bestDist * 0.85) {
+        // Claramente más cercano: lo tomamos.
+        bestIdx = i;
+        bestDist = d;
+      } else if (d <= bestDist * 1.15 && points[i].orderTime < points[bestIdx].orderTime) {
+        // Distancia casi igual (±15%): gana el pedido más antiguo (FIFO).
+        bestIdx = i;
+        bestDist = d;
       }
     }
     if (bestIdx === -1) break;
