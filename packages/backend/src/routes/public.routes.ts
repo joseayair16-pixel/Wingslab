@@ -879,7 +879,25 @@ export async function registerPublicRoutes(fastify: FastifyInstance): Promise<vo
         .filter((restaurant) => isRestaurantOpenNow(RestaurantStatus.ACTIVE, restaurant.isAcceptingOrders, restaurant.isPaused, restaurant.operatingHours))
         .flatMap((restaurant: any) => {
           return restaurant.products.map((p: any) => {
-            const savings = Math.round(p.price - (p.discountPrice ?? p.price));
+            let savings = p.discountPrice != null && p.price > 0
+              ? p.price - p.discountPrice
+              : 0;
+
+            let discountPercent = p.price > 0 && p.discountPrice != null
+              ? Math.round((savings / p.price) * 100)
+              : 0;
+
+            const isMultiBuy =
+              p.promoType === 'MULTI_BUY' &&
+              p.promoBuyQuantity > 0 &&
+              p.promoPayQuantity > 0 &&
+              p.promoPayQuantity < p.promoBuyQuantity;
+
+            if (isMultiBuy) {
+              savings = p.price * (p.promoBuyQuantity - p.promoPayQuantity);
+              discountPercent = Math.round((1 - p.promoPayQuantity / p.promoBuyQuantity) * 100);
+            }
+
             return {
               product: {
                 id: p.id,
@@ -892,8 +910,8 @@ export async function registerPublicRoutes(fastify: FastifyInstance): Promise<vo
                 promoPayQuantity: p.promoPayQuantity,
                 image: p.image,
                 categoryId: p.categoryId,
-                savings,
-                discountPercent: Math.round((savings / p.price) * 100),
+                savings: Math.round(savings * 100) / 100,
+                discountPercent: Math.min(100, discountPercent),
               },
               restaurant: {
                 id: restaurant.id,
@@ -915,11 +933,23 @@ export async function registerPublicRoutes(fastify: FastifyInstance): Promise<vo
         return copy;
       };
 
+      const MAX_OFFERS_PER_RESTAURANT = 3;
+
       const offersByRestaurant = new Map<string, any[]>();
       for (const offer of offers) {
         const key = offer.restaurant.id;
         if (!offersByRestaurant.has(key)) offersByRestaurant.set(key, []);
         offersByRestaurant.get(key)!.push(offer);
+      }
+
+      // Anti-gaming: como máximo N ofertas por restaurante, priorizando las de
+      // mayor descuento efectivo. Así acumular ofertas no da ventaja: solo las
+      // mejores compiten en el carrusel de "Ofertas imperdibles".
+      for (const group of offersByRestaurant.values()) {
+        group.sort((a, b) => (b.product.discountPercent || 0) - (a.product.discountPercent || 0));
+        if (group.length > MAX_OFFERS_PER_RESTAURANT) {
+          group.splice(MAX_OFFERS_PER_RESTAURANT);
+        }
       }
 
       const groups = shuffle([...offersByRestaurant.values()]).map((g) => shuffle(g));

@@ -10286,6 +10286,12 @@ export default function Home() {
                   </Panel>
                 ) : null}
 
+                {activeSection === 'store' && loading ? (
+                  <div className="flex flex-col items-center justify-center rounded-[32px] border border-black/5 bg-white px-6 py-20 text-center shadow-[0_10px_30px_rgba(15,15,15,0.04)]">
+                    <SaDelLoader size="md" label="Cargando tu tienda..." />
+                  </div>
+                ) : null}
+
                 {activeSection === 'store' && profile ? (
                     <div className={`space-y-6 ${isSelectionMode ? 'pb-32' : ''}`}>
                       <section className="overflow-hidden rounded-[32px] border border-black/5 bg-white shadow-[0_18px_60px_rgba(15,15,15,0.05)]">
@@ -11179,7 +11185,7 @@ export default function Home() {
 
                 ) : null}
 
-                {(activeSection === 'settings' || (activeSection === 'store' && !profile)) ? (
+                {(activeSection === 'settings' || (activeSection === 'store' && !profile && !loading)) ? (
                   <SettingsSection
                     profile={profile}
                     setProfile={setProfile}

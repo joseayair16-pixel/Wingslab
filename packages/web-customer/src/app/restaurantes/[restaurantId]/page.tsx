@@ -427,7 +427,7 @@ export default function RestaurantPage({
       .filter((category) => category.products.length > 0);
 
     const promotedProducts = processedCategories.flatMap((c) =>
-      c.products.filter((p) => p.discountPrice != null)
+      c.products.filter((p) => p.discountPrice != null || getMultiBuyInfo(p).isMultiBuy)
     );
 
     const categories = promotedProducts.length > 0
