@@ -10671,6 +10671,12 @@ export default function Home() {
                                         <p className="mt-2 text-sm leading-6 text-neutral-600">
                                           {product.description}
                                         </p>
+                                        {product.promoType === 'MULTI_BUY' && product.promoBuyQuantity != null && product.promoPayQuantity != null && product.promoBuyQuantity > 0 && product.promoPayQuantity > 0 ? (
+                                          <div className="mt-3 inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50/70 px-2.5 py-1 text-[11px] font-bold text-emerald-700">
+                                            <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M5 12h14M12 5v14" /></svg>
+                                            {product.promoBuyQuantity} x {product.promoPayQuantity}
+                                          </div>
+                                        ) : null}
                                         {product.discountPrice ? (
                                           <div className="mt-3 flex items-center gap-2">
                                             <p className="text-lg font-bold text-sky-600 sm:text-xl">
@@ -10862,6 +10868,11 @@ export default function Home() {
                                             <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-sky-50 px-2.5 py-0.5 text-[11px] font-bold text-sky-700 ring-1 ring-sky-200/70">
                                               {category.name}
                                             </span>
+                                            {product.promoType === 'MULTI_BUY' && product.promoBuyQuantity != null && product.promoPayQuantity != null && product.promoBuyQuantity > 0 && product.promoPayQuantity > 0 ? (
+                                              <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-0.5 text-[11px] font-bold text-emerald-700">
+                                                {product.promoBuyQuantity} x {product.promoPayQuantity}
+                                              </span>
+                                            ) : null}
                                             {!product.isAvailable ? (
                                               <span className="rounded-full bg-neutral-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-neutral-500">Agotado</span>
                                             ) : null}

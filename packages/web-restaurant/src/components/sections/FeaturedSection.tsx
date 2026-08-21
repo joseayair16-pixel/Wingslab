@@ -229,7 +229,7 @@ export const FeaturedSection = React.memo(function FeaturedSection({
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2 flex-wrap">
-                          <p className="font-bold text-neutral-900 text-sm">${req.totalPrice.toFixed(2)} MXN</p>
+                          <p className="font-bold text-neutral-900 text-sm">${(req.totalPrice ?? 0).toFixed(2)} MXN</p>
                           <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
                             req.status === 'APPROVED' ? 'bg-emerald-100 text-emerald-800' :
                             req.status === 'REJECTED' ? 'bg-rose-100 text-rose-800' :
