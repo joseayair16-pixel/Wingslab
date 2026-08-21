@@ -72,6 +72,8 @@ type PublicRestaurantDetail = {
   transferBankName?: string | null;
   transferAccountNumber?: string | null;
   transferBeneficiaryName?: string | null;
+  acceptsCash?: boolean | null;
+  acceptedPaymentMethods?: string[];
   rating?: number;
   reviewCount?: number;
   accentColor?: string | null;
@@ -620,6 +622,16 @@ export default function RestaurantPage({
   useEffect(() => { setMounted(true); }, []);
   const cart: CartItem[] = mounted && cartRestaurantId === params.restaurantId ? cartItems : [];
   const [checkoutForm, setCheckoutForm] = useState<CheckoutForm>(defaultCheckoutForm);
+
+  // Si el restaurante solo acepta un método de pago, ajusta el seleccionado por
+  // defecto para que el checkout siempre arranque con una opción válida.
+  useEffect(() => {
+    if (!rawRestaurant) return;
+    const accepted = getAcceptedPaymentMethods(rawRestaurant);
+    if (accepted.length === 1 && checkoutForm.paymentMethod !== accepted[0]) {
+      setCheckoutForm((current) => ({ ...current, paymentMethod: accepted[0] as 'CASH' | 'TRANSFER' }));
+    }
+  }, [rawRestaurant, checkoutForm.paymentMethod]);
   const [promoCodeState, setPromoCodeState] = useState<'idle' | 'validating' | 'valid' | 'invalid'>('idle');
   const [promoCodeInfo, setPromoCodeInfo] = useState<{ code: string; type: 'PERCENT' | 'AMOUNT' | 'FREE_DELIVERY'; value: number; discount: number; description?: string | null } | null>(null);
   const [isCouponOpen, setIsCouponOpen] = useState(false);
@@ -4121,38 +4133,50 @@ function triggerHaptic(pattern: number | number[] = 10) {
                     <div className="space-y-4">
                       {/* Selector de Método de Pago */}
                       <div>
-                        <div className="flex gap-1.5 rounded-2xl bg-neutral-100 p-1">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setCheckoutForm((current) => ({ ...current, paymentMethod: 'CASH' }));
-                              setTransferProofName('');
-                              setTransferProofSource('');
-                            }}
-                            className={`flex flex-1 items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-xs font-bold transition-all ${
-                              checkoutForm.paymentMethod === 'CASH'
-                                ? 'bg-[var(--accent)] text-white shadow-sm shadow-[0_4px_14px_var(--accent-soft)]'
-                                : 'text-neutral-500 hover:text-neutral-800'
-                            }`}
-                          >
-                            <DollarSign className="h-4 w-4" strokeWidth={1.5} />
-                            Efectivo
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setCheckoutForm((current) => ({ ...current, paymentMethod: 'TRANSFER' }));
-                            }}
-                            className={`flex flex-1 items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-xs font-bold transition-all ${
-                              checkoutForm.paymentMethod === 'TRANSFER'
-                                ? 'bg-[var(--accent)] text-white shadow-sm shadow-[0_4px_14px_var(--accent-soft)]'
-                                : 'text-neutral-500 hover:text-neutral-800'
-                            }`}
-                          >
-                            <Landmark className="h-4 w-4" strokeWidth={1.5} />
-                            Transferencia
-                          </button>
-                        </div>
+                        {(() => {
+                          const accepted = getAcceptedPaymentMethods(restaurant);
+                          const showCash = accepted.includes('CASH');
+                          const showTransfer = accepted.includes('TRANSFER');
+                          if (!showCash && !showTransfer) return null;
+                          return (
+                            <div className="flex gap-1.5 rounded-2xl bg-neutral-100 p-1">
+                              {showCash && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setCheckoutForm((current) => ({ ...current, paymentMethod: 'CASH' }));
+                                    setTransferProofName('');
+                                    setTransferProofSource('');
+                                  }}
+                                  className={`flex flex-1 items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-xs font-bold transition-all ${
+                                    checkoutForm.paymentMethod === 'CASH'
+                                      ? 'bg-[var(--accent)] text-white shadow-sm shadow-[0_4px_14px_var(--accent-soft)]'
+                                      : 'text-neutral-500 hover:text-neutral-800'
+                                  }`}
+                                >
+                                  <DollarSign className="h-4 w-4" strokeWidth={1.5} />
+                                  Efectivo
+                                </button>
+                              )}
+                              {showTransfer && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setCheckoutForm((current) => ({ ...current, paymentMethod: 'TRANSFER' }));
+                                  }}
+                                  className={`flex flex-1 items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-xs font-bold transition-all ${
+                                    checkoutForm.paymentMethod === 'TRANSFER'
+                                      ? 'bg-[var(--accent)] text-white shadow-sm shadow-[0_4px_14px_var(--accent-soft)]'
+                                      : 'text-neutral-500 hover:text-neutral-800'
+                                  }`}
+                                >
+                                  <Landmark className="h-4 w-4" strokeWidth={1.5} />
+                                  Transferencia
+                                </button>
+                              )}
+                            </div>
+                          );
+                        })()}
                       </div>
 
                       {/* CONDICIONAL: Detalles de Transferencia Integrados */}
@@ -4704,6 +4728,30 @@ function triggerHaptic(pattern: number | number[] = 10) {
                           <span className={`font-bold ${restaurant.isOpen ? 'text-emerald-600' : 'text-red-600'}`}>{restaurant.isOpen ? 'Abierto' : 'Cerrado'}</span>
                         </div>
                       </div>
+                      {(() => {
+                        const accepted = restaurant.acceptedPaymentMethods ?? (hasTransferDetails(restaurant) ? ['CASH', 'TRANSFER'] : ['CASH']);
+                        const onlyCash = accepted.length === 1 && accepted[0] === 'CASH';
+                        const onlyTransfer = accepted.length === 1 && accepted[0] === 'TRANSFER';
+                        if (!onlyCash && !onlyTransfer) return null;
+                        return (
+                          <div className="flex flex-1 lg:flex-none flex-col items-center justify-center gap-0 rounded-xl lg:rounded-none bg-neutral-50 lg:bg-transparent px-2 py-1.5 lg:px-4 dark:bg-transparent">
+                            <span className="text-[9px] font-extrabold uppercase tracking-widest text-neutral-400 dark:text-zinc-500">Pago</span>
+                            <div className="flex items-center gap-1 text-[12px] font-semibold text-neutral-700 dark:text-zinc-200">
+                              {onlyCash ? (
+                                <>
+                                  <svg className="h-3 w-3 text-neutral-400 dark:text-zinc-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 6v12m-3-2.818l.879.659c1.171.879 3.07.879 4.242 0 1.172-.879 1.172-2.303 0-3.182C13.536 12.219 12.768 12 12 12c-.725 0-1.45-.22-2.003-.659-1.106-.879-1.106-2.303 0-3.182s2.9-.879 4.006 0l.415.33M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                                  Efectivo
+                                </>
+                              ) : (
+                                <>
+                                  <svg className="h-3 w-3 text-neutral-400 dark:text-zinc-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M2.25 21h19.5m-18-18v18m10.5-18v18m6-13.5V21M6.75 6.75h.75m-.75 3h.75m-.75 3h.75m3-6h.75m-.75 3h.75m-.75 3h.75M6.75 21v-3.375c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21M3 3h12m-.75 4.5H21m-3.75 3.75h.008v.008h-.008v-.008zm0 3h.008v.008h-.008v-.008zm0 3h.008v.008h-.008v-.008z" /></svg>
+                                  Transferencia
+                                </>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })()}
                     </div>
                   </div>
 
@@ -6452,6 +6500,14 @@ function getCheckoutValidationMessage(
     return 'Este restaurante aun no ha configurado sus datos de transferencia.';
   }
 
+  const acceptedMethods = getAcceptedPaymentMethods(selectedRestaurant);
+  if (checkoutForm.paymentMethod === 'CASH' && !acceptedMethods.includes('CASH')) {
+    return 'Este restaurante no acepta pagos en efectivo. Usa transferencia.';
+  }
+  if (checkoutForm.paymentMethod === 'TRANSFER' && !acceptedMethods.includes('TRANSFER')) {
+    return 'Este restaurante no acepta pagos por transferencia. Usa efectivo.';
+  }
+
   if (
     !checkoutForm.street.trim() ||
     !checkoutForm.number.trim() ||
@@ -6591,6 +6647,17 @@ function hasTransferDetails(restaurant: PublicRestaurantDetail | null) {
       restaurant.transferAccountNumber?.trim() &&
       restaurant.transferBeneficiaryName?.trim()
   );}
+
+function getAcceptedPaymentMethods(restaurant: PublicRestaurantDetail | null): string[] {
+  if (restaurant?.acceptedPaymentMethods?.length) {
+    return restaurant.acceptedPaymentMethods;
+  }
+  // Fallback para datos viejos en caché: derivar del estado actual.
+  const methods: string[] = [];
+  if (restaurant?.acceptsCash !== false) methods.push('CASH');
+  if (hasTransferDetails(restaurant)) methods.push('TRANSFER');
+  return methods;
+}
 
 function orderStatusLabel(status: OrderStatus, businessType?: string): string {
   return getOrderStatusLabel(status, businessType);

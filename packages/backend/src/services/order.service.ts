@@ -777,6 +777,15 @@ export async function createOrderForCustomer({
     );
   }
 
+  // El restaurante puede no aceptar pagos en efectivo (solo transferencia).
+  if (input.paymentMethod === PaymentMethod.CASH && restaurant.acceptsCash === false) {
+    throw new AppError(
+      400,
+      'CASH_NOT_ACCEPTED',
+      'Este restaurante no acepta pagos en efectivo. Por favor usa transferencia.'
+    );
+  }
+
   try {
     return await prisma.$transaction(async (tx) => {
       // Seguridad: Límite de Pedidos Activos (Máximo 2) — dentro de la transacción

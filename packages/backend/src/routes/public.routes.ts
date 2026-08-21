@@ -87,6 +87,30 @@ function resolveDeliveryPricing(
   };
 }
 
+/**
+ * Métodos de pago que un restaurante acepta de forma efectiva.
+ * - Efectivo: habilitado si `acceptsCash` (default true) no fue desactivado.
+ * - Transferencia: habilitada si completó los datos bancarios (banco + cuenta + beneficiario).
+ */
+function resolveAcceptedPaymentMethods(restaurant: {
+  acceptsCash?: boolean | null;
+  transferBankName?: string | null;
+  transferAccountNumber?: string | null;
+  transferBeneficiaryName?: string | null;
+}): string[] {
+  const acceptsCash = restaurant.acceptsCash !== false;
+  const acceptsTransfer = Boolean(
+    restaurant.transferBankName?.trim() &&
+      restaurant.transferAccountNumber?.trim() &&
+      restaurant.transferBeneficiaryName?.trim()
+  );
+
+  const methods: string[] = [];
+  if (acceptsCash) methods.push('CASH');
+  if (acceptsTransfer) methods.push('TRANSFER');
+  return methods;
+}
+
 export async function registerPublicRoutes(fastify: FastifyInstance): Promise<void> {
   fastify.get('/restaurantes', async (request, reply) => {
     const parsed = listRestaurantsQuerySchema.safeParse(request.query);
@@ -274,6 +298,7 @@ export async function registerPublicRoutes(fastify: FastifyInstance): Promise<vo
           maxDeliveryTime: restaurant.maxDeliveryTime,
           distanceKm,
           hasPromotions: promoRestaurantIds.has(restaurant.id),
+          acceptedPaymentMethods: resolveAcceptedPaymentMethods(restaurant),
           rating: (restaurant as any).stats?.rating || 0,
           reviewCount: (restaurant as any).stats?.reviewCount || 0,
           totalOrders: (restaurant as any).stats?.totalOrders || 0,
@@ -430,6 +455,7 @@ export async function registerPublicRoutes(fastify: FastifyInstance): Promise<vo
       success: true,
       data: {
         ...restaurant,
+        acceptedPaymentMethods: resolveAcceptedPaymentMethods(restaurant),
         rating: (restaurant as any).stats?.rating || 0,
         reviewCount: (restaurant as any).stats?.reviewCount || 0,
         regionName: regionConfig?.name || null,

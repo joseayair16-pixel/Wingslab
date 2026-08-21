@@ -98,6 +98,7 @@ type RestaurantProfile = {
   deliveryMinFee?: number | null;
   deliveryMaxFee?: number | null;
   maxCashOrder?: number | null;
+  acceptsCash?: boolean | null;
   hasOwnDelivery: boolean;
   supportsNetworkDelivery?: boolean;
   pickupOnly?: boolean;
@@ -379,6 +380,7 @@ type StoreProfileDraft = {
   deliveryMinFee: string;
   deliveryMaxFee: string;
   maxCashOrder: string;
+  acceptsCash: boolean;
   storeCategories: string[];
   enableTicketPrinting: boolean;
   whatsappNotifications: boolean;
@@ -1226,6 +1228,7 @@ export default function Home() {
     deliveryMinFee: '',
     deliveryMaxFee: '',
     maxCashOrder: '',
+    acceptsCash: true,
     storeCategories: [],
     enableTicketPrinting: true,
     whatsappNotifications: false,
@@ -2309,6 +2312,7 @@ export default function Home() {
         deliveryMinFee: '',
         deliveryMaxFee: '',
         maxCashOrder: '',
+        acceptsCash: true,
         storeCategories: [],
         enableTicketPrinting: true,
     whatsappNotifications: false,
@@ -2961,6 +2965,7 @@ export default function Home() {
         deliveryMinFee: profileData.data.deliveryMinFee != null ? String(profileData.data.deliveryMinFee) : '',
         deliveryMaxFee: profileData.data.deliveryMaxFee != null ? String(profileData.data.deliveryMaxFee) : '',
         maxCashOrder: profileData.data.maxCashOrder != null ? String(profileData.data.maxCashOrder) : '',
+        acceptsCash: profileData.data.acceptsCash !== false,
         storeCategories: profileData.data.storeCategories?.map(sc => sc.category.id) || [],
         enableTicketPrinting: profileData.data.enableTicketPrinting ?? true,
         whatsappNotifications: profileData.data.whatsappNotifications ?? false,
@@ -4170,6 +4175,7 @@ export default function Home() {
 
     // pagos
     body.maxCashOrder = num(storeDraft.maxCashOrder) ?? 500;
+    body.acceptsCash = storeDraft.acceptsCash;
     body.transferBankName = transferBankName.trim() || null;
     body.transferAccountNumber = transferAccountNumber.trim() || null;
     body.transferBeneficiaryName = transferBeneficiaryName.trim() || null;
@@ -4233,6 +4239,7 @@ export default function Home() {
         deliveryMinFee: payload.data.deliveryMinFee != null ? String(payload.data.deliveryMinFee) : '',
         deliveryMaxFee: payload.data.deliveryMaxFee != null ? String(payload.data.deliveryMaxFee) : '',
         maxCashOrder: payload.data.maxCashOrder != null ? String(payload.data.maxCashOrder) : '',
+        acceptsCash: payload.data.acceptsCash !== false,
         storeCategories: payload.data.storeCategories?.map((sc: any) => sc.category.id) || [],
         enableTicketPrinting: payload.data.enableTicketPrinting ?? true,
         whatsappNotifications: payload.data.whatsappNotifications ?? false,

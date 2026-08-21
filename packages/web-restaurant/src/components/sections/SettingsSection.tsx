@@ -1346,6 +1346,14 @@ export const SettingsSection = React.memo(function SettingsSection({
                   <p className="text-sky-700/80">Define el monto máximo que tus clientes pueden pagar en efectivo. Por encima de este monto deberán pagar con transferencia.</p>
                 </div>
                 <div className="sm:col-span-2">
+                  <ToggleField
+                    label="Aceptar pagos en efectivo"
+                    checked={storeDraft.acceptsCash}
+                    onChange={(checked: boolean) => setStoreDraft((c: any) => ({ ...c, acceptsCash: checked }))}
+                    description="Desactiva si prefieres cobrar solo con transferencia."
+                  />
+                </div>
+                <div className="sm:col-span-2">
                   <Field
                     label="Monto máximo para pago en efectivo ($)"
                     value={storeDraft.maxCashOrder}

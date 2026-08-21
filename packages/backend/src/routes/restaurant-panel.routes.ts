@@ -36,6 +36,7 @@ const restaurantProfileSchema = z.object({
   deliveryMinFee: z.number().nonnegative().optional(),
   deliveryMaxFee: z.number().nonnegative().optional(),
   maxCashOrder: z.number().positive().optional(),
+  acceptsCash: z.boolean().optional(),
   minDeliveryTime: z.number().int().positive().optional(),
   maxDeliveryTime: z.number().int().positive().optional(),
   contactPhone: z.string().min(8, 'El telefono de contacto es obligatorio.').optional(),
