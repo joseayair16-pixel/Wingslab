@@ -1309,7 +1309,7 @@ export default function Home() {
     skipped: number;
     errors: { index: number; name: string; message: string }[];
   } | null>(null);
-  const [storeViewMode, setStoreViewMode] = useState<'cards' | 'list'>('cards');
+  const [storeViewMode, setStoreViewMode] = useState<'cards' | 'list'>('list');
   const [storeSearchQuery, setStoreSearchQuery] = useState('');
   const [isSelectionMode, setIsSelectionMode] = useState(false);
   const [selectedProductIds, setSelectedProductIds] = useState<Set<string>>(new Set());
@@ -10395,19 +10395,21 @@ export default function Home() {
                           <div className="inline-flex rounded-full border border-black/10 bg-neutral-100/70 p-1 shadow-inner">
                             <button
                               type="button"
-                              onClick={() => setStoreViewMode('cards')}
-                              className={`inline-flex items-center gap-2 rounded-full px-4 py-2 text-[13px] font-bold transition ${storeViewMode === 'cards' ? 'bg-white text-sky-700 shadow-sm' : 'text-neutral-500 hover:text-neutral-800'}`}
-                            >
-                              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" /></svg>
-                              Tarjetas
-                            </button>
-                            <button
-                              type="button"
                               onClick={() => setStoreViewMode('list')}
+                              aria-pressed={storeViewMode === 'list'}
                               className={`inline-flex items-center gap-2 rounded-full px-4 py-2 text-[13px] font-bold transition ${storeViewMode === 'list' ? 'bg-white text-sky-700 shadow-sm' : 'text-neutral-500 hover:text-neutral-800'}`}
                             >
                               <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M4 14h16M4 18h16" /></svg>
                               Lista
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setStoreViewMode('cards')}
+                              aria-pressed={storeViewMode === 'cards'}
+                              className={`inline-flex items-center gap-2 rounded-full px-4 py-2 text-[13px] font-bold transition ${storeViewMode === 'cards' ? 'bg-white text-sky-700 shadow-sm' : 'text-neutral-500 hover:text-neutral-800'}`}
+                            >
+                              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" /></svg>
+                              Tarjetas
                             </button>
                           </div>
                           <div className="relative min-w-0 flex-1 sm:min-w-[220px] sm:max-w-xs">
@@ -10417,7 +10419,7 @@ export default function Home() {
                               value={storeSearchQuery}
                               onChange={(event) => setStoreSearchQuery(event.target.value)}
                               placeholder="Buscar en tu menú..."
-                              className="w-full rounded-full border border-black/10 bg-neutral-50 py-2.5 pl-10 pr-9 text-sm font-medium text-neutral-900 shadow-inner outline-none transition placeholder:text-neutral-400 focus:border-sky-400 focus:bg-white focus:ring-4 focus:ring-sky-400/20"
+                              className="w-full rounded-full border border-black/10 bg-neutral-50 py-2.5 pl-10 pr-9 text-base font-medium text-neutral-900 shadow-inner outline-none transition placeholder:text-neutral-400 focus:border-sky-400 focus:bg-white focus:ring-4 focus:ring-sky-400/20 sm:text-sm"
                             />
                             {storeSearchQuery ? (
                               <button
@@ -10453,7 +10455,7 @@ export default function Home() {
                         </div>
                       </div>
 
-                      <div className="-mx-1 overflow-x-auto px-1 pb-4 pt-2 sticky top-0 z-20 bg-gradient-to-b from-[#faf9f7] via-[#faf9f7]/95 to-transparent backdrop-blur-sm">
+                      <div className="-mx-1 overflow-x-auto px-1 pb-4 pt-2 scrollbar-none sticky top-0 z-20 bg-gradient-to-b from-[#f8f8f8] via-[#f8f8f8]/95 to-transparent backdrop-blur-sm">
                         <div className="flex min-w-max gap-3 px-2">
                           {storeCategories.map((category) => (
                             <div
@@ -10813,8 +10815,23 @@ export default function Home() {
                                 </div>
                                 <div className="divide-y divide-black/5">
                                   {category.products.length === 0 ? (
-                                    <div className="px-4 py-6 text-center text-[13px] text-neutral-400">
-                                      Esta categoria no tiene productos aun.
+                                    <div className="flex flex-col items-center gap-3 px-4 py-8 text-center sm:flex-row sm:justify-between sm:px-5 sm:text-left">
+                                      <div className="min-w-0">
+                                        <p className="text-[13px] font-semibold text-neutral-700">
+                                          Esta categoria no tiene productos aun.
+                                        </p>
+                                        <p className="mt-0.5 text-[12px] text-neutral-400">
+                                          Agrega el primero para publicarlo en tu menu.
+                                        </p>
+                                      </div>
+                                      <button
+                                        type="button"
+                                        onClick={() => openProductModal(category.id)}
+                                        className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-neutral-950 px-4 py-2 text-[12px] font-bold text-white transition hover:bg-neutral-800 active:scale-[0.97]"
+                                      >
+                                        <Plus className="h-3.5 w-3.5" strokeWidth={2.5} />
+                                        Agregar producto
+                                      </button>
                                     </div>
                                   ) : (
                                     category.products.map((product) => (
@@ -10853,9 +10870,8 @@ export default function Home() {
                                             <p className="mt-1 truncate text-[13px] text-neutral-500">{product.description}</p>
                                           ) : null}
                                         </div>
-                                        <div className="flex items-center gap-4 sm:w-auto">
+                                        <div className="flex flex-wrap items-center justify-between gap-3 sm:w-auto sm:flex-nowrap sm:justify-start sm:gap-4">
                                           <div className="flex items-center gap-1.5">
-                                            <span className="text-[11px] font-bold uppercase tracking-wide text-neutral-400">$</span>
                                             <span className="text-[15px] font-bold text-neutral-900">{product.discountPrice ? formatCurrency(product.discountPrice) : formatCurrency(product.price)}</span>
                                           </div>
                                           <button
