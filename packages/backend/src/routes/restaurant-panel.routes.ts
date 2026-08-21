@@ -113,7 +113,7 @@ const optionGroupSchema = z.object({
   options: z.array(optionSchema).min(1, 'Debes incluir al menos una opcion en el grupo.'),
 });
 
-const productSchema = z.object({
+const productSchemaBase = z.object({
   categoryId: z.string().min(1, 'La categoria es obligatoria.'),
   name: z.string().min(2, 'El nombre es obligatorio.'),
   description: z.string().min(5, 'La descripcion es obligatoria.'),
@@ -140,11 +140,42 @@ const productSchema = z.object({
   optionGroups: z.array(optionGroupSchema).optional(),
 });
 
+function refineProductConsistency(data: {
+  price?: number;
+  discountPrice?: number | null;
+  promoType?: 'MULTI_BUY' | null;
+  promoBuyQuantity?: number | null;
+  promoPayQuantity?: number | null;
+}, ctx: z.RefinementCtx) {
+  if (data.discountPrice != null && data.price != null && data.discountPrice >= data.price) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['discountPrice'],
+      message: 'El precio especial debe ser menor al precio normal para que el descuento sea valido.',
+    });
+  }
+  if (
+    data.promoType === 'MULTI_BUY' &&
+    data.promoBuyQuantity != null &&
+    data.promoPayQuantity != null &&
+    data.promoPayQuantity >= data.promoBuyQuantity
+  ) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['promoPayQuantity'],
+      message: 'La promocion no es valida: la cantidad a pagar debe ser menor a la cantidad a comprar (ej. comprar 2, pagar 1).',
+    });
+  }
+}
+
+const productSchema = productSchemaBase.superRefine(refineProductConsistency);
+const productPatchSchema = productSchemaBase.partial().superRefine(refineProductConsistency);
+
 const productAvailabilitySchema = z.object({
   isAvailable: z.boolean(),
 });
 
-const promoCodeSchema = z.object({
+const promoCodeSchemaBase = z.object({
   code: z
     .string()
     .min(2, 'El codigo debe tener al menos 2 caracteres.')
@@ -160,6 +191,39 @@ const promoCodeSchema = z.object({
   maxUses: z.number().int().positive().nullable().optional(),
   isActive: z.boolean().default(true),
 });
+
+function refinePromoCodeConsistency(data: {
+  type?: 'PERCENT' | 'AMOUNT' | 'FREE_DELIVERY';
+  value?: number;
+  minOrderAmount?: number | null;
+  validFrom?: Date | undefined;
+  validUntil?: Date | undefined;
+}, ctx: z.RefinementCtx) {
+  if (data.type === 'PERCENT' && data.value != null && data.value > 100) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['value'],
+      message: 'El porcentaje no puede superar 100.',
+    });
+  }
+  if (data.type === 'AMOUNT' && data.minOrderAmount != null && data.value != null && data.value > data.minOrderAmount) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['value'],
+      message: 'El monto del cupon no puede ser mayor a la compra minima.',
+    });
+  }
+  if (data.validFrom && data.validUntil && data.validUntil <= data.validFrom) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['validUntil'],
+      message: 'La fecha de vencimiento debe ser posterior a la fecha de inicio.',
+    });
+  }
+}
+
+const promoCodeSchema = promoCodeSchemaBase.superRefine(refinePromoCodeConsistency);
+const promoCodePatchSchema = promoCodeSchemaBase.partial().superRefine(refinePromoCodeConsistency);
 
 const operationalStatusSchema = z.object({
   isAcceptingOrders: z.boolean(),
@@ -1426,7 +1490,7 @@ export async function registerRestaurantPanelRoutes(fastify: FastifyInstance): P
 
     restaurant.patch('/restaurant-panel/productos/:id', async (request, reply) => {
       const params = z.object({ id: z.string().min(1) }).safeParse(request.params);
-      const parsed = parseBody(productSchema.partial().safeParse(request.body));
+      const parsed = parseBody(productPatchSchema.safeParse(request.body));
 
       if (!params.success) {
         return reply.status(400).send({
@@ -1967,7 +2031,7 @@ export async function registerRestaurantPanelRoutes(fastify: FastifyInstance): P
 
     restaurant.patch('/restaurant-panel/promocodes/:id', async (request, reply) => {
       const params = z.object({ id: z.string().min(1) }).safeParse(request.params);
-      const parsed = parseBody(promoCodeSchema.partial().safeParse(request.body));
+      const parsed = parseBody(promoCodePatchSchema.safeParse(request.body));
 
       if (!params.success || 'error' in parsed) {
         return reply.status(400).send((!params.success ? (params.error as any) : parsed.error));

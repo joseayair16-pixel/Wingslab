@@ -463,6 +463,38 @@ function buildEmptyProductDraft(
   };
 }
 
+function validateProductConsistency(draft: ProductDraft): string | null {
+  const price = Number(draft.price);
+  const discountPrice = draft.discountPrice ? Number(draft.discountPrice) : null;
+  const buy = draft.promoBuyQuantity ? Number(draft.promoBuyQuantity) : 0;
+  const pay = draft.promoPayQuantity ? Number(draft.promoPayQuantity) : 0;
+  const hasPromo = draft.promoType === 'MULTI_BUY';
+
+  if (!Number.isFinite(price) || price <= 0) {
+    return 'El precio debe ser un número mayor a cero.';
+  }
+
+  if (discountPrice != null) {
+    if (!Number.isFinite(discountPrice) || discountPrice <= 0) {
+      return 'El precio especial debe ser un número mayor a cero.';
+    }
+    if (discountPrice >= price) {
+      return 'El precio especial debe ser menor al precio normal para que el descuento sea válido.';
+    }
+  }
+
+  if (hasPromo) {
+    if (!Number.isFinite(buy) || !Number.isFinite(pay) || buy <= 0 || pay <= 0) {
+      return 'Indica cantidades válidas para la promoción por cantidad (comprar y pagar mayores a cero).';
+    }
+    if (pay >= buy) {
+      return 'La promoción no es válida: la cantidad a pagar debe ser menor a la cantidad a comprar (ej. comprar 2, pagar 1).';
+    }
+  }
+
+  return null;
+}
+
 type ImportFieldKey = 'name' | 'price' | 'category' | 'sellBy' | 'description' | 'discountPrice' | 'image';
 
 const IMPORT_FIELD_LABELS: Record<ImportFieldKey, string> = {
@@ -4754,6 +4786,12 @@ export default function Home() {
       return;
     }
 
+    const consistencyError = validateProductConsistency(productDraft);
+    if (consistencyError) {
+      pushToast('error', 'Configuración no válida', consistencyError);
+      return;
+    }
+
     setCreatingProduct(true);
     setError('');
     setProductImageValidationError('');
@@ -4857,6 +4895,12 @@ export default function Home() {
       setProductImageValidationError(validationMessage);
       setError(validationMessage);
       pushToast('error', 'Imagen no valida', validationMessage);
+      return;
+    }
+
+    const consistencyError = validateProductConsistency(productDraft);
+    if (consistencyError) {
+      pushToast('error', 'Configuración no válida', consistencyError);
       return;
     }
 

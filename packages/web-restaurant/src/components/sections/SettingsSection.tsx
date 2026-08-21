@@ -269,6 +269,32 @@ export const SettingsSection = React.memo(function SettingsSection({
       pushToast('error', 'Valor inválido', 'El porcentaje no puede superar 100.');
       return;
     }
+    if (promoCodeForm.type === 'AMOUNT' && promoCodeForm.minOrderAmount) {
+      const minAmount = Number(promoCodeForm.minOrderAmount);
+      if (!Number.isFinite(minAmount) || minAmount <= 0) {
+        pushToast('error', 'Compra mínima inválida', 'La compra mínima debe ser un número mayor a cero.');
+        return;
+      }
+      if (valueNum > minAmount) {
+        pushToast('error', 'Valor inválido', 'El monto del cupón no puede ser mayor a la compra mínima.');
+        return;
+      }
+    }
+    if (promoCodeForm.maxUses) {
+      const maxUses = Number(promoCodeForm.maxUses);
+      if (!Number.isInteger(maxUses) || maxUses <= 0) {
+        pushToast('error', 'Usos máximos inválidos', 'Los usos máximos deben ser un entero mayor a cero.');
+        return;
+      }
+    }
+    if (promoCodeForm.validFrom && promoCodeForm.validUntil) {
+      const from = new Date(`${promoCodeForm.validFrom}T00:00:00`);
+      const until = new Date(`${promoCodeForm.validUntil}T23:59:59`);
+      if (until <= from) {
+        pushToast('error', 'Fechas inválidas', 'La fecha de vencimiento debe ser posterior a la fecha de inicio.');
+        return;
+      }
+    }
     setPromoCodeSaving(true);
     try {
       const body: Record<string, unknown> = {
