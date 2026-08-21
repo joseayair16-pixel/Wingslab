@@ -8238,8 +8238,8 @@ export default function Home() {
                           </div>
                           
                           <div className="p-5">
-                            <div className="grid gap-4 sm:grid-cols-12">
-                              <div className="sm:col-span-6">
+                            <div className="grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-12">
+                              <div className="sm:col-span-6 min-w-0">
                                 <label className="grid gap-1.5 text-xs font-bold text-neutral-800">
                                   <span>Nombre (Ej: Elige tu salsa)</span>
                                   <input
@@ -8260,7 +8260,7 @@ export default function Home() {
                                   />
                                 </label>
                               </div>
-                              <div className="sm:col-span-3">
+                              <div className="sm:col-span-3 min-w-0">
                                 <label className="grid gap-1.5 text-xs font-bold text-neutral-800">
                                   <span>Mínimo</span>
                                   <EditableNumberInput
@@ -8283,7 +8283,7 @@ export default function Home() {
                                   />
                                 </label>
                               </div>
-                              <div className="sm:col-span-3">
+                              <div className="sm:col-span-3 min-w-0">
                                 <label className="grid gap-1.5 text-xs font-bold text-neutral-800">
                                   <span>Máximo</span>
                                   <EditableNumberInput
@@ -11813,8 +11813,8 @@ export default function Home() {
                       {isStore ? (
                         <div className="space-y-3">
                           <p className="text-xs font-semibold opacity-80">Entrega programada actual: {formatDate(selectedOrderForEtaExtension.estimatedDeliveryTime || selectedOrderForEtaExtension.createdAt)}</p>
-                          <div className="grid grid-cols-2 gap-3">
-                            <div>
+                          <div className="grid grid-cols-1 min-[420px]:grid-cols-2 gap-3">
+                            <div className="min-w-0">
                               <label className="text-[10px] font-bold uppercase tracking-wider opacity-70">Nueva fecha</label>
                               <input
                                 type="date"
@@ -11823,7 +11823,7 @@ export default function Home() {
                                 className="mt-1 w-full rounded-xl border border-black/10 bg-white px-3 py-2.5 text-sm font-semibold text-neutral-900 outline-none transition focus:border-black/20"
                               />
                             </div>
-                            <div>
+                            <div className="min-w-0">
                               <label className="text-[10px] font-bold uppercase tracking-wider opacity-70">Nueva hora</label>
                               <input
                                 type="time"

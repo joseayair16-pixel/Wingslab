@@ -608,7 +608,7 @@ export const SettingsSection = React.memo(function SettingsSection({
 
             {/* ─── PERFIL ─── */}
             {activeSettingsTab === 'perfil' && (
-              <div className="grid gap-4 sm:grid-cols-2">
+              <div className="grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-2">
                 <div className="sm:col-span-2">
                   <Field
                     label="Nombre del restaurante"
@@ -671,7 +671,7 @@ export const SettingsSection = React.memo(function SettingsSection({
                     placeholder="Describe tu restaurante, tu cocina y la experiencia que ofreces a tus clientes."
                   />
                 </div>
-                <div className="sm:col-span-2">
+                <div className="sm:col-span-2 min-w-0">
                   <div className="border-t border-black/5 pt-4 mt-2 mb-3">
                     <p className="text-[13px] font-bold text-neutral-900">Color de tu marca</p>
                     <p className="text-xs text-neutral-500 mt-0.5">
@@ -735,7 +735,7 @@ export const SettingsSection = React.memo(function SettingsSection({
                     <span className="text-[11px] text-neutral-400">Así se verá tu botón de pedir.</span>
                   </div>
                 </div>
-                <div className="sm:col-span-2">
+                <div className="sm:col-span-2 min-w-0">
                   <div className="border-t border-black/5 pt-4 mt-2 mb-3">
                     <p className="text-[13px] font-bold text-neutral-900">Fondo de tu menú</p>
                     <p className="text-xs text-neutral-500 mt-0.5">
@@ -803,7 +803,7 @@ export const SettingsSection = React.memo(function SettingsSection({
                     <span className="text-[11px] text-neutral-400">Así se verá el fondo de tu portal.</span>
                   </div>
                 </div>
-                <div className="sm:col-span-2">
+                <div className="sm:col-span-2 min-w-0">
                   <div className="flex items-center justify-between gap-3 mb-3">
                     <div className="min-w-0 flex-1">
                       <label className="block text-[13px] font-semibold text-neutral-900">Categorías</label>
@@ -868,7 +868,7 @@ export const SettingsSection = React.memo(function SettingsSection({
 
 
             {/* ─── UBICACIÓN ─── */}
-            <div className={`grid gap-4 sm:grid-cols-2 ${activeSettingsTab === 'ubicacion' ? '' : 'hidden'}`}>
+            <div className={`grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-2 ${activeSettingsTab === 'ubicacion' ? '' : 'hidden'}`}>
                 <div className="sm:col-span-2 relative z-[9999]">
                   <Field
                     label="Dirección"
@@ -973,7 +973,7 @@ export const SettingsSection = React.memo(function SettingsSection({
 
             {/* ─── ENTREGA ─── */}
             {activeSettingsTab === 'entrega' && (
-              <div className="grid gap-4 sm:grid-cols-2">
+              <div className="grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-2">
                 <div className="sm:col-span-2">
                   <ToggleField
                     label="Solo recoger en tienda"
@@ -1340,7 +1340,7 @@ export const SettingsSection = React.memo(function SettingsSection({
 
             {/* ─── PAGOS ─── */}
             {activeSettingsTab === 'pagos' && (
-              <div className="grid gap-4 sm:grid-cols-2">
+              <div className="grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-2">
                 <div className="sm:col-span-2 rounded-[18px] border border-sky-100 bg-sky-50 p-4 text-sm text-sky-700">
                   <p className="font-semibold mb-0.5">Pago en efectivo</p>
                   <p className="text-sky-700/80">Define el monto máximo que tus clientes pueden pagar en efectivo. Por encima de este monto deberán pagar con transferencia.</p>
@@ -1568,8 +1568,8 @@ export const SettingsSection = React.memo(function SettingsSection({
                     </div>
                   </div>
 
-                  <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                    <div className="rounded-[20px] border border-black/5 bg-neutral-50/60 p-4 transition-colors hover:bg-neutral-50">
+                  <div className="mt-5 grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                    <div className="min-w-0 rounded-[20px] border border-black/5 bg-neutral-50/60 p-4 transition-colors hover:bg-neutral-50">
                       <div className="mb-2 flex items-center gap-2">
                         <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-br from-sky-100 to-blue-50 text-base">🛵</span>
                         <span className="text-[12px] font-bold uppercase tracking-[0.08em] text-neutral-600">Envío gratis desde</span>
@@ -1603,7 +1603,7 @@ export const SettingsSection = React.memo(function SettingsSection({
                       </p>
                     </div>
 
-                    <div className="rounded-[20px] border border-black/5 bg-neutral-50/60 p-4 transition-colors hover:bg-neutral-50 sm:col-span-2 lg:col-span-1">
+                    <div className="min-w-0 rounded-[20px] border border-black/5 bg-neutral-50/60 p-4 transition-colors hover:bg-neutral-50 sm:col-span-2 lg:col-span-1">
                       <div className="mb-2 flex items-center gap-2">
                         <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-100 to-teal-50 text-base">🎉</span>
                         <span className="text-[12px] font-bold uppercase tracking-[0.08em] text-neutral-600">% de descuento</span>
@@ -1694,7 +1694,7 @@ export const SettingsSection = React.memo(function SettingsSection({
                           </div>
                           <div className="min-w-0 flex-1">
                             <div className="flex flex-wrap items-center gap-2">
-                              <span className="font-mono text-sm font-black tracking-wider text-neutral-900">{promo.code}</span>
+                              <span className="font-mono text-sm font-black tracking-wider text-neutral-900 break-all">{promo.code}</span>
                               {promo.type === 'PERCENT' && (
                                 <span className="rounded-full bg-sky-100 px-2 py-0.5 text-[11px] font-bold text-sky-700">{promo.value}% OFF</span>
                               )}
@@ -1788,7 +1788,7 @@ export const SettingsSection = React.memo(function SettingsSection({
                   <div className="mb-3 flex items-center gap-2">
                     <h4 className="text-[11px] font-bold uppercase tracking-[0.12em] text-neutral-400">Descuento</h4>
                   </div>
-                  <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-2">
                     <label className="grid min-w-0 gap-1.5 text-sm text-neutral-600">
                       <span className="text-[11px] font-bold uppercase tracking-[0.1em] text-neutral-500">Tipo de descuento</span>
                       <select
@@ -1848,7 +1848,7 @@ export const SettingsSection = React.memo(function SettingsSection({
                   <div className="mb-3">
                     <h4 className="text-[11px] font-bold uppercase tracking-[0.12em] text-neutral-400">Condiciones</h4>
                   </div>
-                  <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-2">
                     <label className="grid min-w-0 gap-1.5 text-sm text-neutral-600">
                       <span className="text-[11px] font-bold uppercase tracking-[0.1em] text-neutral-500">Mínimo de compra ($)</span>
                       <input
@@ -1870,7 +1870,7 @@ export const SettingsSection = React.memo(function SettingsSection({
                       />
                     </label>
                   </div>
-                  <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                  <div className="mt-4 grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-2">
                     <label className="grid min-w-0 gap-1.5 text-sm text-neutral-600">
                       <span className="text-[11px] font-bold uppercase tracking-[0.1em] text-neutral-500">Válido desde</span>
                       <input
