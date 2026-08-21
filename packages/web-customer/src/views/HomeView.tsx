@@ -393,9 +393,15 @@ export const HomeView = React.memo(function HomeView({
                             </svg>
                           </div>
                         )}
-                        <div className="absolute top-1.5 left-1.5 flex items-center gap-1 bg-rose-500/90 backdrop-blur-sm rounded-full px-2 py-0.5 text-[9px] font-bold text-white shadow-sm">
-                          <span>-{product.discountPercent}%</span>
-                        </div>
+                        {product.discountPrice != null && Number(product.discountPrice) > 0 && Number(product.price) > 0 ? (
+                          <div className="absolute top-1.5 left-1.5 flex items-center gap-1 bg-rose-500/90 backdrop-blur-sm rounded-full px-2 py-0.5 text-[9px] font-bold text-white shadow-sm">
+                            <span>-{Math.max(1, Math.round((Number(product.savings ?? 0) / Number(product.price)) * 100))}%</span>
+                          </div>
+                        ) : product.promoType === 'MULTI_BUY' && product.promoBuyQuantity > 0 && product.promoPayQuantity > 0 ? (
+                          <div className="absolute top-1.5 left-1.5 flex items-center gap-1 bg-emerald-600/90 backdrop-blur-sm rounded-full px-2 py-0.5 text-[9px] font-bold text-white shadow-sm">
+                            <span>{product.promoBuyQuantity} x {product.promoPayQuantity}</span>
+                          </div>
+                        ) : null}
                       </div>
                       <div className="px-2 pb-2 pt-2">
                         <div className="flex items-center gap-1.5 mb-1">
@@ -407,12 +413,22 @@ export const HomeView = React.memo(function HomeView({
                           <p className="text-[9px] font-bold text-neutral-500 truncate">{restaurant.name}</p>
                         </div>
                         <h3 className="text-xs font-bold text-neutral-900 truncate leading-tight">{product.name}</h3>
-                        <div className="flex items-center gap-1.5 mt-1">
-                          <span className="text-sm font-black text-rose-600">${product.discountPrice.toFixed(2)}</span>
-                          <span className="text-[10px] font-medium text-neutral-400 line-through">${product.price.toFixed(2)}</span>
-                        </div>
+                        {product.discountPrice != null && Number(product.discountPrice) > 0 ? (
+                          <div className="flex items-center gap-1.5 mt-1">
+                            <span className="text-sm font-black text-rose-600">${Number(product.discountPrice).toFixed(2)}</span>
+                            <span className="text-[10px] font-medium text-neutral-400 line-through">${Number(product.price ?? 0).toFixed(2)}</span>
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-1.5 mt-1">
+                            <span className="text-sm font-black text-neutral-900">${Number(product.price ?? 0).toFixed(2)}</span>
+                          </div>
+                        )}
                         <div className="mt-0.5">
-                          <span className="text-[9px] font-bold text-sky-600 bg-sky-50 rounded-full px-1.5 py-0.5">Ahorras ${product.savings.toFixed(2)}</span>
+                          {product.discountPrice != null && Number(product.discountPrice) > 0 ? (
+                            <span className="text-[9px] font-bold text-sky-600 bg-sky-50 rounded-full px-1.5 py-0.5">Ahorras ${Number(product.savings ?? 0).toFixed(2)}</span>
+                          ) : product.promoType === 'MULTI_BUY' && product.promoBuyQuantity > 0 && product.promoPayQuantity > 0 ? (
+                            <span className="text-[9px] font-bold text-emerald-700 bg-emerald-50 rounded-full px-1.5 py-0.5">Comprar {product.promoBuyQuantity}, pagar {product.promoPayQuantity}</span>
+                          ) : null}
                         </div>
                       </div>
                     </button>
