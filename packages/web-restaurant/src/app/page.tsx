@@ -6707,7 +6707,7 @@ export default function Home() {
                         }`}>
                         <span className="block text-lg font-black text-neutral-900">{pkg.days}</span>
                         <span className="block text-[11px] text-neutral-400 font-medium">día{pkg.days > 1 ? 's' : ''}</span>
-                        <span className="block mt-1 text-sm font-bold text-sky-600">${pkg.price.toFixed(2)}</span>
+                        <span className="block mt-1 text-sm font-bold text-sky-600">${(pkg.price ?? 0).toFixed(2)}</span>
                         <span className="block text-[10px] text-neutral-400">MXN</span>
                       </button>
                     ))}
