@@ -593,7 +593,7 @@ export const SettingsSection = React.memo(function SettingsSection({
 
           {/* Área de Contenido Glassmórfica */}
           <div className="min-w-0 flex-1 animate-fade-in">
-            <div className="relative rounded-[32px] border border-white/60 bg-white/70 p-4 shadow-[0_8px_40px_-12px_rgba(0,0,0,0.08)] backdrop-blur-2xl sm:p-6 md:p-10 min-h-[500px]">
+            <div className="relative rounded-[32px] border border-white/60 bg-white/70 p-4 shadow-[0_8px_40px_-12px_rgba(0,0,0,0.08)] backdrop-blur-2xl sm:p-6 md:p-10 min-h-[500px] overflow-hidden">
               
               {/* Encabezado de sección dinámico */}
               <div className="mb-6 sm:mb-8 flex items-start sm:items-center gap-3 sm:gap-4 border-b border-black/5 pb-5 sm:pb-6">
@@ -804,10 +804,10 @@ export const SettingsSection = React.memo(function SettingsSection({
                   </div>
                 </div>
                 <div className="sm:col-span-2">
-                  <div className="flex items-center justify-between mb-3">
-                    <div>
+                  <div className="flex items-center justify-between gap-3 mb-3">
+                    <div className="min-w-0 flex-1">
                       <label className="block text-[13px] font-semibold text-neutral-900">Categorías</label>
-                      <p className="text-xs text-neutral-500 mt-0.5">Selecciona las categorías que mejor describan tu comida para aparecer en esas secciones de la app cliente.</p>
+                      <p className="text-xs text-neutral-500 mt-0.5 break-words">Selecciona las categorías que mejor describan tu comida para aparecer en esas secciones de la app cliente.</p>
                     </div>
                     <span className="inline-flex shrink-0 items-center gap-1 text-[11px] font-medium text-neutral-400">
                       Desliza
@@ -925,7 +925,7 @@ export const SettingsSection = React.memo(function SettingsSection({
                               }
                             });
                           }}
-                          className="w-full px-4 py-2.5 text-left text-sm hover:bg-neutral-50 transition border-b last:border-0 border-black/5 text-neutral-800"
+                          className="w-full px-4 py-2.5 text-left text-sm hover:bg-neutral-50 transition border-b last:border-0 border-black/5 text-neutral-800 break-words"
                         >
                           {suggestion.display_name}
                         </button>
@@ -949,14 +949,14 @@ export const SettingsSection = React.memo(function SettingsSection({
                   <label className="block text-sm font-semibold text-neutral-900 mb-2">Ubicación en el mapa</label>
                   <div id="settings-map" className="h-[280px] w-full rounded-[24px] border border-black/5 overflow-hidden shadow-[0_8px_30px_rgba(0,0,0,0.03)]" />
                 </div>
-                <div className="sm:col-span-2 grid grid-cols-2 gap-4 rounded-[20px] border border-black/5 bg-[#f8f7f4]/60 p-4 shadow-[inset_0_1px_1px_rgba(0,0,0,0.01)]">
-                  <div className="space-y-1">
+                <div className="sm:col-span-2 grid grid-cols-1 min-[420px]:grid-cols-2 gap-4 rounded-[20px] border border-black/5 bg-[#f8f7f4]/60 p-4 shadow-[inset_0_1px_1px_rgba(0,0,0,0.01)]">
+                  <div className="min-w-0 space-y-1">
                     <span className="text-[11px] font-semibold uppercase tracking-wider text-neutral-400">Latitud</span>
-                    <code className="block text-sm font-mono font-bold text-neutral-800">{storeDraft.latitude || 'Sin configurar'}</code>
+                    <code className="block text-sm font-mono font-bold text-neutral-800 break-all">{storeDraft.latitude || 'Sin configurar'}</code>
                   </div>
-                  <div className="space-y-1">
+                  <div className="min-w-0 space-y-1">
                     <span className="text-[11px] font-semibold uppercase tracking-wider text-neutral-400">Longitud</span>
-                    <code className="block text-sm font-mono font-bold text-neutral-800">{storeDraft.longitude || 'Sin configurar'}</code>
+                    <code className="block text-sm font-mono font-bold text-neutral-800 break-all">{storeDraft.longitude || 'Sin configurar'}</code>
                   </div>
                 </div>
                 <div className="sm:col-span-2 flex justify-end">
@@ -1280,23 +1280,23 @@ export const SettingsSection = React.memo(function SettingsSection({
                                         </button>
                                       )}
                                     </div>
-                                    <div className="mt-2.5 grid grid-cols-2 gap-3">
-                                      <div>
+                                    <div className="mt-2.5 grid grid-cols-1 min-[420px]:grid-cols-2 gap-3">
+                                      <div className="min-w-0">
                                         <label className="mb-0.5 block text-[10px] font-bold uppercase tracking-wider text-neutral-400">Apertura</label>
                                         <input
                                           type="time"
                                           value={block.openTime}
                                           onChange={(e: any) => updateShift(day.dayOfWeek, block.shiftIndex, { openTime: e.target.value })}
-                                          className="w-full rounded-[12px] border border-black/5 bg-white px-2.5 py-2.5 text-base text-neutral-900 outline-none transition-all duration-200 focus:border-sky-400 focus:ring-4 focus:ring-sky-400/20 sm:text-[13px]"
+                                          className="w-full min-w-0 rounded-[12px] border border-black/5 bg-white px-2.5 py-2.5 text-base text-neutral-900 outline-none transition-all duration-200 focus:border-sky-400 focus:ring-4 focus:ring-sky-400/20 sm:text-[13px]"
                                         />
                                       </div>
-                                      <div>
+                                      <div className="min-w-0">
                                         <label className="mb-0.5 block text-[10px] font-bold uppercase tracking-wider text-neutral-400">Cierre</label>
                                         <input
                                           type="time"
                                           value={block.closeTime}
                                           onChange={(e: any) => updateShift(day.dayOfWeek, block.shiftIndex, { closeTime: e.target.value })}
-                                          className="w-full rounded-[12px] border border-black/5 bg-white px-2.5 py-2.5 text-base text-neutral-900 outline-none transition-all duration-200 focus:border-sky-400 focus:ring-4 focus:ring-sky-400/20 sm:text-[13px]"
+                                          className="w-full min-w-0 rounded-[12px] border border-black/5 bg-white px-2.5 py-2.5 text-base text-neutral-900 outline-none transition-all duration-200 focus:border-sky-400 focus:ring-4 focus:ring-sky-400/20 sm:text-[13px]"
                                         />
                                       </div>
                                     </div>
@@ -1896,17 +1896,17 @@ export const SettingsSection = React.memo(function SettingsSection({
 
             {/* Footer */}
             <div className="shrink-0 border-t border-black/5 bg-neutral-50/80 px-5 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-4 sm:px-8 sm:pb-5">
-              <div className="grid grid-cols-2 gap-3 sm:flex sm:justify-end">
+              <div className="grid grid-cols-1 gap-3 sm:flex sm:justify-end">
                 <button
                   onClick={() => setPromoCodeModalOpen(false)}
-                  className="rounded-full border border-black/10 bg-white px-6 py-3 text-sm font-semibold text-neutral-700 shadow-sm transition-all hover:bg-neutral-100 hover:shadow active:scale-[0.98]"
+                  className="w-full rounded-full border border-black/10 bg-white px-6 py-3 text-sm font-semibold text-neutral-700 shadow-sm transition-all hover:bg-neutral-100 hover:shadow active:scale-[0.98] sm:w-auto"
                 >
                   Cancelar
                 </button>
                 <button
                   onClick={() => void savePromoCode()}
                   disabled={promoCodeSaving}
-                  className="rounded-full bg-neutral-950 px-6 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-neutral-800 active:scale-[0.98] disabled:opacity-50"
+                  className="w-full rounded-full bg-neutral-950 px-6 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-neutral-800 active:scale-[0.98] disabled:opacity-50 sm:w-auto"
                 >
                   {promoCodeSaving ? 'Guardando...' : editingPromoCode ? 'Guardar cambios' : 'Crear cupón'}
                 </button>

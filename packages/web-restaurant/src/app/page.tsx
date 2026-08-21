@@ -10313,8 +10313,8 @@ export default function Home() {
                             <div className="h-64 w-full bg-gradient-to-br from-sky-400 via-sky-600 to-sky-900 md:h-80 lg:h-96" />
                           )}
                           <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
-                          <div className="absolute inset-x-0 top-0 flex items-start justify-between gap-3 p-4 md:p-6 lg:p-8">
-                            <div className="flex items-center gap-2">
+                          <div className="absolute inset-x-0 top-0 flex flex-wrap items-start justify-between gap-3 p-4 md:p-6 lg:p-8">
+                            <div className="flex flex-wrap min-w-0 items-center gap-2">
                               <div className="rounded-full bg-white/90 backdrop-blur-md px-4 py-2.5 text-[11px] font-bold uppercase tracking-widest text-sky-900 shadow-sm border border-white/40 ring-1 ring-black/5">
                                 Vista Previa: Tu Tienda
                               </div>
@@ -10393,31 +10393,31 @@ export default function Home() {
                                 <Pencil className="h-4 w-4" />
                               </button>
                             </div>
-                            <p className="mt-4 text-3xl font-bold tracking-tight text-neutral-950">
+                            <p className="mt-4 text-3xl font-bold tracking-tight text-neutral-950 break-words">
                               {storeDraft.name || 'Nombre de tu tienda'}
                             </p>
-                            <p className="mt-2 max-w-sm text-[15px] font-medium leading-relaxed text-neutral-500">
+                            <p className="mt-2 max-w-sm text-[15px] font-medium leading-relaxed text-neutral-500 break-words">
                               {storeDraft.description || 'Agrega una descripcion atractiva para tus clientes.'}
                             </p>
                           </div>
 
                           <div className="mt-5 flex flex-wrap justify-center gap-3 lg:mt-6 lg:justify-start">
-                            <div className="group flex items-center gap-2 rounded-full bg-white/80 backdrop-blur-md px-4 py-2.5 text-[13px] font-medium text-neutral-700 shadow-sm ring-1 ring-black/5 transition hover:bg-white hover:shadow-md">
-                              <svg className="h-4 w-4 text-sky-500 transition-transform group-hover:scale-110" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <div className="group flex max-w-full min-w-0 items-center gap-2 rounded-full bg-white/80 backdrop-blur-md px-4 py-2.5 text-[13px] font-medium text-neutral-700 shadow-sm ring-1 ring-black/5 transition hover:bg-white hover:shadow-md">
+                              <svg className="h-4 w-4 shrink-0 text-sky-500 transition-transform group-hover:scale-110" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.243-4.243a8 8 0 1111.314 0z" />
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
                               </svg>
-                              <span>
+                              <span className="min-w-0 break-words">
                                 <span className="font-bold text-neutral-900">Direccion:</span>{' '}
                                 {storeDraft.address || 'Agrega tu direccion principal'}
                               </span>
                             </div>
 
-                            <div className="group flex items-center gap-2 rounded-full bg-white/80 backdrop-blur-md px-4 py-2.5 text-[13px] font-medium text-neutral-700 shadow-sm ring-1 ring-black/5 transition hover:bg-white hover:shadow-md">
-                              <svg className="h-4 w-4 text-sky-500 transition-transform group-hover:scale-110" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <div className="group flex max-w-full min-w-0 items-center gap-2 rounded-full bg-white/80 backdrop-blur-md px-4 py-2.5 text-[13px] font-medium text-neutral-700 shadow-sm ring-1 ring-black/5 transition hover:bg-white hover:shadow-md">
+                              <svg className="h-4 w-4 shrink-0 text-sky-500 transition-transform group-hover:scale-110" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                               </svg>
-                              <span>
+                              <span className="min-w-0 break-words">
                                 <span className="font-bold text-neutral-900">Entrega:</span>{' '}
                                 {storeDraft.hasOwnDelivery && storeDraft.deliveryPricingModel === 'distance'
                                   ? 'Por distancia'
@@ -10428,7 +10428,7 @@ export default function Home() {
                             </div>
 
                             <div
-                              className={`group flex items-center gap-2 rounded-full px-4 py-2.5 text-[13px] font-bold shadow-sm ring-1 transition hover:shadow-md ${profile.status === 'ACTIVE' && profile.isAcceptingOrders
+                              className={`group flex max-w-full min-w-0 items-center gap-2 rounded-full px-4 py-2.5 text-[13px] font-bold shadow-sm ring-1 transition hover:shadow-md ${profile.status === 'ACTIVE' && profile.isAcceptingOrders
                                 ? 'bg-emerald-50/80 text-emerald-700 ring-emerald-200/60 hover:bg-emerald-100'
                                 : profile.status === 'SUSPENDED'
                                   ? 'bg-sky-50/80 text-sky-700 ring-sky-200/60 hover:bg-sky-100'
@@ -10436,7 +10436,7 @@ export default function Home() {
                                 }`}
                             >
                               <Clock />
-                              <span>
+                              <span className="min-w-0 break-words">
                                 {getRestaurantOperationalStatusLabel(
                                   profile.status,
                                   profile.isAcceptingOrders
@@ -10573,12 +10573,12 @@ export default function Home() {
                         {filteredStoreCategories.map((category) => (
                           <section key={category.id} className="rounded-[24px] px-0 py-0">
                       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4">
-                              <div>
-                                <div className="flex items-center gap-3">
-                                  <h2 className="text-2xl font-semibold tracking-[-0.03em] text-neutral-950">
+                              <div className="min-w-0">
+                                <div className="flex min-w-0 items-center gap-3">
+                                  <h2 className="min-w-0 text-2xl font-semibold tracking-[-0.03em] text-neutral-950 break-words">
                                     {category.name}
                                   </h2>
-                                  <div className="flex items-center gap-1">
+                                  <div className="flex shrink-0 items-center gap-1">
                                     <button
                                       type="button"
                                       onClick={() => void moveCategoryUp(category.id)}
@@ -10631,7 +10631,7 @@ export default function Home() {
                               </button>
                             </div>
 
-                            <div className="mt-5 grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3 xl:grid-cols-4">
+                            <div className="mt-5 grid grid-cols-1 min-[420px]:grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3 xl:grid-cols-4">
                               {category.products.map((product) => (
                                 <article
                                   key={product.id}
@@ -10713,19 +10713,19 @@ export default function Home() {
                                     <div className="flex flex-1 flex-col justify-between p-4 sm:p-5">
                                       <div>
                                         <div className="flex items-start justify-between gap-2">
-                                          <h3 className="flex items-center gap-2 text-base font-semibold text-neutral-950 sm:text-lg">
+                                          <h3 className="flex min-w-0 items-center gap-2 text-base font-semibold text-neutral-950 sm:text-lg break-words">
                                             {product.name}
                                             {product.isAdultOnly && (
-                                              <span className="rounded bg-rose-100 px-1.5 py-0.5 text-[10px] font-bold text-rose-700 tracking-wider">
+                                              <span className="shrink-0 rounded bg-rose-100 px-1.5 py-0.5 text-[10px] font-bold text-rose-700 tracking-wider">
                                                 +18
                                               </span>
                                             )}
                                           </h3>
-                                          <span className="rounded-full bg-white px-3 py-1 text-xs font-medium text-neutral-500">
+                                          <span className="shrink-0 rounded-full bg-white px-3 py-1 text-xs font-medium text-neutral-500">
                                             {product.preparationTime} min
                                           </span>
                                         </div>
-                                        <p className="mt-2 text-sm leading-6 text-neutral-600">
+                                        <p className="mt-2 text-sm leading-6 text-neutral-600 break-words line-clamp-3">
                                           {product.description}
                                         </p>
                                         {product.promoType === 'MULTI_BUY' && product.promoBuyQuantity != null && product.promoPayQuantity != null && product.promoBuyQuantity > 0 && product.promoPayQuantity > 0 ? (
@@ -11088,7 +11088,7 @@ export default function Home() {
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
                         Cerrar vista previa
                       </button>
-                      <div className="relative w-[340px] h-[620px] bg-neutral-900 rounded-[44px] p-3 shadow-2xl ring-1 ring-white/10 overflow-hidden">
+                      <div className="relative w-full max-w-[340px] h-[620px] bg-neutral-900 rounded-[44px] p-3 shadow-2xl ring-1 ring-white/10 overflow-hidden mx-auto">
                         <div className="absolute top-0 inset-x-0 h-6 flex justify-center z-20">
                           <div className="w-32 h-5.5 bg-neutral-900 rounded-b-2xl"></div>
                         </div>
