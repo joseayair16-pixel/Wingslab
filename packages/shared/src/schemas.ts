@@ -49,7 +49,6 @@ export const CreateProductSchema = z.object({
   maxWeightG: z.number().int().positive().nullish(),
   stepWeightG: z.number().int().positive().nullish(),
   weightPresets: z.array(z.number().int().positive()).nullish(),
-  preparationTime: z.number().positive('Preparation time must be positive'),
   calories: z.number().positive().optional(),
   allergens: z.array(z.string()).optional(),
 });

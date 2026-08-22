@@ -103,7 +103,6 @@ export interface Product {
   imagePosition?: string;
   imageZoom?: number;
   isAvailable: boolean;
-  preparationTime: number;
   calories?: number;
   allergens?: string[];
   createdAt: Date;

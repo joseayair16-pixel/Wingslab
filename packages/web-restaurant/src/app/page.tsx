@@ -269,7 +269,6 @@ type ProductItem = {
   imageZoom?: number | null;
   isAdultOnly?: boolean;
   isAvailable: boolean;
-  preparationTime: number;
   category?: {
     id?: string;
     name: string;
@@ -412,7 +411,6 @@ type ProductDraft = {
   imagePosition?: string;
   imageZoom?: number;
   isAdultOnly: boolean;
-  preparationTime: string;
   optionGroups?: ProductOptionGroup[];
 };
 
@@ -435,7 +433,6 @@ function buildEmptyProductDraft(
     imagePosition?: string;
     imageZoom?: number;
     isAdultOnly?: boolean;
-    preparationTime?: string;
     optionGroups?: ProductOptionGroup[];
   },
 ): ProductDraft {
@@ -460,7 +457,6 @@ function buildEmptyProductDraft(
     imagePosition: template?.imagePosition || '50% 50%',
     imageZoom: template?.imageZoom || 100,
     isAdultOnly: template?.isAdultOnly ?? false,
-    preparationTime: template?.preparationTime || '15',
     optionGroups: template?.optionGroups ? cloneOptionGroups(template.optionGroups) : [],
   };
 }
@@ -1321,7 +1317,6 @@ export default function Home() {
     imagePosition: '50% 50%',
     imageZoom: 100,
     isAdultOnly: false,
-    preparationTime: '15',
   });
   const [productConfigInherited, setProductConfigInherited] = useState(false);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
@@ -1656,7 +1651,6 @@ export default function Home() {
     imagePosition: string;
     imageZoom: number;
     isAdultOnly: boolean;
-    preparationTime: string;
     optionGroups: ProductOptionGroup[];
   } | null>(null);
   const productNameInputRef = useRef<HTMLInputElement | null>(null);
@@ -4457,7 +4451,6 @@ export default function Home() {
       imagePosition: product.imagePosition || '50% 50%',
       imageZoom: product.imageZoom || 100,
       isAdultOnly: product.isAdultOnly || false,
-      preparationTime: String(product.preparationTime),
       optionGroups: product.optionGroups || [],
     });
     setIsProductModalOpen(true);
@@ -4510,7 +4503,6 @@ export default function Home() {
       imagePosition: product.imagePosition || '50% 50%',
       imageZoom: product.imageZoom || 100,
       isAdultOnly: product.isAdultOnly || false,
-      preparationTime: String(product.preparationTime),
       optionGroups: product.optionGroups || [],
     });
     setIsProductModalOpen(true);
@@ -4853,7 +4845,6 @@ export default function Home() {
             imagePosition: productDraft.imagePosition || null,
             imageZoom: productDraft.imageZoom || null,
             isAdultOnly: productDraft.isAdultOnly,
-            preparationTime: Number(productDraft.preparationTime),
             isAvailable: true,
             allergens: [],
             optionGroups: productDraft.optionGroups || [],
@@ -4965,7 +4956,6 @@ export default function Home() {
             imagePosition: productDraft.imagePosition || null,
             imageZoom: productDraft.imageZoom || null,
             isAdultOnly: productDraft.isAdultOnly,
-            preparationTime: Number(productDraft.preparationTime),
             optionGroups: productDraft.optionGroups || [],
           }),
         },
@@ -5393,7 +5383,6 @@ export default function Home() {
       imagePosition: draft.imagePosition || '50% 50%',
       imageZoom: draft.imageZoom || 100,
       isAdultOnly: draft.isAdultOnly,
-      preparationTime: draft.preparationTime,
       optionGroups: draft.optionGroups ? cloneOptionGroups(draft.optionGroups) : [],
     };
   }
@@ -5412,7 +5401,6 @@ export default function Home() {
       imagePosition: '50% 50%',
       imageZoom: 100,
       isAdultOnly: false,
-      preparationTime: '15',
       optionGroups: [],
     }));
   }
@@ -5640,7 +5628,6 @@ export default function Home() {
           imageZoom: null,
           isAvailable: true,
           isAdultOnly: false,
-          preparationTime: 15,
           allergens: [],
         };
       });
@@ -7716,25 +7703,6 @@ export default function Home() {
                           }
                         }}
                       />
-                      {profile?.businessType === 'RESTAURANT' ? (
-                        <Field
-                          label="Tiempo de Prep (min)"
-                          value={productDraft.preparationTime}
-                          onChange={(value) =>
-                            setProductDraft((current) => ({ ...current, preparationTime: value }))
-                          }
-                          placeholder="Ej: 15"
-                        />
-                      ) : (
-                        <Field
-                          label="SKU / Código"
-                          value={productDraft.preparationTime}
-                          onChange={(value) =>
-                            setProductDraft((current) => ({ ...current, preparationTime: value }))
-                          }
-                          placeholder="Ej: PROD-001"
-                        />
-                      )}
                       <div className="sm:col-span-2">
                         <TextAreaField
                           label="Descripción"
@@ -10721,9 +10689,6 @@ export default function Home() {
                                               </span>
                                             )}
                                           </h3>
-                                          <span className="shrink-0 rounded-full bg-white px-3 py-1 text-xs font-medium text-neutral-500">
-                                            {product.preparationTime} min
-                                          </span>
                                         </div>
                                         <p className="mt-2 text-sm leading-6 text-neutral-600 break-words line-clamp-3">
                                           {product.description}

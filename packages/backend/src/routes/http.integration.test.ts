@@ -1463,7 +1463,6 @@ describe('http integration contracts', () => {
               price: 200,
               image: null,
               isAvailable: true,
-              preparationTime: 10,
               calories: null,
               allergens: [],
               createdAt: new Date(),

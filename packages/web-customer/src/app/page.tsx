@@ -135,7 +135,6 @@ type PublicRestaurantDetail = {
       description: string;
       price: number;
       image?: string | null;
-      preparationTime: number;
     }>;
   }>;
 };

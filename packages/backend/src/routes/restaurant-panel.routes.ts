@@ -135,7 +135,6 @@ const productSchemaBase = z.object({
   imageZoom: z.number().int().min(30).max(300).nullable().optional(),
   isAvailable: z.boolean().optional(),
   isAdultOnly: z.boolean().optional().default(false),
-  preparationTime: z.number().int().positive('El tiempo de preparacion debe ser mayor a cero.'),
   calories: z.number().int().positive().nullable().optional(),
   allergens: z.array(z.string()).default([]),
   optionGroups: z.array(optionGroupSchema).optional(),
@@ -1126,7 +1125,6 @@ export async function registerRestaurantPanelRoutes(fastify: FastifyInstance): P
           imageZoom: parsed.data.imageZoom || null,
           isAvailable: parsed.data.isAvailable ?? true,
           isAdultOnly: parsed.data.isAdultOnly,
-          preparationTime: parsed.data.preparationTime,
           calories: parsed.data.calories || null,
           allergens: parsed.data.allergens,
           optionGroups: parsed.data.optionGroups && parsed.data.optionGroups.length > 0 ? {
@@ -1239,7 +1237,6 @@ export async function registerRestaurantPanelRoutes(fastify: FastifyInstance): P
             imageZoom: item.imageZoom || null,
             isAvailable: item.isAvailable ?? true,
             isAdultOnly: item.isAdultOnly,
-            preparationTime: item.preparationTime,
             calories: item.calories || null,
             allergens: item.allergens,
             optionGroups: item.optionGroups && item.optionGroups.length > 0 ? {

@@ -101,7 +101,6 @@ type PublicRestaurantDetail = {
         images?: string[];
         imagePosition?: string | null;
         imageZoom?: number | null;
-        preparationTime: number;
         discountPrice?: number | null;
         promoType?: 'MULTI_BUY' | null;
         promoBuyQuantity?: number | null;
