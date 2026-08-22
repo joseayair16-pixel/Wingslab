@@ -6,6 +6,7 @@ import fastifyCompress from '@fastify/compress';
 import fastifySocketIO from 'fastify-socket.io';
 import Fastify, { FastifyInstance } from 'fastify';
 import http from 'http';
+import { UserRole } from '@prisma/client';
 import { createAdapter } from '@socket.io/redis-adapter';
 
 import './config/env';
@@ -13,6 +14,7 @@ import { validateEnvironment } from './config/env';
 import { prisma } from './config/database';
 import { getRedis } from './config/redis';
 import { errorHandler } from './middleware/error.handler';
+import { authenticate, authorize } from './middleware/auth';
 import { setupRoutes } from './routes';
 import { setupSocketIO } from './services/socket.service';
 import { setupNotificationSubscribers } from './subscribers/notification.subscriber';
@@ -51,6 +53,14 @@ if (NODE_ENV === 'production') {
   validateEnvironment();
 }
 
+// Fail-fast: sin JWT_SECRET la firma de tokens es predecible = toma de cuentas total.
+if (!process.env.JWT_SECRET) {
+  if (NODE_ENV === 'production') {
+    throw new Error('FATAL: JWT_SECRET is required in production.');
+  }
+  console.warn('[AUTH] JWT_SECRET no configurado — usando secreto inseguro solo para desarrollo.');
+}
+
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
 
 export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyInstance> {
@@ -63,9 +73,9 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     bodyLimit: 10485760,
     requestTimeout: 30000,
     // Behind a reverse proxy (Railway/cloud) all requests share the proxy IP.
-    // Trusting the proxy lets request.ip resolve the real client IP so rate
-    // limits apply per user instead of globally across everyone.
-    trustProxy: true,
+    // Trust exactly one proxy hop so request.ip resolves the real client IP
+    // while attacker-controlled X-Forwarded-For chains cannot spoof new IPs.
+    trustProxy: 1,
     serverFactory: (handler) => {
       httpServer.on('request', (req, res) => {
         if (req.url?.startsWith('/socket.io')) {
@@ -98,8 +108,6 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     origin: (origin, cb) => {
       const corsOrigin = process.env.CORS_ORIGIN || '*';
       if (corsOrigin === '*' || !origin) {
-        cb(null, true);
-      } else if (origin.endsWith('.vercel.app')) {
         cb(null, true);
       } else {
         const allowedOrigins = corsOrigin.split(',').map((o) => o.trim());
@@ -186,7 +194,20 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
       logger.info('[Redis] REDIS_URL no configurado — socket.io sin adapter');
     }
 
-    setupSocketIO(fastify.io);
+    setupSocketIO(fastify.io, (token) => {
+      if (typeof token !== 'string' || !token) {
+        return null;
+      }
+      try {
+        const payload = fastify.jwt.verify<{ sub: string; role: string }>(token);
+        if (!payload?.sub || !payload?.role) {
+          return null;
+        }
+        return { sub: payload.sub, role: payload.role };
+      } catch {
+        return null;
+      }
+    });
     setupNotificationSubscribers(fastify);
   }
 
@@ -252,7 +273,9 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     };
   });
 
-  fastify.get('/metrics', async () => {
+  fastify.get('/metrics', {
+    preHandler: [authenticate, authorize([UserRole.ADMIN])],
+  }, async () => {
     const snapshot = getMetricsSnapshot();
     return {
       requests_total: snapshot.totals.requests,

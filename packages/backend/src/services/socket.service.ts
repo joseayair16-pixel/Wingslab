@@ -10,27 +10,48 @@ type NotificationMeta = {
   orderId?: string;
 };
 
-// Validar que el userId y role no contengan caracteres peligrosos
-function isValidRoomParam(value: string): boolean {
-  return /^[a-zA-Z0-9_-]+$/.test(value);
+export type SocketTokenPayload = { sub: string; role: string };
+export type SocketTokenVerifier = (token?: unknown) => SocketTokenPayload | null;
+
+type AuthenticatedSocket = Socket & {
+  data: { userId?: string; role?: string };
+};
+
+function getRoom(socket: AuthenticatedSocket): string | null {
+  if (!socket.data.userId || !socket.data.role) {
+    return null;
+  }
+  return `${socket.data.role}:${socket.data.userId}`;
 }
 
-export const setupSocketIO = (io: SocketIOServer) => {
-  io.on('connection', (socket: Socket) => {
+export const setupSocketIO = (io: SocketIOServer, verifyToken?: SocketTokenVerifier) => {
+  // Autenticacion obligatoria en el handshake: sin JWT valido no hay conexion.
+  io.use((socket: AuthenticatedSocket, next) => {
+    if (!verifyToken) {
+      // Entornos de prueba sin JWT configurado.
+      return next();
+    }
+    const auth = verifyToken(socket.handshake.auth?.token);
+    if (!auth) {
+      logger.warn(`Socket connection rejected (missing/invalid token): ${socket.id}`);
+      return next(new Error('UNAUTHORIZED'));
+    }
+    socket.data.userId = auth.sub;
+    socket.data.role = auth.role;
+    next();
+  });
+
+  io.on('connection', (socket: AuthenticatedSocket) => {
     logger.info(`User connected: ${socket.id}`);
 
-    // Join room for user (e.g., restaurant, driver, customer)
-    socket.on('join-room', (userId: string, role: string) => {
+    // La sala siempre se deriva del token verificado; lo que envie el cliente se ignora.
+    socket.on('join-room', () => {
       try {
-        if (!userId || !role) {
-          logger.warn(`Invalid join-room params from ${socket.id}`);
+        const room = getRoom(socket);
+        if (!room) {
+          logger.warn(`join-room without authenticated identity from ${socket.id}`);
           return;
         }
-        if (!isValidRoomParam(userId) || !isValidRoomParam(role)) {
-          logger.warn(`Invalid characters in join-room params from ${socket.id}`);
-          return;
-        }
-        const room = `${role}:${userId}`;
         socket.join(room);
         logger.info(`${socket.id} joined room ${room}`);
       } catch (error) {
@@ -39,10 +60,10 @@ export const setupSocketIO = (io: SocketIOServer) => {
     });
 
     // Leave room
-    socket.on('leave-room', (userId: string, role: string) => {
+    socket.on('leave-room', () => {
       try {
-        if (!userId || !role) return;
-        const room = `${role}:${userId}`;
+        const room = getRoom(socket);
+        if (!room) return;
         socket.leave(room);
         logger.info(`${socket.id} left room ${room}`);
       } catch (error) {
@@ -50,12 +71,22 @@ export const setupSocketIO = (io: SocketIOServer) => {
       }
     });
 
-    // Driver location update
+    // Driver location update — solo el propio driver puede emitir su posicion.
     socket.on('driver:location', (data: unknown) => {
       try {
-        const location = data as { userId?: string; latitude?: number; longitude?: number } | null;
-        if (location?.userId && typeof location.latitude === 'number' && typeof location.longitude === 'number') {
-          socket.broadcast.emit(`driver:location:${location.userId}`, {
+        if (socket.data.role !== 'DRIVER' || !socket.data.userId) {
+          logger.warn(`driver:location rejected (not an authenticated driver): ${socket.id}`);
+          return;
+        }
+        const location = data as { latitude?: number; longitude?: number } | null;
+        if (
+          location &&
+          typeof location.latitude === 'number' &&
+          Number.isFinite(location.latitude) &&
+          typeof location.longitude === 'number' &&
+          Number.isFinite(location.longitude)
+        ) {
+          socket.broadcast.emit(`driver:location:${socket.data.userId}`, {
             latitude: location.latitude,
             longitude: location.longitude,
           });

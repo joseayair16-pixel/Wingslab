@@ -3313,6 +3313,7 @@ export default function Home() {
     }
 
     setSocketStatus('connecting');
+    const getSocketToken = () => readStoredSession(storageKey).token || '';
     const socket = io('https://sadel-production.up.railway.app', {
       path: '/socket.io',
       transports: ['websocket', 'polling'],
@@ -3320,6 +3321,11 @@ export default function Home() {
       reconnection: true,
       reconnectionAttempts: Infinity,
       reconnectionDelay: 1000,
+      auth: { token: getSocketToken() },
+    });
+
+    socket.on('reconnect_attempt', () => {
+      socket.auth = { token: getSocketToken() };
     });
 
     socketRef.current = socket;

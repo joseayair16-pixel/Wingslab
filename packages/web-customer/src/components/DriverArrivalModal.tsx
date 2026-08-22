@@ -142,11 +142,17 @@ export default function DriverArrivalModal() {
   useEffect(() => {
     if (!token || !sessionUser || sessionUser.role !== 'CUSTOMER' || isDeliveryScreen) return;
 
+    const getSocketToken = () => readStoredSession('sadel.customer').token || '';
     const socket = io(process.env.NEXT_PUBLIC_SOCKET_URL || 'https://sadel-production.up.railway.app', {
       path: '/socket.io',
       transports: ['websocket', 'polling'],
       autoConnect: true,
       reconnection: true,
+      auth: { token: getSocketToken() },
+    });
+
+    socket.on('reconnect_attempt', () => {
+      socket.auth = { token: getSocketToken() };
     });
 
     const sessionUserIdRef = sessionUser.id;

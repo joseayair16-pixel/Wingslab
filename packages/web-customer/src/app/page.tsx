@@ -3189,11 +3189,17 @@ export default function Home() {
     }
 
     setSocketStatus('connecting');
+    const getSocketToken = () => readStoredSession(storageKey).token || '';
     const socket = io(process.env.NEXT_PUBLIC_SOCKET_URL || 'https://sadel-production.up.railway.app', {
       path: '/socket.io',
       transports: ['websocket', 'polling'],
       autoConnect: true,
       reconnection: true,
+      auth: { token: getSocketToken() },
+    });
+
+    socket.on('reconnect_attempt', () => {
+      socket.auth = { token: getSocketToken() };
     });
 
     socketRef.current = socket;

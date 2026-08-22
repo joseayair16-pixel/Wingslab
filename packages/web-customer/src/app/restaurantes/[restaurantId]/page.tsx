@@ -1229,13 +1229,18 @@ export default function RestaurantPage({
       return;
     }
 
+    const getSocketToken = () => readStoredSession(storageKey).token || '';
     const socket = io(process.env.NEXT_PUBLIC_SOCKET_URL || 'https://sadel-production.up.railway.app', {
       path: '/socket.io',
       transports: ['websocket', 'polling'],
       autoConnect: true,
       reconnection: true,
+      auth: { token: getSocketToken() },
     });
-    socketRef.current = socket;
+
+    socket.on('reconnect_attempt', () => {
+      socket.auth = { token: getSocketToken() };
+    });
 
     socket.on('connect', () => {
       socket.emit('join-room', sessionUser.id, 'CUSTOMER');
