@@ -370,14 +370,14 @@ export const HomeView = React.memo(function HomeView({
               <h2 className="text-xl font-black text-neutral-900">🔥 Ofertas imperdibles</h2>
               <span className="text-xs font-bold text-rose-500">{filteredOfferProducts.length} productos</span>
             </div>
-            <div className="overflow-x-auto pb-2 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            <div className="overflow-x-auto pb-2 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden snap-x snap-mandatory md:snap-none">
               <div className="flex gap-3 px-4 md:px-0 min-w-max">
                 {filteredOfferProducts.map((item: any) => {
                   const { product, restaurant } = item;
                   return (
                     <button key={product.id} onClick={() => router.push(`/restaurantes/${restaurant.id}?focusProduct=${product.id}`)}
-                      className="group w-28 sm:w-44 shrink-0 overflow-hidden rounded-[18px] border border-black/5 bg-white text-left transition-all duration-300 ease-out hover:-translate-y-1 hover:border-black/10 hover:shadow-[0_12px_30px_rgba(15,15,15,0.08)] active:scale-[0.98]">
-                        <div className="relative overflow-hidden h-20 sm:h-24">
+                      className="group w-28 sm:w-44 shrink-0 snap-start overflow-hidden rounded-[18px] border border-black/5 bg-white text-left transition-all duration-300 ease-out hover:-translate-y-1 hover:border-black/10 hover:shadow-[0_12px_30px_rgba(15,15,15,0.08)] active:scale-[0.98]">
+                        <div className="relative overflow-hidden aspect-[4/3]">
                           {product.image ? (
                             <Image
                               src={product.image}
@@ -387,18 +387,18 @@ export const HomeView = React.memo(function HomeView({
                               className="object-cover transition duration-300 group-hover:scale-105"
                             />
                         ) : (
-                          <div className="h-20 sm:h-24 w-full bg-gradient-to-br from-neutral-100 to-neutral-200 flex items-center justify-center">
+                          <div className="aspect-[4/3] w-full bg-gradient-to-br from-neutral-100 to-neutral-200 flex items-center justify-center">
                             <svg className="w-8 h-8 text-neutral-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
                               <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607zM13.5 10.5h-3" />
                             </svg>
                           </div>
                         )}
                         {product.discountPrice != null && Number(product.discountPrice) > 0 && Number(product.price) > 0 ? (
-                          <div className="absolute top-1.5 left-1.5 flex items-center gap-1 bg-rose-500/90 backdrop-blur-sm rounded-full px-2 py-0.5 text-[9px] font-bold text-white shadow-sm">
+                          <div className="absolute top-1.5 left-1.5 flex items-center gap-1 bg-rose-500/90 backdrop-blur-sm rounded-full px-2 py-0.5 text-[10px] font-bold text-white shadow-sm">
                             <span>-{Math.max(1, Math.round((Number(product.savings ?? 0) / Number(product.price)) * 100))}%</span>
                           </div>
                         ) : product.promoType === 'MULTI_BUY' && product.promoBuyQuantity > 0 && product.promoPayQuantity > 0 ? (
-                          <div className="absolute top-1.5 left-1.5 flex items-center gap-1 bg-emerald-600/90 backdrop-blur-sm rounded-full px-2 py-0.5 text-[9px] font-bold text-white shadow-sm">
+                          <div className="absolute top-1.5 left-1.5 flex items-center gap-1 bg-emerald-600/90 backdrop-blur-sm rounded-full px-2 py-0.5 text-[10px] font-bold text-white shadow-sm">
                             <span>{product.promoBuyQuantity} x {product.promoPayQuantity}</span>
                           </div>
                         ) : null}
@@ -410,7 +410,7 @@ export const HomeView = React.memo(function HomeView({
                               <Image src={restaurant.logo} alt={restaurant.name} fill sizes="20px" className="object-cover" />
                             </div>
                           )}
-                          <p className="text-[9px] font-bold text-neutral-500 truncate">{restaurant.name}</p>
+                          <p className="text-[10px] font-bold text-neutral-500 truncate">{restaurant.name}</p>
                         </div>
                         <h3 className="text-xs font-bold text-neutral-900 truncate leading-tight">{product.name}</h3>
                         {product.discountPrice != null && Number(product.discountPrice) > 0 ? (
@@ -423,13 +423,6 @@ export const HomeView = React.memo(function HomeView({
                             <span className="text-sm font-black text-neutral-900">${Number(product.price ?? 0).toFixed(2)}</span>
                           </div>
                         )}
-                        <div className="mt-0.5">
-                          {product.discountPrice != null && Number(product.discountPrice) > 0 ? (
-                            <span className="text-[9px] font-bold text-sky-600 bg-sky-50 rounded-full px-1.5 py-0.5">Ahorras ${Number(product.savings ?? 0).toFixed(2)}</span>
-                          ) : product.promoType === 'MULTI_BUY' && product.promoBuyQuantity > 0 && product.promoPayQuantity > 0 ? (
-                            <span className="text-[9px] font-bold text-emerald-700 bg-emerald-50 rounded-full px-1.5 py-0.5">Comprar {product.promoBuyQuantity}, pagar {product.promoPayQuantity}</span>
-                          ) : null}
-                        </div>
                       </div>
                     </button>
                   );
