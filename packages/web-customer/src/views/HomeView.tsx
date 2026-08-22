@@ -398,7 +398,7 @@ export const HomeView = React.memo(function HomeView({
                             <span>-{Math.max(1, Math.round((Number(product.savings ?? 0) / Number(product.price)) * 100))}%</span>
                           </div>
                         ) : product.promoType === 'MULTI_BUY' && product.promoBuyQuantity > 0 && product.promoPayQuantity > 0 ? (
-                          <div className="absolute top-1.5 left-1.5 flex items-center gap-1 bg-emerald-600/90 backdrop-blur-sm rounded-full px-2 py-0.5 text-[10px] font-bold text-white shadow-sm">
+                          <div className="absolute top-1.5 left-1.5 flex items-center gap-1 bg-rose-500/90 backdrop-blur-sm rounded-full px-2 py-0.5 text-[10px] font-bold text-white shadow-sm">
                             <span>{product.promoBuyQuantity} x {product.promoPayQuantity}</span>
                           </div>
                         ) : null}
