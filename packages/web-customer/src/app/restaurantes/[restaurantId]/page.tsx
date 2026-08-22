@@ -190,6 +190,9 @@ type CustomerOrderDetail = {
   paymentStatus: string;
   estimatedDeliveryTime: string;
   etaExtendedMinutes?: number;
+  lastDriverLatitude?: number | null;
+  lastDriverLongitude?: number | null;
+  lastDriverLocationAt?: string | null;
   preparationDeadlineAt?: string | null;
   notes?: string | null;
   handoverPin?: string | null;
@@ -610,6 +613,20 @@ export default function RestaurantPage({
       setCarouselIndex(activeOrderListItems.length - 1);
     }
   }, [activeOrderListItems.length, carouselIndex]);
+
+  // Posición inicial del repartidor: si el seguimiento se abre cuando el
+  // repartidor ya va en ruta, el mapa arranca en su última posición conocida
+  // en BD sin esperar el siguiente ping de la APK.
+  useEffect(() => {
+    if (driverLocation || !isTrackingEnabled) return;
+    if (!activeOrder) return;
+    const lat = activeOrder.lastDriverLatitude;
+    const lng = activeOrder.lastDriverLongitude;
+    if (lat == null || lng == null) return;
+    const routeStatuses = ['PICKED_UP', 'IN_TRANSIT', 'DRIVER_ARRIVED'];
+    if (!routeStatuses.includes(activeOrder.status)) return;
+    setDriverLocation({ lat, lng });
+  }, [activeOrder, driverLocation, isTrackingEnabled]);
 
   const cartRestaurantId = useCartStore(state => state.restaurantId);
   const cartItems = useCartStore(state => state.items);

@@ -1,41 +1,9 @@
 import { MessageCircle } from 'lucide-react';
+import { Icon } from '@iconify/react';
 import { memo, useEffect, useState } from 'react';
 import { getBusinessArticleCapitalized, getBusinessRef, getOrderStatusLabel } from '@sadel/shared';
 import LiveTrackingMap from './LiveTrackingMap';
-
-export type CompactOrderDetail = {
-  id: string;
-  status: string;
-  estimatedDeliveryTime?: string;
-  fulfillmentType?: 'DELIVERY' | 'PICKUP';
-  dailyCounter?: number;
-  paymentMethod?: string;
-  deliveryPin?: string | null;
-  handoverPin?: string | null;
-  pickupPin?: string | null;
-  batchId?: string | null;
-  deliverySequence?: number | null;
-  tracking?: Array<{ notes?: string | null }>;
-  restaurant?: {
-    name?: string;
-    businessType?: string;
-    latitude?: number;
-    longitude?: number;
-  } | null;
-  address?: {
-    latitude?: number;
-    longitude?: number;
-    street?: string;
-    number?: string;
-    neighborhood?: string;
-    reference?: string | null;
-  } | null;
-  scheduledDeliveryAt?: string | null;
-  scheduledDeliveryCustomerAcceptedAt?: string | null;
-  etaExtendedMinutes?: number;
-  preparationDeadlineAt?: string | null;
-  noDriversAvailable?: boolean;
-};
+import { buildTimelineSteps, type CompactOrderDetail, type TimelineStep } from './trackingSteps';
 
 export type DelayLevel = 1 | 2 | 3;
 
@@ -102,15 +70,7 @@ const DELAY_PILL_STYLES: Record<number, { wrap: string; icon: string; text: stri
   },
 };
 
-export type TimelineStep = {
-  key: string;
-  label: string;
-  description: string;
-  state: 'done' | 'active' | 'pending';
-};
-
-export function getEtaWindowMinutes(status: string) {
-  if (status === 'PENDING') {
+export function getEtaWindowMinutes(status: string) {  if (status === 'PENDING') {
     return { early: 5, late: 5 };
   }
 
@@ -207,87 +167,6 @@ export function formatEstimatedArrivalMinutes(
   }
 
   return fulfillmentType === 'PICKUP' ? `Listo para recoger en ${startMin} - ${endMin} min 🛍️` : `Llega en ${startMin} - ${endMin} min 🛵`;
-}
-
-export function buildTimelineSteps(order: CompactOrderDetail, activeStatusOverride?: string): TimelineStep[] {
-  const status = activeStatusOverride || order.status;
-  const isPickup = order.fulfillmentType === 'PICKUP';
-
-  if (isPickup) {
-    return [
-      {
-        key: 'kitchen',
-        label: getOrderStatusLabel('PREPARING', order.restaurant?.businessType),
-        description: status === 'PENDING'
-          ? `${getBusinessArticleCapitalized(order.restaurant?.businessType)} ${getBusinessRef(order.restaurant?.businessType)} está revisando tu solicitud`
-          : 'Estamos preparando tu pedido',
-        state: status === 'PENDING' || status === 'CONFIRMED' || status === 'PREPARING'
-          ? 'active'
-          : ['READY', 'PICKED_UP', 'IN_TRANSIT', 'DRIVER_ARRIVED', 'DELIVERED'].includes(status)
-            ? 'done'
-            : 'pending',
-      },
-      {
-        key: 'ready',
-        label: 'Pedido listo',
-        description: `Tu pedido está listo para recoger en ${order.restaurant?.name}`,
-        state: status === 'READY'
-          ? 'active'
-          : ['PICKED_UP', 'IN_TRANSIT', 'DRIVER_ARRIVED', 'DELIVERED'].includes(status)
-            ? 'done'
-            : 'pending',
-      },
-      {
-        key: 'picked_up',
-        label: 'Recogido',
-        description: 'Ya recogiste tu pedido. ¡Buen provecho!',
-        state: ['PICKED_UP', 'IN_TRANSIT', 'DRIVER_ARRIVED', 'DELIVERED'].includes(status)
-          ? 'done'
-          : 'pending',
-      },
-    ];
-  }
-
-  return [
-    {
-      key: 'kitchen',
-      label: getOrderStatusLabel('PREPARING', order.restaurant?.businessType),
-      description: status === 'PENDING'
-        ? `${getBusinessArticleCapitalized(order.restaurant?.businessType)} ${getBusinessRef(order.restaurant?.businessType)} está revisando tu solicitud`
-        : 'Estamos preparando tu pedido',
-      state: status === 'PENDING' || status === 'CONFIRMED' || status === 'PREPARING'
-        ? 'active'
-        : ['READY', 'PICKED_UP', 'IN_TRANSIT', 'DRIVER_ARRIVED', 'DELIVERED'].includes(status)
-          ? 'done'
-          : 'pending',
-    },
-    {
-      key: 'ready',
-      label: 'Pedido listo',
-      description: `${getBusinessArticleCapitalized(order.restaurant?.businessType)} ${getBusinessRef(order.restaurant?.businessType)} ha confirmado que tu pedido está listo`,
-      state: status === 'READY'
-        ? 'active'
-        : ['PICKED_UP', 'IN_TRANSIT', 'DRIVER_ARRIVED', 'DELIVERED'].includes(status)
-          ? 'done'
-          : 'pending',
-    },
-    {
-      key: 'transit',
-      label: status === 'DRIVER_ARRIVED' ? '¡Tu pedido ha llegado! 📍' : 'En camino',
-      description: status === 'DRIVER_ARRIVED' ? 'Sal a recibir a tu repartidor' : 'El repartidor está en camino, tu pedido llega pronto',
-      state: status === 'PICKED_UP' || status === 'IN_TRANSIT' || status === 'DRIVER_ARRIVED'
-        ? 'active'
-        : status === 'DELIVERED'
-          ? 'done'
-          : 'pending',
-    },
-    {
-      key: 'delivered',
-      label: 'Entregado',
-      description: 'El pedido llegó a tu domicilio.',
-      state: status === 'DELIVERED' ? 'done' : 'pending',
-    },
-  ];
 }
 
 export function buildFallbackTimelineSteps(
@@ -430,7 +309,10 @@ export const CompactActiveOrderBanner = memo(function CompactActiveOrderBanner({
   // Calcular el progreso de la barra
   const doneCount = compactSteps.filter((s) => s.state === 'done').length;
   const activeCount = compactSteps.filter((s) => s.state === 'active').length;
-  const progressPercent = Math.max(0, Math.min(100, ((doneCount + activeCount - 1) / (compactSteps.length - 1)) * 100));
+  const rawProgress = Math.max(0, Math.min(100, ((doneCount + activeCount - 1) / (compactSteps.length - 1)) * 100));
+  // Piso visual: en la primera etapa la barra nunca inicia en 0% (se ve rota);
+  // un pequeño avance comunica "en curso" sin mentir el progreso real.
+  const progressPercent = rawProgress === 0 && activeCount > 0 ? 14 : rawProgress;
 
   // Paso activo actual
   const activeStep = compactSteps.find((s) => s.state === 'active') || compactSteps[compactSteps.length - 1];
@@ -443,15 +325,17 @@ export const CompactActiveOrderBanner = memo(function CompactActiveOrderBanner({
           {/* Indicador animado */}
           <div className="relative shrink-0">
             <div className="w-10 h-10 rounded-2xl bg-neutral-950 flex items-center justify-center">
-              <span className="text-lg">
-                {activeStatus === 'DELIVERED' ? '✅' :
-                 activeStatus === 'PICKED_UP' && isPickup ? '🛍️' :
-                 activeStatus === 'PICKED_UP' ? '🛵' :
-                 activeStatus === 'IN_TRANSIT' ? '🛵' :
-                 activeStatus === 'DRIVER_ARRIVED' ? '📍' :
-                 activeStatus === 'READY' ? '📦' :
-                 currentOrder.restaurant?.businessType && currentOrder.restaurant.businessType !== 'RESTAURANT' ? '📦' : '🍳'}
-              </span>
+              {(() => {
+                // Iconografía Fluent coherente con el resto de la app (Iconify).
+                const stageIcon =
+                  activeStatus === 'DELIVERED' ? 'fluent-emoji-flat:check-mark-button' :
+                  activeStatus === 'DRIVER_ARRIVED' ? 'fluent-emoji-flat:round-pushpin' :
+                  activeStatus === 'READY' ? 'fluent-emoji-flat:package' :
+                  activeStatus === 'PICKED_UP' || activeStatus === 'IN_TRANSIT' ? 'fluent-emoji-flat:motor-scooter' :
+                  currentOrder.restaurant?.businessType && currentOrder.restaurant.businessType !== 'RESTAURANT' ? 'fluent-emoji-flat:package' :
+                  'fluent-emoji-flat:cooking';
+                return <Icon icon={stageIcon} className="h-6 w-6" aria-hidden="true" />;
+              })()}
             </div>
             {!['DELIVERED', 'CANCELLED', 'REJECTED'].includes(activeStatus) && (
               <span className="absolute -top-0.5 -right-0.5 flex h-3 w-3">

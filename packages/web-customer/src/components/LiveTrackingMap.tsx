@@ -1,6 +1,7 @@
 import React, { memo, useEffect, useRef, useState } from 'react';
 import { getOrderStatusLabel } from '@sadel/shared';
 import { ensureGoogleMapsScript, getGoogleMaps } from '../lib/googleMaps';
+import { buildTimelineSteps } from './trackingSteps';
 
 type Point = { lat: number; lng: number };
 
@@ -69,6 +70,34 @@ function buildPinIcon(google: any, emoji: string, bg: string) {
     url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(svg),
     scaledSize: new google.maps.Size(36, 43),
     anchor: new google.maps.Point(18, 42),
+  };
+}
+
+// Cachea los SVG de Iconify (fluent-emoji-flat) como data-URI para marcadores.
+const fluentIconCache = new Map<string, string>();
+
+async function getFluentIconDataUri(name: string): Promise<string | null> {
+  const cached = fluentIconCache.get(name);
+  if (cached) return cached;
+  try {
+    const res = await fetch(`https://api.iconify.design/${name}.svg`);
+    if (!res.ok) return null;
+    const svg = await res.text();
+    const uri = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+    fluentIconCache.set(name, uri);
+    return uri;
+  } catch {
+    return null;
+  }
+}
+
+// Badge circular blanco con anillo de color e ícono Fluent dentro.
+function buildBadgeIcon(google: any, iconDataUri: string, ringColor: string) {
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="44" height="44" viewBox="0 0 44 44"><circle cx="22" cy="22" r="20" fill="#ffffff" stroke="${ringColor}" stroke-width="2.5"/><image href="${iconDataUri}" x="9" y="9" width="26" height="26"/></svg>`;
+  return {
+    url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(svg),
+    scaledSize: new google.maps.Size(40, 40),
+    anchor: new google.maps.Point(20, 20),
   };
 }
 
@@ -187,6 +216,22 @@ export default memo(function LiveTrackingMap({
         });
       }
 
+      // Upgrade progresivo a íconos Fluent (fluent-emoji-flat) cuando la red
+      // responde; los pins emoji de arriba actúan como fallback instantáneo.
+      void (async () => {
+        const [storeUri, destUri] = await Promise.all([
+          getFluentIconDataUri('fluent-emoji-flat:convenience-store'),
+          getFluentIconDataUri('fluent-emoji-flat:house'),
+        ]);
+        if (!storeUri && !destUri) return;
+        if (storeUri && storeMarkerRef.current) {
+          storeMarkerRef.current.setIcon(buildBadgeIcon(google, storeUri, '#0f172a'));
+        }
+        if (destUri && deliveryMarkerRef.current) {
+          deliveryMarkerRef.current.setIcon(buildBadgeIcon(google, destUri, '#0ea5e9'));
+        }
+      })();
+
       // Encuadrar tienda + entrega si ambos existen
       const bounds = new google.maps.LatLngBounds();
       if (storeLat && storeLng) bounds.extend({ lat: storeLat, lng: storeLng });
@@ -258,6 +303,12 @@ export default memo(function LiveTrackingMap({
         map,
         icon: buildDriverIcon(google),
         zIndex: 3,
+      });
+
+      // Upgrade a ícono Fluent del repartidor cuando la red responda.
+      void getFluentIconDataUri('fluent-emoji-flat:motor-scooter').then((uri) => {
+        if (!uri || !driverMarkerRef.current) return;
+        driverMarkerRef.current.setIcon(buildBadgeIcon(google, uri, '#0ea5e9'));
       });
 
       trailPointsRef.current = [{ lat, lng }];
@@ -344,12 +395,18 @@ export default memo(function LiveTrackingMap({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [driverLocation, order?.id, mapReady]);
 
-  const statusLabel =
-    order?.status === 'DRIVER_ARRIVED'
-      ? 'Tu repartidor está llegando'
-      : order?.status
-        ? getOrderStatusLabel(order.status, order.restaurant?.businessType)
-        : null;
+  // El pill del mapa SIEMPRE muestra la misma etapa que la tarjeta principal:
+  // ambos derivan del timeline compartido (trackingSteps.ts), garantizando
+  // consistencia total entre card y mapa.
+  const isTerminalStatus = ['CANCELLED', 'REJECTED'].includes(order?.status || '');
+  const timeline = order ? buildTimelineSteps(order as unknown as Parameters<typeof buildTimelineSteps>[0]) : [];
+  const activeTimelineStep = timeline.find((s) => s.state === 'active');
+  const lastTimelineStep = timeline[timeline.length - 1];
+  const statusLabel = !order?.status
+    ? null
+    : isTerminalStatus
+      ? getOrderStatusLabel(order.status, order.restaurant?.businessType)
+      : activeTimelineStep?.label ?? lastTimelineStep?.label ?? null;
 
   return (
     <div className="relative">
