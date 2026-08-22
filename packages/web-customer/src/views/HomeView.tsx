@@ -4,7 +4,7 @@ import { useStore } from '../store';
 import { StoreCategoryItem } from '../app/page';
 import { BillboardCarousel, type Billboard } from '../components/BillboardCarousel';
 import { CategoryIcon } from '../components/CategoryIcon';
-import { ChevronRight, ChevronUp, Flame } from 'lucide-react';
+import { BadgePercent, ChevronRight, ChevronUp } from 'lucide-react';
 
 const isRestaurantType = (type?: string | null) => !type || type === 'RESTAURANT';
 
@@ -369,7 +369,7 @@ export const HomeView = React.memo(function HomeView({
             <div className="px-4 md:px-0 mb-3 flex items-center justify-between">
               <h2 className="flex items-center gap-2 text-xl font-black text-neutral-900">
                 <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-rose-500/10">
-                  <Flame className="h-4 w-4 text-rose-600" strokeWidth={2.5} />
+                  <BadgePercent className="h-4 w-4 text-rose-600" strokeWidth={2.25} />
                 </span>
                 Ofertas imperdibles
               </h2>

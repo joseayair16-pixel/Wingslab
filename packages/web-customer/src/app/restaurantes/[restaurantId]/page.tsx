@@ -5027,9 +5027,9 @@ function triggerHaptic(pattern: number | number[] = 10) {
                               {product.sellBy === 'WEIGHT' ? (
                                 <p className="mt-0.5 text-[11px] font-bold text-neutral-900 dark:text-white">{formatCurrency(product.unitPrice || product.price)}/kg</p>
                               ) : getMultiBuyInfo(product).isMultiBuy ? (
-                                <div className="mt-0.5 flex items-baseline gap-1">
-                                  <span className="text-xs font-bold text-emerald-600">{formatCurrency(getMultiBuyInfo(product).effectiveUnitPrice)}</span>
-                                  <span className="text-[9px] text-neutral-400 line-through dark:text-zinc-500">{formatCurrency(getMultiBuyInfo(product).basePrice)}</span>
+                                <div className="mt-0.5">
+                                  <p className="text-xs font-bold text-neutral-900 dark:text-white">{formatCurrency(getMultiBuyInfo(product).basePrice)}</p>
+                                  <p className="truncate text-[9px] font-semibold text-emerald-600">Llevando {getMultiBuyInfo(product).buy}: {formatCurrency(getMultiBuyInfo(product).effectiveUnitPrice)} c/u</p>
                                 </div>
                               ) : product.discountPrice ? (
                                 <div className="mt-0.5 flex items-baseline gap-1">
@@ -5102,9 +5102,9 @@ function triggerHaptic(pattern: number | number[] = 10) {
                                 {product.sellBy === 'WEIGHT' ? (
                                   <p className="mt-0.5 text-xs font-semibold text-neutral-500 dark:text-zinc-400">{formatCurrency(product.unitPrice || product.price)}/kg</p>
                                 ) : getMultiBuyInfo(product).isMultiBuy ? (
-                                  <div className="mt-0.5 flex items-baseline gap-1.5">
-                                    <span className="text-xs font-bold text-emerald-600">{formatCurrency(getMultiBuyInfo(product).effectiveUnitPrice)}</span>
-                                    <span className="text-[10px] text-neutral-400 line-through dark:text-zinc-500">{formatCurrency(getMultiBuyInfo(product).basePrice)}</span>
+                                  <div className="mt-0.5">
+                                    <p className="text-xs font-bold text-neutral-900 dark:text-white">{formatCurrency(getMultiBuyInfo(product).basePrice)}</p>
+                                    <p className="truncate text-[9px] font-semibold text-emerald-600">Llevando {getMultiBuyInfo(product).buy}: {formatCurrency(getMultiBuyInfo(product).effectiveUnitPrice)} c/u</p>
                                   </div>
                                 ) : product.discountPrice ? (
                                   <div className="mt-0.5 flex items-baseline gap-1.5">
@@ -5187,9 +5187,9 @@ function triggerHaptic(pattern: number | number[] = 10) {
                                 {product.sellBy === 'WEIGHT' ? (
                                   <p className="mt-0.5 text-xs font-semibold text-neutral-500 dark:text-zinc-400">{formatCurrency(product.unitPrice || product.price)}/kg</p>
                                 ) : getMultiBuyInfo(product).isMultiBuy ? (
-                                  <div className="mt-0.5 flex items-baseline gap-1.5">
-                                    <span className="text-xs font-bold text-emerald-600">{formatCurrency(getMultiBuyInfo(product).effectiveUnitPrice)}</span>
-                                    <span className="text-[10px] text-neutral-400 line-through dark:text-zinc-500">{formatCurrency(getMultiBuyInfo(product).basePrice)}</span>
+                                  <div className="mt-0.5">
+                                    <p className="text-xs font-bold text-neutral-900 dark:text-white">{formatCurrency(getMultiBuyInfo(product).basePrice)}</p>
+                                    <p className="truncate text-[9px] font-semibold text-emerald-600">Llevando {getMultiBuyInfo(product).buy}: {formatCurrency(getMultiBuyInfo(product).effectiveUnitPrice)} c/u</p>
                                   </div>
                                 ) : product.discountPrice ? (
                                   <div className="mt-0.5 flex items-baseline gap-1.5">
@@ -5319,9 +5319,9 @@ function triggerHaptic(pattern: number | number[] = 10) {
                                     {product.sellBy === 'WEIGHT' ? (
                                       <span className="text-sm font-bold text-neutral-900 dark:text-white">{formatCurrency(product.unitPrice || product.price)}/kg</span>
                                     ) : getMultiBuyInfo(product).isMultiBuy ? (
-                                      <div className="flex items-baseline gap-1.5">
-                                        <span className="text-sm font-bold text-emerald-600">{formatCurrency(getMultiBuyInfo(product).effectiveUnitPrice)}</span>
-                                        <span className="text-[10px] text-neutral-400 line-through dark:text-zinc-500">{formatCurrency(getMultiBuyInfo(product).basePrice)}</span>
+                                      <div className="mt-0.5">
+                                        <span className="text-sm font-bold text-neutral-900 dark:text-white">{formatCurrency(getMultiBuyInfo(product).basePrice)}</span>
+                                        <p className="truncate text-[10px] font-semibold text-emerald-600">Llevando {getMultiBuyInfo(product).buy}: {formatCurrency(getMultiBuyInfo(product).effectiveUnitPrice)} c/u</p>
                                       </div>
                                     ) : product.discountPrice ? (
                                       <div className="flex items-baseline gap-1.5">
@@ -6111,12 +6111,12 @@ function triggerHaptic(pattern: number | number[] = 10) {
                     <p className="text-2xl font-bold text-neutral-900 dark:text-white">{formatCurrency(previewProduct.unitPrice || previewProduct.price)}<span className="text-base font-medium text-neutral-500 dark:text-zinc-400">/kg</span></p>
                   ) : getMultiBuyInfo(previewProduct).isMultiBuy ? (
                     <div className="space-y-1">
-                      <div className="flex items-baseline gap-2.5">
-                        <span className="text-2xl font-bold text-emerald-600 dark:text-emerald-500">{formatCurrency(getMultiBuyInfo(previewProduct).effectiveUnitPrice)}</span>
-                        <span className="text-sm text-neutral-400 line-through dark:text-zinc-500">{formatCurrency(getMultiBuyInfo(previewProduct).basePrice)}</span>
+                      <div className="flex flex-wrap items-baseline gap-x-2.5 gap-y-0.5">
+                        <span className="text-2xl font-bold text-neutral-900 dark:text-white">{formatCurrency(getMultiBuyInfo(previewProduct).basePrice)}</span>
+                        <span className="text-sm font-semibold text-emerald-600 dark:text-emerald-500">{formatCurrency(getMultiBuyInfo(previewProduct).effectiveUnitPrice)} c/u llevando {getMultiBuyInfo(previewProduct).buy}</span>
                       </div>
                       <span className="inline-block rounded-full bg-emerald-50 px-2.5 py-0.5 text-[10px] font-bold text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400">
-                        Compra {getMultiBuyInfo(previewProduct).buy} paga {getMultiBuyInfo(previewProduct).pay} · ahorras {getMultiBuyInfo(previewProduct).discountPercent}%
+                        Compra {getMultiBuyInfo(previewProduct).buy} paga {getMultiBuyInfo(previewProduct).pay} · ahorras {formatCurrency(getMultiBuyInfo(previewProduct).savingsPerGroup)}
                       </span>
                     </div>
                   ) : previewProduct.discountPrice ? (
