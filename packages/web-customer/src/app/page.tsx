@@ -14,6 +14,7 @@ import {
   readStoredSession,
   requestJson,
   setGlobalSessionExpiredHandler,
+  forceSessionExpired,
   submitReview,
   uploadMediaAsset,
   getOrderStatusLabel,
@@ -3200,6 +3201,16 @@ export default function Home() {
 
     socket.on('reconnect_attempt', () => {
       socket.auth = { token: getSocketToken() };
+    });
+
+    socket.on('connect_error', (err) => {
+      // Token expirado/inválido: cortar el bucle de reconexión y forzar el
+      // flujo de sesión expirada en vez de reintentar indefinidamente.
+      if (String((err as Error)?.message || '').includes('UNAUTHORIZED')) {
+        socket.disconnect();
+        forceSessionExpired();
+        return;
+      }
     });
 
     socketRef.current = socket;

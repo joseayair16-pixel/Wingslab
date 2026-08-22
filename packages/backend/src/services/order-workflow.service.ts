@@ -920,6 +920,14 @@ export async function assignDriverToOrder({
       );
     }
 
+    // Reservar cupo inmediatamente: marcar BUSY al asignar (antes solo al
+    // aceptar). Así un driver AVAILABLE no acumula N pedidos sin aceptar
+    // durante la ventana de 2 min del JIT.
+    await tx.driver.update({
+      where: { id: driver.id },
+      data: { availability: DriverAvailability.BUSY },
+    });
+
     const updated = await tx.order.findUniqueOrThrow({
       where: { id: order.id },
       select: restaurantOrderWorkflowSelect,
@@ -1127,40 +1135,38 @@ export async function updateOrderStatusByDriver({
       );
     }
 
-    const activeOrdersCount = await prisma.order.count({
-      where: {
-        driverId: driver.id,
-        isAcceptedByDriver: true,
-        status: {
-          in: [
-            OrderStatus.CONFIRMED,
-            OrderStatus.PREPARING,
-            OrderStatus.READY,
-            OrderStatus.PICKED_UP,
-            OrderStatus.IN_TRANSIT,
-          ],
-        },
-      },
-    });
-
-    if (
-      driver.availability !== DriverAvailability.AVAILABLE &&
-      (driver.availability !== DriverAvailability.BUSY || activeOrdersCount >= getMaxActiveOrders())
-    ) {
-      throw createDomainError(
-        409,
-        'DRIVER_NOT_AVAILABLE',
-        'El repartidor no esta disponible para aceptar pedidos.'
-      );
-    }
+    // Nota: el cupo máximo de pedidos activos se reserva al ASIGNAR (ver
+    // assignDriverToOrder), no al aceptar. Validarlo aquí podría bloquear la
+    // aceptación de un pedido ya asignado y dejarlo varado sin salida.
 
     return prisma.$transaction(async (tx) => {
-      const updatedOrder = await tx.order.update({
-        where: { id: order.id },
+      // Claim guardado: solo se acepta si el pedido SIGUE asignado a este
+      // repartidor y pendiente de aceptación. Evita la carrera con la expulsión
+      // automática del JIT (2 min) y la reasignación a otro repartidor: si el
+      // pedido ya cambió de dueño, count = 0 y se informa al driver.
+      const claimed = await tx.order.updateMany({
+        where: {
+          id: order.id,
+          driverId: driver.id,
+          isAcceptedByDriver: false,
+          status: { in: [OrderStatus.CONFIRMED, OrderStatus.PREPARING, OrderStatus.READY] },
+        },
         data: {
           driverPlatformFee: driver.platformFeePerOrder || 0,
           isAcceptedByDriver: true,
         },
+      });
+
+      if (claimed.count === 0) {
+        throw createDomainError(
+          409,
+          'ORDER_STATE_CHANGED',
+          'El pedido ya no está asignado a ti o ya no requiere tu confirmación. Actualiza tu panel.'
+        );
+      }
+
+      const updatedOrder = await tx.order.findUniqueOrThrow({
+        where: { id: order.id },
         select: restaurantOrderWorkflowSelect,
       });
 
@@ -1191,14 +1197,33 @@ export async function updateOrderStatusByDriver({
 
   if (action === 'reject') {
     return prisma.$transaction(async (tx) => {
-      const updatedOrder = await tx.order.update({
-        where: { id: order.id },
+      // Release guardado: solo libera el pedido si SIGUE asignado a este
+      // repartidor. Si ya fue expulsado y reasignado a otro, count = 0 y no
+      // se toca el pedido del nuevo dueño ni se cuenta un rechazo ajeno.
+      const released = await tx.order.updateMany({
+        where: {
+          id: order.id,
+          driverId: driver.id,
+          status: { in: [OrderStatus.CONFIRMED, OrderStatus.PREPARING, OrderStatus.READY] },
+        },
         data: {
           driverId: null,
           driverAssignedAt: null,
           isAcceptedByDriver: false,
           noDriversAvailable: false,
         },
+      });
+
+      if (released.count === 0) {
+        throw createDomainError(
+          409,
+          'ORDER_STATE_CHANGED',
+          'El pedido ya no está asignado a ti. Actualiza tu panel.'
+        );
+      }
+
+      const updatedOrder = await tx.order.findUniqueOrThrow({
+        where: { id: order.id },
         select: restaurantOrderWorkflowSelect,
       });
 
@@ -1268,13 +1293,30 @@ export async function updateOrderStatusByDriver({
     }
 
     return prisma.$transaction(async (tx) => {
-      const updatedOrder = await tx.order.update({
-        where: { id: order.id },
+      // Guardado: exige que el pedido siga siendo de este repartidor y READY.
+      const claimed = await tx.order.updateMany({
+        where: {
+          id: order.id,
+          driverId: driver.id,
+          status: OrderStatus.READY,
+        },
         data: {
           status: OrderStatus.PICKED_UP,
           pickedUpAt: new Date(),
           estimatedDeliveryTime: calculatePickedUpEta(order),
         },
+      });
+
+      if (claimed.count === 0) {
+        throw createDomainError(
+          409,
+          'ORDER_STATE_CHANGED',
+          'El pedido cambió de estado o de repartidor. Actualiza tu panel.'
+        );
+      }
+
+      const updatedOrder = await tx.order.findUniqueOrThrow({
+        where: { id: order.id },
         select: restaurantOrderWorkflowSelect,
       });
 
@@ -1307,13 +1349,30 @@ export async function updateOrderStatusByDriver({
     }
 
     return prisma.$transaction(async (tx) => {
-      const updatedOrder = await tx.order.update({
-        where: { id: order.id },
+      // Guardado: exige que el pedido siga siendo de este repartidor y PICKED_UP.
+      const claimed = await tx.order.updateMany({
+        where: {
+          id: order.id,
+          driverId: driver.id,
+          status: OrderStatus.PICKED_UP,
+        },
         data: {
           status: OrderStatus.IN_TRANSIT,
           inTransitAt: new Date(),
           estimatedDeliveryTime: calculateInTransitEta(order),
         },
+      });
+
+      if (claimed.count === 0) {
+        throw createDomainError(
+          409,
+          'ORDER_STATE_CHANGED',
+          'El pedido cambió de estado o de repartidor. Actualiza tu panel.'
+        );
+      }
+
+      const updatedOrder = await tx.order.findUniqueOrThrow({
+        where: { id: order.id },
         select: restaurantOrderWorkflowSelect,
       });
 
@@ -1386,19 +1445,40 @@ export async function updateOrderStatusByDriver({
     // wallet earnings, settlement revenue and debt/suspension aggregations.
     const shouldExemptDriverBilling = action === 'no_show';
 
-    const updatedOrder = await tx.order.update({
-      where: { id: order.id },
-      data: {
-        status: OrderStatus.DELIVERED,
-        deliveredAt: new Date(),
-        actualDeliveryTime: new Date(),
-        estimatedDeliveryTime: new Date(),
-        ...(shouldMarkCashCompleted ? { paymentStatus: PaymentStatus.COMPLETED } : {}),
-        ...(shouldExemptDriverBilling ? { deliveryFee: 0, driverPlatformFee: 0 } : {}),
-        ...(action === 'no_show' ? { noShowReleasedAt: new Date() } : {}),
-      },
-      select: restaurantOrderWorkflowSelect,
-    });
+    const updatedOrder = await (async () => {
+      // Guardado: exige que el pedido siga siendo de este repartidor y IN_TRANSIT
+      // (la lectura de currentOrder arriba ya validó el estado; esto lo revalida
+      // de forma atómica junto con la escritura).
+      const claimed = await tx.order.updateMany({
+        where: {
+          id: order.id,
+          driverId: driver.id,
+          status: OrderStatus.IN_TRANSIT,
+        },
+        data: {
+          status: OrderStatus.DELIVERED,
+          deliveredAt: new Date(),
+          actualDeliveryTime: new Date(),
+          estimatedDeliveryTime: new Date(),
+          ...(shouldMarkCashCompleted ? { paymentStatus: PaymentStatus.COMPLETED } : {}),
+          ...(shouldExemptDriverBilling ? { deliveryFee: 0, driverPlatformFee: 0 } : {}),
+          ...(action === 'no_show' ? { noShowReleasedAt: new Date() } : {}),
+        },
+      });
+
+      if (claimed.count === 0) {
+        throw createDomainError(
+          409,
+          'ORDER_STATE_CHANGED',
+          'El pedido cambió de estado o de repartidor. Actualiza tu panel.'
+        );
+      }
+
+      return tx.order.findUniqueOrThrow({
+        where: { id: order.id },
+        select: restaurantOrderWorkflowSelect,
+      });
+    })();
 
     const remainingActiveOrdersCount = await tx.order.count({
       where: {
@@ -2008,11 +2088,22 @@ export async function autoAssignDriver(
     driver: { id: string; userId: string; user: { name: string } };
     order: any;
   } | 'ALREADY_ASSIGNED' | null> => {
-    for (const candidate of drivers) {
-      const activeAcceptedCount = await prisma.order.count({
+    // Balanceo de carga: barajar los candidatos antes de iterar. Todos cumplen
+    // las mismas reglas del pool, así que repartir ráfagas entre ellos evita
+    // que el mismo driver top-rated concentre todas las asignaciones.
+    const orderedCandidates = [...drivers];
+    for (let i = orderedCandidates.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [orderedCandidates[i], orderedCandidates[j]] = [orderedCandidates[j], orderedCandidates[i]];
+    }
+
+    for (const candidate of orderedCandidates) {
+      // Contar TODOS los pedidos activos (asignados y aceptados): los
+      // asignados-pendientes-de-aceptar también reservan cupo. Esto cierra la
+      // ventana donde un driver acumulaba asignaciones sin aceptar.
+      const activeOrdersCount = await prisma.order.count({
         where: {
           driverId: candidate.id,
-          isAcceptedByDriver: true,
           status: { in: ['CONFIRMED', 'PREPARING', 'READY', 'PICKED_UP', 'IN_TRANSIT'] as any },
         },
       });
@@ -2022,7 +2113,7 @@ export async function autoAssignDriver(
       // normal, pero hasta un máximo configurable para evitar saturar a un
       // único repartidor con todo el pool de pedidos.
       const maxActive = options.allowOverload ? getOverloadMaxActiveOrders() : getMaxActiveOrders();
-      if (activeAcceptedCount >= maxActive) continue;
+      if (activeOrdersCount >= maxActive) continue;
 
       let assignedOrder: any;
       try {

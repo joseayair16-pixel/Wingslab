@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { io } from 'socket.io-client';
-import { requestJson, readStoredSession } from '@sadel/shared';
+import { requestJson, readStoredSession, forceSessionExpired } from '@sadel/shared';
 import { useStore } from '../store';
 import { useCustomerSounds } from '../hooks/useCustomerSounds';
 
@@ -161,6 +161,13 @@ export default function DriverArrivalModal() {
     });
 
     socket.on('connect_error', (err) => {
+      // Token expirado/inválido: cortar el bucle de reconexión y forzar el
+      // flujo de sesión expirada.
+      if (String((err as Error)?.message || '').includes('UNAUTHORIZED')) {
+        socket.disconnect();
+        forceSessionExpired();
+        return;
+      }
       // Fallo de conexión: el polling de respaldo sigue cubriendo la llegada del
       // repartidor mientras socket.io reintenta por su cuenta.
       if (process.env.NODE_ENV !== 'production') {

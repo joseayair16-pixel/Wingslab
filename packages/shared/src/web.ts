@@ -168,6 +168,12 @@ export function setGlobalSessionExpiredHandler(handler: (() => void) | null): vo
   sessionExpiredHandler = handler;
 }
 
+// Disparador público para casos fuera del pipeline de requestJson
+// (ej. socket.io rechazado por token expirado/inválido).
+export function forceSessionExpired(): void {
+  notifySessionExpired();
+}
+
 function notifySessionExpired(): void {
   try {
     sessionExpiredHandler?.();

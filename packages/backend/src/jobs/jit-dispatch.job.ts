@@ -11,9 +11,29 @@ import { emitNotification } from '../services/socket.service';
 import { logger } from '../utils/logger';
 
 export function startJitDispatchJob(fastify: FastifyInstance) {
-  // Ejecutar cada 30 segundos
+  // Evita solapamiento: si una pasada tarda más de 30 s, la siguiente se
+  // omite. Dos pasadas concurrentes duplicarían notificaciones y presionarían
+  // el conteo de cupo de los repartidores (el claim atómico por pedido ya
+  // evita dobles asignaciones, pero esto elimina la carrera completa).
+  let isRunning = false;
   cron.schedule('*/30 * * * * *', async () => {
+    if (isRunning) {
+      logger.warn('[JIT-Dispatch] Pasada anterior aún en curso; se omite este ciclo.');
+      return;
+    }
+    isRunning = true;
     try {
+      await jitDispatchCycle(fastify);
+    } catch (error) {
+      logger.error('[JIT-Dispatch] Error general en el job:', error);
+    } finally {
+      isRunning = false;
+    }
+  });
+}
+
+async function jitDispatchCycle(fastify: FastifyInstance): Promise<void> {
+  try {
       const now = new Date();
       
       // 1. Verificar pedidos asignados que no han sido aceptados en 2 minutos (Auto-Reject)
@@ -36,10 +56,16 @@ export function startJitDispatchJob(fastify: FastifyInstance) {
         const driverName = order.driver?.user?.name || 'El repartidor';
         const requestId = `jit-auto-unassign-${order.id}`;
 
-        await prisma.$transaction(async (tx) => {
-          // Desvincular al repartidor
-          await tx.order.update({
-            where: { id: order.id },
+        const wasExpelled = await prisma.$transaction(async (tx) => {
+          // Unassign guardado: solo expulsa si el pedido SIGUE sin aceptar y
+          // con este repartidor. Si el driver acaba de aceptar (carrera con su
+          // petición en vuelo), count = 0 y no se toca el pedido.
+          const expelled = await tx.order.updateMany({
+            where: {
+              id: order.id,
+              driverId: order.driverId!,
+              isAcceptedByDriver: false,
+            },
             data: {
               driverId: null,
               driverAssignedAt: null,
@@ -47,6 +73,13 @@ export function startJitDispatchJob(fastify: FastifyInstance) {
               noDriversAvailable: false, // Permitir que vuelva a buscar
             },
           });
+
+          if (expelled.count === 0) {
+            logger.info(
+              `[JIT-Dispatch] Pedido ${order.id} fue aceptado justo a tiempo; se cancela la expulsión.`
+            );
+            return false;
+          }
           // Liberar al repartidor: recalcular su disponibilidad real en vez de
           // marcarlo siempre AVAILABLE (si conserva otros pedidos activos debe
           // permanecer BUSY para no recibir asignaciones incorrectas).
@@ -80,7 +113,10 @@ export function startJitDispatchJob(fastify: FastifyInstance) {
               notes: 'Repartidor expulsado automáticamente por no aceptar a tiempo.',
             },
           });
+          return true;
         });
+
+        if (!wasExpelled) continue;
 
         // Registrar el rechazo del driver expulsado (máx. 2) para que el mismo
         // pedido no se le reasigne en loop: con 2 rechazos queda excluido.
@@ -308,7 +344,6 @@ export function startJitDispatchJob(fastify: FastifyInstance) {
         }
       }
     } catch (error) {
-      logger.error('[JIT-Dispatch] Error general en el job:', error);
+      logger.error('[JIT-Dispatch] Error general en el ciclo:', error);
     }
-  });
 }

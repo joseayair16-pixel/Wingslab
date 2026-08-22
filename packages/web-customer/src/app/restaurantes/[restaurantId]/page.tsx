@@ -3,7 +3,7 @@ import { AlertTriangle, ArrowLeft, Banknote, Bell, BellOff, Bike, Check, Chevron
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { AuthUser, clearStoredSession, readStoredSession, requestJson, submitReview, uploadMediaAsset, convertImageFileToDataUrl, getOrderStatusLabel, isRestaurant, ApiRequestError, isAuthRequestError, setGlobalSessionExpiredHandler } from '@sadel/shared';
+import { AuthUser, clearStoredSession, readStoredSession, requestJson, submitReview, uploadMediaAsset, convertImageFileToDataUrl, getOrderStatusLabel, isRestaurant, ApiRequestError, isAuthRequestError, setGlobalSessionExpiredHandler, forceSessionExpired } from '@sadel/shared';
 import { io } from 'socket.io-client';
 import { AuthModal } from '../../../components/AuthModal';
 import { CompactActiveOrderBanner, computeDelayState, formatEstimatedArrivalMinutes, formatOverdueMinutes } from '../../../components/CompactActiveOrderBanner';
@@ -1247,6 +1247,13 @@ export default function RestaurantPage({
     });
 
     socket.on('connect_error', (err) => {
+      // Token expirado/inválido: cortar el bucle de reconexión y forzar el
+      // flujo de sesión expirada en vez de reintentar indefinidamente.
+      if (String((err as Error)?.message || '').includes('UNAUTHORIZED')) {
+        socket.disconnect();
+        forceSessionExpired();
+        return;
+      }
       // Fallo de conexión: el polling de respaldo recarga pedidos mientras
       // socket.io reintenta por su cuenta.
       if (process.env.NODE_ENV !== 'production') {

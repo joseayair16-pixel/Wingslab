@@ -14,6 +14,7 @@ import {
   persistApiBase,
   persistStoredSession,
   readStoredSession,
+  forceSessionExpired,
   requestJson,
   uploadMediaAsset,
   convertImageFileToDataUrl,
@@ -3350,6 +3351,13 @@ export default function Home() {
     });
 
     socket.on('connect_error', (err) => {
+      // Token expirado/inválido: cortar el bucle de reconexión y forzar el
+      // flujo de sesión expirada en vez de reintentar indefinidamente.
+      if (String((err as Error)?.message || '').includes('UNAUTHORIZED')) {
+        socket.disconnect();
+        forceSessionExpired();
+        return;
+      }
       // Fallo de conexión (red, servidor caído, DNS). Marcamos el estado para
       // que el polling de respaldo recargue pedidos mientras socket.io reintenta.
       setSocketStatus('reconnecting');
