@@ -4,7 +4,7 @@ import { useStore } from '../store';
 import { StoreCategoryItem } from '../app/page';
 import { BillboardCarousel, type Billboard } from '../components/BillboardCarousel';
 import { CategoryIcon } from '../components/CategoryIcon';
-import { ChevronRight, ChevronUp } from 'lucide-react';
+import { ChevronRight, ChevronUp, Flame } from 'lucide-react';
 
 const isRestaurantType = (type?: string | null) => !type || type === 'RESTAURANT';
 
@@ -367,7 +367,12 @@ export const HomeView = React.memo(function HomeView({
         {filteredOfferProducts && filteredOfferProducts.length > 0 && (
           <section className="-mx-4 md:mx-0">
             <div className="px-4 md:px-0 mb-3 flex items-center justify-between">
-              <h2 className="text-xl font-black text-neutral-900">🔥 Ofertas imperdibles</h2>
+              <h2 className="flex items-center gap-2 text-xl font-black text-neutral-900">
+                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-rose-500/10">
+                  <Flame className="h-4 w-4 text-rose-600" strokeWidth={2.5} />
+                </span>
+                Ofertas imperdibles
+              </h2>
               <span className="text-xs font-bold text-rose-500">{filteredOfferProducts.length} productos</span>
             </div>
             <div className="overflow-x-auto pb-2 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden snap-x snap-mandatory md:snap-none">
