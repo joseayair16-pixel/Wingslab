@@ -1,5 +1,5 @@
 'use client';
-import { AlertTriangle, ArrowLeft, Banknote, Bell, BellOff, Bike, Check, ChevronLeft, ChevronRight, CircleCheck, CirclePlus, ClipboardCheck, Clock, Copy, DollarSign, Home, Landmark, Loader2, Mail, Map, MapPin, MessageCircle, Minus, Plus, RefreshCw, Search, ShoppingBag, Store, Tag, Ticket, Trash2, Upload, User, X } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, Banknote, Bell, BellOff, Bike, Check, ChevronLeft, ChevronRight, CircleCheck, CirclePlus, ClipboardCheck, Clock, Copy, DollarSign, Home, Landmark, Loader2, Mail, Map, MapPin, MessageCircle, Minus, Package, Plus, RefreshCw, Search, ShoppingBag, Store, Tag, Ticket, Trash2, Upload, User, X } from 'lucide-react';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
@@ -4865,11 +4865,13 @@ function triggerHaptic(pattern: number | number[] = 10) {
                   distanceKm > radiusKm
                 ) {
                   return (
-                    <div className="mt-4 flex items-start gap-2.5 rounded-2xl border border-amber-200/70 bg-amber-50/80 px-4 py-3 text-[13px] leading-relaxed text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300">
-                      <span className="mt-0.5 text-base shrink-0">📦</span>
-                      <p>
-                        Estás a <strong>{distanceKm.toFixed(1)} km</strong> de este negocio. La entrega a domicilio está
-                        disponible dentro de <strong>{radiusKm} km</strong>; también puedes <strong>recoger en tienda</strong>.
+                    <div className="mt-4 flex items-start gap-3 rounded-2xl border border-sky-100/80 bg-gradient-to-br from-sky-50/80 to-white px-4 py-3.5 dark:border-sky-500/20 dark:from-sky-500/10 dark:to-transparent">
+                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-sky-500 to-blue-600 text-white shadow-[0_4px_10px_-2px_rgba(2,132,199,0.5)]">
+                        <Package className="h-4 w-4" strokeWidth={2} />
+                      </div>
+                      <p className="text-[13px] leading-relaxed text-neutral-600 dark:text-zinc-300">
+                        Estás a <strong className="font-bold text-neutral-900 dark:text-white">{distanceKm.toFixed(1)} km</strong> de este negocio. La entrega a domicilio está
+                        disponible dentro de <strong className="font-bold text-neutral-900 dark:text-white">{radiusKm} km</strong>; también puedes <strong className="font-bold text-sky-600 dark:text-sky-400">recoger en tienda</strong>.
                       </p>
                     </div>
                   );
