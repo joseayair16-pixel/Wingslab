@@ -4,7 +4,7 @@ import { useStore } from '../store';
 import { StoreCategoryItem } from '../app/page';
 import { BillboardCarousel, type Billboard } from '../components/BillboardCarousel';
 import { CategoryIcon } from '../components/CategoryIcon';
-import { ChevronRight, ChevronUp } from 'lucide-react';
+import { Bike, ChevronRight, ChevronUp, MapPin } from 'lucide-react';
 
 const isRestaurantType = (type?: string | null) => !type || type === 'RESTAURANT';
 
@@ -806,16 +806,27 @@ export const HomeView = React.memo(function HomeView({
                               </span>
                             </div>
                             <p className="mt-0.5 truncate text-[11px] text-neutral-500">{restaurant.address}</p>
-                            <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1">
-                              {(() => {
-                                const dist = restaurant.calculatedDistance;
-                                return dist ? (
-                                  <span className="text-[11px] font-medium text-neutral-600">{dist.toFixed(1)} km</span>
-                                ) : null;
-                              })()}
-                              <span className="text-[11px] font-medium text-neutral-600">
-                                🛵 {restaurant.effectiveDeliveryFee === 0 ? 'Envío gratis' : `${formatDeliverySummary(restaurant.effectiveDeliveryFee)} de envío`}
-                              </span>
+                             <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1">
+                               {(() => {
+                                 const dist = restaurant.calculatedDistance;
+                                 return dist ? (
+                                   <span className="inline-flex items-center gap-1 text-[11px] font-medium text-neutral-600">
+                                     <MapPin className="h-3 w-3 text-neutral-400" strokeWidth={2} />
+                                     {dist.toFixed(1)} km
+                                   </span>
+                                 ) : null;
+                               })()}
+                               {restaurant.effectiveDeliveryFee === 0 ? (
+                                 <span className="inline-flex items-center gap-1 rounded-full border border-emerald-100/70 bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-700">
+                                   <Bike className="h-3 w-3" strokeWidth={2} />
+                                   Envío gratis
+                                 </span>
+                               ) : (
+                                 <span className="inline-flex items-center gap-1 rounded-full bg-sky-50 px-2 py-0.5 text-[10px] font-semibold text-sky-700">
+                                   <Bike className="h-3 w-3" strokeWidth={2} />
+                                   {formatDeliverySummary(restaurant.effectiveDeliveryFee)} de envío
+                                 </span>
+                               )}
                               <span className="rounded-full bg-neutral-100 px-2 py-0.5 text-[10px] font-medium text-neutral-500">
                                 {formatRegionChipLabel(restaurant.regionName || restaurant.region)}
                               </span>
