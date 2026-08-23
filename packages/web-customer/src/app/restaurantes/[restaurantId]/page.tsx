@@ -718,15 +718,21 @@ export default function RestaurantPage({
   useEffect(() => {
     if (!searchParams?.focusProduct || !restaurant) return;
     const productId = typeof searchParams.focusProduct === 'string' ? searchParams.focusProduct : searchParams.focusProduct[0];
+    let cleanupTimer: ReturnType<typeof setTimeout> | null = null;
     const timer = setTimeout(() => {
       const el = document.getElementById(productId);
       if (el) {
         el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        el.classList.add('ring-2', 'ring-sky-400', 'ring-offset-2', 'rounded-[28px]');
-        setTimeout(() => el.classList.remove('ring-2', 'ring-sky-400', 'ring-offset-2'), 2500);
+        // Latido premium: doble pulso con glow accent que señala el producto
+        // y se asienta solo (ver globals.css · product-focus-heartbeat).
+        el.classList.add('product-focus-heartbeat');
+        cleanupTimer = setTimeout(() => el.classList.remove('product-focus-heartbeat'), 1500);
       }
     }, 500);
-    return () => clearTimeout(timer);
+    return () => {
+      clearTimeout(timer);
+      if (cleanupTimer) clearTimeout(cleanupTimer);
+    };
   }, [searchParams, restaurant]);
 
   const [transientNotice, setTransientNotice] = useState<TransientNotice | null>(null);
