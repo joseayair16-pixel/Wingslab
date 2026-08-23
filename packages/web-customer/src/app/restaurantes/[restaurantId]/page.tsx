@@ -1,5 +1,5 @@
 'use client';
-import { AlertTriangle, ArrowLeft, Banknote, Bell, BellOff, Bike, Check, ChevronLeft, ChevronRight, CircleCheck, CirclePlus, ClipboardCheck, Clock, Copy, DollarSign, Home, Landmark, Loader2, Mail, Map, MapPin, MessageCircle, Minus, Plus, RefreshCw, Search, ShoppingBag, Store, Tag, Ticket, Trash2, Upload, User, X } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, Banknote, Bell, BellOff, Bike, Check, ChevronLeft, ChevronRight, ChevronUp, CircleCheck, CirclePlus, ClipboardCheck, Clock, Copy, DollarSign, Home, Landmark, Loader2, Mail, Map, MapPin, MessageCircle, Minus, Plus, RefreshCw, Search, ShoppingBag, Store, Tag, Ticket, Trash2, Upload, User, X } from 'lucide-react';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
@@ -676,6 +676,11 @@ export default function RestaurantPage({
   }, []);
   const [transferProofName, setTransferProofName] = useState('');
   const [transferProofSource, setTransferProofSource] = useState('');
+  // Guía de errores: true cuando el usuario intentó confirmar y faltaba algo.
+  const [attemptedCheckout, setAttemptedCheckout] = useState(false);
+  const [showInstructions, setShowInstructions] = useState(() =>
+    Boolean(checkoutForm.storeNotes || checkoutForm.notes)
+  );
   const [error, setError] = useState('');
   const [menuReloadKey, setMenuReloadKey] = useState(0);
   const [deliveryErrorModal, setDeliveryErrorModal] = useState('');
@@ -3732,7 +3737,10 @@ function triggerHaptic(pattern: number | number[] = 10) {
                     <div className="mb-4 flex items-center justify-between border-b border-black/[0.05] pb-3">
                       <div className="flex items-center gap-2.5">
                         <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[var(--accent)] text-[11px] font-black text-white">1</span>
-                        <h3 className="text-[13px] font-bold tracking-tight text-neutral-900">Dirección de entrega</h3>
+                        <div>
+                          <h3 className="text-[13px] font-bold tracking-tight text-neutral-900">Dirección de entrega</h3>
+                          <p className="text-[11px] font-medium text-neutral-500 dark:text-zinc-400">¿A dónde enviamos tu pedido?</p>
+                        </div>
                       </div>
                     </div>
 
@@ -3749,6 +3757,8 @@ function triggerHaptic(pattern: number | number[] = 10) {
                                 type="button"
                                 onClick={() => {
                                   setSelectedAddressId(addr.id);
+                                  // Seleccionar muestra automáticamente su mapa.
+                                  setShowMapForAddress(addr.id);
                                   const target = addr;
                                   setCheckoutForm((current) => ({
                                     ...current,
@@ -3764,8 +3774,8 @@ function triggerHaptic(pattern: number | number[] = 10) {
                                 }}
                                 className={`relative flex w-64 shrink-0 flex-col rounded-2xl border p-3.5 text-left transition-all ${
                                   isSelected
-                                    ? 'border-[var(--accent)] bg-sky-50/30 ring-1 ring-[var(--accent)]/30'
-                                    : 'border-black/[0.06] bg-white hover:border-black/10'
+                                    ? 'border-[var(--accent)] bg-[color-mix(in_srgb,var(--menu-accent)_7%,white)] ring-2 ring-[var(--accent)]/35'
+                                    : 'border-black/[0.08] bg-white opacity-95 hover:border-black/20 hover:opacity-100'
                                 }`}
                               >
                                 <div className="flex items-center justify-between gap-2">
@@ -3784,37 +3794,6 @@ function triggerHaptic(pattern: number | number[] = 10) {
                                 <p className="text-xs text-neutral-500 truncate mt-0.5">
                                   {addr.neighborhood || 'Sin colonia'}, {addr.city || 'Sin ciudad'}
                                 </p>
-                                <button
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    if (showMapForAddress === addr.id) {
-                                      setShowMapForAddress(null);
-                                    } else {
-                                      setSelectedAddressId(addr.id);
-                                      setCheckoutForm((current) => ({
-                                        ...current,
-                                        street: addr.street || '',
-                                        number: addr.number || '',
-                                        neighborhood: addr.neighborhood || '',
-                                        city: addr.city || '',
-                                        state: addr.state || '',
-                                        zipCode: addr.zipCode || '',
-                                        latitude: String(addr.latitude),
-                                        longitude: String(addr.longitude),
-                                      }));
-                                      setShowMapForAddress(addr.id);
-                                    }
-                                  }}
-                                  className={`mt-2.5 inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[11px] font-bold transition-all active:scale-95 ${
-                                    showMapForAddress === addr.id
-                                      ? 'border-[var(--accent)] bg-[var(--accent)] text-white shadow-sm shadow-[0_4px_14px_var(--accent-soft)] hover:bg-[var(--accent)]'
-                                      : 'border-sky-200 bg-sky-50 text-[var(--accent)] hover:border-[var(--accent)] hover:bg-[var(--accent-soft-strong)]'
-                                  }`}
-                                >
-                                  <Map className="h-3.5 w-3.5" strokeWidth={1.5} />
-                                  {showMapForAddress === addr.id ? 'Ocultar mapa' : 'Ver en mapa'}
-                                </button>
                               </button>
                             );
                           })}
@@ -4062,23 +4041,43 @@ function triggerHaptic(pattern: number | number[] = 10) {
                       </div>
                     )}
 
-                    {/* Google Map (solo visible al hacer clic en "Ver en mapa" o al agregar dirección) */}
+                    {/* Google Map (aparece al seleccionar dirección o al agregar una nueva) */}
                     <div
                       id="map-checkout"
-                      className={`h-48 w-full rounded-2xl border border-black/5 mt-4 overflow-hidden shadow-inner no-invert transition-opacity duration-300 ${(showMapForAddress || (isAddingNewAddress && newAddressStep !== 'search')) ? '' : 'hidden'}`}
-                    />
+                      className={`relative h-48 w-full rounded-2xl border border-black/5 mt-4 overflow-hidden shadow-inner no-invert transition-opacity duration-300 ${(showMapForAddress || (isAddingNewAddress && newAddressStep !== 'search')) ? '' : 'hidden'}`}
+                    >
+                      {showMapForAddress && !isAddingNewAddress && (
+                        <button
+                          type="button"
+                          onClick={() => setShowMapForAddress(null)}
+                          className="absolute right-2 top-2 z-10 flex items-center gap-1 rounded-full bg-white/95 px-3 py-1 text-[10px] font-bold text-neutral-600 shadow-md backdrop-blur transition-all hover:bg-white active:scale-95"
+                        >
+                          <X className="h-3 w-3" strokeWidth={2.5} /> Ocultar mapa
+                        </button>
+                      )}
+                    </div>
                   </div>
                   )}
 
-                  {/* ── PASO 2: INSTRUCCIONES ── */}
+                  {/* ── PASO 2: INSTRUCCIONES (colapsable, opcional) ── */}
                   <div className="rounded-[22px] border border-black/[0.04] bg-white p-4 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
-                    <div className="mb-4 flex items-center justify-between border-b border-black/[0.05] pb-3">
+                    <button
+                      type="button"
+                      onClick={() => setShowInstructions((v) => !v)}
+                      className="mb-1 flex w-full items-center justify-between gap-3 text-left"
+                      aria-expanded={showInstructions}
+                    >
                       <div className="flex items-center gap-2.5">
-                        <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[var(--accent)] text-[11px] font-black text-white">2</span>
-                        <h3 className="text-[13px] font-bold tracking-tight text-neutral-900">Instrucciones</h3>
+                        <span className="flex h-6 w-6 items-center justify-center rounded-full bg-neutral-200 text-[11px] font-black text-neutral-500 dark:bg-zinc-700 dark:text-zinc-300">2</span>
+                        <div>
+                          <h3 className="text-[13px] font-bold tracking-tight text-neutral-900">Instrucciones</h3>
+                          <p className="text-[11px] font-medium text-neutral-500 dark:text-zinc-400">Opcional · para la tienda o el repartidor</p>
+                        </div>
                       </div>
-                    </div>
-                    <div className="space-y-3.5">
+                      <ChevronUp className={`h-4 w-4 shrink-0 text-neutral-400 transition-transform duration-200 ${showInstructions ? '' : 'rotate-180'}`} strokeWidth={2} />
+                    </button>
+                    {showInstructions && (
+                    <div className="mt-4 space-y-3.5">
                       <Field 
                         label="Instrucciones para la tienda" 
                         value={checkoutForm.storeNotes} 
@@ -4093,10 +4092,12 @@ function triggerHaptic(pattern: number | number[] = 10) {
                       />
                       )}
                     </div>
+                    )}
                   </div>
 
-                  {/* ── PASO 2.5: CUPÓN ── */}
+                  {/* ── PASO 2.5: CUPÓN (opcional) ── */}
                   <div className="rounded-[22px] border border-black/[0.04] bg-white p-4 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
+                    <p className="mb-3 inline-flex items-center rounded-full bg-neutral-100 px-2.5 py-0.5 text-[9px] font-black uppercase tracking-[0.14em] text-neutral-400">Extra opcional</p>
                     {promoCodeState === 'valid' && promoCodeInfo ? (
                       <div className="space-y-3.5">
                         <div className="overflow-hidden rounded-2xl border border-sky-200/70 bg-gradient-to-br from-sky-50/90 via-white to-blue-50/60">
@@ -4202,7 +4203,10 @@ function triggerHaptic(pattern: number | number[] = 10) {
                     <div className="mb-4 flex items-center justify-between border-b border-black/[0.05] pb-3">
                       <div className="flex items-center gap-2.5">
                         <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[var(--accent)] text-[11px] font-black text-white">3</span>
-                        <h3 className="text-[13px] font-bold tracking-tight text-neutral-900">Método de pago</h3>
+                        <div>
+                          <h3 className="text-[13px] font-bold tracking-tight text-neutral-900">Método de pago</h3>
+                          <p className="text-[11px] font-medium text-neutral-500 dark:text-zinc-400">¿Cómo prefieres pagar?</p>
+                        </div>
                       </div>
                     </div>
 
@@ -4264,6 +4268,14 @@ function triggerHaptic(pattern: number | number[] = 10) {
                                 <Landmark className="h-4 w-4 text-[var(--accent)]" strokeWidth={1.5} />
                                 Transferencia bancaria
                               </p>
+                              {/* Checklist rápido del flujo de transferencia */}
+                              <div className="mb-4 flex flex-wrap items-center gap-x-2 gap-y-1.5 text-[10px] font-semibold text-neutral-400 dark:text-zinc-500">
+                                <span className="flex items-center gap-1"><span className="flex h-4 w-4 items-center justify-center rounded-full bg-[var(--accent-soft-strong)] text-[9px] font-black text-[var(--accent-strong)]">1</span>Transfiere el monto exacto</span>
+                                <ChevronRight className="h-3 w-3" strokeWidth={2.5} />
+                                <span className="flex items-center gap-1"><span className="flex h-4 w-4 items-center justify-center rounded-full bg-[var(--accent-soft-strong)] text-[9px] font-black text-[var(--accent-strong)]">2</span>Sube tu comprobante</span>
+                                <ChevronRight className="h-3 w-3" strokeWidth={2.5} />
+                                <span className="flex items-center gap-1"><span className="flex h-4 w-4 items-center justify-center rounded-full bg-[var(--accent-soft-strong)] text-[9px] font-black text-[var(--accent-strong)]">3</span>Confirmamos tu pedido</span>
+                              </div>
                               <div className="rounded-xl bg-neutral-50 px-4 py-3 text-center mb-3">
                                 <p className="text-[11px] text-neutral-500 font-medium">Monto exacto a transferir</p>
                                 <p className="text-xl font-extrabold text-neutral-900 mt-0.5">{formatCurrency(orderTotal)}</p>
@@ -4357,19 +4369,30 @@ function triggerHaptic(pattern: number | number[] = 10) {
                                 </label>
                               </div>
                             ) : (
-                              <label className="relative flex cursor-pointer items-center justify-center gap-2.5 rounded-2xl border-2 border-dashed border-neutral-200 bg-white px-5 py-4 text-sm font-bold text-neutral-700 transition-all hover:border-[var(--accent)] hover:bg-sky-50/40 hover:text-[var(--accent-strong)] active:scale-[0.97] shadow-sm hover:shadow-md group">
+                              <label
+                                id="transfer-proof-upload"
+                                className={`relative flex cursor-pointer items-center justify-center gap-2.5 rounded-2xl border-2 border-dashed px-5 py-4 text-sm font-bold transition-all active:scale-[0.97] shadow-sm group ${
+                                  attemptedCheckout && checkoutForm.paymentMethod === 'TRANSFER'
+                                    ? 'border-rose-300 bg-rose-50/50 text-rose-700 hover:border-rose-400'
+                                    : 'border-neutral-200 bg-white text-neutral-700 hover:border-[var(--accent)] hover:bg-sky-50/40 hover:text-[var(--accent-strong)] hover:shadow-md'
+                                }`}
+                              >
                                 <input
                                   type="file"
                                   accept="image/*"
                                   onChange={(event) => void handleTransferProofChange(event)}
                                   className="sr-only"
                                 />
-                                <div className="flex h-9 w-9 items-center justify-center rounded-full bg-sky-50 text-[var(--accent)] group-hover:bg-[var(--accent-soft-strong)] transition-colors">
+                                <div className={`flex h-9 w-9 items-center justify-center rounded-full transition-colors ${attemptedCheckout && checkoutForm.paymentMethod === 'TRANSFER' ? 'bg-rose-100 text-rose-500' : 'bg-sky-50 text-[var(--accent)] group-hover:bg-[var(--accent-soft-strong)]'}`}>
                                   <Upload className="h-4 w-4" strokeWidth={1.5} />
                                 </div>
                                 <div className="flex flex-col items-start">
                                   <span className="text-sm font-bold">Subir comprobante de pago</span>
-                                  <span className="text-[10px] font-medium text-neutral-400 group-hover:text-[var(--accent)] transition-colors">JPG, PNG o captura de pantalla</span>
+                                  {attemptedCheckout && checkoutForm.paymentMethod === 'TRANSFER' ? (
+                                    <span className="text-[10px] font-bold text-rose-500">Necesario para confirmar tu pedido</span>
+                                  ) : (
+                                    <span className="text-[10px] font-medium text-neutral-400 group-hover:text-[var(--accent)] transition-colors">JPG, PNG o captura de pantalla</span>
+                                  )}
                                 </div>
                               </label>
                             )}
@@ -4446,14 +4469,34 @@ function triggerHaptic(pattern: number | number[] = 10) {
                       <button
                         type="button"
                         onClick={() => {
+                          if (creatingOrder) return;
+                          // Guía al error en lugar de bloquear en silencio:
+                          // falta comprobante → sacudir + scroll al upload.
+                          if (checkoutValidationMessage) {
+                            setAttemptedCheckout(true);
+                            if (checkoutForm.paymentMethod === 'TRANSFER' && !transferProofSource) {
+                              const el = document.getElementById('transfer-proof-upload');
+                              if (el) {
+                                el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                el.classList.remove('animate-nudge');
+                                void (el as HTMLElement).offsetWidth; // reinicia la animación
+                                el.classList.add('animate-nudge');
+                              }
+                              return;
+                            }
+                          }
                           if (pushPermission !== 'granted') {
                             setIsPushReminderModalOpen(true);
                           } else {
                             void createOrder();
                           }
                         }}
-                        disabled={creatingOrder || Boolean(checkoutValidationMessage)}
-                        className="group relative flex-1 overflow-hidden rounded-2xl bg-[var(--accent)] px-5 py-3.5 text-[15px] font-bold text-white shadow-[0_8px_20px_-6px_rgba(14,165,233,0.4)] transition-all hover:bg-[var(--accent-strong)] hover:shadow-[0_12px_24px_-8px_rgba(14,165,233,0.5)] active:scale-[0.97] active-scale disabled:pointer-events-none disabled:bg-neutral-100 disabled:text-neutral-400 disabled:shadow-none"
+                        aria-disabled={creatingOrder || Boolean(checkoutValidationMessage)}
+                        className={`group relative flex-1 overflow-hidden rounded-2xl px-5 py-3.5 text-[15px] font-bold text-white transition-all active:scale-[0.97] active-scale ${
+                          checkoutValidationMessage && !creatingOrder
+                            ? 'bg-neutral-400 shadow-none'
+                            : 'bg-[var(--accent)] shadow-[0_8px_20px_-6px_rgba(14,165,233,0.4)] hover:bg-[var(--accent-strong)] hover:shadow-[0_12px_24px_-8px_rgba(14,165,233,0.5)]'
+                        }`}
                       >
                         <div className="absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/20 to-transparent transition-transform duration-1000 group-hover:translate-x-full disabled:hidden" />
                         <span className="relative flex items-center justify-center gap-2">
