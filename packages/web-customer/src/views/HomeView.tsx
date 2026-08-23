@@ -811,7 +811,7 @@ export const HomeView = React.memo(function HomeView({
                                  const dist = restaurant.calculatedDistance;
                                  return dist ? (
                                    <span className="inline-flex items-center gap-1 text-[11px] font-medium text-neutral-600">
-                                     <MapPin className="h-3 w-3 text-neutral-400" strokeWidth={2} />
+                                     <MapPin className="h-3 w-3 text-red-500" strokeWidth={2} />
                                      {dist.toFixed(1)} km
                                    </span>
                                  ) : null;
