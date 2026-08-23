@@ -1,4 +1,5 @@
 import Image from 'next/image';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 import React, { memo, useCallback, useEffect, useRef, useState } from 'react';
 
 export interface Billboard {
@@ -21,6 +22,11 @@ const AUTOPLAY_INTERVAL_MS = 5000;
 const SWIPE_THRESHOLD_PX = 60;
 const SWIPE_THRESHOLD_RATIO = 0.2;
 const TRANSITION_MS = 600;
+
+// Modo desktop (estilo Uber Eats): tarjetas fijas lado a lado en vez de
+// un solo banner gigante. Gap entre tarjetas y breakpoint lg.
+const DESKTOP_CARD_GAP_PX = 16;
+const DESKTOP_MIN_WIDTH = 1024;
 
 // Map a track position back to the real slide index it represents.
 const realIndexOf = (p: number, n: number) => (p === 0 ? n - 1 : p === n + 1 ? 0 : p - 1);
@@ -52,6 +58,27 @@ export const BillboardCarousel = memo(function BillboardCarousel({
     posRef.current = pos;
   }, [pos]);
 
+  // Medición del viewport para el modo desktop de tarjetas múltiples.
+  const [viewportW, setViewportW] = useState(0);
+  useEffect(() => {
+    const el = viewportRef.current;
+    if (!el) return;
+    const update = () => setViewportW(el.clientWidth || 0);
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  const isDesktop = viewportW >= DESKTOP_MIN_WIDTH;
+  // Tarjetas visibles: hasta 3 en desktop; menos si hay pocos banners.
+  const perView = !isDesktop || n <= 1 ? 1 : Math.min(3, n);
+  const cardW =
+    isDesktop && n > 1 && viewportW > 0
+      ? Math.floor((viewportW - DESKTOP_CARD_GAP_PX * (perView - 1)) / perView)
+      : 0; // 0 = modo móvil (ancho completo vía CSS)
+  const stepPx = cardW + DESKTOP_CARD_GAP_PX;
+
   const stopAutoplay = useCallback(() => {
     if (timerRef.current) {
       clearInterval(timerRef.current);
@@ -61,7 +88,8 @@ export const BillboardCarousel = memo(function BillboardCarousel({
 
   const startAutoplay = useCallback(() => {
     stopAutoplay();
-    if (n <= 1) return;
+    // Nada que rotar: un solo banner o todos visibles en desktop.
+    if (n <= 1 || (isDesktop && n <= perView)) return;
     timerRef.current = setInterval(() => {
       const p = posRef.current;
       // If a transitionend was missed (e.g. throttled background tab) and we
@@ -82,7 +110,7 @@ export const BillboardCarousel = memo(function BillboardCarousel({
       }
       setPos(p === n ? n + 1 : p + 1);
     }, AUTOPLAY_INTERVAL_MS);
-  }, [n, stopAutoplay]);
+  }, [n, perView, isDesktop, stopAutoplay]);
 
   // Reset to the first slide when the source list changes.
   useEffect(() => {
@@ -232,7 +260,9 @@ export const BillboardCarousel = memo(function BillboardCarousel({
   const track =
     n > 1 ? [billboards[n - 1], ...billboards, billboards[0]] : billboards;
 
-  const transform = `translate3d(calc(${-pos * 100}% + ${dragX}px), 0, 0)`;
+  const transform = cardW
+    ? `translate3d(${-(pos * stepPx) + dragX}px, 0, 0)`
+    : `translate3d(calc(${-pos * 100}% + ${dragX}px), 0, 0)`;
   const transition = isDragging || suppressTransition ? 'none' : `transform ${TRANSITION_MS}ms cubic-bezier(0.4, 0, 0.2, 1)`;
   const activeReal = realIndexOf(pos, n);
 
@@ -243,7 +273,7 @@ export const BillboardCarousel = memo(function BillboardCarousel({
           src={billboard.imageUrl}
           alt="Banner publicitario"
           fill
-          sizes="(max-width: 768px) 100vw, 75vw"
+          sizes="(max-width: 768px) 100vw, 380px"
           priority={key === `${billboard.id}-real-0`}
           draggable={false}
           className="object-cover"
@@ -251,7 +281,15 @@ export const BillboardCarousel = memo(function BillboardCarousel({
       </div>
     );
     return (
-      <div key={key} className="relative h-full w-full shrink-0" style={{ aspectRatio: `${BILLBOARD_RATIO}` }}>
+      <div
+        key={key}
+        className="relative h-full shrink-0"
+        style={{
+          aspectRatio: `${BILLBOARD_RATIO}`,
+          // Desktop: ancho fijo calculado; móvil: llena el viewport.
+          ...(cardW ? { width: `${cardW}px` } : {}),
+        }}
+      >
         {billboard.linkUrl ? (
           <button
             type="button"
@@ -272,6 +310,7 @@ export const BillboardCarousel = memo(function BillboardCarousel({
   return (
     <div
       className="w-full select-none"
+      style={n === 1 ? { maxWidth: '720px', margin: '0 auto' } : undefined}
       onMouseEnter={stopAutoplay}
       onMouseLeave={() => {
         if (!isDragging) startAutoplay();
@@ -285,7 +324,12 @@ export const BillboardCarousel = memo(function BillboardCarousel({
       >
         <div
           className="flex h-full"
-          style={{ transform, transition, willChange: 'transform' }}
+          style={{
+            transform,
+            transition,
+            willChange: 'transform',
+            gap: cardW ? DESKTOP_CARD_GAP_PX : 0,
+          }}
           onTransitionEnd={handleTransitionEnd}
         >
           {n > 1
@@ -296,9 +340,31 @@ export const BillboardCarousel = memo(function BillboardCarousel({
               ]
             : billboards.map((b, i) => slide(b, `${b.id}-real-${i}`))}
         </div>
+
+        {/* Flechas estilo Uber Eats — solo desktop y cuando hay más de lo visible */}
+        {isDesktop && n > perView && (
+          <>
+            <button
+              type="button"
+              onClick={goBack}
+              aria-label="Anterior"
+              className="absolute left-3 top-1/2 z-10 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-white text-neutral-800 shadow-[0_4px_16px_rgba(0,0,0,0.18)] ring-1 ring-black/5 transition-all hover:scale-105 hover:bg-neutral-50 active:scale-95"
+            >
+              <ChevronLeft className="h-5 w-5" strokeWidth={2.5} />
+            </button>
+            <button
+              type="button"
+              onClick={advance}
+              aria-label="Siguiente"
+              className="absolute right-3 top-1/2 z-10 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-white text-neutral-800 shadow-[0_4px_16px_rgba(0,0,0,0.18)] ring-1 ring-black/5 transition-all hover:scale-105 hover:bg-neutral-50 active:scale-95"
+            >
+              <ChevronRight className="h-5 w-5" strokeWidth={2.5} />
+            </button>
+          </>
+        )}
       </div>
 
-      {n > 1 && (
+      {!isDesktop && n > 1 && (
         <div className="mt-3 flex justify-center gap-1.5">
           {billboards.map((billboard, i) => (
             <button
