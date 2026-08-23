@@ -1,5 +1,5 @@
 'use client';
-import { AlertTriangle, ArrowLeft, Banknote, Bell, BellOff, Bike, Check, ChevronLeft, ChevronRight, CircleCheck, CirclePlus, ClipboardCheck, Clock, Copy, DollarSign, Home, Landmark, Loader2, Mail, Map, MapPin, MessageCircle, Minus, Package, Plus, RefreshCw, Search, ShoppingBag, Store, Tag, Ticket, Trash2, Upload, User, X } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, Banknote, Bell, BellOff, Bike, Check, ChevronLeft, ChevronRight, CircleCheck, CirclePlus, ClipboardCheck, Clock, Copy, DollarSign, Home, Landmark, Loader2, Mail, Map, MapPin, MessageCircle, Minus, Plus, RefreshCw, Search, ShoppingBag, Store, Tag, Ticket, Trash2, Upload, User, X } from 'lucide-react';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
@@ -65,6 +65,7 @@ type PublicRestaurantDetail = {
   minDeliveryFee?: number | null;
   maxDeliveryFee?: number | null;
   deliveryRadius?: number | null;
+  businessType?: string;
   minDeliveryTime: number;
   maxDeliveryTime: number;
   latitude?: number;
@@ -1998,6 +1999,26 @@ export default function RestaurantPage({
     return Math.round(fee * 100) / 100;
   }, [restaurant, distanceKm, fulfillmentType, cartSubtotal, discountAmount]);
 
+  // Aviso amable de distancia: si el usuario está fuera del radio de entrega,
+  // se explica UNA sola vez por negocio y sesión (modal) qué puede hacer:
+  // recoger en tienda, pagar con transferencia o agendar (tiendas).
+  const [showDistanceNotice, setShowDistanceNotice] = useState(false);
+  useEffect(() => {
+    if (!restaurant || typeof distanceKm !== 'number') return;
+    if (restaurant.pickupOnly) return;
+    const radiusKm = restaurant.deliveryRadius || 3;
+    if (distanceKm <= radiusKm) return;
+    let seen: string | null = null;
+    try {
+      seen = sessionStorage.getItem(`distanceNotice:${restaurant.id}`);
+    } catch {}
+    if (seen === '1') return;
+    setShowDistanceNotice(true);
+    try {
+      sessionStorage.setItem(`distanceNotice:${restaurant.id}`, '1');
+    } catch {}
+  }, [restaurant, distanceKm]);
+
   const effectiveSubtotal = Math.max(0, cartSubtotal - discountAmount);
   const couponDiscount = promoCodeState === 'valid' && promoCodeInfo ? promoCodeInfo.discount : 0;
   const minOrderDiscount =
@@ -3749,7 +3770,7 @@ function triggerHaptic(pattern: number | number[] = 10) {
                                     {addr.isDefault ? <><Home className="h-3 w-3 inline-block align-text-bottom" strokeWidth={1.5} /> Casa (Principal)</> : <><MapPin className="h-3 w-3 inline-block align-text-bottom" strokeWidth={1.5} /> Dirección</>}
                                   </span>
                                   {isSelected && (
-                                    <span className="flex h-4.5 w-4.5 items-center justify-center rounded-full bg-[var(--accent)] text-white">
+                                    <span className="flex h-[18px] w-[18px] items-center justify-center rounded-full bg-[var(--accent)] text-white">
                                       <Check className="h-3 w-3" strokeWidth={3} />
                                     </span>
                                   )}
@@ -4857,27 +4878,82 @@ function triggerHaptic(pattern: number | number[] = 10) {
                 </div>
               </section>
 
-              {(() => {
-                const radiusKm = restaurant.deliveryRadius || 3;
-                if (
-                  !restaurant.pickupOnly &&
-                  typeof distanceKm === 'number' &&
-                  distanceKm > radiusKm
-                ) {
-                  return (
-                    <div className="mt-4 flex items-start gap-3 rounded-2xl border border-sky-100/80 bg-gradient-to-br from-sky-50/80 to-white px-4 py-3.5 dark:border-sky-500/20 dark:from-sky-500/10 dark:to-transparent">
-                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-sky-500 to-blue-600 text-white shadow-[0_4px_10px_-2px_rgba(2,132,199,0.5)]">
-                        <Package className="h-4 w-4" strokeWidth={2} />
+              {showDistanceNotice && (
+                <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-md px-4 py-6" onClick={() => setShowDistanceNotice(false)}>
+                  <div
+                    className="relative w-full max-w-md rounded-[28px] border border-black/5 bg-white p-6 shadow-[0_24px_80px_rgba(15,15,15,0.25)] dark:border-zinc-800 dark:bg-neutral-900"
+                    onClick={(e) => e.stopPropagation()}
+                    role="dialog"
+                    aria-modal="true"
+                    aria-label="Fuera de la zona de entrega"
+                  >
+                    <button
+                      type="button"
+                      onClick={() => setShowDistanceNotice(false)}
+                      className="absolute right-4 top-4 flex h-8 w-8 items-center justify-center rounded-full text-neutral-400 transition-colors hover:bg-neutral-100 hover:text-neutral-700 active:scale-90 dark:text-zinc-500 dark:hover:bg-zinc-800 dark:hover:text-zinc-200"
+                      aria-label="Cerrar"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+
+                    <div className="flex flex-col items-center text-center">
+                      <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-[20px] bg-gradient-to-br from-sky-500 to-blue-600 text-white shadow-[0_10px_28px_rgba(2,132,199,0.45)]">
+                        <MapPin className="h-6 w-6" strokeWidth={2} />
                       </div>
-                      <p className="text-[13px] leading-relaxed text-neutral-600 dark:text-zinc-300">
-                        Estás a <strong className="font-bold text-neutral-900 dark:text-white">{distanceKm.toFixed(1)} km</strong> de este negocio. La entrega a domicilio está
-                        disponible dentro de <strong className="font-bold text-neutral-900 dark:text-white">{radiusKm} km</strong>; también puedes <strong className="font-bold text-sky-600 dark:text-sky-400">recoger en tienda</strong>.
+                      <h3 className="text-lg font-extrabold tracking-tight text-neutral-900 dark:text-white">Estás fuera de la zona de entrega</h3>
+                      <p className="mt-1.5 text-sm leading-relaxed text-neutral-500 dark:text-zinc-400">
+                        {restaurant?.name} entrega a domicilio dentro de{' '}
+                        <strong className="font-bold text-neutral-900 dark:text-white">{restaurant?.deliveryRadius || 3} km</strong> y estás a{' '}
+                        <strong className="font-bold text-neutral-900 dark:text-white">{typeof distanceKm === 'number' ? `${distanceKm.toFixed(1)} km` : '—'}</strong>.
                       </p>
                     </div>
-                  );
-                }
-                return null;
-              })()}
+
+                    <div className="mt-5 space-y-2.5">
+                      <div className="flex items-start gap-3 rounded-2xl border border-black/[0.05] bg-neutral-50 p-3.5 dark:border-zinc-800 dark:bg-zinc-800/50">
+                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white text-sky-600 shadow-sm dark:bg-zinc-900 dark:text-sky-400">
+                          <Store className="h-[18px] w-[18px]" strokeWidth={1.8} />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-[13px] font-bold text-neutral-900 dark:text-white">Recoger en tienda</p>
+                          <p className="text-xs leading-relaxed text-neutral-500 dark:text-zinc-400">Pide ahora y pasa por tu pedido sin costo de envío.</p>
+                        </div>
+                      </div>
+
+                      {getAcceptedPaymentMethods(restaurant).includes('TRANSFER') && (
+                        <div className="flex items-start gap-3 rounded-2xl border border-black/[0.05] bg-neutral-50 p-3.5 dark:border-zinc-800 dark:bg-zinc-800/50">
+                          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white text-emerald-600 shadow-sm dark:bg-zinc-900 dark:text-emerald-400">
+                            <Banknote className="h-[18px] w-[18px]" strokeWidth={1.8} />
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-[13px] font-bold text-neutral-900 dark:text-white">Pago por transferencia</p>
+                            <p className="text-xs leading-relaxed text-neutral-500 dark:text-zinc-400">Este negocio acepta transferencias con comprobante directo.</p>
+                          </div>
+                        </div>
+                      )}
+
+                      {restaurant?.businessType && restaurant.businessType !== 'RESTAURANT' && (
+                        <div className="flex items-start gap-3 rounded-2xl border border-black/[0.05] bg-neutral-50 p-3.5 dark:border-zinc-800 dark:bg-zinc-800/50">
+                          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white text-violet-600 shadow-sm dark:bg-zinc-900 dark:text-violet-400">
+                            <Clock className="h-[18px] w-[18px]" strokeWidth={1.8} />
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-[13px] font-bold text-neutral-900 dark:text-white">Entrega programada</p>
+                            <p className="text-xs leading-relaxed text-neutral-500 dark:text-zinc-400">Las tiendas pueden coordinar el día y la hora de tu entrega.</p>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => setShowDistanceNotice(false)}
+                      className="mt-5 w-full rounded-2xl bg-neutral-900 py-3.5 text-sm font-bold text-white transition-all duration-200 hover:bg-neutral-800 active:scale-[0.98] dark:bg-white dark:text-neutral-950 dark:hover:bg-zinc-200"
+                    >
+                      Entendido, ver menú
+                    </button>
+                  </div>
+                </div>
+              )}
 
               <div data-sticky-header className="sticky top-[calc(env(safe-area-inset-top)+72px)] z-20 -mx-4 mb-6 bg-[var(--menu-surface)] shadow-[0_1px_2px_rgba(0,0,0,0.03),0_8px_24px_rgba(0,0,0,0.05)] border-b border-black/[0.04] md:-mx-6 lg:-mx-7 dark:bg-[var(--menu-surface-dark)] dark:border-zinc-800/60">
                 <div className="px-4 py-3 md:px-6 md:py-3.5 lg:px-7">
