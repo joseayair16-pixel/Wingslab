@@ -3757,8 +3757,6 @@ function triggerHaptic(pattern: number | number[] = 10) {
                                 type="button"
                                 onClick={() => {
                                   setSelectedAddressId(addr.id);
-                                  // Seleccionar muestra automáticamente su mapa.
-                                  setShowMapForAddress(addr.id);
                                   const target = addr;
                                   setCheckoutForm((current) => ({
                                     ...current,
@@ -3856,6 +3854,22 @@ function triggerHaptic(pattern: number | number[] = 10) {
                           <CirclePlus className="h-4 w-4" strokeWidth={1.5} /> Agregar dirección de entrega
                         </button>
                       </div>
+                    )}
+
+                    {/* Mapa: oculto por defecto; el usuario decide verlo */}
+                    {!isAddingNewAddress && addresses.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setShowMapForAddress((v) => (v ? null : selectedAddressId || 'checkout-form'))}
+                        className={`mt-3 inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-[11px] font-bold transition-all active:scale-95 ${
+                          showMapForAddress
+                            ? 'border-[var(--accent)] bg-[var(--accent)] text-white shadow-sm shadow-[0_4px_14px_var(--accent-soft)]'
+                            : 'border-sky-200 bg-sky-50/60 text-[var(--accent)] hover:bg-[var(--accent-soft-strong)]'
+                        }`}
+                      >
+                        <Map className="h-3.5 w-3.5" strokeWidth={1.5} />
+                        {showMapForAddress ? 'Ocultar mapa' : 'Ver mapa de entrega'}
+                      </button>
                     )}
 
                     {/* Referencias del domicilio (solo direcciones guardadas) */}
@@ -4064,8 +4078,8 @@ function triggerHaptic(pattern: number | number[] = 10) {
                     <button
                       type="button"
                       onClick={() => setShowInstructions((v) => !v)}
-                      className="mb-1 flex w-full items-center justify-between gap-3 text-left"
                       aria-expanded={showInstructions}
+                      className="-mx-2 mb-1 flex w-full items-center justify-between gap-3 rounded-xl px-2 py-1 text-left transition-colors hover:bg-neutral-50 active:scale-[0.99] dark:hover:bg-zinc-800/50"
                     >
                       <div className="flex items-center gap-2.5">
                         <span className="flex h-6 w-6 items-center justify-center rounded-full bg-neutral-200 text-[11px] font-black text-neutral-500 dark:bg-zinc-700 dark:text-zinc-300">2</span>
@@ -4095,9 +4109,33 @@ function triggerHaptic(pattern: number | number[] = 10) {
                     )}
                   </div>
 
-                  {/* ── PASO 2.5: CUPÓN (opcional) ── */}
+                  {/* ── PASO 2.5: CUPÓN (opcional, colapsable) ── */}
                   <div className="rounded-[22px] border border-black/[0.04] bg-white p-4 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
-                    <p className="mb-3 inline-flex items-center rounded-full bg-neutral-100 px-2.5 py-0.5 text-[9px] font-black uppercase tracking-[0.14em] text-neutral-400">Extra opcional</p>
+                    <button
+                      type="button"
+                      onClick={() => setIsCouponOpen((v) => !v)}
+                      aria-expanded={isCouponOpen || promoCodeState === 'valid'}
+                      className="-mx-2 mb-1 flex w-full items-center justify-between gap-3 rounded-xl px-2 py-1 text-left transition-colors hover:bg-neutral-50 active:scale-[0.99] dark:hover:bg-zinc-800/50"
+                    >
+                      <div className="flex items-center gap-2.5">
+                        <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-neutral-200 text-neutral-500 dark:bg-zinc-700 dark:text-zinc-300">
+                          <Ticket className="h-3.5 w-3.5" strokeWidth={1.8} />
+                        </span>
+                        <div>
+                          <h3 className="text-[13px] font-bold tracking-tight text-neutral-900">Cupón de descuento</h3>
+                          <p className="text-[11px] font-medium text-neutral-500 dark:text-zinc-400">¿Tienes un código? Aplícalo aquí</p>
+                        </div>
+                      </div>
+                      <div className="flex shrink-0 items-center gap-2">
+                        {promoCodeState === 'valid' && promoCodeInfo && !isCouponOpen && (
+                          <span className="text-[11px] font-black text-emerald-600">-{formatCurrency(promoCodeInfo.discount)}</span>
+                        )}
+                        <ChevronUp className={`h-4 w-4 shrink-0 text-neutral-400 transition-transform duration-200 ${isCouponOpen || promoCodeState === 'valid' ? '' : 'rotate-180'}`} strokeWidth={2} />
+                      </div>
+                    </button>
+
+                    {(isCouponOpen || promoCodeState === 'valid') && (
+                    <>
                     {promoCodeState === 'valid' && promoCodeInfo ? (
                       <div className="space-y-3.5">
                         <div className="overflow-hidden rounded-2xl border border-sky-200/70 bg-gradient-to-br from-sky-50/90 via-white to-blue-50/60">
@@ -4147,51 +4185,36 @@ function triggerHaptic(pattern: number | number[] = 10) {
                           Quitar cupón
                         </button>
                       </div>
-                    ) : isCouponOpen ? (
-                      <div className="space-y-3.5">
-                        <div className="flex items-center justify-between border-b border-black/[0.05] pb-3">
-                          <div className="flex items-center gap-2.5">
-                            <span className="text-base leading-none"><Ticket className="h-4 w-4" strokeWidth={1.5} /></span>
-                            <h3 className="text-[13px] font-bold tracking-tight text-neutral-900">Cupón de descuento</h3>
-                          </div>
-                        </div>
-                        <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
-                          <div className="min-w-0 flex-1">
-                            <Field
-                              label="Código promocional"
-                              value={checkoutForm.promoCode}
-                              onChange={(value) => {
-                                setCheckoutForm((current) => ({ ...current, promoCode: value.toUpperCase() }));
-                                setPromoCodeState('idle');
-                                setPromoCodeInfo(null);
-                              }}
-                              placeholder="Ej. VERANO10"
-                            />
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => void validatePromoCode()}
-                            disabled={!checkoutForm.promoCode.trim() || promoCodeState === 'validating'}
-                            className="inline-flex h-[46px] w-full shrink-0 items-center justify-center gap-1.5 rounded-xl bg-neutral-950 px-4 text-sm font-bold text-white transition hover:bg-neutral-800 active:scale-[0.97] disabled:cursor-not-allowed disabled:bg-neutral-200 disabled:text-neutral-400 sm:mt-6 sm:w-auto"
-                          >
-                            {promoCodeState === 'validating' ? (
-                              <Loader2 className="h-4 w-4 animate-spin text-white" />
-                            ) : (
-                              <Search className="h-4 w-4" />
-                            )}
-                            {promoCodeState === 'validating' ? 'Validando...' : 'Aplicar'}
-                          </button>
-                        </div>
-                      </div>
                     ) : (
-                      <button
-                        type="button"
-                        onClick={() => setIsCouponOpen(true)}
-                        className="group flex w-full items-center justify-center gap-2 rounded-2xl border-2 border-sky-500/70 bg-white px-4 py-3.5 text-sm font-bold text-[var(--accent-strong)] shadow-sm transition-all hover:border-sky-500 hover:bg-sky-50/50 hover:shadow-[0_8px_20px_-8px_rgba(14,165,233,0.35)] active:scale-[0.98]"
-                      >
-                        <span className="text-base leading-none"><Ticket className="h-4 w-4" strokeWidth={1.5} /></span>
-                        <span>Tengo un cupón</span>
-                      </button>
+                      <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
+                        <div className="min-w-0 flex-1">
+                          <Field
+                            label="Código promocional"
+                            value={checkoutForm.promoCode}
+                            onChange={(value) => {
+                              setCheckoutForm((current) => ({ ...current, promoCode: value.toUpperCase() }));
+                              setPromoCodeState('idle');
+                              setPromoCodeInfo(null);
+                            }}
+                            placeholder="Ej. VERANO10"
+                          />
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => void validatePromoCode()}
+                          disabled={!checkoutForm.promoCode.trim() || promoCodeState === 'validating'}
+                          className="inline-flex h-[46px] w-full shrink-0 items-center justify-center gap-1.5 rounded-xl bg-neutral-950 px-4 text-sm font-bold text-white transition hover:bg-neutral-800 active:scale-[0.97] disabled:cursor-not-allowed disabled:bg-neutral-200 disabled:text-neutral-400 sm:mt-6 sm:w-auto"
+                        >
+                          {promoCodeState === 'validating' ? (
+                            <Loader2 className="h-4 w-4 animate-spin text-white" />
+                          ) : (
+                            <Search className="h-4 w-4" />
+                          )}
+                          {promoCodeState === 'validating' ? 'Validando...' : 'Aplicar'}
+                        </button>
+                      </div>
+                    )}
+                    </>
                     )}
                   </div>
                   </div>
