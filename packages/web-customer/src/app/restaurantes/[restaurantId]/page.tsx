@@ -2934,7 +2934,7 @@ function triggerHaptic(pattern: number | number[] = 10) {
         />
       ) : null}
       <div className="sticky top-0 z-40">
-        <header className="border-b border-black/5 bg-[var(--menu-surface)] dark:bg-[var(--menu-surface-dark)] sticky top-0 z-40 shadow-[0_4px_20px_rgba(0,0,0,0.03)] pt-[env(safe-area-inset-top)]">
+        <header className="border-b border-black/5 bg-[var(--menu-header,#ffffff)] dark:bg-[var(--menu-header-dark,#0c0c0e)] sticky top-0 z-40 shadow-[0_4px_20px_rgba(0,0,0,0.03)] pt-[env(safe-area-inset-top)]">
           <div className="mx-auto flex max-w-7xl items-center gap-3 px-4 py-4 md:px-6">
             <button
               type="button"

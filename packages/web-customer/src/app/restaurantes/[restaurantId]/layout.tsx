@@ -156,6 +156,11 @@ export default async function RestaurantLayout({
 
   const menuTheme = getMenuThemeById(restaurant?.menuTheme ?? null);
   const menuThemeColor = menuTheme ? (gradientStartColor(menuTheme.gradientLight) ?? '#fafafa') : null;
+  // Color del header compacto sticky: en claro usamos el inicio del gradiente
+  // del tema (los temas tienen surface blanco en light, así que sin esto el
+  // header se vería sin pintar); en oscuro, su superficie oscura real.
+  const menuHeaderColor = menuTheme ? (gradientStartColor(menuTheme.gradientLight) ?? '#ffffff') : '#ffffff';
+  const menuHeaderDarkColor = menuTheme?.surfaceDark ?? '#0c0c0e';
 
   return (
     <>
@@ -176,6 +181,8 @@ export default async function RestaurantLayout({
   --menu-bg-dark: ${menuTheme ? menuTheme.gradientDark : '#0b0b0d'};
   --menu-surface: ${menuTheme ? menuTheme.surface : '#ffffff'};
   --menu-surface-dark: ${menuTheme ? menuTheme.surfaceDark : '#0c0c0e'};
+  --menu-header: ${menuHeaderColor};
+  --menu-header-dark: ${menuHeaderDarkColor};
   --menu-card: ${menuTheme ? menuTheme.card : '#ffffff'};
   --menu-card-dark: ${menuTheme ? menuTheme.cardDark : '#0c0c0e'};
 }`}</style>
