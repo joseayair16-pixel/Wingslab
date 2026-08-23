@@ -2453,6 +2453,9 @@ export async function registerAdminRoutes(fastify: FastifyInstance): Promise<voi
         restaurantPromoModalEnabled: z.boolean().optional(),
         restaurantPromoModalImage: z.string().url('URL invalida.').optional().or(z.literal('')),
         customerThankYouWhatsappEnabled: z.boolean().optional(),
+        socialInstagram: z.string().url('URL invalida.').optional().or(z.literal('')),
+        socialFacebook: z.string().url('URL invalida.').optional().or(z.literal('')),
+        socialTiktok: z.string().url('URL invalida.').optional().or(z.literal('')),
       }).safeParse(request.body);
 
       if (!body.success) {
@@ -2556,6 +2559,27 @@ export async function registerAdminRoutes(fastify: FastifyInstance): Promise<voi
               create: { key: 'customerThankYouWhatsappEnabled', value: body.data.customerThankYouWhatsappEnabled ? 'true' : 'false' },
             })
           );
+        }
+
+        // Redes sociales: URL vacia elimina la red (deja de mostrarse en el footer).
+        const socialEntries = [
+          ['socialInstagram', body.data.socialInstagram],
+          ['socialFacebook', body.data.socialFacebook],
+          ['socialTiktok', body.data.socialTiktok],
+        ] as const;
+        for (const [key, value] of socialEntries) {
+          if (value === undefined) continue;
+          if (value === '') {
+            promises.push(prisma.systemSetting.deleteMany({ where: { key } }));
+          } else {
+            promises.push(
+              prisma.systemSetting.upsert({
+                where: { key },
+                update: { value },
+                create: { key, value },
+              })
+            );
+          }
         }
 
         await Promise.all(promises);

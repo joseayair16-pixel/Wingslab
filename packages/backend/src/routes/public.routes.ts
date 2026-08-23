@@ -515,6 +515,9 @@ export async function registerPublicRoutes(fastify: FastifyInstance): Promise<vo
           restaurantPromoModalEnabled: settingsMap['restaurantPromoModalEnabled'] === 'true',
           restaurantPromoModalImage: settingsMap['restaurantPromoModalImage'] || "",
           customerThankYouWhatsappEnabled: settingsMap['customerThankYouWhatsappEnabled'] === 'true',
+          socialInstagram: settingsMap['socialInstagram'] || "",
+          socialFacebook: settingsMap['socialFacebook'] || "",
+          socialTiktok: settingsMap['socialTiktok'] || "",
         },
       });
     } catch (error) {
@@ -531,6 +534,9 @@ export async function registerPublicRoutes(fastify: FastifyInstance): Promise<vo
           restaurantPromoModalEnabled: false,
           restaurantPromoModalImage: "",
           customerThankYouWhatsappEnabled: false,
+          socialInstagram: "",
+          socialFacebook: "",
+          socialTiktok: "",
         }
       });
     }

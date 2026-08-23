@@ -3,6 +3,7 @@ import { AlertTriangle, Check, ChevronUp, Plus, RefreshCw, X } from 'lucide-reac
 
 import { SaDelLogo } from '../components/SaDelLogo';
 import { CategoryIcon } from '../components/CategoryIcon';
+import { Icon } from '@iconify/react';
 import Link from 'next/link';
 import { FormEvent, useCallback, useEffect, useRef, useState } from 'react';
 import { Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, ComposedChart, PieChart, Pie, Cell } from 'recharts';
@@ -600,7 +601,7 @@ export default function Home() {
   const [selectedRegionCode, setSelectedRegionCode] = useState('');
   const [selectedRegion, setSelectedRegion] = useState<RegionItem | null>(null);
   const [regionForm, setRegionForm] = useState<RegionEditForm | null>(null);
-  const [settingsTab, setSettingsTab] = useState<'regions' | 'brand' | 'payments' | 'categories'>('regions');
+  const [settingsTab, setSettingsTab] = useState<'regions' | 'brand' | 'social' | 'payments' | 'categories'>('regions');
   const [isCreateRegionOpen, setIsCreateRegionOpen] = useState(false);
   const [creatingRegion, setCreatingRegion] = useState(false);
   const [createRegionForm, setCreateRegionForm] = useState<CreateRegionForm>(createRegionFormState());
@@ -714,6 +715,9 @@ export default function Home() {
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
   const activeRestaurantRegions = regions.filter((regionItem) => regionItem.isActive);
   const [restaurantWelcomeImage, setRestaurantWelcomeImage] = useState('');
+  const [socialInstagram, setSocialInstagram] = useState('');
+  const [socialFacebook, setSocialFacebook] = useState('');
+  const [socialTiktok, setSocialTiktok] = useState('');
   const [adminBankName, setAdminBankName] = useState('');
   const [adminBankAccount, setAdminBankAccount] = useState('');
   const [adminBankBeneficiary, setAdminBankBeneficiary] = useState('');
@@ -782,6 +786,9 @@ export default function Home() {
         const data = await response.json();
         if (data.success) {
           setRestaurantWelcomeImage(data.data.restaurantWelcomeImage || '');
+          setSocialInstagram(data.data.socialInstagram || '');
+          setSocialFacebook(data.data.socialFacebook || '');
+          setSocialTiktok(data.data.socialTiktok || '');
           setDriverWelcomeImage(data.data.driverWelcomeImage || '');
           setAdminBankName(data.data.adminBankName || '');
           setAdminBankAccount(data.data.adminBankAccount || '');
@@ -819,6 +826,9 @@ export default function Home() {
           promoModalImage,
           restaurantPromoModalEnabled,
           restaurantPromoModalImage,
+          socialInstagram,
+          socialFacebook,
+          socialTiktok,
         }),
       });
       const data = await response.json();
@@ -6462,6 +6472,7 @@ export default function Home() {
                     { id: 'regions', icon: '🌎', label: 'Zonas y Cobertura' },
                     { id: 'categories', icon: '🏷️', label: 'Categorías' },
                     { id: 'brand', icon: '🎨', label: 'Marca y UX' },
+                    { id: 'social', icon: '📣', label: 'Redes Sociales' },
                     { id: 'payments', icon: '💳', label: 'Pagos' },
                   ].map((tab) => (
                     <button
@@ -6702,7 +6713,52 @@ export default function Home() {
                         </div>
                       </div>
                     )}
-            {settingsTab === 'categories' && (
+                    {settingsTab === 'social' && (
+                      <div className="space-y-6">
+                        <div>
+                          <h2 className="text-2xl font-bold text-neutral-900">Redes Sociales</h2>
+                          <p className="mt-1 text-sm text-neutral-500">
+                            Estas redes aparecen en el pie de página de la app para que tus clientes sigan a SaDeL.
+                          </p>
+                        </div>
+                        <div className="grid gap-4 md:grid-cols-3">
+                          {([
+                            { key: 'Instagram', icon: 'simple-icons:instagram', value: socialInstagram, set: setSocialInstagram, chip: 'bg-gradient-to-tr from-[#f9ce34] via-[#ee2a7b] to-[#6228d7]', placeholder: 'https://instagram.com/sadelmx' },
+                            { key: 'Facebook', icon: 'simple-icons:facebook', value: socialFacebook, set: setSocialFacebook, chip: 'bg-[#1877F2]', placeholder: 'https://facebook.com/sadelmx' },
+                            { key: 'TikTok', icon: 'simple-icons:tiktok', value: socialTiktok, set: setSocialTiktok, chip: 'bg-neutral-900', placeholder: 'https://tiktok.com/@sadelmx' },
+                          ] as const).map((s) => (
+                            <div key={s.key} className="rounded-2xl border border-black/5 bg-white p-5 shadow-sm">
+                              <div className="mb-3 flex items-center gap-2.5">
+                                <span className={`flex h-9 w-9 items-center justify-center rounded-xl text-white shadow-sm ${s.chip}`}>
+                                  <Icon icon={s.icon} className="h-[18px] w-[18px]" width={18} height={18} />
+                                </span>
+                                <span className="text-sm font-bold text-neutral-900">{s.key}</span>
+                              </div>
+                              <input
+                                type="url"
+                                value={s.value}
+                                onChange={(e) => s.set(e.target.value)}
+                                placeholder={s.placeholder}
+                                className="w-full rounded-xl border border-black/[0.08] bg-neutral-50/70 px-4 py-2.5 text-sm text-neutral-950 outline-none transition placeholder:text-neutral-400/80 focus:border-sky-400 focus:bg-white focus:ring-4 focus:ring-sky-400/15"
+                              />
+                            </div>
+                          ))}
+                        </div>
+                        <p className="text-xs font-medium text-neutral-400">
+                          Deja un campo vacío para ocultar esa red del pie de página. Usa la URL completa con https.
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => void saveBrandSettings()}
+                          disabled={isSavingBrandSettings}
+                          className="rounded-full bg-neutral-950 px-6 py-3 text-sm font-semibold text-white shadow-md transition hover:bg-neutral-800 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          {isSavingBrandSettings ? 'Guardando...' : 'Guardar redes sociales'}
+                        </button>
+                      </div>
+                    )}
+
+                    {settingsTab === 'categories' && (
               <div className="space-y-6">
                 <div className="flex items-center justify-between">
                   <h2 className="text-2xl font-bold text-neutral-900">Categorías de la Plataforma</h2>

@@ -20,6 +20,7 @@ import {
   getOrderStatusLabel,
   convertImageFileToDataUrl,
 } from '@sadel/shared';
+import { Icon } from '@iconify/react';
 import { usePushNotifications } from '../hooks/usePushNotifications';
 import {
   isNativePlatform,
@@ -887,6 +888,23 @@ export default function Home() {
   const [exploringZone, setExploringZone] = useState<boolean>(() => {
     return getZoneSessionValue('exploringZone') === '1';
   });
+  // Redes sociales de SaDeL (configuradas desde el panel admin).
+  const [socialLinks, setSocialLinks] = useState({ instagram: '', facebook: '', tiktok: '' });
+  useEffect(() => {
+    if (!apiBase) return;
+    fetch(`${apiBase}/settings`)
+      .then((r) => r.json())
+      .then((d) => {
+        if (d?.success) {
+          setSocialLinks({
+            instagram: d.data.socialInstagram || '',
+            facebook: d.data.socialFacebook || '',
+            tiktok: d.data.socialTiktok || '',
+          });
+        }
+      })
+      .catch(() => {});
+  }, [apiBase]);
   const exploringZoneRef = useRef(exploringZone);
   exploringZoneRef.current = exploringZone;
   const [selectedZoneName, setSelectedZoneName] = useState<string | null>(() => {
@@ -5374,6 +5392,51 @@ export default function Home() {
                 </div>
 
               </div>
+
+              {/* Redes sociales de SaDeL (configurables desde el panel admin) */}
+              {(socialLinks.instagram || socialLinks.facebook || socialLinks.tiktok) && (
+                <div className="border-t border-black/5 py-8">
+                  <p className="text-center text-[10px] font-bold uppercase tracking-[0.3em] text-neutral-400">Síguenos en nuestras redes</p>
+                  <p className="mt-2 text-center text-sm font-semibold text-neutral-600">
+                    Únete a la comunidad SaDeL y no te pierdas nada
+                  </p>
+                  <div className="mt-5 flex items-center justify-center gap-4">
+                    {socialLinks.instagram && (
+                      <a
+                        href={socialLinks.instagram}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        aria-label="Instagram de SaDeL"
+                        className="flex h-12 w-12 items-center justify-center rounded-full border border-black/[0.06] bg-white text-neutral-500 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:border-transparent hover:bg-gradient-to-tr hover:from-[#f9ce34] hover:via-[#ee2a7b] hover:to-[#6228d7] hover:text-white hover:shadow-lg active:scale-95"
+                      >
+                        <Icon icon="simple-icons:instagram" width={20} height={20} />
+                      </a>
+                    )}
+                    {socialLinks.facebook && (
+                      <a
+                        href={socialLinks.facebook}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        aria-label="Facebook de SaDeL"
+                        className="flex h-12 w-12 items-center justify-center rounded-full border border-black/[0.06] bg-white text-neutral-500 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:border-transparent hover:bg-[#1877F2] hover:text-white hover:shadow-lg active:scale-95"
+                      >
+                        <Icon icon="simple-icons:facebook" width={20} height={20} />
+                      </a>
+                    )}
+                    {socialLinks.tiktok && (
+                      <a
+                        href={socialLinks.tiktok}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        aria-label="TikTok de SaDeL"
+                        className="flex h-12 w-12 items-center justify-center rounded-full border border-black/[0.06] bg-white text-neutral-500 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:border-transparent hover:bg-neutral-900 hover:text-white hover:shadow-lg active:scale-95"
+                      >
+                        <Icon icon="simple-icons:tiktok" width={20} height={20} />
+                      </a>
+                    )}
+                  </div>
+                </div>
+              )}
 
               {/* Bottom Copyright */}
               <div className="border-t border-black/5 pt-6 flex flex-col sm:flex-row items-center justify-between gap-4 text-[11px] font-semibold text-neutral-400">
