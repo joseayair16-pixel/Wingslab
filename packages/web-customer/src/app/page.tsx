@@ -54,6 +54,65 @@ const CartDrawer = dynamic(() => import('../components/CartDrawer').then(mod => 
 const ChatPanel = dynamic(() => import('../components/ChatPanel').then(mod => mod.ChatPanel), { ssr: false });
 const AuthModal = dynamic(() => import('../components/AuthModal').then(mod => mod.AuthModal), { ssr: false });
 const ZonesModal = dynamic(() => import('../components/ZonesModal').then(mod => mod.ZonesModal), { ssr: false });
+
+// ── Zona elegida manualmente: SOLO vive durante la sesión ─────────────────
+// Elegir navegar por otra ciudad (ej. Puruarán desde Morelia) se respeta
+// durante la visita actual, pero NO persiste entre sesiones: al reabrir la
+// app, la ubicación real del usuario manda. Antes esto vivía en localStorage
+// y atrapaba al usuario en una zona vieja para siempre.
+const ZONE_SESSION_KEYS = ['selectedZoneName', 'exploringZone', 'locationDenied', 'locationSource'] as const;
+
+let manualZoneMigrationDone = false;
+
+function migrateManualZoneFromLocalStorage(): void {
+  if (manualZoneMigrationDone || typeof window === 'undefined') return;
+  manualZoneMigrationDone = true;
+  try {
+    const wasManualZone = window.localStorage.getItem('locationSource') === 'manual';
+    ZONE_SESSION_KEYS.forEach((k) => window.localStorage.removeItem(k));
+    // Si la userLocation guardada venía de una zona manual (no de GPS real),
+    // se descarta para no arrancar anclado en otra ciudad.
+    if (wasManualZone) window.localStorage.removeItem('userLocation');
+  } catch {}
+}
+
+function getZoneSessionValue(key: string): string | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const v = window.sessionStorage.getItem(key);
+    if (v !== null) return v;
+  } catch {}
+  migrateManualZoneFromLocalStorage();
+  try {
+    return window.localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+function setZoneSessionValue(key: string, value: string | null): void {
+  if (typeof window === 'undefined') return;
+  try {
+    if (value === null) {
+      window.sessionStorage.removeItem(key);
+    } else {
+      window.sessionStorage.setItem(key, value);
+    }
+    window.localStorage.removeItem(key);
+  } catch {}
+}
+
+// El GPS recuperó el mando: la zona manual de la sesión se descarta por
+// completo (ambos storages) y queda registrado que la fuente es GPS.
+function clearManualZoneSession(): void {
+  if (typeof window === 'undefined') return;
+  try {
+    ['selectedZoneName', 'locationDenied', 'exploringZone', 'userLocation'].forEach((k) => window.sessionStorage.removeItem(k));
+    window.sessionStorage.setItem('locationSource', 'gps');
+    ['locationDenied', 'selectedZoneName', 'exploringZone'].forEach((k) => window.localStorage.removeItem(k));
+    window.localStorage.setItem('locationSource', 'gps');
+  } catch {}
+}
 const RatingModal = dynamic(() => import('../components/RatingModal').then(mod => mod.default), { ssr: false });
 
 type OrderStatus =
@@ -826,22 +885,12 @@ export default function Home() {
   const [zonesLoading, setZonesLoading] = useState(false);
   const [isZonesModalOpen, setIsZonesModalOpen] = useState(false);
   const [exploringZone, setExploringZone] = useState<boolean>(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        return window.localStorage.getItem('exploringZone') === '1';
-      } catch {}
-    }
-    return false;
+    return getZoneSessionValue('exploringZone') === '1';
   });
   const exploringZoneRef = useRef(exploringZone);
   exploringZoneRef.current = exploringZone;
   const [selectedZoneName, setSelectedZoneName] = useState<string | null>(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        return window.localStorage.getItem('selectedZoneName') || null;
-      } catch {}
-    }
-    return null;
+    return getZoneSessionValue('selectedZoneName');
   });
   const [featuredRestaurants, setFeaturedRestaurants] = useState<any[]>([]);
   const [offerProducts, setOfferProducts] = useState<any[]>([]);
@@ -861,7 +910,10 @@ export default function Home() {
   const [, setSelectedCheckoutAddressId] = useState('');
   const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number; address: string; accuracy?: number; ts?: number } | null>(() => {
     try {
-      const raw = typeof window !== 'undefined' ? window.localStorage.getItem('userLocation') : null;
+      if (typeof window === 'undefined') return null;
+      migrateManualZoneFromLocalStorage();
+      // Prioridad: ubicación manual de ESTA sesión; si no hay, historial GPS.
+      const raw = window.sessionStorage.getItem('userLocation') || window.localStorage.getItem('userLocation');
       if (raw) {
         const parsed = JSON.parse(raw);
         if (typeof parsed?.latitude === 'number' && typeof parsed?.longitude === 'number') {
@@ -2149,11 +2201,15 @@ export default function Home() {
     setUserLocation(loc);
     setExploringZone(true);
     try {
-      localStorage.setItem('locationDenied', '1');
-      localStorage.setItem('locationSource', 'manual');
-      localStorage.setItem('userLocation', JSON.stringify(loc));
-      localStorage.setItem('selectedZoneName', zone.regionName);
-      localStorage.setItem('exploringZone', '1');
+      // La zona manual vive SOLO durante esta sesión (sessionStorage): al
+      // reabrir la app otro día, la ubicación real del usuario manda.
+      sessionStorage.setItem('locationDenied', '1');
+      sessionStorage.setItem('locationSource', 'manual');
+      sessionStorage.setItem('userLocation', JSON.stringify(loc));
+      sessionStorage.setItem('selectedZoneName', zone.regionName);
+      sessionStorage.setItem('exploringZone', '1');
+      // Limpieza de datos legado persistidos por versiones anteriores.
+      ZONE_SESSION_KEYS.forEach((k) => localStorage.removeItem(k));
     } catch (e) {}
     loadDashboard();
     if (typeof window !== 'undefined') {
@@ -2171,11 +2227,8 @@ export default function Home() {
     setLocationDenied(false);
     setExploringZone(false);
     try {
-      localStorage.removeItem('locationDenied');
-      localStorage.removeItem('locationSource');
+      clearManualZoneSession();
       localStorage.removeItem('userLocation');
-      localStorage.removeItem('selectedZoneName');
-      localStorage.removeItem('exploringZone');
     } catch (e) {}
 
     // Al regresar a la zona del GPS se recarga todo el dashboard; subir al tope
@@ -2585,11 +2638,7 @@ export default function Home() {
           setLocationDenied(false);
           setLocationSource('gps');
           setSelectedZoneName(null);
-          try {
-            localStorage.removeItem('locationDenied');
-            localStorage.removeItem('selectedZoneName');
-            localStorage.setItem('locationSource', 'gps');
-          } catch (e) { }
+          clearManualZoneSession();
           const { latitude, longitude, accuracy } = position.coords;
           try {
             const google = getGoogleMaps();
@@ -2655,9 +2704,9 @@ export default function Home() {
       try {
         if (typeof window !== 'undefined' && window.localStorage) {
           try {
-            const denied = window.localStorage.getItem('locationDenied') === '1';
+            const denied = getZoneSessionValue('locationDenied') === '1';
             if (denied) setLocationDenied(true);
-            const source = window.localStorage.getItem('locationSource') as 'gps' | 'manual' | null;
+            const source = getZoneSessionValue('locationSource') as 'gps' | 'manual' | null;
             if (source) setLocationSource(source);
           } catch (e) { }
           // If permission granted, proactively refresh location in background.
@@ -2681,16 +2730,14 @@ export default function Home() {
             if (fresh) {
               setUserLocation(fresh as any);
               setSelectedZoneName(null);
-              try {
-                localStorage.removeItem('selectedZoneName');
-                localStorage.removeItem('locationDenied');
-              } catch {}
+              setZoneSessionValue('selectedZoneName', null);
+              setZoneSessionValue('locationDenied', null);
               return;
             }
           }
 
-          // Fallback: use stored location (already loaded synchronously via useState initializer)
-          const savedZoneName = window.localStorage.getItem('selectedZoneName');
+          // Fallback: zona manual de ESTA sesión (ya no persiste entre sesiones).
+          const savedZoneName = getZoneSessionValue('selectedZoneName');
           if (savedZoneName) {
             setSelectedZoneName(savedZoneName);
           }
@@ -2742,9 +2789,8 @@ export default function Home() {
       setSelectedZoneName(null);
       try {
         localStorage.setItem('userLocation', JSON.stringify(loc));
-        localStorage.removeItem('locationDenied');
-        localStorage.removeItem('selectedZoneName');
-        localStorage.setItem('locationSource', 'gps');
+        clearManualZoneSession();
+        sessionStorage.setItem('locationSource', 'gps');
       } catch (e) { }
     };
 
