@@ -3632,7 +3632,7 @@ function triggerHaptic(pattern: number | number[] = 10) {
         <div className="absolute inset-0 bg-black/50 backdrop-blur-[2px]" onClick={() => setIsCheckoutOpen(false)} />
         <div
           ref={checkoutRef}
-          className={`absolute right-0 top-0 flex h-full w-full max-w-[580px] flex-col overflow-hidden bg-[#faf9f6] shadow-[0_0_0_1px_rgba(0,0,0,0.04),0_40px_100px_rgba(15,15,15,0.25)] sm:rounded-l-[36px] transition-transform duration-350 ease-[cubic-bezier(0.16,1,0.3,1)] ${isCheckoutOpen ? 'translate-x-0' : 'translate-x-full'}`}
+          className={`absolute right-0 top-0 flex h-full w-full max-w-[580px] flex-col overflow-hidden bg-[#faf9f6] shadow-[0_0_0_1px_rgba(0,0,0,0.04),0_40px_100px_rgba(15,15,15,0.25)] sm:rounded-l-[36px] transition-all duration-[350ms] ease-[cubic-bezier(0.16,1,0.3,1)] lg:inset-x-auto lg:left-1/2 lg:top-1/2 lg:h-fit lg:max-h-[92vh] lg:w-full lg:max-w-4xl lg:rounded-[32px] ${isCheckoutOpen ? 'translate-x-0 opacity-100 lg:-translate-x-1/2 lg:-translate-y-1/2 lg:scale-100' : 'translate-x-full opacity-100 lg:-translate-x-1/2 lg:-translate-y-1/2 lg:scale-95 lg:opacity-0'}`}
         >
             <section className="flex h-full flex-col">
               {/* ── Header ── */}
@@ -3676,7 +3676,10 @@ function triggerHaptic(pattern: number | number[] = 10) {
                 </button>
               </div>
 
-              <div className="flex-1 space-y-4 overflow-y-auto px-4 pb-8 pt-5 sm:px-5">
+              <div className="flex-1 overflow-y-auto px-4 pb-8 pt-5 sm:px-5 lg:px-6">
+                {/* Desktop: formulario (izq.) + pago (der.). Móvil: columna única. */}
+                <div className="space-y-4 lg:grid lg:grid-cols-2 lg:items-start lg:gap-5 lg:space-y-0 xl:gap-6">
+                  <div className="space-y-4">
 
                   {fulfillmentType === 'PICKUP' ? (
                     <div className="rounded-[22px] border border-black/[0.04] bg-white p-3 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
@@ -4190,7 +4193,10 @@ function triggerHaptic(pattern: number | number[] = 10) {
                       </button>
                     )}
                   </div>
+                  </div>
 
+                  {/* ── Columna derecha (desktop): PAGO Y DETALLES ── */}
+                  <div className="space-y-4">
                   {/* ── PASO 3: PAGO Y DETALLES ── */}
                   <div className="rounded-[22px] border border-black/[0.04] bg-white p-4 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
                     <div className="mb-4 flex items-center justify-between border-b border-black/[0.05] pb-3">
@@ -4395,6 +4401,8 @@ function triggerHaptic(pattern: number | number[] = 10) {
                       </button>
                     </div>
                   )}
+                  </div>
+                  </div>
                 </div>
 
                 <div className="sticky bottom-0 z-10 border-t border-black/[0.04] bg-white/95 px-4 pt-4 pb-[calc(1.5rem+env(safe-area-inset-bottom))] backdrop-blur-xl sm:px-5 shadow-[0_-12px_30px_-8px_rgba(0,0,0,0.08)]">
