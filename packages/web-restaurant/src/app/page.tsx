@@ -26,6 +26,7 @@ import {
   installWarmupListeners,
   installVisibilityResumeListener,
   reset,
+  getMenuThemeById,
 } from '@sadel/shared';
 
 import { useForegroundPolling } from '../hooks/useForegroundPolling';
@@ -11051,15 +11052,23 @@ export default function Home() {
                         </div>
                       ) : null}
 
-                {showMenuPreview ? (
+                {showMenuPreview ? (() => {
+                  // La vista previa refleja EN VIVO el tema y color elegidos en
+                  // "Mi tienda", antes incluso de guardar cambios.
+                  const previewTheme = getMenuThemeById(storeDraft.menuTheme ?? null);
+                  const previewAccent = /^#[0-9a-fA-F]{6}$/.test(storeDraft.accentColor || '')
+                    ? (storeDraft.accentColor as string)
+                    : '#0ea5e9';
+                  return (
                   <div
                     className="fixed inset-0 z-[85] flex items-center justify-center bg-black/60 px-4 py-5 backdrop-blur-sm animate-fade-in"
                     onClick={() => setShowMenuPreview(false)}
                   >
-                    <div
-                      className="relative flex items-center justify-center"
-                      onClick={(e) => e.stopPropagation()}
-                    >
+                      <div className="relative flex items-center justify-center" onClick={(e) => e.stopPropagation()}>
+                        {/* Resplandor ambiental con el color elegido */}
+                        <div className="absolute inset-0 flex items-center justify-center pointer-events-none" aria-hidden="true">
+                          <div className="h-[440px] w-[440px] rounded-full opacity-20 blur-3xl" style={{ backgroundColor: previewAccent }} />
+                        </div>
                       <button
                         onClick={() => setShowMenuPreview(false)}
                         className="absolute -top-12 right-0 sm:right-auto sm:-top-12 sm:left-1/2 sm:-translate-x-1/2 flex items-center gap-1.5 rounded-full bg-white/90 px-4 py-2 text-sm font-semibold text-neutral-700 shadow-lg hover:bg-white hover:text-neutral-900 transition-all z-10"
@@ -11071,7 +11080,7 @@ export default function Home() {
                         <div className="absolute top-0 inset-x-0 h-6 flex justify-center z-20">
                           <div className="w-32 h-5.5 bg-neutral-900 rounded-b-2xl"></div>
                         </div>
-                        <div className="relative w-full h-full bg-white rounded-[36px] overflow-hidden flex flex-col">
+                        <div className="relative w-full h-full rounded-[36px] overflow-hidden flex flex-col" style={{ background: previewTheme?.gradientLight ?? '#ffffff' }}>
                           <div className="flex justify-between items-center px-5 pt-3 pb-0.5 text-[9px] font-bold text-neutral-900">
                             <span>9:41</span>
                             <div className="flex gap-1 items-center">
@@ -11079,7 +11088,7 @@ export default function Home() {
                               <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M15.67 4H14V2h-4v2H8.33C7.6 4 7 4.6 7 5.33v15.33C7 21.4 7.6 22 8.33 22h7.33c.74 0 1.34-.6 1.34-1.33V5.33C17 4.6 16.4 4 15.67 4z"/></svg>
                             </div>
                           </div>
-                          <div className="px-3.5 py-1.5 border-b border-neutral-100">
+                          <div className="px-3.5 py-1.5 border-b border-black/5" style={{ backgroundColor: previewTheme?.surface ?? '#ffffff' }}>
                             <h1 className="text-sm font-black text-neutral-900">{storeDraft.name || profile.name}</h1>
                             <p className="text-[10px] text-neutral-500 mt-0.5">Menú</p>
                           </div>
@@ -11090,8 +11099,11 @@ export default function Home() {
                               </div>
                             ) : (
                               storeCategories.map((category) => (
-                                <div key={category.id}>
-                                  <h2 className="text-xs font-bold text-neutral-900 mb-2">{category.name}</h2>
+                                 <div key={category.id}>
+                                   <div className="mb-2 flex items-center gap-1.5">
+                                     <span className="h-3 w-[3px] rounded-full" style={{ backgroundColor: previewAccent }} aria-hidden="true" />
+                                     <h2 className="text-xs font-bold text-neutral-900">{category.name}</h2>
+                                   </div>
                                   {category.products.length === 0 ? (
                                     <div className="flex items-center justify-center h-20 rounded-2xl border border-dashed border-neutral-200 bg-neutral-50">
                                       <p className="text-[10px] text-neutral-400">Sin productos</p>
@@ -11144,7 +11156,7 @@ export default function Home() {
                                                 )}
                                               </div>
                                               <div className="mt-2 flex items-center justify-end">
-                                                <div className="rounded-full bg-neutral-100 px-3 py-1 text-[8px] font-bold text-neutral-900">
+                                                <div className="rounded-full px-3 py-1 text-[8px] font-bold text-white shadow-sm" style={{ backgroundColor: previewAccent }}>
                                                   Agregar
                                                 </div>
                                               </div>
@@ -11165,7 +11177,8 @@ export default function Home() {
                       </div>
                     </div>
                   </div>
-                ) : null}
+                  );
+                  })() : null}
 
                     </div>
 
