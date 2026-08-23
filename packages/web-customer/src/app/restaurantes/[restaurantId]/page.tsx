@@ -733,6 +733,21 @@ export default function RestaurantPage({
   // Latido del banner de pedido activo al crear un pedido (scroll + animación).
   const [orderCreatedPulse, setOrderCreatedPulse] = useState(false);
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
+  const categoryNavRef = useRef<HTMLDivElement | null>(null);
+
+  // Auto-centrar la pestaña de categoría activa dentro del carrusel del
+  // header sticky: cubre tanto taps como el scroll-spy que marca categorías
+  // mientras el usuario recorre el menú.
+  useEffect(() => {
+    const nav = categoryNavRef.current;
+    if (!nav || !activeCategory) return;
+    const el = nav.querySelector<HTMLButtonElement>(`[data-category-id="${activeCategory}"]`);
+    if (!el) return;
+    requestAnimationFrame(() => {
+      el.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+    });
+  }, [activeCategory]);
+
   const [isRatingModalOpen, setIsRatingModalOpen] = useState(false);
   const [orderToRate, setOrderToRate] = useState<string | null>(null);
   const [ratingBusinessType, setRatingBusinessType] = useState<string | null>(null);
@@ -4856,51 +4871,61 @@ function triggerHaptic(pattern: number | number[] = 10) {
                 return null;
               })()}
 
-              <div data-sticky-header className="sticky top-[calc(env(safe-area-inset-top)+72px)] z-20 -mx-4 mb-6 bg-[var(--menu-surface)] shadow-[0_6px_20px_rgba(0,0,0,0.04)] border-b border-black/[0.04] md:-mx-6 lg:-mx-7 dark:bg-[var(--menu-surface-dark)] dark:border-zinc-800/60">
-                <div className="px-4 py-2.5 md:px-6 lg:px-7">
-                  <div className="relative w-full">
+              <div data-sticky-header className="sticky top-[calc(env(safe-area-inset-top)+72px)] z-20 -mx-4 mb-6 bg-[var(--menu-surface)] shadow-[0_1px_2px_rgba(0,0,0,0.03),0_8px_24px_rgba(0,0,0,0.05)] border-b border-black/[0.04] md:-mx-6 lg:-mx-7 dark:bg-[var(--menu-surface-dark)] dark:border-zinc-800/60">
+                <div className="px-4 py-3 md:px-6 md:py-3.5 lg:px-7">
+                  <div className="relative w-full max-w-2xl mx-auto lg:mx-0">
+                    <Search className="pointer-events-none absolute left-4 top-1/2 h-[18px] w-[18px] -translate-y-1/2 text-neutral-400 dark:text-zinc-500" strokeWidth={1.8} />
                     <input
                       type="text"
                       placeholder={`Buscar en ${restaurant?.name || 'el menú'}...`}
                       value={productSearchQuery}
                       onChange={(e) => setProductSearchQuery(e.target.value)}
-                      className="w-full rounded-full border border-black/10 bg-white px-5 py-2.5 pr-11 text-base text-neutral-900 outline-none transition placeholder:text-neutral-400 focus:border-black/20 dark:border-zinc-800 dark:bg-neutral-900 dark:text-zinc-100 dark:placeholder:text-zinc-500 dark:focus:border-zinc-600"
+                      className={`w-full rounded-full border bg-white pl-11 pr-11 py-3 text-base text-neutral-900 outline-none transition-all duration-200 placeholder:text-neutral-400 focus:border-black/25 focus:shadow-[0_4px_16px_rgba(0,0,0,0.07)] active:border-black/15 dark:bg-neutral-900 dark:text-zinc-100 dark:placeholder:text-zinc-500 dark:focus:border-zinc-600 dark:focus:shadow-none ${
+                        productSearchQuery
+                          ? 'border-black/20 dark:border-zinc-700'
+                          : 'border-black/[0.09] dark:border-zinc-800'
+                      }`}
                     />
-                    {productSearchQuery ? (
+                    {productSearchQuery && (
                       <button
                         type="button"
                         onClick={() => setProductSearchQuery('')}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-neutral-400 hover:text-neutral-700 transition-colors rounded-full hover:bg-neutral-100 dark:text-zinc-500 dark:hover:text-zinc-200 dark:hover:bg-zinc-800"
+                        className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 text-neutral-400 hover:text-neutral-700 transition-colors rounded-full hover:bg-neutral-100 active:scale-90 dark:text-zinc-500 dark:hover:text-zinc-200 dark:hover:bg-zinc-800"
                         aria-label="Limpiar búsqueda"
                       >
                         <X className="h-4 w-4" />
                       </button>
-                    ) : (
-                      <Search className="pointer-events-none absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-400 dark:text-zinc-500" strokeWidth={1.8} />
                     )}
                   </div>
                 </div>
                 {!productSearchQuery.trim() && (
-                <div className="px-4 pb-2 md:px-6 lg:px-7">
-                  <div className="-mx-1 overflow-x-auto px-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-                    <div className="flex min-w-max gap-1 sm:gap-1">
+                <div className="pb-2.5">
+                  <div
+                    ref={categoryNavRef}
+                    className="flex overflow-x-auto px-4 pb-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden snap-x snap-proximity md:snap-none md:px-6 lg:px-7"
+                  >
+                    <div className="flex min-w-max gap-1.5 mx-auto sm:gap-2">
                       {(productSearchQuery.trim() ? (filteredRestaurant?.categories ?? []) : restaurant.categories).map((category) => {
                         const isActive = activeCategory === category.id;
                         return (
                           <button
                             type="button"
                             key={category.id}
+                            data-category-id={category.id}
                             onClick={() => scrollToCategory(category.id)}
-                            className={`relative px-4 py-2 text-[13px] font-semibold transition-all duration-200 ${
+                            aria-current={isActive ? 'true' : undefined}
+                            className={`whitespace-nowrap rounded-full px-4 py-2.5 text-[13px] font-semibold transition-all duration-200 active:scale-[0.97] ${
                               isActive
-                                ? 'text-[var(--menu-accent)] dark:text-sky-400'
-                                : 'text-neutral-500 hover:text-neutral-800 dark:text-zinc-400 dark:hover:text-zinc-100'
+                                ? 'text-[var(--menu-accent)] dark:text-sky-400 shadow-[inset_0_0_0_1.5px_var(--menu-accent)] dark:shadow-[inset_0_0_0_1.5px_rgb(56_189_248/0.45)]'
+                                : 'text-neutral-500 hover:bg-black/[0.045] hover:text-neutral-800 dark:text-zinc-400 dark:hover:bg-white/[0.06] dark:hover:text-zinc-100'
                             }`}
+                            style={
+                              isActive
+                                ? { backgroundColor: 'color-mix(in srgb, var(--menu-accent) 13%, transparent)' }
+                                : undefined
+                            }
                           >
                             {category.name}
-                            <span className={`absolute bottom-0 left-1/2 h-[3px] rounded-full bg-[var(--menu-accent)] transition-all duration-300 ${
-                              isActive ? 'w-5/6 -translate-x-1/2' : 'w-0 -translate-x-1/2'
-                            }`} />
                           </button>
                         );
                       })}
