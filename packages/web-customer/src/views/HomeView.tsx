@@ -371,7 +371,7 @@ export const HomeView = React.memo(function HomeView({
                 <CategoryIcon name="Tag" className="h-6 w-6 shrink-0" />
                 Ofertas imperdibles
               </h2>
-              <span className="text-xs font-bold text-rose-500">{filteredOfferProducts.length} productos</span>
+              <span className="shrink-0 rounded-full bg-gradient-to-r from-sky-50 to-white px-3 py-1.5 text-[11px] font-bold text-sky-600 border border-sky-100/60 shadow-[0_2px_8px_rgba(14,165,233,0.08)] sm:text-xs">{filteredOfferProducts.length} productos</span>
             </div>
             <div className="overflow-x-auto pb-2 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden snap-x snap-mandatory md:snap-none">
               <div className="flex gap-3 px-4 md:px-0 min-w-max">
