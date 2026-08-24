@@ -174,22 +174,6 @@ export const HomeView = React.memo(function HomeView({
 
   const visibleBillboards = !isBillboardFilterBlocked ? billboards : [];
 
-  // Position within the grid:
-  //   n <= 10  -> middle (10 -> after the 5th)
-  //   n >  10  -> quarter (16 -> after the 4th)
-  const billboardInsertIndex = useMemo(() => {
-    const n = filteredByBusinessType.length;
-    if (visibleBillboards.length === 0 || n === 0) return -1;
-    if (n <= 10) return Math.ceil(n / 2);
-    return Math.floor(n / 4);
-  }, [filteredByBusinessType.length, visibleBillboards.length]);
-
-  // When the computed position lands beyond the last item (e.g. n=1 -> pos 1),
-  // clamp the in-grid insertion and render the carousel after the grid instead.
-  const billboardAfterGrid =
-    billboardInsertIndex > 0 &&
-    billboardInsertIndex >= filteredByBusinessType.length;
-
   const handleBillboardNavigate = React.useCallback((url: string) => {
     if (url.startsWith('http://') || url.startsWith('https://')) {
       window.open(url, '_blank', 'noopener,noreferrer');
@@ -230,6 +214,13 @@ export const HomeView = React.memo(function HomeView({
   return (
     <>
       <div className="space-y-4">
+        {/* Billboards publicitarios: siempre debajo del header principal */}
+        {visibleBillboards.length > 0 && (
+          <section className="-mx-4 md:mx-0">
+            <BillboardCarousel billboards={visibleBillboards} onNavigate={handleBillboardNavigate} />
+          </section>
+        )}
+
         {/* Business type selector — hidden when searching, defaults to 'all' */}
         <div className="space-y-2">
         {!isSearching && (
@@ -704,16 +695,11 @@ export const HomeView = React.memo(function HomeView({
             /* ──────── RESTAURANT / TIENDA SEARCH LAYOUT (Full Cards) ──────── */
             <div className="space-y-6">
             <div className="grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-              {filteredByBusinessType.map((restaurant, index) => {
+              {filteredByBusinessType.map((restaurant) => {
                 const primaryCategory = restaurant.storeCategories?.[0];
 
                 return (
                   <React.Fragment key={restaurant.id}>
-                  {index === billboardInsertIndex && !billboardAfterGrid && visibleBillboards.length > 0 && (
-                    <div className="col-span-full">
-                      <BillboardCarousel billboards={visibleBillboards} onNavigate={handleBillboardNavigate} />
-                    </div>
-                  )}
                   <div
                     className={`group relative overflow-hidden rounded-[30px] border text-left transition-all duration-300 ease-out ${
                       restaurant.isOpen
@@ -845,11 +831,6 @@ export const HomeView = React.memo(function HomeView({
                 );
               })}
             </div>
-            {billboardAfterGrid && visibleBillboards.length > 0 && (
-              <div className="mt-5">
-                <BillboardCarousel billboards={visibleBillboards} onNavigate={handleBillboardNavigate} />
-              </div>
-            )}
             {hasMoreRestaurants && !isSearching && filteredByBusinessType.length > 0 && (
               <div className="pt-2 flex justify-center">
                 <button
