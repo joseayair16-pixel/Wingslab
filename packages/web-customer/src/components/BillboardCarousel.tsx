@@ -295,7 +295,7 @@ export const BillboardCarousel = memo(function BillboardCarousel({
           src={billboard.imageUrl}
           alt="Banner publicitario"
           fill
-          sizes="(max-width: 768px) 100vw, 380px"
+          sizes="(max-width: 768px) calc(100vw - 32px), 380px"
           priority={key === `${billboard.id}-real-0`}
           draggable={false}
           className="object-cover"

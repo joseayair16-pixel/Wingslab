@@ -214,9 +214,11 @@ export const HomeView = React.memo(function HomeView({
   return (
     <>
       <div className="space-y-4">
-        {/* Billboards publicitarios: siempre debajo del header principal */}
+        {/* Billboards publicitarios: siempre debajo del header principal.
+            Sin full-bleed: respeta el padding de la página (margen lateral
+            estilo Uber Eats) en vez de abarcar todo el ancho. */}
         {visibleBillboards.length > 0 && (
-          <section className="-mx-4 md:mx-0">
+          <section className="md:mx-0">
             <BillboardCarousel billboards={visibleBillboards} onNavigate={handleBillboardNavigate} />
           </section>
         )}
