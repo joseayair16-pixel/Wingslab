@@ -691,16 +691,28 @@ export async function registerPublicRoutes(fastify: FastifyInstance): Promise<vo
     const now = new Date();
 
     try {
-      // Precedence: explicit coordinates (dynamic, user is wherever their GPS
-      // says) > explicit region param > global-only billboards.
+      // Resolución de zona (precedencia):
+      //   1) coordenadas GPS explícitas (ubicación dinámica del usuario)
+      //   2) parámetro `region` (zona guardada en la cuenta, p.ej. sin GPS)
+      // Si ninguna resuelve una zona de servicio → no se devuelven anuncios.
       const resolvedRegion =
         latitude !== undefined && longitude !== undefined
           ? await resolveNearestZone({ latitude, longitude })
           : region ?? null;
 
-      const regionFilter = resolvedRegion
-        ? { OR: [{ regions: { isEmpty: true } }, { regions: { has: resolvedRegion } }] }
-        : { regions: { isEmpty: true } };
+      // Sin zona de servicio resuelta (fuera de toda zona o ubicación
+      // desconocida): no devolvemos anuncios. Esto evita que los billboards
+      // "globales" (regions vacío) se filtren a usuarios fuera del área.
+      if (!resolvedRegion) {
+        return reply.send({ success: true, data: [] });
+      }
+
+      const regionFilter = {
+        OR: [
+          { regions: { isEmpty: true } },
+          { regions: { has: resolvedRegion } },
+        ],
+      };
 
       const billboards = await prisma.billboard.findMany({
         where: {
