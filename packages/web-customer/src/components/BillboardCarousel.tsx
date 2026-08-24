@@ -60,17 +60,39 @@ export const BillboardCarousel = memo(function BillboardCarousel({
 
   // Medición del viewport para el modo desktop de tarjetas múltiples.
   const [viewportW, setViewportW] = useState(0);
+  const [isDesktop, setIsDesktop] = useState(false);
   useEffect(() => {
     const el = viewportRef.current;
-    if (!el) return;
-    const update = () => setViewportW(el.clientWidth || 0);
+    const mq = typeof window !== 'undefined' ? window.matchMedia(`(min-width: ${DESKTOP_MIN_WIDTH}px)`) : null;
+
+    const update = () => {
+      setIsDesktop(mq ? mq.matches : false);
+      // Hasta 10 reintentos con rAF: garantiza un ancho real aunque el
+      // elemento monte dentro de un contenedor aún sin layout.
+      let tries = 0;
+      const measure = () => {
+        const w = viewportRef.current?.clientWidth || 0;
+        setViewportW(w);
+        if (w === 0 && tries < 10) {
+          tries += 1;
+          requestAnimationFrame(measure);
+        }
+      };
+      requestAnimationFrame(measure);
+    };
+
     update();
-    const ro = new ResizeObserver(update);
-    ro.observe(el);
-    return () => ro.disconnect();
+    const ro = el ? new ResizeObserver(update) : null;
+    if (ro && el) ro.observe(el);
+    mq?.addEventListener('change', update);
+    window.addEventListener('resize', update);
+    return () => {
+      ro?.disconnect();
+      mq?.removeEventListener('change', update);
+      window.removeEventListener('resize', update);
+    };
   }, []);
 
-  const isDesktop = viewportW >= DESKTOP_MIN_WIDTH;
   // Tarjetas visibles: hasta 3 en desktop; menos si hay pocos banners.
   const perView = !isDesktop || n <= 1 ? 1 : Math.min(3, n);
   const cardW =
@@ -283,11 +305,11 @@ export const BillboardCarousel = memo(function BillboardCarousel({
     return (
       <div
         key={key}
-        className="relative h-full shrink-0"
+        className="relative h-full w-full shrink-0"
         style={{
           aspectRatio: `${BILLBOARD_RATIO}`,
           // Desktop: ancho fijo calculado; móvil: llena el viewport.
-          ...(cardW ? { width: `${cardW}px` } : {}),
+          ...(cardW ? { width: `${cardW}px`, maxWidth: 'none' } : {}),
         }}
       >
         {billboard.linkUrl ? (
