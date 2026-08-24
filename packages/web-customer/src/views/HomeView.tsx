@@ -228,7 +228,7 @@ export const HomeView = React.memo(function HomeView({
           <div className="flex justify-center gap-4 md:gap-5">
             {tabs.map((tab) => {
               const isActive = businessTypeFilter === tab.key;
-              const imgSrc = tab.key === 'restaurants' ? '/restaurantes.png' : tab.key === 'stores' ? '/tiendas.png' : '/todos.png';
+              const imgSrc = tab.key === 'restaurants' ? '/restaurantes.webp' : tab.key === 'stores' ? '/tiendas.webp' : '/todos.webp';
               return (
                 <button
                   key={tab.key}
@@ -245,7 +245,7 @@ export const HomeView = React.memo(function HomeView({
                     src={imgSrc}
                     alt={tab.label}
                     width={500}
-                    height={350}
+                    height={500}
                     className="w-full h-auto"
                     priority
                   />
