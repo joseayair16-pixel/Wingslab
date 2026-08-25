@@ -18,6 +18,7 @@ import {
   getBusinessRef,
   getBusinessArticleCapitalized,
 } from '../utils/restaurant';
+import { restoreStockForOrder } from './stock.service';
 import { getRedis } from '../config/redis';
 import { logger } from '../utils/logger';
 import { appEvents } from '../utils/events';
@@ -552,6 +553,8 @@ export async function updateOrderStatusByRestaurant({
           ? 'El restaurante rechazó el pedido.'
           : 'El restaurante canceló el pedido.'
       );
+      // Liberar el stock reservado al cancelar/rechazar la orden.
+      await restoreStockForOrder(tx, order.id);
     }
 
     appEvents.emit('order.status_changed', {
@@ -719,6 +722,8 @@ export async function respondToCancellationRequest(
         order.id,
         `Cancelación aprobada (solicitada por el cliente). ${note ? `Nota: ${note}` : ''}`
       );
+
+      await restoreStockForOrder(tx, order.id);
     });
 
     return { customerUserId: order.customer.userId, driverUserId: order.driver?.userId ?? null };
@@ -800,6 +805,8 @@ export async function cancelOrderByRestaurant(
     }
 
     await createTransferRefundTicket(tx, order.id, `Cancelado por el restaurante. ${reason}`);
+
+    await restoreStockForOrder(tx, order.id);
 
     return { customerUserId: order.customer.userId, driverUserId: order.driver?.userId ?? null };
   });

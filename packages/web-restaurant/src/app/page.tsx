@@ -1,5 +1,5 @@
 'use client';
-import { AlertTriangle, Check, ChevronUp, Clock, Info, Mail, MessageCircle, Minus, Pencil, Plus, RefreshCw, Tag, Trash2, User, X } from 'lucide-react';
+import { AlertTriangle, Check, ChevronUp, Clock, Info, Mail, MessageCircle, Minus, Package, Pencil, Plus, RefreshCw, Tag, Trash2, User, X } from 'lucide-react';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { io } from 'socket.io-client';
@@ -270,6 +270,9 @@ type ProductItem = {
   imagePosition?: string | null;
   imageZoom?: number | null;
   isAdultOnly?: boolean;
+  trackStock?: boolean;
+  stock?: number | null;
+  lowStockThreshold?: number | null;
   isAvailable: boolean;
   category?: {
     id?: string;
@@ -413,6 +416,9 @@ type ProductDraft = {
   imagePosition?: string;
   imageZoom?: number;
   isAdultOnly: boolean;
+  trackStock: boolean;
+  stock: string;
+  lowStockThreshold: string;
   optionGroups?: ProductOptionGroup[];
 };
 
@@ -459,6 +465,9 @@ function buildEmptyProductDraft(
     imagePosition: template?.imagePosition || '50% 50%',
     imageZoom: template?.imageZoom || 100,
     isAdultOnly: template?.isAdultOnly ?? false,
+    trackStock: false,
+    stock: '',
+    lowStockThreshold: '5',
     optionGroups: template?.optionGroups ? cloneOptionGroups(template.optionGroups) : [],
   };
 }
@@ -489,6 +498,17 @@ function validateProductConsistency(draft: ProductDraft): string | null {
     }
     if (pay >= buy) {
       return 'La promoción no es válida: la cantidad a pagar debe ser menor a la cantidad a comprar (ej. comprar 2, pagar 1).';
+    }
+  }
+
+  if (draft.trackStock) {
+    const stock = draft.stock ? Number(draft.stock) : 0;
+    if (!Number.isFinite(stock) || stock < 0) {
+      return 'El stock debe ser un número mayor o igual a cero.';
+    }
+    const threshold = draft.lowStockThreshold ? Number(draft.lowStockThreshold) : 5;
+    if (!Number.isFinite(threshold) || threshold < 0) {
+      return 'La alerta de pocas unidades debe ser un número mayor o igual a cero.';
     }
   }
 
@@ -1319,6 +1339,9 @@ export default function Home() {
     imagePosition: '50% 50%',
     imageZoom: 100,
     isAdultOnly: false,
+    trackStock: false,
+    stock: '',
+    lowStockThreshold: '5',
   });
   const [productConfigInherited, setProductConfigInherited] = useState(false);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
@@ -4466,6 +4489,9 @@ export default function Home() {
       imagePosition: product.imagePosition || '50% 50%',
       imageZoom: product.imageZoom || 100,
       isAdultOnly: product.isAdultOnly || false,
+      trackStock: product.trackStock || false,
+      stock: product.stock != null ? String(product.stock) : '',
+      lowStockThreshold: product.lowStockThreshold != null ? String(product.lowStockThreshold) : '5',
       optionGroups: product.optionGroups || [],
     });
     setIsProductModalOpen(true);
@@ -4518,6 +4544,9 @@ export default function Home() {
       imagePosition: product.imagePosition || '50% 50%',
       imageZoom: product.imageZoom || 100,
       isAdultOnly: product.isAdultOnly || false,
+      trackStock: product.trackStock || false,
+      stock: product.stock != null ? String(product.stock) : '',
+      lowStockThreshold: product.lowStockThreshold != null ? String(product.lowStockThreshold) : '5',
       optionGroups: product.optionGroups || [],
     });
     setIsProductModalOpen(true);
@@ -4860,6 +4889,9 @@ export default function Home() {
             imagePosition: productDraft.imagePosition || null,
             imageZoom: productDraft.imageZoom || null,
             isAdultOnly: productDraft.isAdultOnly,
+            trackStock: productDraft.trackStock,
+            stock: productDraft.trackStock ? (productDraft.stock ? Number(productDraft.stock) : 0) : 0,
+            lowStockThreshold: productDraft.lowStockThreshold ? Number(productDraft.lowStockThreshold) : 5,
             isAvailable: true,
             allergens: [],
             optionGroups: productDraft.optionGroups || [],
@@ -8153,6 +8185,63 @@ export default function Home() {
                             }`}
                           />
                         </button>
+                      </div>
+
+                      <div className="rounded-2xl border border-amber-100 bg-amber-50/50 p-4 sm:col-span-2 mt-2">
+                        <div className="flex items-center justify-between gap-4">
+                          <div className="flex items-start gap-3">
+                            <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-600">
+                              <Package className="h-4 w-4" />
+                            </div>
+                            <div>
+                              <h4 className="text-sm font-bold text-amber-950">Control de inventario</h4>
+                              <p className="mt-0.5 text-xs font-medium text-amber-700/80">
+                                Limita las unidades disponibles por pedido. Las ventas presenciales debes descontarlas manualmente aquí.
+                              </p>
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setProductDraft((curr) => ({ ...curr, trackStock: !curr.trackStock }))}
+                            className={`relative inline-flex h-7 w-12 shrink-0 cursor-pointer items-center rounded-full transition-colors duration-200 ease-in-out focus:outline-none shadow-inner ${
+                              productDraft.trackStock ? 'bg-amber-500' : 'bg-neutral-300'
+                            }`}
+                            role="switch"
+                            aria-checked={productDraft.trackStock}
+                          >
+                            <span
+                              className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-sm ring-0 transition duration-200 ease-in-out ${
+                                productDraft.trackStock ? 'translate-x-6' : 'translate-x-1'
+                              }`}
+                            />
+                          </button>
+                        </div>
+                        {productDraft.trackStock && (
+                          <div className="mt-4 grid grid-cols-2 gap-3">
+                            <div>
+                              <label className="text-xs font-bold text-neutral-700">Unidades en stock</label>
+                              <input
+                                type="number"
+                                min={0}
+                                value={productDraft.stock}
+                                onChange={(e) => setProductDraft((curr) => ({ ...curr, stock: e.target.value }))}
+                                className="mt-1 w-full rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm text-neutral-900 outline-none transition focus:border-amber-400 focus:ring-2 focus:ring-amber-100 dark:border-neutral-700 dark:bg-neutral-900 dark:text-white"
+                                placeholder="0"
+                              />
+                            </div>
+                            <div>
+                              <label className="text-xs font-bold text-neutral-700">Alerta de pocas unidades</label>
+                              <input
+                                type="number"
+                                min={0}
+                                value={productDraft.lowStockThreshold}
+                                onChange={(e) => setProductDraft((curr) => ({ ...curr, lowStockThreshold: e.target.value }))}
+                                className="mt-1 w-full rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm text-neutral-900 outline-none transition focus:border-amber-400 focus:ring-2 focus:ring-amber-100 dark:border-neutral-700 dark:bg-neutral-900 dark:text-white"
+                                placeholder="5"
+                              />
+                            </div>
+                          </div>
+                        )}
                       </div>
                     </div>
                   </div>

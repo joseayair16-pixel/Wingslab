@@ -494,6 +494,15 @@ export async function createOrderForCustomer({
       );
     }
 
+    // Validación de inventario (opcional, solo para venta por unidad).
+    if (product.trackStock && product.sellBy === 'UNIT' && product.stock < item.quantity) {
+      throw new AppError(
+        400,
+        'INSUFFICIENT_STOCK',
+        `El producto "${product.name}" solo tiene ${product.stock} unidad(es) disponible(s).`
+      );
+    }
+
     const selectedOptionIds = item.optionIds || [];
     let itemOptionsPrice = 0;
     const validatedOptions: Array<{ id: string; name: string; price: number }> = [];
@@ -928,6 +937,26 @@ export async function createOrderForCustomer({
         isPickup && input.paymentMethod === PaymentMethod.TRANSFER
           ? String(Math.floor(1000 + Math.random() * 9000))
           : undefined;
+
+      // Decremento atómico de inventario (solo UNIT con trackStock).
+      // updateMany con condición de stock evita carreras: si otro pedido ya
+      // consumió el stock, count=0 y abortamos la orden (se revierte el tx).
+      for (const item of input.items) {
+        const product = productsById.get(item.productId);
+        if (product?.trackStock && product.sellBy === 'UNIT') {
+          const updated = await tx.product.updateMany({
+            where: { id: item.productId, stock: { gte: item.quantity } },
+            data: { stock: { decrement: item.quantity } },
+          });
+          if (updated.count === 0) {
+            throw new AppError(
+              400,
+              'INSUFFICIENT_STOCK',
+              `El producto "${product.name}" ya no tiene suficiente stock disponible.`
+            );
+          }
+        }
+      }
 
       const order = await tx.order.create({
         data: {

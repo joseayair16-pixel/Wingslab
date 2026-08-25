@@ -325,6 +325,12 @@ model Product {
   image           String?
   images          String[] @default([])
   imagePosition   String?
+
+  // Inventario opcional por producto (solo para sellBy=UNIT).
+  // trackStock=false -> sin control de stock (se usa isAvailable).
+  trackStock        Boolean @default(false)
+  stock             Int     @default(0)
+  lowStockThreshold Int     @default(5)
   imageZoom       Int?
   isAdultOnly     Boolean  @default(false)
   isAvailable     Boolean  @default(true)

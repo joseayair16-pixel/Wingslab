@@ -107,6 +107,9 @@ type PublicRestaurantDetail = {
         promoBuyQuantity?: number | null;
         promoPayQuantity?: number | null;
         isAdultOnly?: boolean;
+        trackStock?: boolean;
+        stock?: number;
+        lowStockThreshold?: number;
         optionGroups?: ProductOptionGroup[];
       }>;
   }>;
@@ -2045,9 +2048,44 @@ function triggerHaptic(pattern: number | number[] = 10) {
   }
 }
 
+function getProductAvailability(p: { trackStock?: boolean; stock?: number; lowStockThreshold?: number }) {
+  const tracked = !!p.trackStock;
+  const stock = typeof p.stock === 'number' ? p.stock : 0;
+  const threshold = typeof p.lowStockThreshold === 'number' ? p.lowStockThreshold : 5;
+  const available = tracked ? stock > 0 : true;
+  const lowStock = tracked && stock > 0 && stock <= threshold;
+  const maxQty = available ? (tracked ? stock : Number.POSITIVE_INFINITY) : 0;
+  return { available, lowStock, maxQty, tracked };
+}
+
+function StockBadge({ avail }: { avail: ReturnType<typeof getProductAvailability> }) {
+  if (!avail.available) {
+    return (
+      <div className="absolute bottom-1.5 left-1.5 z-10 flex items-center gap-1 rounded-full bg-neutral-900/90 px-2 py-0.5 text-[9px] font-bold text-white shadow-sm">
+        Agotado
+      </div>
+    );
+  }
+  if (avail.lowStock) {
+    return (
+      <div className="absolute bottom-1.5 left-1.5 z-10 flex items-center gap-1 rounded-full bg-amber-500/90 px-2 py-0.5 text-[9px] font-bold text-white shadow-sm">
+        Pocas unidades
+      </div>
+    );
+  }
+  return null;
+}
+
   function addToCart(product: PublicRestaurantDetail['categories'][number]['products'][number]) {
     const hasOptions = product.optionGroups && product.optionGroups.length > 0;
     const isWeightProduct = product.sellBy === 'WEIGHT';
+    const availability = getProductAvailability(product);
+
+    if (!availability.available) {
+      setError('Este producto está agotado.');
+      return;
+    }
+
     if (hasOptions || isWeightProduct) {
       setCustomizingProduct(product);
       setCustomizingQuantity(1);
@@ -2076,7 +2114,8 @@ function triggerHaptic(pattern: number | number[] = 10) {
       specialInstructions: '',
       selectedOptions: [],
       sellBy: 'UNIT',
-    }, params.restaurantId as string, restaurant?.serviceFee || 0, restaurant?.effectiveDeliveryFee || 0);
+      maxStock: availability.tracked ? (product.stock ?? 0) : null,
+    } as any, params.restaurantId as string, restaurant?.serviceFee || 0, restaurant?.effectiveDeliveryFee || 0);
     setCartJustUpdated(true);
     triggerHaptic(15); // Small vibration
   }
@@ -2116,6 +2155,11 @@ function triggerHaptic(pattern: number | number[] = 10) {
       ? (customizingProduct.unitPrice || 0) * customizingWeight / 1000
       : customizingProduct.price;
 
+    const availability = getProductAvailability(customizingProduct);
+    const qty = availability.tracked
+      ? Math.min(customizingQuantity, availability.maxQty)
+      : customizingQuantity;
+
     addItem({
       cartItemId,
       productId: customizingProduct.id,
@@ -2126,13 +2170,14 @@ function triggerHaptic(pattern: number | number[] = 10) {
       promoBuyQuantity: customizingProduct.promoBuyQuantity,
       promoPayQuantity: customizingProduct.promoPayQuantity,
       image: customizingProduct.image,
-      quantity: customizingQuantity,
+      quantity: qty,
       specialInstructions: customizingInstructions,
       selectedOptions: flatSelectedOptions as any,
       sellBy: customizingProduct.sellBy || 'UNIT',
       weightG: isWeightProduct ? customizingWeight : null,
       unitPrice: isWeightProduct ? customizingProduct.unitPrice : null,
-    }, params.restaurantId as string, restaurant?.serviceFee || 0, restaurant?.effectiveDeliveryFee || 0);
+      maxStock: availability.tracked ? (customizingProduct.stock ?? 0) : null,
+    } as any, params.restaurantId as string, restaurant?.serviceFee || 0, restaurant?.effectiveDeliveryFee || 0);
 
     setCustomizingProduct(null);
     setCartJustUpdated(true);
@@ -3332,8 +3377,9 @@ function triggerHaptic(pattern: number | number[] = 10) {
                   </span>
                   <button
                     type="button"
-                    onClick={() => setCustomizingQuantity(q => q + 1)}
-                    className="flex h-9 w-9 items-center justify-center rounded-full text-lg text-neutral-700 dark:text-neutral-300 transition hover:bg-neutral-200 dark:hover:bg-neutral-800"
+                    onClick={() => setCustomizingQuantity(q => Math.max(1, Math.min(q + 1, getProductAvailability(customizingProduct).tracked ? getProductAvailability(customizingProduct).maxQty : q + 1)))}
+                    disabled={getProductAvailability(customizingProduct).tracked && customizingQuantity >= getProductAvailability(customizingProduct).maxQty}
+                    className="flex h-9 w-9 items-center justify-center rounded-full text-lg text-neutral-700 dark:text-neutral-300 transition hover:bg-neutral-200 dark:hover:bg-neutral-800 disabled:opacity-40 disabled:cursor-not-allowed"
                   >
                     +
                   </button>
@@ -5196,6 +5242,7 @@ function triggerHaptic(pattern: number | number[] = 10) {
                     >
                     {category.products.map((product) => {
                       const quantity = getCartQuantity(product.id);
+                      const avail = getProductAvailability(product);
 
                       return (
                         isPromoCarousel ? (
@@ -5221,6 +5268,7 @@ function triggerHaptic(pattern: number | number[] = 10) {
                                   <span>{getMultiBuyInfo(product).buy}x{getMultiBuyInfo(product).pay}</span>
                                 </div>
                               )}
+                              <StockBadge avail={avail} />
                             </div>
                             <div className="px-1.5 pb-1.5 pt-1">
                               <h3 className="truncate text-[11px] font-bold leading-tight text-neutral-900 dark:text-white">{product.name}</h3>
@@ -5255,12 +5303,12 @@ function triggerHaptic(pattern: number | number[] = 10) {
                                       )}
                                     </button>
                                     <span className="flex h-5 w-5 items-center justify-center text-[10px] font-bold text-neutral-900 dark:text-white">{quantity}</span>
-                                    <button type="button" onClick={() => addToCart(product)} className="flex h-5 w-5 items-center justify-center rounded-md text-neutral-500 transition-all hover:bg-white active:scale-90 dark:text-zinc-300 dark:hover:bg-zinc-700" aria-label={`Agregar una unidad de ${product.name}`}>
+                                    <button type="button" onClick={() => addToCart(product)} disabled={!avail.available || (avail.tracked && quantity >= avail.maxQty)} className="flex h-5 w-5 items-center justify-center rounded-md text-neutral-500 transition-all hover:bg-white active:scale-90 dark:text-zinc-300 dark:hover:bg-zinc-700 disabled:opacity-40 disabled:cursor-not-allowed" aria-label={`Agregar una unidad de ${product.name}`}>
                                       <Plus className="h-2 w-2" strokeWidth={2.5} />
                                     </button>
                                   </div>
                                 ) : (
-                                  <button type="button" onClick={() => addToCart(product)} disabled={!restaurant.isOpen} className="w-full rounded-lg bg-neutral-900 py-1.5 text-[10px] font-bold text-white transition hover:bg-neutral-800 disabled:bg-neutral-200 disabled:text-neutral-400 dark:bg-white dark:text-neutral-950 dark:hover:bg-zinc-200 dark:disabled:bg-neutral-800 dark:disabled:text-zinc-600">
+                                  <button type="button" onClick={() => addToCart(product)} disabled={!restaurant.isOpen || !avail.available} className="w-full rounded-lg bg-neutral-900 py-1.5 text-[10px] font-bold text-white transition hover:bg-neutral-800 disabled:bg-neutral-200 disabled:text-neutral-400 dark:bg-white dark:text-neutral-950 dark:hover:bg-zinc-200 dark:disabled:bg-neutral-800 dark:disabled:text-zinc-600">
                                     Agregar
                                   </button>
                                 )}
@@ -5296,6 +5344,7 @@ function triggerHaptic(pattern: number | number[] = 10) {
                                     <span>{getMultiBuyInfo(product).buy}x{getMultiBuyInfo(product).pay}</span>
                                   </div>
                                 )}
+                                <StockBadge avail={avail} />
                               </div>
                               <div className="flex flex-1 flex-col p-3">
 <h3 className="text-sm font-bold leading-snug text-neutral-900 line-clamp-2 dark:text-white">{product.name}</h3>
@@ -5339,12 +5388,12 @@ function triggerHaptic(pattern: number | number[] = 10) {
                                         )}
                                       </button>
                                       <span className="flex h-7 w-7 items-center justify-center text-xs font-bold text-neutral-900 dark:text-white">{quantity}</span>
-                                      <button type="button" onClick={() => addToCart(product)} className="flex h-7 w-7 items-center justify-center rounded-full text-neutral-500 transition-all hover:bg-white active:scale-90 dark:text-zinc-300 dark:hover:bg-zinc-700" aria-label={`Agregar una unidad de ${product.name}`}>
+                                      <button type="button" onClick={() => addToCart(product)} disabled={!avail.available || (avail.tracked && quantity >= avail.maxQty)} className="flex h-7 w-7 items-center justify-center rounded-full text-neutral-500 transition-all hover:bg-white active:scale-90 dark:text-zinc-300 dark:hover:bg-zinc-700 disabled:opacity-40 disabled:cursor-not-allowed" aria-label={`Agregar una unidad de ${product.name}`}>
                                         <Plus className="h-3 w-3" strokeWidth={2.5} />
                                       </button>
                                     </div>
                                   ) : (
-                                    <button type="button" onClick={() => addToCart(product)} disabled={!restaurant.isOpen} className="w-full rounded-xl bg-neutral-900 py-2.5 text-[11px] font-bold text-white transition hover:bg-neutral-800 disabled:bg-neutral-200 disabled:text-neutral-400 dark:bg-white dark:text-neutral-950 dark:hover:bg-zinc-200 dark:disabled:bg-neutral-800 dark:disabled:text-zinc-600">
+                                    <button type="button" onClick={() => addToCart(product)} disabled={!restaurant.isOpen || !avail.available} className="w-full rounded-xl bg-neutral-900 py-2.5 text-[11px] font-bold text-white transition hover:bg-neutral-800 disabled:bg-neutral-200 disabled:text-neutral-400 dark:bg-white dark:text-neutral-950 dark:hover:bg-zinc-200 dark:disabled:bg-neutral-800 dark:disabled:text-zinc-600">
                                       Agregar
                                     </button>
                                   )}
@@ -5381,6 +5430,7 @@ function triggerHaptic(pattern: number | number[] = 10) {
                                     <span>{getMultiBuyInfo(product).buy}x{getMultiBuyInfo(product).pay}</span>
                                   </div>
                                 )}
+                                <StockBadge avail={avail} />
                               </div>
                               <div className="flex flex-1 flex-col p-3">
                                 <h3 className="text-sm font-bold leading-snug text-neutral-900 line-clamp-2 dark:text-white">{product.name}</h3>
@@ -5424,12 +5474,12 @@ function triggerHaptic(pattern: number | number[] = 10) {
                                         )}
                                       </button>
                                       <span className="flex h-7 w-7 items-center justify-center text-xs font-bold text-neutral-900 dark:text-white">{quantity}</span>
-                                      <button type="button" onClick={() => addToCart(product)} className="flex h-7 w-7 items-center justify-center rounded-full text-neutral-500 transition-all hover:bg-white active:scale-90 dark:text-zinc-300 dark:hover:bg-zinc-700" aria-label={`Agregar una unidad de ${product.name}`}>
+                                      <button type="button" onClick={() => addToCart(product)} disabled={!avail.available || (avail.tracked && quantity >= avail.maxQty)} className="flex h-7 w-7 items-center justify-center rounded-full text-neutral-500 transition-all hover:bg-white active:scale-90 dark:text-zinc-300 dark:hover:bg-zinc-700 disabled:opacity-40 disabled:cursor-not-allowed" aria-label={`Agregar una unidad de ${product.name}`}>
                                         <Plus className="h-3 w-3" strokeWidth={2.5} />
                                       </button>
                                     </div>
                                   ) : (
-                                    <button type="button" onClick={() => addToCart(product)} disabled={!restaurant.isOpen} className="w-full rounded-xl bg-neutral-900 py-2.5 text-[11px] font-bold text-white transition hover:bg-neutral-800 disabled:bg-neutral-200 disabled:text-neutral-400 dark:bg-white dark:text-neutral-950 dark:hover:bg-zinc-200 dark:disabled:bg-neutral-800 dark:disabled:text-zinc-600">
+                                    <button type="button" onClick={() => addToCart(product)} disabled={!restaurant.isOpen || !avail.available} className="w-full rounded-xl bg-neutral-900 py-2.5 text-[11px] font-bold text-white transition hover:bg-neutral-800 disabled:bg-neutral-200 disabled:text-neutral-400 dark:bg-white dark:text-neutral-950 dark:hover:bg-zinc-200 dark:disabled:bg-neutral-800 dark:disabled:text-zinc-600">
                                       Agregar
                                     </button>
                                   )}
@@ -5508,6 +5558,7 @@ function triggerHaptic(pattern: number | number[] = 10) {
                                     <span>{getMultiBuyInfo(product).buy}x{getMultiBuyInfo(product).pay}</span>
                                   </div>
                                 )}
+                                <StockBadge avail={avail} />
                               </div>
                               <div className="flex min-w-0 flex-1 flex-col">
                                 <div className="flex flex-col gap-0.5">
@@ -5544,12 +5595,12 @@ function triggerHaptic(pattern: number | number[] = 10) {
                                         )}
                                       </button>
                                       <span className="flex h-7 w-7 items-center justify-center text-xs font-bold text-neutral-900 dark:text-white">{quantity}</span>
-                                      <button type="button" onClick={() => addToCart(product)} className="flex h-7 w-7 items-center justify-center rounded-full text-neutral-500 transition-all hover:bg-white active:scale-90 dark:text-zinc-300 dark:hover:bg-zinc-700" aria-label={`Agregar una unidad de ${product.name}`}>
+                                      <button type="button" onClick={() => addToCart(product)} disabled={!avail.available || (avail.tracked && quantity >= avail.maxQty)} className="flex h-7 w-7 items-center justify-center rounded-full text-neutral-500 transition-all hover:bg-white active:scale-90 dark:text-zinc-300 dark:hover:bg-zinc-700 disabled:opacity-40 disabled:cursor-not-allowed" aria-label={`Agregar una unidad de ${product.name}`}>
                                         <Plus className="h-3 w-3" strokeWidth={2.5} />
                                       </button>
                                     </div>
                                   ) : (
-                                    <button type="button" onClick={() => addToCart(product)} disabled={!restaurant.isOpen} className="rounded-xl bg-neutral-900 px-5 py-2.5 text-[11px] font-bold text-white transition hover:bg-neutral-800 disabled:bg-neutral-200 disabled:text-neutral-400 dark:bg-white dark:text-neutral-950 dark:hover:bg-zinc-200 dark:disabled:bg-neutral-800 dark:disabled:text-zinc-600">
+                                    <button type="button" onClick={() => addToCart(product)} disabled={!restaurant.isOpen || !avail.available} className="rounded-xl bg-neutral-900 px-5 py-2.5 text-[11px] font-bold text-white transition hover:bg-neutral-800 disabled:bg-neutral-200 disabled:text-neutral-400 dark:bg-white dark:text-neutral-950 dark:hover:bg-zinc-200 dark:disabled:bg-neutral-800 dark:disabled:text-zinc-600">
                                       Agregar
                                     </button>
                                   )}

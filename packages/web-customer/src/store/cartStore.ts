@@ -25,6 +25,7 @@ export type CartItem = {
   sellBy?: string;
   weightG?: number | null;
   unitPrice?: number | null;
+  maxStock?: number | null;
 };
 
 type CartState = {
@@ -63,6 +64,14 @@ export const useCartStore = create<CartState>()(
           return;
         }
 
+        // Respeta el límite de stock cuando el producto lo controla.
+        const max = item.maxStock ?? null;
+        const qtyForProduct = items
+          .filter((i) => i.productId === item.productId)
+          .reduce((sum, i) => sum + i.quantity, 0);
+        const qtyToAdd = max != null ? Math.max(0, Math.min(item.quantity, max - qtyForProduct)) : item.quantity;
+        if (qtyToAdd <= 0) return;
+
         // Misma tienda, intentamos agrupar
         const existingIndex = items.findIndex((i) => {
           if (i.productId !== item.productId) return false;
@@ -80,13 +89,13 @@ export const useCartStore = create<CartState>()(
           const newItems = [...items];
           newItems[existingIndex] = {
             ...newItems[existingIndex],
-            quantity: newItems[existingIndex].quantity + item.quantity,
+            quantity: newItems[existingIndex].quantity + qtyToAdd,
             specialInstructions: item.specialInstructions || newItems[existingIndex].specialInstructions,
           };
           set({ items: newItems, restaurantId: newRestaurantId, serviceFee: newServiceFee, deliveryFee: newDeliveryFee });
         } else {
           set({
-            items: [...items, item],
+            items: [...items, { ...item, quantity: qtyToAdd }],
             restaurantId: newRestaurantId,
             serviceFee: newServiceFee,
             deliveryFee: newDeliveryFee,
@@ -95,15 +104,26 @@ export const useCartStore = create<CartState>()(
       },
 
       updateItem: (cartItemId, patch) => {
-        set((state) => ({
-          items: state.items
-            .map((item) =>
-              item.cartItemId === cartItemId
-                ? { ...item, ...patch }
-                : item
-            )
-            .filter((item) => item.quantity > 0),
-        }));
+        set((state) => {
+          const items = state.items
+            .map((item) => {
+              if (item.cartItemId !== cartItemId) return item;
+              const next = { ...item, ...patch };
+              const max = next.maxStock ?? null;
+              if (max != null) {
+                // El stock es por producto, no por variante de opciones.
+                // Limitamos respecto al total ya en el carrito de ese producto.
+                const othersQty = state.items
+                  .filter((i) => i.productId === next.productId && i.cartItemId !== cartItemId)
+                  .reduce((sum, i) => sum + i.quantity, 0);
+                const allowed = Math.max(0, max - othersQty);
+                if (next.quantity > allowed) next.quantity = allowed;
+              }
+              return next;
+            })
+            .filter((item) => item.quantity > 0);
+          return { items };
+        });
       },
 
       decreaseQuantity: (productId) => {
