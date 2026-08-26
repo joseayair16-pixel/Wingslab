@@ -887,13 +887,13 @@ export const HomeView = React.memo(function HomeView({
                 <p className="mt-2 max-w-md mx-auto text-[15px] font-medium leading-relaxed text-neutral-500">
                   Pero puedes explorar las ciudades donde ya estamos presentes y descubrir nuevos lugares:
                 </p>
-                <div className="mt-6 flex flex-wrap justify-center gap-2.5">
-                  {activeZones.map((zone: any) => (
+                <div className="mt-6 flex flex-col gap-2.5">
+                  {activeZones.slice().sort((a: any, b: any) => String(a.regionName).localeCompare(String(b.regionName))).map((zone: any) => (
                     <button
                       key={zone.regionCode}
                       type="button"
                       onClick={() => onZoneSelect?.(zone)}
-                      className="group relative inline-flex items-center gap-2 overflow-hidden rounded-full border border-sky-400/70 bg-white/70 px-4 py-2.5 text-sm font-bold text-neutral-800 shadow-[0_2px_12px_rgba(14,165,233,0.15)] backdrop-blur-xl transition-all duration-300 hover:-translate-y-0.5 hover:border-sky-500 hover:shadow-[0_8px_24px_rgba(14,165,233,0.2)] active:scale-[0.97]"
+                      className="group relative flex w-full items-center justify-between gap-2 overflow-hidden rounded-full border border-sky-400/70 bg-white/70 px-4 py-2.5 text-sm font-bold text-neutral-800 shadow-[0_2px_12px_rgba(14,165,233,0.15)] backdrop-blur-xl transition-all duration-300 hover:-translate-y-0.5 hover:border-sky-500 hover:shadow-[0_8px_24px_rgba(14,165,233,0.2)] active:scale-[0.97]"
                     >
                       <span className="relative z-10 flex items-center gap-1.5">
                         <svg className="h-4 w-4 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
