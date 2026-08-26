@@ -140,7 +140,7 @@ export async function registerOrderRoutes(fastify: FastifyInstance): Promise<voi
       if (promo.maxUses != null && promo.usesCount >= promo.maxUses) {
         return reply.status(400).send({
           success: false,
-          error: { code: 'PROMO_CODE_EXHAUSTED', message: 'El código promocional ya no está disponible.' },
+          error: { code: 'PROMO_CODE_EXHAUSTED', message: 'Este código promocional se ha agotado (límite de usos alcanzado).' },
         });
       }
       if (promo.minOrderAmount != null && subtotal < promo.minOrderAmount) {

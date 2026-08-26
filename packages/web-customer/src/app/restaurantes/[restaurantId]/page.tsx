@@ -2856,7 +2856,12 @@ function StockBadge({ avail }: { avail: ReturnType<typeof getProductAvailability
         setOrderCreatedPulse(false);
       }, 1600);
     } catch (requestError) {
-      if (requestError instanceof ApiRequestError && ['OUT_OF_DELIVERY_RANGE', 'CUSTOMER_TOO_FAR_FROM_DELIVERY_ADDRESS', 'CUSTOMER_LOCATION_REQUIRED', 'CUSTOMER_LOCATION_INVALID', 'CUSTOMER_LOCATION_LOW_ACCURACY'].includes(requestError.code || '')) {
+      if (requestError instanceof ApiRequestError && requestError.code === 'PROMO_CODE_EXHAUSTED') {
+        setPromoCodeState('invalid');
+        setPromoCodeInfo(null);
+        setCheckoutForm((prev) => ({ ...prev, promoCode: '' }));
+        showCouponFeedback('error', 'Cupón agotado', requestError.message);
+      } else if (requestError instanceof ApiRequestError && ['OUT_OF_DELIVERY_RANGE', 'CUSTOMER_TOO_FAR_FROM_DELIVERY_ADDRESS', 'CUSTOMER_LOCATION_REQUIRED', 'CUSTOMER_LOCATION_INVALID', 'CUSTOMER_LOCATION_LOW_ACCURACY'].includes(requestError.code || '')) {
         setDeliveryErrorModal(requestError.message);
       } else {
         setError(requestError instanceof Error ? requestError.message : 'No se pudo crear el pedido.');

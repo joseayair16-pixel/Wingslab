@@ -683,6 +683,7 @@ export async function createOrderForCustomer({
   // ===== Promociones (acumulativo: multi-compra → cupón → % por monto mínimo → envío gratis) =====
   let promoDiscountAmount = 0;
   let appliedPromoCode: string | null = null;
+  let appliedPromoMaxUses: number | null = null;
   let freeDeliveryGranted = false;
   const discountBreakdown: Record<string, number | string> = {};
   if (multiBuySaving > 0) discountBreakdown.multiBuy = multiBuySaving;
@@ -706,7 +707,7 @@ export async function createOrderForCustomer({
       throw new AppError(400, 'INVALID_PROMO_CODE', 'El código promocional no es válido.');
     }
     if (promoCode.maxUses != null && promoCode.usesCount >= promoCode.maxUses) {
-      throw new AppError(400, 'PROMO_CODE_EXHAUSTED', 'El código promocional ya no está disponible.');
+      throw new AppError(400, 'PROMO_CODE_EXHAUSTED', 'Este código promocional se ha agotado (límite de usos alcanzado).');
     }
     if (promoCode.minOrderAmount != null && subtotal < promoCode.minOrderAmount) {
       throw new AppError(
@@ -725,6 +726,7 @@ export async function createOrderForCustomer({
       freeDeliveryGranted = true;
     }
     appliedPromoCode = promoCode.code;
+    appliedPromoMaxUses = promoCode.maxUses;
     discountBreakdown.coupon = {
       type: promoCode.type,
       value: promoCode.value,
@@ -1036,10 +1038,17 @@ export async function createOrderForCustomer({
       });
 
       if (appliedPromoCode) {
-        await tx.promoCode.updateMany({
-          where: { restaurantId: restaurant.id, code: appliedPromoCode },
+        const promoIncrement = await tx.promoCode.updateMany({
+          where: {
+            restaurantId: restaurant.id,
+            code: appliedPromoCode,
+            OR: [{ maxUses: null }, { usesCount: { lt: appliedPromoMaxUses ?? 0 } }],
+          },
           data: { usesCount: { increment: 1 } },
         });
+        if (promoIncrement.count === 0) {
+          throw new AppError(400, 'PROMO_CODE_EXHAUSTED', 'Este código promocional se ha agotado (límite de usos alcanzado).');
+        }
       }
 
       logger.info('Order created', {
