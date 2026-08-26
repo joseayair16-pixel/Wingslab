@@ -2860,7 +2860,7 @@ function StockBadge({ avail }: { avail: ReturnType<typeof getProductAvailability
         setPromoCodeState('invalid');
         setPromoCodeInfo(null);
         setCheckoutForm((prev) => ({ ...prev, promoCode: '' }));
-        showCouponFeedback('error', 'Cupón agotado', requestError.message);
+        setError(requestError.message);
       } else if (requestError instanceof ApiRequestError && ['OUT_OF_DELIVERY_RANGE', 'CUSTOMER_TOO_FAR_FROM_DELIVERY_ADDRESS', 'CUSTOMER_LOCATION_REQUIRED', 'CUSTOMER_LOCATION_INVALID', 'CUSTOMER_LOCATION_LOW_ACCURACY'].includes(requestError.code || '')) {
         setDeliveryErrorModal(requestError.message);
       } else {
