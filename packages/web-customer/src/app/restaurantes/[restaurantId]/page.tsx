@@ -1,5 +1,5 @@
 'use client';
-import { AlertTriangle, ArrowLeft, Banknote, Bell, BellOff, Bike, Check, ChevronLeft, ChevronRight, ChevronUp, CircleCheck, CirclePlus, ClipboardCheck, Clock, Copy, DollarSign, Home, Landmark, Loader2, Mail, Map, MapPin, MessageCircle, Minus, Plus, RefreshCw, Search, ShoppingBag, Store, Tag, Ticket, Trash2, Upload, User, X } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, Banknote, Bell, BellOff, Bike, Check, ChevronLeft, ChevronRight, ChevronUp, CircleCheck, CirclePlus, ClipboardCheck, Clock, Copy, DollarSign, Home, Landmark, Loader2, Mail, Map, MapPin, MessageCircle, Minus, Plus, RefreshCw, Search, ShoppingBag, Store, Tag, Ticket,   Trash2, Upload, User, X, ZoomIn } from 'lucide-react';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
@@ -13,6 +13,7 @@ import { useForegroundPolling } from '../../../hooks/useForegroundPolling';
 import { SaDelLoader } from '../../../components/SaDelLoader';
 import { SaDelLogo } from '../../../components/SaDelLogo';
 import CartDrawer from '../../../components/CartDrawer';
+import ImageZoomLightbox from '../../../components/ImageZoomLightbox';
 import { createPlacesSource } from '../../../lib/places';
 type PaymentMethod = 'CASH' | 'TRANSFER';
 type OrderStatus =
@@ -846,6 +847,9 @@ export default function RestaurantPage({
   const [customizingWeight, setCustomizingWeight] = useState(0);
   const [customizingInstructions, setCustomizingInstructions] = useState('');
 
+  const [previewLightboxOpen, setPreviewLightboxOpen] = useState(false);
+  const [customizingLightboxOpen, setCustomizingLightboxOpen] = useState(false);
+
   const openProductPreview = (product: PublicRestaurantDetail['categories'][number]['products'][number]) => {
     const imgs = product.images?.length ? product.images : product.image ? [product.image] : [];
     setPreviewProduct({
@@ -863,6 +867,7 @@ export default function RestaurantPage({
       optionGroups: product.optionGroups,
     });
     setPreviewIndex(0);
+    setPreviewLightboxOpen(false);
   };
 
   const handleCopyText = (text: string | undefined | null, field: 'account' | 'beneficiary' | 'amount') => {
@@ -3164,20 +3169,44 @@ function StockBadge({ avail }: { avail: ReturnType<typeof getProductAvailability
               {/* Imagen y Detalles del Producto */}
               <div className="overflow-y-auto flex-1">
                 {customizingProduct.image ? (
-                  <div className="relative h-64 w-full bg-neutral-100 dark:bg-neutral-950 overflow-hidden">
-                    <img src={customizingProduct.image} className="w-full h-full object-cover" alt={customizingProduct.name} loading="lazy" decoding="async" />
+                  <div className="relative h-64 w-full overflow-hidden bg-neutral-100 dark:bg-neutral-950">
+                    <img
+                      src={customizingProduct.image}
+                      className="h-full w-full cursor-zoom-in object-cover"
+                      alt={customizingProduct.name}
+                      loading="lazy"
+                      decoding="async"
+                      onClick={() => setCustomizingLightboxOpen(true)}
+                    />
                     <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/20 to-transparent"></div>
                     <div className="absolute bottom-6 left-6 right-6 text-white">
                       <h3 className="text-2xl font-bold tracking-[-0.03em]">{customizingProduct.name}</h3>
-                      <p className="mt-1 text-sm text-neutral-200 leading-relaxed max-w-md">{customizingProduct.description}</p>
+                      <p className="mt-1 text-sm text-neutral-200 leading-relaxed max-w-md whitespace-pre-wrap break-words">{customizingProduct.description}</p>
                     </div>
+                    <button
+                      type="button"
+                      onClick={() => setCustomizingLightboxOpen(true)}
+                      aria-label="Ampliar imagen"
+                      className="absolute bottom-4 right-4 z-10 flex h-8 w-8 items-center justify-center rounded-full bg-black/45 text-white backdrop-blur-sm transition hover:bg-black/60"
+                    >
+                      <ZoomIn className="h-4 w-4" />
+                    </button>
                   </div>
                 ) : (
                   <div className="p-6 pb-4 border-b border-black/5 dark:border-zinc-800 dark:bg-neutral-950">
                     <h3 className="text-2xl font-bold text-neutral-950 dark:text-white tracking-[-0.03em]">{customizingProduct.name}</h3>
-                    <p className="mt-1 text-sm text-neutral-500 dark:text-neutral-400 leading-relaxed max-w-md">{customizingProduct.description}</p>
+                    <p className="mt-1 text-sm text-neutral-500 dark:text-neutral-400 leading-relaxed max-w-md whitespace-pre-wrap break-words">{customizingProduct.description}</p>
                   </div>
                 )}
+
+                <ImageZoomLightbox
+                  open={customizingLightboxOpen && !!customizingProduct?.image}
+                  images={customizingProduct?.image ? [customizingProduct.image] : []}
+                  index={0}
+                  onIndexChange={() => {}}
+                  name={customizingProduct?.name ?? ''}
+                  onClose={() => setCustomizingLightboxOpen(false)}
+                />
 
                 {/* Grupos de Modificadores */}
                 <div className="divide-y divide-black/5 dark:divide-zinc-800">
@@ -6321,12 +6350,22 @@ function StockBadge({ avail }: { avail: ReturnType<typeof getProductAvailability
             {/* Image section */}
             <div className="relative flex w-full items-center justify-center bg-neutral-50 sm:w-[55%] sm:min-h-[500px] dark:bg-neutral-800/40">
               {previewProduct.images.length > 0 ? (
-                <img
-                  src={previewProduct.images[previewIndex]}
-                  alt={previewProduct.name}
-                  loading="lazy" decoding="async"
-                  className="h-64 w-full object-contain p-6 sm:h-full sm:max-h-[500px] sm:p-8"
-                />
+                <button
+                  type="button"
+                  onClick={() => setPreviewLightboxOpen(true)}
+                  aria-label="Ampliar imagen"
+                  className="relative block w-full cursor-zoom-in appearance-none border-0 bg-transparent p-0 sm:h-full"
+                >
+                  <img
+                    src={previewProduct.images[previewIndex]}
+                    alt={previewProduct.name}
+                    loading="lazy" decoding="async"
+                    className="h-64 w-full object-contain p-6 sm:h-full sm:max-h-[500px] sm:p-8"
+                  />
+                  <span className="pointer-events-none absolute bottom-4 right-4 flex items-center gap-1 rounded-full bg-black/55 px-2.5 py-1 text-[11px] font-semibold text-white opacity-80 backdrop-blur-sm transition hover:opacity-100 dark:bg-white/20">
+                    <ZoomIn className="h-3.5 w-3.5" /> Ampliar
+                  </span>
+                </button>
               ) : (
                 <div className="flex h-64 w-full flex-col items-center justify-center gap-3 text-neutral-300 sm:h-full dark:text-zinc-600">
                   <svg className="h-16 w-16" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.2">
@@ -6375,12 +6414,21 @@ function StockBadge({ avail }: { avail: ReturnType<typeof getProductAvailability
               )}
             </div>
 
+            <ImageZoomLightbox
+              open={previewLightboxOpen && !!previewProduct}
+              images={previewProduct?.images ?? []}
+              index={previewIndex}
+              onIndexChange={setPreviewIndex}
+              name={previewProduct?.name ?? ''}
+              onClose={() => setPreviewLightboxOpen(false)}
+            />
+
             {/* Details section */}
             <div className="flex w-full flex-col justify-between p-5 sm:w-[45%] sm:p-7">
               <div className="overflow-y-auto">
                 <h2 className="text-xl font-bold leading-tight text-neutral-900 sm:text-2xl dark:text-white">{previewProduct.name}</h2>
                 {previewProduct.description && (
-                  <p className="mt-3 text-sm leading-relaxed text-neutral-600 dark:text-zinc-300">{previewProduct.description}</p>
+                  <p className="mt-3 text-sm leading-relaxed text-neutral-600 dark:text-zinc-300 whitespace-pre-wrap break-words">{previewProduct.description}</p>
                 )}
                 <div className="mt-5">
                   {previewProduct.sellBy === 'WEIGHT' ? (
