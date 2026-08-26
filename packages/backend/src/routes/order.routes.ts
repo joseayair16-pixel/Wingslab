@@ -7,6 +7,7 @@ import { sendAppError } from '../errors/http';
 import { authenticate, authorize, getAuthenticatedUser } from '../middleware/auth';
 import { customerOrderDetailSelect, customerOrderListSelect } from '../services/order-selects';
 import { emitNotification } from '../services/socket.service';
+import { restoreStockForOrder } from '../services/stock.service';
 import { getOrCreateRequestContext } from '../utils/request-context';
 import { createOrderForCustomer } from '../services/order.service';
 import { sendPushNotification } from '../services/notification.service';
@@ -715,6 +716,9 @@ export async function registerOrderRoutes(fastify: FastifyInstance): Promise<voi
         });
 
         await createTransferRefundTicket(prisma, order.id, cancellationReason);
+
+        // Liberar el stock reservado al cancelar (productos trackeados por unidad).
+        await restoreStockForOrder(prisma, order.id);
 
         // Notify restaurant via socket
         emitNotification(

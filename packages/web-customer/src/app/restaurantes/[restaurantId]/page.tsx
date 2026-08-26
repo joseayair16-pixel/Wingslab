@@ -3,7 +3,7 @@ import { AlertTriangle, ArrowLeft, Banknote, Bell, BellOff, Bike, Check, Chevron
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { AuthUser, clearStoredSession, readStoredSession, requestJson, submitReview, uploadMediaAsset, convertImageFileToDataUrl, getOrderStatusLabel, isRestaurant, ApiRequestError, isAuthRequestError, setGlobalSessionExpiredHandler, forceSessionExpired } from '@sadel/shared';
+import { AuthUser, clearStoredSession, readStoredSession, requestJson, submitReview, uploadMediaAsset, convertImageFileToDataUrl, getOrderStatusLabel, isRestaurant, ApiRequestError, isAuthRequestError, setGlobalSessionExpiredHandler, forceSessionExpired, setDefaultRefreshConfig } from '@sadel/shared';
 import { io } from 'socket.io-client';
 import { AuthModal } from '../../../components/AuthModal';
 import { CompactActiveOrderBanner, computeDelayState, formatEstimatedArrivalMinutes, formatOverdueMinutes } from '../../../components/CompactActiveOrderBanner';
@@ -288,6 +288,22 @@ type TransientNotice = {
 const defaultApiBase = '/api';
 const storageKey = 'sadel.customer';
 const profileAddressStorageKey = `${storageKey}.profile-address`;
+
+// Wire transparent access-token refresh for every requestJson call in this app.
+if (typeof window !== 'undefined') {
+  setDefaultRefreshConfig({
+    refreshToken: () => readStoredSession(storageKey).refreshToken,
+    onRefreshed: (token, rt) => {
+      try {
+        window.localStorage.setItem(`${storageKey}.token`, token);
+        if (rt) window.localStorage.setItem(`${storageKey}.refreshToken`, rt);
+      } catch {
+        // ignore storage failures
+      }
+    },
+    onRefreshFailed: () => forceSessionExpired(),
+  });
+}
 const persistentNoticeStorageKey = `${storageKey}.persistent-notice`;
 
 const defaultCheckoutForm: CheckoutForm = {
@@ -4509,6 +4525,15 @@ function StockBadge({ avail }: { avail: ReturnType<typeof getProductAvailability
                   )}
 
                   {/* Buttons Row */}
+                  {error && token && (
+                    <div className="mb-3.5 flex justify-center animate-in slide-in-from-bottom-2 fade-in duration-300">
+                      <div className="flex items-center gap-2 rounded-2xl border border-rose-200/60 bg-rose-50/80 px-3.5 py-2 text-[12px] font-medium text-rose-600 shadow-sm backdrop-blur-md">
+                        <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-rose-500/20"><AlertTriangle className="h-3 w-3 text-rose-500" strokeWidth={1.5} /></span>
+                        <span className="text-left">{error}</span>
+                      </div>
+                    </div>
+                  )}
+
                   <div className="flex items-center gap-3">
                     <button
                       type="button"

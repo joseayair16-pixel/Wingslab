@@ -168,7 +168,12 @@ export default async function RestaurantLayout({
       {restaurant && (
         <script
           type="application/ld+json"
-          dangerouslySetInnerHTML={{ __html: JSON.stringify(buildRestaurantJsonLd(restaurant)) }}
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify(buildRestaurantJsonLd(restaurant))
+              .replace(/</g, '\\u003c')
+              .replace(/>/g, '\\u003e')
+              .replace(/&/g, '\\u0026'),
+          }}
         />
       )}
       <style>{`:root {

@@ -3,6 +3,7 @@ import { FastifyInstance } from 'fastify';
 import { prisma } from '../config/database';
 import { emitNotification } from '../services/socket.service';
 import { createTransferRefundTicket } from '../services/refund-ticket.service';
+import { restoreStockForOrder } from '../services/stock.service';
 import { logger } from '../utils/logger';
 
 const OWN_DELIVERY_CANCEL_HOURS = 24;
@@ -58,6 +59,9 @@ export function startOwnDeliveryTimeoutJob(fastify: FastifyInstance) {
           });
 
           await createTransferRefundTicket(prisma, order.id, 'Pedido no entregado por reparto propio.');
+
+          // Liberar el stock reservado al cancelar (productos trackeados por unidad).
+          await restoreStockForOrder(prisma, order.id);
 
           emitNotification(fastify.io, order.customer.userId, 'CUSTOMER', 'order:cancelled', {
             orderId: order.id,

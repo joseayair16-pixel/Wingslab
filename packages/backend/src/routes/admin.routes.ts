@@ -2338,6 +2338,16 @@ export async function registerAdminRoutes(fastify: FastifyInstance): Promise<voi
         });
       }
 
+      if (settlement.status === 'PAID') {
+        return reply.status(409).send({
+          success: false,
+          error: {
+            code: 'SETTLEMENT_ALREADY_PAID',
+            message: 'No se puede rechazar un corte que ya fue pagado.',
+          },
+        });
+      }
+
       const updatedSettlement = await prisma.restaurantBillingSettlement.update({
         where: { id: params.data.id },
         data: {
@@ -2716,6 +2726,33 @@ export async function registerAdminRoutes(fastify: FastifyInstance): Promise<voi
           error: {
             code: 'INVALID_PAYLOAD',
             message: 'Datos inválidos.',
+          },
+        });
+      }
+
+      const currentSettlement = await prisma.restaurantBillingSettlement.findUnique({
+        where: { id: params.data.id },
+      });
+
+      if (!currentSettlement) {
+        return reply.status(404).send({
+          success: false,
+          error: {
+            code: 'SETTLEMENT_NOT_FOUND',
+            message: 'No se encontro el corte.',
+          },
+        });
+      }
+
+      // Un corte ya pagado representa dinero transferido. No se permite
+      // revertirlo a un estado editable (PENDING/IN_REVIEW/OVERDUE), pues
+      // volvería a ser facturable y generaría doble cobro.
+      if (currentSettlement.status === 'PAID' && body.data.status !== 'PAID') {
+        return reply.status(409).send({
+          success: false,
+          error: {
+            code: 'SETTLEMENT_ALREADY_PAID',
+            message: 'No se puede cambiar el estado de un corte que ya fue pagado.',
           },
         });
       }

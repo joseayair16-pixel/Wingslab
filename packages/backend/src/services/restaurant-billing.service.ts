@@ -109,10 +109,10 @@ export async function buildRestaurantBillingSummary(seed: BillingSeed, cutEnd?: 
     where: {
       restaurantId: seed.id,
       status: { in: ['DELIVERED', 'COMPLETED'] },
-      createdAt: {
-        gte: debtStart,
-        lte: periodEnd,
-      },
+      OR: [
+        { deliveredAt: { gte: debtStart, lte: periodEnd } },
+        { completedAt: { gte: debtStart, lte: periodEnd } },
+      ],
     },
     _sum: {
       whatsappFee: true,
@@ -129,10 +129,10 @@ export async function buildRestaurantBillingSummary(seed: BillingSeed, cutEnd?: 
     where: {
       restaurantId: seed.id,
       status: { in: ['DELIVERED', 'COMPLETED'] },
-      createdAt: {
-        gte: debtStart,
-        lte: periodEnd,
-      },
+      OR: [
+        { deliveredAt: { gte: debtStart, lte: periodEnd } },
+        { completedAt: { gte: debtStart, lte: periodEnd } },
+      ],
     },
     select: {
       restaurantId: true,

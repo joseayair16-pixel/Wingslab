@@ -274,6 +274,25 @@ function getCacheKey(apiBase: string, path: string): string {
   return `${apiBase}${path}`;
 }
 
+export type RefreshConfig = {
+  refreshToken: string | (() => string | null | undefined);
+  onRefreshed: (accessToken: string, newRefreshToken: string) => void;
+  onRefreshFailed: () => void;
+};
+
+// Optional app-wide default used when an individual call doesn't supply its own
+// refreshConfig (e.g. the customer app wires this once at startup so every
+// requestJson call can transparently recover from an expired access token).
+let defaultRefreshConfig: RefreshConfig | null = null;
+
+export function setDefaultRefreshConfig(config: RefreshConfig | null): void {
+  defaultRefreshConfig = config;
+}
+
+function resolveRefreshToken(config: RefreshConfig): string | null | undefined {
+  return typeof config.refreshToken === 'function' ? config.refreshToken() : config.refreshToken;
+}
+
 export async function requestJson<T>(params: {
   apiBase: string;
   path: string;
@@ -285,11 +304,7 @@ export async function requestJson<T>(params: {
     attempts?: number;
     backoffMs?: number;
   };
-  refreshConfig?: {
-    refreshToken: string;
-    onRefreshed: (accessToken: string, newRefreshToken: string) => void;
-    onRefreshFailed: () => void;
-  };
+  refreshConfig?: RefreshConfig;
 }): Promise<T> {
   const attempts = Math.max(0, params.retry?.attempts ?? 2);
   const backoffMs = Math.max(0, params.retry?.backoffMs || 350);
@@ -327,7 +342,8 @@ export async function requestJson<T>(params: {
         clearTimeout(timer);
       }
 
-      if (!response.ok && response.status === 401 && params.refreshConfig && attempt === 0) {
+      const refreshConfig = params.refreshConfig ?? defaultRefreshConfig;
+      if (!response.ok && response.status === 401 && refreshConfig && attempt === 0) {
         try {
           const refreshController = new AbortController();
           const refreshTimer = setTimeout(() => refreshController.abort(), timeoutMs);
@@ -336,7 +352,7 @@ export async function requestJson<T>(params: {
             refreshRes = await fetch(`${params.apiBase}/auth/refresh`, {
               method: 'POST',
               headers: { 'content-type': 'application/json' },
-              body: JSON.stringify({ refreshToken: params.refreshConfig.refreshToken }),
+              body: JSON.stringify({ refreshToken: resolveRefreshToken(refreshConfig) }),
               signal: refreshController.signal,
             });
           } finally {
@@ -346,7 +362,7 @@ export async function requestJson<T>(params: {
           if (refreshRes.ok) {
             const refreshPayload = await refreshRes.json();
             if (refreshPayload.success && refreshPayload.data) {
-              params.refreshConfig.onRefreshed(
+              refreshConfig.onRefreshed(
                 refreshPayload.data.token,
                 refreshPayload.data.refreshToken,
               );
@@ -357,7 +373,7 @@ export async function requestJson<T>(params: {
         } catch {
           // Refresh failed — fall through to original error
         }
-        params.refreshConfig.onRefreshFailed();
+        refreshConfig.onRefreshFailed();
       }
 
       const rawBody = await response.text();
@@ -371,6 +387,20 @@ export async function requestJson<T>(params: {
         const fallback = params.fallbackMessage || 'No se pudo completar la solicitud.';
         const classification = classifyResponseError(response.status);
 
+        throw new ApiRequestError({
+          message: getApiErrorMessage(payload, fallback),
+          code: getApiErrorCode(payload),
+          status: response.status,
+          kind: classification.kind,
+          isTransient: classification.isTransient,
+        });
+      }
+
+      // A 2xx can still carry a logical failure (success:false). Treat it as an
+      // error so callers don't silently treat a failed request as success.
+      if (payload && (payload as { success?: boolean }).success === false) {
+        const fallback = params.fallbackMessage || 'No se pudo completar la solicitud.';
+        const classification = classifyResponseError(response.status);
         throw new ApiRequestError({
           message: getApiErrorMessage(payload, fallback),
           code: getApiErrorCode(payload),
