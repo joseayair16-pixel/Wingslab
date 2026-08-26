@@ -6462,7 +6462,7 @@ function StockBadge({ avail }: { avail: ReturnType<typeof getProductAvailability
                   )}
                 </div>
               </div>
-              <div className="shrink-0 border-t border-neutral-100 p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] dark:border-zinc-800 sm:pb-7">
+              <div className="flex shrink-0 items-center gap-3 border-t border-neutral-100 p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] dark:border-zinc-800 sm:pb-7">
                 {previewProduct.optionGroups?.length ? (
                   <button
                     type="button"
