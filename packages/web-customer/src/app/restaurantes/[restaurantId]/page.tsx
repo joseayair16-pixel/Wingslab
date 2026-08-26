@@ -3153,9 +3153,12 @@ function StockBadge({ avail }: { avail: ReturnType<typeof getProductAvailability
 
         {/* Modal de Personalización de Producto (Uber Eats / Rappi Style) */}
         {customizingProduct && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-md px-4 py-6" onClick={() => setCustomizingProduct(null)}>
-            <div className="relative bg-white dark:bg-neutral-900 rounded-[32px] overflow-hidden shadow-2xl flex flex-col w-full max-w-2xl max-h-[90vh] border border-black/5 dark:border-zinc-800 animate-fade-in" onClick={(e) => e.stopPropagation()}>
+          <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 backdrop-blur-md px-0 py-0 sm:items-center sm:px-4 sm:py-6" onClick={() => setCustomizingProduct(null)}>
+                <div className="relative bg-white dark:bg-neutral-900 rounded-t-3xl sm:rounded-[32px] overflow-hidden shadow-2xl flex flex-col w-full max-w-2xl max-h-[92dvh] sm:max-h-[90vh] border border-black/5 dark:border-zinc-800 animate-fade-in" onClick={(e) => e.stopPropagation()}>
               
+              {/* Drag handle (mobile bottom sheet) */}
+              <div className="mx-auto mt-2 h-1.5 w-10 shrink-0 rounded-full bg-neutral-300 dark:bg-zinc-600 sm:hidden" />
+
               {/* Botón de Cerrar */}
               <button
                 type="button"
@@ -3181,7 +3184,6 @@ function StockBadge({ avail }: { avail: ReturnType<typeof getProductAvailability
                     <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/20 to-transparent"></div>
                     <div className="absolute bottom-6 left-6 right-6 text-white">
                       <h3 className="text-2xl font-bold tracking-[-0.03em]">{customizingProduct.name}</h3>
-                      <p className="mt-1 text-sm text-neutral-200 leading-relaxed max-w-md whitespace-pre-wrap break-words">{customizingProduct.description}</p>
                     </div>
                     <button
                       type="button"
@@ -3195,7 +3197,6 @@ function StockBadge({ avail }: { avail: ReturnType<typeof getProductAvailability
                 ) : (
                   <div className="p-6 pb-4 border-b border-black/5 dark:border-zinc-800 dark:bg-neutral-950">
                     <h3 className="text-2xl font-bold text-neutral-950 dark:text-white tracking-[-0.03em]">{customizingProduct.name}</h3>
-                    <p className="mt-1 text-sm text-neutral-500 dark:text-neutral-400 leading-relaxed max-w-md whitespace-pre-wrap break-words">{customizingProduct.description}</p>
                   </div>
                 )}
 
@@ -6331,13 +6332,16 @@ function StockBadge({ avail }: { avail: ReturnType<typeof getProductAvailability
       {/* Quick View Modal for Stores */}
       {previewProduct && (
         <div
-          className="animate-overlay-fade fixed inset-0 z-[60] flex items-center justify-center bg-black/80 backdrop-blur-sm px-3 py-4 sm:px-6 sm:py-8"
+          className="animate-overlay-fade fixed inset-0 z-[60] flex items-end justify-center bg-black/80 backdrop-blur-sm px-0 py-0 sm:items-center sm:px-6 sm:py-8"
           onClick={() => setPreviewProduct(null)}
         >
           <div
-            className="animate-modal-pop relative flex w-full max-w-4xl flex-col overflow-hidden rounded-3xl bg-white shadow-2xl ring-1 ring-black/5 sm:flex-row sm:max-h-[85vh] dark:bg-neutral-900 dark:ring-white/10"
+            className="animate-modal-pop relative flex w-full max-w-4xl flex-col overflow-hidden rounded-t-3xl bg-white shadow-2xl ring-1 ring-black/5 max-h-[92dvh] sm:flex-row sm:max-h-[90vh] sm:rounded-3xl dark:bg-neutral-900 dark:ring-white/10"
             onClick={(e) => e.stopPropagation()}
           >
+            {/* Drag handle (mobile bottom sheet) */}
+            <div className="mx-auto mt-2 h-1.5 w-10 shrink-0 rounded-full bg-neutral-300 dark:bg-zinc-600 sm:hidden" />
+
             {/* Close button */}
             <button
               type="button"
@@ -6348,26 +6352,26 @@ function StockBadge({ avail }: { avail: ReturnType<typeof getProductAvailability
             </button>
 
             {/* Image section */}
-            <div className="relative flex w-full items-center justify-center bg-neutral-50 sm:w-[55%] sm:min-h-[500px] dark:bg-neutral-800/40">
+            <div className="relative flex w-full shrink-0 items-center justify-center bg-neutral-50 h-56 sm:h-full sm:w-[55%] sm:min-h-[500px] dark:bg-neutral-800/40">
               {previewProduct.images.length > 0 ? (
                 <button
                   type="button"
                   onClick={() => setPreviewLightboxOpen(true)}
                   aria-label="Ampliar imagen"
-                  className="relative block w-full cursor-zoom-in appearance-none border-0 bg-transparent p-0 sm:h-full"
+                  className="relative block h-56 w-full cursor-zoom-in appearance-none border-0 bg-transparent p-0 sm:h-full"
                 >
                   <img
                     src={previewProduct.images[previewIndex]}
                     alt={previewProduct.name}
                     loading="lazy" decoding="async"
-                    className="h-64 w-full object-contain p-6 sm:h-full sm:max-h-[500px] sm:p-8"
+                    className="h-full w-full object-contain p-4 sm:p-8"
                   />
                   <span className="pointer-events-none absolute bottom-4 right-4 flex items-center gap-1 rounded-full bg-black/55 px-2.5 py-1 text-[11px] font-semibold text-white opacity-80 backdrop-blur-sm transition hover:opacity-100 dark:bg-white/20">
                     <ZoomIn className="h-3.5 w-3.5" /> Ampliar
                   </span>
                 </button>
               ) : (
-                <div className="flex h-64 w-full flex-col items-center justify-center gap-3 text-neutral-300 sm:h-full dark:text-zinc-600">
+                <div className="flex h-56 w-full flex-col items-center justify-center gap-3 text-neutral-300 sm:h-full dark:text-zinc-600">
                   <svg className="h-16 w-16" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.2">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 001.5-1.5V6a1.5 1.5 0 00-1.5-1.5H3.75A1.5 1.5 0 002.25 6v12a1.5 1.5 0 001.5 1.5zm10.5-11.25h.008v.008h-.008V8.25zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z" />
                   </svg>
@@ -6380,7 +6384,7 @@ function StockBadge({ avail }: { avail: ReturnType<typeof getProductAvailability
                 </div>
               )}
               {getMultiBuyInfo(previewProduct).isMultiBuy && (
-                <div className="absolute right-4 top-4 z-10 rounded-full bg-emerald-600/90 px-3 py-1 text-[11px] font-bold text-white shadow-lg backdrop-blur-sm">
+                <div className="absolute left-4 top-12 z-10 rounded-full bg-emerald-600/90 px-3 py-1 text-[11px] font-bold text-white shadow-lg backdrop-blur-sm">
                   {getMultiBuyInfo(previewProduct).buy}x{getMultiBuyInfo(previewProduct).pay}
                 </div>
               )}
@@ -6424,8 +6428,8 @@ function StockBadge({ avail }: { avail: ReturnType<typeof getProductAvailability
             />
 
             {/* Details section */}
-            <div className="flex w-full flex-col justify-between p-5 sm:w-[45%] sm:p-7">
-              <div className="overflow-y-auto">
+            <div className="flex w-full min-h-0 flex-1 flex-col sm:h-full sm:w-[45%] sm:flex-none">
+              <div className="min-h-0 flex-1 overflow-y-auto p-5 sm:p-7">
                 <h2 className="text-xl font-bold leading-tight text-neutral-900 sm:text-2xl dark:text-white">{previewProduct.name}</h2>
                 {previewProduct.description && (
                   <p className="mt-3 text-sm leading-relaxed text-neutral-600 dark:text-zinc-300 whitespace-pre-wrap break-words">{previewProduct.description}</p>
@@ -6458,7 +6462,7 @@ function StockBadge({ avail }: { avail: ReturnType<typeof getProductAvailability
                   )}
                 </div>
               </div>
-              <div className="mt-6 flex items-center gap-3 border-t border-neutral-100 pt-5 dark:border-zinc-800">
+              <div className="shrink-0 border-t border-neutral-100 p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] dark:border-zinc-800 sm:pb-7">
                 {previewProduct.optionGroups?.length ? (
                   <button
                     type="button"
