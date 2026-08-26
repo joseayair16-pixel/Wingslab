@@ -5580,6 +5580,7 @@ export default function Home() {
                         type="password"
                         value={editPassword}
                         onChange={(e) => setEditPassword(e.target.value)}
+                        autoComplete="current-password"
                         className="mt-1.5 w-full rounded-2xl border border-black/10 bg-neutral-50 px-4 py-3 text-sm focus:border-accent focus:ring-1 focus:ring-accent focus:outline-none"
                         placeholder="Necesaria si cambias tu teléfono"
                       />

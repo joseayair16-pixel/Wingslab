@@ -536,6 +536,7 @@ export const AuthModal = memo(function AuthModal({ isOpen, onClose, onSuccess, a
                         onChange={setPassword}
                         placeholder="Ingresa tu contraseña"
                         type="password"
+                        autoComplete="current-password"
                       />
                       
                       <button
@@ -624,6 +625,7 @@ export const AuthModal = memo(function AuthModal({ isOpen, onClose, onSuccess, a
                             onChange={setPassword}
                             placeholder="Al menos 6 caracteres"
                             type="password"
+                            autoComplete="new-password"
                           />
                           <Field
                             label="Confirmar contraseña"
@@ -631,6 +633,7 @@ export const AuthModal = memo(function AuthModal({ isOpen, onClose, onSuccess, a
                             onChange={setConfirmPassword}
                             placeholder="Repite tu contraseña"
                             type="password"
+                            autoComplete="new-password"
                           />
                           {password && confirmPassword && password !== confirmPassword && (
                             <p className="text-[11px] font-semibold text-rose-500 px-1">Las contraseñas no coinciden.</p>
@@ -727,6 +730,7 @@ export const AuthModal = memo(function AuthModal({ isOpen, onClose, onSuccess, a
                             onChange={setPassword}
                             placeholder="Al menos 6 caracteres"
                             type="password"
+                            autoComplete="new-password"
                           />
                           <Field
                             label="Confirmar contraseña"
@@ -734,6 +738,7 @@ export const AuthModal = memo(function AuthModal({ isOpen, onClose, onSuccess, a
                             onChange={setConfirmPassword}
                             placeholder="Repite tu contraseña"
                             type="password"
+                            autoComplete="new-password"
                           />
                           {password && confirmPassword && password !== confirmPassword && (
                             <p className="text-[11px] font-semibold text-rose-500 px-1">Las contraseñas no coinciden.</p>
@@ -855,6 +860,7 @@ function Field({
   placeholder,
   type = 'text',
   mask,
+  autoComplete,
 }: {
   label: string;
   value: string;
@@ -862,6 +868,7 @@ function Field({
   placeholder: string;
   type?: string;
   mask?: (value: string) => string;
+  autoComplete?: string;
 }) {
   const [showPassword, setShowPassword] = useState(false);
   const isPassword = type === 'password';
@@ -871,7 +878,9 @@ function Field({
       ? { inputMode: 'numeric' as const, autoComplete: 'tel' as const }
       : type === 'email'
         ? { inputMode: 'email' as const, autoComplete: 'email' as const }
-        : {};
+        : isPassword
+          ? { autoComplete: autoComplete ?? 'current-password' }
+          : {};
 
   return (
     <label className="grid gap-1.5 text-xs text-neutral-600 font-medium">
