@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { Banknote } from 'lucide-react';
 
 interface IncomingOrderModalProps {
   order: any;
@@ -94,21 +95,21 @@ export function IncomingOrderModal({
 
   return (
     <div className="fixed inset-0 z-[9999] flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm p-4 pb-8">
-      <div className="relative w-full max-w-sm rounded-[32px] bg-white shadow-2xl overflow-hidden dark:bg-zinc-950 animate-in slide-in-from-bottom-10 sm:zoom-in-95 duration-300">
+      <div className="relative w-full max-w-sm rounded-[32px] bg-surface shadow-2xl overflow-hidden dark:bg-zinc-950 animate-in slide-in-from-bottom-10 sm:zoom-in-95 duration-300">
         
         {/* Header estético (sin botón gigante, solo texto) */}
         <div className="flex items-center justify-center p-4 pb-2">
-          <span className="text-xs font-bold uppercase tracking-widest text-neutral-400 dark:text-zinc-600">
+          <span className="text-xs font-bold uppercase tracking-widest text-muted dark:text-zinc-600">
             Nueva Solicitud de Viaje
           </span>
         </div>
 
         {/* Info principal (Ganancia) */}
         <div className="px-6 text-center mt-2">
-          <p className="text-[40px] font-black text-neutral-900 dark:text-white tracking-tighter leading-none">
+          <p className="text-[40px] font-black text-foreground dark:text-white tracking-tighter leading-none">
             {formatCurrency(order.deliveryFee || 0)}
           </p>
-          <p className="text-xs font-bold uppercase tracking-wider text-neutral-400 dark:text-zinc-500 mt-2">
+          <p className="text-xs font-bold uppercase tracking-wider text-muted dark:text-zinc-500 mt-2">
             Ganancia estimada
           </p>
         </div>
@@ -116,26 +117,26 @@ export function IncomingOrderModal({
         {/* Detalles del pedido */}
         <div className="px-6 mt-8 space-y-5">
           <div className="flex items-start gap-4">
-            <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-neutral-100 dark:bg-zinc-900">
+            <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-surface-2 dark:bg-zinc-900">
               <div className="h-2.5 w-2.5 rounded-full bg-neutral-800 dark:bg-zinc-200" />
             </div>
             <div>
-              <p className="text-lg font-black text-neutral-900 dark:text-zinc-50 leading-tight">
+              <p className="text-lg font-black text-foreground dark:text-zinc-50 leading-tight">
                 {order.restaurant?.name || 'Restaurante'}
               </p>
-              <p className="text-sm font-semibold text-neutral-500 dark:text-zinc-400 mt-0.5">
+              <p className="text-sm font-semibold text-muted dark:text-zinc-400 mt-0.5">
                 {totalDistance > 0 ? `${totalDistance.toFixed(1)} km (Distancia total)` : 'Calculando ruta...'}
               </p>
             </div>
           </div>
 
           {isCash && (
-            <div className="mt-4 flex items-center justify-between rounded-2xl bg-neutral-100 px-5 py-4 dark:bg-zinc-900">
+            <div className="mt-4 flex items-center justify-between rounded-2xl bg-surface-2 px-5 py-4 dark:bg-zinc-900">
               <div className="flex items-center gap-3">
-                <span className="text-xl">💵</span>
-                <span className="text-sm font-bold text-neutral-700 dark:text-neutral-300">Pagar a tienda:</span>
+                <span className="text-xl"><Banknote className="h-5 w-5" /></span>
+                <span className="text-sm font-bold text-foreground dark:text-neutral-300">Pagar a tienda:</span>
               </div>
-              <span className="text-lg font-black text-neutral-900 dark:text-white">{formatCurrency(payToStoreAmount)}</span>
+              <span className="text-lg font-black text-foreground dark:text-white">{formatCurrency(payToStoreAmount)}</span>
             </div>
           )}
         </div>
@@ -144,7 +145,7 @@ export function IncomingOrderModal({
         <div className="px-6 mt-8 mb-4 flex flex-col gap-3">
           <button
             onClick={handleAccept}
-            className="relative w-full overflow-hidden rounded-2xl h-[56px] bg-neutral-200 dark:bg-zinc-800 text-center transition active:scale-[0.98]"
+            className="relative w-full overflow-hidden rounded-2xl h-[56px] bg-surface-2 dark:bg-zinc-800 text-center transition active:scale-[0.98]"
           >
             {/* Barra de progreso de tiempo como fondo del botón */}
             <div 
@@ -164,7 +165,7 @@ export function IncomingOrderModal({
           </button>
         </div>
         
-        <p className="text-center mb-6 text-[11px] font-bold uppercase tracking-widest text-neutral-400">
+        <p className="text-center mb-6 text-[11px] font-bold uppercase tracking-widest text-muted">
           {Math.ceil(timeLeftMs / 1000)}s restantes
         </p>
       </div>

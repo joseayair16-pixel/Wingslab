@@ -2,6 +2,7 @@
 import { X } from 'lucide-react';
 
 import { useEffect, useState } from 'react';
+import { ArrowUpRight } from 'lucide-react';
 
 type BeforeInstallPromptEvent = Event & {
   prompt: () => Promise<void>;
@@ -99,13 +100,13 @@ export default function InstallAppButton() {
   return (
     <>
       <div className="fixed inset-x-0 bottom-4 z-[9990] flex justify-center px-4 pb-[env(safe-area-inset-bottom)]">
-        <div className="flex items-center gap-2.5 rounded-full border border-black/5 bg-white py-2 pl-3 pr-2 shadow-[0_12px_40px_-8px_rgba(15,15,15,0.25)]">
+        <div className="flex items-center gap-2.5 rounded-full border border-black/5 bg-surface py-2 pl-3 pr-2 shadow-[0_12px_40px_-8px_rgba(15,15,15,0.25)]">
           <span className="flex h-9 w-9 items-center justify-center rounded-full bg-sky-100 text-sky-600">
             <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.8}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
             </svg>
           </span>
-          <span className="text-sm font-semibold text-neutral-900">Instala SaDeL</span>
+          <span className="text-sm font-semibold text-foreground">Instala SaDeL</span>
           <button
             type="button"
             onClick={isIOS ? () => setShowIOSHelp(true) : () => void handleAndroidInstall()}
@@ -117,7 +118,7 @@ export default function InstallAppButton() {
             type="button"
             onClick={handleDismiss}
             aria-label="Descartar"
-            className="flex h-7 w-7 items-center justify-center rounded-full text-neutral-400 transition hover:bg-neutral-100 hover:text-neutral-600"
+            className="flex h-7 w-7 items-center justify-center rounded-full text-muted transition hover:bg-surface-2 hover:text-muted"
           >
             <X className="h-4 w-4" />
           </button>
@@ -126,40 +127,40 @@ export default function InstallAppButton() {
 
       {isIOS && showIOSHelp && (
         <div className="fixed inset-0 z-[9995] flex items-end justify-center bg-black/45 px-4 pb-8 sm:items-center sm:pb-0">
-          <div className="w-full max-w-sm rounded-[28px] bg-white p-6 shadow-2xl">
+          <div className="w-full max-w-sm rounded-[28px] bg-surface p-6 shadow-2xl">
             <div className="mb-4 flex items-center justify-between">
-              <h3 className="text-lg font-bold text-neutral-900">Instalar SaDeL en tu iPhone</h3>
+              <h3 className="text-lg font-bold text-foreground">Instalar SaDeL en tu iPhone</h3>
               <button
                 type="button"
                 onClick={() => setShowIOSHelp(false)}
                 aria-label="Cerrar"
-                className="flex h-8 w-8 items-center justify-center rounded-full text-neutral-400 hover:bg-neutral-100 hover:text-neutral-600"
+                className="flex h-8 w-8 items-center justify-center rounded-full text-muted hover:bg-surface-2 hover:text-muted"
               >
                 <X className="h-4 w-4" />
               </button>
             </div>
-            <p className="mb-4 text-sm leading-relaxed text-neutral-600">
+            <p className="mb-4 text-sm leading-relaxed text-muted">
               Apple no permite instalar apps desde el navegador automáticamente. Sigue estos pasos y la tendrás en tu pantalla de inicio en 10 segundos:
             </p>
             <ol className="space-y-3 text-sm">
               <li className="flex items-start gap-3">
                 <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-sky-100 text-xs font-bold text-sky-700">1</span>
-                <span className="leading-relaxed text-neutral-700">
-                  Toca el botón <span className="font-semibold text-neutral-900">Compartir</span>{' '}
-                  <span className="inline-flex h-5 w-5 items-center justify-center rounded-md bg-neutral-100 text-[10px] font-bold text-neutral-700">⤴</span>{' '}
+                <span className="leading-relaxed text-foreground">
+                  Toca el botón <span className="font-semibold text-foreground">Compartir</span>{' '}
+                  <span className="inline-flex h-5 w-5 items-center justify-center rounded-md bg-surface-2 text-[10px] font-bold text-foreground"><ArrowUpRight className="h-5 w-5" /></span>{' '}
                   (abajo en Safari).
                 </span>
               </li>
               <li className="flex items-start gap-3">
                 <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-sky-100 text-xs font-bold text-sky-700">2</span>
-                <span className="leading-relaxed text-neutral-700">
-                  Desplázate y toca <span className="font-semibold text-neutral-900">Añadir a pantalla de inicio</span>.
+                <span className="leading-relaxed text-foreground">
+                  Desplázate y toca <span className="font-semibold text-foreground">Añadir a pantalla de inicio</span>.
                 </span>
               </li>
               <li className="flex items-start gap-3">
                 <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-sky-100 text-xs font-bold text-sky-700">3</span>
-                <span className="leading-relaxed text-neutral-700">
-                  Toca <span className="font-semibold text-neutral-900">Añadir</span> arriba a la derecha. ¡Listo!
+                <span className="leading-relaxed text-foreground">
+                  Toca <span className="font-semibold text-foreground">Añadir</span> arriba a la derecha. ¡Listo!
                 </span>
               </li>
             </ol>

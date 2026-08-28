@@ -7,6 +7,8 @@ import { IncomingOrderModal } from '../components/IncomingOrderModal';
 import DriverNavigationMap from '../components/DriverNavigationMap';
 import DriverTurnByTurnOverlay from '../components/DriverTurnByTurnOverlay';
 import PushEnableBanner from '../components/PushEnableBanner';
+import { SettlementStatusBadge } from '../components/ui/Badge';
+import { EmptyState } from '../components/ui/EmptyState';
 import { useForegroundPolling } from '../hooks/useForegroundPolling';
 import { io } from 'socket.io-client';
 import {
@@ -28,6 +30,8 @@ import {
   installWarmupListeners,
   installVisibilityResumeListener,
 } from '@sadel/shared';
+
+import { AlertTriangle, Bike, Star, Briefcase, ArrowRight, CreditCard, Calendar, Moon, Settings, Menu, Hourglass, MapPin, Store, ClipboardList, BellOff, Map as MapIcon, CheckCircle2, Banknote, Package, Unlink, Phone, Wallet, Image as ImageIcon, Search, RadioTower, PartyPopper, Ban, Camera, Info } from 'lucide-react';
 
 type DriverAvailability = 'AVAILABLE' | 'BUSY' | 'OFFLINE';
 type OrderStatus = 'CONFIRMED' | 'PREPARING' | 'READY' | 'PICKED_UP' | 'IN_TRANSIT' | 'DELIVERED';
@@ -645,7 +649,7 @@ export default function Home() {
         try {
           navigator.serviceWorker.controller.postMessage({
             type: 'SHOW_NOTIFICATION',
-            title: 'Nueva solicitud de entrega 🛵',
+            title: 'Nueva solicitud de entrega ',
             body: pendingAssignedOrder.restaurant?.name
               ? `Pedido de ${pendingAssignedOrder.restaurant.name} — $${(pendingAssignedOrder.deliveryFee || 0).toFixed(2)} MXN`
               : `Nuevo pedido asignado — $${(pendingAssignedOrder.deliveryFee || 0).toFixed(2)} MXN`,
@@ -1685,11 +1689,11 @@ export default function Home() {
             : o
         )
       );
-      pushToast('success', '✅ Pago confirmado', isStore ? 'La tienda confirmó el pago. Ya puedes iniciar el viaje.' : 'El restaurante confirmó el pago. Ya puedes iniciar el viaje.');
+      pushToast('success', ' Pago confirmado', isStore ? 'La tienda confirmó el pago. Ya puedes iniciar el viaje.' : 'El restaurante confirmó el pago. Ya puedes iniciar el viaje.');
       debouncedRefresh();
     });
 
-    // Actualizar status del pedido en tiempo real (ej. READY → PICKED_UP cuando restaurante confirma entrega)
+    // Actualizar status del pedido en tiempo real (ej. READY  PICKED_UP cuando restaurante confirma entrega)
     socket.on('order:status-changed', (payload: { orderId: string; status?: string }) => {
       setPendingOrders((prev) =>
         prev.map((o) =>
@@ -1709,7 +1713,7 @@ export default function Home() {
             : o
         )
       );
-      pushToast('info', '🔄 Nuevo PIN generado', 'El PIN anterior expiró. Muestra este nuevo PIN al restaurante.');
+      pushToast('info', ' Nuevo PIN generado', 'El PIN anterior expiró. Muestra este nuevo PIN al restaurante.');
     });
 
     return () => {
@@ -1999,7 +2003,7 @@ export default function Home() {
   // ==========================================
   if (isCheckingSession) {
     return (
-      <main className="min-h-[100dvh] bg-white dark:bg-black font-sans text-neutral-900 dark:text-zinc-100 flex items-center justify-center">
+      <main className="min-h-[100dvh] bg-surface dark:bg-black font-sans text-foreground dark:text-zinc-100 flex items-center justify-center">
         <div className="animate-pulse opacity-50">Cargando...</div>
       </main>
     );
@@ -2007,7 +2011,7 @@ export default function Home() {
 
   if (!token || !sessionUser) {
     return (
-      <main className="min-h-[100dvh] flex flex-col justify-between bg-white text-neutral-900 font-sans antialiased"
+      <main className="min-h-[100dvh] flex flex-col justify-between bg-surface text-foreground font-sans antialiased"
       >
         <header className="px-6 py-5 flex justify-between items-center max-w-md mx-auto w-full">
           <div className="flex items-center gap-2">
@@ -2016,29 +2020,29 @@ export default function Home() {
         </header>
 
         <section className="w-full max-w-md mx-auto px-6 py-4 flex-1 flex flex-col justify-center">
-          <div className="rounded-[32px] bg-white p-8 shadow-[0_8px_32px_rgba(0,0,0,0.06)] border border-black/[0.06]">
+          <div className="rounded-[32px] bg-surface p-8 shadow-[0_8px_32px_rgba(0,0,0,0.06)] border border-black/[0.06]">
             <div className="text-center mb-8">
               <span className="inline-flex items-center gap-1.5 rounded-full bg-sky-50 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-sky-600">
                 <span className="h-1.5 w-1.5 rounded-full bg-sky-500 animate-pulse" />
                 Acceso Repartidor
               </span>
-              <h1 className="text-2xl font-bold tracking-tight text-neutral-900 mt-5">
+              <h1 className="text-2xl font-bold tracking-tight text-foreground mt-5">
                 Bienvenido a SaDeL
               </h1>
-              <p className="text-sm text-neutral-500 mt-1.5 leading-relaxed">
+              <p className="text-sm text-muted mt-1.5 leading-relaxed">
                 Ingresa con tu número y contraseña para comenzar a recibir pedidos.
               </p>
             </div>
 
             <div className="space-y-4">
               <label className="block space-y-1.5">
-                <span className="text-xs font-semibold text-neutral-600">Teléfono Celular</span>
+                <span className="text-xs font-semibold text-muted">Teléfono Celular</span>
                 <div className="relative flex items-center">
-                  <span className="absolute left-4 text-sm font-semibold text-neutral-400">+52</span>
+                  <span className="absolute left-4 text-sm font-semibold text-muted">+52</span>
                   <input
                     type="tel"
                     placeholder="55 1234 5678"
-                    className="w-full rounded-2xl border border-black/[0.08] bg-white px-4 py-3.5 pl-12 text-sm text-neutral-900 outline-none transition-all placeholder:text-neutral-400 shadow-[0_1px_2px_rgba(0,0,0,0.02)] focus:border-black/20 focus:shadow-[0_4px_12px_rgba(0,0,0,0.04)] focus:ring-2 focus:ring-black/[0.04]"
+                    className="w-full rounded-2xl border border-black/[0.08] bg-surface px-4 py-3.5 pl-12 text-sm text-foreground outline-none transition-all placeholder:text-muted shadow-[0_1px_2px_rgba(0,0,0,0.02)] focus:border-black/20 focus:shadow-[0_4px_12px_rgba(0,0,0,0.04)] focus:ring-2 focus:ring-black/[0.04]"
                     value={phone}
                     onChange={(e) => setPhone(e.target.value)}
                   />
@@ -2046,12 +2050,12 @@ export default function Home() {
               </label>
 
               <label className="block space-y-1.5">
-                <span className="text-xs font-semibold text-neutral-600">Contraseña</span>
+                <span className="text-xs font-semibold text-muted">Contraseña</span>
                 <div className="relative flex items-center">
                   <input
                     type={showLoginPassword ? 'text' : 'password'}
                     placeholder="••••••••••••"
-                    className="w-full rounded-2xl border border-black/[0.08] bg-white px-4 py-3.5 pr-14 text-sm text-neutral-900 outline-none transition-all placeholder:text-neutral-400 shadow-[0_1px_2px_rgba(0,0,0,0.02)] focus:border-black/20 focus:shadow-[0_4px_12px_rgba(0,0,0,0.04)] focus:ring-2 focus:ring-black/[0.04]"
+                    className="w-full rounded-2xl border border-black/[0.08] bg-surface px-4 py-3.5 pr-14 text-sm text-foreground outline-none transition-all placeholder:text-muted shadow-[0_1px_2px_rgba(0,0,0,0.02)] focus:border-black/20 focus:shadow-[0_4px_12px_rgba(0,0,0,0.04)] focus:ring-2 focus:ring-black/[0.04]"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                   />
@@ -2060,7 +2064,7 @@ export default function Home() {
                     onClick={() => setShowLoginPassword((current) => !current)}
                     aria-label={showLoginPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
                     tabIndex={-1}
-                    className="absolute right-2 inset-y-0 my-auto flex h-8 w-8 items-center justify-center rounded-full text-neutral-400 transition-colors duration-200 hover:bg-neutral-100 hover:text-neutral-800 active:scale-95 focus-visible:text-neutral-800"
+                    className="absolute right-2 inset-y-0 my-auto flex h-8 w-8 items-center justify-center rounded-full text-muted transition-colors duration-200 hover:bg-surface-2 hover:text-foreground active:scale-95 focus-visible:text-foreground"
                   >
                     {showLoginPassword ? (
                       <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
@@ -2081,7 +2085,7 @@ export default function Home() {
                   type="button"
                   onClick={() => void loginWithPassword()}
                   disabled={verifyingCode || phone.trim().length < 8 || password.trim().length < 4}
-                  className="w-full rounded-2xl bg-[#0a0a0a] py-3.5 text-sm font-semibold text-white transition-all duration-200 hover:bg-[#262626] hover:shadow-[0_8px_24px_rgba(10,10,10,0.12)] disabled:cursor-not-allowed disabled:bg-neutral-100 disabled:text-neutral-400 disabled:shadow-none active:scale-[0.98] flex items-center justify-center gap-2"
+                  className="w-full rounded-2xl bg-[#0a0a0a] py-3.5 text-sm font-semibold text-white transition-all duration-200 hover:bg-[#262626] hover:shadow-[0_8px_24px_rgba(10,10,10,0.12)] disabled:cursor-not-allowed disabled:bg-surface-2 disabled:text-muted disabled:shadow-none active:scale-[0.98] flex items-center justify-center gap-2"
                 >
                   {verifyingCode ? (
                     <>
@@ -2102,7 +2106,7 @@ export default function Home() {
 
               {error && (
                 <div className="rounded-2xl border border-rose-100 bg-rose-50/50 p-4 text-xs font-bold text-rose-800 dark:border-rose-950/20 dark:bg-rose-950/10 dark:text-rose-400 text-center">
-                  ⚠️ {error}
+                  <AlertTriangle className="h-5 w-5" /> {error}
                 </div>
               )}
             </div>
@@ -2110,38 +2114,38 @@ export default function Home() {
         </section>
 
         {/* Footer simple de marca */}
-        <footer className="px-6 py-6 text-center text-[11px] font-semibold tracking-wider text-neutral-400 max-w-sm mx-auto">
+        <footer className="px-6 py-6 text-center text-[11px] font-semibold tracking-wider text-muted max-w-sm mx-auto">
           SaDeL Logistics · Pro Console v2.0
         </footer>
 
         {/* Modal de Configuración Técnica Ocultable */}
         {showDeveloperSettings && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-            <div className="w-full max-w-md rounded-[32px] border border-black/5 bg-white p-6 shadow-2xl dark:bg-zinc-950 dark:border-zinc-900 animate-fadeIn">
+            <div className="w-full max-w-md rounded-[32px] border border-black/5 bg-surface p-6 shadow-2xl dark:bg-zinc-950 dark:border-zinc-900 animate-fadeIn">
               <div className="flex justify-between items-center mb-4">
                 <h3 className="text-sm font-black uppercase tracking-wider">Configuración Técnica</h3>
                 <button
                   type="button"
                   onClick={() => setShowDeveloperSettings(false)}
-                  className="h-8 w-8 rounded-full flex items-center justify-center border border-black/5 dark:border-zinc-900 bg-neutral-50 dark:bg-zinc-900"
+                  className="h-8 w-8 rounded-full flex items-center justify-center border border-black/5 dark:border-zinc-900 bg-surface-2 dark:bg-zinc-900"
                 >
-                  ✕
+                  <X className="h-5 w-5" />
                 </button>
               </div>
 
               <div className="space-y-4">
                 <label className="block space-y-1.5">
-                  <span className="text-xs font-bold uppercase tracking-wider text-neutral-500">API Endpoint Base</span>
+                  <span className="text-xs font-bold uppercase tracking-wider text-muted">API Endpoint Base</span>
                   <input
                     type="text"
                     value={apiBase}
                     onChange={(e) => setApiBase(e.target.value)}
                     placeholder="/api"
-                    className="w-full rounded-xl border border-black/5 bg-neutral-50 px-4 py-3 text-xs outline-none focus:border-neutral-300 dark:bg-zinc-900 dark:border-zinc-800 dark:focus:border-zinc-700"
+                    className="w-full rounded-xl border border-black/5 bg-surface-2 px-4 py-3 text-xs outline-none focus:border-border dark:bg-zinc-900 dark:border-zinc-800 dark:focus:border-zinc-700"
                   />
                 </label>
 
-                <p className="text-[10px] text-neutral-500 leading-relaxed">
+                <p className="text-[10px] text-muted leading-relaxed">
                   Modifica este campo únicamente bajo instrucción del equipo técnico. Las sesiones abiertas se sincronizarán a la URL especificada.
                 </p>
 
@@ -2240,7 +2244,7 @@ export default function Home() {
 
   return (
     <main
-      className={`min-h-[100dvh] bg-white text-neutral-900 transition-colors duration-300 dark:bg-black dark:text-zinc-300 font-sans antialiased select-none overflow-x-hidden ${activeTab === 'active' ? 'pb-20' : ''}`}
+      className={`min-h-[100dvh] bg-surface text-foreground transition-colors duration-300 dark:bg-black dark:text-zinc-300 font-sans antialiased select-none overflow-x-hidden ${activeTab === 'active' ? 'pb-20' : ''}`}
       onTouchStart={handleTouchStart}
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
@@ -2255,7 +2259,7 @@ export default function Home() {
         {!isOnline && (
           <div className="sticky top-0 z-[9999] bg-gradient-to-r from-rose-600 to-rose-500 dark:from-rose-800 dark:to-rose-700 text-white shadow-lg">
             <div className="max-w-md mx-auto flex items-center gap-3 px-4 py-2.5">
-              <div className="h-7 w-7 rounded-full bg-white/20 flex items-center justify-center shrink-0">
+              <div className="h-7 w-7 rounded-full bg-surface/20 flex items-center justify-center shrink-0">
                 <svg className="h-4 w-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 5.636a9 9 0 010 12.728m-2.829-2.829a5 5 0 000-7.07m-4.243 4.243a1 1 0 010-1.414" />
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v.01M12 9v3" />
@@ -2265,7 +2269,7 @@ export default function Home() {
                 <p className="text-[13px] font-extrabold leading-tight">Sin conexión a Internet</p>
                 <p className="text-[11px] text-rose-100 leading-tight mt-0.5">No recibirás pedidos nuevos hasta que te reconectes.</p>
               </div>
-              <div className="h-2 w-2 rounded-full bg-white/80 animate-pulse shrink-0" />
+              <div className="h-2 w-2 rounded-full bg-surface/80 animate-pulse shrink-0" />
             </div>
           </div>
         )}
@@ -2283,7 +2287,7 @@ export default function Home() {
       {/* MODAL DE ÉXITO: VIAJE INICIADO */}
       {tripStartedForOrderId && (
         <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-          <div className="w-full max-w-xs rounded-[32px] bg-white dark:bg-zinc-950 shadow-2xl p-8 flex flex-col items-center text-center animate-in zoom-in-90 duration-300">
+          <div className="w-full max-w-xs rounded-[32px] bg-surface dark:bg-zinc-950 shadow-2xl p-8 flex flex-col items-center text-center animate-in zoom-in-90 duration-300">
             {/* Checkmark animated */}
             <div className="relative mb-5">
               <div className="h-20 w-20 rounded-full bg-emerald-50 dark:bg-emerald-950/30 flex items-center justify-center">
@@ -2291,14 +2295,14 @@ export default function Home() {
                   <polyline points="20 6 9 17 4 12" />
                 </svg>
               </div>
-              <span className="absolute -top-1 -right-1 text-2xl animate-bounce">🛵</span>
+              <span className="absolute -top-1 -right-1 text-2xl animate-bounce"><Bike className="h-5 w-5" /></span>
             </div>
             <p className="text-[10px] font-bold uppercase tracking-widest text-emerald-500 dark:text-emerald-400 mb-1">¡Todo listo!</p>
-            <h3 className="text-xl font-black text-neutral-900 dark:text-zinc-50 leading-snug">Recolectado con éxito</h3>
-            <p className="text-sm text-neutral-500 dark:text-zinc-400 mt-2 leading-relaxed max-w-[220px]">
+            <h3 className="text-xl font-black text-foreground dark:text-zinc-50 leading-snug">Recolectado con éxito</h3>
+            <p className="text-sm text-muted dark:text-zinc-400 mt-2 leading-relaxed max-w-[220px]">
               Dirígete al lugar de entrega y completa el pedido.
             </p>
-            <div className="mt-6 w-full h-1 rounded-full bg-neutral-100 dark:bg-zinc-800 overflow-hidden">
+            <div className="mt-6 w-full h-1 rounded-full bg-surface-2 dark:bg-zinc-800 overflow-hidden">
               <div className="h-full bg-emerald-500 rounded-full animate-[shrink_4s_linear_forwards]" style={{ animation: 'shrink 4s linear forwards', width: '100%' }} />
             </div>
           </div>
@@ -2309,12 +2313,12 @@ export default function Home() {
 
       {selectedOrderDetail && (
         <div className="fixed inset-0 z-[9999] flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="relative w-full max-w-md rounded-[32px] bg-white shadow-2xl overflow-hidden dark:bg-zinc-950 p-6 flex flex-col max-h-[85vh] animate-in slide-in-from-bottom-10 duration-300">
+          <div className="relative w-full max-w-md rounded-[32px] bg-surface shadow-2xl overflow-hidden dark:bg-zinc-950 p-6 flex flex-col max-h-[85vh] animate-in slide-in-from-bottom-10 duration-300">
             {/* Header */}
-            <div className="flex items-center justify-between border-b border-neutral-100 dark:border-zinc-900 pb-4">
+            <div className="flex items-center justify-between border-b border-border dark:border-zinc-900 pb-4">
               <div>
-                <p className="text-[10px] font-bold uppercase tracking-widest text-neutral-400 dark:text-zinc-500">Verificación de Pedido</p>
-                <h3 className="text-lg font-black text-neutral-900 dark:text-zinc-50 mt-0.5">#{selectedOrderDetail.orderReference.substring(0, 8)}</h3>
+                <p className="text-[10px] font-bold uppercase tracking-widest text-muted dark:text-zinc-500">Verificación de Pedido</p>
+                <h3 className="text-lg font-black text-foreground dark:text-zinc-50 mt-0.5">#{selectedOrderDetail.orderReference.substring(0, 8)}</h3>
               </div>
               <button
                 type="button"
@@ -2322,28 +2326,28 @@ export default function Home() {
                   triggerHaptic(10);
                   setSelectedOrderDetail(null);
                 }}
-                className="h-8 w-8 rounded-full bg-neutral-100 dark:bg-zinc-900 flex items-center justify-center text-sm font-black text-neutral-500 hover:bg-neutral-200 transition text-neutral-900 dark:text-zinc-50"
+                className="h-8 w-8 rounded-full bg-surface-2 dark:bg-zinc-900 flex items-center justify-center text-sm font-black text-muted hover:bg-surface-2 transition text-foreground dark:text-zinc-50"
               >
-                ✕
+                <X className="h-5 w-5" />
               </button>
             </div>
 
             {/* Content (Scrollable list of items) */}
             <div className="flex-grow overflow-y-auto py-4 space-y-4 pr-1">
               <div>
-                <p className="text-[10px] font-bold uppercase tracking-widest text-neutral-400 dark:text-zinc-500 mb-1">{selectedOrderDetail.restaurant.businessType && selectedOrderDetail.restaurant.businessType !== 'RESTAURANT' ? 'Tienda' : 'Restaurante'}</p>
-                <p className="text-sm font-black text-neutral-800 dark:text-zinc-200">{selectedOrderDetail.restaurant.name}</p>
+                <p className="text-[10px] font-bold uppercase tracking-widest text-muted dark:text-zinc-500 mb-1">{selectedOrderDetail.restaurant.businessType && selectedOrderDetail.restaurant.businessType !== 'RESTAURANT' ? 'Tienda' : 'Restaurante'}</p>
+                <p className="text-sm font-black text-foreground dark:text-zinc-200">{selectedOrderDetail.restaurant.name}</p>
               </div>
 
               <div>
-                <p className="text-[10px] font-bold uppercase tracking-widest text-neutral-400 dark:text-zinc-500 mb-2">Artículos a entregar</p>
+                <p className="text-[10px] font-bold uppercase tracking-widest text-muted dark:text-zinc-500 mb-2">Artículos a entregar</p>
                 {selectedOrderDetail.items && selectedOrderDetail.items.length > 0 ? (
-                  <div className="divide-y divide-neutral-100 dark:divide-zinc-900/60 border border-neutral-100 dark:border-zinc-900/80 rounded-2xl overflow-hidden bg-neutral-50/50 dark:bg-zinc-900/20">
+                  <div className="divide-y divide-neutral-100 dark:divide-zinc-900/60 border border-border dark:border-zinc-900/80 rounded-2xl overflow-hidden bg-surface-2/50 dark:bg-zinc-900/20">
                     {selectedOrderDetail.items.map((item) => (
                       <div key={item.id} className="p-4 space-y-1">
                         <div className="flex items-start gap-3">
                           {item.product.image && (
-                            <div className="shrink-0 w-12 h-12 rounded-xl overflow-hidden bg-neutral-100 dark:bg-zinc-800 border border-black/5">
+                            <div className="shrink-0 w-12 h-12 rounded-xl overflow-hidden bg-surface-2 dark:bg-zinc-800 border border-black/5">
                               <img
                                 src={item.product.image}
                                 alt={item.product.name}
@@ -2353,8 +2357,8 @@ export default function Home() {
                               />
                             </div>
                           )}
-                          <p className="text-sm font-black text-neutral-800 dark:text-zinc-200 leading-snug pt-0.5">
-                            <span className="inline-block px-1.5 py-0.5 rounded bg-neutral-200 dark:bg-zinc-850 text-xs font-bold text-neutral-700 dark:text-zinc-300 mr-2">
+                          <p className="text-sm font-black text-foreground dark:text-zinc-200 leading-snug pt-0.5">
+                            <span className="inline-block px-1.5 py-0.5 rounded bg-surface-2 dark:bg-zinc-850 text-xs font-bold text-foreground dark:text-zinc-300 mr-2">
                               {item.quantity}x
                             </span>
                             {item.product.name}
@@ -2370,7 +2374,7 @@ export default function Home() {
                         {item.options && item.options.length > 0 && (
                           <div className="pl-9 flex flex-wrap gap-1.5">
                             {item.options.map((opt) => (
-                              <span key={opt.id} className="inline-block text-[10.5px] text-neutral-500 dark:text-zinc-400 font-medium">
+                              <span key={opt.id} className="inline-block text-[10.5px] text-muted dark:text-zinc-400 font-medium">
                                 + {opt.name}
                               </span>
                             ))}
@@ -2389,7 +2393,7 @@ export default function Home() {
                     ))}
                   </div>
                 ) : (
-                  <p className="text-xs text-neutral-400 dark:text-zinc-500 italic p-3 text-center border border-dashed border-neutral-200 dark:border-zinc-800 rounded-2xl">
+                  <p className="text-xs text-muted dark:text-zinc-500 italic p-3 text-center border border-dashed border-border dark:border-zinc-800 rounded-2xl">
                     No hay detalles de artículos disponibles para este pedido.
                   </p>
                 )}
@@ -2399,7 +2403,7 @@ export default function Home() {
             </div>
 
             {/* Footer */}
-            <div className="pt-4 border-t border-neutral-100 dark:border-zinc-900 flex items-center justify-between gap-3">
+            <div className="pt-4 border-t border-border dark:border-zinc-900 flex items-center justify-between gap-3">
               <div className="text-left">
                 {selectedOrderDetail.paymentMethod === 'TRANSFER' ? (
                   <>
@@ -2413,8 +2417,8 @@ export default function Home() {
                   </>
                 ) : (
                   <>
-                    <p className="text-[9px] font-bold uppercase tracking-widest text-neutral-400 dark:text-zinc-500 leading-none">A pagar en {selectedOrderDetail.restaurant.businessType && selectedOrderDetail.restaurant.businessType !== 'RESTAURANT' ? 'Tienda' : 'Restaurante'}</p>
-                    <p className="text-xl font-black text-neutral-900 dark:text-white mt-1 leading-none">
+                    <p className="text-[9px] font-bold uppercase tracking-widest text-muted dark:text-zinc-500 leading-none">A pagar en {selectedOrderDetail.restaurant.businessType && selectedOrderDetail.restaurant.businessType !== 'RESTAURANT' ? 'Tienda' : 'Restaurante'}</p>
+                    <p className="text-xl font-black text-foreground dark:text-white mt-1 leading-none">
                       {selectedOrderDetail.totalAmount 
                         ? formatCurrency(selectedOrderDetail.totalAmount - (selectedOrderDetail.deliveryFee || 0)) 
                         : formatCurrency(0)}
@@ -2442,7 +2446,7 @@ export default function Home() {
         className={`fixed top-0 left-0 right-0 z-50 flex justify-center pt-3 pointer-events-none transition-opacity duration-200 ${pullDistance > 0 || isRefreshing ? 'opacity-100' : 'opacity-0'}`}
         style={{ transform: `translateY(${Math.max(0, pullDistance - 40)}px)` }}
       >
-        <div className="rounded-full bg-white dark:bg-zinc-950 p-2 shadow-lg border border-black/5 dark:border-zinc-900 flex items-center justify-center">
+        <div className="rounded-full bg-surface dark:bg-zinc-950 p-2 shadow-lg border border-black/5 dark:border-zinc-900 flex items-center justify-center">
           <RefreshCw strokeWidth={2.5} />
         </div>
       </div>
@@ -2450,7 +2454,14 @@ export default function Home() {
       {/* Toast notifications */}
       {toasts.length > 0 && (
         <div className="fixed top-4 right-4 z-[200] flex flex-col gap-2 max-w-sm">
-          {toasts.map((toast) => (
+          {toasts.map((toast) => {
+            const ToneIcon =
+              toast.tone === 'error'
+                ? AlertTriangle
+                : toast.tone === 'success'
+                  ? CheckCircle2
+                  : Info;
+            return (
             <div
               key={toast.id}
               onClick={() => dismissToast(toast.id)}
@@ -2462,16 +2473,22 @@ export default function Home() {
                     : 'border-sky-200 bg-sky-50/95 text-sky-800 dark:border-sky-900/30 dark:bg-sky-950/40 dark:text-sky-300'
               }`}
             >
-              <p className="font-bold">{toast.title}</p>
-              {toast.message && <p className="mt-0.5 opacity-80">{toast.message}</p>}
+              <div className="flex items-start gap-2.5">
+                <ToneIcon className="h-5 w-5 shrink-0 mt-0.5" />
+                <div className="min-w-0">
+                  <p className="font-bold">{toast.title}</p>
+                  {toast.message && <p className="mt-0.5 opacity-80">{toast.message}</p>}
+                </div>
+              </div>
               <button
                 onClick={(e) => { e.stopPropagation(); dismissToast(toast.id); }}
                 className="absolute top-2 right-2 flex h-5 w-5 items-center justify-center rounded-full text-current opacity-50 hover:opacity-100"
               >
-                ✕
+                <X className="h-5 w-5" />
               </button>
             </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
@@ -2485,7 +2502,7 @@ export default function Home() {
           />
 
           {/* Drawer Content */}
-          <div className="relative flex w-4/5 max-w-sm flex-col bg-white p-6 shadow-2xl dark:bg-zinc-950 dark:border-r dark:border-zinc-900 h-full animate-slideInLeft select-none text-neutral-900 dark:text-zinc-200">
+          <div className="relative flex w-4/5 max-w-sm flex-col bg-surface p-6 shadow-2xl dark:bg-zinc-950 dark:border-r dark:border-zinc-900 h-full animate-slideInLeft select-none text-foreground dark:text-zinc-200">
             {/* Header / Profile info (clickable to account settings) */}
             <button
               type="button"
@@ -2494,28 +2511,28 @@ export default function Home() {
                 setActiveTab('profile');
                 setIsMenuOpen(false);
               }}
-              className="flex items-center text-left w-full gap-3 pb-6 border-b border-black/5 dark:border-zinc-900/80 hover:bg-neutral-500/10 p-2 -mx-2 rounded-2xl transition active:scale-[0.98]"
+              className="flex items-center text-left w-full gap-3 pb-6 border-b border-black/5 dark:border-zinc-900/80 hover:bg-surface-20/10 p-2 -mx-2 rounded-2xl transition active:scale-[0.98]"
             >
               <div className="h-12 w-12 rounded-full bg-accent flex items-center justify-center text-white text-xl font-bold shadow-md shadow-accent/30 overflow-hidden shrink-0">
                 {driverProfile?.user.profilePhoto ? (
                   <img src={driverProfile.user.profilePhoto} alt="Profile" className="h-full w-full object-cover" />
                 ) : (
-                  '👤'
+                  ''
                 )}
               </div>
               <div className="min-w-0 flex-1">
-                <h3 className="font-black text-sm text-neutral-900 dark:text-white leading-tight truncate">
+                <h3 className="font-black text-sm text-foreground dark:text-white leading-tight truncate">
                   {driverProfile?.user.name || 'Cargando repartidor...'}
                 </h3>
                 {driverProfile && (
-                  <div className="flex items-center gap-1.5 mt-1 text-[10px] font-bold text-neutral-500 dark:text-zinc-400">
-                    <span>⭐ {driverProfile.rating.toFixed(1)}</span>
+                  <div className="flex items-center gap-1.5 mt-1 text-[10px] font-bold text-muted dark:text-zinc-400">
+                    <span><Star className="h-5 w-5" /> {driverProfile.rating.toFixed(1)}</span>
                     <span>•</span>
-                    <span>💼 {driverProfile.totalDeliveries} viajes</span>
+                    <span><Briefcase className="h-5 w-5" /> {driverProfile.totalDeliveries} viajes</span>
                   </div>
                 )}
               </div>
-              <span className="text-neutral-400 dark:text-zinc-500 text-xs font-bold">➔</span>
+              <span className="text-muted dark:text-zinc-500 text-xs font-bold"><ArrowRight className="h-5 w-5" /></span>
             </button>
 
             {/* Menu Options */}
@@ -2529,10 +2546,10 @@ export default function Home() {
                 }}
                 className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl text-xs font-black uppercase tracking-wider transition ${activeTab === 'active'
                     ? 'bg-gradient-to-r from-sky-400 to-sky-600 text-white shadow-md shadow-sky-500/40'
-                    : 'hover:bg-black/5 dark:hover:bg-zinc-900 text-neutral-600 dark:text-zinc-400'
+                    : 'hover:bg-black/5 dark:hover:bg-zinc-900 text-muted dark:text-zinc-400'
                   }`}
               >
-                <span>🛵</span> Inicio
+                <span><Bike className="h-5 w-5" /></span> Inicio
               </button>
 
               <button
@@ -2544,10 +2561,10 @@ export default function Home() {
                 }}
                 className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl text-xs font-black uppercase tracking-wider transition ${activeTab === 'wallet'
                     ? 'bg-gradient-to-r from-sky-400 to-sky-600 text-white shadow-md shadow-sky-500/40'
-                    : 'hover:bg-black/5 dark:hover:bg-zinc-900 text-neutral-600 dark:text-zinc-400'
+                    : 'hover:bg-black/5 dark:hover:bg-zinc-900 text-muted dark:text-zinc-400'
                   }`}
               >
-                <span>💳</span> Mi Billetera
+                <span><CreditCard className="h-5 w-5" /></span> Mi Billetera
               </button>
 
               <button
@@ -2559,18 +2576,18 @@ export default function Home() {
                 }}
                 className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl text-xs font-black uppercase tracking-wider transition ${activeTab === 'history'
                     ? 'bg-gradient-to-r from-sky-400 to-sky-600 text-white shadow-md shadow-sky-500/40'
-                    : 'hover:bg-black/5 dark:hover:bg-zinc-900 text-neutral-600 dark:text-zinc-400'
+                    : 'hover:bg-black/5 dark:hover:bg-zinc-900 text-muted dark:text-zinc-400'
                   }`}
               >
-                <span>📅</span> Historial
+                <span><Calendar className="h-5 w-5" /></span> Historial
               </button>
 
               <hr className="border-black/5 dark:border-zinc-900/80 my-4" />
 
               {/* Modo Oscuro Toggle */}
-              <div className="flex items-center justify-between px-4 py-2 text-xs font-bold text-neutral-600 dark:text-zinc-400">
+              <div className="flex items-center justify-between px-4 py-2 text-xs font-bold text-muted dark:text-zinc-400">
                 <span className="flex items-center gap-3">
-                  <span>🌙</span> Modo Oscuro
+                  <span><Moon className="h-5 w-5" /></span> Modo Oscuro
                 </span>
                 <button
                   type="button"
@@ -2579,7 +2596,7 @@ export default function Home() {
                     }`}
                 >
                   <span
-                    className={`inline-block h-3 w-3 transform rounded-full bg-white shadow transition ${darkMode ? 'translate-x-5' : 'translate-x-1'
+                    className={`inline-block h-3 w-3 transform rounded-full bg-surface shadow transition ${darkMode ? 'translate-x-5' : 'translate-x-1'
                       }`}
                   />
                 </button>
@@ -2593,9 +2610,9 @@ export default function Home() {
                   setShowDeveloperSettings(true);
                   setIsMenuOpen(false);
                 }}
-                className="w-full flex items-center gap-3 px-4 py-3 rounded-2xl text-xs font-bold text-neutral-600 dark:text-zinc-400 hover:bg-black/5 dark:hover:bg-zinc-900 transition"
+                className="w-full flex items-center gap-3 px-4 py-3 rounded-2xl text-xs font-bold text-muted dark:text-zinc-400 hover:bg-black/5 dark:hover:bg-zinc-900 transition"
               >
-                <span>⚙️</span> Configuración de Red
+                <span><Settings className="h-5 w-5" /></span> Configuración de Red
               </button>
             </div>
 
@@ -2610,7 +2627,7 @@ export default function Home() {
                 }}
                 className="w-full flex items-center justify-center gap-2 px-4 py-3.5 rounded-2xl bg-rose-50 dark:bg-rose-950/20 text-rose-600 hover:bg-rose-100 dark:hover:bg-rose-950/40 text-xs font-black uppercase tracking-wider transition"
               >
-                Cerrar Sesión ➔
+                Cerrar Sesión <ArrowRight className="h-5 w-5" />
               </button>
             </div>
           </div>
@@ -2618,7 +2635,7 @@ export default function Home() {
       )}
 
       {/* CABECERA PRINCIPAL (STICKY + BLUR) */}
-      <header className="sticky top-0 z-40 border-b border-black/5 bg-white dark:bg-neutral-950 dark:border-zinc-900/80 px-6 py-6 transition">
+      <header className="sticky top-0 z-40 border-b border-black/5 bg-surface dark:bg-neutral-950 dark:border-zinc-900/80 px-6 py-6 transition">
         <div className="max-w-5xl mx-auto flex items-center justify-between w-full">
           {/* Superior Izquierda: Menu Hamburguesa */}
           <button
@@ -2627,10 +2644,10 @@ export default function Home() {
               triggerHaptic(20);
               setIsMenuOpen(true);
             }}
-            className="h-14 w-14 rounded-[20px] border border-black/5 dark:border-zinc-900 bg-white dark:bg-zinc-950 flex items-center justify-center shadow-md text-2xl text-neutral-800 dark:text-zinc-200 transition hover:scale-105 active:scale-95"
+            className="h-14 w-14 rounded-[20px] border border-black/5 dark:border-zinc-900 bg-surface dark:bg-zinc-950 flex items-center justify-center shadow-md text-2xl text-foreground dark:text-zinc-200 transition hover:scale-105 active:scale-95"
             aria-label="Menú principal"
           >
-            ☰
+            <Menu className="h-5 w-5" />
           </button>
 
           {/* Superior Central: Ovalo con Ganancias Semanales */}
@@ -2669,7 +2686,7 @@ export default function Home() {
                     disabled={Boolean(activeActionKey) || Boolean(updatingAvailability)}
                     className="mt-3 w-full rounded-xl bg-neutral-950 py-2.5 text-xs font-black uppercase tracking-wider text-white shadow dark:bg-rose-900"
                   >
-                    Reintentar Acción ➔
+                    Reintentar Acción <ArrowRight className="h-5 w-5" />
                   </button>
                 </div>
               </div>
@@ -2689,7 +2706,7 @@ export default function Home() {
                       ? 'bg-gradient-to-br from-sky-400 to-sky-600 shadow-sky-500/40'
                       : 'bg-gradient-to-br from-neutral-300 to-neutral-400 dark:from-zinc-700 dark:to-zinc-800 shadow-black/20'
                     }`}>
-                    <span className={`text-5xl ${driverProfile?.availability === 'AVAILABLE' ? 'animate-moto-ride' : ''}`}>🛵</span>
+                    <span className={`text-5xl ${driverProfile?.availability === 'AVAILABLE' ? 'animate-moto-ride' : ''}`}><Bike className="h-5 w-5" /></span>
                   </div>
                 </div>
 
@@ -2697,7 +2714,7 @@ export default function Home() {
                 <div className="mb-2">
                   <SaDelLogo className="h-11 w-auto" />
                 </div>
-                <p className="text-xs font-bold uppercase tracking-widest text-neutral-400 dark:text-zinc-500 mb-8">Servicio de Entrega Local</p>
+                <p className="text-xs font-bold uppercase tracking-widest text-muted dark:text-zinc-500 mb-8">Servicio de Entrega Local</p>
 
                 {/* Status indicator */}
                 {driverProfile?.availability === 'AVAILABLE' ? (
@@ -2713,18 +2730,18 @@ export default function Home() {
                         <span className="h-1.5 w-1.5 rounded-full bg-sky-400 animate-bounce" style={{ animationDelay: '150ms' }} />
                         <span className="h-1.5 w-1.5 rounded-full bg-sky-300 animate-bounce" style={{ animationDelay: '300ms' }} />
                       </div>
-                      <span className="text-xs font-bold text-neutral-500 dark:text-zinc-400">Buscando pedidos...</span>
+                      <span className="text-xs font-bold text-muted dark:text-zinc-400">Buscando pedidos...</span>
                     </div>
                   </div>
                 ) : (
-                  <div className="flex items-center gap-2 px-5 py-2 rounded-full bg-neutral-100 dark:bg-zinc-900 border border-neutral-200 dark:border-zinc-800">
+                  <div className="flex items-center gap-2 px-5 py-2 rounded-full bg-surface-2 dark:bg-zinc-900 border border-border dark:border-zinc-800">
                     <span className="flex h-2 w-2 rounded-full bg-neutral-400 dark:bg-zinc-500" />
-                    <span className="text-xs font-black uppercase tracking-widest text-neutral-500 dark:text-zinc-400">Desconectado</span>
+                    <span className="text-xs font-black uppercase tracking-widest text-muted dark:text-zinc-400">Desconectado</span>
                   </div>
                 )}
 
                 {driverProfile?.availability !== 'AVAILABLE' && (
-                  <p className="text-[11px] text-neutral-400 dark:text-zinc-500 mt-4 text-center max-w-[200px] leading-relaxed">
+                  <p className="text-[11px] text-muted dark:text-zinc-500 mt-4 text-center max-w-[200px] leading-relaxed">
                     Presiona el botón de abajo para comenzar a recibir pedidos
                   </p>
                 )}
@@ -2790,7 +2807,7 @@ export default function Home() {
                           lat: order.restaurant.latitude,
                           lng: order.restaurant.longitude,
                           label: order.restaurant.name,
-                          emoji: '🏪',
+                          emoji: '',
                         }}
                         dark={darkMode}
                         onExit={() => setTurnByTurnFor((prev) => ({ ...prev, [order.id]: null }))}
@@ -2803,7 +2820,7 @@ export default function Home() {
                           lat: order.latitude,
                           lng: order.longitude,
                           label: customerAddressStr,
-                          emoji: '🏠',
+                          emoji: '',
                         }}
                         dark={darkMode}
                         onExit={() => setTurnByTurnFor((prev) => ({ ...prev, [order.id]: null }))}
@@ -2816,16 +2833,16 @@ export default function Home() {
                         isSameRestaurantBatch && (order.status === 'READY' || order.status === 'PICKED_UP' || order.status === 'IN_TRANSIT')
                           ? 'bg-neutral-900 text-white dark:bg-zinc-100 dark:text-zinc-900'
                           : isSameRestaurantBatch
-                          ? 'bg-neutral-100 text-neutral-500 dark:bg-zinc-900 dark:text-zinc-400 border border-neutral-200 dark:border-zinc-800'
+                          ? 'bg-surface-2 text-muted dark:bg-zinc-900 dark:text-zinc-400 border border-border dark:border-zinc-800'
                           : 'bg-sky-900/10 text-sky-700 dark:text-sky-400 border border-sky-200 dark:border-sky-900/30'
                       }`}>
                         {isSameRestaurantBatch && order.status === 'READY'
-                          ? <><span className="h-2 w-2 rounded-full bg-white dark:bg-zinc-900 animate-pulse inline-block" /> {isStore ? 'Misma tienda — recoger junto con el pedido activo' : 'Mismo restaurante — recoger junto con el pedido activo'}</>
+                          ? <><span className="h-2 w-2 rounded-full bg-surface dark:bg-zinc-900 animate-pulse inline-block" /> {isStore ? 'Misma tienda — recoger junto con el pedido activo' : 'Mismo restaurante — recoger junto con el pedido activo'}</>
                           : isSameRestaurantBatch && isDeliveryPhase
-                          ? <><span className="h-2 w-2 rounded-full bg-white dark:bg-zinc-900 animate-pulse inline-block" /> Multi-ruta activa — {order.restaurant.name}</>
+                          ? <><span className="h-2 w-2 rounded-full bg-surface dark:bg-zinc-900 animate-pulse inline-block" /> Multi-ruta activa — {order.restaurant.name}</>
                           : isSameRestaurantBatch
-                          ? <><span className="inline-block">⏳</span> Mismo restaurante — esperando a que esté listo</>
-                          : <><span className="text-base">📍</span> Siguiente parada — {order.restaurant.name}</>
+                          ? <><span className="inline-block"><Hourglass className="h-5 w-5" /></span> Mismo restaurante — esperando a que esté listo</>
+                          : <><span className="text-base"><MapPin className="h-5 w-5" /></span> Siguiente parada — {order.restaurant.name}</>
                         }
                       </div>
                     )}
@@ -2836,14 +2853,14 @@ export default function Home() {
                     <div
                       className={
                         isQueued
-                          ? `rounded-3xl bg-white dark:bg-zinc-950 border border-neutral-150 dark:border-zinc-800 overflow-hidden shadow-sm ${isQueueBlocked ? 'opacity-60' : ''}`
-                          : `w-full bg-white dark:bg-zinc-950 border-0 flex-grow flex flex-col min-h-[calc(100dvh-100px)] pb-[112px]`
+                          ? `rounded-3xl bg-surface dark:bg-zinc-950 border border-neutral-150 dark:border-zinc-800 overflow-hidden shadow-sm ${isQueueBlocked ? 'opacity-60' : ''}`
+                          : `w-full bg-surface dark:bg-zinc-950 border-0 flex-grow flex flex-col min-h-[calc(100dvh-100px)] pb-[112px]`
                       }
                     >
                       {/* ─── FOLIO + STATUS ─── */}
-                       <div className="px-5 pt-5 pb-3 flex items-start justify-between gap-3 border-b border-neutral-100 dark:border-zinc-800/80">
+                       <div className="px-5 pt-5 pb-3 flex items-start justify-between gap-3 border-b border-border dark:border-zinc-800/80">
                           <div className="min-w-0 flex-1">
-                            <p className="text-3xl font-black text-neutral-900 dark:text-zinc-50 leading-none tracking-tight">
+                            <p className="text-3xl font-black text-foreground dark:text-zinc-50 leading-none tracking-tight">
                               Pedido #{order.dailyCounter || 'S/N'}
                             </p>
                             {order.customer.user?.name && (
@@ -2851,12 +2868,12 @@ export default function Home() {
                                 <div className="flex items-center justify-center w-6 h-6 rounded-full bg-sky-100 dark:bg-sky-500/20 text-sky-600 dark:text-sky-400 shrink-0">
                                   <User className="w-3.5 h-3.5" strokeWidth={2.5} />
                                 </div>
-                                <p className="text-base font-bold text-neutral-700 dark:text-zinc-300 truncate">
+                                <p className="text-base font-bold text-foreground dark:text-zinc-300 truncate">
                                   {order.customer.user.name}
                                 </p>
                               </div>
                             )}
-                            <p className="text-[11px] font-bold text-neutral-400 dark:text-zinc-500 mt-1.5 font-mono tracking-wide">
+                            <p className="text-[11px] font-bold text-muted dark:text-zinc-500 mt-1.5 font-mono tracking-wide">
                               #{order.orderReference}
                             </p>
                           </div>
@@ -2872,7 +2889,7 @@ export default function Home() {
                             <div className="space-y-4">
                               {/* Instruction banner */}
                               <div className="text-center pb-1">
-                                <p className="text-3xl font-black text-neutral-900 dark:text-zinc-50 leading-tight">
+                                <p className="text-3xl font-black text-foreground dark:text-zinc-50 leading-tight">
                                   {order.status === 'READY' ? 'Recoge el pedido' : isStore ? 'Dirígete a la tienda' : 'Dirígete al restaurante'}
                                 </p>
                               </div>
@@ -2880,8 +2897,8 @@ export default function Home() {
                               {/* Restaurant header card */}
                               <div className="rounded-2xl bg-neutral-900 dark:bg-zinc-100 p-5 text-white dark:text-zinc-900 shadow-lg">
                                 <div className="flex items-start gap-4">
-                                  <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-white/20 dark:bg-zinc-900/20 text-2xl">
-                                    🏪
+                                  <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-surface/20 dark:bg-zinc-900/20 text-2xl">
+                                    <Store className="h-5 w-5" />
                                   </div>
                                   <div className="min-w-0 flex-1">
                                     <p className="text-[10px] font-bold uppercase tracking-widest text-white/70 dark:text-zinc-900/70">Recoger en</p>
@@ -2899,7 +2916,7 @@ export default function Home() {
                                   <button
                                     type="button"
                                     onClick={(e) => { e.stopPropagation(); triggerHaptic(20); setTurnByTurnFor((prev) => ({ ...prev, [order.id]: 'pickup' })); }}
-                                    className="flex items-center justify-center gap-2 py-3.5 rounded-2xl border border-neutral-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-xs font-bold text-neutral-700 dark:text-zinc-300 shadow-sm transition active:scale-[0.97]"
+                                    className="flex items-center justify-center gap-2 py-3.5 rounded-2xl border border-border dark:border-zinc-800 bg-surface dark:bg-zinc-900 text-xs font-bold text-foreground dark:text-zinc-300 shadow-sm transition active:scale-[0.97]"
                                   >
                                     <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/><circle cx="12" cy="9" r="2.5"/></svg>
                                     Navegar
@@ -2912,9 +2929,9 @@ export default function Home() {
                                     triggerHaptic(10);
                                     setSelectedOrderDetail(order);
                                   }}
-                                  className="flex items-center justify-center gap-2 py-3.5 rounded-2xl border border-neutral-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-xs font-bold text-neutral-700 dark:text-zinc-300 shadow-sm transition active:scale-[0.97]"
+                                  className="flex items-center justify-center gap-2 py-3.5 rounded-2xl border border-border dark:border-zinc-800 bg-surface dark:bg-zinc-900 text-xs font-bold text-foreground dark:text-zinc-300 shadow-sm transition active:scale-[0.97]"
                                 >
-                                  <span>📋</span> Pedido
+                                  <span><ClipboardList className="h-5 w-5" /></span> Pedido
                                 </button>
                               </div>
 
@@ -2932,7 +2949,7 @@ export default function Home() {
                                                 lat: order.restaurant.latitude,
                                                 lng: order.restaurant.longitude,
                                                 label: order.restaurant.name,
-                                                emoji: '🏪',
+                                                emoji: '',
                                               }
                                             : null
                                         }
@@ -2944,9 +2961,9 @@ export default function Home() {
                                           triggerHaptic(20);
                                           setNavigationMapOpenFor((prev) => ({ ...prev, [order.id]: null }));
                                         }}
-                                        className="w-full py-2 rounded-lg border border-neutral-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-[11px] font-bold text-neutral-500 dark:text-zinc-400 flex items-center justify-center gap-1.5 transition active:scale-[0.98]"
+                                        className="w-full py-2 rounded-lg border border-border dark:border-zinc-800 bg-surface dark:bg-zinc-900 text-[11px] font-bold text-muted dark:text-zinc-400 flex items-center justify-center gap-1.5 transition active:scale-[0.98]"
                                       >
-                                        📴 Cerrar mapa
+                                        <BellOff className="h-5 w-5" /> Cerrar mapa
                                       </button>
                                     </>
                                   ) : (
@@ -2957,9 +2974,9 @@ export default function Home() {
                                         triggerHaptic(10);
                                         setNavigationMapOpenFor((prev) => ({ ...prev, [order.id]: 'pickup' }));
                                       }}
-                                      className="w-full py-2.5 rounded-2xl border border-dashed border-neutral-300 dark:border-zinc-700 bg-neutral-50/50 dark:bg-zinc-900/40 flex items-center justify-center gap-2 text-xs font-bold text-neutral-700 dark:text-zinc-300 transition active:scale-[0.98]"
+                                      className="w-full py-2.5 rounded-2xl border border-dashed border-border dark:border-zinc-700 bg-surface-2/50 dark:bg-zinc-900/40 flex items-center justify-center gap-2 text-xs font-bold text-foreground dark:text-zinc-300 transition active:scale-[0.98]"
                                     >
-                                      <span className="text-sm">🗺</span> Ver mapa de navegación
+                                      <span className="text-sm"><MapIcon className="h-5 w-5" /></span> Ver mapa de navegación
                                     </button>
                                   )}
                                 </div>
@@ -2970,7 +2987,7 @@ export default function Home() {
                                 if (order.status === 'READY') {
                                   return (
                                     <div className="rounded-2xl bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-900/30 px-5 py-4 flex items-center gap-3">
-                                      <span className="text-2xl">✅</span>
+                                      <span className="text-2xl"><CheckCircle2 className="h-5 w-5" /></span>
                                       <div>
                                         <p className="text-xs font-black text-emerald-700 dark:text-emerald-400">Pedido listo para recoger</p>
                                         <p className="text-[11px] text-emerald-600 dark:text-emerald-500 mt-0.5">{isStore ? 'La tienda ya surtió todo' : 'El restaurante ya preparó todo'}</p>
@@ -2981,8 +2998,8 @@ export default function Home() {
                                 if (isStore && prepDeadlineMs !== null) {
                                   return (
                                     <div className="rounded-2xl border border-amber-200 dark:border-amber-900/30 bg-amber-50 dark:bg-amber-950/20 px-5 py-4">
-                                      <p className="text-[10px] font-bold uppercase tracking-wider text-neutral-500 dark:text-zinc-500">Surtiendo tu pedido</p>
-                                      <p className="text-sm font-black text-neutral-800 dark:text-zinc-200 mt-0.5">
+                                      <p className="text-[10px] font-bold uppercase tracking-wider text-muted dark:text-zinc-500">Surtiendo tu pedido</p>
+                                      <p className="text-sm font-black text-foreground dark:text-zinc-200 mt-0.5">
                                         {remainingPrepMin === 0 ? 'Listo en cualquier momento' : `Aprox. ${remainingPrepMin} min`}
                                       </p>
                                     </div>
@@ -2994,8 +3011,8 @@ export default function Home() {
                                   const mins = Math.max(1, Math.round(Math.abs(diffMs) / 60000));
                                   return (
                                     <div className="rounded-2xl border border-amber-200 dark:border-amber-900/30 bg-amber-50 dark:bg-amber-950/20 px-5 py-4">
-                                      <p className="text-[10px] font-bold uppercase tracking-wider text-neutral-500 dark:text-zinc-500">Recogiendo tu pedido</p>
-                                      <p className="text-sm font-black text-neutral-800 dark:text-zinc-200 mt-0.5">
+                                      <p className="text-[10px] font-bold uppercase tracking-wider text-muted dark:text-zinc-500">Recogiendo tu pedido</p>
+                                      <p className="text-sm font-black text-foreground dark:text-zinc-200 mt-0.5">
                                         {overdue ? `Debería estar listo (hace ${mins} min)` : `Aprox. ${mins} min`}
                                       </p>
                                     </div>
@@ -3004,8 +3021,8 @@ export default function Home() {
                                 if (prepDeadlineMs !== null) {
                                   return (
                                     <div className="rounded-2xl border border-amber-200 dark:border-amber-900/30 bg-amber-50 dark:bg-amber-950/20 px-5 py-4">
-                                      <p className="text-[10px] font-bold uppercase tracking-wider text-neutral-500 dark:text-zinc-500">Preparando tu pedido</p>
-                                      <p className="text-sm font-black text-neutral-800 dark:text-zinc-200 mt-0.5">
+                                      <p className="text-[10px] font-bold uppercase tracking-wider text-muted dark:text-zinc-500">Preparando tu pedido</p>
+                                      <p className="text-sm font-black text-foreground dark:text-zinc-200 mt-0.5">
                                         {remainingPrepMin === 0 ? 'Listo en cualquier momento' : `Aprox. ${remainingPrepMin} min`}
                                       </p>
                                     </div>
@@ -3018,8 +3035,8 @@ export default function Home() {
                                   const mins = Math.max(1, Math.round(Math.abs(diffMs) / 60000));
                                   return (
                                     <div className="rounded-2xl border border-amber-200 dark:border-amber-900/30 bg-amber-50 dark:bg-amber-950/20 px-5 py-4">
-                                      <p className="text-[10px] font-bold uppercase tracking-wider text-neutral-500 dark:text-zinc-500">Preparando tu pedido</p>
-                                      <p className="text-sm font-black text-neutral-800 dark:text-zinc-200 mt-0.5">
+                                      <p className="text-[10px] font-bold uppercase tracking-wider text-muted dark:text-zinc-500">Preparando tu pedido</p>
+                                      <p className="text-sm font-black text-foreground dark:text-zinc-200 mt-0.5">
                                         {overdue ? `Debería estar listo (hace ${mins} min)` : `Aprox. ${mins} min`}
                                       </p>
                                     </div>
@@ -3054,7 +3071,7 @@ export default function Home() {
                                   type="button"
                                   onClick={() => void runDriverAction(order.id, 'reject')}
                                   disabled={activeActionKey !== null}
-                                  className="w-full py-2.5 rounded-2xl text-sm font-bold text-neutral-400 dark:text-zinc-500 transition active:scale-[0.97] disabled:opacity-50 hover:text-rose-500"
+                                  className="w-full py-2.5 rounded-2xl text-sm font-bold text-muted dark:text-zinc-500 transition active:scale-[0.97] disabled:opacity-50 hover:text-rose-500"
                                 >
                                   {activeActionKey === `${order.id}:reject` ? 'Rechazando...' : 'Rechazar pedido'}
                                 </button>
@@ -3073,8 +3090,8 @@ export default function Home() {
                           {/* Restaurant header card — app style */}
                           <div className="rounded-[20px] bg-neutral-900 dark:bg-zinc-800 p-5 text-white shadow-lg">
                             <div className="flex items-start gap-3.5">
-                              <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-white/15 text-2xl">
-                                🏪
+                              <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-surface/15 text-2xl">
+                                <Store className="h-5 w-5" />
                               </div>
                               <div className="min-w-0 flex-1">
                                 <p className="text-[10px] font-bold uppercase tracking-widest text-white/50">Recoger en</p>
@@ -3091,14 +3108,14 @@ export default function Home() {
                               triggerHaptic(10);
                               setSelectedOrderDetail(order);
                             }}
-                            className="w-full py-3 rounded-2xl border border-neutral-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-xs font-bold text-neutral-600 dark:text-zinc-400 shadow-sm hover:bg-neutral-50 dark:hover:bg-zinc-800/80 transition active:scale-[0.97]"
+                            className="w-full py-3 rounded-2xl border border-border dark:border-zinc-800 bg-surface dark:bg-zinc-900 text-xs font-bold text-muted dark:text-zinc-400 shadow-sm hover:bg-surface-2 dark:hover:bg-zinc-800/80 transition active:scale-[0.97]"
                           >
-                            <span>📋</span> Ver detalles del pedido
+                            <span><ClipboardList className="h-5 w-5" /></span> Ver detalles del pedido
                           </button>
 
                           {/* Instruction */}
                           <div className="pb-1">
-                            <p className="text-lg font-black text-neutral-900 dark:text-zinc-50 leading-tight">
+                            <p className="text-lg font-black text-foreground dark:text-zinc-50 leading-tight">
                               {isCash ? 'Paga y recoge el pedido' : 'Muestra el PIN y recoge el pedido'}
                             </p>
                           </div>
@@ -3109,10 +3126,10 @@ export default function Home() {
                               <div className="flex items-center justify-between">
                                 <div>
                                   <p className="text-[10px] font-bold uppercase tracking-widest text-emerald-600 dark:text-emerald-400">{isStore ? 'Pagar en tienda' : 'Pagar al restaurante'}</p>
-                                  <p className="text-3xl font-black text-neutral-900 dark:text-zinc-50 mt-0.5">{formatCurrency(batchTotalAmount)}</p>
+                                  <p className="text-3xl font-black text-foreground dark:text-zinc-50 mt-0.5">{formatCurrency(batchTotalAmount)}</p>
                                 </div>
                                 <div className="flex h-12 w-12 items-center justify-center rounded-full bg-emerald-200/60 dark:bg-emerald-800/40 text-emerald-600 dark:text-emerald-400 text-xl">
-                                  💵
+                                  <Banknote className="h-5 w-5" />
                                 </div>
                               </div>
                             </div>
@@ -3120,19 +3137,19 @@ export default function Home() {
 
                           {/* BATCH: list of orders included in the batch pickup */}
                           {isBatchPickup && (
-                            <div className="rounded-2xl border border-neutral-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/50 p-4 space-y-2">
-                              <p className="text-[10px] font-bold uppercase tracking-widest text-neutral-400 dark:text-zinc-500 mb-2">📦 Pedidos incluidos en este lote</p>
+                            <div className="rounded-2xl border border-border dark:border-zinc-800 bg-surface dark:bg-zinc-900/50 p-4 space-y-2">
+                              <p className="text-[10px] font-bold uppercase tracking-widest text-muted dark:text-zinc-500 mb-2"><Package className="h-5 w-5" /> Pedidos incluidos en este lote</p>
                               {batchGroup.filter(o => o.status === 'READY' || o.status === 'PICKED_UP').map((batchOrder) => {
                                 const batchOrderAmount = batchOrder.totalAmount && batchOrder.deliveryFee
                                   ? batchOrder.totalAmount - batchOrder.deliveryFee
                                   : batchOrder.totalAmount || 0;
                                 return (
-                                  <div key={batchOrder.id} className="flex items-center justify-between gap-2 rounded-xl bg-neutral-50 dark:bg-zinc-800/50 px-3 py-2.5">
+                                  <div key={batchOrder.id} className="flex items-center justify-between gap-2 rounded-xl bg-surface-2 dark:bg-zinc-800/50 px-3 py-2.5">
                                     <div className="min-w-0 flex-1">
-                                      <p className="text-sm font-bold text-neutral-900 dark:text-zinc-50 truncate">
+                                      <p className="text-sm font-bold text-foreground dark:text-zinc-50 truncate">
                                         #{batchOrder.dailyCounter || 'S/N'} · {batchOrder.customer?.user?.name || 'Cliente'}
                                       </p>
-                                      <p className="text-[10px] font-mono text-neutral-400 dark:text-zinc-500 truncate mt-0.5">
+                                      <p className="text-[10px] font-mono text-muted dark:text-zinc-500 truncate mt-0.5">
                                         {batchOrder.orderReference}
                                       </p>
                                     </div>
@@ -3147,10 +3164,10 @@ export default function Home() {
 
                           {/* TRANSFER: PIN card */}
                           {isTransfer && order.handoverPin && (
-                            <div className="rounded-2xl bg-neutral-50 dark:bg-zinc-900/50 border border-neutral-200 dark:border-zinc-800 p-5 text-center">
-                              <p className="text-[10px] font-bold uppercase tracking-widest text-neutral-400 dark:text-zinc-500 mb-3">{isStore ? 'Muestra este PIN en la tienda' : 'Muestra este PIN al restaurante'}</p>
-                              <p className="text-5xl font-black tracking-[0.5em] text-neutral-900 dark:text-zinc-50 font-mono py-2">{order.handoverPin}</p>
-                              <p className="text-xs text-neutral-400 dark:text-zinc-500 mt-2">{isStore ? 'En tienda verificarán que eres el repartidor autorizado' : 'El restaurante verificará que eres el repartidor autorizado'}</p>
+                            <div className="rounded-2xl bg-surface-2 dark:bg-zinc-900/50 border border-border dark:border-zinc-800 p-5 text-center">
+                              <p className="text-[10px] font-bold uppercase tracking-widest text-muted dark:text-zinc-500 mb-3">{isStore ? 'Muestra este PIN en la tienda' : 'Muestra este PIN al restaurante'}</p>
+                              <p className="text-5xl font-black tracking-[0.5em] text-foreground dark:text-zinc-50 font-mono py-2">{order.handoverPin}</p>
+                              <p className="text-xs text-muted dark:text-zinc-500 mt-2">{isStore ? 'En tienda verificarán que eres el repartidor autorizado' : 'El restaurante verificará que eres el repartidor autorizado'}</p>
                             </div>
                           )}
 
@@ -3178,7 +3195,7 @@ export default function Home() {
                             <div className="rounded-2xl border border-sky-200 dark:border-sky-900/30 bg-sky-50 dark:bg-sky-950/20 px-5 py-4">
                               <div className="flex items-center gap-3">
                                 <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-sky-200/60 dark:bg-sky-800/30 text-sky-600 dark:text-sky-400 text-lg">
-                                  ⏱️
+                                  <Clock className="h-5 w-5" />
                                 </div>
                                 <div>
                                   <p className="text-sm font-black text-sky-800 dark:text-sky-400">{isStore ? 'Surtiendo pedido' : 'Preparando pedido'}</p>
@@ -3212,7 +3229,7 @@ export default function Home() {
                                   disabled={activeActionKey !== null && activeActionKey.startsWith(order.id)}
                                   className="w-full py-3 rounded-2xl border-2 border-dashed border-rose-300 dark:border-rose-800/50 bg-rose-50 dark:bg-rose-950/20 text-rose-700 dark:text-rose-400 text-sm font-bold transition active:scale-[0.97] disabled:opacity-40 disabled:cursor-not-allowed"
                                 >
-                                  ⛓️‍💥 Liberar pedido
+                                  <Unlink className="h-5 w-5" /> Liberar pedido
                                 </button>
                               );
                             })()}
@@ -3344,7 +3361,7 @@ export default function Home() {
                               </div>
                               <p className="text-2xl font-black leading-tight text-white">{customerAddressStr}</p>
                               {order.address?.reference && (
-                                <p className="mt-2 text-sm text-white/60 leading-snug">📍 {order.address.reference}</p>
+                                <p className="mt-2 text-sm text-white/60 leading-snug"><MapPin className="h-5 w-5" /> {order.address.reference}</p>
                               )}
                             </div>
 
@@ -3374,7 +3391,7 @@ export default function Home() {
                                               lat: order.latitude,
                                               lng: order.longitude,
                                               label: customerAddressStr,
-                                              emoji: '🏠',
+                                              emoji: '',
                                             }
                                           : null
                                       }
@@ -3386,9 +3403,9 @@ export default function Home() {
                                         triggerHaptic(20);
                                         setNavigationMapOpenFor((prev) => ({ ...prev, [order.id]: null }));
                                       }}
-                                      className="w-full py-2 rounded-lg border border-neutral-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-[11px] font-bold text-neutral-500 dark:text-zinc-400 flex items-center justify-center gap-1.5 transition active:scale-[0.98]"
+                                      className="w-full py-2 rounded-lg border border-border dark:border-zinc-800 bg-surface dark:bg-zinc-900 text-[11px] font-bold text-muted dark:text-zinc-400 flex items-center justify-center gap-1.5 transition active:scale-[0.98]"
                                     >
-                                      📴 Cerrar mapa
+                                      <BellOff className="h-5 w-5" /> Cerrar mapa
                                     </button>
                                   </>
                                 ) : (
@@ -3399,9 +3416,9 @@ export default function Home() {
                                       triggerHaptic(10);
                                       setNavigationMapOpenFor((prev) => ({ ...prev, [order.id]: 'delivery' }));
                                     }}
-                                    className="w-full py-2.5 rounded-2xl border border-dashed border-neutral-300 dark:border-zinc-700 bg-neutral-50/50 dark:bg-zinc-900/40 flex items-center justify-center gap-2 text-xs font-bold text-neutral-700 dark:text-zinc-300 transition active:scale-[0.98]"
+                                    className="w-full py-2.5 rounded-2xl border border-dashed border-border dark:border-zinc-700 bg-surface-2/50 dark:bg-zinc-900/40 flex items-center justify-center gap-2 text-xs font-bold text-foreground dark:text-zinc-300 transition active:scale-[0.98]"
                                   >
-                                    <span className="text-sm">🗺</span> Ver mapa de navegación
+                                    <span className="text-sm"><MapIcon className="h-5 w-5" /></span> Ver mapa de navegación
                                   </button>
                                 )}
                               </div>
@@ -3409,23 +3426,23 @@ export default function Home() {
 
                             {/* ── Delivery preference ── */}
                             {order.deliveryPreference && (
-                              <div className="rounded-2xl border border-neutral-200 dark:border-zinc-800 px-4 py-3 flex items-start gap-3">
+                              <div className="rounded-2xl border border-border dark:border-zinc-800 px-4 py-3 flex items-start gap-3">
                                 <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-amber-50 dark:bg-amber-950/20 text-base">
-                                  {order.deliveryPreference === 'NO_DOORBELL' && '🤫'}
-                                  {order.deliveryPreference === 'CALL_ON_ARRIVAL' && '📞'}
-                                  {order.deliveryPreference === 'PREFER_WHATSAPP' && '💬'}
-                                  {order.deliveryPreference === 'HONK_ON_ARRIVAL' && '🚗'}
-                                  {order.deliveryPreference === 'BEWARE_OF_DOG' && '🐕'}
+                                  {order.deliveryPreference === 'NO_DOORBELL' && ''}
+                                  {order.deliveryPreference === 'CALL_ON_ARRIVAL' && ''}
+                                  {order.deliveryPreference === 'PREFER_WHATSAPP' && ''}
+                                  {order.deliveryPreference === 'HONK_ON_ARRIVAL' && ''}
+                                  {order.deliveryPreference === 'BEWARE_OF_DOG' && ''}
                                 </div>
                                 <div className="min-w-0 flex-1">
-                                  <p className="text-sm font-bold text-neutral-900 dark:text-zinc-100">
+                                  <p className="text-sm font-bold text-foreground dark:text-zinc-100">
                                     {order.deliveryPreference === 'NO_DOORBELL' && 'No tocar el timbre'}
                                     {order.deliveryPreference === 'CALL_ON_ARRIVAL' && 'Llamar al llegar'}
                                     {order.deliveryPreference === 'PREFER_WHATSAPP' && 'Avisar por WhatsApp'}
                                     {order.deliveryPreference === 'HONK_ON_ARRIVAL' && 'Tocar el claxon'}
                                     {order.deliveryPreference === 'BEWARE_OF_DOG' && 'Cuidado con el perro'}
                                   </p>
-                                  <p className="text-xs text-neutral-500 dark:text-zinc-400 mt-0.5 leading-snug">
+                                  <p className="text-xs text-muted dark:text-zinc-400 mt-0.5 leading-snug">
                                     {order.deliveryPreference === 'NO_DOORBELL' && 'Llama o manda mensaje. No uses el timbre.'}
                                     {order.deliveryPreference === 'CALL_ON_ARRIVAL' && 'Llama por teléfono en cuanto llegues.'}
                                     {order.deliveryPreference === 'PREFER_WHATSAPP' && 'Avisa por WhatsApp que ya llegaste.'}
@@ -3442,9 +3459,9 @@ export default function Home() {
                                 <a
                                   href={`tel:${order.customer.user.phone}`}
                                   onClick={(e) => { e.stopPropagation(); triggerHaptic(20); }}
-                                  className="flex items-center justify-center gap-2 w-full py-3 rounded-2xl border border-neutral-200 dark:border-zinc-800 bg-neutral-50 dark:bg-zinc-900/50 text-xs font-bold text-neutral-700 dark:text-zinc-300 transition active:scale-[0.97]"
+                                  className="flex items-center justify-center gap-2 w-full py-3 rounded-2xl border border-border dark:border-zinc-800 bg-surface-2 dark:bg-zinc-900/50 text-xs font-bold text-foreground dark:text-zinc-300 transition active:scale-[0.97]"
                                 >
-                                  <span className="text-base">📞</span> Llamar
+                                  <span className="text-base"><Phone className="h-5 w-5" /></span> Llamar
                                 </a>
                                 <a
                                   href={`https://wa.me/52${order.customer.user.phone.replace(/\D/g,'')}`}
@@ -3468,10 +3485,10 @@ export default function Home() {
                                     triggerHaptic(10);
                                     setShowRestaurantContact((prev) => !prev);
                                   }}
-                                  className="flex items-center justify-between w-full py-3 px-4 rounded-2xl border border-neutral-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-xs font-bold text-neutral-500 dark:text-zinc-400 transition active:scale-[0.98]"
+                                  className="flex items-center justify-between w-full py-3 px-4 rounded-2xl border border-border dark:border-zinc-800 bg-surface dark:bg-zinc-900 text-xs font-bold text-muted dark:text-zinc-400 transition active:scale-[0.98]"
                                 >
                                   <span className="flex items-center gap-2">
-                                    <span className="text-base">🏪</span> {isStore ? 'Tienda' : 'Restaurante'}
+                                    <span className="text-base"><Store className="h-5 w-5" /></span> {isStore ? 'Tienda' : 'Restaurante'}
                                   </span>
                                   <ChevronUp />
                                 </button>
@@ -3483,9 +3500,9 @@ export default function Home() {
                                       <a
                                         href={`tel:${order.restaurant.user.phone}`}
                                         onClick={(e) => { e.stopPropagation(); triggerHaptic(20); }}
-                                        className="flex items-center justify-center gap-2 w-full py-3 rounded-2xl border border-neutral-200 dark:border-zinc-800 bg-neutral-50 dark:bg-zinc-900/50 text-xs font-bold text-neutral-700 dark:text-zinc-300 transition active:scale-[0.97]"
+                                        className="flex items-center justify-center gap-2 w-full py-3 rounded-2xl border border-border dark:border-zinc-800 bg-surface-2 dark:bg-zinc-900/50 text-xs font-bold text-foreground dark:text-zinc-300 transition active:scale-[0.97]"
                                       >
-                                        <span className="text-base">📞</span> Llamar
+                                        <span className="text-base"><Phone className="h-5 w-5" /></span> Llamar
                                       </a>
                                       <a
                                         href={`https://wa.me/52${order.restaurant.user.phone.replace(/\D/g,'')}`}
@@ -3537,8 +3554,8 @@ export default function Home() {
 
                             {/* ── Delivery instruction ── */}
                             <div>
-                              <p className="text-[10px] font-bold uppercase tracking-widest text-neutral-400 dark:text-zinc-500 mb-1">Entrega a {order.customer.user?.name || 'cliente'}</p>
-                              <p className="text-xl font-black text-neutral-900 dark:text-zinc-50">
+                              <p className="text-[10px] font-bold uppercase tracking-widest text-muted dark:text-zinc-500 mb-1">Entrega a {order.customer.user?.name || 'cliente'}</p>
+                              <p className="text-xl font-black text-foreground dark:text-zinc-50">
                                 {isCash ? 'Cobra al cliente' : 'Solicita el PIN al cliente'}
                               </p>
                             </div>
@@ -3570,11 +3587,11 @@ export default function Home() {
                                 <div className="flex items-center justify-between">
                                   <div>
                                     <p className="text-[10px] font-bold uppercase tracking-widest text-emerald-600 dark:text-emerald-400">Total a cobrar</p>
-                                    <p className="text-4xl font-black text-neutral-900 dark:text-zinc-50 mt-0.5">{formatCurrency(order.totalAmount)}</p>
+                                    <p className="text-4xl font-black text-foreground dark:text-zinc-50 mt-0.5">{formatCurrency(order.totalAmount)}</p>
                                     <p className="text-xs text-emerald-600/70 dark:text-emerald-400/70 mt-1 leading-snug">Pago en efectivo — entrega cambio exacto si aplica</p>
                                   </div>
                                   <div className="flex h-14 w-14 items-center justify-center rounded-full bg-emerald-200/60 dark:bg-emerald-800/40 text-emerald-600 dark:text-emerald-400 text-2xl">
-                                    💵
+                                    <Banknote className="h-5 w-5" />
                                   </div>
                                 </div>
                               </div>
@@ -3583,7 +3600,7 @@ export default function Home() {
                             {/* ── TRANSFER: PIN input ── */}
                             {isTransfer && (
                               <div className="space-y-3">
-                                <p className="text-[10px] font-bold uppercase tracking-widest text-neutral-400 dark:text-zinc-500">PIN de confirmación del cliente</p>
+                                <p className="text-[10px] font-bold uppercase tracking-widest text-muted dark:text-zinc-500">PIN de confirmación del cliente</p>
                                 <input
                                   type="tel"
                                   inputMode="numeric"
@@ -3595,27 +3612,27 @@ export default function Home() {
                                     setDeliveryPinError('');
                                   }}
                                   placeholder="• • • •"
-                                  className="w-full text-center tracking-[0.5em] text-2xl font-black rounded-2xl border border-neutral-200 dark:border-zinc-800 bg-neutral-50 dark:bg-zinc-900 py-4 outline-none focus:border-neutral-400 dark:focus:border-zinc-600 text-neutral-900 dark:text-zinc-50 transition"
+                                  className="w-full text-center tracking-[0.5em] text-2xl font-black rounded-2xl border border-border dark:border-zinc-800 bg-surface-2 dark:bg-zinc-900 py-4 outline-none focus:border-neutral-400 dark:focus:border-zinc-600 text-foreground dark:text-zinc-50 transition"
                                   autoFocus
                                 />
                                 {deliveryPinError && (
                                   <p className="text-xs font-bold text-rose-600 dark:text-rose-400 text-center">{deliveryPinError}</p>
                                 )}
-                                <p className="text-[10px] text-neutral-400 dark:text-zinc-500 text-center leading-snug">El cliente te dará este PIN para confirmar que recibió el pedido</p>
+                                <p className="text-[10px] text-muted dark:text-zinc-500 text-center leading-snug">El cliente te dará este PIN para confirmar que recibió el pedido</p>
                               </div>
                             )}
 
                             {/* ── Contact client ── */}
                             {order.customer.user?.phone && (
                               <div>
-                                <p className="text-[10px] font-bold uppercase tracking-widest text-neutral-400 dark:text-zinc-500 mb-2.5 ml-1">Contacto</p>
+                                <p className="text-[10px] font-bold uppercase tracking-widest text-muted dark:text-zinc-500 mb-2.5 ml-1">Contacto</p>
                                 <div className="grid grid-cols-2 gap-3">
                                   <a
                                     href={`tel:${order.customer.user.phone}`}
                                     onClick={(e) => { e.stopPropagation(); triggerHaptic(20); }}
-                                    className="flex items-center justify-center gap-2 w-full py-3 rounded-2xl border border-neutral-200 dark:border-zinc-800 bg-neutral-50 dark:bg-zinc-900/50 text-xs font-bold text-neutral-700 dark:text-zinc-300 transition active:scale-[0.97]"
+                                    className="flex items-center justify-center gap-2 w-full py-3 rounded-2xl border border-border dark:border-zinc-800 bg-surface-2 dark:bg-zinc-900/50 text-xs font-bold text-foreground dark:text-zinc-300 transition active:scale-[0.97]"
                                   >
-                                    <span className="text-base">📞</span> Llamar Cliente
+                                    <span className="text-base"><Phone className="h-5 w-5" /></span> Llamar Cliente
                                   </a>
                                   <a
                                     href={`https://wa.me/52${order.customer.user.phone.replace(/\D/g,'')}`}
@@ -3651,7 +3668,7 @@ export default function Home() {
                             if (!showTimer) return null;
 
                             return (
-                              <div className="rounded-2xl border border-amber-200 dark:border-amber-900/30 bg-white dark:bg-zinc-900 px-4 py-3.5 space-y-3">
+                              <div className="rounded-2xl border border-amber-200 dark:border-amber-900/30 bg-surface dark:bg-zinc-900 px-4 py-3.5 space-y-3">
                                 <div className="flex items-center justify-between">
                                   <p className="text-[10px] font-bold uppercase tracking-widest text-amber-700 dark:text-amber-400">
                                     Espera sin contacto
@@ -3679,7 +3696,7 @@ export default function Home() {
                                       setSafePlaceConfirmOrderId(order.id);
                                     }}
                                     disabled={!safePlaceReady || activeActionKey !== null}
-                                    className="w-full py-3 rounded-2xl border-2 border-amber-300 dark:border-amber-700/60 bg-white dark:bg-zinc-900 text-amber-800 dark:text-amber-300 text-sm font-black tracking-wide transition active:scale-[0.97] disabled:opacity-35 disabled:cursor-not-allowed"
+                                    className="w-full py-3 rounded-2xl border-2 border-amber-300 dark:border-amber-700/60 bg-surface dark:bg-zinc-900 text-amber-800 dark:text-amber-300 text-sm font-black tracking-wide transition active:scale-[0.97] disabled:opacity-35 disabled:cursor-not-allowed"
                                   >
                                     {activeActionKey === `${order.id}:safePlace`
                                       ? <span className="flex items-center justify-center gap-2"><span className="h-4 w-4 rounded-full border-2 border-current border-t-transparent animate-spin" />Procesando...</span>
@@ -3696,7 +3713,7 @@ export default function Home() {
                                       setNoShowConfirmOrderId(order.id);
                                     }}
                                     disabled={!noShowReady || activeActionKey !== null}
-                                    className="w-full py-3 rounded-2xl border-2 border-rose-300 dark:border-rose-700/60 bg-white dark:bg-zinc-900 text-rose-700 dark:text-rose-400 text-sm font-black tracking-wide transition active:scale-[0.97] disabled:opacity-35 disabled:cursor-not-allowed"
+                                    className="w-full py-3 rounded-2xl border-2 border-rose-300 dark:border-rose-700/60 bg-surface dark:bg-zinc-900 text-rose-700 dark:text-rose-400 text-sm font-black tracking-wide transition active:scale-[0.97] disabled:opacity-35 disabled:cursor-not-allowed"
                                   >
                                     {activeActionKey === `${order.id}:noShow`
                                       ? <span className="flex items-center justify-center gap-2"><span className="h-4 w-4 rounded-full border-2 border-current border-t-transparent animate-spin" />Procesando...</span>
@@ -3752,15 +3769,15 @@ export default function Home() {
         {activeTab === 'history' && (
           <div className="space-y-4">
             {/* Sub-tab selector: Pedidos | Pagos */}
-            <div className="flex gap-1.5 rounded-3xl border border-black/5 dark:border-zinc-900 bg-white dark:bg-zinc-950 p-1 shadow-sm">
+            <div className="flex gap-1.5 rounded-3xl border border-black/5 dark:border-zinc-900 bg-surface dark:bg-zinc-950 p-1 shadow-sm">
               {(['orders', 'payments'] as const).map((sub) => (
                 <button
                   key={sub}
                   onClick={() => setHistorySubTab(sub)}
                   className={`flex-1 px-3 py-2 rounded-2xl text-[10px] font-black uppercase tracking-wider transition-all ${
                     historySubTab === sub
-                      ? 'bg-neutral-950 text-white dark:bg-white dark:text-neutral-950 shadow-md'
-                      : 'text-neutral-400 hover:text-neutral-600 dark:hover:text-zinc-300'
+                      ? 'bg-neutral-950 text-white dark:bg-surface dark:text-neutral-950 shadow-md'
+                      : 'text-muted hover:text-muted dark:hover:text-zinc-300'
                   }`}
                 >
                   {sub === 'orders' ? 'Pedidos' : 'Pagos'}
@@ -3771,9 +3788,9 @@ export default function Home() {
             {historySubTab === 'orders' && (
               <>
                 {/* Tarjeta de Resumen Acumulado en el Historial */}
-                <div className="rounded-3xl border border-black/5 bg-white p-5 dark:bg-zinc-950 dark:border-zinc-900 shadow-sm transition">
+                <div className="rounded-3xl border border-black/5 bg-surface p-5 dark:bg-zinc-950 dark:border-zinc-900 shadow-sm transition">
                   <span className="text-[9px] font-extrabold uppercase tracking-widest text-sky-500 dark:text-sky-400">Métricas Totales Visibles</span>
-                  <h3 className="text-lg font-black text-neutral-900 dark:text-zinc-50 leading-tight mt-1">Historial General</h3>
+                  <h3 className="text-lg font-black text-foreground dark:text-zinc-50 leading-tight mt-1">Historial General</h3>
 
                   {/* Filtro por período */}
                   <div className="mt-3 flex gap-1.5">
@@ -3784,7 +3801,7 @@ export default function Home() {
                         className={`px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-wider transition-all ${
                           historyFilter === f
                             ? 'bg-sky-500 text-white shadow-md'
-                            : 'bg-neutral-100 dark:bg-zinc-900 text-neutral-500 dark:text-zinc-400 hover:bg-neutral-200 dark:hover:bg-zinc-800'
+                            : 'bg-surface-2 dark:bg-zinc-900 text-muted dark:text-zinc-400 hover:bg-surface-2 dark:hover:bg-zinc-800'
                         }`}
                       >
                         {f === 'day' ? 'Hoy' : f === 'week' ? 'Semana' : f === 'month' ? 'Mes' : 'Todo'}
@@ -3793,13 +3810,13 @@ export default function Home() {
                   </div>
 
                   <div className="mt-3.5 grid grid-cols-2 gap-3.5">
-                    <div className="rounded-2xl bg-neutral-50 p-4 dark:bg-zinc-900/60 shadow-inner">
-                      <p className="text-[9px] font-black uppercase tracking-wider text-neutral-400">Viajes Completados</p>
+                    <div className="rounded-2xl bg-surface-2 p-4 dark:bg-zinc-900/60 shadow-inner">
+                      <p className="text-[9px] font-black uppercase tracking-wider text-muted">Viajes Completados</p>
                       <p className="text-2xl font-black text-neutral-950 dark:text-zinc-50 mt-1">
                         {filteredHistoryOrders.length}
                       </p>
                     </div>
-                    <div className="rounded-2xl bg-neutral-50 p-4 dark:bg-zinc-900/60 shadow-inner">
+                    <div className="rounded-2xl bg-surface-2 p-4 dark:bg-zinc-900/60 shadow-inner">
                       <p className="text-[9px] font-black uppercase tracking-wider text-sky-600 dark:text-sky-400">Tu Ganancia</p>
                       <p className="text-2xl font-black text-sky-600 dark:text-sky-400 mt-1">
                         {formatCurrency(
@@ -3808,26 +3825,24 @@ export default function Home() {
                       </p>
                     </div>
                   </div>
-                  <p className="text-[9px] text-neutral-400 dark:text-zinc-600 mt-2 text-right">
+                  <p className="text-[9px] text-muted dark:text-zinc-600 mt-2 text-right">
                     Total facturado: {formatCurrency(filteredHistoryOrders.reduce((sum, o) => sum + (o.totalAmount || 0), 0))}
                   </p>
                 </div>
 
                 {filteredHistoryOrders.length === 0 ? (
-                  <div className="rounded-[36px] border border-dashed border-black/10 bg-white/40 p-10 text-center dark:bg-zinc-950/15 dark:border-zinc-900">
-                    <span className="text-3xl block mb-3">📅</span>
-                    <h4 className="text-sm font-black text-neutral-850 dark:text-zinc-200">Sin resultados</h4>
-                    <p className="text-xs text-neutral-500 dark:text-zinc-400 mt-1 leading-relaxed">
-                      {historyFilter === 'all' ? 'Aún no registras entregas. ¡Sal a ruta e inicia a ganar!' : 'No hay entregas en este período.'}
-                    </p>
-                  </div>
+                  <EmptyState
+                    icon={Calendar}
+                    title="Sin resultados"
+                    description={historyFilter === 'all' ? 'Aún no registras entregas. ¡Sal a ruta e inicia a ganar!' : 'No hay entregas en este período.'}
+                  />
                 ) : (
                   <div className="space-y-5">
                     {groupedHistoryOrders.map(([dateLabel, orders]) => (
                       <div key={dateLabel}>
                         <div className="flex items-center gap-2 mb-2.5 px-1">
-                          <h4 className="text-[10px] font-bold text-neutral-400 dark:text-zinc-500 uppercase tracking-wider">{dateLabel}</h4>
-                          <div className="flex-1 h-px bg-neutral-200/50 dark:bg-zinc-800/50" />
+                          <h4 className="text-[10px] font-bold text-muted dark:text-zinc-500 uppercase tracking-wider">{dateLabel}</h4>
+                          <div className="flex-1 h-px bg-surface-2/50 dark:bg-zinc-800/50" />
                           <span className="text-[9px] font-bold text-neutral-300 dark:text-zinc-600">{orders.length} viaje{orders.length !== 1 ? 's' : ''}</span>
                         </div>
                         <div className="space-y-2">
@@ -3835,14 +3850,14 @@ export default function Home() {
                             <article
                               key={order.id}
                               onClick={() => setSelectedHistoryOrder(order)}
-                              className="rounded-2xl border border-black/5 bg-white p-4 flex justify-between items-center transition cursor-pointer hover:bg-neutral-50 dark:bg-zinc-950 dark:border-zinc-900/60 dark:hover:bg-zinc-900"
+                              className="rounded-2xl border border-black/5 bg-surface p-4 flex justify-between items-center transition cursor-pointer hover:bg-surface-2 dark:bg-zinc-950 dark:border-zinc-900/60 dark:hover:bg-zinc-900"
                             >
                               <div>
                                 <div className="flex items-center gap-2">
                                   {order.noShowReleasedAt ? (
-                                    <span className="h-5 w-5 rounded bg-rose-500 text-white flex items-center justify-center text-[10px] font-bold shrink-0" title="Cliente no salió a recibir">⚠</span>
+                                    <span className="h-5 w-5 rounded bg-rose-500 text-white flex items-center justify-center text-[10px] font-bold shrink-0" title="Cliente no salió a recibir"><AlertTriangle className="h-5 w-5" /></span>
                                   ) : (
-                                    <span className="h-5 w-5 rounded bg-emerald-500 text-white flex items-center justify-center text-[10px] font-bold shrink-0">✓</span>
+                                    <span className="h-5 w-5 rounded bg-emerald-500 text-white flex items-center justify-center text-[10px] font-bold shrink-0"><Check className="h-5 w-5" /></span>
                                   )}
                                   <span className="text-xs font-black text-neutral-950 dark:text-zinc-50 truncate">
                                     {order.restaurant.name} — {order.customer?.user?.name ?? 'Cliente'} #{order.dailyCounter ?? '?'}
@@ -3853,10 +3868,10 @@ export default function Home() {
                                     </span>
                                   )}
                                 </div>
-                                <p className="text-[9px] text-neutral-400 dark:text-zinc-500 mt-0.5 font-mono tracking-tight">
+                                <p className="text-[9px] text-muted dark:text-zinc-500 mt-0.5 font-mono tracking-tight">
                                   {order.orderReference}
                                 </p>
-                                <p className="text-[9px] text-neutral-500 dark:text-zinc-400 mt-0.5">
+                                <p className="text-[9px] text-muted dark:text-zinc-400 mt-0.5">
                                   {order.deliveredAt ? formatDate(order.deliveredAt) : 'Completado'}
                                 </p>
                               </div>
@@ -3867,7 +3882,7 @@ export default function Home() {
                                     {formatCurrency(order.totalAmount)}
                                   </span>
                                 )}
-                                <span className="text-[9px] uppercase font-bold text-neutral-400">
+                                <span className="text-[9px] uppercase font-bold text-muted">
                                   {order.paymentMethod === 'TRANSFER' ? 'Transferencia' : 'Efectivo'}
                                 </span>
                               </div>
@@ -3881,7 +3896,7 @@ export default function Home() {
                       <button 
                         onClick={loadMoreHistory} 
                         disabled={loadingMoreHistory}
-                        className="w-full py-3.5 bg-neutral-100 hover:bg-neutral-200 dark:bg-zinc-900 dark:hover:bg-zinc-800 text-neutral-700 dark:text-zinc-300 rounded-2xl text-xs font-black uppercase tracking-widest transition-colors disabled:opacity-50 mt-4"
+                        className="w-full py-3.5 bg-surface-2 hover:bg-surface-2 dark:bg-zinc-900 dark:hover:bg-zinc-800 text-foreground dark:text-zinc-300 rounded-2xl text-xs font-black uppercase tracking-widest transition-colors disabled:opacity-50 mt-4"
                       >
                         {loadingMoreHistory ? 'Cargando...' : 'Cargar más antiguos'}
                       </button>
@@ -3894,13 +3909,11 @@ export default function Home() {
             {historySubTab === 'payments' && (
               <div className="space-y-4">
                 {driverSettlements.length === 0 ? (
-                  <div className="rounded-[36px] border border-dashed border-black/10 bg-white/40 p-10 text-center dark:bg-zinc-950/15 dark:border-zinc-900">
-                    <span className="text-3xl block mb-3">💰</span>
-                    <h4 className="text-sm font-black text-neutral-850 dark:text-zinc-200">Sin pagos registrados</h4>
-                    <p className="text-xs text-neutral-500 dark:text-zinc-400 mt-1 leading-relaxed">
-                      Aún no hay cortes de comisión registrados.
-                    </p>
-                  </div>
+                  <EmptyState
+                    icon={Wallet}
+                    title="Sin pagos registrados"
+                    description="Aún no hay cortes de comisión registrados."
+                  />
                 ) : (
                   driverSettlements.map((s) => {
                     const isPending = s.status === 'PENDING' || s.status === 'OVERDUE';
@@ -3911,7 +3924,7 @@ export default function Home() {
                           isPending
                             ? 'border-amber-200 bg-gradient-to-r from-amber-50/40 via-amber-50/10 to-white dark:from-amber-950/20 dark:to-zinc-950'
                             : s.status === 'PAID'
-                              ? 'border-black/5 bg-gradient-to-r from-neutral-50/50 to-white dark:from-zinc-900/30 dark:to-zinc-950 hover:border-neutral-200'
+                              ? 'border-black/5 bg-gradient-to-r from-neutral-50/50 to-white dark:from-zinc-900/30 dark:to-zinc-950 hover:border-border'
                               : s.status === 'IN_REVIEW'
                                 ? 'border-sky-200 bg-gradient-to-r from-sky-50/40 to-white dark:from-sky-950/20 dark:to-zinc-950'
                                 : 'border-black/5 bg-gradient-to-r from-neutral-50/50 to-white dark:from-zinc-900/30 dark:to-zinc-950'
@@ -3922,7 +3935,7 @@ export default function Home() {
                             <div className="flex items-center gap-2 flex-wrap">
                               <p className="font-extrabold text-neutral-950 dark:text-zinc-100 tracking-tight text-xs">{s.reference || 'Corte'}</p>
                             </div>
-                            <p className="text-[10px] text-neutral-500 dark:text-zinc-400 font-medium">
+                            <p className="text-[10px] text-muted dark:text-zinc-400 font-medium">
                               Periodo: {new Date(s.periodStart).toLocaleDateString('es-MX', { day: 'numeric', month: 'short' })} - {new Date(s.periodEnd).toLocaleDateString('es-MX', { day: 'numeric', month: 'short', year: 'numeric' })}
                             </p>
                           </div>
@@ -3931,33 +3944,17 @@ export default function Home() {
                               <p className="text-xl font-black text-neutral-950 dark:text-zinc-100">{formatCurrency(
                                 s.status === 'PENDING' && (walletData?.pastDebt || 0) > 0 ? (walletData?.pastDebt ?? 0) : s.amount
                               )}</p>
-                              <p className="text-[9px] text-neutral-500 dark:text-zinc-400 font-semibold mt-0.5">{s.deliveredOrders || 0} pedidos</p>
+                              <p className="text-[9px] text-muted dark:text-zinc-400 font-semibold mt-0.5">{s.deliveredOrders || 0} pedidos</p>
                             </div>
                             <div className="min-w-[100px] text-right">
-                              <span className={`inline-flex items-center gap-1 rounded-full border px-3 py-1 text-[10px] font-bold ${
-                                s.status === 'PAID'
-                                  ? 'bg-emerald-100 border-emerald-200/40 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300'
-                                  : s.status === 'IN_REVIEW'
-                                    ? 'bg-sky-100 border-sky-200/40 text-sky-800 dark:bg-sky-900/30 dark:text-sky-300'
-                                    : s.status === 'REJECTED'
-                                      ? 'bg-rose-100 border-rose-200/40 text-rose-800 dark:bg-rose-900/30 dark:text-rose-300'
-                                      : s.status === 'OVERDUE'
-                                        ? 'bg-red-100 border-red-200/40 text-red-800 dark:bg-red-900/30 dark:text-red-300 animate-pulse'
-                                        : 'bg-amber-100 border-amber-200/40 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300'
-                              }`}>
-                                {s.status === 'PAID' && '✅ Pagado'}
-                                {s.status === 'IN_REVIEW' && '🔍 En revisión'}
-                                {s.status === 'REJECTED' && '❌ Rechazado'}
-                                {s.status === 'PENDING' && '⏱️ Pendiente'}
-                                {s.status === 'OVERDUE' && '🚨 Vencido'}
-                              </span>
+                              <SettlementStatusBadge status={s.status} />
                             </div>
                           </div>
                         </div>
 
                         {s.dueDate && (s.status === 'PENDING' || s.status === 'OVERDUE') && (
                           <div className={`mt-3 flex items-center gap-1.5 text-[10px] font-bold rounded-xl px-3 py-1.5 w-fit ${new Date(s.dueDate) < new Date() ? 'text-red-600 dark:text-red-400 bg-red-50/40 dark:bg-red-950/20 border border-red-200/40 dark:border-red-900/30' : 'text-amber-700 dark:text-amber-400 bg-amber-50/40 dark:bg-amber-950/20 border border-amber-100/40 dark:border-amber-900/30'}`}>
-                            <span>{new Date(s.dueDate) < new Date() ? '🚨' : '📅'}</span>
+                            <span>{new Date(s.dueDate) < new Date() ? '' : ''}</span>
                             <span>{new Date(s.dueDate) < new Date() ? 'Retrasado' : `Límite de pago: ${new Date(s.dueDate).toLocaleDateString('es-MX', { day: 'numeric', month: 'long', year: 'numeric' })}`}</span>
                           </div>
                         )}
@@ -3966,7 +3963,7 @@ export default function Home() {
                           <button
                             type="button"
                             onClick={() => openSettlementDetailModal(s)}
-                            className="rounded-xl border border-black/10 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-3.5 py-2 text-[10px] font-bold text-neutral-700 dark:text-zinc-300 transition hover:bg-neutral-50 dark:hover:bg-zinc-800 active:scale-95 shadow-sm"
+                            className="rounded-xl border border-black/10 dark:border-zinc-700 bg-surface dark:bg-zinc-900 px-3.5 py-2 text-[10px] font-bold text-foreground dark:text-zinc-300 transition hover:bg-surface-2 dark:hover:bg-zinc-800 active:scale-95 shadow-sm"
                           >
                             Ver detalles
                           </button>
@@ -3974,16 +3971,16 @@ export default function Home() {
                             <button
                               type="button"
                               onClick={() => { setProofImageUrl(s.paymentProofUrl ?? ''); setShowProofModal(true); }}
-                              className="rounded-xl border border-black/10 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-3.5 py-2 text-[10px] font-bold text-neutral-700 dark:text-zinc-300 transition hover:bg-neutral-50 dark:hover:bg-zinc-800 active:scale-95 shadow-sm inline-flex items-center gap-1.5"
+                              className="rounded-xl border border-black/10 dark:border-zinc-700 bg-surface dark:bg-zinc-900 px-3.5 py-2 text-[10px] font-bold text-foreground dark:text-zinc-300 transition hover:bg-surface-2 dark:hover:bg-zinc-800 active:scale-95 shadow-sm inline-flex items-center gap-1.5"
                             >
-                              🖼️ Ver comprobante
+                              <ImageIcon className="h-5 w-5" /> Ver comprobante
                             </button>
                           )}
                           {(s.status === 'PENDING' || s.status === 'OVERDUE') && (
                             <button
                               type="button"
                               onClick={openPayModal}
-                              className="rounded-xl bg-neutral-950 dark:bg-white px-4 py-2 text-[10px] font-bold text-white dark:text-neutral-950 transition hover:bg-neutral-800 dark:hover:bg-neutral-200 active:scale-95 shadow-sm"
+                              className="rounded-xl bg-neutral-950 dark:bg-surface px-4 py-2 text-[10px] font-bold text-white dark:text-neutral-950 transition hover:bg-neutral-800 dark:hover:bg-surface-2 active:scale-95 shadow-sm"
                             >
                               Pagar Corte
                             </button>
@@ -4004,13 +4001,13 @@ export default function Home() {
         {activeTab === 'wallet' && (
           <div className="space-y-4 animate-fadeIn">
             {/* Gráfica de Ganancias */}
-            <div className="rounded-3xl border border-black/5 bg-white p-5 dark:bg-zinc-950 dark:border-zinc-900 shadow-sm transition">
+            <div className="rounded-3xl border border-black/5 bg-surface p-5 dark:bg-zinc-950 dark:border-zinc-900 shadow-sm transition">
               <div className="flex justify-between items-center mb-4">
                 <span className="text-[9px] font-extrabold uppercase tracking-widest text-sky-500 dark:text-sky-400">Rendimiento</span>
                 <select
                   value={walletWeekOffset}
                   onChange={(e) => setWalletWeekOffset(parseInt(e.target.value, 10))}
-                  className="bg-neutral-100 dark:bg-zinc-900 text-xs font-black text-neutral-700 dark:text-zinc-300 rounded-lg px-2 py-1 outline-none appearance-none cursor-pointer border border-transparent focus:border-accent/50 transition-colors"
+                  className="bg-surface-2 dark:bg-zinc-900 text-xs font-black text-foreground dark:text-zinc-300 rounded-lg px-2 py-1 outline-none appearance-none cursor-pointer border border-transparent focus:border-accent/50 transition-colors"
                 >
                   {[0, 1, 2, 3, 4, 5, 6, 7].map(offset => (
                     <option key={offset} value={offset}>
@@ -4045,13 +4042,13 @@ export default function Home() {
                             <p className="text-[10px] text-accent-hover dark:text-sky-400 uppercase tracking-widest font-black transition-colors">
                               {dateTitle}
                             </p>
-                            <p className="text-2xl font-black text-neutral-900 dark:text-white mt-0.5 transition-all">
+                            <p className="text-2xl font-black text-foreground dark:text-white mt-0.5 transition-all">
                               {formatCurrency(displayedData.earnings)}
                             </p>
                           </div>
                           <div className="text-right">
-                            <p className="text-[10px] text-neutral-500 dark:text-zinc-500 uppercase tracking-widest font-black transition-colors">Viajes</p>
-                            <p className="text-xl font-black text-neutral-900 dark:text-white mt-0.5 transition-all">
+                            <p className="text-[10px] text-muted dark:text-zinc-500 uppercase tracking-widest font-black transition-colors">Viajes</p>
+                            <p className="text-xl font-black text-foreground dark:text-white mt-0.5 transition-all">
                               {displayedData.trips}
                             </p>
                           </div>
@@ -4117,7 +4114,7 @@ export default function Home() {
                         <div className="absolute top-[100%] left-0 right-0 flex mt-2">
                           {walletChartData.chartData.map((d, i) => (
                             <div key={i} className="flex-1 flex justify-center">
-                              <span className="text-[10px] font-black text-neutral-400 dark:text-zinc-500">{d.label}</span>
+                              <span className="text-[10px] font-black text-muted dark:text-zinc-500">{d.label}</span>
                             </div>
                           ))}
                         </div>
@@ -4126,14 +4123,17 @@ export default function Home() {
                   })()}
                 </div>
               ) : (
-                <div className="h-44 flex items-center justify-center text-xs text-neutral-400">Sin datos</div>
+                <div className="h-44 flex flex-col items-center justify-center gap-2 text-xs text-muted">
+                  <ClipboardList className="h-6 w-6" />
+                  Sin datos
+                </div>
               )}
             </div>
 
             {/* Tarjeta de Resumen General */}
-            <div className="rounded-3xl border border-black/5 bg-white p-5 dark:bg-zinc-950 dark:border-zinc-900 shadow-sm transition">
+            <div className="rounded-3xl border border-black/5 bg-surface p-5 dark:bg-zinc-950 dark:border-zinc-900 shadow-sm transition">
               <span className="text-[9px] font-extrabold uppercase tracking-widest text-[#A78BFA]">Saldo y Ganancias</span>
-              <h3 className="text-lg font-black text-neutral-900 dark:text-zinc-50 leading-tight mt-1">Resumen Financiero</h3>
+              <h3 className="text-lg font-black text-foreground dark:text-zinc-50 leading-tight mt-1">Resumen Financiero</h3>
 
               <div className="mt-5 space-y-4">
                 {/* Deuda de la semana pasada (corte pendiente) */}
@@ -4147,7 +4147,7 @@ export default function Home() {
                         <div>
                           <p className="text-[9px] font-black uppercase tracking-wider text-amber-700 dark:text-amber-400">Corte de Semana Pasada</p>
                         </div>
-                        <span className="text-xl">{hasProof ? '🔍' : displayDebt > 0 ? '⏰' : '✅'}</span>
+                        <span className="text-xl">{hasProof ? '' : displayDebt > 0 ? '' : ''}</span>
                       </div>
                       <div className="flex justify-between items-baseline mt-4 border-t border-amber-200/40 dark:border-amber-900/30 pt-3">
                         <span className="text-xs font-black text-amber-800 dark:text-amber-300">Deuda pendiente:</span>
@@ -4157,14 +4157,14 @@ export default function Home() {
                       </div>
                       {walletData?.pendingSettlementDueDate && (
                         <div className={`mt-2 flex items-center gap-1.5 text-[11px] font-bold ${new Date(walletData.pendingSettlementDueDate) < new Date() ? 'text-red-600 dark:text-red-400' : 'text-amber-700 dark:text-amber-400'}`}>
-                          <span>{new Date(walletData.pendingSettlementDueDate) < new Date() ? '🚨' : '📅'}</span>
+                          <span>{new Date(walletData.pendingSettlementDueDate) < new Date() ? '' : ''}</span>
                           <span>{new Date(walletData.pendingSettlementDueDate) < new Date() ? 'Retrasado' : `Límite de pago: ${new Date(walletData.pendingSettlementDueDate).toLocaleDateString('es-MX', { day: 'numeric', month: 'long', year: 'numeric' })}`}</span>
                         </div>
                       )}
                       {hasProof ? (
                         <div className="mt-3 space-y-2">
                           <div className="rounded-xl bg-sky-50 dark:bg-sky-950/20 border border-sky-200 dark:border-sky-900/30 p-3 flex items-center gap-2">
-                            <span className="text-sm">🔍</span>
+                            <span className="text-sm"><Search className="h-5 w-5" /></span>
                             <div>
                               <p className="text-[10px] font-black text-sky-700 dark:text-sky-300 uppercase tracking-wider">Comprobante enviado</p>
                               <p className="text-[9px] text-sky-600 dark:text-sky-400">Esperando revisión del administrador</p>
@@ -4173,7 +4173,7 @@ export default function Home() {
                           <div className="flex gap-2">
                             <button
                               onClick={() => openDebtModal('past')}
-                              className="flex-1 py-2 bg-neutral-100 dark:bg-zinc-900 text-neutral-700 dark:text-zinc-300 text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-neutral-200 dark:hover:bg-zinc-800 transition"
+                              className="flex-1 py-2 bg-surface-2 dark:bg-zinc-900 text-foreground dark:text-zinc-300 text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-surface-2 dark:hover:bg-zinc-800 transition"
                             >
                               Ver detalle
                             </button>
@@ -4181,9 +4181,9 @@ export default function Home() {
                               <button
                                 type="button"
                                 onClick={() => { setProofImageUrl(activeSettlement.paymentProofUrl ?? ''); setShowProofModal(true); }}
-                                className="py-2 px-3.5 bg-neutral-100 dark:bg-zinc-900 text-neutral-700 dark:text-zinc-300 text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-neutral-200 dark:hover:bg-zinc-800 transition inline-flex items-center gap-1"
+                                className="py-2 px-3.5 bg-surface-2 dark:bg-zinc-900 text-foreground dark:text-zinc-300 text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-surface-2 dark:hover:bg-zinc-800 transition inline-flex items-center gap-1"
                               >
-                                🖼️ Comprobante
+                                <ImageIcon className="h-5 w-5" /> Comprobante
                               </button>
                             )}
                           </div>
@@ -4198,7 +4198,7 @@ export default function Home() {
                           </button>
                           <button
                             onClick={openPayModal}
-                            className="flex-1 py-2 bg-neutral-950 dark:bg-white text-white dark:text-neutral-950 text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-neutral-800 dark:hover:bg-neutral-200 transition animate-wiggle"
+                            className="flex-1 py-2 bg-neutral-950 dark:bg-surface text-white dark:text-neutral-950 text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-neutral-800 dark:hover:bg-surface-2 transition animate-wiggle"
                           >
                             Pagar ahora
                           </button>
@@ -4214,11 +4214,11 @@ export default function Home() {
                     <div className="flex justify-between items-start">
                       <div>
                         <p className="text-[9px] font-black uppercase tracking-wider text-rose-600 dark:text-rose-450">Comisión por Servicio Ocupado</p>
-                        <p className="text-[11px] text-neutral-500 dark:text-zinc-400 mt-1 leading-relaxed">
+                        <p className="text-[11px] text-muted dark:text-zinc-400 mt-1 leading-relaxed">
                           Deuda acumulada de esta semana. Se cortará el próximo domingo.
                         </p>
                       </div>
-                      <span className="text-xl">⚠️</span>
+                      <span className="text-xl"><AlertTriangle className="h-5 w-5" /></span>
                     </div>
                     <div className="flex justify-between items-baseline mt-4 border-t border-rose-200/40 dark:border-rose-900/30 pt-3">
                       <span className="text-xs font-black text-rose-800 dark:text-rose-300">Deuda acumulada:</span>
@@ -4242,7 +4242,7 @@ export default function Home() {
                 {/* If there's no debt at all — only after walletData loads */}
                 {walletData && (!walletData?.currentDebt || walletData.currentDebt <= 0) && (!walletData?.pastDebt || walletData.pastDebt <= 0) && (
                   <div className="rounded-2xl bg-emerald-50/50 dark:bg-emerald-950/10 border border-emerald-200/50 dark:border-emerald-900/30 p-4 text-center">
-                    <p className="text-2xl mb-1">✅</p>
+                    <p className="text-2xl mb-1"><CheckCircle2 className="h-5 w-5" /></p>
                     <p className="text-sm font-black text-emerald-700 dark:text-emerald-400">Estás al día</p>
                     <p className="text-[10px] text-emerald-600 dark:text-emerald-500 mt-0.5">No tienes deuda pendiente</p>
                   </div>
@@ -4252,31 +4252,31 @@ export default function Home() {
                 <div className="rounded-2xl bg-sky-50/55 dark:bg-sky-950/15 border border-sky-100 dark:border-sky-900/25 p-4">
                   <p className="text-[9px] font-black uppercase tracking-wider text-accent dark:text-[#A78BFA]">Semana en Curso</p>
                   <div className="flex justify-between items-baseline mt-2">
-                    <span className="text-xs text-neutral-500 dark:text-zinc-450">Ganancias estimadas:</span>
+                    <span className="text-xs text-muted dark:text-zinc-450">Ganancias estimadas:</span>
                     <span className="text-xl font-black text-neutral-950 dark:text-zinc-100">
                       {formatCurrency(walletData?.weeklyEarnings || 0)}
                     </span>
                   </div>
                   <div className="flex justify-between items-baseline mt-1">
-                    <span className="text-xs text-neutral-500 dark:text-zinc-450">Entregas de la semana:</span>
-                    <span className="text-xs font-black text-neutral-900 dark:text-zinc-200">
+                    <span className="text-xs text-muted dark:text-zinc-450">Entregas de la semana:</span>
+                    <span className="text-xs font-black text-foreground dark:text-zinc-200">
                       {walletData?.weeklyTripsCount || 0} viajes
                     </span>
                   </div>
                 </div>
 
                 {/* Ganancias de hoy */}
-                <div className="rounded-2xl bg-neutral-50 dark:bg-zinc-900/50 p-4">
+                <div className="rounded-2xl bg-surface-2 dark:bg-zinc-900/50 p-4">
                   <p className="text-[9px] font-black uppercase tracking-wider text-neutral-555 dark:text-zinc-400">Actividad de Hoy</p>
                   <div className="flex justify-between items-baseline mt-2">
-                    <span className="text-xs text-neutral-500 dark:text-zinc-450">Ganancia neta hoy:</span>
+                    <span className="text-xs text-muted dark:text-zinc-450">Ganancia neta hoy:</span>
                     <span className="text-lg font-black text-neutral-950 dark:text-zinc-100">
                       {formatCurrency(walletData?.todayEarnings || 0)}
                     </span>
                   </div>
                   <div className="flex justify-between items-baseline mt-1">
-                    <span className="text-xs text-neutral-500 dark:text-zinc-450">Entregas de hoy:</span>
-                    <span className="text-xs font-black text-neutral-900 dark:text-zinc-200">
+                    <span className="text-xs text-muted dark:text-zinc-450">Entregas de hoy:</span>
+                    <span className="text-xs font-black text-foreground dark:text-zinc-200">
                       {walletData?.todayTripsCount || 0} viajes
                     </span>
                   </div>
@@ -4286,13 +4286,13 @@ export default function Home() {
 
 
             {/* Historial reciente de ganancias de los viajes */}
-            <div className="rounded-3xl border border-black/5 bg-white p-5 dark:bg-zinc-950 dark:border-zinc-900 shadow-sm transition">
+            <div className="rounded-3xl border border-black/5 bg-surface p-5 dark:bg-zinc-950 dark:border-zinc-900 shadow-sm transition">
               <span className="text-[9px] font-extrabold uppercase tracking-widest text-sky-500 dark:text-sky-400">Detalle</span>
-              <h3 className="text-lg font-black text-neutral-900 dark:text-zinc-50 leading-tight mt-1">Viajes Recientes (7d)</h3>
+              <h3 className="text-lg font-black text-foreground dark:text-zinc-50 leading-tight mt-1">Viajes Recientes (7d)</h3>
 
               <div className="mt-4 space-y-4">
                 {!walletData?.recentDeliveries || walletData.recentDeliveries.length === 0 ? (
-                  <div className="py-6 text-center text-xs text-neutral-400">
+                  <div className="py-6 text-center text-xs text-muted">
                     No hay viajes registrados en los últimos 7 días.
                   </div>
                 ) : (() => {
@@ -4310,8 +4310,8 @@ export default function Home() {
                   return sorted.map(([dateLabel, deliveries]) => (
                     <div key={dateLabel}>
                       <div className="flex items-center gap-2 mb-2 px-1">
-                        <h4 className="text-[10px] font-bold text-neutral-400 dark:text-zinc-500 uppercase tracking-wider">{dateLabel}</h4>
-                        <div className="flex-1 h-px bg-neutral-200/50 dark:bg-zinc-800/50" />
+                        <h4 className="text-[10px] font-bold text-muted dark:text-zinc-500 uppercase tracking-wider">{dateLabel}</h4>
+                        <div className="flex-1 h-px bg-surface-2/50 dark:bg-zinc-800/50" />
                         <span className="text-[9px] font-bold text-neutral-300 dark:text-zinc-600">{deliveries.length} viaje{deliveries.length !== 1 ? 's' : ''}</span>
                       </div>
                       <div className="space-y-2">
@@ -4322,27 +4322,27 @@ export default function Home() {
                               const order = orderRefMap.get(delivery.orderReference);
                               if (order) setSelectedHistoryOrder(order);
                             }}
-                            className="rounded-2xl border border-black/5 bg-white p-3.5 flex justify-between items-center cursor-pointer hover:bg-neutral-50 dark:bg-zinc-900/40 dark:border-zinc-900/50 dark:hover:bg-zinc-800/60 transition"
+                            className="rounded-2xl border border-black/5 bg-surface p-3.5 flex justify-between items-center cursor-pointer hover:bg-surface-2 dark:bg-zinc-900/40 dark:border-zinc-900/50 dark:hover:bg-zinc-800/60 transition"
                           >
                             <div className="min-w-0 flex-1 mr-3">
                               {(() => {
                                 const full = orderRefMap.get(delivery.orderReference);
                                 return full ? (
                                   <>
-                                    <span className="text-xs font-black text-neutral-900 dark:text-zinc-100 truncate block">
+                                    <span className="text-xs font-black text-foreground dark:text-zinc-100 truncate block">
                                       {full.restaurant.name} — {full.customer?.user?.name ?? 'Cliente'} #{full.dailyCounter ?? '?'}
                                     </span>
-                                    <p className="text-[8px] text-neutral-400 dark:text-zinc-500 mt-0.5 font-mono tracking-tight truncate">
+                                    <p className="text-[8px] text-muted dark:text-zinc-500 mt-0.5 font-mono tracking-tight truncate">
                                       {delivery.orderReference}
                                     </p>
                                   </>
                                 ) : (
-                                  <span className="text-xs font-black text-neutral-900 dark:text-zinc-100">
+                                  <span className="text-xs font-black text-foreground dark:text-zinc-100">
                                     {delivery.orderReference}
                                   </span>
                                 );
                               })()}
-                              <p className="text-[9px] text-neutral-500 dark:text-zinc-400 mt-0.5">{formatDate(delivery.deliveredAt)}</p>
+                              <p className="text-[9px] text-muted dark:text-zinc-400 mt-0.5">{formatDate(delivery.deliveredAt)}</p>
                             </div>
                             <span className="text-xs font-extrabold text-emerald-600 dark:text-emerald-400">
                               +{formatCurrency(delivery.deliveryFee)}
@@ -4365,15 +4365,15 @@ export default function Home() {
           <div className="space-y-4 animate-fadeIn">
             {/* Foto de Perfil Uploader */}
             {driverProfile && (
-              <div className="rounded-3xl border border-black/5 bg-white p-5 dark:bg-zinc-950 dark:border-zinc-900 shadow-sm transition flex flex-col items-center">
+              <div className="rounded-3xl border border-black/5 bg-surface p-5 dark:bg-zinc-950 dark:border-zinc-900 shadow-sm transition flex flex-col items-center">
                 <span className="text-[9px] font-extrabold uppercase tracking-widest text-[#A78BFA] self-start">Identidad</span>
-                <h3 className="text-lg font-black text-neutral-900 dark:text-zinc-50 leading-tight mt-1 self-start">Foto de Perfil</h3>
-                <p className="text-xs text-neutral-500 dark:text-zinc-400 mt-1 leading-relaxed self-start">
+                <h3 className="text-lg font-black text-foreground dark:text-zinc-50 leading-tight mt-1 self-start">Foto de Perfil</h3>
+                <p className="text-xs text-muted dark:text-zinc-400 mt-1 leading-relaxed self-start">
                   Sube una foto clara y profesional para que los restaurantes y clientes puedan identificarte fácilmente.
                 </p>
 
                 <div className="relative mt-6 mb-2">
-                  <div className="relative h-28 w-28 rounded-full border border-black/10 dark:border-zinc-800 bg-neutral-100 dark:bg-zinc-900 flex items-center justify-center overflow-hidden shadow-inner group">
+                  <div className="relative h-28 w-28 rounded-full border border-black/10 dark:border-zinc-800 bg-surface-2 dark:bg-zinc-900 flex items-center justify-center overflow-hidden shadow-inner group">
                     {driverProfile.user.profilePhoto ? (
                       <img
                         src={driverProfile.user.profilePhoto}
@@ -4381,7 +4381,7 @@ export default function Home() {
                         className="h-full w-full object-cover transition duration-300 group-hover:scale-105"
                       />
                     ) : (
-                      <span className="text-4xl text-neutral-400 select-none">👤</span>
+                      <span className="text-4xl text-muted select-none"><User className="h-5 w-5" /></span>
                     )}
 
                     {isUploadingPhoto && (
@@ -4416,15 +4416,15 @@ export default function Home() {
 
             {/* Tarjeta de estadísticas del repartidor */}
             {driverProfile && (
-              <div className="rounded-3xl border border-black/5 bg-white p-5 dark:bg-zinc-950 dark:border-zinc-900 shadow-sm transition">
+              <div className="rounded-3xl border border-black/5 bg-surface p-5 dark:bg-zinc-950 dark:border-zinc-900 shadow-sm transition">
                 <span className="text-[9px] font-extrabold uppercase tracking-widest text-[#A78BFA]">Rendimiento</span>
-                <h3 className="text-lg font-black text-neutral-900 dark:text-zinc-50 leading-tight mt-1">Estadísticas</h3>
+                <h3 className="text-lg font-black text-foreground dark:text-zinc-50 leading-tight mt-1">Estadísticas</h3>
                 <div className="mt-5 flex items-stretch gap-0">
                   <div className="flex-1 text-center border-r border-black/5 dark:border-zinc-800 pr-3">
-                    <p className="text-3xl font-black text-neutral-900 dark:text-zinc-50 tabular-nums">
-                      {driverProfile.rating > 0 ? driverProfile.rating.toFixed(1) : <span className="text-base font-bold text-neutral-400">—</span>}
+                    <p className="text-3xl font-black text-foreground dark:text-zinc-50 tabular-nums">
+                      {driverProfile.rating > 0 ? driverProfile.rating.toFixed(1) : <span className="text-base font-bold text-muted">—</span>}
                     </p>
-                    <p className="mt-0.5 text-[10px] font-bold uppercase tracking-wider text-neutral-500 dark:text-zinc-400">Calificación</p>
+                    <p className="mt-0.5 text-[10px] font-bold uppercase tracking-wider text-muted dark:text-zinc-400">Calificación</p>
                     {driverProfile.rating > 0 && (
                       <div className="mt-1 flex items-center justify-center gap-0.5">
                         {[1, 2, 3, 4, 5].map((star) => (
@@ -4436,9 +4436,9 @@ export default function Home() {
                     )}
                   </div>
                   <div className="flex-1 text-center pl-3">
-                    <p className="text-3xl font-black text-neutral-900 dark:text-zinc-50 tabular-nums">{driverProfile.totalDeliveries}</p>
-                    <p className="mt-0.5 text-[10px] font-bold uppercase tracking-wider text-neutral-500 dark:text-zinc-400">Viajes</p>
-                    <p className="mt-1 text-[10px] text-neutral-400 dark:text-zinc-500">
+                    <p className="text-3xl font-black text-foreground dark:text-zinc-50 tabular-nums">{driverProfile.totalDeliveries}</p>
+                    <p className="mt-0.5 text-[10px] font-bold uppercase tracking-wider text-muted dark:text-zinc-400">Viajes</p>
+                    <p className="mt-1 text-[10px] text-muted dark:text-zinc-500">
                       {driverProfile.totalDeliveries === 0 ? 'Sin actividad' : 'Completados'}
                     </p>
                   </div>
@@ -4448,22 +4448,22 @@ export default function Home() {
 
             {/* Tarjeta informativa del repartidor */}
             {driverProfile && (
-              <div className="rounded-3xl border border-black/5 bg-white p-5 dark:bg-zinc-950 dark:border-zinc-900 shadow-sm transition">
+              <div className="rounded-3xl border border-black/5 bg-surface p-5 dark:bg-zinc-950 dark:border-zinc-900 shadow-sm transition">
                 <span className="text-[9px] font-extrabold uppercase tracking-widest text-[#A78BFA]">Datos del Repartidor</span>
-                <h3 className="text-lg font-black text-neutral-900 dark:text-zinc-50 leading-tight mt-1">Información de Cuenta</h3>
+                <h3 className="text-lg font-black text-foreground dark:text-zinc-50 leading-tight mt-1">Información de Cuenta</h3>
 
                 <div className="mt-4 space-y-3.5">
                   <div className="flex justify-between items-center text-xs">
                     <span className="text-neutral-450 font-bold dark:text-zinc-500 uppercase tracking-wider text-[9px]">Nombre completo</span>
-                    <span className="font-extrabold text-neutral-900 dark:text-zinc-100">{driverProfile.user.name}</span>
+                    <span className="font-extrabold text-foreground dark:text-zinc-100">{driverProfile.user.name}</span>
                   </div>
                   <div className="flex justify-between items-center text-xs pt-3 border-t border-black/5 dark:border-zinc-900/80">
                     <span className="text-neutral-450 font-bold dark:text-zinc-500 uppercase tracking-wider text-[9px]">Teléfono</span>
-                    <span className="font-extrabold text-neutral-900 dark:text-zinc-100">{driverProfile.user.phone}</span>
+                    <span className="font-extrabold text-foreground dark:text-zinc-100">{driverProfile.user.phone}</span>
                   </div>
                   <div className="flex justify-between items-center text-xs pt-3 border-t border-black/5 dark:border-zinc-900/80">
                     <span className="text-neutral-450 font-bold dark:text-zinc-500 uppercase tracking-wider text-[9px]">Zona de reparto</span>
-                    <span className="font-extrabold text-neutral-900 dark:text-zinc-100">{driverProfile.user.region}</span>
+                    <span className="font-extrabold text-foreground dark:text-zinc-100">{driverProfile.user.region}</span>
                   </div>
                   <div className="flex justify-between items-center text-xs pt-3 border-t border-black/5 dark:border-zinc-900/80">
                     <span className="text-neutral-450 font-bold dark:text-zinc-500 uppercase tracking-wider text-[9px]">Estado de cuenta</span>
@@ -4476,19 +4476,19 @@ export default function Home() {
             )}
 
             {/* Ajustes de Datos y Batería */}
-            <div className="rounded-3xl border border-black/5 bg-white p-5 dark:bg-zinc-950 dark:border-zinc-900 shadow-sm transition">
+            <div className="rounded-3xl border border-black/5 bg-surface p-5 dark:bg-zinc-950 dark:border-zinc-900 shadow-sm transition">
               <span className="text-[9px] font-extrabold uppercase tracking-widest text-[#A78BFA]">Ahorro de Datos y Energía</span>
-              <h3 className="text-lg font-black text-neutral-900 dark:text-zinc-50 leading-tight mt-1">Preferencias de GPS</h3>
-              <p className="text-xs text-neutral-500 dark:text-zinc-400 mt-1 leading-relaxed">
+              <h3 className="text-lg font-black text-foreground dark:text-zinc-50 leading-tight mt-1">Preferencias de GPS</h3>
+              <p className="text-xs text-muted dark:text-zinc-400 mt-1 leading-relaxed">
                 Desactiva la transmisión en tiempo real para ahorrar el consumo de tu batería y datos Telcel. Tus clientes seguirán viendo tu estado de timeline.
               </p>
 
               <div className="mt-5 flex items-center justify-between">
                 <div className="flex items-center gap-2.5">
-                  <span className="text-xl">📡</span>
+                  <span className="text-xl"><RadioTower className="h-5 w-5" /></span>
                   <div>
-                    <p className="text-xs font-bold text-neutral-900 dark:text-zinc-100">Compartir GPS en Vivo</p>
-                    <p className="text-[10px] text-neutral-500 dark:text-zinc-400">
+                    <p className="text-xs font-bold text-foreground dark:text-zinc-100">Compartir GPS en Vivo</p>
+                    <p className="text-[10px] text-muted dark:text-zinc-400">
                       {shareLocationGps ? 'Activo (transmite ubicación)' : 'Apagado (ahorro máximo)'}
                     </p>
                   </div>
@@ -4497,12 +4497,12 @@ export default function Home() {
                 <button
                   type="button"
                   onClick={toggleShareLocationGps}
-                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${shareLocationGps ? 'bg-[#5B21B6] dark:bg-[#C4B5FD]' : 'bg-neutral-200 dark:bg-zinc-800'
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${shareLocationGps ? 'bg-[#5B21B6] dark:bg-[#C4B5FD]' : 'bg-surface-2 dark:bg-zinc-800'
                     }`}
                   aria-label="Alternar compartir ubicación en vivo"
                 >
                   <span
-                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${shareLocationGps ? 'translate-x-6' : 'translate-x-1'
+                    className={`inline-block h-4 w-4 transform rounded-full bg-surface transition-transform ${shareLocationGps ? 'translate-x-6' : 'translate-x-1'
                       }`}
                   />
                 </button>
@@ -4510,10 +4510,10 @@ export default function Home() {
             </div>
 
             {/* Formulario Premium para cambiar contraseña */}
-            <div className="rounded-3xl border border-black/5 bg-white p-5 dark:bg-zinc-950 dark:border-zinc-900 shadow-sm transition">
+            <div className="rounded-3xl border border-black/5 bg-surface p-5 dark:bg-zinc-950 dark:border-zinc-900 shadow-sm transition">
               <span className="text-[9px] font-extrabold uppercase tracking-widest text-[#A78BFA]">Seguridad de Acceso</span>
-              <h3 className="text-lg font-black text-neutral-900 dark:text-zinc-50 leading-tight mt-1">Cambiar Contraseña</h3>
-              <p className="text-xs text-neutral-500 dark:text-zinc-400 mt-1 leading-relaxed">
+              <h3 className="text-lg font-black text-foreground dark:text-zinc-50 leading-tight mt-1">Cambiar Contraseña</h3>
+              <p className="text-xs text-muted dark:text-zinc-400 mt-1 leading-relaxed">
                 Elige una contraseña segura de mínimo 6 caracteres para proteger tu cuenta.
               </p>
 
@@ -4529,7 +4529,7 @@ export default function Home() {
                       onChange={(e) => setCurrentPassword(e.target.value)}
                       placeholder="Ingresa tu contraseña actual"
                       required
-                      className="w-full text-xs font-semibold rounded-2xl border border-black/5 bg-neutral-50 px-4 py-3.5 pr-12 outline-none focus:border-[#C4B5FD] dark:bg-zinc-900 dark:border-zinc-800 dark:text-zinc-50 dark:focus:border-[#A78BFA]"
+                      className="w-full text-xs font-semibold rounded-2xl border border-black/5 bg-surface-2 px-4 py-3.5 pr-12 outline-none focus:border-[#C4B5FD] dark:bg-zinc-900 dark:border-zinc-800 dark:text-zinc-50 dark:focus:border-[#A78BFA]"
                     />
                     <PasswordToggleButton show={showCurrentPassword} onToggle={() => setShowCurrentPassword((v) => !v)} />
                   </div>
@@ -4546,7 +4546,7 @@ export default function Home() {
                       onChange={(e) => setNewPassword(e.target.value)}
                       placeholder="Mínimo 6 caracteres"
                       required
-                      className="w-full text-xs font-semibold rounded-2xl border border-black/5 bg-neutral-50 px-4 py-3.5 pr-12 outline-none focus:border-[#C4B5FD] dark:bg-zinc-900 dark:border-zinc-800 dark:text-zinc-50 dark:focus:border-[#A78BFA]"
+                      className="w-full text-xs font-semibold rounded-2xl border border-black/5 bg-surface-2 px-4 py-3.5 pr-12 outline-none focus:border-[#C4B5FD] dark:bg-zinc-900 dark:border-zinc-800 dark:text-zinc-50 dark:focus:border-[#A78BFA]"
                     />
                     <PasswordToggleButton show={showNewPassword} onToggle={() => setShowNewPassword((v) => !v)} />
                   </div>
@@ -4563,7 +4563,7 @@ export default function Home() {
                       onChange={(e) => setConfirmPassword(e.target.value)}
                       placeholder="Repite tu nueva contraseña"
                       required
-                      className="w-full text-xs font-semibold rounded-2xl border border-black/5 bg-neutral-50 px-4 py-3.5 pr-12 outline-none focus:border-[#C4B5FD] dark:bg-zinc-900 dark:border-zinc-800 dark:text-zinc-50 dark:focus:border-[#A78BFA]"
+                      className="w-full text-xs font-semibold rounded-2xl border border-black/5 bg-surface-2 px-4 py-3.5 pr-12 outline-none focus:border-[#C4B5FD] dark:bg-zinc-900 dark:border-zinc-800 dark:text-zinc-50 dark:focus:border-[#A78BFA]"
                     />
                     <PasswordToggleButton show={showConfirmPassword} onToggle={() => setShowConfirmPassword((v) => !v)} />
                   </div>
@@ -4571,13 +4571,13 @@ export default function Home() {
 
                 {passwordError && (
                   <div className="rounded-2xl bg-rose-50 border border-rose-100 p-3.5 text-xs font-bold text-rose-800 text-center dark:bg-rose-950/20 dark:border-rose-900/30 dark:text-rose-450">
-                    ⚠️ {passwordError}
+                    <AlertTriangle className="h-5 w-5" /> {passwordError}
                   </div>
                 )}
 
                 {passwordSuccess && (
                   <div className="rounded-2xl bg-emerald-50 border border-emerald-100 p-3.5 text-xs font-bold text-emerald-850 text-center dark:bg-emerald-950/20 dark:border-emerald-900/30 dark:text-emerald-450 animate-bounce">
-                    🎉 {passwordSuccess}
+                    <PartyPopper className="h-5 w-5" /> {passwordSuccess}
                   </div>
                 )}
 
@@ -4602,48 +4602,48 @@ export default function Home() {
       {/* 1. Modal de Configuración Técnica Ocultable */}
       {showDeveloperSettings && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fadeIn">
-          <div className="w-full max-w-md rounded-[32px] border border-black/5 bg-white p-6 shadow-2xl dark:bg-zinc-950 dark:border-zinc-900 animate-scaleUp">
+          <div className="w-full max-w-md rounded-[32px] border border-black/5 bg-surface p-6 shadow-2xl dark:bg-zinc-950 dark:border-zinc-900 animate-scaleUp">
             <div className="flex justify-between items-center mb-4">
               <h3 className="text-sm font-black uppercase tracking-wider">Centro de Desarrollador</h3>
               <button
                 type="button"
                 onClick={() => setShowDeveloperSettings(false)}
-                className="h-8 w-8 rounded-full flex items-center justify-center border border-black/5 dark:border-zinc-900 bg-neutral-50 dark:bg-zinc-900 font-bold"
+                className="h-8 w-8 rounded-full flex items-center justify-center border border-black/5 dark:border-zinc-900 bg-surface-2 dark:bg-zinc-900 font-bold"
               >
-                ✕
+                <X className="h-5 w-5" />
               </button>
             </div>
 
             <div className="space-y-4">
               <label className="block space-y-1.5">
-                <span className="text-xs font-bold uppercase tracking-wider text-neutral-500">API Endpoint Base</span>
+                <span className="text-xs font-bold uppercase tracking-wider text-muted">API Endpoint Base</span>
                 <input
                   type="text"
                   value={apiBase}
                   onChange={(e) => setApiBase(e.target.value)}
                   placeholder="/api"
-                  className="w-full rounded-xl border border-black/5 bg-neutral-50 px-4 py-3 text-xs outline-none focus:border-neutral-300 dark:bg-zinc-900 dark:border-zinc-800"
+                  className="w-full rounded-xl border border-black/5 bg-surface-2 px-4 py-3 text-xs outline-none focus:border-border dark:bg-zinc-900 dark:border-zinc-800"
                 />
               </label>
 
               {/* Geolocalización del Contrato */}
               {driverProfile && (
-                <div className="rounded-2xl border border-black/5 bg-neutral-50 p-4 dark:bg-zinc-900/60 space-y-2">
-                  <p className="text-[10px] font-black uppercase tracking-wider text-neutral-400">Geolocalización GPS</p>
+                <div className="rounded-2xl border border-black/5 bg-surface-2 p-4 dark:bg-zinc-900/60 space-y-2">
+                  <p className="text-[10px] font-black uppercase tracking-wider text-muted">Geolocalización GPS</p>
                   <div className="grid grid-cols-2 gap-2 text-xs">
                     <div>
-                      <span className="text-[9px] text-neutral-400 uppercase block">Latitud</span>
+                      <span className="text-[9px] text-muted uppercase block">Latitud</span>
                       <span className="font-bold">{formatCoordinate(driverProfile.currentLatitude)}</span>
                     </div>
                     <div>
-                      <span className="text-[9px] text-neutral-400 uppercase block">Longitud</span>
+                      <span className="text-[9px] text-muted uppercase block">Longitud</span>
                       <span className="font-bold">{formatCoordinate(driverProfile.currentLongitude)}</span>
                     </div>
                   </div>
                 </div>
               )}
 
-              <p className="text-[10px] text-neutral-500 leading-relaxed">
+              <p className="text-[10px] text-muted leading-relaxed">
                 Modifica estos campos bajo instrucción técnica. Para forzar la actualización de coordenadas o simular fallos, utiliza las herramientas del servidor base.
               </p>
 
@@ -4666,11 +4666,11 @@ export default function Home() {
       {/* 2. Hermoso Modal de Verificación de PIN en React */}
       {showPinModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fadeIn">
-          <div className="w-full max-w-sm rounded-[32px] border border-black/5 bg-white p-6 shadow-2xl dark:bg-zinc-950 dark:border-zinc-900 animate-scaleUp">
+          <div className="w-full max-w-sm rounded-[32px] border border-black/5 bg-surface p-6 shadow-2xl dark:bg-zinc-950 dark:border-zinc-900 animate-scaleUp">
             <div className="text-center mb-5">
               <span className="text-[9px] font-black uppercase tracking-widest text-[#A78BFA] block">Seguridad del Restaurante</span>
-              <h3 className="text-xl font-black text-neutral-900 dark:text-zinc-50 mt-1">Verificar Recogida</h3>
-              <p className="text-xs text-neutral-500 dark:text-zinc-400 mt-1 leading-relaxed">
+              <h3 className="text-xl font-black text-foreground dark:text-zinc-50 mt-1">Verificar Recogida</h3>
+              <p className="text-xs text-muted dark:text-zinc-400 mt-1 leading-relaxed">
                 Solicita al personal de cocina el **PIN de verificación de 4 dígitos** antes de retirar el pedido de las instalaciones.
               </p>
             </div>
@@ -4684,13 +4684,13 @@ export default function Home() {
                 value={pinInput}
                 onChange={(e) => setPinInput(e.target.value)}
                 placeholder="Ingresa el PIN numérico"
-                className="w-full text-center tracking-[0.6em] text-lg font-black rounded-2xl border border-black/5 bg-neutral-50 py-3.5 outline-none focus:border-[#C4B5FD] dark:bg-zinc-900 dark:border-zinc-800 dark:text-zinc-50 dark:focus:border-[#A78BFA]"
+                className="w-full text-center tracking-[0.6em] text-lg font-black rounded-2xl border border-black/5 bg-surface-2 py-3.5 outline-none focus:border-[#C4B5FD] dark:bg-zinc-900 dark:border-zinc-800 dark:text-zinc-50 dark:focus:border-[#A78BFA]"
                 autoFocus
               />
 
               {pinModalError && (
                 <div className="rounded-xl bg-rose-50/80 border border-rose-100 p-3 text-[11px] font-bold text-rose-800 text-center dark:bg-rose-950/20 dark:border-rose-900/30 dark:text-rose-400">
-                  ⚠️ {pinModalError}
+                  <AlertTriangle className="h-5 w-5" /> {pinModalError}
                 </div>
               )}
 
@@ -4703,7 +4703,7 @@ export default function Home() {
                     setPinInput('');
                     setPinModalError('');
                   }}
-                  className="py-3.5 rounded-2xl text-xs font-black uppercase tracking-wider border border-black/10 bg-white hover:bg-neutral-50 dark:bg-zinc-950 dark:border-zinc-900"
+                  className="py-3.5 rounded-2xl text-xs font-black uppercase tracking-wider border border-black/10 bg-surface hover:bg-surface-2 dark:bg-zinc-950 dark:border-zinc-900"
                 >
                   Cancelar
                 </button>
@@ -4770,22 +4770,22 @@ export default function Home() {
           PANTALLA DE BLOQUEO POR DEUDA (FULL SCREEN)
           ========================================== */}
       {driverProfile?.isSuspendedByDebt && !hideSuspensionOverlay && (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-white dark:bg-black p-6">
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-surface dark:bg-black p-6">
           <div className="w-full max-w-md mx-auto text-center">
             <div className="rounded-[32px] bg-rose-600/95 p-8 text-white shadow-2xl backdrop-blur-md shadow-rose-900/50 border border-rose-500">
-              <span className="text-5xl mb-4 block">🛑</span>
+              <span className="text-5xl mb-4 block"><Ban className="h-5 w-5" /></span>
               <h2 className="text-xl font-black uppercase tracking-widest mb-2">Cuenta Suspendida</h2>
               <p className="text-sm text-rose-100 font-bold leading-relaxed">
                 No puedes trabajar hasta que liquides tu deuda pendiente de la semana anterior.
               </p>
-              <div className="mt-6 inline-block bg-white/20 rounded-2xl px-6 py-4 border border-white/30">
+              <div className="mt-6 inline-block bg-surface/20 rounded-2xl px-6 py-4 border border-white/30">
                 <p className="text-[10px] uppercase tracking-widest text-rose-100 font-black mb-1">Deuda Vencida</p>
                 <p className="text-3xl font-black">{formatCurrency(driverProfile.suspendedDebtAmount || 0)}</p>
               </div>
               <button
                 type="button"
                 onClick={() => { setHideSuspensionOverlay(true); setActiveTab('wallet'); }}
-                className="mt-4 w-full py-3 rounded-full border-2 border-white/40 text-white text-xs font-black uppercase tracking-widest hover:bg-white/10 transition-colors"
+                className="mt-4 w-full py-3 rounded-full border-2 border-white/40 text-white text-xs font-black uppercase tracking-widest hover:bg-surface/10 transition-colors"
               >
                 Ir a Billetera
               </button>
@@ -4801,7 +4801,7 @@ export default function Home() {
           ========================================== */}
       {showPayModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-          <div className="w-full max-w-md rounded-[32px] bg-white p-6 shadow-2xl dark:bg-zinc-950 dark:border-zinc-900 animate-fadeIn">
+          <div className="w-full max-w-md rounded-[32px] bg-surface p-6 shadow-2xl dark:bg-zinc-950 dark:border-zinc-900 animate-fadeIn">
             <div className="flex items-start justify-between gap-4 mb-4">
               <div>
                 <div className="flex items-center gap-2 mb-1">
@@ -4810,26 +4810,26 @@ export default function Home() {
                   </div>
                   <p className="text-[10px] font-bold uppercase tracking-widest text-sky-600 dark:text-sky-400">Liquidación</p>
                 </div>
-                <h3 className="text-xl font-black text-neutral-900 dark:text-zinc-100">Pagar Deuda</h3>
+                <h3 className="text-xl font-black text-foreground dark:text-zinc-100">Pagar Deuda</h3>
               </div>
               <button
                 type="button"
                 onClick={() => { setShowPayModal(false); setProofPreviewBase64(null); }}
-                className="h-8 w-8 rounded-full flex items-center justify-center border border-black/5 dark:border-zinc-900 bg-neutral-50 dark:bg-zinc-900"
+                className="h-8 w-8 rounded-full flex items-center justify-center border border-black/5 dark:border-zinc-900 bg-surface-2 dark:bg-zinc-900"
               >
-                ✕
+                <X className="h-5 w-5" />
               </button>
             </div>
 
             <div className="space-y-5">
               {/* Amount hero */}
               <div className="relative overflow-hidden rounded-[24px] bg-neutral-900 dark:bg-zinc-800 p-5 text-white shadow-lg">
-                <div className="absolute -right-8 -top-8 h-32 w-32 rounded-full bg-white/5 blur-3xl"></div>
+                <div className="absolute -right-8 -top-8 h-32 w-32 rounded-full bg-surface/5 blur-3xl"></div>
                 <div className="relative z-10">
-                  <p className="text-xs font-medium text-neutral-400">Total a liquidar</p>
+                  <p className="text-xs font-medium text-muted">Total a liquidar</p>
                   <div className="mt-1 flex items-baseline gap-1">
                     <span className="text-3xl font-black">{formatCurrency(walletData?.pastDebt || 0)}</span>
-                    <span className="text-sm font-semibold text-neutral-400">MXN</span>
+                    <span className="text-sm font-semibold text-muted">MXN</span>
                   </div>
                   <button
                     type="button"
@@ -4846,20 +4846,20 @@ export default function Home() {
               </div>
 
               {/* Bank details */}
-              <div className="rounded-[20px] border border-black/5 dark:border-zinc-800 bg-neutral-50 dark:bg-zinc-900/50 p-1">
+              <div className="rounded-[20px] border border-black/5 dark:border-zinc-800 bg-surface-2 dark:bg-zinc-900/50 p-1">
                 <div className="flex items-center gap-2 border-b border-black/5 dark:border-zinc-800 px-4 py-3">
-                  <Mail className="h-4 w-4 text-neutral-400" />
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-neutral-500 dark:text-zinc-400">Datos Bancarios</span>
+                  <Mail className="h-4 w-4 text-muted" />
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-muted dark:text-zinc-400">Datos Bancarios</span>
                 </div>
                 {bankDetailsError ? (
                   <div className="px-4 py-4 text-center">
                     <p className="text-[11px] font-bold text-rose-600 dark:text-rose-400">Error al cargar datos bancarios</p>
-                    <p className="text-[10px] text-neutral-500 mt-1">Intenta de nuevo o contacta a soporte.</p>
+                    <p className="text-[10px] text-muted mt-1">Intenta de nuevo o contacta a soporte.</p>
                   </div>
                 ) : !bankDetailsLoaded ? (
                   <div className="px-4 py-4 text-center">
                     <div className="animate-spin h-5 w-5 border-2 border-sky-500 border-t-transparent rounded-full mx-auto"></div>
-                    <p className="text-[10px] text-neutral-400 mt-2">Cargando datos bancarios...</p>
+                    <p className="text-[10px] text-muted mt-2">Cargando datos bancarios...</p>
                   </div>
                 ) : (
                   <div className="divide-y divide-black/5 dark:divide-zinc-800">
@@ -4869,13 +4869,13 @@ export default function Home() {
                       { label: 'Beneficiario', value: adminBankBeneficiary },
                     ].map((row) => (
                       <div key={row.label} className="flex items-center justify-between px-4 py-2.5">
-                        <span className="text-[11px] font-semibold text-neutral-500 dark:text-zinc-400">{row.label}</span>
+                        <span className="text-[11px] font-semibold text-muted dark:text-zinc-400">{row.label}</span>
                         <div className="flex items-center gap-1.5">
-                          <span className="text-xs font-black text-neutral-900 dark:text-zinc-100">{row.value}</span>
+                          <span className="text-xs font-black text-foreground dark:text-zinc-100">{row.value}</span>
                           <button
                             type="button"
                             onClick={() => { navigator.clipboard.writeText(row.value); pushToast('success', 'Copiado', `${row.label} copiado.`); }}
-                            className="flex h-7 w-7 items-center justify-center rounded-full bg-neutral-100 text-neutral-500 hover:bg-neutral-200 hover:text-neutral-900 active:scale-90 dark:bg-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-700 dark:hover:text-zinc-100 transition"
+                            className="flex h-7 w-7 items-center justify-center rounded-full bg-surface-2 text-muted hover:bg-surface-2 hover:text-foreground active:scale-90 dark:bg-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-700 dark:hover:text-zinc-100 transition"
                             title={`Copiar ${row.label.toLowerCase()}`}
                           >
                             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
@@ -4889,10 +4889,10 @@ export default function Home() {
 
               {/* Upload proof */}
               <div className="rounded-[20px] border border-black/5 dark:border-zinc-800 p-4">
-                <p className="text-[10px] font-bold uppercase tracking-wider text-neutral-500 dark:text-zinc-400 mb-3">Sube tu comprobante de pago</p>
+                <p className="text-[10px] font-bold uppercase tracking-wider text-muted dark:text-zinc-400 mb-3">Sube tu comprobante de pago</p>
                 {proofPreviewBase64 ? (
                   <div className="space-y-3">
-                    <div className="relative rounded-2xl overflow-hidden bg-neutral-100 dark:bg-zinc-900 border border-black/5 dark:border-zinc-800 p-2">
+                    <div className="relative rounded-2xl overflow-hidden bg-surface-2 dark:bg-zinc-900 border border-black/5 dark:border-zinc-800 p-2">
                       <img src={proofPreviewBase64} alt="Vista previa" className="w-full max-h-40 object-contain rounded-xl" />
                       <button
                         type="button"
@@ -4907,7 +4907,7 @@ export default function Home() {
                       type="button"
                       onClick={handleSubmitPaymentProof}
                       disabled={uploadingProof}
-                      className="w-full py-3 bg-neutral-950 dark:bg-white text-white dark:text-neutral-950 rounded-xl text-sm font-black uppercase tracking-widest hover:bg-neutral-800 dark:hover:bg-neutral-200 transition disabled:opacity-50"
+                      className="w-full py-3 bg-neutral-950 dark:bg-surface text-white dark:text-neutral-950 rounded-xl text-sm font-black uppercase tracking-widest hover:bg-neutral-800 dark:hover:bg-surface-2 transition disabled:opacity-50"
                     >
                       {uploadingProof ? 'Subiendo...' : 'Enviar Comprobante'}
                     </button>
@@ -4919,9 +4919,9 @@ export default function Home() {
                       type="button"
                       onClick={() => fileInputRef.current?.click()}
                       disabled={uploadingProof}
-                      className="w-full py-3 border-2 border-dashed border-neutral-300 dark:border-zinc-700 rounded-xl text-xs font-bold text-neutral-500 dark:text-zinc-400 hover:border-neutral-400 dark:hover:border-zinc-600 transition disabled:opacity-50"
+                      className="w-full py-3 border-2 border-dashed border-border dark:border-zinc-700 rounded-xl text-xs font-bold text-muted dark:text-zinc-400 hover:border-neutral-400 dark:hover:border-zinc-600 transition disabled:opacity-50"
                     >
-                      📸 Seleccionar foto del comprobante
+                      <Camera className="h-5 w-5" /> Seleccionar foto del comprobante
                     </button>
                   </>
                 )}
@@ -4936,43 +4936,31 @@ export default function Home() {
           ========================================== */}
       {showSettlementDetailModal && selectedSettlement && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-          <div className="w-full max-w-md rounded-[32px] border border-black/5 bg-white p-6 shadow-2xl dark:bg-zinc-950 dark:border-zinc-900 animate-fadeIn max-h-[80vh] flex flex-col">
+          <div className="w-full max-w-md rounded-[32px] border border-black/5 bg-surface p-6 shadow-2xl dark:bg-zinc-950 dark:border-zinc-900 animate-fadeIn max-h-[80vh] flex flex-col">
             <div className="flex justify-between items-center mb-4 shrink-0">
               <h3 className="text-sm font-black uppercase tracking-wider text-emerald-600 dark:text-emerald-400">Detalle del Período</h3>
               <button
                 type="button"
                 onClick={() => setShowSettlementDetailModal(false)}
-                className="h-8 w-8 rounded-full flex items-center justify-center border border-black/5 dark:border-zinc-900 bg-neutral-50 dark:bg-zinc-900"
+                className="h-8 w-8 rounded-full flex items-center justify-center border border-black/5 dark:border-zinc-900 bg-surface-2 dark:bg-zinc-900"
               >
-                ✕
+                <X className="h-5 w-5" />
               </button>
             </div>
             <div className="flex-1 overflow-y-auto">
-              <div className="rounded-2xl bg-neutral-50 dark:bg-zinc-900/50 p-4 mb-4">
-                <p className="text-xs text-neutral-500 dark:text-zinc-400">
+              <div className="rounded-2xl bg-surface-2 dark:bg-zinc-900/50 p-4 mb-4">
+                <p className="text-xs text-muted dark:text-zinc-400">
                   Período: {new Date(selectedSettlement.periodStart).toLocaleDateString('es-MX', { day: 'numeric', month: 'short' })} - {new Date(selectedSettlement.periodEnd).toLocaleDateString('es-MX', { day: 'numeric', month: 'short', year: 'numeric' })}
                 </p>
                 <div className="flex justify-between items-baseline mt-2">
-                  <span className="text-xs font-bold text-neutral-500 dark:text-zinc-400">
+                  <span className="text-xs font-bold text-muted dark:text-zinc-400">
                     {selectedSettlement.status === 'PENDING' && (walletData?.pastDebt || 0) > 0 ? 'Deuda pendiente:' : 'Total pagado:'}
                   </span>
                   <span className="text-xl font-black text-emerald-600 dark:text-emerald-400">{formatCurrency(
                     selectedSettlement.status === 'PENDING' && (walletData?.pastDebt || 0) > 0 ? (walletData?.pastDebt ?? 0) : selectedSettlement.amount
                   )}</span>
                 </div>
-                <span className={`inline-block mt-2 text-[10px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-full ${
-                  selectedSettlement.status === 'PAID'
-                    ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300'
-                    : selectedSettlement.status === 'IN_REVIEW'
-                      ? 'bg-sky-100 dark:bg-sky-900/30 text-sky-700 dark:text-sky-300'
-                      : 'bg-rose-100 dark:bg-rose-900/30 text-rose-700 dark:text-rose-300'
-                }`}>
-                  {selectedSettlement.status === 'PAID' && '✅ Pagado'}
-                  {selectedSettlement.status === 'IN_REVIEW' && '🔍 En revisión'}
-                  {selectedSettlement.status === 'REJECTED' && '❌ Rechazado'}
-                  {selectedSettlement.status === 'PENDING' && '⏳ Pendiente'}
-                  {selectedSettlement.status === 'OVERDUE' && '🚨 Vencido'}
-                </span>
+                <SettlementStatusBadge status={selectedSettlement.status} className="mt-2" />
               </div>
 
               <div className="space-y-2">
@@ -4982,10 +4970,10 @@ export default function Home() {
                   </div>
                 ) : settlementPeriodOrders.length > 0 ? (
                   settlementPeriodOrders.map((order: any) => (
-                    <div key={order.id} className="flex justify-between items-center p-3 rounded-2xl bg-neutral-50 dark:bg-zinc-900/50 border border-neutral-100 dark:border-zinc-800">
+                    <div key={order.id} className="flex justify-between items-center p-3 rounded-2xl bg-surface-2 dark:bg-zinc-900/50 border border-border dark:border-zinc-800">
                       <div>
-                        <p className="text-xs font-black text-neutral-900 dark:text-zinc-100">{order.orderReference}</p>
-                        <p className="text-[10px] text-neutral-500 dark:text-zinc-400 mt-0.5">
+                        <p className="text-xs font-black text-foreground dark:text-zinc-100">{order.orderReference}</p>
+                        <p className="text-[10px] text-muted dark:text-zinc-400 mt-0.5">
                           {new Date(order.deliveredAt).toLocaleDateString('es-MX', { day: 'numeric', month: 'short' })}
                         </p>
                       </div>
@@ -4993,7 +4981,7 @@ export default function Home() {
                     </div>
                   ))
                 ) : (
-                  <p className="text-center text-xs text-neutral-400 py-4">No se encontraron pedidos en este período.</p>
+                  <p className="text-center text-xs text-muted py-4">No se encontraron pedidos en este período.</p>
                 )}
               </div>
             </div>
@@ -5008,22 +4996,22 @@ export default function Home() {
           onClick={() => setShowProofSentModal(false)}
         >
           <div
-            className="relative w-full max-w-sm rounded-[32px] border border-emerald-200 bg-white p-7 shadow-2xl dark:border-emerald-900/30 dark:bg-zinc-950 animate-scaleUp"
+            className="relative w-full max-w-sm rounded-[32px] border border-emerald-200 bg-surface p-7 shadow-2xl dark:border-emerald-900/30 dark:bg-zinc-950 animate-scaleUp"
             onClick={(e) => e.stopPropagation()}
           >
             <button
               type="button"
               onClick={() => setShowProofSentModal(false)}
-              className="absolute top-3 right-3 flex h-6 w-6 items-center justify-center rounded-full text-neutral-400 hover:text-neutral-700 dark:hover:text-zinc-200 transition"
+              className="absolute top-3 right-3 flex h-6 w-6 items-center justify-center rounded-full text-muted hover:text-foreground dark:hover:text-zinc-200 transition"
             >
-              ✕
+              <X className="h-5 w-5" />
             </button>
             <div className="text-center">
               <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-900/30 mb-4">
                 <Check className="h-8 w-8 text-emerald-600 dark:text-emerald-400" strokeWidth={2.5} />
               </div>
-              <h3 className="text-lg font-black text-neutral-900 dark:text-zinc-50">¡Listo!</h3>
-              <p className="mt-2 text-sm text-neutral-500 dark:text-zinc-400 leading-relaxed">
+              <h3 className="text-lg font-black text-foreground dark:text-zinc-50">¡Listo!</h3>
+              <p className="mt-2 text-sm text-muted dark:text-zinc-400 leading-relaxed">
                 Comprobante enviado. La administración lo revisará y confirmará tu pago.
               </p>
             </div>
@@ -5044,11 +5032,11 @@ export default function Home() {
             <button
               type="button"
               onClick={() => setShowProofModal(false)}
-              className="absolute -top-3 -right-3 z-10 h-9 w-9 rounded-full bg-white dark:bg-zinc-900 border border-black/10 dark:border-zinc-700 flex items-center justify-center shadow-lg hover:scale-105 active:scale-95 transition text-neutral-700 dark:text-zinc-300 text-sm"
+              className="absolute -top-3 -right-3 z-10 h-9 w-9 rounded-full bg-surface dark:bg-zinc-900 border border-black/10 dark:border-zinc-700 flex items-center justify-center shadow-lg hover:scale-105 active:scale-95 transition text-foreground dark:text-zinc-300 text-sm"
             >
-              ✕
+              <X className="h-5 w-5" />
             </button>
-            <div className="rounded-[24px] overflow-hidden bg-white dark:bg-zinc-950 shadow-2xl border border-black/10 dark:border-zinc-800">
+            <div className="rounded-[24px] overflow-hidden bg-surface dark:bg-zinc-950 shadow-2xl border border-black/10 dark:border-zinc-800">
               <img
                 src={proofImageUrl}
                 alt="Comprobante de pago"
@@ -5060,7 +5048,7 @@ export default function Home() {
                 href={proofImageUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex items-center gap-1.5 rounded-xl bg-white/10 backdrop-blur-md px-4 py-2 text-[11px] font-bold text-white hover:bg-white/20 transition"
+                className="inline-flex items-center gap-1.5 rounded-xl bg-surface/10 backdrop-blur-md px-4 py-2 text-[11px] font-bold text-white hover:bg-surface/20 transition"
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
                 Abrir en nueva pestaña
@@ -5068,7 +5056,7 @@ export default function Home() {
               <button
                 type="button"
                 onClick={() => setShowProofModal(false)}
-                className="rounded-xl bg-white/10 backdrop-blur-md px-4 py-2 text-[11px] font-bold text-white hover:bg-white/20 transition"
+                className="rounded-xl bg-surface/10 backdrop-blur-md px-4 py-2 text-[11px] font-bold text-white hover:bg-surface/20 transition"
               >
                 Cerrar
               </button>
@@ -5080,7 +5068,7 @@ export default function Home() {
       {/* Modal de Detalle de Deuda */}
       {showDebtModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-          <div className="w-full max-w-md rounded-[32px] border border-black/5 bg-white p-6 shadow-2xl dark:bg-zinc-950 dark:border-zinc-900 animate-fadeIn max-h-[80vh] flex flex-col">
+          <div className="w-full max-w-md rounded-[32px] border border-black/5 bg-surface p-6 shadow-2xl dark:bg-zinc-950 dark:border-zinc-900 animate-fadeIn max-h-[80vh] flex flex-col">
             <div className="flex justify-between items-center mb-4 shrink-0">
               <div className="flex items-center gap-2">
                 <div className="h-2 w-2 rounded-full bg-sky-500" />
@@ -5091,9 +5079,9 @@ export default function Home() {
               <button
                 type="button"
                 onClick={() => setShowDebtModal(false)}
-                className="h-8 w-8 rounded-full flex items-center justify-center border border-black/5 dark:border-zinc-900 bg-neutral-50 dark:bg-zinc-900 hover:bg-neutral-100 dark:hover:bg-zinc-800 transition"
+                className="h-8 w-8 rounded-full flex items-center justify-center border border-black/5 dark:border-zinc-900 bg-surface-2 dark:bg-zinc-900 hover:bg-surface-2 dark:hover:bg-zinc-800 transition"
               >
-                ✕
+                <X className="h-5 w-5" />
               </button>
             </div>
 
@@ -5107,7 +5095,7 @@ export default function Home() {
                   <p className="text-xs font-bold text-rose-600 dark:text-rose-400">Error al cargar la deuda</p>
                   <button
                     onClick={() => openDebtModal(debtModalMode)}
-                    className="px-4 py-2 bg-neutral-100 dark:bg-zinc-900 text-xs font-bold rounded-xl hover:bg-neutral-200 dark:hover:bg-zinc-800 transition"
+                    className="px-4 py-2 bg-surface-2 dark:bg-zinc-900 text-xs font-bold rounded-xl hover:bg-surface-2 dark:hover:bg-zinc-800 transition"
                   >
                     Reintentar
                   </button>
@@ -5125,8 +5113,8 @@ export default function Home() {
                         {debtDetails.pastOrders.map(order => (
                           <div key={order.id} className="flex justify-between items-center p-3 rounded-2xl bg-sky-50/50 dark:bg-sky-950/20 border border-sky-100 dark:border-sky-900/30">
                             <div className="min-w-0 flex-1 mr-3">
-                              <p className="text-xs font-black text-neutral-900 dark:text-zinc-100 truncate">Pedido {order.orderReference}</p>
-                              <p className="text-[10px] text-neutral-500 dark:text-zinc-400 mt-0.5">
+                              <p className="text-xs font-black text-foreground dark:text-zinc-100 truncate">Pedido {order.orderReference}</p>
+                              <p className="text-[10px] text-muted dark:text-zinc-400 mt-0.5">
                                 Entregado: {new Date(order.deliveredAt).toLocaleDateString('es-ES', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
                               </p>
                             </div>
@@ -5150,15 +5138,15 @@ export default function Home() {
                         <span className="text-[9px] font-black uppercase tracking-widest text-sky-600 dark:text-sky-400">Semana Actual</span>
                         <div className="flex-1 h-px bg-sky-200/50 dark:bg-sky-900/30" />
                       </div>
-                      <p className="text-[10px] text-neutral-500 dark:text-zinc-400 mb-3 leading-relaxed">
+                      <p className="text-[10px] text-muted dark:text-zinc-400 mb-3 leading-relaxed">
                         Pedidos entregados esta semana que generaron comisión. Se cortarán el próximo domingo.
                       </p>
                       <div className="space-y-2">
                         {debtDetails.currentOrders.map(order => (
                           <div key={order.id} className="flex justify-between items-center p-3 rounded-2xl bg-sky-50/50 dark:bg-sky-950/20 border border-sky-100 dark:border-sky-900/30">
                             <div className="min-w-0 flex-1 mr-3">
-                              <p className="text-xs font-black text-neutral-900 dark:text-zinc-100 truncate">Pedido {order.orderReference}</p>
-                              <p className="text-[10px] text-neutral-500 dark:text-zinc-400 mt-0.5">
+                              <p className="text-xs font-black text-foreground dark:text-zinc-100 truncate">Pedido {order.orderReference}</p>
+                              <p className="text-[10px] text-muted dark:text-zinc-400 mt-0.5">
                                 Entregado: {new Date(order.deliveredAt).toLocaleDateString('es-ES', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
                               </p>
                             </div>
@@ -5176,7 +5164,7 @@ export default function Home() {
                   )}
                 </div>
               ) : (
-                <div className="h-full flex items-center justify-center text-xs text-neutral-400 text-center px-4">
+                <div className="h-full flex items-center justify-center text-xs text-muted text-center px-4">
                   No hay deuda pendiente de cobro.<br/>¡Todo al corriente!
                 </div>
               )}
@@ -5184,7 +5172,7 @@ export default function Home() {
 
             {!loadingDebtDetails && debtDetails && (
               <div className="mt-4 pt-4 border-t border-black/5 dark:border-zinc-900 flex justify-between items-end shrink-0">
-                <span className="text-xs font-black uppercase tracking-wider text-neutral-500">
+                <span className="text-xs font-black uppercase tracking-wider text-muted">
                   {debtModalMode === 'past' ? 'Total corte pasado' : 'Deuda esta semana'}
                 </span>
                 <span className="text-2xl font-black text-sky-600 dark:text-sky-400">
@@ -5199,24 +5187,24 @@ export default function Home() {
       {/* Modal de Detalle del Pedido en Historial */}
       {selectedHistoryOrder && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/70 backdrop-blur-md">
-          <div className="w-full max-w-md rounded-[32px] bg-white shadow-2xl dark:bg-zinc-950 animate-fadeIn max-h-[85vh] flex flex-col overflow-hidden border border-black/5 dark:border-zinc-900">
+          <div className="w-full max-w-md rounded-[32px] bg-surface shadow-2xl dark:bg-zinc-950 animate-fadeIn max-h-[85vh] flex flex-col overflow-hidden border border-black/5 dark:border-zinc-900">
             <div className="h-[3px] bg-sky-400/40 shrink-0" />
 
             <div className="p-5 pt-4 shrink-0 border-b border-black/5 dark:border-zinc-900">
               <div className="flex justify-between items-start">
                 <div className="flex items-start gap-3">
-                  <span className="h-9 w-9 rounded-xl bg-gradient-to-br from-emerald-400 to-emerald-600 flex items-center justify-center text-white text-sm shadow-lg shadow-emerald-500/20 shrink-0 mt-0.5">✓</span>
+                  <span className="h-9 w-9 rounded-xl bg-gradient-to-br from-emerald-400 to-emerald-600 flex items-center justify-center text-white text-sm shadow-lg shadow-emerald-500/20 shrink-0 mt-0.5"><Check className="h-5 w-5" /></span>
                   <div>
-                    <h3 className="text-sm font-black text-neutral-900 dark:text-zinc-50 leading-tight">
+                    <h3 className="text-sm font-black text-foreground dark:text-zinc-50 leading-tight">
                       {selectedHistoryOrder.customer?.user?.name
                         ? `${selectedHistoryOrder.restaurant.name} — ${selectedHistoryOrder.customer.user.name}`
                         : selectedHistoryOrder.orderReference
                       }
                     </h3>
-                    <p className="text-[9px] font-mono text-neutral-400 dark:text-zinc-500 mt-0.5 tracking-tight">
+                    <p className="text-[9px] font-mono text-muted dark:text-zinc-500 mt-0.5 tracking-tight">
                       {selectedHistoryOrder.orderReference}
                       {selectedHistoryOrder.dailyCounter != null && (
-                        <span className="ml-2 text-[9px] font-bold text-neutral-400 dark:text-zinc-500 not-italic font-sans">
+                        <span className="ml-2 text-[9px] font-bold text-muted dark:text-zinc-500 not-italic font-sans">
                           · Pedido #{selectedHistoryOrder.dailyCounter}
                         </span>
                       )}
@@ -5226,9 +5214,9 @@ export default function Home() {
                 <button
                   type="button"
                   onClick={() => setSelectedHistoryOrder(null)}
-                  className="h-7 w-7 rounded-full flex items-center justify-center bg-neutral-100 dark:bg-zinc-900 text-neutral-400 hover:bg-neutral-200 dark:hover:bg-zinc-800 hover:text-neutral-600 dark:hover:text-zinc-300 transition-colors shrink-0 ml-3"
+                  className="h-7 w-7 rounded-full flex items-center justify-center bg-surface-2 dark:bg-zinc-900 text-muted hover:bg-surface-2 dark:hover:bg-zinc-800 hover:text-muted dark:hover:text-zinc-300 transition-colors shrink-0 ml-3"
                 >
-                  ✕
+                  <X className="h-5 w-5" />
                 </button>
               </div>
             </div>
@@ -5246,14 +5234,14 @@ export default function Home() {
                   <Clock className="w-3 h-3" strokeWidth={2.5} />
                   {selectedHistoryOrder.noShowReleasedAt ? 'Liberado — cliente no salió' : 'Entregado'}
                 </span>
-                <span className="text-xs font-bold text-neutral-800 dark:text-zinc-200">
+                <span className="text-xs font-bold text-foreground dark:text-zinc-200">
                   {selectedHistoryOrder.deliveredAt ? formatDate(selectedHistoryOrder.deliveredAt) : '—'}
                 </span>
               </div>
 
               {selectedHistoryOrder.noShowReleasedAt && (
                 <div className="flex items-start gap-3 px-4 py-3 rounded-2xl bg-amber-50/70 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/30">
-                  <span className="text-base shrink-0 mt-0.5">⚠️</span>
+                  <span className="text-base shrink-0 mt-0.5"><AlertTriangle className="h-5 w-5" /></span>
                   <div>
                     <p className="text-[11px] font-black text-amber-700 dark:text-amber-400">Pedido liberado con deuda</p>
                     <p className="text-[10px] text-amber-700/80 dark:text-amber-400/80 mt-0.5 leading-relaxed">
@@ -5264,32 +5252,32 @@ export default function Home() {
               )}
 
               {/* Restaurante / Tienda */}
-              <div className="p-4 rounded-2xl bg-white dark:bg-zinc-900/60 border border-neutral-100 dark:border-zinc-800 shadow-sm">
-                <span className="text-[9px] font-black uppercase tracking-wider text-neutral-400 flex items-center gap-1.5">
+              <div className="p-4 rounded-2xl bg-surface dark:bg-zinc-900/60 border border-border dark:border-zinc-800 shadow-sm">
+                <span className="text-[9px] font-black uppercase tracking-wider text-muted flex items-center gap-1.5">
                   <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 100 4 2 2 0 000-4z" /></svg>
                   {selectedHistoryOrder.restaurant.businessType && selectedHistoryOrder.restaurant.businessType !== 'RESTAURANT' ? 'Tienda' : 'Restaurante'}
                 </span>
-                <p className="text-sm font-black text-neutral-900 dark:text-zinc-50 mt-1.5">{selectedHistoryOrder.restaurant.name}</p>
+                <p className="text-sm font-black text-foreground dark:text-zinc-50 mt-1.5">{selectedHistoryOrder.restaurant.name}</p>
                 {selectedHistoryOrder.restaurant.address && (
-                  <p className="text-[10px] text-neutral-500 dark:text-zinc-400 mt-1 leading-relaxed flex items-start gap-1">
-                    <svg className="w-2.5 h-2.5 mt-0.5 shrink-0 text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+                  <p className="text-[10px] text-muted dark:text-zinc-400 mt-1 leading-relaxed flex items-start gap-1">
+                    <svg className="w-2.5 h-2.5 mt-0.5 shrink-0 text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
                     {selectedHistoryOrder.restaurant.address}
                   </p>
                 )}
               </div>
 
               {/* Dirección de entrega */}
-              <div className="p-4 rounded-2xl bg-white dark:bg-zinc-900/60 border border-neutral-100 dark:border-zinc-800 shadow-sm">
-                <span className="text-[9px] font-black uppercase tracking-wider text-neutral-400 flex items-center gap-1.5">
+              <div className="p-4 rounded-2xl bg-surface dark:bg-zinc-900/60 border border-border dark:border-zinc-800 shadow-sm">
+                <span className="text-[9px] font-black uppercase tracking-wider text-muted flex items-center gap-1.5">
                   <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
                   Dirección de Entrega
                 </span>
                 {selectedHistoryOrder.address ? (
                   <>
-                    <p className="text-sm font-black text-neutral-900 dark:text-zinc-50 mt-1.5">
+                    <p className="text-sm font-black text-foreground dark:text-zinc-50 mt-1.5">
                       {selectedHistoryOrder.address.street} {selectedHistoryOrder.address.number}
                     </p>
-                    <p className="text-[10px] text-neutral-500 dark:text-zinc-400 mt-0.5">
+                    <p className="text-[10px] text-muted dark:text-zinc-400 mt-0.5">
                       Col. {selectedHistoryOrder.address.neighborhood}
                     </p>
                     {selectedHistoryOrder.address.reference && (
@@ -5300,7 +5288,7 @@ export default function Home() {
                     )}
                   </>
                 ) : (
-                  <p className="text-xs text-neutral-400 mt-1.5">No disponible</p>
+                  <p className="text-xs text-muted mt-1.5">No disponible</p>
                 )}
               </div>
 
@@ -5309,12 +5297,12 @@ export default function Home() {
                selectedHistoryOrder.restaurant.longitude != null &&
                selectedHistoryOrder.latitude != null &&
                selectedHistoryOrder.longitude != null && (
-                <div className="flex items-center justify-between px-4 py-3 rounded-2xl bg-neutral-50/80 dark:bg-zinc-900/40 border border-neutral-100 dark:border-zinc-800">
-                  <span className="text-[9px] font-black uppercase tracking-wider text-neutral-400 flex items-center gap-1.5">
+                <div className="flex items-center justify-between px-4 py-3 rounded-2xl bg-surface-2/80 dark:bg-zinc-900/40 border border-border dark:border-zinc-800">
+                  <span className="text-[9px] font-black uppercase tracking-wider text-muted flex items-center gap-1.5">
                     <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" /></svg>
                     Distancia Recorrida
                   </span>
-                  <span className="text-xs font-black text-neutral-900 dark:text-zinc-50">
+                  <span className="text-xs font-black text-foreground dark:text-zinc-50">
                     {calculateDistance(
                       selectedHistoryOrder.restaurant.latitude,
                       selectedHistoryOrder.restaurant.longitude,
@@ -5327,7 +5315,7 @@ export default function Home() {
               )}
 
               {/* Resumen Financiero */}
-              <div className="rounded-2xl bg-gradient-to-b from-white to-neutral-50/80 dark:from-zinc-900/80 dark:to-zinc-900/40 border border-neutral-100 dark:border-zinc-800 overflow-hidden shadow-sm">
+              <div className="rounded-2xl bg-gradient-to-b from-white to-neutral-50/80 dark:from-zinc-900/80 dark:to-zinc-900/40 border border-border dark:border-zinc-800 overflow-hidden shadow-sm">
                 <div className="px-4 pt-3.5 pb-2 bg-gradient-to-r from-sky-500/5 to-transparent">
                   <span className="text-[9px] font-black uppercase tracking-wider text-sky-600 dark:text-sky-400 flex items-center gap-1.5">
                     <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
@@ -5344,20 +5332,20 @@ export default function Home() {
                         </span>
                       </div>
                       <div className="flex justify-between items-center px-4 py-3">
-                        <span className="text-[11px] font-bold text-neutral-600 dark:text-zinc-400">Recibido del Comensal</span>
+                        <span className="text-[11px] font-bold text-muted dark:text-zinc-400">Recibido del Comensal</span>
                         <span className="text-sm font-black text-neutral-950 dark:text-zinc-50">$0.00</span>
                       </div>
                     </>
                   ) : (
                     <div className="flex justify-between items-center px-4 py-3">
-                      <span className="text-[11px] font-bold text-neutral-600 dark:text-zinc-400">Cobrado al Comensal</span>
+                      <span className="text-[11px] font-bold text-muted dark:text-zinc-400">Cobrado al Comensal</span>
                       <span className="text-sm font-black text-neutral-950 dark:text-zinc-50">
                         {formatCurrency(selectedHistoryOrder.totalAmount || 0)}
                       </span>
                     </div>
                   )}
                   <div className="flex justify-between items-center px-4 py-3">
-                    <span className="text-[11px] font-bold text-neutral-600 dark:text-zinc-400">Pagado al{selectedHistoryOrder.restaurant.businessType && selectedHistoryOrder.restaurant.businessType !== 'RESTAURANT' ? 'a Tienda' : ' Restaurante'}</span>
+                    <span className="text-[11px] font-bold text-muted dark:text-zinc-400">Pagado al{selectedHistoryOrder.restaurant.businessType && selectedHistoryOrder.restaurant.businessType !== 'RESTAURANT' ? 'a Tienda' : ' Restaurante'}</span>
                     <span className="text-sm font-black text-amber-600 dark:text-amber-400">
                       {formatCurrency((selectedHistoryOrder.totalAmount ?? 0) - (selectedHistoryOrder.deliveryFee ?? 0))}
                     </span>
@@ -5374,7 +5362,7 @@ export default function Home() {
                     </div>
                   )}
                   <div className="flex justify-between items-center px-4 py-3">
-                    <span className="text-[11px] font-bold text-neutral-600 dark:text-zinc-400">Tipo de Pago</span>
+                    <span className="text-[11px] font-bold text-muted dark:text-zinc-400">Tipo de Pago</span>
                     <span className={`text-[10px] font-black px-3 py-1.5 rounded-full border ${
                       selectedHistoryOrder.paymentMethod === 'TRANSFER'
                         ? 'bg-sky-50 text-sky-700 border-sky-200 dark:bg-sky-950/30 dark:text-sky-400 dark:border-sky-900/50'
@@ -5388,9 +5376,9 @@ export default function Home() {
 
               {/* Artículos del pedido */}
               {selectedHistoryOrder.items && selectedHistoryOrder.items.length > 0 && (
-                <div className="rounded-2xl bg-white dark:bg-zinc-900/60 border border-neutral-100 dark:border-zinc-800 overflow-hidden shadow-sm">
-                  <div className="px-4 pt-3.5 pb-2 border-b border-neutral-100 dark:border-zinc-800">
-                    <span className="text-[9px] font-black uppercase tracking-wider text-neutral-400 flex items-center gap-1.5">
+                <div className="rounded-2xl bg-surface dark:bg-zinc-900/60 border border-border dark:border-zinc-800 overflow-hidden shadow-sm">
+                  <div className="px-4 pt-3.5 pb-2 border-b border-border dark:border-zinc-800">
+                    <span className="text-[9px] font-black uppercase tracking-wider text-muted flex items-center gap-1.5">
                       <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M4 6h16M4 10h16M4 14h16M4 18h16" /></svg>
                       Artículos ({selectedHistoryOrder.items.length})
                     </span>
@@ -5400,11 +5388,11 @@ export default function Home() {
                       <div key={item.id} className="px-4 py-3">
                         <div className="flex justify-between items-start">
                           <div className="flex-1 min-w-0 mr-3">
-                            <p className="text-xs font-black text-neutral-900 dark:text-zinc-50 truncate">
+                            <p className="text-xs font-black text-foreground dark:text-zinc-50 truncate">
                               {item.quantity}x {item.product.name}
                             </p>
                             {item.options && item.options.length > 0 && (
-                              <p className="text-[9px] text-neutral-400 dark:text-zinc-500 mt-0.5 truncate">
+                              <p className="text-[9px] text-muted dark:text-zinc-500 mt-0.5 truncate">
                                 {item.options.map((o) => o.name).join(', ')}
                               </p>
                             )}
@@ -5436,17 +5424,17 @@ export default function Home() {
         const waitMin = arrivalTracking ? Math.floor((Date.now() - new Date(arrivalTracking.createdAt).getTime()) / 60000) : 0;
         return (
           <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm px-4">
-            <div className="w-full max-w-md rounded-3xl bg-white dark:bg-zinc-900 p-6 shadow-2xl animate-in fade-in zoom-in-95 duration-200">
+            <div className="w-full max-w-md rounded-3xl bg-surface dark:bg-zinc-900 p-6 shadow-2xl animate-in fade-in zoom-in-95 duration-200">
               <div className="flex flex-col items-center text-center">
                 <div className="flex h-16 w-16 items-center justify-center rounded-full bg-rose-100 dark:bg-rose-950/30 text-3xl mb-4">
-                  ⛓️‍💥
+                  <Unlink className="h-5 w-5" />
                 </div>
                 <h2 className="text-xl font-black text-neutral-950 dark:text-zinc-50">¿Liberar pedido?</h2>
-                <p className="text-sm text-neutral-500 dark:text-zinc-400 mt-2 leading-relaxed">
-                  Has esperado <strong className="text-neutral-700 dark:text-zinc-300">{waitMin} minutos</strong> en el establecimiento.
+                <p className="text-sm text-muted dark:text-zinc-400 mt-2 leading-relaxed">
+                  Has esperado <strong className="text-foreground dark:text-zinc-300">{waitMin} minutos</strong> en el establecimiento.
                   Puedes liberarte de este pedido para que otro repartidor lo tome.
                 </p>
-                <p className="text-xs text-neutral-400 dark:text-zinc-500 mt-3 leading-relaxed bg-neutral-50 dark:bg-zinc-800/50 rounded-xl px-4 py-3 w-full">
+                <p className="text-xs text-muted dark:text-zinc-500 mt-3 leading-relaxed bg-surface-2 dark:bg-zinc-800/50 rounded-xl px-4 py-3 w-full">
                   Agradecemos tu espera y compromiso. Si decides liberarlo,{' '}
                   <strong>no se te volverá a asignar este pedido</strong> y podrás recibir otros.
                 </p>
@@ -5454,7 +5442,7 @@ export default function Home() {
                   <button
                     type="button"
                     onClick={() => { setReleaseConfirmOrderId(null); triggerHaptic(10); }}
-                    className="flex-1 py-3.5 rounded-2xl border border-neutral-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-sm font-bold text-neutral-600 dark:text-zinc-400 transition active:scale-[0.97] hover:bg-neutral-50 dark:hover:bg-zinc-700"
+                    className="flex-1 py-3.5 rounded-2xl border border-border dark:border-zinc-700 bg-surface dark:bg-zinc-800 text-sm font-bold text-muted dark:text-zinc-400 transition active:scale-[0.97] hover:bg-surface-2 dark:hover:bg-zinc-700"
                   >
                     Seguir esperando
                   </button>
@@ -5484,26 +5472,26 @@ export default function Home() {
         const waitMin = arrivalTime ? Math.floor((Date.now() - arrivalTime) / 60000) : 0;
         return (
           <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm px-4">
-            <div className="w-full max-w-md rounded-3xl bg-white dark:bg-zinc-900 p-6 shadow-2xl animate-in fade-in zoom-in-95 duration-200">
+            <div className="w-full max-w-md rounded-3xl bg-surface dark:bg-zinc-900 p-6 shadow-2xl animate-in fade-in zoom-in-95 duration-200">
               <div className="flex flex-col items-center text-center">
                 <div className="flex h-16 w-16 items-center justify-center rounded-full bg-amber-100 dark:bg-amber-950/30 text-3xl mb-4">
-                  📦
+                  <Package className="h-5 w-5" />
                 </div>
                 <h2 className="text-xl font-black text-neutral-950 dark:text-zinc-50">¿Dejar en un lugar seguro?</h2>
-                <p className="text-sm text-neutral-500 dark:text-zinc-400 mt-2 leading-relaxed">
-                  Has esperado <strong className="text-neutral-700 dark:text-zinc-300">{waitMin} minutos</strong> sin que el cliente salga.
+                <p className="text-sm text-muted dark:text-zinc-400 mt-2 leading-relaxed">
+                  Has esperado <strong className="text-foreground dark:text-zinc-300">{waitMin} minutos</strong> sin que el cliente salga.
                   Puedes dejar el pedido en un lugar seguro y marcarlo como entregado.
                 </p>
                 <div className="w-full text-left mt-4 space-y-2.5">
-                  <div className="rounded-2xl border border-sky-200 dark:border-sky-900/30 bg-white dark:bg-zinc-900 px-4 py-3">
+                  <div className="rounded-2xl border border-sky-200 dark:border-sky-900/30 bg-surface dark:bg-zinc-900 px-4 py-3">
                     <p className="text-[10px] font-bold uppercase tracking-widest text-sky-600 dark:text-sky-400 mb-1">Para el cliente</p>
-                    <p className="text-xs text-neutral-600 dark:text-zinc-300 leading-relaxed">
+                    <p className="text-xs text-muted dark:text-zinc-300 leading-relaxed">
                       El cliente <strong>ya pagó por transferencia</strong>. Deja el pedido donde pueda recogerlo; el pago ya está cubierto.
                     </p>
                   </div>
-                  <div className="rounded-2xl border border-emerald-200 dark:border-emerald-900/30 bg-white dark:bg-zinc-900 px-4 py-3">
+                  <div className="rounded-2xl border border-emerald-200 dark:border-emerald-900/30 bg-surface dark:bg-zinc-900 px-4 py-3">
                     <p className="text-[10px] font-bold uppercase tracking-widest text-emerald-600 dark:text-emerald-400 mb-1">Para ti (repartidor)</p>
-                    <p className="text-xs text-neutral-600 dark:text-zinc-300 leading-relaxed">
+                    <p className="text-xs text-muted dark:text-zinc-300 leading-relaxed">
                       Al dejar el pedido en lugar seguro la entrega cuenta <strong>normalmente</strong>: se te paga el envío y se aplica la comisión habitual como en cualquier entrega.
                     </p>
                   </div>
@@ -5512,7 +5500,7 @@ export default function Home() {
                   <button
                     type="button"
                     onClick={() => { setSafePlaceConfirmOrderId(null); triggerHaptic(10); }}
-                    className="flex-1 py-3.5 rounded-2xl border border-neutral-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-sm font-bold text-neutral-600 dark:text-zinc-400 transition active:scale-[0.97] hover:bg-neutral-50 dark:hover:bg-zinc-700"
+                    className="flex-1 py-3.5 rounded-2xl border border-border dark:border-zinc-700 bg-surface dark:bg-zinc-800 text-sm font-bold text-muted dark:text-zinc-400 transition active:scale-[0.97] hover:bg-surface-2 dark:hover:bg-zinc-700"
                   >
                     Volver
                   </button>
@@ -5542,17 +5530,17 @@ export default function Home() {
         const waitMin = arrivalTime ? Math.floor((Date.now() - arrivalTime) / 60000) : 0;
         return (
           <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm px-4">
-            <div className="w-full max-w-md rounded-3xl bg-white dark:bg-zinc-900 p-6 shadow-2xl animate-in fade-in zoom-in-95 duration-200">
+            <div className="w-full max-w-md rounded-3xl bg-surface dark:bg-zinc-900 p-6 shadow-2xl animate-in fade-in zoom-in-95 duration-200">
               <div className="flex flex-col items-center text-center">
                 <div className="flex h-16 w-16 items-center justify-center rounded-full bg-rose-100 dark:bg-rose-950/30 text-3xl mb-4">
-                  ⚠️
+                  <AlertTriangle className="h-5 w-5" />
                 </div>
                 <h2 className="text-xl font-black text-neutral-950 dark:text-zinc-50">¿Liberar el pedido?</h2>
-                <p className="text-sm text-neutral-500 dark:text-zinc-400 mt-2 leading-relaxed">
-                  Has esperado <strong className="text-neutral-700 dark:text-zinc-300">{waitMin} minutos</strong> y el cliente no salió a recibir.
+                <p className="text-sm text-muted dark:text-zinc-400 mt-2 leading-relaxed">
+                  Has esperado <strong className="text-foreground dark:text-zinc-300">{waitMin} minutos</strong> y el cliente no salió a recibir.
                 </p>
-                <div className="w-full text-left mt-4 rounded-2xl border border-amber-200 dark:border-amber-900/30 bg-white dark:bg-zinc-900 px-4 py-3">
-                  <p className="text-xs text-neutral-600 dark:text-zinc-300 leading-relaxed">
+                <div className="w-full text-left mt-4 rounded-2xl border border-amber-200 dark:border-amber-900/30 bg-surface dark:bg-zinc-900 px-4 py-3">
+                  <p className="text-xs text-muted dark:text-zinc-300 leading-relaxed">
                     Asegúrate de haber intentado contactar al cliente. Al liberar el pedido{' '}
                     <strong>podrás disponer de él</strong> y deberás{' '}
                     <strong>contactar a soporte</strong> para la devolución o ajuste del pedido.
@@ -5562,7 +5550,7 @@ export default function Home() {
                   <button
                     type="button"
                     onClick={() => { setNoShowConfirmOrderId(null); triggerHaptic(10); }}
-                    className="flex-1 py-3.5 rounded-2xl border border-neutral-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-sm font-bold text-neutral-600 dark:text-zinc-400 transition active:scale-[0.97] hover:bg-neutral-50 dark:hover:bg-zinc-700"
+                    className="flex-1 py-3.5 rounded-2xl border border-border dark:border-zinc-700 bg-surface dark:bg-zinc-800 text-sm font-bold text-muted dark:text-zinc-400 transition active:scale-[0.97] hover:bg-surface-2 dark:hover:bg-zinc-700"
                   >
                     Volver
                   </button>
@@ -5781,7 +5769,7 @@ function PasswordToggleButton({ show, onToggle }: { show: boolean; onToggle: () 
       onClick={onToggle}
       aria-label={show ? 'Ocultar contraseña' : 'Mostrar contraseña'}
       tabIndex={-1}
-      className="absolute right-2 inset-y-0 my-auto flex h-8 w-8 items-center justify-center rounded-full text-neutral-400 transition-colors duration-200 hover:bg-neutral-100 hover:text-neutral-800 dark:hover:bg-zinc-800 dark:hover:text-zinc-100 active:scale-95"
+      className="absolute right-2 inset-y-0 my-auto flex h-8 w-8 items-center justify-center rounded-full text-muted transition-colors duration-200 hover:bg-surface-2 hover:text-foreground dark:hover:bg-zinc-800 dark:hover:text-zinc-100 active:scale-95"
     >
       {show ? (
         <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">

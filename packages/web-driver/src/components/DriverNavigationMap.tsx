@@ -39,8 +39,8 @@ const MAP_STYLES: unknown[] = [
   { featureType: 'water', elementType: 'labels.text.fill', stylers: [{ color: '#a3b4c9' }] },
 ];
 
-function buildPinIcon(google: any, emoji: string, bg: string) {
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="40" height="48" viewBox="0 0 40 48"><path d="M20 1C11.7 1 5 7.7 5 16c0 9 15 31 15 31s15-22 15-31C35 7.7 28.3 1 20 1Z" fill="${bg}" stroke="#ffffff" stroke-width="2"/><circle cx="20" cy="15.5" r="10.5" fill="#ffffff"/><text x="20" y="19.5" font-size="12" text-anchor="middle">${emoji}</text></svg>`;
+function buildPinIcon(google: any, bg: string) {
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="40" height="48" viewBox="0 0 40 48"><path d="M20 1C11.7 1 5 7.7 5 16c0 9 15 31 15 31s15-22 15-31C35 7.7 28.3 1 20 1Z" fill="${bg}" stroke="#ffffff" stroke-width="2"/><circle cx="20" cy="15.5" r="10.5" fill="#ffffff"/><circle cx="20" cy="15.5" r="5" fill="${bg}"/></svg>`;
   return {
     url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(svg),
     scaledSize: new google.maps.Size(36, 43),
@@ -53,7 +53,7 @@ function buildDriverIcon(google: any) {
     url:
       'data:image/svg+xml;charset=UTF-8,' +
       encodeURIComponent(
-        '<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32"><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" font-size="28" filter="drop-shadow(0px 2px 6px rgba(0,0,0,0.4))">🛵</text></svg>'
+        '<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32"><circle cx="16" cy="16" r="11" fill="#0ea5e9" stroke="#ffffff" stroke-width="3"/></svg>'
       ),
     scaledSize: new google.maps.Size(36, 36),
     anchor: new google.maps.Point(18, 18),
@@ -286,7 +286,7 @@ export default memo(function DriverNavigationMap({
             destMarkerRef.current = new google.maps.Marker({
               position: { lat: dest.lat, lng: dest.lng },
               map,
-              icon: buildPinIcon(google, dest.emoji, '#0f172a'),
+              icon: buildPinIcon(google, '#0f172a'),
               zIndex: 2,
               title: dest.label,
             });
@@ -364,7 +364,7 @@ export default memo(function DriverNavigationMap({
 
   if (loadError) {
     return (
-      <div className="flex h-48 w-full items-center justify-center rounded-2xl border border-neutral-200 dark:border-zinc-800 bg-neutral-50 dark:bg-zinc-900/60 text-xs font-semibold text-neutral-500 dark:text-zinc-400 p-4 text-center">
+      <div className="flex h-48 w-full items-center justify-center rounded-2xl border border-border dark:border-zinc-800 bg-surface-2 dark:bg-zinc-900/60 text-xs font-semibold text-muted dark:text-zinc-400 p-4 text-center">
         No se pudo cargar el mapa. Usa{' '}
         <span className="font-bold text-sky-600 dark:text-sky-400">Abrir en Google Maps</span> para
         navegar.
@@ -376,7 +376,7 @@ export default memo(function DriverNavigationMap({
     <div className="space-y-2">
       <div
         id={mapElIdRef.current}
-        className={`w-full rounded-2xl border border-black/[0.05] bg-neutral-50 z-0 ${heightClass}`}
+        className={`w-full rounded-2xl border border-black/[0.05] bg-surface-2 z-0 ${heightClass}`}
       />
 
       {gpsError && origin === null && (

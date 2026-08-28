@@ -1,6 +1,24 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import type { LucideIcon } from 'lucide-react';
+import {
+  ArrowUp,
+  ArrowUpLeft,
+  ArrowUpRight,
+  ArrowLeft,
+  ArrowRight,
+  Merge,
+  RefreshCw,
+  Undo2,
+  Ship,
+  Flag,
+  Map as MapIcon,
+  Car,
+  Bike,
+  Check,
+  CheckCircle2,
+} from 'lucide-react';
 import { ensureGoogleMapsScript, getGoogleMaps } from '../lib/googleMaps';
 
 type Point = { lat: number; lng: number };
@@ -49,8 +67,8 @@ const DARK_STYLES: unknown[] = [
   { featureType: 'water', elementType: 'labels.text.fill', stylers: [{ color: '#3f4a59' }] },
 ];
 
-function buildPinIcon(google: any, emoji: string, bg: string) {
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="40" height="48" viewBox="0 0 40 48"><path d="M20 1C11.7 1 5 7.7 5 16c0 9 15 31 15 31s15-22 15-31C35 7.7 28.3 1 20 1Z" fill="${bg}" stroke="#ffffff" stroke-width="2"/><circle cx="20" cy="15.5" r="10.5" fill="#ffffff"/><text x="20" y="19.5" font-size="12" text-anchor="middle">${emoji}</text></svg>`;
+function buildPinIcon(google: any, bg: string) {
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="40" height="48" viewBox="0 0 40 48"><path d="M20 1C11.7 1 5 7.7 5 16c0 9 15 31 15 31s15-22 15-31C35 7.7 28.3 1 20 1Z" fill="${bg}" stroke="#ffffff" stroke-width="2"/><circle cx="20" cy="15.5" r="10.5" fill="#ffffff"/><circle cx="20" cy="15.5" r="5" fill="${bg}"/></svg>`;
   return {
     url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(svg),
     scaledSize: new google.maps.Size(40, 48),
@@ -63,7 +81,7 @@ function buildDriverIcon(google: any) {
     url:
       'data:image/svg+xml;charset=UTF-8,' +
       encodeURIComponent(
-        '<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32"><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" font-size="28" filter="drop-shadow(0px 2px 6px rgba(0,0,0,0.4))">🛵</text></svg>'
+        '<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32"><circle cx="16" cy="16" r="11" fill="#0ea5e9" stroke="#ffffff" stroke-width="3"/></svg>'
       ),
     scaledSize: new google.maps.Size(36, 36),
     anchor: new google.maps.Point(18, 18),
@@ -86,27 +104,27 @@ function haversineMeters(a: Point, b: Point): number {
 // misma respuesta, sin llamadas adicionales.
 const ROUTE_RECALC_DISTANCE_M = 800;
 
-const MANEUVER_EMOJI: Record<string, string> = {
-  'turn-slight-left': '↖️',
-  'turn-sharp-left': '⬅️',
-  'turn-left': '⬅️',
-  'turn-slight-right': '↗️',
-  'turn-sharp-right': '➡️',
-  'turn-right': '➡️',
-  'straight': '⬆️',
-  'merge': '🔀',
-  'roundabout-left': '🔃',
-  'roundabout-right': '🔃',
-  'uturn-left': '🔄',
-  'uturn-right': '🔄',
-  'fork-left': '↖️',
-  'fork-right': '↗️',
-  'ramp-left': '↖️',
-  'ramp-right': '↗️',
-  'keep-left': '↖️',
-  'keep-right': '↗️',
-  'ferry': '⛴️',
-  'destination': '🏁',
+const MANEUVER_ICON: Record<string, LucideIcon> = {
+  'turn-slight-left': ArrowUpLeft,
+  'turn-sharp-left': ArrowLeft,
+  'turn-left': ArrowLeft,
+  'turn-slight-right': ArrowUpRight,
+  'turn-sharp-right': ArrowRight,
+  'turn-right': ArrowRight,
+  'straight': ArrowUp,
+  'merge': Merge,
+  'roundabout-left': RefreshCw,
+  'roundabout-right': RefreshCw,
+  'uturn-left': Undo2,
+  'uturn-right': Undo2,
+  'fork-left': ArrowUpLeft,
+  'fork-right': ArrowUpRight,
+  'ramp-left': ArrowUpLeft,
+  'ramp-right': ArrowUpRight,
+  'keep-left': ArrowUpLeft,
+  'keep-right': ArrowUpRight,
+  'ferry': Ship,
+  'destination': Flag,
 };
 
 function stripHtml(html: string) {
@@ -149,7 +167,7 @@ export default function DriverTurnByTurnOverlay({
   const [driverPos, setDriverPos] = useState<Point | null>(initialDriverPos || null);
   const [routeInfo, setRouteInfo] = useState<{ distanceM: number; durationMin: number } | null>(null);
   const [nav, setNav] = useState<{
-    emoji: string;
+    emoji: LucideIcon;
     text: string;
     distToTurnM: number;
     remainingM: number;
@@ -274,7 +292,7 @@ export default function DriverTurnByTurnOverlay({
       destMarkerRef.current = new google.maps.Marker({
         position: { lat: dest.lat, lng: dest.lng },
         map,
-        icon: buildPinIcon(google, dest.emoji || '🏁', '#0f172a'),
+        icon: buildPinIcon(google, '#0f172a'),
         zIndex: 2,
         title: dest.label,
       });
@@ -489,7 +507,7 @@ export default function DriverTurnByTurnOverlay({
     const maneuver = step?.maneuver || (currentIdx === steps.length - 1 ? 'destination' : 'straight');
 
     setNav({
-      emoji: MANEUVER_EMOJI[maneuver as string] || '⬆️',
+      emoji: MANEUVER_ICON[maneuver as string] || ArrowUp,
       text: arrived
         ? 'Llegaste a tu destino'
         : step
@@ -535,7 +553,7 @@ export default function DriverTurnByTurnOverlay({
   };
 
   return (
-    <div className={`fixed inset-0 z-[80] flex flex-col ${dark ? 'bg-black text-white' : 'bg-white text-neutral-900'}`}>
+    <div className={`fixed inset-0 z-[80] flex flex-col ${dark ? 'bg-black text-white' : 'bg-surface text-foreground'}`}>
       <div id={mapElIdRef.current} className="absolute inset-0 z-0" />
 
       {/* Header flotante */}
@@ -547,7 +565,7 @@ export default function DriverTurnByTurnOverlay({
             className={`flex h-11 w-11 items-center justify-center rounded-2xl border shadow-lg backdrop-blur transition active:scale-95 ${
               dark
                 ? 'border-white/10 bg-zinc-900/90 text-white'
-                : 'border-black/[0.06] bg-white/95 text-neutral-800'
+                : 'border-black/[0.06] bg-surface/95 text-foreground'
             }`}
             aria-label="Salir de la navegación"
           >
@@ -557,11 +575,11 @@ export default function DriverTurnByTurnOverlay({
           </button>
 
           {nav && !nav.arrived && (
-            <div className={`rounded-2xl border px-3.5 py-2 shadow-lg backdrop-blur ${dark ? 'border-white/10 bg-zinc-900/90' : 'border-black/[0.06] bg-white/95'}`}>
-              <p className={`text-[10px] font-bold uppercase tracking-widest ${dark ? 'text-zinc-400' : 'text-neutral-400'}`}>
+            <div className={`rounded-2xl border px-3.5 py-2 shadow-lg backdrop-blur ${dark ? 'border-white/10 bg-zinc-900/90' : 'border-black/[0.06] bg-surface/95'}`}>
+              <p className={`text-[10px] font-bold uppercase tracking-widest ${dark ? 'text-zinc-400' : 'text-muted'}`}>
                 Llegada estimada
               </p>
-              <p className={`text-sm font-black mt-0.5 ${dark ? 'text-white' : 'text-neutral-900'}`}>
+              <p className={`text-sm font-black mt-0.5 ${dark ? 'text-white' : 'text-foreground'}`}>
                 {formatDistance(nav.remainingM)} · {nav.remainingMin} min
               </p>
             </div>
@@ -581,7 +599,7 @@ export default function DriverTurnByTurnOverlay({
             }
           }}
           className={`absolute right-4 bottom-44 z-[5] flex items-center gap-1.5 rounded-xl border px-3 py-2 text-[11px] font-bold shadow-lg backdrop-blur transition active:scale-95 ${
-            dark ? 'border-white/10 bg-zinc-900/90 text-white' : 'border-black/[0.06] bg-white/95 text-neutral-800'
+            dark ? 'border-white/10 bg-zinc-900/90 text-white' : 'border-black/[0.06] bg-surface/95 text-foreground'
           }`}
         >
           <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -594,10 +612,10 @@ export default function DriverTurnByTurnOverlay({
 
       {/* Bottom card: indicación turn-by-turn */}
       <div className="absolute inset-x-0 bottom-0 z-[5] p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
-        <div className={`rounded-[24px] border p-4 shadow-2xl ${dark ? 'border-white/10 bg-zinc-900/95' : 'border-black/[0.06] bg-white/95'}`}>
+        <div className={`rounded-[24px] border p-4 shadow-2xl ${dark ? 'border-white/10 bg-zinc-900/95' : 'border-black/[0.06] bg-surface/95'}`}>
           {loadError ? (
             <div className="space-y-2">
-              <p className={`text-sm font-bold ${dark ? 'text-white' : 'text-neutral-900'}`}>
+              <p className={`text-sm font-bold ${dark ? 'text-white' : 'text-foreground'}`}>
                 No se pudo cargar el mapa.
               </p>
               <div className="grid grid-cols-2 gap-2">
@@ -607,23 +625,23 @@ export default function DriverTurnByTurnOverlay({
                   rel="noopener noreferrer"
                   className="flex items-center justify-center gap-1.5 rounded-xl bg-sky-500 py-3 text-xs font-bold text-white shadow-lg shadow-sky-500/30"
                 >
-                  🗺️ Google Maps
+                  <MapIcon className="h-4 w-4" /> Google Maps
                 </a>
                 <a
                   href={openWazeUrl}
                   target="_blank"
                   rel="noopener noreferrer"
                   className={`flex items-center justify-center gap-1.5 rounded-xl border py-3 text-xs font-bold ${
-                    dark ? 'border-white/10 text-white' : 'border-black/10 text-neutral-800'
+                    dark ? 'border-white/10 text-white' : 'border-black/10 text-foreground'
                   }`}
                 >
-                  🚗 Waze
+                  <Car className="h-4 w-4" /> Waze
                 </a>
               </div>
               <button
                 type="button"
                 onClick={handleExit}
-                className={`w-full rounded-xl border py-3 text-xs font-bold ${dark ? 'border-white/10 text-zinc-300' : 'border-black/10 text-neutral-600'}`}
+                className={`w-full rounded-xl border py-3 text-xs font-bold ${dark ? 'border-white/10 text-zinc-300' : 'border-black/10 text-muted'}`}
               >
                 Salir
               </button>
@@ -631,13 +649,13 @@ export default function DriverTurnByTurnOverlay({
           ) : nav?.arrived ? (
             <>
               <div className="flex flex-col items-center py-2 text-center">
-                <span className="flex h-16 w-16 items-center justify-center rounded-full bg-emerald-500/15 text-4xl">
-                  🏁
+                <span className="flex h-16 w-16 items-center justify-center rounded-full bg-emerald-500/15 text-emerald-600">
+                  <Flag className="h-9 w-9" />
                 </span>
-                <p className={`text-lg font-black mt-3 ${dark ? 'text-white' : 'text-neutral-900'}`}>
+                <p className={`text-lg font-black mt-3 ${dark ? 'text-white' : 'text-foreground'}`}>
                   ¡Llegaste a tu destino!
                 </p>
-                <p className={`text-sm mt-1 ${dark ? 'text-zinc-400' : 'text-neutral-500'}`}>
+                <p className={`text-sm mt-1 ${dark ? 'text-zinc-400' : 'text-muted'}`}>
                   {dest.label}
                 </p>
                 <button
@@ -645,14 +663,14 @@ export default function DriverTurnByTurnOverlay({
                   onClick={handleExit}
                   className="mt-4 w-full flex items-center justify-center gap-2 rounded-xl bg-emerald-500 py-3.5 text-sm font-black text-white shadow-lg shadow-emerald-500/30 transition active:scale-[0.97]"
                 >
-                  ✓ Continuar
+                  <Check className="h-4 w-4" /> Continuar
                 </button>
               </div>
             </>
           ) : nav ? (
             <>
               {/* Barra de progreso */}
-              <div className={`h-1 w-full overflow-hidden rounded-full ${dark ? 'bg-white/10' : 'bg-black/10'}`}>
+              <div className={`h-1 w-full overflow-hidden rounded-full ${dark ? 'bg-surface/10' : 'bg-black/10'}`}>
                 <div
                   className="h-full rounded-full bg-sky-500 transition-all duration-700"
                   style={{ width: `${Math.round(nav.progress * 100)}%` }}
@@ -661,13 +679,13 @@ export default function DriverTurnByTurnOverlay({
 
               <div className="mt-3 flex items-center gap-3">
                 <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-sky-500/10 text-2xl">
-                  {nav.emoji}
+                  <nav.emoji className="h-6 w-6" />
                 </span>
                 <div className="min-w-0 flex-1">
-                  <p className={`text-[10px] font-bold uppercase tracking-widest ${dark ? 'text-zinc-400' : 'text-neutral-400'}`}>
+                  <p className={`text-[10px] font-bold uppercase tracking-widest ${dark ? 'text-zinc-400' : 'text-muted'}`}>
                     {nav.distToTurnM > 0 ? `Gira en ${formatDistance(nav.distToTurnM)}` : 'Siguiente'}
                   </p>
-                  <p className={`text-base font-black leading-snug mt-0.5 ${dark ? 'text-white' : 'text-neutral-900'}`}>
+                  <p className={`text-base font-black leading-snug mt-0.5 ${dark ? 'text-white' : 'text-foreground'}`}>
                     {nav.text}
                   </p>
                 </div>
@@ -678,30 +696,30 @@ export default function DriverTurnByTurnOverlay({
                   href={openGoogleMapsUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className={`flex items-center justify-center gap-1.5 rounded-xl border py-2.5 text-[11px] font-bold transition active:scale-95 ${dark ? 'border-white/10 text-zinc-200' : 'border-black/10 text-neutral-700'}`}
+                  className={`flex items-center justify-center gap-1.5 rounded-xl border py-2.5 text-[11px] font-bold transition active:scale-95 ${dark ? 'border-white/10 text-zinc-200' : 'border-black/10 text-foreground'}`}
                 >
-                  🗺️ Google Maps
+                  <MapIcon className="h-4 w-4" /> Google Maps
                 </a>
                 <a
                   href={openWazeUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className={`flex items-center justify-center gap-1.5 rounded-xl border py-2.5 text-[11px] font-bold transition active:scale-95 ${dark ? 'border-white/10 text-zinc-200' : 'border-black/10 text-neutral-700'}`}
+                  className={`flex items-center justify-center gap-1.5 rounded-xl border py-2.5 text-[11px] font-bold transition active:scale-95 ${dark ? 'border-white/10 text-zinc-200' : 'border-black/10 text-foreground'}`}
                 >
-                  🚗 Waze
+                  <Car className="h-4 w-4" /> Waze
                 </a>
               </div>
             </>
           ) : (
             <div className="flex items-center gap-3">
-              <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-sky-500/10 text-2xl">
-                🛵
-              </span>
+                <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-sky-500/10 text-2xl">
+                  <Bike className="h-7 w-7" />
+                </span>
               <div className="min-w-0 flex-1">
-                <p className={`text-sm font-black ${dark ? 'text-white' : 'text-neutral-900'}`}>
+                <p className={`text-sm font-black ${dark ? 'text-white' : 'text-foreground'}`}>
                   {gpsError ? 'Calculando ruta…' : 'Obteniendo tu ubicación…'}
                 </p>
-                <p className={`text-xs mt-0.5 ${dark ? 'text-zinc-400' : 'text-neutral-500'}`}>
+                <p className={`text-xs mt-0.5 ${dark ? 'text-zinc-400' : 'text-muted'}`}>
                   Dirígete a: {dest.label}
                 </p>
               </div>

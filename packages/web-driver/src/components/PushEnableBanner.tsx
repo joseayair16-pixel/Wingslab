@@ -2,6 +2,7 @@
 import { X } from 'lucide-react';
 
 import { useEffect, useState } from 'react';
+import { Lock, Info, ArrowRight, AlertTriangle, Bell } from 'lucide-react';
 
 type EnableStatus = 'DENIED' | 'BLOCKED' | 'INSECURE' | 'NOT_SUPPORTED' | 'VAPID_NOT_CONFIGURED' | 'SUBSCRIBE_FAILED' | 'UNKNOWN';
 
@@ -88,8 +89,8 @@ export default function PushEnableBanner({ visible, onEnable }: Props) {
   if (permission === 'denied') {
     return (
       <div className="fixed inset-x-0 top-0 z-[9991] bg-amber-50 px-4 py-2.5 text-center text-xs font-medium text-amber-800 shadow-sm border-b border-amber-100">
-        Notificaciones bloqueadas. Para activarlas: toca el ícono 🔒 (o ℹ️) junto a la URL y habilita
-        «Notificaciones» en Chrome / «Permisos → Notificaciones» en Safari.
+        Notificaciones bloqueadas. Para activarlas: toca el ícono <Lock className="h-5 w-5" /> (o <Info className="h-5 w-5" />) junto a la URL y habilita
+        «Notificaciones» en Chrome / «Permisos <ArrowRight className="h-5 w-5" /> Notificaciones» en Safari.
       </div>
     );
   }
@@ -102,13 +103,13 @@ export default function PushEnableBanner({ visible, onEnable }: Props) {
       <div className="mx-auto flex max-w-5xl flex-col gap-1">
         {insecureContext && (
           <p className="text-[11px] font-semibold text-sky-100">
-            ⚠️ Nota: estás en una conexión no segura (HTTP). Abre el panel con https:// para que las
+            <AlertTriangle className="h-5 w-5" /> Nota: estás en una conexión no segura (HTTP). Abre el panel con https:// para que las
             notificaciones puedan activarse.
           </p>
         )}
         <div className="flex items-center justify-between gap-3">
           <p className="text-xs font-semibold leading-snug sm:text-sm">
-            🔔 {iosTooOld
+            <Bell className="h-5 w-5" /> {iosTooOld
               ? 'Tu iPhone necesita iOS 16.4+ para recibir notificaciones. Actualiza iOS.'
               : 'Activa las notificaciones para no perderte ningún pedido.'}
           </p>
@@ -133,7 +134,7 @@ export default function PushEnableBanner({ visible, onEnable }: Props) {
                     setBusy(false);
                   }
                 }}
-                className="rounded-full bg-white px-3.5 py-1.5 text-xs font-bold text-sky-700 transition hover:bg-sky-50 active:scale-95 disabled:opacity-60"
+                className="rounded-full bg-surface px-3.5 py-1.5 text-xs font-bold text-sky-700 transition hover:bg-sky-50 active:scale-95 disabled:opacity-60"
               >
                 {busy ? 'Activando...' : 'Activar'}
               </button>
@@ -145,7 +146,7 @@ export default function PushEnableBanner({ visible, onEnable }: Props) {
                 setDismissed(true);
               }}
               aria-label="Descartar"
-              className="flex h-6 w-6 items-center justify-center rounded-full text-white/70 transition hover:bg-white/15 hover:text-white"
+              className="flex h-6 w-6 items-center justify-center rounded-full text-white/70 transition hover:bg-surface/15 hover:text-white"
             >
               <X className="h-3.5 w-3.5" />
             </button>

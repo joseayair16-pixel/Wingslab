@@ -4,15 +4,43 @@
 
 :root {
   color-scheme: light;
+
+  /* Tokens semánticos (RGB triplets para alpha) */
+  --bg: 246 246 244;        /* #f6f6f4 */
+  --surface: 255 255 255;   /* #ffffff */
+  --surface-2: 244 244 242; /* #f4f4f2 */
+  --fg: 22 22 22;           /* #161616 */
+  --muted: 115 115 115;     /* neutral-500 */
+  --border: 229 229 227;    /* neutral-200 */
+
   --app-bg: #f6f6f4;
   --text-main: #161616;
 
-  /* Azul Celeste – Identidad SaDeL */
-  --accent: #87CEEB;
-  --accent-hover: #5bb5db;
-  --accent-soft: #eef8fd;
-  --accent-soft-hover: #d6eef9;
+  /* Azul Celeste – Identidad SaDeL (unificado a sky-500) */
+  --accent: #0ea5e9;
+  --accent-hover: #0284c7;
+  --accent-soft: #e0f2fe;
+  --accent-soft-hover: #bae6fd;
   --accent-text: #ffffff;
+}
+
+html.dark {
+  color-scheme: dark;
+
+  --bg: 9 9 10;             /* #09090a */
+  --surface: 24 24 27;      /* zinc-900 */
+  --surface-2: 32 32 36;    /* zinc-800 */
+  --fg: 250 250 249;        /* zinc-50 */
+  --muted: 161 161 170;     /* zinc-400 */
+  --border: 39 39 42;       /* zinc-800 */
+
+  --app-bg: #09090a;
+  --text-main: #fafaf9;
+
+  --accent: #0ea5e9;
+  --accent-hover: #38bdf8;  /* sky-400 para contraste en oscuro */
+  --accent-soft: #0b3a52;
+  --accent-soft-hover: #0e4a64;
 }
 
 html {
@@ -31,7 +59,28 @@ body {
   font-family: 'Avenir Next', 'Segoe UI', 'Helvetica Neue', sans-serif;
 }
 
-.sadel-logo-light { box-shadow: 0 0 transparent, 0 0 transparent, 0 0 transparent; }
+html.dark body {
+  background:
+    radial-gradient(circle at top left, rgba(255, 255, 255, 0.04), transparent 24%),
+    radial-gradient(circle at bottom right, rgba(255, 255, 255, 0.03), transparent 28%),
+    var(--app-bg);
+}
+
+/* Logo: light en claro, dark en oscuro (sin filtros) */
+html.dark .sadel-logo-light { display: none !important; }
+html:not(.dark) .sadel-logo-dark { display: none !important; }
+
+/* Splash a pantalla completa: usa tokens propios de tema */
+.sadel-splash {
+  background-color: var(--bg);
+  color: var(--fg);
+}
+.sadel-splash .sadel-splash-title {
+  color: var(--fg);
+}
+.sadel-splash .sadel-splash-track {
+  background-color: rgb(var(--border));
+}
 
 /* SaDel Loader breathing animation */
 @keyframes sadel-breathe {
@@ -51,37 +100,10 @@ body {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .animate-sadel-breathe {
+  .animate-sadel-breathe,
+  .animate-moto-ride {
     animation: none;
   }
-}
-
-html.dark .sadel-logo-light { display: none !important; }
-html:not(.dark) .sadel-logo-dark { display: none !important; }
-html.dark:not(.pure-dark) .sadel-logo-dark {
-  filter: invert(1) hue-rotate(180deg) saturate(1.54) !important;
-}
-
-/* Splash a pantalla completa: modo oscuro autocontenido.
-   El invert global del <html> no alcanza de forma fiable a los elementos
-   position:fixed en Safari/iOS, así que el splash se oscurece por sí mismo
-   y contra-invierte cuando el truco global está activo. */
-html.dark .sadel-splash {
-  background-color: #09090a;
-  color: #fafaf9;
-}
-html.dark .sadel-splash .sadel-splash-title {
-  color: #fafaf9;
-}
-html.dark .sadel-splash .sadel-splash-track {
-  background-color: rgba(255, 255, 255, 0.14);
-}
-html.dark:not(.pure-dark) .sadel-splash {
-  filter: invert(1) hue-rotate(180deg) saturate(1.54);
-}
-html.dark:not(.pure-dark) .sadel-splash .sadel-logo-light,
-html.dark:not(.pure-dark) .sadel-splash .sadel-logo-dark {
-  filter: none !important;
 }
 
 * {
@@ -91,43 +113,10 @@ html.dark:not(.pure-dark) .sadel-splash .sadel-logo-dark {
 ::selection {
   background: rgba(17, 17, 17, 0.14);
 }
-
-/* Dark Mode Magic Filter */
-html.dark {
-  filter: invert(0.96) hue-rotate(180deg) saturate(0.65) contrast(1.02);
-  background: #09090a;
+html.dark ::selection {
+  background: rgba(250, 250, 249, 0.18);
 }
 
-html.dark img, 
-html.dark video, 
-html.dark iframe,
-html.dark .no-invert {
-  filter: invert(1) hue-rotate(180deg) saturate(1.54); /* Correct image saturation back to 100% (1 / 0.65) */
-}
-
-/* Extra pop for brand identity colors (Sky Blue accents) */
-html.dark [class*="accent-"],
-html.dark [class*="sky-"] {
-  filter: saturate(1.4);
-}
-
-@keyframes moto-rumble {
-  0%, 100% { transform: translateY(0) scaleX(1) rotate(0deg); }
-  20% { transform: translateY(-6px) scaleX(0.98) rotate(-4deg); }
-  40% { transform: translateY(1px) scaleX(1.02) rotate(2deg); }
-  60% { transform: translateY(-4px) scaleX(0.99) rotate(-2deg); }
-  80% { transform: translateY(0) scaleX(1.01) rotate(1deg); }
-}
-
-.animate-moto-ride {
-  display: inline-block;
-  animation: moto-rumble 0.8s ease-in-out infinite;
-  will-change: transform;
-  backface-visibility: hidden;
-  transform: translateZ(0);
-}
-
-/* ===== iOS / Safari Hardening ===== */
 * {
   -webkit-tap-highlight-color: transparent;
 }
