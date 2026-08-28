@@ -17,7 +17,6 @@ import {
   Car,
   Check,
 } from 'lucide-react';
-import { Scooter } from '../components/ui/Scooter';
 import { ensureGoogleMapsScript, getGoogleMaps } from '../lib/googleMaps';
 
 type Point = { lat: number; lng: number };
@@ -706,8 +705,8 @@ export default function DriverTurnByTurnOverlay({
             </>
           ) : (
             <div className="flex items-center gap-3">
-                <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-sky-500/10 text-2xl text-accent">
-                  <Scooter className="h-7 w-7" />
+                <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-sky-500/10 text-2xl">
+                  🛵
                 </span>
               <div className="min-w-0 flex-1">
                 <p className={`text-sm font-black ${dark ? 'text-white' : 'text-foreground'}`}>

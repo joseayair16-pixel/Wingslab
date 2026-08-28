@@ -9,7 +9,6 @@ import DriverTurnByTurnOverlay from '../components/DriverTurnByTurnOverlay';
 import PushEnableBanner from '../components/PushEnableBanner';
 import { SettlementStatusBadge } from '../components/ui/Badge';
 import { EmptyState } from '../components/ui/EmptyState';
-import { Scooter } from '../components/ui/Scooter';
 import { useForegroundPolling } from '../hooks/useForegroundPolling';
 import { io } from 'socket.io-client';
 import {
@@ -2707,9 +2706,7 @@ export default function Home() {
                       ? 'bg-gradient-to-br from-sky-400 to-sky-600 shadow-sky-500/40'
                       : 'bg-gradient-to-br from-neutral-300 to-neutral-400 dark:from-zinc-700 dark:to-zinc-800 shadow-black/20'
                     }`}>
-                    <span className={`text-5xl ${driverProfile?.availability === 'AVAILABLE' ? 'animate-moto-ride text-white' : 'text-foreground'}`}>
-                      <Scooter className="h-16 w-16" />
-                    </span>
+                    <span className={`text-5xl ${driverProfile?.availability === 'AVAILABLE' ? 'animate-moto-ride' : ''}`}>🛵</span>
                   </div>
                 </div>
 
