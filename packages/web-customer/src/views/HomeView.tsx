@@ -887,23 +887,29 @@ export const HomeView = React.memo(function HomeView({
                 <p className="mt-2 max-w-md mx-auto text-[15px] font-medium leading-relaxed text-neutral-500">
                   Pero puedes explorar las ciudades donde ya estamos presentes y descubrir nuevos lugares:
                 </p>
-                <div className="mt-6 flex flex-col gap-2.5">
+                <div className="mt-6 flex flex-col gap-2.5 sm:grid sm:grid-cols-2 sm:gap-3">
                   {activeZones.slice().sort((a: any, b: any) => String(a.regionName).localeCompare(String(b.regionName))).map((zone: any) => (
                     <button
                       key={zone.regionCode}
                       type="button"
+                      aria-label={`Explorar la zona ${zone.regionName}`}
                       onClick={() => onZoneSelect?.(zone)}
-                      className="group relative flex w-full items-center justify-between gap-2 overflow-hidden rounded-full border border-sky-400/70 bg-white/70 px-4 py-2.5 text-sm font-bold text-neutral-800 shadow-[0_2px_12px_rgba(14,165,233,0.15)] backdrop-blur-xl transition-all duration-300 hover:-translate-y-0.5 hover:border-sky-500 hover:shadow-[0_8px_24px_rgba(14,165,233,0.2)] active:scale-[0.97]"
+                      className="group relative flex w-full items-center justify-between gap-2 overflow-hidden rounded-full border border-sky-400/70 bg-white/70 px-4 py-2.5 text-sm font-bold text-neutral-800 shadow-[0_2px_12px_rgba(14,165,233,0.15)] backdrop-blur-xl transition-all duration-300 hover:-translate-y-0.5 hover:border-sky-500 hover:shadow-[0_8px_24px_rgba(14,165,233,0.2)] active:scale-[0.97] sm:flex-col sm:items-stretch sm:justify-start sm:gap-2 sm:rounded-2xl sm:px-4 sm:py-3.5 sm:text-left"
                     >
-                      <span className="relative z-10 flex items-center gap-1.5">
-                        <svg className="h-4 w-4 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M15 10.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1 1 15 0Z" />
-                        </svg>
-                        {zone.regionName}
+                      <span className="relative z-10 flex items-center gap-1.5 sm:gap-2">
+                        <span className="flex items-center justify-center text-red-500 sm:h-9 sm:w-9 sm:rounded-xl sm:bg-sky-50 sm:text-sky-500">
+                          <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M15 10.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1 1 15 0Z" />
+                          </svg>
+                        </span>
+                        <span className="text-sm font-bold text-neutral-800">{zone.regionName}</span>
                       </span>
-                      <span className="relative z-10 inline-flex items-center justify-center rounded-full bg-neutral-900/5 px-2 py-0.5 text-[11px] font-bold text-neutral-500 backdrop-blur-sm">
+                      <span className="relative z-10 inline-flex items-center justify-center rounded-full bg-neutral-900/5 px-2 py-0.5 text-[11px] font-bold text-neutral-500 backdrop-blur-sm sm:hidden">
                         {zone.restaurantCount}
+                      </span>
+                      <span className="relative z-10 hidden text-[12px] font-medium text-neutral-500 sm:block">
+                        {zone.restaurantCount} {zone.restaurantCount === 1 ? 'lugar' : 'lugares'}
                       </span>
                       <div className="absolute inset-0 bg-gradient-to-r from-white via-sky-50/30 to-white opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
                     </button>
