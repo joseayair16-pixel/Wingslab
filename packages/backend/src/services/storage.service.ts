@@ -92,7 +92,8 @@ function getS3Client(config: ReturnType<typeof getRequiredR2Config>) {
   return s3Client;
 }
 
-export function urlToKey(url: string): string | null {
+export function urlToKey(url: string | null | undefined): string | null {
+  if (!url) return null;
   try {
     const parsed = new URL(url);
     const key = parsed.pathname.replace(/^\//, '');
@@ -104,17 +105,23 @@ export function urlToKey(url: string): string | null {
 }
 
 export async function deleteImages(keys: (string | null | undefined)[]): Promise<void> {
-  const validKeys = keys.filter((k): k is string => !!k);
+  // Dedupe y descarta nulos: reintentar sobre una clave ya eliminada es un no-op en R2.
+  const validKeys = Array.from(new Set(keys.filter((k): k is string => !!k)));
   if (validKeys.length === 0) return;
 
   const config = getRequiredR2Config();
   const s3 = getS3Client(config);
 
+  // DeleteObjectsCommand acepta máx. 1000 objetos por llamada; procesamos en lotes de 500.
+  const BATCH_SIZE = 500;
   try {
-    await s3.send(new DeleteObjectsCommand({
-      Bucket: config.bucketName,
-      Delete: { Objects: validKeys.map(Key => ({ Key })) },
-    }));
+    for (let i = 0; i < validKeys.length; i += BATCH_SIZE) {
+      const batch = validKeys.slice(i, i + BATCH_SIZE);
+      await s3.send(new DeleteObjectsCommand({
+        Bucket: config.bucketName,
+        Delete: { Objects: batch.map((Key) => ({ Key })) },
+      }));
+    }
   } catch (err) {
     throw new AppError(
       502,

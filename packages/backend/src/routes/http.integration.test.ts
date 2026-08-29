@@ -1715,6 +1715,106 @@ describe('http integration contracts', () => {
     expect(s3SendSpy).toHaveBeenCalled();
   });
 
+  it('elimina un restaurante (soft-delete) y purga su media de R2', async () => {
+    const token = await createToken({
+      sub: 'admin-user-del',
+      phone: '+5215533333333',
+      role: UserRole.ADMIN,
+    });
+
+    const originalEnv = {
+      accountId: process.env.R2_ACCOUNT_ID,
+      accessKeyId: process.env.R2_ACCESS_KEY_ID,
+      secretAccessKey: process.env.R2_SECRET_ACCESS_KEY,
+      bucketName: process.env.R2_BUCKET_NAME,
+      publicUrl: process.env.R2_PUBLIC_URL,
+    };
+    process.env.R2_ACCOUNT_ID = 'demo-account';
+    process.env.R2_ACCESS_KEY_ID = 'demo-key';
+    process.env.R2_SECRET_ACCESS_KEY = 'demo-secret';
+    process.env.R2_BUCKET_NAME = 'sadel-images';
+    process.env.R2_PUBLIC_URL = 'https://images.sadel.mx';
+
+    const restaurantFindUniqueSpy = jest
+      .spyOn(prisma.restaurant, 'findUnique')
+      .mockResolvedValue({
+        id: 'restaurant-del',
+        userId: 'user-del',
+        name: 'Borrar Demo',
+        region: 'cdmx-centro',
+        logo: 'https://images.sadel.mx/logo.png',
+        coverImage: 'https://images.sadel.mx/cover.png',
+        featuredFlyer: null,
+        user: { id: 'user-del', profilePhoto: 'https://images.sadel.mx/pp.png' },
+      } as never);
+
+    const productFindManySpy = jest
+      .spyOn(prisma.product, 'findMany')
+      .mockResolvedValue([
+        {
+          image: 'https://images.sadel.mx/p1.png',
+          images: ['https://images.sadel.mx/p1a.png', 'https://images.sadel.mx/p1b.png'],
+        },
+      ] as never);
+
+    const s3SendSpy = jest
+      .spyOn(require('@aws-sdk/client-s3').S3Client.prototype, 'send')
+      .mockResolvedValue({ $metadata: { httpStatusCode: 200 }, Deleted: [] } as never);
+
+    const restaurantUpdateSpy = jest.fn().mockResolvedValue({} as never);
+    const userUpdateSpy = jest.fn().mockResolvedValue({} as never);
+    const productUpdateManySpy = jest.fn().mockResolvedValue({} as never);
+    const featuredDeleteManySpy = jest.fn().mockResolvedValue({} as never);
+
+    const transactionSpy = jest
+      .spyOn(prisma, '$transaction')
+      .mockImplementation(async (cb: any) => {
+        if (typeof cb === 'function') {
+          return cb({
+            restaurant: { update: restaurantUpdateSpy },
+            user: { update: userUpdateSpy },
+            product: { updateMany: productUpdateManySpy },
+            featuredPurchase: { deleteMany: featuredDeleteManySpy },
+          } as never);
+        }
+        return [] as never;
+      });
+
+    const cacheService = require('../services/cache.service');
+    const invalidateRestaurantsCacheSpy = jest
+      .spyOn(cacheService, 'invalidateRestaurantsCache')
+      .mockImplementation(() => undefined as never);
+    const invalidateMenuCacheSpy = jest
+      .spyOn(cacheService, 'invalidateMenuCache')
+      .mockImplementation(() => undefined as never);
+
+    try {
+      const response = await app.inject({
+        method: 'DELETE',
+        url: '/admin/restaurantes/restaurant-del',
+        headers: { authorization: `Bearer ${token}` },
+      });
+
+      const body = parseJson<{ success: boolean; data: { id: string; status: string } }>(response.body);
+
+      expect(response.statusCode).toBe(200);
+      expect(body.success).toBe(true);
+      expect(body.data.status).toBe('DELETED');
+      expect(restaurantUpdateSpy).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ status: 'DELETED' }) })
+      );
+      expect(s3SendSpy).toHaveBeenCalled();
+    } finally {
+      Object.assign(process.env, originalEnv);
+      restaurantFindUniqueSpy.mockRestore();
+      productFindManySpy.mockRestore();
+      s3SendSpy.mockRestore();
+      transactionSpy.mockRestore();
+      invalidateRestaurantsCacheSpy.mockRestore();
+      invalidateMenuCacheSpy.mockRestore();
+    }
+  });
+
   it('permite al restaurante eliminar un producto propio', async () => {
     const token = await createToken({
       sub: 'restaurant-user-5',

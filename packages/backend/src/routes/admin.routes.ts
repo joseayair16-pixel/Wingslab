@@ -18,6 +18,8 @@ import { getMetricsSnapshot } from '../utils/metrics';
 import { sendPushNotification } from '../services/notification.service';
 import { emitNotification } from '../services/socket.service';
 import { encrypt } from '../utils/crypto';
+import { deleteImages, urlToKey } from '../services/storage.service';
+import { invalidateRestaurantsCache, invalidateMenuCache } from '../services/cache.service';
 
 const listRestaurantsQuerySchema = z.object({
   page: z.coerce.number().int().positive().default(1),
@@ -2000,7 +2002,16 @@ export async function registerAdminRoutes(fastify: FastifyInstance): Promise<voi
 
       const restaurant = await prisma.restaurant.findUnique({
         where: { id: params.data.id },
-        select: { id: true, userId: true, name: true },
+        select: {
+          id: true,
+          userId: true,
+          name: true,
+          region: true,
+          logo: true,
+          coverImage: true,
+          featuredFlyer: true,
+          user: { select: { id: true, profilePhoto: true } },
+        },
       });
 
       if (!restaurant) {
@@ -2013,46 +2024,89 @@ export async function registerAdminRoutes(fastify: FastifyInstance): Promise<voi
         });
       }
 
+      // 1) Recolectar claves de media en R2 (logo, portada, flyer destacado, foto de perfil y todas las imágenes de productos).
+      const productMedia = await prisma.product.findMany({
+        where: { restaurantId: restaurant.id },
+        select: { image: true, images: true },
+      });
+
+      const mediaKeys = [
+        restaurant.logo,
+        restaurant.coverImage,
+        restaurant.featuredFlyer,
+        restaurant.user?.profilePhoto,
+        ...productMedia.flatMap((p) => [p.image, ...(p.images ?? [])]),
+      ]
+        .map(urlToKey)
+        .filter((k): k is string => !!k);
+
       try {
+        // 2) Purgar blobs de R2 primero. Si falla, abortamos para no dejar huérfanos (reintento idempotente).
+        if (mediaKeys.length > 0) {
+          await deleteImages(mediaKeys);
+        }
+
+        // 3) Soft-delete + anonimización de PII. Conservamos pedidos/transacciones/settlements para auditoría.
+        const redactedRestaurantEmail = `eliminado_${restaurant.id}@sadel.local`;
+        const redactedUserEmail = `eliminado_user_${restaurant.userId}@sadel.local`;
+        const randomPassword = await bcryptjs.hash(
+          `${restaurant.id}:${Date.now()}:${Math.random()}`,
+          10
+        );
+
         await prisma.$transaction(async (tx) => {
-          const orderIds = (
-            await tx.order.findMany({
-              where: {
-                OR: [{ restaurantId: restaurant.id }, { supportRestaurantId: restaurant.id }],
-              },
-              select: { id: true },
-            })
-          ).map((order) => order.id);
-
-          if (orderIds.length > 0) {
-            await tx.customerBillingSettlement.deleteMany({
-              where: { orderId: { in: orderIds } },
-            });
-            await tx.transaction.deleteMany({
-              where: { orderId: { in: orderIds } },
-            });
-            await tx.review.deleteMany({
-              where: { orderId: { in: orderIds } },
-            });
-            await tx.order.deleteMany({
-              where: { id: { in: orderIds } },
-            });
-          }
-
-          await tx.review.deleteMany({
-            where: { restaurantId: restaurant.id },
-          });
-          await tx.favoriteRestaurant.deleteMany({
-            where: { restaurantId: restaurant.id },
-          });
-          await tx.transaction.deleteMany({
-            where: { restaurantId: restaurant.id },
+          await tx.restaurant.update({
+            where: { id: restaurant.id },
+            data: {
+              status: RestaurantStatus.DELETED,
+              statusReason: 'Eliminado por administrador',
+              statusChangedAt: new Date(),
+              name: 'Negocio eliminado',
+              description: '',
+              address: '',
+              contactPhone: '',
+              email: redactedRestaurantEmail,
+              transferBankName: null,
+              transferAccountNumber: null,
+              transferBeneficiaryName: null,
+              billingContactEmail: null,
+              instagram: null,
+              facebook: null,
+              tiktok: null,
+              logo: null,
+              coverImage: null,
+              featuredFlyer: null,
+              isFeatured: false,
+            },
           });
 
-          await tx.user.delete({
+          await tx.user.update({
             where: { id: restaurant.userId },
+            data: {
+              email: redactedUserEmail,
+              phone: '0000000000',
+              name: 'Eliminado',
+              lastName: null,
+              dateOfBirth: null,
+              profilePhoto: null,
+              password: randomPassword,
+            },
+          });
+
+          await tx.product.updateMany({
+            where: { restaurantId: restaurant.id },
+            data: { image: null, images: [] },
+          });
+
+          // Limpiar solicitudes de destacado pendientes (sin destruir historial financiero ya aprobado).
+          await tx.featuredPurchase.deleteMany({
+            where: { restaurantId: restaurant.id, status: 'PENDING' },
           });
         });
+
+        // 4) Invalidar cachés de descubrimiento y de menú.
+        invalidateRestaurantsCache(restaurant.region);
+        invalidateMenuCache(restaurant.id);
       } catch (error) {
         request.log.error({ err: error, restaurantId: restaurant.id }, 'Error al eliminar restaurante');
         return reply.status(500).send({
@@ -2066,7 +2120,8 @@ export async function registerAdminRoutes(fastify: FastifyInstance): Promise<voi
 
       return reply.send({
         success: true,
-        data: { id: restaurant.id, name: restaurant.name },
+        data: { id: restaurant.id, name: restaurant.name, status: RestaurantStatus.DELETED },
+        message: 'Restaurante eliminado (soft-delete). Media purgada de R2.',
       });
     });
 
