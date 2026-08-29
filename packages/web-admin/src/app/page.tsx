@@ -2361,6 +2361,14 @@ export default function Home() {
       country: createRegionForm.country,
     });
 
+    if (regions.some((r) => r.code === nextRegionCode)) {
+      setError(
+        `La zona "${createRegionForm.name.trim()}" (código ${nextRegionCode}) ya existe. Elige otra ciudad o estado para generar un código distinto.`
+      );
+      setCreatingRegion(false);
+      return;
+    }
+
     try {
       const payload = await requestJson<{ success: true; data: RegionItem }>({
         apiBase,

@@ -1,5 +1,4 @@
 import type { Metadata } from 'next';
-import Script from 'next/script';
 import '../styles/globals.css';
 import ServiceWorkerRegister from './ServiceWorkerRegister';
 import InstallAppButton from '../components/InstallAppButton';
@@ -49,7 +48,6 @@ export default function RootLayout({
         <SplashScreen />
         {children}
       </body>
-      <Script src={`https://maps.googleapis.com/maps/api/js?key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || ''}&loading=async`} strategy="lazyOnload" />
     </html>
   );
 }
