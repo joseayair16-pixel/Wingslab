@@ -7,6 +7,7 @@ import { IncomingOrderModal } from '../components/IncomingOrderModal';
 import DriverNavigationMap from '../components/DriverNavigationMap';
 import DriverTurnByTurnOverlay from '../components/DriverTurnByTurnOverlay';
 import PushEnableBanner from '../components/PushEnableBanner';
+import { isNativePlatform, requestNativePushPermission, registerNativePush, checkNativePushPermission, onNativeNotificationTap, nativeKeepAwake, nativeAllowSleep } from '../lib/native';
 import { SettlementStatusBadge } from '../components/ui/Badge';
 import { EmptyState } from '../components/ui/EmptyState';
 import { useForegroundPolling } from '../hooks/useForegroundPolling';
@@ -1190,6 +1191,20 @@ export default function Home() {
     | { ok: true }
     | { ok: false; reason: 'DENIED' | 'BLOCKED' | 'INSECURE' | 'NOT_SUPPORTED' | 'VAPID_NOT_CONFIGURED' | 'SUBSCRIBE_FAILED' | 'UNKNOWN' }
   > => {
+    // App nativa (WebView Capacitor): FCM vía plugin nativo, sin serviceWorker web.
+    if (isNativePlatform()) {
+      const permission = await requestNativePushPermission();
+      if (permission !== 'granted') {
+        return { ok: false, reason: permission === 'unavailable' ? 'NOT_SUPPORTED' : 'DENIED' };
+      }
+      const result = await registerNativePush(apiBase, tokenToUse);
+      if (!result.ok) {
+        console.error('[Push] FCM registration failed:', result.reason);
+        return { ok: false, reason: 'SUBSCRIBE_FAILED' };
+      }
+      return { ok: true };
+    }
+
     if (typeof window === 'undefined' || !('serviceWorker' in navigator) || !('Notification' in window)) {
       return { ok: false, reason: 'NOT_SUPPORTED' };
     }
@@ -1318,6 +1333,18 @@ export default function Home() {
   }, [apiBase]);
 
   useEffect(() => {
+    if (!token || typeof window === 'undefined') return;
+
+    // En la app nativa el permiso se consulta vía plugin y el token FCM se
+    // re-sincroniza con el backend en cada arranque.
+    if (isNativePlatform()) {
+      let cancelled = false;
+      checkNativePushPermission().then((granted) => {
+        if (!cancelled && granted) void subscribeToPush(token);
+      });
+      return () => { cancelled = true; };
+    }
+
     // Solo se restablece la suscripción cuando el permiso YA fue concedido en una
     // sesión anterior. El primer permiso (estado 'default') debe pedirse desde un
     // gesto del usuario (banner "Activar notificaciones"); pedirlo al cargar la
@@ -1330,6 +1357,33 @@ export default function Home() {
       void subscribeToPush(token);
     }
   }, [token, sessionUser, subscribeToPush]);
+
+  // Push nativo: al tocar la notificación FCM en la app del repartidor,
+  // asegurar que el pedido entrante se muestre (IncomingOrderModal).
+  useEffect(() => {
+    if (typeof window === 'undefined' || !isNativePlatform() || !token) return;
+    const off = onNativeNotificationTap(({ orderId }) => {
+      if (!orderId) return;
+      void loadPendingOrders();
+    });
+    return off;
+  }, [token, loadPendingOrders]);
+
+  // Screen Wake Lock: mantener la pantalla encendida mientras la app del repartidor está abierta.
+  useEffect(() => {
+    try {
+      if (isNativePlatform()) {
+        nativeKeepAwake();
+      }
+    } catch { /* noop */ }
+    return () => {
+      try {
+        if (isNativePlatform()) {
+          nativeAllowSleep();
+        }
+      } catch { /* noop */ }
+    };
+  }, []);
 
   // Efecto para el rastreo de ubicación (watchPosition; evita reinicios por pendingOrders)
   useEffect(() => {

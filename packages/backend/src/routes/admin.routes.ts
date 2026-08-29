@@ -2856,6 +2856,8 @@ export async function registerAdminRoutes(fastify: FastifyInstance): Promise<voi
       const body = z.object({
         region: z.string().min(1, 'La región es obligatoria.'),
         password: z.string().min(6, 'La contraseña debe tener al menos 6 caracteres.').default('sadel123'),
+        latitude: z.number({ invalid_type_error: 'La latitud debe ser un número.' }).optional(),
+        longitude: z.number({ invalid_type_error: 'La longitud debe ser un número.' }).optional(),
       }).safeParse(request.body);
 
       if (!params.success || !body.success) {
@@ -2869,7 +2871,7 @@ export async function registerAdminRoutes(fastify: FastifyInstance): Promise<voi
       }
 
       const { id } = params.data;
-      const { region, password } = body.data;
+      const { region, password, latitude, longitude } = body.data;
 
       const platformReq = await getPlatformRequestById(id);
       if (!platformReq) {
@@ -2912,6 +2914,12 @@ export async function registerAdminRoutes(fastify: FastifyInstance): Promise<voi
         }
 
         if (platformReq.type === 'RESTAURANT') {
+          if (latitude == null || longitude == null || Number.isNaN(latitude) || Number.isNaN(longitude)) {
+            return reply.status(400).send({
+              success: false,
+              error: { code: 'MISSING_COORDS', message: 'Debes indicar la latitud y longitud reales del negocio para aprobar la afiliación.' },
+            });
+          }
           await prisma.$transaction(async (tx) => {
             const user = await tx.user.create({
               data: {
@@ -2943,8 +2951,8 @@ export async function registerAdminRoutes(fastify: FastifyInstance): Promise<voi
                 description: `Afiliación aprobada de ${platformReq.ownerName}. Giro: ${platformReq.giro || 'Restaurante'}.`,
                 businessType,
                 address: platformReq.location,
-                latitude: 19.7006,
-                longitude: -101.1864,
+                latitude,
+                longitude,
                 region: region,
                 contactPhone: ownerPhone,
                 email: `${ownerPhone.replace(/\D/g, '')}@sadel.local`,

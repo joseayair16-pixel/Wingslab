@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">SaDeL Repartidor</string>
+    <string name="title_activity_main">SaDeL Repartidor</string>
+    <string name="package_name">app.sadel.driver</string>
+    <string name="custom_url_scheme">app.sadel.driver</string>
+</resources>

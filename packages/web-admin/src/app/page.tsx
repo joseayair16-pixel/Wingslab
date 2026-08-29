@@ -739,6 +739,8 @@ export default function Home() {
   const [isApproveRequestModalOpen, setIsApproveRequestModalOpen] = useState(false);
   const [approveRegion, setApproveRegion] = useState('');
   const [approvePassword, setApprovePassword] = useState('sadel123');
+  const [approveLatitude, setApproveLatitude] = useState('');
+  const [approveLongitude, setApproveLongitude] = useState('');
   const [isSubmittingApproval, setIsSubmittingApproval] = useState(false);
   const [isSubmittingRejection, setIsSubmittingRejection] = useState(false);
 
@@ -1534,10 +1536,22 @@ export default function Home() {
     }
   }, [apiBase, token]);
 
-  const approvePlatformRequest = async (requestId: string, reqRegion: string, reqPassword?: string) => {
+  const approvePlatformRequest = async (requestId: string, reqRegion: string, reqPassword?: string, reqLatitude?: string, reqLongitude?: string, reqType?: string) => {
     if (!reqRegion) {
       setError('La región es obligatoria para la aprobación.');
       return;
+    }
+    if (reqType === 'RESTAURANT') {
+      if (reqLatitude === '' || reqLongitude === '' || reqLatitude == null || reqLongitude == null) {
+        setError('Debes indicar la latitud y longitud reales del negocio.');
+        return;
+      }
+      const lat = parseFloat(reqLatitude);
+      const lng = parseFloat(reqLongitude);
+      if (Number.isNaN(lat) || Number.isNaN(lng)) {
+        setError('La latitud y longitud deben ser números válidos.');
+        return;
+      }
     }
     setIsSubmittingApproval(true);
     setError('');
@@ -1550,7 +1564,10 @@ export default function Home() {
           method: 'POST',
           body: JSON.stringify({
             region: reqRegion,
-            password: reqPassword || 'sadel123'
+            password: reqPassword || 'sadel123',
+            ...(reqType === 'RESTAURANT' && reqLatitude != null && reqLongitude != null
+              ? { latitude: parseFloat(reqLatitude), longitude: parseFloat(reqLongitude) }
+              : {})
           })
         },
         fallbackMessage: 'No se pudo aprobar la solicitud.',
@@ -3501,7 +3518,7 @@ export default function Home() {
                                 </div>
                                 <div className="flex items-center gap-1.5">
                                   <a href={`https://wa.me/${req.whatsapp.replace(/\D/g, '')}?text=Hola%20${encodeURIComponent(req.ownerName)},%20te%20escribimos%20de%20SaDeL%20para%20darle%20seguimiento%20a%20tu%20alta.`} target="_blank" rel="noreferrer" className="text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200/50 px-2 py-1 rounded-full hover:bg-emerald-100">💬</a>
-                                  <button onClick={() => { setSelectedRequestId(req.id); setApproveRegion(regions[0]?.code || ''); setApprovePassword('sadel123'); setIsApproveRequestModalOpen(true); }} className="text-[10px] font-bold text-white bg-neutral-950 px-2 py-1 rounded-full hover:bg-neutral-800">Aprobar</button>
+                                  <button onClick={() => { setSelectedRequestId(req.id);                   setApproveRegion(regions[0]?.code || ''); setApprovePassword('sadel123'); setApproveLatitude(''); setApproveLongitude(''); setIsApproveRequestModalOpen(true); }} className="text-[10px] font-bold text-white bg-neutral-950 px-2 py-1 rounded-full hover:bg-neutral-800">Aprobar</button>
                                   <button onClick={() => rejectPlatformRequest(req.id)} className="text-[10px] font-bold text-rose-700 bg-rose-50 border border-rose-200/50 px-2 py-1 rounded-full hover:bg-rose-100">✗</button>
                                 </div>
                               </div>
@@ -7824,6 +7841,29 @@ export default function Home() {
                   />
                 </div>
 
+                {selectedReq.type === 'RESTAURANT' && (
+                  <div>
+                    <p className="text-[11px] font-bold text-neutral-400 uppercase tracking-wider mb-2">Ubicación Real del Negocio</p>
+                    <div className="grid grid-cols-2 gap-3">
+                      <Field
+                        label="Latitud"
+                        value={approveLatitude}
+                        onChange={(value) => setApproveLatitude(value)}
+                        placeholder="19.123456"
+                        type="text"
+                      />
+                      <Field
+                        label="Longitud"
+                        value={approveLongitude}
+                        onChange={(value) => setApproveLongitude(value)}
+                        placeholder="-101.123456"
+                        type="text"
+                      />
+                    </div>
+                    <p className="text-[11px] text-neutral-400 mt-1.5">Indica las coordenadas exactas del negocio (puedes obtenerlas desde Google Maps). Se usan para activar la zona de tu pueblo.</p>
+                  </div>
+                )}
+
                 <div className="flex justify-end gap-3 pt-4 border-t border-black/5">
                   <button
                     type="button"
@@ -7835,8 +7875,8 @@ export default function Home() {
                   </button>
                   <button
                     type="button"
-                    disabled={isSubmittingApproval || !approveRegion}
-                    onClick={() => approvePlatformRequest(selectedReq.id, approveRegion, approvePassword)}
+                    disabled={isSubmittingApproval || !approveRegion || (selectedReq.type === 'RESTAURANT' && (!approveLatitude || !approveLongitude))}
+                    onClick={() => approvePlatformRequest(selectedReq.id, approveRegion, approvePassword, selectedReq.type === 'RESTAURANT' ? approveLatitude : '', selectedReq.type === 'RESTAURANT' ? approveLongitude : '', selectedReq.type)}
                     className="rounded-full bg-neutral-950 text-white hover:bg-neutral-800 px-6 py-3 text-xs font-bold transition flex items-center gap-2"
                   >
                     {isSubmittingApproval ? (
