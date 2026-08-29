@@ -6546,17 +6546,18 @@ export default function Home() {
                 </div>
 
                 <div>
-                  <label className="text-[10px] font-bold uppercase tracking-widest text-neutral-400">Ubicación del Negocio</label>
+                  <label className="text-[10px] font-bold uppercase tracking-widest text-neutral-400">Ciudad / Localidad del Negocio</label>
                   <input
                     type="text"
                     value={joinRestLocation}
                     onChange={(e) => setJoinRestLocation(e.target.value)}
-                    placeholder="Calle, número, colonia, ciudad o localidad"
+                    placeholder="Tu ciudad, pueblo o localidad"
                     autoComplete="off"
                     autoCorrect="off"
                     autoCapitalize="words"
                     className="mt-2 w-full rounded-2xl border border-black/5 bg-neutral-50/50 focus:bg-white px-4 py-3.5 text-base font-medium text-neutral-900 transition-colors focus:border-neutral-950 focus:outline-none focus:ring-1 focus:ring-neutral-950 placeholder:text-neutral-400"
                   />
+                  <p className="mt-1.5 text-[11px] leading-snug text-neutral-400">Te ubicamos para activar la zona de tu pueblo.</p>
                 </div>
 
                 <div className="flex justify-end pt-4 gap-3">
