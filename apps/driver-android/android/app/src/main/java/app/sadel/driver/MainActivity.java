@@ -34,11 +34,11 @@ public class MainActivity extends BridgeActivity {
                 .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
                 .build();
 
-        createChannel(manager, "notifica", "Pedido nuevo", R.raw.notifica, NotificationManager.IMPORTANCE_HIGH, attrs);
-        createChannel(manager, "llegue", "Repartidor llegó", R.raw.llegue, NotificationManager.IMPORTANCE_HIGH, attrs);
-        createChannel(manager, "rezagado", "Pedido rezagado", R.raw.rezagado, NotificationManager.IMPORTANCE_HIGH, attrs);
-        createChannel(manager, "mensaje", "Mensaje de chat", R.raw.mensaje, NotificationManager.IMPORTANCE_DEFAULT, attrs);
-        createChannel(manager, "default", "Notificaciones generales", R.raw.notifica, NotificationManager.IMPORTANCE_DEFAULT, attrs);
+        createChannel(manager, "notifica", "Pedido nuevo", R.raw.notifica, NotificationManager.IMPORTANCE_HIGH, attrs, true);
+        createChannel(manager, "llegue", "Repartidor llegó", R.raw.llegue, NotificationManager.IMPORTANCE_HIGH, attrs, true);
+        createChannel(manager, "rezagado", "Pedido rezagado", R.raw.rezagado, NotificationManager.IMPORTANCE_HIGH, attrs, true);
+        createChannel(manager, "mensaje", "Mensaje de chat", R.raw.mensaje, NotificationManager.IMPORTANCE_DEFAULT, attrs, false);
+        createChannel(manager, "default", "Notificaciones generales", R.raw.notifica, NotificationManager.IMPORTANCE_DEFAULT, attrs, false);
     }
 
     private void createChannel(
@@ -47,10 +47,14 @@ public class MainActivity extends BridgeActivity {
             String name,
             int soundRes,
             int importance,
-            AudioAttributes attrs) {
+            AudioAttributes attrs,
+            boolean bypassDnd) {
         NotificationChannel channel = new NotificationChannel(id, name, importance);
         channel.setDescription("Canal " + name + " de SaDeL Repartidor");
         channel.enableVibration(true);
+        // Los canales críticos (pedido nuevo / llegada / rezagado) suenan aunque
+        // el dispositivo esté en "No molestar", para no perder una entrega.
+        if (bypassDnd) channel.setBypassDnd(true);
         channel.setSound(Uri.parse("android.resource://" + getPackageName() + "/" + soundRes), attrs);
         manager.createNotificationChannel(channel);
     }

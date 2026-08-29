@@ -8,6 +8,7 @@ import DriverNavigationMap from '../components/DriverNavigationMap';
 import DriverTurnByTurnOverlay from '../components/DriverTurnByTurnOverlay';
 import PushEnableBanner from '../components/PushEnableBanner';
 import { isNativePlatform, requestNativePushPermission, registerNativePush, checkNativePushPermission, onNativeNotificationTap, nativeKeepAwake, nativeAllowSleep } from '../lib/native';
+import { playAlertSound } from '../lib/sound';
 import { SettlementStatusBadge } from '../components/ui/Badge';
 import { EmptyState } from '../components/ui/EmptyState';
 import { useForegroundPolling } from '../hooks/useForegroundPolling';
@@ -1692,6 +1693,8 @@ export default function Home() {
       seenLiveEventKeysRef.current = [...seenLiveEventKeysRef.current.slice(-39), liveEventKey];
       const liveMessage = buildDriverLiveMessage('order:assigned', payload);
       setAuthMessage(liveMessage);
+      // Alerta sonora en primer plano (en segundo plano suena el canal nativo).
+      playAlertSound('/sounds/notifica.wav');
       // Pedido entrante es crítico: refrescar sin debounce
       void loadPendingOrders();
       void loadDashboard();
