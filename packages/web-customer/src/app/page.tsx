@@ -6744,13 +6744,14 @@ export default function Home() {
         <button
           type="button"
           onClick={handleResetZone}
-          className="fixed bottom-6 left-1/2 z-[46] -translate-x-1/2 inline-flex items-center gap-2 rounded-full border border-black/5 bg-white/90 px-5 py-3 text-sm font-semibold text-neutral-600 shadow-lg backdrop-blur-lg transition-all duration-200 hover:-translate-y-0.5 hover:border-sky-200/50 hover:text-sky-700 hover:shadow-[0_8px_24px_rgba(14,165,233,0.15)] active:scale-[0.97]"
+          aria-label={`Cambiar zona, zona actual: ${selectedZoneName}`}
+          className="fixed bottom-6 left-1/2 z-[46] -translate-x-1/2 inline-flex items-center gap-2.5 rounded-full bg-neutral-950 px-5 py-3 text-sm font-semibold text-white/80 shadow-[0_10px_30px_rgba(0,0,0,0.28)] transition-all duration-200 hover:-translate-y-0.5 hover:bg-neutral-900 hover:text-white hover:shadow-[0_14px_38px_rgba(14,165,233,0.18)] active:scale-[0.97]"
         >
-          <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M9 15 3 9m0 0 6-6M3 9h12a6 6 0 0 1 0 12h-3" />
+          <svg className="h-4 w-4 text-sky-400" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+            <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7Zm0 9.5a2.5 2.5 0 1 1 0-5 2.5 2.5 0 0 1 0 5Z" />
           </svg>
-          Cambiar zona
-          <span className="ml-0.5 font-bold text-neutral-800">{selectedZoneName}</span>
+          <span>Cambiar zona</span>
+          <span className="font-bold text-sky-300">{selectedZoneName}</span>
         </button>
       )}
 
