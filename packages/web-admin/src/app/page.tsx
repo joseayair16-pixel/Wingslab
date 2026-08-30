@@ -2358,12 +2358,12 @@ export default function Home() {
     const nextRegionCode = buildRegionCode({
       state: createRegionForm.state,
       city: createRegionForm.city,
-      country: createRegionForm.country,
+      name: createRegionForm.name.trim(),
     });
 
     if (regions.some((r) => r.code === nextRegionCode)) {
       setError(
-        `La zona "${createRegionForm.name.trim()}" (código ${nextRegionCode}) ya existe. Elige otra ciudad o estado para generar un código distinto.`
+        `La zona "${createRegionForm.name.trim()}" (código ${nextRegionCode}) ya existe. Usa otro nombre, ciudad o estado para generar un código distinto.`
       );
       setCreatingRegion(false);
       return;
@@ -7627,10 +7627,10 @@ export default function Home() {
               <div className="rounded-[24px] border border-black/5 bg-neutral-50 p-4 text-sm leading-7 text-neutral-600">
                 <span className="font-semibold text-neutral-900">Codigo interno:</span>{' '}
                 {buildRegionCode({
-                  country: createRegionForm.country,
                   state: createRegionForm.state,
                   city: createRegionForm.city,
-                }) || 'Completa pais, estado y ciudad para generarlo'}.
+                  name: createRegionForm.name.trim(),
+                }) || 'Completa estado, ciudad y nombre para generarlo'}.
                 <p className="mt-2 text-xs leading-6 text-neutral-500">
                   Este codigo se usa solo para identificar la zona internamente. El nombre visible para la operacion y para los usuarios es el que escribes en &quot;Nombre de la zona&quot;.
                 </p>
@@ -8860,8 +8860,8 @@ function sortRegionsByName(items: RegionItem[]) {
   return [...items].sort((left, right) => left.name.localeCompare(right.name, 'es'));
 }
 
-function buildRegionCode(params: { country: string; state: string; city: string }) {
-  return [params.country, params.state, params.city]
+function buildRegionCode(params: { state: string; city: string; name: string }) {
+  return [params.state, params.city, params.name]
     .map((value) =>
       value
         .normalize('NFD')
@@ -8872,7 +8872,6 @@ function buildRegionCode(params: { country: string; state: string; city: string 
         .replace(/^-+|-+$/g, '')
     )
     .filter(Boolean)
-    .slice(-2)
     .join('-')
     .slice(0, 60);
 }

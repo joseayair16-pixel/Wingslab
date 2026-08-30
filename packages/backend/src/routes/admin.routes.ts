@@ -1,4 +1,4 @@
-import { BillingCycle, BusinessType, OrderStatus, RestaurantStatus, UserRole, UserStatus, DriverStatus, DriverAvailability } from '@prisma/client';
+import { BillingCycle, BusinessType, OrderStatus, RestaurantStatus, UserRole, UserStatus, DriverStatus, DriverAvailability, Prisma } from '@prisma/client';
 import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import bcryptjs from 'bcryptjs';
@@ -1433,17 +1433,32 @@ export async function registerAdminRoutes(fastify: FastifyInstance): Promise<voi
         });
       }
 
-      const region = await prisma.region.create({
-        data: {
-          ...parsed.data,
-          code: normalizedCode,
-        },
-      });
+      try {
+        const region = await prisma.region.create({
+          data: {
+            ...parsed.data,
+            code: normalizedCode,
+          },
+        });
 
-      return reply.status(201).send({
-        success: true,
-        data: region,
-      });
+        return reply.status(201).send({
+          success: true,
+          data: region,
+        });
+      } catch (error) {
+        // Defensa en profundidad: si el slug colisiona o se repite (state, city, name),
+        // la restriccion unica de la BD lo garantiza y respondemos 409 claro, no un 500.
+        if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+          return reply.status(409).send({
+            success: false,
+            error: {
+              code: 'REGION_ALREADY_EXISTS',
+              message: 'Ya existe una zona con ese nombre en la misma ciudad y estado.',
+            },
+          });
+        }
+        throw error;
+      }
     });
 
     admin.patch('/admin/regiones/:code', async (request, reply) => {

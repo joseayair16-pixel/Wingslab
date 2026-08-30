@@ -864,6 +864,7 @@ model Region {
   updatedAt DateTime @updatedAt
 
   @@index([isActive])
+  @@unique([state, city, name])
 }
 
 // ============== Push Notifications ==============
