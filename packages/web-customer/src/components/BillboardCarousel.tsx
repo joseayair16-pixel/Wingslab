@@ -288,6 +288,15 @@ export const BillboardCarousel = memo(function BillboardCarousel({
   const transition = isDragging || suppressTransition ? 'none' : `transform ${TRANSITION_MS}ms cubic-bezier(0.4, 0, 0.2, 1)`;
   const activeReal = realIndexOf(pos, n);
 
+  // `sizes` exacto segun el ancho real de la tarjeta: el navegador descarga el
+  // ancho necesario (xDPR) en vez de un 380px que luego se estira y se ve borroso.
+  // Modo movil / banner unico: llena el viewport (max 720px centrado). Modo
+  // desktop multi-tarjeta: el ancho medido de cada tarjeta (cardW).
+  const billboardSizes =
+    cardW > 0
+      ? `(max-width: 1023px) calc(100vw - 32px), ${cardW}px`
+      : '(max-width: 1023px) calc(100vw - 32px), min(720px, 100vw)';
+
   const slide = (billboard: Billboard, key: string, isClone?: boolean) => {
     const inner = (
       <div className="relative h-full w-full overflow-hidden rounded-2xl">
@@ -295,7 +304,8 @@ export const BillboardCarousel = memo(function BillboardCarousel({
           src={billboard.imageUrl}
           alt="Banner publicitario"
           fill
-          sizes="(max-width: 768px) calc(100vw - 32px), 380px"
+          sizes={billboardSizes}
+          quality={82}
           priority={key === `${billboard.id}-real-0`}
           draggable={false}
           className="object-cover"
