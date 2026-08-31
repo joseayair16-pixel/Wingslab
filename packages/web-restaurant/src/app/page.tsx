@@ -2837,13 +2837,17 @@ export default function Home() {
       setStoreDraft({
         name: profileData.data.name || '',
         description: profileData.data.description || '',
-        address: (profileData.data.address || '').replace(/, No\. .*$/, ''),
+        address: (() => {
+          const raw = profileData.data.address || '';
+          if (raw.trim() === 'Dirección pendiente de registro') return '';
+          return raw.replace(/, No\. .*$/, '');
+        })(),
         houseNumber: (() => {
           const match = (profileData.data.address || '').match(/, No\. (.*)$/);
-          return match ? match[1] : '';
+          return match && match[1].trim() !== 'Dirección pendiente de registro' ? match[1] : '';
         })(),
-        latitude: profileData.data.latitude != null ? String(profileData.data.latitude) : '',
-        longitude: profileData.data.longitude != null ? String(profileData.data.longitude) : '',
+        latitude: profileData.data.latitude ? String(profileData.data.latitude) : '',
+        longitude: profileData.data.longitude ? String(profileData.data.longitude) : '',
         contactPhone: profileData.data.contactPhone || '',
         email: profileData.data.email || '',
         logo: profileData.data.logo || '',
