@@ -2055,20 +2055,16 @@ export async function registerAdminRoutes(fastify: FastifyInstance): Promise<voi
         .map(urlToKey)
         .filter((k): k is string => !!k);
 
+      // 2) Soft-delete + anonimización de PII. Operación crítica: va primero y debe
+      //    completarse aunque la purga de R2 falle. Conservamos pedidos/transacciones/settlements.
+      const redactedRestaurantEmail = `eliminado_${restaurant.id}@sadel.local`;
+      const redactedUserEmail = `eliminado_user_${restaurant.userId}@sadel.local`;
+      const randomPassword = await bcryptjs.hash(
+        `${restaurant.id}:${Date.now()}:${Math.random()}`,
+        10
+      );
+
       try {
-        // 2) Purgar blobs de R2 primero. Si falla, abortamos para no dejar huérfanos (reintento idempotente).
-        if (mediaKeys.length > 0) {
-          await deleteImages(mediaKeys);
-        }
-
-        // 3) Soft-delete + anonimización de PII. Conservamos pedidos/transacciones/settlements para auditoría.
-        const redactedRestaurantEmail = `eliminado_${restaurant.id}@sadel.local`;
-        const redactedUserEmail = `eliminado_user_${restaurant.userId}@sadel.local`;
-        const randomPassword = await bcryptjs.hash(
-          `${restaurant.id}:${Date.now()}:${Math.random()}`,
-          10
-        );
-
         await prisma.$transaction(async (tx) => {
           await tx.restaurant.update({
             where: { id: restaurant.id },
@@ -2095,7 +2091,8 @@ export async function registerAdminRoutes(fastify: FastifyInstance): Promise<voi
             },
           });
 
-          await tx.user.update({
+          // updateMany: no lanza P2025 si el usuario no existe (idempotente).
+          await tx.user.updateMany({
             where: { id: restaurant.userId },
             data: {
               email: redactedUserEmail,
@@ -2119,11 +2116,28 @@ export async function registerAdminRoutes(fastify: FastifyInstance): Promise<voi
           });
         });
 
-        // 4) Invalidar cachés de descubrimiento y de menú.
+        // 3) Invalidar cachés de descubrimiento y de menú.
         invalidateRestaurantsCache(restaurant.region);
         invalidateMenuCache(restaurant.id);
+
+        // 4) Purga de media en R2 best-effort: si falla, no bloquea la eliminación.
+        //    El job cleanup-orphan-media repurga huérfanos como red de seguridad.
+        if (mediaKeys.length > 0) {
+          try {
+            await deleteImages(mediaKeys);
+          } catch (purgeError) {
+            request.log.warn(
+              { err: purgeError, restaurantId: restaurant.id },
+              'La purga de media en R2 fallo, se reprograma via cleanup-orphan-media.'
+            );
+          }
+        }
       } catch (error) {
-        request.log.error({ err: error, restaurantId: restaurant.id }, 'Error al eliminar restaurante');
+        const code = error instanceof Prisma.PrismaClientKnownRequestError ? error.code : 'UNKNOWN';
+        request.log.error(
+          { err: error, code, restaurantId: restaurant.id },
+          'Error al eliminar restaurante'
+        );
         return reply.status(500).send({
           success: false,
           error: {
