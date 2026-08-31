@@ -358,7 +358,17 @@ export async function registerAdminRoutes(fastify: FastifyInstance): Promise<voi
       }
 
       const { page, limit, search, region, status, businessType } = parsed.data;
+      // Los restaurantes eliminados (soft-delete) quedan ocultos por defecto; solo
+      // reaparecen cuando el admin filtra explícitamente por estado DELETED para
+      // auditar o reactivar. Evita que negocios dados de baja sigan "apareciendo".
       const where = {
+        ...(status
+          ? { status }
+          : {
+              status: {
+                not: RestaurantStatus.DELETED,
+              },
+            }),
         ...(search
           ? {
               OR: [
@@ -369,7 +379,6 @@ export async function registerAdminRoutes(fastify: FastifyInstance): Promise<voi
             }
           : {}),
         ...(region ? { region } : {}),
-        ...(status ? { status } : {}),
         ...(businessType ? { businessType } : {}),
       };
 
