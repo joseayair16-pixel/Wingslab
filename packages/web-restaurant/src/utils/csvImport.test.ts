@@ -256,3 +256,63 @@ describe('flujo completo del caso del usuario', () => {
     expect(valid.length).toBe(3);
   });
 });
+
+describe('validez del importador con categorías nuevas (regresión del bug)', () => {
+  // Simula la lógica de isValid del componente page.tsx: una fila es válida
+  // si no hay errores y la categoría está resuelta (existente O a crear).
+  function buildRowsValid(input: string, createMissing: boolean): number {
+    const delimiter = guessCsvDelimiter(input);
+    const rows = parseCsvRows(input, delimiter);
+    const header = rows[0];
+    const data = rows.slice(1);
+    const map = autoMapImportColumns(header);
+
+    return data.filter((row) => {
+      const cell = (idx: number | undefined) => (idx !== undefined ? (row[idx] ?? '').trim() : '');
+      const errors: string[] = [];
+      const name = cell(map.name);
+      const price = parseImportPrice(cell(map.price), delimiter);
+      const categoryName = cell(map.category);
+      if (!name || name.length < 2) errors.push('name');
+      if (price === null || price <= 0) errors.push('price');
+
+      let categoryTargetId = '';
+      let willCreateCategory = false;
+      if (categoryName) {
+        if (createMissing) willCreateCategory = true;
+        else errors.push('categoria no existe');
+      } else {
+        errors.push('sin categoria');
+      }
+
+      const isValid = errors.length === 0 && (Boolean(categoryTargetId) || willCreateCategory);
+      return isValid;
+    }).length;
+  }
+
+  const csv = [
+    'nombre,precio,categoría,tipo,descripción',
+    'Burger House Clásica,89,Hamburguesas,pieza,Carne de res con queso',
+    'Cheese Burger,99,Hamburguesas,pieza,Hamburguesa con doble queso',
+    'BBQ Burger,119,Hamburguesas,pieza,Carne con queso tocino y salsa BBQ',
+  ].join('\n');
+
+  it('marca como válidas las filas con categorías nuevas cuando crear faltantes está activo', () => {
+    expect(buildRowsValid(csv, true)).toBe(3);
+  });
+
+  it('marca como inválidas las filas con categorías nuevas si crear faltantes está desactivado', () => {
+    expect(buildRowsValid(csv, false)).toBe(0);
+  });
+
+  it('mapea correctamente los encabezados del ejemplo de 20 productos', () => {
+    const header = ['nombre', 'precio', 'categoría', 'tipo', 'descripción'];
+    const map = autoMapImportColumns(header);
+    expect(map.name).toBe(0);
+    expect(map.price).toBe(1);
+    expect(map.category).toBe(2);
+    expect(map.sellBy).toBe(3);
+    expect(map.description).toBe(4);
+    expect(map).toMatchObject({ discountPrice: undefined, image: undefined });
+  });
+});

@@ -5468,7 +5468,11 @@ export default function Home() {
         willCreateCategory,
         categoryLabel,
         errors,
-        isValid: errors.length === 0 && Boolean(categoryTargetId),
+        // Una fila es válida cuando no tiene errores y la categoría está
+        // resuelta: ya sea una existente (categoryTargetId) o una nueva que se
+        // creará automáticamente (willCreateCategory). Sin este caso, las filas
+        // con categorías nuevas quedaban siempre como "con errores".
+        isValid: errors.length === 0 && (Boolean(categoryTargetId) || willCreateCategory),
       };
     });
   }, [importDataRows, importColumnMap, importDelimiter, importCreateMissingCategories, importDefaultCategoryId, importCategoryIdByName]);
