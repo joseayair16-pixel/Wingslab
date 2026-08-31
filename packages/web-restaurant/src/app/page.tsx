@@ -515,140 +515,19 @@ function validateProductConsistency(draft: ProductDraft): string | null {
   return null;
 }
 
-type ImportFieldKey = 'name' | 'price' | 'category' | 'sellBy' | 'description' | 'discountPrice' | 'image';
-
-const IMPORT_FIELD_LABELS: Record<ImportFieldKey, string> = {
-  name: 'Nombre',
-  price: 'Precio',
-  category: 'Categoría',
-  sellBy: 'Tipo de venta',
-  description: 'Descripción',
-  discountPrice: 'Precio especial',
-  image: 'Imagen (URL)',
-};
-
-const IMPORT_FIELD_ORDER: ImportFieldKey[] = ['name', 'price', 'category', 'sellBy', 'description', 'discountPrice', 'image'];
-
-const IMPORT_COLUMN_KEYWORDS: Record<ImportFieldKey, string[]> = {
-  name: ['nombre', 'name', 'platillo', 'plato', 'producto', 'item', 'articulo', 'artículo'],
-  price: ['precio', 'price', 'precio pieza', 'precio por pieza'],
-  category: ['categoria', 'category', 'categoría', 'seccion', 'sección'],
-  sellBy: ['tipo', 'tipo de venta', 'venta', 'sell by', 'unidad', 'peso'],
-  description: ['descripcion', 'description', 'descripción', 'detalle', 'detalles', 'des'],
-  discountPrice: ['precio especial', 'descuento', 'discount', 'precio oferta', 'precio promocion'],
-  image: ['imagen', 'image', 'foto', 'url', 'imagen url', 'foto url', 'url imagen'],
-};
-
-type CsvDelimiter = ',' | ';' | '\t';
-
-function guessCsvDelimiter(text: string): CsvDelimiter {
-  const sample = text.slice(0, 4000);
-  const commaCount = (sample.match(/,/g) || []).length;
-  const semicolonCount = (sample.match(/;/g) || []).length;
-  const tabCount = (sample.match(/\t/g) || []).length;
-  if (semicolonCount > commaCount && semicolonCount > 0) return ';';
-  if (tabCount > commaCount && tabCount > 0) return '\t';
-  return ',';
-}
-
-function parseCsvRows(text: string, delimiter: CsvDelimiter): string[][] {
-  const rows: string[][] = [];
-  let current: string[] = [];
-  let field = '';
-  let inQuotes = false;
-
-  const pushField = () => {
-    current.push(field);
-    field = '';
-  };
-  const pushRow = () => {
-    pushField();
-    rows.push(current);
-    current = [];
-  };
-
-  for (let i = 0; i < text.length; i += 1) {
-    const char = text[i];
-    if (inQuotes) {
-      if (char === '"') {
-        if (text[i + 1] === '"') {
-          field += '"';
-          i += 1;
-        } else {
-          inQuotes = false;
-        }
-      } else {
-        field += char;
-      }
-    } else if (char === '"') {
-      inQuotes = true;
-    } else if (char === delimiter) {
-      pushField();
-    } else if (char === '\n' || char === '\r') {
-      if (char === '\r' && text[i + 1] === '\n') i += 1;
-      if (field.trim() !== '' || current.length > 0) pushRow();
-    } else {
-      field += char;
-    }
-  }
-  if (field.trim() !== '' || current.length > 0) pushRow();
-
-  return rows.filter((row) => row.some((cell) => cell.trim() !== ''));
-}
-
-function detectCsvHeaderRow(firstRow: string[]): boolean {
-  const keywords = new Set(Object.values(IMPORT_COLUMN_KEYWORDS).flat().map((word) => word.trim().toLowerCase()));
-  return firstRow.some((cell) => keywords.has(cell.trim().toLowerCase()));
-}
-
-function autoMapImportColumns(headerRow: string[]): Record<ImportFieldKey, number | undefined> {
-  const map: Record<ImportFieldKey, number | undefined> = {
-    name: undefined,
-    price: undefined,
-    category: undefined,
-    sellBy: undefined,
-    description: undefined,
-    discountPrice: undefined,
-    image: undefined,
-  };
-
-  if (headerRow.length === 0) {
-    map.name = 0;
-    map.price = 1;
-    return map;
-  }
-
-  const normalized = headerRow.map((cell) => cell.trim().toLowerCase());
-  (Object.keys(IMPORT_COLUMN_KEYWORDS) as ImportFieldKey[]).forEach((field) => {
-    const index = normalized.findIndex((cell) => IMPORT_COLUMN_KEYWORDS[field].includes(cell));
-    if (index >= 0) map[field] = index;
-  });
-
-  if (map.name === undefined) map.name = 0;
-  if (map.price === undefined) {
-    map.price = map.name === 0 ? 1 : 0;
-  }
-
-  return map;
-}
-
-function parseImportPrice(cell: string, delimiter: CsvDelimiter): number | null {
-  let value = cell.trim();
-  if (!value) return null;
-  if (delimiter === ';' || delimiter === '\t') {
-    const hasDot = value.includes('.');
-    const hasComma = value.includes(',');
-    if (hasComma && hasDot) {
-      value = value.replace(/\./g, '').replace(',', '.');
-    } else if (hasComma) {
-      value = value.replace(',', '.');
-    }
-  } else {
-    value = value.replace(/,/g, '');
-  }
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : null;
-}
+import {
+  type ImportFieldKey,
+  IMPORT_FIELD_LABELS,
+  IMPORT_FIELD_ORDER,
+  type CsvDelimiter,
+  guessCsvDelimiter,
+  parseCsvRows,
+  detectCsvHeaderRow,
+  autoMapImportColumns,
+  parseImportPrice,
+  isValidHttpUrl,
+  resolveSellBy,
+} from '../utils/csvImport';
 
 const defaultApiBase = 'https://sadel-production.up.railway.app';
 function getCanonicalCustomerUrl(): string {
@@ -5527,14 +5406,12 @@ export default function Home() {
       const errors: string[] = [];
       const name = cell('name');
       const price = parseImportPrice(cell('price'), importDelimiter);
-      const description = cell('description') || name;
+      const hasDescriptionColumn = importColumnMap.description !== undefined;
+      const rawDescription = cell('description');
+      const description = rawDescription || name;
       const categoryName = cell('category');
       const discountPrice = parseImportPrice(cell('discountPrice'), importDelimiter);
-      const sellByCell = cell('sellBy').toLowerCase();
-      const sellBy: 'UNIT' | 'WEIGHT' =
-        sellByCell.includes('peso') || sellByCell.includes('weight') || sellByCell.includes('kg')
-          ? 'WEIGHT'
-          : 'UNIT';
+      const sellBy = resolveSellBy(cell('sellBy'));
       const image = cell('image');
 
       if (!name.trim()) {
@@ -5547,15 +5424,13 @@ export default function Home() {
       } else if (price <= 0) {
         errors.push('El precio debe ser mayor a 0');
       }
-      if (description.trim().length < 5) {
+      // La descripción es opcional: solo se valida su longitud cuando el usuario
+      // suministró explícitamente una columna de descripción y un valor no vacío.
+      if (hasDescriptionColumn && rawDescription && rawDescription.trim().length < 5) {
         errors.push('Descripción muy corta');
       }
-      if (image) {
-        try {
-          new URL(image);
-        } catch {
-          errors.push('URL de imagen inválida');
-        }
+      if (image && !isValidHttpUrl(image)) {
+        errors.push('URL de imagen inválida');
       }
 
       let categoryTargetId = '';
