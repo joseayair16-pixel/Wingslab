@@ -2839,12 +2839,13 @@ export default function Home() {
         description: profileData.data.description || '',
         address: (() => {
           const raw = profileData.data.address || '';
-          if (raw.trim() === 'Dirección pendiente de registro') return '';
+          if (/pendiente de registro|pendiente de configurac/i.test(raw.trim())) return '';
           return raw.replace(/, No\. .*$/, '');
         })(),
         houseNumber: (() => {
           const match = (profileData.data.address || '').match(/, No\. (.*)$/);
-          return match && match[1].trim() !== 'Dirección pendiente de registro' ? match[1] : '';
+          const tail = match ? match[1] : '';
+          return tail && !/pendiente de registro|pendiente de configurac/i.test(tail) ? tail : '';
         })(),
         latitude: profileData.data.latitude ? String(profileData.data.latitude) : '',
         longitude: profileData.data.longitude ? String(profileData.data.longitude) : '',
