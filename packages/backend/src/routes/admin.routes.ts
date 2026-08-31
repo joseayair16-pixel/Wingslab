@@ -2059,6 +2059,10 @@ export async function registerAdminRoutes(fastify: FastifyInstance): Promise<voi
       //    completarse aunque la purga de R2 falle. Conservamos pedidos/transacciones/settlements.
       const redactedRestaurantEmail = `eliminado_${restaurant.id}@sadel.local`;
       const redactedUserEmail = `eliminado_user_${restaurant.userId}@sadel.local`;
+      // Teléfono anonimizado determinista y ÚNICO por usuario: evita violar la
+      // restricción @@unique([phone, role]) al eliminar varios restaurantes.
+      // Los últimos 7 caracteres de un cuid garantizan unicidad y aleatoriedad.
+      const redactedPhone = `0000${restaurant.userId.slice(-7)}`;
       const randomPassword = await bcryptjs.hash(
         `${restaurant.id}:${Date.now()}:${Math.random()}`,
         10
@@ -2096,7 +2100,7 @@ export async function registerAdminRoutes(fastify: FastifyInstance): Promise<voi
             where: { id: restaurant.userId },
             data: {
               email: redactedUserEmail,
-              phone: '0000000000',
+              phone: redactedPhone,
               name: 'Eliminado',
               lastName: null,
               dateOfBirth: null,
