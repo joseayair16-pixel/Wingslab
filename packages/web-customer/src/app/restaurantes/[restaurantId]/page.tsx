@@ -3177,18 +3177,20 @@ function StockBadge({ avail }: { avail: ReturnType<typeof getProductAvailability
               {/* Imagen y Detalles del Producto */}
               <div className="overflow-y-auto flex-1">
                 {customizingProduct.image ? (
-                  <div className="relative h-64 w-full overflow-hidden bg-neutral-100 dark:bg-neutral-950">
+                  <div className="relative h-64 w-full overflow-hidden bg-gradient-to-br from-neutral-100 to-neutral-200 sm:h-72 dark:from-neutral-900 dark:to-neutral-950">
                     <img
                       src={customizingProduct.image}
-                      className="h-full w-full cursor-zoom-in object-cover"
+                      className="h-full w-full cursor-zoom-in object-contain"
                       alt={customizingProduct.name}
-                      loading="lazy"
+                      loading="eager"
                       decoding="async"
+                      fetchPriority="high"
+                      draggable={false}
                       onClick={() => setCustomizingLightboxOpen(true)}
                     />
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/20 to-transparent"></div>
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/10 to-transparent"></div>
                     <div className="absolute bottom-6 left-6 right-6 text-white">
-                      <h3 className="text-2xl font-bold tracking-[-0.03em]">{customizingProduct.name}</h3>
+                      <h3 className="text-2xl font-bold tracking-[-0.03em] drop-shadow-sm">{customizingProduct.name}</h3>
                     </div>
                     <button
                       type="button"
@@ -6357,26 +6359,29 @@ function StockBadge({ avail }: { avail: ReturnType<typeof getProductAvailability
             </button>
 
             {/* Image section */}
-            <div className="relative flex w-full shrink-0 items-center justify-center bg-neutral-50 h-56 sm:h-full sm:w-[55%] sm:min-h-[500px] dark:bg-neutral-800/40">
+            <div className="relative flex w-full shrink-0 items-center justify-center overflow-hidden h-64 sm:h-full sm:w-[55%] sm:min-h-[480px] bg-gradient-to-br from-neutral-100 via-neutral-50 to-neutral-200 dark:from-neutral-800/60 dark:via-neutral-800/30 dark:to-neutral-900">
               {previewProduct.images.length > 0 ? (
                 <button
                   type="button"
                   onClick={() => setPreviewLightboxOpen(true)}
                   aria-label="Ampliar imagen"
-                  className="relative block h-56 w-full cursor-zoom-in appearance-none border-0 bg-transparent p-0 sm:h-full"
+                  className="relative flex h-full w-full cursor-zoom-in items-center justify-center appearance-none border-0 bg-transparent p-3 sm:p-6"
                 >
                   <img
+                    key={previewIndex}
                     src={previewProduct.images[previewIndex]}
                     alt={previewProduct.name}
-                    loading="lazy" decoding="async"
-                    className="h-full w-full object-contain p-4 sm:p-8"
+                    loading="eager" decoding="async" fetchPriority="high"
+                    draggable={false}
+                    className="max-h-full max-w-full object-contain"
+                    style={{ width: 'auto', height: 'auto' }}
                   />
                   <span className="pointer-events-none absolute bottom-4 right-4 flex items-center gap-1 rounded-full bg-black/55 px-2.5 py-1 text-[11px] font-semibold text-white opacity-80 backdrop-blur-sm transition hover:opacity-100 dark:bg-white/20">
                     <ZoomIn className="h-3.5 w-3.5" /> Ampliar
                   </span>
                 </button>
               ) : (
-                <div className="flex h-56 w-full flex-col items-center justify-center gap-3 text-neutral-300 sm:h-full dark:text-zinc-600">
+                <div className="flex h-full w-full flex-col items-center justify-center gap-3 text-neutral-300 dark:text-zinc-600">
                   <svg className="h-16 w-16" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.2">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 001.5-1.5V6a1.5 1.5 0 00-1.5-1.5H3.75A1.5 1.5 0 002.25 6v12a1.5 1.5 0 001.5 1.5zm10.5-11.25h.008v.008h-.008V8.25zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z" />
                   </svg>
