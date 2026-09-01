@@ -4,7 +4,8 @@ import { useStore } from '../store';
 import { StoreCategoryItem } from '../app/page';
 import { BillboardCarousel, type Billboard } from '../components/BillboardCarousel';
 import { CategoryIcon } from '../components/CategoryIcon';
-import { Bike, ChevronRight, ChevronUp, Clock, MapPin } from 'lucide-react';
+import { BadgePercent, Bike, ChevronRight, ChevronUp, Clock, Flame, MapPin, Sparkles } from 'lucide-react';
+import { SectionHeader } from '../components/SectionHeader';
 
 const isRestaurantType = (type?: string | null) => !type || type === 'RESTAURANT';
 
@@ -294,8 +295,12 @@ export const HomeView = React.memo(function HomeView({
 
         {featuredRestaurants && featuredRestaurants.length > 0 && (
           <section className="-mx-4 md:mx-0">
-            <div className="px-4 md:px-0 mb-3">
-              <h2 className="text-xl font-black text-neutral-900">Restaurantes Destacados</h2>
+            <div className="px-4 md:px-0">
+              <SectionHeader
+                title="Restaurantes Destacados"
+                eyebrow="Recomendados para ti"
+                icon={<Flame className="h-5 w-5" />}
+              />
             </div>
             <div className="overflow-x-auto pb-2 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
               <div className="flex gap-4 px-4 md:px-0 min-w-max">
@@ -405,12 +410,14 @@ export const HomeView = React.memo(function HomeView({
 
         {filteredOfferProducts && filteredOfferProducts.length > 0 && (
           <section className="-mx-4 md:mx-0">
-            <div className="px-4 md:px-0 mb-3 flex items-center justify-between">
-              <h2 className="flex items-center gap-2 text-xl font-black text-neutral-900">
-                <CategoryIcon name="Tag" className="h-6 w-6 shrink-0" />
-                Ofertas imperdibles
-              </h2>
-              <span className="shrink-0 rounded-full bg-gradient-to-r from-sky-50 to-white px-3 py-1.5 text-[11px] font-bold text-sky-600 border border-sky-100/60 shadow-[0_2px_8px_rgba(14,165,233,0.08)] sm:text-xs">{filteredOfferProducts.length} productos</span>
+            <div className="px-4 md:px-0">
+              <SectionHeader
+                title="Ofertas imperdibles"
+                eyebrow="Promociones"
+                icon={<BadgePercent className="h-5 w-5" />}
+                count={{ value: filteredOfferProducts.length, label: 'productos' }}
+                countIcon={<Sparkles className="h-3.5 w-3.5" />}
+              />
             </div>
             <div className="overflow-x-auto pb-2 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden snap-x snap-mandatory md:snap-none">
               <div className="flex gap-3 px-4 md:px-0 min-w-max">

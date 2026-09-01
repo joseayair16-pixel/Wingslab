@@ -1,5 +1,5 @@
 'use client';
-import { AlertTriangle, ArrowLeft, Banknote, Bell, BellOff, Bike, Check, ChevronLeft, ChevronRight, ChevronUp, CircleCheck, CirclePlus, ClipboardCheck, Clock, Copy, DollarSign, Home, Landmark, Loader2, Mail, Map, MapPin, MessageCircle, Minus, Plus, RefreshCw, Search, ShoppingBag, Store, Tag, Ticket,   Trash2, Upload, User, X, ZoomIn } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, Banknote, Bell, BellOff, Bike, Check, ChevronLeft, ChevronRight, ChevronUp, CircleCheck, CirclePlus, ClipboardCheck, Clock, Copy, DollarSign, Gift, Home, Landmark, Loader2, Mail, Map, MapPin, MessageCircle, Minus, Package, Plus, RefreshCw, Search, ShoppingBag, Store, Tag, Ticket,   Trash2, Upload, User, X, ZoomIn } from 'lucide-react';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
@@ -14,6 +14,7 @@ import { SaDelLoader } from '../../../components/SaDelLoader';
 import { SaDelLogo } from '../../../components/SaDelLogo';
 import CartDrawer from '../../../components/CartDrawer';
 import ImageZoomLightbox from '../../../components/ImageZoomLightbox';
+import { SectionHeader } from '../../../components/SectionHeader';
 import { createPlacesSource } from '../../../lib/places';
 type PaymentMethod = 'CASH' | 'TRANSFER';
 type OrderStatus =
@@ -5311,14 +5312,18 @@ function StockBadge({ avail }: { avail: ReturnType<typeof getProductAvailability
                   }}
                   className="scroll-mt-[184px] mb-10 px-0 py-0 md:scroll-mt-[184px]"
                 >
-                  <div className="flex items-center justify-between gap-4 mb-2">
-                    <h2 className="text-2xl font-bold tracking-[-0.03em] text-neutral-950 dark:text-white">{category.name}</h2>
-                    <span className="shrink-0 rounded-full bg-gradient-to-r from-sky-50 to-white px-3 py-1.5 text-[11px] font-bold text-[var(--menu-accent)] border border-sky-100/60 shadow-[0_2px_8px_rgba(14,165,233,0.08)] sm:text-xs">
-                      {category.products.length} productos
-                    </span>
-                  </div>
+                  <SectionHeader
+                    title={category.name}
+                    eyebrow={isPromotions ? 'Ofertas activas' : undefined}
+                    subtitle={!isPromotions ? (category as any).description || undefined : undefined}
+                    icon={isPromotions ? <Gift className="h-5 w-5" /> : undefined}
+                    count={{ value: category.products.length, label: 'productos' }}
+                    countIcon={<Package className="h-3.5 w-3.5" />}
+                    divider
+                    accent="var(--menu-accent)"
+                  />
 
-                  <div className={isPromoCarousel || isLargeCategory ? "relative mt-5" : "mt-5 overflow-hidden"}>
+                  <div className={isPromoCarousel || isLargeCategory ? "relative" : "overflow-hidden"}>
                     <CarouselOrGrid
                       isCarousel={isPromoCarousel || isLargeCategory}
                       gridClassName={
