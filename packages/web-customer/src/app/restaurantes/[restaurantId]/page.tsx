@@ -5441,19 +5441,22 @@ function StockBadge({ avail }: { avail: ReturnType<typeof getProductAvailability
                               <div className="flex flex-1 flex-col p-3">
 <h3 className="text-sm font-bold leading-snug text-neutral-900 line-clamp-2 dark:text-white">{product.name}</h3>
                                 {product.sellBy === 'WEIGHT' ? (
-                                  <p className="mt-0.5 text-xs font-semibold text-neutral-500 dark:text-zinc-400">{formatCurrency(product.unitPrice || product.price)}/kg</p>
+                                  <p className="mt-1 text-base font-black tracking-[-0.02em] text-neutral-950 dark:text-white">
+                                    {formatCurrency(product.unitPrice || product.price)}
+                                    <span className="ml-1 text-xs font-bold text-neutral-400 dark:text-zinc-500">/kg</span>
+                                  </p>
                                 ) : getMultiBuyInfo(product).isMultiBuy ? (
-                                  <div className="mt-0.5">
-                                    <p className="text-xs font-bold text-neutral-900 dark:text-white">{formatCurrency(getMultiBuyInfo(product).basePrice)}</p>
+                                  <div className="mt-1">
+                                    <p className="text-base font-black tracking-[-0.02em] text-neutral-950 dark:text-white">{formatCurrency(getMultiBuyInfo(product).basePrice)}</p>
                                     <p className="truncate text-[9px] font-semibold text-emerald-600">Llevando {getMultiBuyInfo(product).buy}: {formatCurrency(getMultiBuyInfo(product).effectiveUnitPrice)} c/u</p>
                                   </div>
                                 ) : product.discountPrice ? (
-                                  <div className="mt-0.5 flex items-baseline gap-1.5">
-                                    <span className="text-xs font-bold text-rose-600">{formatCurrency(product.discountPrice)}</span>
-                                    <span className="text-[10px] text-neutral-400 line-through dark:text-zinc-500">{formatCurrency(product.price)}</span>
+                                  <div className="mt-1 flex items-baseline gap-2">
+                                    <span className="text-base font-black tracking-[-0.02em] text-rose-600">{formatCurrency(product.discountPrice)}</span>
+                                    <span className="text-[11px] font-semibold text-neutral-400 line-through dark:text-zinc-500">{formatCurrency(product.price)}</span>
                                   </div>
                                 ) : (
-                                  <p className="mt-0.5 text-xs font-semibold text-neutral-500 dark:text-zinc-400">{formatCurrency(product.price)}</p>
+                                  <p className="mt-1 text-base font-black tracking-[-0.02em] text-neutral-950 dark:text-white">{formatCurrency(product.price)}</p>
                                 )}
                                 {product.description && (
                                   <div className="mt-1.5">
@@ -5527,19 +5530,22 @@ function StockBadge({ avail }: { avail: ReturnType<typeof getProductAvailability
                               <div className="flex flex-1 flex-col p-3">
                                 <h3 className="text-sm font-bold leading-snug text-neutral-900 line-clamp-2 dark:text-white">{product.name}</h3>
                                 {product.sellBy === 'WEIGHT' ? (
-                                  <p className="mt-0.5 text-xs font-semibold text-neutral-500 dark:text-zinc-400">{formatCurrency(product.unitPrice || product.price)}/kg</p>
+                                  <p className="mt-1 text-base font-black tracking-[-0.02em] text-neutral-950 dark:text-white">
+                                    {formatCurrency(product.unitPrice || product.price)}
+                                    <span className="ml-1 text-xs font-bold text-neutral-400 dark:text-zinc-500">/kg</span>
+                                  </p>
                                 ) : getMultiBuyInfo(product).isMultiBuy ? (
-                                  <div className="mt-0.5">
-                                    <p className="text-xs font-bold text-neutral-900 dark:text-white">{formatCurrency(getMultiBuyInfo(product).basePrice)}</p>
+                                  <div className="mt-1">
+                                    <p className="text-base font-black tracking-[-0.02em] text-neutral-950 dark:text-white">{formatCurrency(getMultiBuyInfo(product).basePrice)}</p>
                                     <p className="truncate text-[9px] font-semibold text-emerald-600">Llevando {getMultiBuyInfo(product).buy}: {formatCurrency(getMultiBuyInfo(product).effectiveUnitPrice)} c/u</p>
                                   </div>
                                 ) : product.discountPrice ? (
-                                  <div className="mt-0.5 flex items-baseline gap-1.5">
-                                    <span className="text-xs font-bold text-rose-600">{formatCurrency(product.discountPrice)}</span>
-                                    <span className="text-[10px] text-neutral-400 line-through dark:text-zinc-500">{formatCurrency(product.price)}</span>
+                                  <div className="mt-1 flex items-baseline gap-2">
+                                    <span className="text-base font-black tracking-[-0.02em] text-rose-600">{formatCurrency(product.discountPrice)}</span>
+                                    <span className="text-[11px] font-semibold text-neutral-400 line-through dark:text-zinc-500">{formatCurrency(product.price)}</span>
                                   </div>
                                 ) : (
-                                  <p className="mt-0.5 text-xs font-semibold text-neutral-500 dark:text-zinc-400">{formatCurrency(product.price)}</p>
+                                  <p className="mt-1 text-base font-black tracking-[-0.02em] text-neutral-950 dark:text-white">{formatCurrency(product.price)}</p>
                                 )}
                                 {product.description && (
                                   <div className="mt-1.5">
@@ -5658,21 +5664,24 @@ function StockBadge({ avail }: { avail: ReturnType<typeof getProductAvailability
                                   {product.description && (
                                     <p className="text-xs leading-relaxed text-neutral-500 line-clamp-2 dark:text-zinc-400">{product.description}</p>
                                   )}
-                                  <div className="mt-0.5">
+                                  <div className="mt-1">
                                     {product.sellBy === 'WEIGHT' ? (
-                                      <span className="text-sm font-bold text-neutral-900 dark:text-white">{formatCurrency(product.unitPrice || product.price)}/kg</span>
+                                      <p className="text-base font-black tracking-[-0.02em] text-neutral-950 dark:text-white">
+                                        {formatCurrency(product.unitPrice || product.price)}
+                                        <span className="ml-1 text-xs font-bold text-neutral-400 dark:text-zinc-500">/kg</span>
+                                      </p>
                                     ) : getMultiBuyInfo(product).isMultiBuy ? (
                                       <div className="mt-0.5">
-                                        <span className="text-sm font-bold text-neutral-900 dark:text-white">{formatCurrency(getMultiBuyInfo(product).basePrice)}</span>
+                                        <span className="text-base font-black tracking-[-0.02em] text-neutral-950 dark:text-white">{formatCurrency(getMultiBuyInfo(product).basePrice)}</span>
                                         <p className="truncate text-[10px] font-semibold text-emerald-600">Llevando {getMultiBuyInfo(product).buy}: {formatCurrency(getMultiBuyInfo(product).effectiveUnitPrice)} c/u</p>
                                       </div>
                                     ) : product.discountPrice ? (
                                       <div className="flex items-baseline gap-1.5">
-                                        <span className="text-sm font-bold text-rose-600">{formatCurrency(product.discountPrice)}</span>
-                                        <span className="text-[10px] text-neutral-400 line-through dark:text-zinc-500">{formatCurrency(product.price)}</span>
+                                        <span className="text-base font-black tracking-[-0.02em] text-rose-600">{formatCurrency(product.discountPrice)}</span>
+                                        <span className="text-xs text-neutral-400 line-through dark:text-zinc-500">{formatCurrency(product.price)}</span>
                                       </div>
                                     ) : (
-                                      <span className="text-sm font-bold text-neutral-900 dark:text-white">{formatCurrency(product.price)}</span>
+                                      <span className="text-base font-black tracking-[-0.02em] text-neutral-950 dark:text-white">{formatCurrency(product.price)}</span>
                                     )}
                                   </div>
                                 </div>
