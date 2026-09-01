@@ -77,6 +77,7 @@ export default function ImageZoomLightbox({
   const go = (dir: number) => {
     if (!hasMultiple) return;
     onIndexChange((index + dir + images.length) % images.length);
+    closeRef.current?.focus();
   };
 
   // Close only when the backdrop itself is clicked (never the image/controls),
@@ -139,18 +140,20 @@ export default function ImageZoomLightbox({
         doubleClick={{ mode: 'toggle', step: 2 }}
         wheel={{ step: 0.2 }}
         pinch={{ step: 5 }}
+        centerOnInit
       >
         <TransformComponent
-          wrapperStyle={{ width: '100%', height: '100%' }}
+          wrapperStyle={{ width: '100%', height: '100%', minWidth: 0, minHeight: 0 }}
+          wrapperClass="!flex !h-full !w-full items-center justify-center"
           contentStyle={{ width: '100%', height: '100%' }}
-          wrapperClass="!flex items-center justify-center"
+          contentClass="!flex !h-full !w-full items-center justify-center"
         >
           {current ? (
             <img
               src={current}
               alt={name}
               draggable={false}
-              className="max-h-[88vh] max-w-[92vw] cursor-grab touch-none select-none object-contain active:cursor-grabbing"
+              className="max-h-[78vh] max-w-[92vw] cursor-grab touch-none select-none object-contain active:cursor-grabbing sm:max-h-[88vh]"
             />
           ) : null}
         </TransformComponent>
