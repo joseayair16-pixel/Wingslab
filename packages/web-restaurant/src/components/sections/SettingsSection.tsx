@@ -807,11 +807,10 @@ export const SettingsSection = React.memo(function SettingsSection({
                   <div className="flex items-center justify-between gap-3 mb-3">
                     <div className="min-w-0 flex-1">
                       <label className="block text-[13px] font-semibold text-neutral-900">Categorías</label>
-                      <p className="text-xs text-neutral-500 mt-0.5 break-words">Selecciona las categorías que mejor describan tu comida para aparecer en esas secciones de la app cliente.</p>
+                      <p className="text-xs text-neutral-500 mt-0.5 break-words">Selecciona hasta 2 categorías que mejor describan tu negocio para aparecer en esas secciones de la app cliente.</p>
                     </div>
-                    <span className="inline-flex shrink-0 items-center gap-1 text-[11px] font-medium text-neutral-400">
-                      Desliza
-                      <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" /></svg>
+                    <span className={`inline-flex shrink-0 items-center gap-1 text-[11px] font-medium ${storeDraft.storeCategories.length >= 2 ? 'text-sky-600' : 'text-neutral-400'}`}>
+                      {storeDraft.storeCategories.length}/2
                     </span>
                   </div>
                   {platformCategories.length === 0 ? (
@@ -820,22 +819,28 @@ export const SettingsSection = React.memo(function SettingsSection({
                     <div className="scrollbar-none flex gap-3 overflow-x-auto pb-3 -mx-1 px-1 snap-x snap-mandatory">
                       {platformCategories.map((cat: any) => {
                         const isSelected = storeDraft.storeCategories.includes(cat.id);
+                        const atLimit = storeDraft.storeCategories.length >= 2 && !isSelected;
                         return (
                           <button
                             key={cat.id}
                             type="button"
+                            disabled={atLimit}
                             onClick={() => {
                               setStoreDraft((prev: any) => ({
                                 ...prev,
                                 storeCategories: isSelected 
                                   ? prev.storeCategories.filter((id: string) => id !== cat.id) 
-                                  : [...prev.storeCategories, cat.id]
+                                  : prev.storeCategories.length >= 2 
+                                    ? prev.storeCategories 
+                                    : [...prev.storeCategories, cat.id]
                               }))
                             }}
                             className={`flex w-[150px] shrink-0 snap-start items-center gap-2 rounded-xl border p-3 text-left transition ${
                               isSelected 
                                 ? 'border-neutral-900 bg-neutral-900 text-white' 
-                                : 'border-black/10 bg-white text-neutral-700 hover:border-black/20 hover:bg-neutral-50'
+                                : atLimit
+                                  ? 'border-black/5 bg-neutral-50 text-neutral-300 cursor-not-allowed'
+                                  : 'border-black/10 bg-white text-neutral-700 hover:border-black/20 hover:bg-neutral-50'
                             }`}
                           >
                             <CategoryIcon name={cat.icon} className="h-5 w-5 shrink-0" />

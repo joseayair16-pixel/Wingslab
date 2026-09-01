@@ -670,6 +670,16 @@ export async function registerRestaurantPanelRoutes(fastify: FastifyInstance): P
 
       const { storeCategories, ...restData } = parsed.data;
 
+      if (storeCategories !== undefined && storeCategories.length > 2) {
+        return reply.status(400).send({
+          success: false,
+          error: {
+            code: 'MAX_CATEGORIES',
+            message: 'Un restaurante o tienda solo puede elegir hasta 2 categorías.',
+          },
+        });
+      }
+
       if (restData.transferAccountNumber) {
         restData.transferAccountNumber = encrypt(restData.transferAccountNumber);
       }
