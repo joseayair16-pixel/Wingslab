@@ -655,9 +655,34 @@ export default function RestaurantPage({
   const decreaseQuantity = useCartStore(state => state.decreaseQuantity);
   const updateCartItemAction = useCartStore(state => state.updateItem);
   const clearCartAction = useCartStore(state => state.clearCart);
+  const refreshCartItemImages = useCartStore(state => state.refreshItemImages);
   const [mounted, setMounted] = useState(false);
   useEffect(() => { setMounted(true); }, []);
   const cart: CartItem[] = mounted && cartRestaurantId === params.restaurantId ? cartItems : [];
+
+  // El carrito guarda un snapshot de `image` al agregar el producto. Si la
+  // imagen se subió con posterioridad (o el producto no la tenía al agregarse),
+  // el snapshot queda vacío y el drawer muestra el ícono genérico. Aquí
+  // re-hidratamos la imagen faltante con los datos frescos del menú cargado.
+  const cartImageSync = useMemo(() => {
+    if (!restaurant?.categories?.length) return [];
+    const imageByProductId = Object.fromEntries(
+      restaurant.categories
+        .flatMap((category) => category.products || [])
+        .filter((product) => product.image)
+        .map((product) => [product.id, product.image] as const)
+    ) as Record<string, string>;
+    return cartItems
+      .filter((item) => !item.image && imageByProductId[item.productId])
+      .map((item) => ({
+        cartItemId: item.cartItemId,
+        image: imageByProductId[item.productId],
+      }));
+  }, [restaurant, cartItems]);
+
+  useEffect(() => {
+    if (cartImageSync.length) refreshCartItemImages(cartImageSync);
+  }, [cartImageSync, refreshCartItemImages]);
   const [checkoutForm, setCheckoutForm] = useState<CheckoutForm>(defaultCheckoutForm);
 
   // Si el restaurante solo acepta un método de pago, ajusta el seleccionado por

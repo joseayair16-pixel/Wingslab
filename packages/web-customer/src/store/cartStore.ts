@@ -40,6 +40,7 @@ type CartState = {
   decreaseQuantity: (productId: string) => void;
   clearCart: () => void;
   setCart: (items: CartItem[], restaurantId: string, deliveryFee?: number) => void;
+  refreshItemImages: (updates: Array<{ cartItemId: string; image: string }>) => void;
 };
 
 export const useCartStore = create<CartState>()(
@@ -150,6 +151,16 @@ export const useCartStore = create<CartState>()(
 
       setCart: (items, restaurantId, deliveryFee = 0) => {
         set({ items, restaurantId, deliveryFee });
+      },
+
+      refreshItemImages: (updates) => {
+        if (!updates.length) return;
+        const imageById = new Map(updates.map((update) => [update.cartItemId, update.image]));
+        set((state) => ({
+          items: state.items.map((item) =>
+            imageById.has(item.cartItemId) ? { ...item, image: imageById.get(item.cartItemId)! } : item
+          ),
+        }));
       },
     }),
     {
