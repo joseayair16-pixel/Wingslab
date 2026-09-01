@@ -795,6 +795,12 @@ export async function registerPublicRoutes(fastify: FastifyInstance): Promise<vo
               )
             : null;
           const deliveryRadius = p.restaurant.hasOwnDelivery ? p.restaurant.deliveryRadius : (regionsByCode.get(p.restaurant.region)?.deliveryRadius ?? null);
+          const isOpen = isRestaurantOpenNow(
+            p.restaurant.status,
+            p.restaurant.isAcceptingOrders,
+            p.restaurant.isPaused,
+            p.restaurant.operatingHours
+          );
           return {
             id: p.restaurant.id,
             name: p.restaurant.name,
@@ -806,12 +812,9 @@ export async function registerPublicRoutes(fastify: FastifyInstance): Promise<vo
             maxDeliveryTime: p.restaurant.maxDeliveryTime,
             rating: p.restaurant.stats?.rating || 0,
             reviewCount: p.restaurant.stats?.reviewCount || 0,
-            isOpen: isRestaurantOpenNow(
-              p.restaurant.status,
-              p.restaurant.isAcceptingOrders,
-              p.restaurant.isPaused,
-              p.restaurant.operatingHours
-            ),
+            isOpen,
+            isPaused: p.restaurant.isPaused,
+            nextOpenTime: !isOpen && !p.restaurant.isPaused ? getNextOpenTime(p.restaurant.operatingHours) : null,
             distanceKm,
             deliveryRadius,
           };

@@ -4,7 +4,7 @@ import { useStore } from '../store';
 import { StoreCategoryItem } from '../app/page';
 import { BillboardCarousel, type Billboard } from '../components/BillboardCarousel';
 import { CategoryIcon } from '../components/CategoryIcon';
-import { Bike, ChevronRight, ChevronUp, MapPin } from 'lucide-react';
+import { Bike, ChevronRight, ChevronUp, Clock, MapPin } from 'lucide-react';
 
 const isRestaurantType = (type?: string | null) => !type || type === 'RESTAURANT';
 
@@ -299,59 +299,105 @@ export const HomeView = React.memo(function HomeView({
             </div>
             <div className="overflow-x-auto pb-2 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
               <div className="flex gap-4 px-4 md:px-0 min-w-max">
-                {featuredRestaurants.map((fr: any) => (
-                  <button key={fr.id} onClick={() => router.push(`/restaurantes/${fr.id}`)}
-                    className="group relative w-72 shrink-0 overflow-hidden rounded-[30px] border border-black/5 bg-white text-left transition-all duration-300 ease-out hover:-translate-y-1 hover:border-black/10 hover:shadow-[0_24px_60px_rgba(15,15,15,0.08)] active:scale-[0.98]">
-                    <div className="relative overflow-hidden h-40 sm:h-44">
-                      <Image
-                        src={fr.coverImage || '/default-cover.jpg'}
-                        alt={`Portada de ${fr.name}`}
-                        fill
-                        sizes="288px"
-                        className="object-cover transition duration-300 group-hover:scale-105"
-                      />
-                      <div className="absolute inset-x-0 top-0 flex items-start justify-between p-4 z-10 pointer-events-none">
-                        <div className="flex items-center gap-1.5 bg-white/90 backdrop-blur-sm rounded-full px-3 py-1.5 text-xs font-bold text-sky-700 shadow-sm pointer-events-auto">
-                          <span className="text-sm leading-none">⭐</span>
-                          <span>Destacado</span>
+                {featuredRestaurants.map((fr: any) => {
+                  const closed = !fr.isOpen;
+                  const classes = `group relative w-72 shrink-0 overflow-hidden rounded-[30px] border border-black/5 bg-white text-left transition-all duration-300 ease-out ${
+                    closed
+                      ? 'cursor-default'
+                      : 'cursor-pointer hover:-translate-y-1 hover:border-black/10 hover:shadow-[0_24px_60px_rgba(15,15,15,0.08)] active:scale-[0.98]'
+                  }`;
+                  const cardBody = (
+                    <>
+                      <div className="relative overflow-hidden h-40 sm:h-44">
+                        <Image
+                          src={fr.coverImage || '/default-cover.jpg'}
+                          alt={`Portada de ${fr.name}`}
+                          fill
+                          sizes="288px"
+                          className={`object-cover transition duration-300 ${closed ? 'grayscale-[80%] brightness-75' : 'group-hover:scale-105'}`}
+                        />
+                        <div className="absolute inset-x-0 top-0 flex items-start justify-between p-4 z-10 pointer-events-none">
+                          <div className="flex items-center gap-1.5 bg-white/90 backdrop-blur-sm rounded-full px-3 py-1.5 text-xs font-bold text-sky-700 shadow-sm pointer-events-auto">
+                            <span className="text-sm leading-none">⭐</span>
+                            <span>Destacado</span>
+                          </div>
                         </div>
+                        {closed && (
+                          <div className="absolute inset-0 z-20 flex items-center justify-center bg-black/25 backdrop-blur-[2px] pointer-events-none">
+                            <div className="flex flex-col items-center gap-2 px-6 text-center">
+                              <div className="rounded-full bg-neutral-900/90 px-4 py-2 text-xs font-bold text-white shadow-lg backdrop-blur-md">
+                                {fr.isPaused ? 'Pausado temporalmente' : 'Cerrado por el momento'}
+                              </div>
+                              {fr.nextOpenTime && !fr.isPaused && (
+                                <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-white drop-shadow-md">
+                                  <Clock className="h-3.5 w-3.5" /> Abre {fr.nextOpenTime}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        )}
+                        <div className="absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-black/60 to-transparent z-10 pointer-events-none" />
                       </div>
-                      <div className="absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-black/60 to-transparent z-10 pointer-events-none" />
-                    </div>
-                    <div className="relative px-4 pb-4 pt-4">
-                      <div className="mb-3 flex items-end gap-3">
-                        <div className="-mt-11 flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-2xl border-4 border-white bg-white shadow-[0_10px_24px_rgba(15,15,15,0.14)] relative">
-                          {fr.logo ? (
-                            <Image
-                              src={fr.logo}
-                              alt={`Logo de ${fr.name}`}
-                              fill
-                              sizes="64px"
-                              className="object-cover"
-                            />
-                          ) : (
-                            <div className="h-full w-full bg-neutral-200 flex items-center justify-center text-lg font-bold text-neutral-500">{fr.name?.[0]}</div>
-                          )}
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <h3 className="truncate text-xl font-bold tracking-tight text-neutral-900">{fr.name}</h3>
-                          <div className="mt-0.5 flex items-center gap-3 text-xs text-neutral-600">
-                            <span className={`flex items-center gap-1 ${fr.isOpen ? 'text-emerald-600' : 'text-red-500'}`}>
-                              <span className={`w-1.5 h-1.5 rounded-full ${fr.isOpen ? 'bg-emerald-500' : 'bg-red-500'}`} />
-                              {fr.isOpen ? 'Abierto' : 'Cerrado'}
-                            </span>
-                            {fr.rating > 0 && (
-                              <span className="flex items-center gap-0.5 font-semibold text-neutral-900">
-                                <span>⭐</span>
-                                {fr.rating.toFixed(1)}
-                              </span>
+                      <div className="relative px-4 pb-4 pt-4">
+                        <div className="mb-3 flex items-end gap-3">
+                          <div className="-mt-11 flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-2xl border-4 border-white bg-white shadow-[0_10px_24px_rgba(15,15,15,0.14)] relative">
+                            {fr.logo ? (
+                              <Image
+                                src={fr.logo}
+                                alt={`Logo de ${fr.name}`}
+                                fill
+                                sizes="64px"
+                                className={`object-cover ${closed ? 'grayscale-[60%] opacity-70' : ''}`}
+                              />
+                            ) : (
+                              <div className="h-full w-full bg-neutral-200 flex items-center justify-center text-lg font-bold text-neutral-500">{fr.name?.[0]}</div>
                             )}
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <h3 className="truncate text-xl font-bold tracking-tight text-neutral-900">{fr.name}</h3>
+                            <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-neutral-600">
+                              {fr.isOpen ? (
+                                <span className="flex items-center gap-1 text-emerald-600">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                                  Abierto
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-2.5 py-0.5 text-[11px] font-semibold text-amber-700 ring-1 ring-amber-100 dark:bg-amber-500/10 dark:text-amber-300 dark:ring-amber-500/20">
+                                  <Clock className="h-3 w-3" />
+                                  {fr.nextOpenTime ? `Abre ${fr.nextOpenTime}` : 'Cerrado'}
+                                </span>
+                              )}
+                              {fr.rating > 0 && (
+                                <span className="flex items-center gap-0.5 font-semibold text-neutral-900">
+                                  <span>⭐</span>
+                                  {fr.rating.toFixed(1)}
+                                </span>
+                              )}
+                            </div>
                           </div>
                         </div>
                       </div>
-                    </div>
-                  </button>
-                ))}
+                    </>
+                  );
+                  if (closed) {
+                    return (
+                      <div key={fr.id} className={classes}>
+                        {cardBody}
+                      </div>
+                    );
+                  }
+                  return (
+                    <button
+                      key={fr.id}
+                      type="button"
+                      onClick={() => router.push(`/restaurantes/${fr.id}`)}
+                      aria-label={`Ver menú de ${fr.name}`}
+                      className={classes}
+                    >
+                      {cardBody}
+                    </button>
+                  );
+                })}
               </div>
             </div>
           </section>
