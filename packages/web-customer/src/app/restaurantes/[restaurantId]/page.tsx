@@ -2125,6 +2125,42 @@ function StockBadge({ avail }: { avail: ReturnType<typeof getProductAvailability
   return null;
 }
 
+type CustomerProduct = PublicRestaurantDetail['categories'][number]['products'][number];
+
+function ProductImage({
+  product,
+  carouselIndex,
+  imgClassName = '',
+  onClick,
+  eager = false,
+}: {
+  product: CustomerProduct;
+  carouselIndex?: number | undefined;
+  imgClassName?: string;
+  onClick?: React.MouseEventHandler;
+  eager?: boolean;
+}) {
+  const images = product.images?.length ? product.images : [];
+  const src = images.length > 1 && typeof carouselIndex === 'number' ? images[carouselIndex % images.length] : product.image;
+
+  if (!src) return null;
+
+  return (
+    <div className="h-full w-full overflow-hidden" style={{ transform: `scale(${(product.imageZoom ?? 100) / 100})`, transformOrigin: 'center center' }}>
+      <img
+        src={src}
+        alt={product.name}
+        loading={eager ? 'eager' : 'lazy'}
+        decoding="async"
+        draggable={false}
+        onClick={onClick}
+        className={`h-full w-full object-cover transition duration-300 ${imgClassName}`}
+        style={{ objectPosition: product.imagePosition || undefined }}
+      />
+    </div>
+  );
+}
+
   function addToCart(product: PublicRestaurantDetail['categories'][number]['products'][number]) {
     const hasOptions = product.optionGroups && product.optionGroups.length > 0;
     const isWeightProduct = product.sellBy === 'WEIGHT';
@@ -5345,7 +5381,7 @@ function StockBadge({ avail }: { avail: ReturnType<typeof getProductAvailability
                           <div className="flex gap-4 p-4">
                             <div className="relative h-24 w-24 shrink-0 overflow-hidden rounded-2xl sm:h-28 sm:w-28">
                               {product.image ? (
-                                <img src={product.image} alt={product.name} className="h-full w-full object-cover" loading="lazy" decoding="async" />
+                                <ProductImage product={product} />
                               ) : (
                                 <div className="h-full w-full bg-gradient-to-br from-neutral-100 to-neutral-200 dark:from-zinc-800 dark:to-zinc-900" />
                               )}
@@ -5433,9 +5469,11 @@ function StockBadge({ avail }: { avail: ReturnType<typeof getProductAvailability
                         isPromoCarousel ? (
                           <article id={product.id} key={product.id} className="group w-32 shrink-0 snap-start overflow-hidden rounded-2xl border border-black/[0.04] bg-white transition-all duration-300 shadow-[0_2px_8px_rgba(0,0,0,0.02)] hover:-translate-y-0.5 hover:shadow-[0_8px_24px_rgba(0,0,0,0.06)] active:scale-[0.98] dark:border-zinc-800 dark:bg-neutral-900">
                           
-                            <div className="relative overflow-hidden">
+                            <div className="relative h-20 w-full overflow-hidden">
                               {product.image ? (
-                                <img src={product.image} alt={product.name} className="h-20 w-full object-cover transition duration-300 group-hover:scale-105" loading="lazy" decoding="async" />
+                                <div className="h-full w-full transition-transform duration-300 group-hover:scale-105">
+                                  <ProductImage product={product} />
+                                </div>
                               ) : (
                                 <div className="flex h-20 w-full items-center justify-center bg-gradient-to-br from-neutral-100 to-neutral-200 dark:from-zinc-800 dark:to-zinc-900">
                                   <svg className="h-6 w-6 text-neutral-400 dark:text-zinc-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
@@ -5508,14 +5546,9 @@ function StockBadge({ avail }: { avail: ReturnType<typeof getProductAvailability
                                 onClick={() => openProductPreview(product)}
                               >
                                 {product.image ? (
-                                  <img
-                                    src={(product.images?.length ?? 0) > 1 && carouselIndexMap[product.id] ? product.images![carouselIndexMap[product.id]] : product.image}
-                                    alt={product.name}
-                                    className="h-full w-full object-contain transition duration-300 hover:scale-105"
-                                    style={{ objectPosition: product.imagePosition || 'center' }}
-                                    loading="lazy"
-                                    decoding="async"
-                                  />
+                                  <div className="h-full w-full transition-transform duration-300 hover:scale-105">
+                                    <ProductImage product={product} carouselIndex={carouselIndexMap[product.id]} />
+                                  </div>
                                 ) : (
                                   <div className="h-full w-full bg-gradient-to-br from-neutral-100 to-neutral-200 dark:from-zinc-800 dark:to-zinc-900" />
                                 )}
@@ -5597,14 +5630,9 @@ function StockBadge({ avail }: { avail: ReturnType<typeof getProductAvailability
                                 onClick={() => openProductPreview(product)}
                               >
                                 {product.image ? (
-                                  <img
-                                    src={(product.images?.length ?? 0) > 1 && carouselIndexMap[product.id] ? product.images![carouselIndexMap[product.id]] : product.image}
-                                    alt={product.name}
-                                    className="h-full w-full object-contain transition duration-300 hover:scale-105"
-                                    style={{ objectPosition: product.imagePosition || 'center' }}
-                                    loading="lazy"
-                                    decoding="async"
-                                  />
+                                  <div className="h-full w-full transition-transform duration-300 hover:scale-105">
+                                    <ProductImage product={product} carouselIndex={carouselIndexMap[product.id]} />
+                                  </div>
                                 ) : (
                                   <div className="h-full w-full bg-gradient-to-br from-neutral-100 to-neutral-200 dark:from-zinc-800 dark:to-zinc-900" />
                                 )}
@@ -5684,13 +5712,7 @@ function StockBadge({ avail }: { avail: ReturnType<typeof getProductAvailability
                               <div className="relative h-24 w-24 shrink-0 overflow-hidden rounded-xl sm:h-28 sm:w-28">
                                 {product.image ? (
                                   <>
-                                    <img
-                                      src={(product.images?.length ?? 0) > 1 && carouselIndexMap[product.id] ? product.images![carouselIndexMap[product.id]] : product.image}
-                                      alt={product.name}
-                                      loading="lazy" decoding="async"
-                                      className="h-full w-full object-cover transition-opacity duration-300"
-                                      style={{ objectPosition: product.imagePosition || undefined }}
-                                    />
+                                    <ProductImage product={product} carouselIndex={carouselIndexMap[product.id]} />
                                     {(product.images?.length ?? 0) > 1 && (
                                       <>
                                         <button
