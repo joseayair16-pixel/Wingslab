@@ -501,6 +501,32 @@ function validateProductConsistency(draft: ProductDraft): string | null {
     }
   }
 
+  if (draft.sellBy === 'WEIGHT') {
+    const min = Number(draft.minWeightG);
+    const max = Number(draft.maxWeightG);
+    const step = Number(draft.stepWeightG);
+
+    if (!Number.isFinite(min) || min <= 0) {
+      return 'Indica un peso mínimo válido (mayor a cero).';
+    }
+    if (!Number.isFinite(max) || max <= 0 || max <= min) {
+      return 'El peso máximo debe ser mayor al mínimo.';
+    }
+    if (!Number.isFinite(step) || step <= 0) {
+      return 'Indica un incremento de peso válido (mayor a cero).';
+    }
+
+    const presets = draft.weightPresets || [];
+    for (const preset of presets) {
+      if (!Number.isFinite(preset) || preset <= 0) {
+        return 'Los accesos rápidos deben ser pesos válidos (mayores a cero).';
+      }
+      if (preset < min || preset > max) {
+        return `El acceso rápido ${formatWeight(preset)} está fuera del rango permitido (${formatWeight(min)} – ${formatWeight(max)}).`;
+      }
+    }
+  }
+
   if (draft.trackStock) {
     const stock = draft.stock ? Number(draft.stock) : 0;
     if (!Number.isFinite(stock) || stock < 0) {
@@ -1222,6 +1248,9 @@ export default function Home() {
     stock: '',
     lowStockThreshold: '5',
   });
+  const [weightUnit, setWeightUnit] = useState<'kg' | 'g'>('kg');
+  const [presetInput, setPresetInput] = useState('');
+  const [presetInputError, setPresetInputError] = useState('');
   const [productConfigInherited, setProductConfigInherited] = useState(false);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [importText, setImportText] = useState('');
@@ -7764,54 +7793,257 @@ export default function Home() {
                         </div>
                       )}
 
-                      {productDraft.sellBy === 'WEIGHT' && (
-                        <div className="sm:col-span-2 rounded-2xl border border-sky-200/50 bg-sky-50/50 p-4">
-                          <p className="mb-3 text-[12px] font-bold uppercase tracking-[0.1em] text-sky-700">Configuración de peso</p>
-                          <div className="grid gap-4 sm:grid-cols-3">
-                            <Field label="Mínimo (gramos)" value={productDraft.minWeightG} onChange={(v) => setProductDraft((c) => ({ ...c, minWeightG: v }))} placeholder="100" />
-                            <Field label="Máximo (gramos)" value={productDraft.maxWeightG} onChange={(v) => setProductDraft((c) => ({ ...c, maxWeightG: v }))} placeholder="5000" />
-                            <Field label="Incremento (gramos)" value={productDraft.stepWeightG} onChange={(v) => setProductDraft((c) => ({ ...c, stepWeightG: v }))} placeholder="100" />
-                          </div>
-                          <div className="mt-3">
-                            <label className="text-[12px] font-bold uppercase tracking-[0.1em] text-neutral-600">Accesos rápidos (gramos)</label>
-                            <div className="mt-1.5 flex flex-wrap gap-2">
-                              {[
-                                { label: '100g', value: 100 },
-                                { label: '200g', value: 200 },
-                                { label: '300g', value: 300 },
-                                { label: '500g', value: 500 },
-                                { label: '1kg', value: 1000 },
-                                { label: '2kg', value: 2000 },
-                                { label: '3kg', value: 3000 },
-                              ].map((preset) => (
+                      {productDraft.sellBy === 'WEIGHT' && (() => {
+                        const minGrams = Number(productDraft.minWeightG) || 0;
+                        const maxGrams = Number(productDraft.maxWeightG) || 0;
+                        const pricePerKg = Number(productDraft.unitPrice) || 0;
+                        const presets = [...(productDraft.weightPresets || [])].sort((a, b) => a - b);
+
+                        const exampleWeights = Array.from(
+                          new Set([minGrams, 500, 1000, maxGrams].filter((w) => w > 0 && w >= minGrams && w <= maxGrams)),
+                        ).sort((a, b) => a - b);
+
+                        const handleAddPreset = () => {
+                          const grams = unitToGrams(presetInput, weightUnit);
+                          const min = Number(productDraft.minWeightG) || 0;
+                          const max = Number(productDraft.maxWeightG) || 0;
+                          if (grams === null) {
+                            setPresetInputError('Escribe un peso válido (ej. 500 o 1.5).');
+                            return;
+                          }
+                          if (min > 0 && grams < min) {
+                            setPresetInputError(`El mínimo permitido es ${formatWeight(min)}.`);
+                            return;
+                          }
+                          if (max > 0 && grams > max) {
+                            setPresetInputError(`El máximo permitido es ${formatWeight(max)}.`);
+                            return;
+                          }
+                          if ((productDraft.weightPresets || []).includes(grams)) {
+                            setPresetInputError('Ese peso ya está en la lista.');
+                            return;
+                          }
+                          setPresetInputError('');
+                          setPresetInput('');
+                          setProductDraft((c) => ({
+                            ...c,
+                            weightPresets: [...(c.weightPresets || []), grams].sort((a, b) => a - b),
+                          }));
+                        };
+
+                        const handleMinChange = (v: string) => {
+                          const grams = unitToGrams(v, weightUnit);
+                          setProductDraft((c) => {
+                            const newMin = grams !== null && grams > 0 ? String(grams) : '';
+                            const filteredPresets = (c.weightPresets || []).filter(
+                              (p) => (newMin ? p >= Number(newMin) : true),
+                            );
+                            return { ...c, minWeightG: newMin, weightPresets: filteredPresets };
+                          });
+                        };
+
+                        const handleMaxChange = (v: string) => {
+                          const grams = unitToGrams(v, weightUnit);
+                          setProductDraft((c) => {
+                            const newMax = grams !== null && grams > 0 ? String(grams) : '';
+                            const filteredPresets = (c.weightPresets || []).filter(
+                              (p) => (newMax ? p <= Number(newMax) : true),
+                            );
+                            return { ...c, maxWeightG: newMax, weightPresets: filteredPresets };
+                          });
+                        };
+
+                        return (
+                          <div className="sm:col-span-2 rounded-[24px] border border-sky-200/60 bg-sky-50/50 p-5 sm:p-6">
+                            {/* Encabezado + selector de unidad */}
+                            <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+                              <div>
+                                <p className="text-[12px] font-bold uppercase tracking-[0.1em] text-sky-700">Venta por peso</p>
+                                <p className="mt-0.5 text-[13px] font-medium text-neutral-500">
+                                  Tus clientes eligen cuántos gramos quieren pedir.
+                                </p>
+                              </div>
+                              <div className="flex gap-1.5 rounded-full border border-sky-200 bg-white/70 p-1">
+                                {(['g', 'kg'] as const).map((unit) => (
+                                  <button
+                                    key={unit}
+                                    type="button"
+                                    onClick={() => setWeightUnit(unit)}
+                                    className={`rounded-full px-4 py-1.5 text-[12px] font-bold transition-all ${
+                                      weightUnit === unit
+                                        ? 'bg-sky-600 text-white shadow-md shadow-sky-600/30'
+                                        : 'text-neutral-500 hover:text-sky-700'
+                                    }`}
+                                  >
+                                    {unit}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+
+                            {/* Vista previa de precios en vivo */}
+                            {pricePerKg > 0 && exampleWeights.length > 0 && (
+                              <div className="mb-5 rounded-2xl border border-sky-100 bg-white/80 p-4">
+                                <p className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.1em] text-neutral-500">
+                                  <span className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-400" />
+                                  Tus clientes verán costos así
+                                </p>
+                                <div className="mt-2.5 flex flex-wrap gap-2">
+                                  {exampleWeights.map((w) => (
+                                    <div
+                                      key={w}
+                                      className="flex items-baseline gap-1.5 rounded-xl border border-neutral-200/80 bg-white px-3 py-1.5 shadow-sm"
+                                    >
+                                      <span className="text-[13px] font-bold text-neutral-800">{formatWeight(w)}</span>
+                                      <span className="text-[13px] font-black text-emerald-600">
+                                        {formatCurrency((pricePerKg * w) / 1000)}
+                                      </span>
+                                    </div>
+                                  ))}
+                                </div>
+                                <p className="mt-2 text-[11px] text-neutral-400">
+                                  Se calcula con tu precio de {formatCurrency(pricePerKg)} por kilo.
+                                </p>
+                              </div>
+                            )}
+
+                            {/* Rango de peso */}
+                            <div className="grid gap-4 sm:grid-cols-3">
+                              <div className="space-y-1">
+                                <Field
+                                  label={`Mínimo (${weightUnit})`}
+                                  value={weightToUnit(productDraft.minWeightG, weightUnit)}
+                                  onChange={handleMinChange}
+                                  placeholder={weightUnit === 'kg' ? '0.1' : '100'}
+                                />
+                                <p className="text-[11px] leading-snug text-neutral-400">Lo menos que puede pedir.</p>
+                              </div>
+                              <div className="space-y-1">
+                                <Field
+                                  label={`Máximo (${weightUnit})`}
+                                  value={weightToUnit(productDraft.maxWeightG, weightUnit)}
+                                  onChange={handleMaxChange}
+                                  placeholder={weightUnit === 'kg' ? '5' : '5000'}
+                                />
+                                <p className="text-[11px] leading-snug text-neutral-400">El tope por pedido.</p>
+                              </div>
+                              <div className="space-y-1">
+                                <Field
+                                  label={`Incremento (${weightUnit})`}
+                                  value={weightToUnit(productDraft.stepWeightG, weightUnit)}
+                                  onChange={(v) => {
+                                    const grams = unitToGrams(v, weightUnit);
+                                    setProductDraft((c) => ({
+                                      ...c,
+                                      stepWeightG: grams !== null && grams > 0 ? String(grams) : '',
+                                    }));
+                                  }}
+                                  placeholder={weightUnit === 'kg' ? '0.05' : '50'}
+                                />
+                                <p className="text-[11px] leading-snug text-neutral-400">De cuánto en cuánto sube.</p>
+                              </div>
+                            </div>
+
+                            {/* Accesos rápidos editables */}
+                            <div className="mt-6 rounded-2xl border border-sky-100 bg-white/70 p-4">
+                              <div className="flex flex-wrap items-center justify-between gap-2">
+                                <div>
+                                  <p className="text-[12px] font-bold uppercase tracking-[0.1em] text-sky-700">
+                                    Accesos rápidos
+                                  </p>
+                                  <p className="mt-0.5 text-[11px] text-neutral-400">
+                                    Botones que tus clientes tocan para pedir rápido.
+                                  </p>
+                                </div>
+                                {presets.length > 0 && (
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      setProductDraft((c) => {
+                                        const min = Number(c.minWeightG) || 0;
+                                        const max = Number(c.maxWeightG) || 0;
+                                        return {
+                                          ...c,
+                                          weightPresets: [100, 250, 500, 1000, 2000].filter(
+                                            (p) => (min ? p >= min : true) && (max ? p <= max : true),
+                                          ),
+                                        };
+                                      })
+                                    }
+                                    className="rounded-full px-3 py-1.5 text-[11px] font-bold text-sky-600 transition hover:bg-sky-50"
+                                  >
+                                    Restablecer
+                                  </button>
+                                )}
+                              </div>
+
+                              {presets.length > 0 ? (
+                                <div className="mt-3 flex flex-wrap gap-2">
+                                  {presets.map((p) => (
+                                    <span
+                                      key={p}
+                                      className="group flex items-center gap-1.5 rounded-full border border-sky-200 bg-sky-50 py-1 pl-3 pr-1 text-[13px] font-bold text-sky-800"
+                                    >
+                                      {formatWeight(p)}
+                                      <button
+                                        type="button"
+                                        title={`Quitar ${formatWeight(p)}`}
+                                        onClick={() =>
+                                          setProductDraft((c) => ({
+                                            ...c,
+                                            weightPresets: (c.weightPresets || []).filter((x) => x !== p),
+                                          }))
+                                        }
+                                        className="flex h-5 w-5 items-center justify-center rounded-full text-sky-500 transition hover:bg-sky-100 hover:text-sky-700"
+                                      >
+                                        <X className="h-3 w-3" />
+                                      </button>
+                                    </span>
+                                  ))}
+                                </div>
+                              ) : (
+                                <p className="mt-3 rounded-xl border border-dashed border-neutral-200 bg-white px-4 py-3 text-[12px] text-neutral-400">
+                                  Aún no hay accesos rápidos. Agrega los más comunes abajo.
+                                </p>
+                              )}
+
+                              <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+                                <input
+                                  value={presetInput}
+                                  onChange={(e) => {
+                                    setPresetInput(e.target.value);
+                                    if (presetInputError) setPresetInputError('');
+                                  }}
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter') {
+                                      e.preventDefault();
+                                      handleAddPreset();
+                                    }
+                                  }}
+                                  aria-label={`Agregar acceso rápido en ${weightUnit}`}
+                                  placeholder={weightUnit === 'kg' ? 'Ej. 0.75 kg' : 'Ej. 750'}
+                                  inputMode="decimal"
+                                  className="block w-full min-w-0 rounded-[18px] border border-black/5 bg-neutral-100/50 px-5 py-3 text-[15px] font-medium text-neutral-950 shadow-inner outline-none transition-all duration-300 placeholder:text-neutral-400 hover:bg-neutral-100/80 focus:border-sky-400 focus:bg-white focus:ring-4 focus:ring-sky-400/20 sm:min-w-0"
+                                />
                                 <button
-                                  key={preset.value}
                                   type="button"
-                                  onClick={() =>
-                                    setProductDraft((current) => {
-                                      const currentPresets = current.weightPresets || [];
-                                      const has = currentPresets.includes(preset.value);
-                                      return {
-                                        ...current,
-                                        weightPresets: has
-                                          ? currentPresets.filter((p) => p !== preset.value)
-                                          : [...currentPresets, preset.value].sort((a, b) => a - b),
-                                      };
-                                    })
-                                  }
-                                  className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition-all ${
-                                    (productDraft.weightPresets || []).includes(preset.value)
-                                      ? 'border-sky-300 bg-sky-100 text-sky-700'
-                                      : 'border-black/5 bg-white/60 text-neutral-500 hover:bg-white'
-                                  }`}
+                                  onClick={handleAddPreset}
+                                  className="shrink-0 rounded-[18px] bg-sky-600 px-5 py-3 text-[13px] font-bold text-white shadow-lg shadow-sky-600/25 transition hover:bg-sky-700 active:scale-[0.98]"
                                 >
-                                  {preset.label}
+                                  <Plus className="mr-1 inline-block h-4 w-4" />
+                                  Agregar
                                 </button>
-                              ))}
+                              </div>
+                              {presetInputError ? (
+                                <p className="mt-2 flex items-center gap-1.5 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-[12px] font-semibold text-amber-700">
+                                  <Info className="h-3.5 w-3.5 shrink-0" />
+                                  {presetInputError}
+                                </p>
+                              ) : null}
                             </div>
                           </div>
-                        </div>
-                      )}
+                        );
+                      })()}
 
                       <div className="sm:col-span-2 mt-2">
                         <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
@@ -14578,6 +14810,32 @@ function formatCurrency(amount: number) {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   }).format(amount);
+}
+
+function formatWeight(grams: number): string {
+  if (!Number.isFinite(grams) || grams <= 0) return '';
+  const kg = grams / 1000;
+  return kg >= 1 || Number.isInteger(kg)
+    ? `${new Intl.NumberFormat('es-MX', { maximumFractionDigits: 2 }).format(kg)} kg`
+    : `${grams} g`;
+}
+
+function weightToUnit(grams: string | number, unit: 'kg' | 'g'): string {
+  const num = typeof grams === 'number' ? grams : Number(grams);
+  if (!Number.isFinite(num)) return '';
+  if (unit === 'kg') {
+    const kg = num / 1000;
+    return String(Number(kg.toFixed(3)));
+  }
+  return String(Math.round(num));
+}
+
+function unitToGrams(value: string, unit: 'kg' | 'g'): number | null {
+  const cleaned = value.trim().replace(',', '.').replace(/[^0-9.]/g, '');
+  if (!cleaned) return null;
+  const num = Number(cleaned);
+  if (!Number.isFinite(num) || num <= 0) return null;
+  return unit === 'kg' ? Math.round(num * 1000) : Math.round(num);
 }
 
 function formatSettlementReference(ref: string): string {

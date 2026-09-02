@@ -872,6 +872,8 @@ export default function RestaurantPage({
   const [customizingQuantity, setCustomizingQuantity] = useState(1);
   const [customizingWeight, setCustomizingWeight] = useState(0);
   const [customizingInstructions, setCustomizingInstructions] = useState('');
+  const [weightLimitWarning, setWeightLimitWarning] = useState(false);
+  const [weightLimitPendingValue, setWeightLimitPendingValue] = useState(0);
 
   const [previewLightboxOpen, setPreviewLightboxOpen] = useState(false);
   const [customizingLightboxOpen, setCustomizingLightboxOpen] = useState(false);
@@ -2138,6 +2140,8 @@ function StockBadge({ avail }: { avail: ReturnType<typeof getProductAvailability
       setCustomizingQuantity(1);
       setCustomizingWeight(isWeightProduct ? (product.minWeightG || 100) : 0);
       setCustomizingInstructions('');
+      setWeightLimitWarning(false);
+      setWeightLimitPendingValue(0);
       const initialSelection: Record<string, any[]> = {};
       (product.optionGroups || []).forEach((group) => {
         initialSelection[group.id] = [];
@@ -2227,6 +2231,8 @@ function StockBadge({ avail }: { avail: ReturnType<typeof getProductAvailability
     } as any, params.restaurantId as string, restaurant?.serviceFee || 0, restaurant?.effectiveDeliveryFee || 0);
 
     setCustomizingProduct(null);
+    setWeightLimitWarning(false);
+    setWeightLimitPendingValue(0);
     setCartJustUpdated(true);
     triggerHaptic(15);
   }
@@ -3351,6 +3357,8 @@ function StockBadge({ avail }: { avail: ReturnType<typeof getProductAvailability
                     const minG = customizingProduct.minWeightG || 100;
                     const maxG = customizingProduct.maxWeightG || 5000;
                     const stepG = customizingProduct.stepWeightG || 100;
+                    const unitPrice = customizingProduct.unitPrice || 0;
+                    const weightEstimate = (unitPrice * customizingWeight) / 1000;
                     let presets: number[] = [];
                     if (customizingProduct.weightPresets) {
                       if (Array.isArray(customizingProduct.weightPresets)) {
@@ -3359,27 +3367,50 @@ function StockBadge({ avail }: { avail: ReturnType<typeof getProductAvailability
                         try { presets = JSON.parse(customizingProduct.weightPresets); } catch {}
                       }
                     }
-                    if (presets.length === 0) presets = [100, 200, 300, 500, 1000];
+                    presets = presets.filter((p) => p >= minG && p <= maxG);
+                    if (presets.length === 0) presets = [100, 200, 300, 500, 1000].filter((p) => p >= minG && p <= maxG);
+                    const formatGrams = (grams: number) => (grams >= 1000 ? `${grams / 1000}kg` : `${grams}g`);
+
+                    const handleWeightInput = (raw: string) => {
+                      const v = parseInt(raw) || 0;
+                      if (v > maxG) {
+                        setWeightLimitPendingValue(v);
+                        setWeightLimitWarning(true);
+                        return;
+                      }
+                      setCustomizingWeight(Math.max(minG, Math.min(maxG, v)));
+                    };
 
                     return (
                       <div className="p-6">
-                        <label className="text-sm text-neutral-600 font-semibold mb-3 block">Peso</label>
-                        <div className="flex flex-wrap gap-2 mb-4">
-                          {presets.map((p) => (
-                            <button
-                              key={p}
-                              type="button"
-                              onClick={() => setCustomizingWeight(p)}
-                              className={`rounded-full border px-4 py-2 text-sm font-semibold transition-all ${
-                                customizingWeight === p
-                                  ? 'border-sky-400 bg-sky-50 text-sky-600'
-                                  : 'border-black/5 bg-white text-neutral-600 hover:bg-neutral-50'
-                              }`}
-                            >
-                              {p >= 1000 ? `${p / 1000}kg` : `${p}g`}
-                            </button>
-                          ))}
+                        <div className="flex items-center justify-between gap-3">
+                          <label className="text-sm text-neutral-600 dark:text-neutral-400 font-semibold">Peso</label>
+                          <div className="flex items-baseline gap-1.5 rounded-full bg-neutral-950 dark:bg-white text-white dark:text-neutral-950 px-3.5 py-1 shadow-sm">
+                            <span className="text-[13px] font-bold">≈ {formatGrams(customizingWeight)}</span>
+                            <span className="h-3.5 w-px bg-white/20 dark:bg-black/20" />
+                            <span className="text-[13px] font-black">{formatCurrency(weightEstimate)}</span>
+                          </div>
                         </div>
+
+                        {presets.length > 0 && (
+                          <div className="flex flex-wrap gap-2 mb-4 mt-3">
+                            {presets.map((p) => (
+                              <button
+                                key={p}
+                                type="button"
+                                onClick={() => setCustomizingWeight(p)}
+                                className={`rounded-full border px-4 py-2 text-sm font-semibold transition-all ${
+                                  customizingWeight === p
+                                    ? 'border-sky-400 bg-sky-50 text-sky-600'
+                                    : 'border-black/5 bg-white text-neutral-600 hover:bg-neutral-50'
+                                }`}
+                              >
+                                {formatGrams(p)}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+
                         <div className="flex items-center gap-3">
                           <button
                             type="button"
@@ -3400,11 +3431,8 @@ function StockBadge({ avail }: { avail: ReturnType<typeof getProductAvailability
                               max={maxG}
                               step={stepG}
                               value={customizingWeight}
-                              onChange={(e) => {
-                                const v = parseInt(e.target.value) || minG;
-                                setCustomizingWeight(Math.max(minG, Math.min(maxG, v)));
-                              }}
-                              className="w-full rounded-2xl border border-black/10 bg-white px-4 py-3 text-center text-lg font-bold text-neutral-950 outline-none"
+                              onChange={(e) => handleWeightInput(e.target.value)}
+                              className="w-full rounded-2xl border border-black/10 bg-white px-4 py-3 text-center text-lg font-bold text-neutral-950 outline-none focus:border-sky-400"
                             />
                             <span className="absolute right-4 top-1/2 -translate-y-1/2 text-sm font-semibold text-neutral-400">gramos</span>
                           </div>
@@ -3421,6 +3449,10 @@ function StockBadge({ avail }: { avail: ReturnType<typeof getProductAvailability
                             +
                           </button>
                         </div>
+
+                        <p className="mt-2.5 text-[11px] font-medium text-neutral-400 dark:text-neutral-500 text-center">
+                          Mínimo {formatGrams(minG)} · Máximo {formatGrams(maxG)} · Sube de {stepG} g en {stepG} g
+                        </p>
                       </div>
                     );
                   })()}
@@ -3500,6 +3532,67 @@ function StockBadge({ avail }: { avail: ReturnType<typeof getProductAvailability
             </div>
           </div>
         )}
+
+        {/* Modal de límite de peso */}
+        {weightLimitWarning && customizingProduct && (() => {
+          const maxG = customizingProduct.maxWeightG || 5000;
+          const unitPrice = customizingProduct.unitPrice || 0;
+          const clampedWeight = Math.min(weightLimitPendingValue || 0, maxG);
+          return (
+            <div
+              className="fixed inset-0 z-[80] flex items-center justify-center bg-black/55 backdrop-blur-sm px-4 py-6 animate-overlay-fade"
+              role="dialog"
+              aria-modal="true"
+              onClick={() => setWeightLimitWarning(false)}
+            >
+              <div
+                className="relative w-full max-w-sm overflow-hidden rounded-3xl bg-white dark:bg-neutral-900 shadow-2xl ring-1 ring-black/5 dark:ring-white/10 animate-modal-pop"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="p-6">
+                  <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-amber-100 dark:bg-amber-500/15 text-amber-600 dark:text-amber-400">
+                    <AlertTriangle className="h-6 w-6" />
+                  </div>
+                  <h3 className="text-center text-base font-bold text-neutral-950 dark:text-white">
+                    Cantidad no disponible
+                  </h3>
+                  <p className="mt-2 text-center text-[13px] leading-relaxed text-neutral-500 dark:text-neutral-400">
+                    Este producto se ofrece en cantidades de hasta{' '}
+                    <span className="font-bold text-neutral-800 dark:text-neutral-200">{maxG >= 1000 ? `${maxG / 1000}kg` : `${maxG}g`}</span>{' '}
+                    por pedido.
+                    {clampedWeight > 0 && (
+                      <>
+                        {' '}Te pediste{' '}
+                        <span className="font-bold text-neutral-800 dark:text-neutral-200">{weightLimitPendingValue >= 1000 ? `${weightLimitPendingValue / 1000}kg` : `${weightLimitPendingValue}g`}</span>
+                        {' '}({formatCurrency((unitPrice * weightLimitPendingValue) / 1000)}).
+                      </>
+                    )}
+                  </p>
+                  <div className="mt-5 flex flex-col gap-2">
+                    <button
+                      type="button"
+                      autoFocus
+                      onClick={() => {
+                        setCustomizingWeight(clampedWeight);
+                        setWeightLimitWarning(false);
+                      }}
+                      className="w-full rounded-full bg-neutral-950 dark:bg-white px-5 py-3 text-sm font-bold text-white dark:text-neutral-950 transition active:scale-[0.98]"
+                    >
+                      Ajustar al máximo disponible
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setWeightLimitWarning(false)}
+                      className="w-full rounded-full px-5 py-3 text-sm font-semibold text-neutral-500 dark:text-neutral-400 transition hover:bg-neutral-100 dark:hover:bg-neutral-800"
+                    >
+                      Elegir otra cantidad
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          );
+        })()}
 
         {/* Modal de Calificación */}
         {isRatingModalOpen && (() => {
