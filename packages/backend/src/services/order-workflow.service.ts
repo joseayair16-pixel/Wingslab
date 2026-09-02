@@ -27,6 +27,13 @@ import { sendPushNotification } from './notification.service';
 import { emitNotification } from './socket.service';
 import { sendWhatsAppDriverDemand } from './whatsapp.service';
 import { createTransferRefundTicket } from './refund-ticket.service';
+import {
+  DriverCandidate,
+  scoreDriverCandidate,
+  isRouteCompatibleWithNewOrder,
+  minutesSinceLastAssignment,
+  driverDistanceToRestaurantKm,
+} from './driver-scoring';
 
 type WorkflowParams = {
   prisma: PrismaClient;
@@ -1973,6 +1980,7 @@ export async function getAvailableDriversForRestaurant(
         },
         select: {
           id: true,
+          driverAssignedAt: true,
           latitude: true,
           longitude: true,
           restaurant: {
@@ -2088,33 +2096,77 @@ export async function autoAssignDriver(
   }
   const excludeDriverIdsArray = Array.from(excludeIds);
 
+  // Datos de contexto del pedido/restaurante, cargados una sola vez para
+  // calcular distancia y compatibilidad de ruta en todos los pases.
+  const [routingContextRestaurant, routingContextOrder] = await Promise.all([
+    prisma.restaurant.findUnique({
+      where: { userId: restaurantUserId },
+      select: { latitude: true, longitude: true },
+    }),
+    prisma.order.findUnique({
+      where: { id: orderId },
+      select: { latitude: true, longitude: true },
+    }),
+  ]);
+
   const tryAssign = async (
-    drivers: { id: string; userId: string; user: { name: string } }[],
+    drivers: DriverCandidate[],
     options: { allowOverload?: boolean } = {}
   ): Promise<{
-    driver: { id: string; userId: string; user: { name: string } };
+    driver: DriverCandidate;
     order: any;
   } | 'ALREADY_ASSIGNED' | null> => {
-    // Balanceo de carga: barajar los candidatos antes de iterar. Todos cumplen
-    // las mismas reglas del pool, así que repartir ráfagas entre ellos evita
-    // que el mismo driver top-rated concentre todas las asignaciones.
-    const orderedCandidates = [...drivers];
-    for (let i = orderedCandidates.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [orderedCandidates[i], orderedCandidates[j]] = [orderedCandidates[j], orderedCandidates[i]];
-    }
+    if (drivers.length === 0) return null;
 
-    for (const candidate of orderedCandidates) {
-      // Contar TODOS los pedidos activos (asignados y aceptados): los
-      // asignados-pendientes-de-aceptar también reservan cupo. Esto cierra la
-      // ventana donde un driver acumulaba asignaciones sin aceptar.
-      const activeOrdersCount = await prisma.order.count({
-        where: {
-          driverId: candidate.id,
-          status: { in: ['CONFIRMED', 'PREPARING', 'READY', 'PICKED_UP', 'IN_TRANSIT'] as any },
-        },
-      });
+    // La carga actual se pondera con peso alto dentro del score (LOAD_PER_ACTIVE)
+    // y el orden final lo decide el score, no la posición en base de datos.
+    // Conteo batch (una sola query) de todos los pedidos activos de los candidatos.
+    const activeOrdersCounts = await prisma.order.groupBy({
+      by: ['driverId'],
+      where: {
+        driverId: { in: drivers.map((d) => d.id) },
+        status: { in: ['CONFIRMED', 'PREPARING', 'READY', 'PICKED_UP', 'IN_TRANSIT'] as any },
+      },
+      _count: { _all: true },
+    });
+    const activeOrdersCountById = new Map<string, number>(
+      activeOrdersCounts.map((row) => [row.driverId!, row._count._all])
+    );
 
+    const orderedCandidates = drivers
+      .map((candidate) => {
+        const activeOrdersCount = activeOrdersCountById.get(candidate.id) ?? 0;
+        const distanceKm = driverDistanceToRestaurantKm(candidate, routingContextRestaurant);
+        const routeCompatible =
+          routingContextRestaurant?.latitude != null &&
+          routingContextRestaurant.longitude != null &&
+          routingContextOrder?.latitude != null &&
+          routingContextOrder.longitude != null &&
+          isRouteCompatibleWithNewOrder({
+            restaurant: {
+              latitude: routingContextRestaurant.latitude,
+              longitude: routingContextRestaurant.longitude,
+            },
+            newOrder: {
+              latitude: routingContextOrder.latitude,
+              longitude: routingContextOrder.longitude,
+            },
+            activeOrders: candidate.orders ?? [],
+          });
+
+        const score = scoreDriverCandidate({
+          activeOrdersCount,
+          distanceKm,
+          routeCompatible,
+          idleMinutes: minutesSinceLastAssignment(candidate),
+          rating: candidate.rating ?? 0,
+        });
+
+        return { candidate, activeOrdersCount, score };
+      })
+      .sort((a, b) => b.score - a.score);
+
+    for (const { candidate, activeOrdersCount } of orderedCandidates) {
       // En pase normal, cada repartidor lleva máx. 3 pedidos activos.
       // En el pase de "overload" (emergencia) se permite exceder el tope
       // normal, pero hasta un máximo configurable para evitar saturar a un
@@ -2338,6 +2390,31 @@ async function getAnyDriverForRestaurant(
       user: {
         select: { id: true, name: true, phone: true },
       },
+      orders: {
+        where: {
+          status: {
+            in: [
+              OrderStatus.CONFIRMED,
+              OrderStatus.PREPARING,
+              OrderStatus.READY,
+              OrderStatus.PICKED_UP,
+              OrderStatus.IN_TRANSIT,
+            ],
+          },
+        },
+        select: {
+          id: true,
+          driverAssignedAt: true,
+          latitude: true,
+          longitude: true,
+          restaurant: {
+            select: {
+              latitude: true,
+              longitude: true,
+            },
+          },
+        },
+      },
     },
     orderBy: [{ rating: 'desc' }, { totalDeliveries: 'desc' }],
     take: 10,
@@ -2346,6 +2423,13 @@ async function getAnyDriverForRestaurant(
   return drivers.map((d) => ({
     id: d.id,
     userId: d.userId,
+    rating: d.rating,
+    totalDeliveries: d.totalDeliveries,
+    currentLatitude: d.currentLatitude,
+    currentLongitude: d.currentLongitude,
+    createdAt: d.createdAt,
+    updatedAt: d.updatedAt,
+    orders: d.orders,
     user: { id: d.user.id, name: d.user.name },
   }));
 }
