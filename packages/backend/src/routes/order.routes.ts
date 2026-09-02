@@ -240,7 +240,10 @@ export async function registerOrderRoutes(fastify: FastifyInstance): Promise<voi
             orderReference: order.orderReference,
             totalAmount: order.totalAmount,
             paymentMethod: order.paymentMethod,
-            customerName: order.customer.user.name,
+            customerName: [order.customer?.user?.name, order.customer?.user?.lastName]
+              .filter(Boolean)
+              .join(' ')
+              .trim() || 'Cliente SaDeL',
             queuePosition: queueInfo.position,
             queueLength: queueInfo.queueLength,
           },

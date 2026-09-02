@@ -223,6 +223,7 @@ type OrderItem = {
   customer?: {
     user?: {
       name?: string;
+      lastName?: string;
       phone?: string;
       profilePhoto?: string | null;
     };
@@ -6281,20 +6282,20 @@ export default function Home() {
                         {activeIncomingOrder.customer?.user?.profilePhoto ? (
                           <img
                             src={activeIncomingOrder.customer.user.profilePhoto}
-                            alt={activeIncomingOrder.customer?.user?.name || 'Cliente'}
+                            alt={getCustomerFullName(activeIncomingOrder.customer?.user) || 'Cliente'}
                             className="h-10 w-10 rounded-full object-cover border border-neutral-200"
                           />
                         ) : (
                           <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-neutral-200 font-bold text-neutral-500 text-sm">
-                            {activeIncomingOrder.customer?.user?.name?.substring(0, 2).toUpperCase() || 'CL'}
+                            {getCustomerInitials(activeIncomingOrder.customer?.user) || 'CL'}
                           </div>
                         )}
                         <div className="min-w-0">
                           <p className="text-sm font-bold text-neutral-900 truncate">
-                            {activeIncomingOrder.customer?.user?.name || 'Cliente SaDeL'}
+                            {getCustomerFullName(activeIncomingOrder.customer?.user) || 'Cliente SaDeL'}
                           </p>
                           <p className="text-[11px] font-medium text-neutral-500">
-                            {activeIncomingOrder.customer?.user?.phone || 'Sin teléfono'}
+                            {formatPhoneDigits(activeIncomingOrder.customer?.user?.phone) || 'Sin teléfono'}
                           </p>
                         </div>
                       </div>
@@ -6439,7 +6440,7 @@ export default function Home() {
                         {waitingIncomingOrders.slice(0, 2).map((order) => (
                           <div key={order.id} className="text-sm text-neutral-700 flex justify-between">
                             <span className="font-medium text-neutral-950">{order.orderReference}</span>
-                            <span className="text-neutral-500">{order.customer?.user?.name?.split(' ')[0] || 'Cliente'}</span>
+                            <span className="text-neutral-500">{getCustomerFullName(order.customer?.user) || 'Cliente'}</span>
                           </div>
                         ))}
                         {waitingIncomingOrders.length > 2 && (
@@ -9716,7 +9717,7 @@ export default function Home() {
                                 <div className="grid gap-2 text-sm text-neutral-600 mb-4">
                                   <p className="flex items-center gap-2">
                                     <User className="w-4 h-4 text-neutral-400 shrink-0" />
-                                    {order.customer?.user?.name || 'Cliente SaDeL'}
+                                    {getCustomerFullName(order.customer?.user) || 'Cliente SaDeL'}
                                   </p>
                                   <p className="flex items-center gap-2">
                                     {(order as any).fulfillmentType === 'PICKUP' ? (
@@ -11537,7 +11538,7 @@ export default function Home() {
                           <div className="flex flex-col items-start leading-tight">
                             <span className="text-[9px] uppercase tracking-[0.12em] text-sky-500 font-bold">Comensal</span>
                             <span className="text-base font-bold text-neutral-950">
-                              {selectedOrderForTicket.customer?.user?.name || 'Cliente SaDeL'}
+                              {getCustomerFullName(selectedOrderForTicket.customer?.user) || 'Cliente SaDeL'}
                             </span>
                           </div>
                         </div>
@@ -12813,7 +12814,7 @@ export default function Home() {
                           <div className="min-w-0 flex-1">
                             <div className="flex items-center gap-2 flex-wrap">
                               <span className="text-sm sm:text-base font-bold text-neutral-950 leading-tight">
-                                {order.customer?.user?.name || 'Comensal Anónimo'}
+                                {getCustomerFullName(order.customer?.user) || 'Comensal Anónimo'}
                               </span>
                               {order.dailyCounter && (
                                 <span className="text-[11px] font-bold text-neutral-500 bg-neutral-100/80 rounded-full px-2 py-0.5">
@@ -12923,7 +12924,7 @@ export default function Home() {
                           <div className="min-w-0 flex-1">
                             <div className="flex items-center gap-2 flex-wrap">
                               <span className="text-sm sm:text-base font-bold text-neutral-950 leading-tight">
-                                {order.customer?.user?.name || 'Comensal Anónimo'}
+                                {getCustomerFullName(order.customer?.user) || 'Comensal Anónimo'}
                               </span>
                               {order.dailyCounter && (
                                 <span className="text-[11px] font-bold text-neutral-500 bg-neutral-100/80 rounded-full px-2 py-0.5">
@@ -13079,7 +13080,7 @@ export default function Home() {
                   </div>
                   <h3 className="text-xl font-bold text-neutral-950 tracking-tight">Solicitud de cancelación</h3>
                   <p className="mt-2 text-sm text-neutral-600 leading-relaxed">
-                    El cliente <strong className="text-neutral-900 font-semibold">{cancelRequestModalOrder.customer?.user?.name || 'Comensal'}</strong> solicita cancelar el pedido <strong className="text-neutral-900 font-semibold">#{cancelRequestModalOrder.orderReference}</strong>.
+                    El cliente <strong className="text-neutral-900 font-semibold">{getCustomerFullName(cancelRequestModalOrder.customer?.user) || 'Comensal'}</strong> solicita cancelar el pedido <strong className="text-neutral-900 font-semibold">#{cancelRequestModalOrder.orderReference}</strong>.
                   </p>
 
                   <div className="mt-4 rounded-2xl bg-neutral-50 p-4 border border-neutral-200/60 text-left space-y-2">
@@ -14810,6 +14811,40 @@ function formatCurrency(amount: number) {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   }).format(amount);
+}
+
+type CustomerUser = {
+  name?: string;
+  lastName?: string;
+};
+
+function getCustomerFullName(user?: CustomerUser | null): string {
+  const name = user?.name?.trim();
+  if (!name) return '';
+  const surname = user?.lastName?.trim().split(/\s+/)[0];
+  return surname ? `${name} ${surname}` : name;
+}
+
+function getCustomerInitials(user?: CustomerUser | null): string {
+  const fullName = getCustomerFullName(user);
+  if (!fullName) return 'CL';
+  const parts = fullName.split(/\s+/).filter(Boolean).slice(0, 2);
+  return parts.map((part) => part[0]?.toUpperCase() || '').join('') || 'CL';
+}
+
+function formatPhoneDigits(phone?: string | null): string {
+  const digits = (phone || '').replace(/\D/g, '');
+  if (!digits) return '';
+  if (digits.length === 12 && digits.startsWith('52')) {
+    return digits.slice(2);
+  }
+  if (digits.length === 13 && digits.startsWith('52')) {
+    return digits.slice(2);
+  }
+  if (digits.length > 10) {
+    return digits.slice(-10);
+  }
+  return digits;
 }
 
 function formatWeight(grams: number): string {

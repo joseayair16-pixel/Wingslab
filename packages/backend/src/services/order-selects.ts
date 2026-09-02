@@ -149,6 +149,7 @@ export const restaurantOrderListSelect = Prisma.validator<Prisma.OrderSelect>()(
         select: {
           id: true,
           name: true,
+          lastName: true,
           phone: true,
           profilePhoto: true,
         },
@@ -417,6 +418,7 @@ export const customerCreatedOrderSelect = Prisma.validator<Prisma.OrderSelect>()
         select: {
           id: true,
           name: true,
+          lastName: true,
           phone: true,
           profilePhoto: true,
         },
