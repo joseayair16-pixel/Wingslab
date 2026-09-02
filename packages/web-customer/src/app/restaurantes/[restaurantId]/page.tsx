@@ -2154,7 +2154,7 @@ function ProductImage({
         decoding="async"
         draggable={false}
         onClick={onClick}
-        className={`h-full w-full object-cover transition duration-300 ${imgClassName}`}
+        className={`h-full w-full object-contain transition duration-300 ${imgClassName}`}
         style={{ objectPosition: product.imagePosition || undefined }}
       />
     </div>
