@@ -738,7 +738,7 @@ export default function Home() {
   // Approval Modal State
   const [isApproveRequestModalOpen, setIsApproveRequestModalOpen] = useState(false);
   const [approveRegion, setApproveRegion] = useState('');
-  const [approvePassword, setApprovePassword] = useState('sadel123');
+  const [approvePassword, setApprovePassword] = useState('');
   const [approveLatitude, setApproveLatitude] = useState('');
   const [approveLongitude, setApproveLongitude] = useState('');
   const [isSubmittingApproval, setIsSubmittingApproval] = useState(false);
@@ -1564,7 +1564,7 @@ export default function Home() {
           method: 'POST',
           body: JSON.stringify({
             region: reqRegion,
-            password: reqPassword || 'sadel123',
+            password: reqPassword || '',
             ...(reqType === 'RESTAURANT' && reqLatitude != null && reqLongitude != null
               ? { latitude: parseFloat(reqLatitude), longitude: parseFloat(reqLongitude) }
               : {})
@@ -3526,7 +3526,7 @@ export default function Home() {
                                 </div>
                                 <div className="flex items-center gap-1.5">
                                   <a href={`https://wa.me/${req.whatsapp.replace(/\D/g, '')}?text=Hola%20${encodeURIComponent(req.ownerName)},%20te%20escribimos%20de%20SaDeL%20para%20darle%20seguimiento%20a%20tu%20alta.`} target="_blank" rel="noreferrer" className="text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200/50 px-2 py-1 rounded-full hover:bg-emerald-100">💬</a>
-                                  <button onClick={() => { setSelectedRequestId(req.id);                   setApproveRegion(regions[0]?.code || ''); setApprovePassword('sadel123'); setApproveLatitude(''); setApproveLongitude(''); setIsApproveRequestModalOpen(true); }} className="text-[10px] font-bold text-white bg-neutral-950 px-2 py-1 rounded-full hover:bg-neutral-800">Aprobar</button>
+                                  <button onClick={() => { setSelectedRequestId(req.id);                   setApproveRegion(regions[0]?.code || ''); setApprovePassword(''); setApproveLatitude(''); setApproveLongitude(''); setIsApproveRequestModalOpen(true); }} className="text-[10px] font-bold text-white bg-neutral-950 px-2 py-1 rounded-full hover:bg-neutral-800">Aprobar</button>
                                   <button onClick={() => rejectPlatformRequest(req.id)} className="text-[10px] font-bold text-rose-700 bg-rose-50 border border-rose-200/50 px-2 py-1 rounded-full hover:bg-rose-100">✗</button>
                                 </div>
                               </div>
@@ -5717,7 +5717,7 @@ export default function Home() {
                                 type="button"
                                 onClick={() => {
                                   setApproveRegion(regions[0]?.code || '');
-                                  setApprovePassword('sadel123');
+                                  setApprovePassword('');
                                   setIsApproveRequestModalOpen(true);
                                 }}
                                 className="rounded-full bg-neutral-950 text-white hover:bg-neutral-800 px-6 py-3 text-sm font-bold active:scale-95 transition-all"
@@ -7844,9 +7844,12 @@ export default function Home() {
                     label="Contraseña Temporal"
                     value={approvePassword}
                     onChange={(value) => setApprovePassword(value)}
-                    placeholder="sadel123"
+                    placeholder="Asigna una contraseña segura para el nuevo usuario"
                     type="text"
                   />
+                  {approvePassword && approvePassword.length < 6 && (
+                    <p className="text-[11px] text-rose-500 mt-1.5">La contraseña debe tener al menos 6 caracteres.</p>
+                  )}
                 </div>
 
                 {selectedReq.type === 'RESTAURANT' && (
@@ -7883,7 +7886,7 @@ export default function Home() {
                   </button>
                   <button
                     type="button"
-                    disabled={isSubmittingApproval || !approveRegion || (selectedReq.type === 'RESTAURANT' && (!approveLatitude || !approveLongitude))}
+                    disabled={isSubmittingApproval || !approveRegion || approvePassword.length < 6 || (selectedReq.type === 'RESTAURANT' && (!approveLatitude || !approveLongitude))}
                     onClick={() => approvePlatformRequest(selectedReq.id, approveRegion, approvePassword, selectedReq.type === 'RESTAURANT' ? approveLatitude : '', selectedReq.type === 'RESTAURANT' ? approveLongitude : '', selectedReq.type)}
                     className="rounded-full bg-neutral-950 text-white hover:bg-neutral-800 px-6 py-3 text-xs font-bold transition flex items-center gap-2"
                   >
