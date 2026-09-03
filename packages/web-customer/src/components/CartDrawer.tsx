@@ -64,6 +64,7 @@ type CartDrawerProps = {
   overrideServiceFee?: number;
   pickupOnly?: boolean;
   freeDeliveryThreshold?: number | null;
+  restaurantId?: string | null;
 };
 
 export default memo(function CartDrawer({
@@ -77,8 +78,14 @@ export default memo(function CartDrawer({
   overrideServiceFee,
   pickupOnly = false,
   freeDeliveryThreshold,
+  restaurantId,
 }: CartDrawerProps) {
-  const cart = useCartStore(state => state.items);
+  const allItems = useCartStore(state => state.items);
+  const storeRestaurantId = useCartStore(state => state.restaurantId);
+  const cart = useMemo(
+    () => (restaurantId && storeRestaurantId === restaurantId ? allItems : []),
+    [allItems, storeRestaurantId, restaurantId]
+  );
   const updateCartItem = useCartStore(state => state.updateItem);
   const storeServiceFee = useCartStore(state => state.serviceFee);
   const storeDeliveryFee = useCartStore(state => state.deliveryFee);

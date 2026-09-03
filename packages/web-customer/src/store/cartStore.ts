@@ -176,22 +176,16 @@ export const useCartStore = create<CartState>()(
         const byProductId = new Map<number | string, ProductPriceUpdate>();
         for (const update of updates) byProductId.set(update.productId, update);
         set((state) => {
-          const usedByProduct = new Map<string, number>();
           const items = state.items.map((item) => {
             const fresh = byProductId.get(item.productId);
             if (!fresh) return item;
             const price = fresh.price;
             const discountPrice = fresh.discountPrice != null ? fresh.discountPrice : item.discountPrice;
             const maxStock = fresh.maxStock != null ? fresh.maxStock : item.maxStock;
-            let quantity = item.quantity;
-            if (item.sellBy !== 'WEIGHT' && maxStock != null) {
-              const alreadyUsed = usedByProduct.get(item.productId) ?? 0;
-              const allowed = Math.max(0, maxStock - alreadyUsed);
-              if (quantity > allowed) quantity = allowed;
-              usedByProduct.set(item.productId, alreadyUsed + quantity);
-            }
-            return { ...item, price, discountPrice, maxStock, quantity };
-          }).filter((item) => item.quantity > 0);
+            // Actualiza el precio/snapshot de stock, pero NO reduce ni elimina
+            // unidades ya válidas en el carrito (solo refresca el techo de stock).
+            return { ...item, price, discountPrice, maxStock };
+          });
           return { items };
         });
       },

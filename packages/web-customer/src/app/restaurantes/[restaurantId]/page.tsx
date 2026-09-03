@@ -3892,6 +3892,7 @@ function ProductImage({
       <CartDrawer
         isOpen={isCartOpen}
         onClose={() => setIsCartOpen(false)}
+        restaurantId={cartRestaurantId}
         onProceedToCheckout={() => {
           setIsCartOpen(false);
           if (!token) {

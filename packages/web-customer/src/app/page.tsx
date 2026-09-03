@@ -4699,6 +4699,7 @@ export default function Home() {
       <CartDrawer
         isOpen={isCartOpen}
         onClose={() => setIsCartOpen(false)}
+        restaurantId={cartRestaurantId}
         onProceedToCheckout={() => {
           setIsCartOpen(false);
           if (!isAuthenticated) {
