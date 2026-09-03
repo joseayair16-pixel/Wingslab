@@ -194,7 +194,11 @@ export default function InstallAppCard() {
           <div className="w-full max-w-sm rounded-[28px] bg-white p-6 shadow-2xl">
             <div className="mb-4 flex items-start justify-between">
               <h3 className="text-lg font-bold text-neutral-900">
-                {platform === 'ios' ? 'Instalar SaDeL en tu iPhone' : 'Instalar SaDeL en tu Android'}
+                {platform === 'ios'
+                  ? 'Instalar SaDeL en tu iPhone'
+                  : platform === 'android'
+                    ? 'Instalar SaDeL en tu Android'
+                    : 'Instalar SaDeL como app'}
               </h3>
               <button
                 type="button"
@@ -210,8 +214,10 @@ export default function InstallAppCard() {
               <IOSGuide />
             ) : platform === 'android' && apkUrl ? (
               <AndroidApkGuide apkUrl={apkUrl} installing={installing} onDownload={handleAndroidAction} />
-            ) : (
+            ) : platform === 'android' ? (
               <AndroidPwaGuide installing={installing} onInstall={handleAndroidAction} />
+            ) : (
+              <DesktopPwaGuide installing={installing} onInstall={handleAndroidAction} />
             )}
           </div>
         </div>
@@ -324,8 +330,30 @@ function AndroidPwaGuide({ installing, onInstall }: { installing: boolean; onIns
   );
 }
 
-function Step({ n, children, active = true }: { n: number; children: ReactNode; active?: boolean }) {
+function DesktopPwaGuide({ installing, onInstall }: { installing: boolean; onInstall: () => void }) {
   return (
+    <div>
+      <p className="mb-4 text-sm leading-relaxed text-neutral-600">
+        Usa el botón de abajo o el ícono <Bold>Instalar app</Bold> que aparece en la barra de
+        direcciones del navegador para instalar SaDeL como una app de escritorio.
+      </p>
+      <button
+        type="button"
+        onClick={onInstall}
+        disabled={installing}
+        className="flex w-full items-center justify-center gap-2 rounded-full bg-neutral-950 py-3 text-sm font-bold text-white transition hover:bg-neutral-800 active:scale-[0.98] disabled:opacity-70"
+      >
+        <Download className="h-4 w-4" />
+        {installing ? 'Instalando…' : 'Instalar SaDeL'}
+      </button>
+      <p className="mt-3 text-center text-[10px] leading-relaxed text-neutral-400">
+        Si el botón no responde, usa el ícono «Instalar» en la barra del navegador.
+      </p>
+    </div>
+  );
+}
+
+function Step({ n, children, active = true }: { n: number; children: ReactNode; active?: boolean }) {  return (
     <li className={`flex items-start gap-3 ${active ? '' : 'opacity-50'}`}>
       <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-sky-100 text-xs font-bold text-sky-700">
         {n}
