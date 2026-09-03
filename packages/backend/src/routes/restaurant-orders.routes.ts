@@ -1386,7 +1386,9 @@ export async function registerRestaurantOrderRoutes(fastify: FastifyInstance): P
             body: 'Gracias por tu compra. Que lo disfrutes.',
             vibrate: [300, 100, 300],
             requireInteraction: false,
-          });
+          }).catch((pushErr) =>
+            request.log.error({ err: pushErr }, `Fallo push "pedido recogido" al cliente ${updatedOrder.customer.user.id}`)
+          );
         }
 
         return reply.send({
@@ -1409,7 +1411,9 @@ export async function registerRestaurantOrderRoutes(fastify: FastifyInstance): P
               body: `Tu nuevo PIN es: ${refreshedOrder.pickupPin}. Proporciónalo al restaurante para recoger tu pedido.`,
               vibrate: [500, 250, 500],
               requireInteraction: true,
-            });
+            }).catch((pushErr) =>
+              request.log.error({ err: pushErr }, `Fallo push de PIN de recolección al cliente ${refreshedOrder.customer.user.id}`)
+            );
           }
         }
         return sendAppError(reply, error);

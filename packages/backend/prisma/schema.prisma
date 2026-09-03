@@ -547,6 +547,10 @@ model Order {
   @@index([noDriversAvailable, status, createdAt])
   @@index([stuckAlertLevel, status])
   @@index([overdueAlertLevel, status])
+  @@index([driverAssignedAt])
+  @@index([preparationDeadlineAt])
+  @@index([isAcceptedByDriver, driverId, status])
+  @@index([isSupportRequested, supportRestaurantId])
 }
 
 enum OrderStatus {

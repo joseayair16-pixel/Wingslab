@@ -2952,7 +2952,7 @@ export async function registerAdminRoutes(fastify: FastifyInstance): Promise<voi
       const params = z.object({ id: z.string().min(1) }).safeParse(request.params);
       const body = z.object({
         region: z.string().min(1, 'La región es obligatoria.'),
-        password: z.string().min(6, 'La contraseña debe tener al menos 6 caracteres.').default('sadel123'),
+        password: z.string().min(6, 'La contraseña debe tener al menos 6 caracteres.'),
         latitude: z.number({ invalid_type_error: 'La latitud debe ser un número.' }).optional(),
         longitude: z.number({ invalid_type_error: 'La longitud debe ser un número.' }).optional(),
       }).safeParse(request.body);
@@ -3091,7 +3091,11 @@ export async function registerAdminRoutes(fastify: FastifyInstance): Promise<voi
           });
         }
       } catch (err: any) {
-        console.warn('Fallo al crear registros en base de datos. Se procederá simulando la creación debido al fallback:', err);
+        request.log.error({ err, requestId: request.id }, 'Fallo al crear registros de afiliación aprobada');
+        return reply.status(500).send({
+          success: false,
+          error: { code: 'AFFILIATION_CREATION_FAILED', message: 'No se pudo dar de alta al nuevo usuario. La solicitud no fue aprobada.' },
+        });
       }
 
       // Actualizar el estado de la solicitud

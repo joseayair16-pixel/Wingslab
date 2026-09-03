@@ -181,7 +181,9 @@ export async function registerPublicDeliveryRoutes(fastify: FastifyInstance): Pr
       // Idempotencia: si el pedido ya fue entregado (vía QR, tablet o repartidor),
       // responder éxito sin re-notificar ni volver a actualizar.
       if (order.status === OrderStatus.DELIVERED) {
-        await (prisma as any).deliveryToken.delete({ where: { id: dToken.id } }).catch(() => undefined);
+        await (prisma as any).deliveryToken
+          .delete({ where: { id: dToken.id } })
+          .catch((err: unknown) => request.log.error({ err }, `Fallo al invalidar token de entrega ${dToken.id} (ya entregado)`));
         return reply.send({
           success: true,
           message: 'El pedido ya fue entregado.',
@@ -235,7 +237,9 @@ export async function registerPublicDeliveryRoutes(fastify: FastifyInstance): Pr
 
       if (claimed.count === 0) {
         // Ya fue entregado/completado/cancelado por otro flujo (o carrera).
-        await (prisma as any).deliveryToken.delete({ where: { id: dToken.id } }).catch(() => undefined);
+        await (prisma as any).deliveryToken
+          .delete({ where: { id: dToken.id } })
+          .catch((err: unknown) => request.log.error({ err }, `Fallo al invalidar token de entrega ${dToken.id} (alcanzado la marca)`));
         return reply.status(409).send({
           success: false,
           error: { code: 'ALREADY_DELIVERED', message: 'Este pedido ya fue entregado.' },

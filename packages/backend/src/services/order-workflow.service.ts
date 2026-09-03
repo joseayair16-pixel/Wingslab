@@ -767,7 +767,6 @@ export async function cancelOrderByRestaurant(
       where: {
         id: orderId,
         restaurant: { userId: restaurantUserId },
-        status: { in: [OrderStatus.CONFIRMED, OrderStatus.PREPARING] },
       },
       include: {
         customer: { select: { userId: true } },
@@ -783,8 +782,15 @@ export async function cancelOrderByRestaurant(
       );
     }
 
-    await tx.order.update({
-      where: { id: order.id },
+    // Claim atómico anti-doble-procesamiento: solo transiciona a CANCELLED si el
+    // pedido sigue en un estado cancelable (CONFIRMED/PREPARING). Si otra vía
+    // (entrega, otro flujo) ya lo movió de estado, count es 0 y no restauramos
+    // stock ni duplicamos efectos.
+    const claimed = await tx.order.updateMany({
+      where: {
+        id: order.id,
+        status: { in: [OrderStatus.CONFIRMED, OrderStatus.PREPARING] },
+      },
       data: {
         status: OrderStatus.CANCELLED,
         cancelledBy: 'RESTAURANT',
@@ -795,6 +801,14 @@ export async function cancelOrderByRestaurant(
         isAcceptedByDriver: false,
       },
     });
+
+    if (claimed.count === 0) {
+      throw createDomainError(
+        409,
+        'ORDER_NOT_CANCELLABLE',
+        'El pedido ya no se puede cancelar porque cambió su estado.'
+      );
+    }
 
     await tx.orderTracking.create({
       data: {
@@ -2166,96 +2180,128 @@ export async function autoAssignDriver(
       })
       .sort((a, b) => b.score - a.score);
 
-    for (const { candidate, activeOrdersCount } of orderedCandidates) {
+    for (const { candidate } of orderedCandidates) {
       // En pase normal, cada repartidor lleva máx. 3 pedidos activos.
       // En el pase de "overload" (emergencia) se permite exceder el tope
       // normal, pero hasta un máximo configurable para evitar saturar a un
       // único repartidor con todo el pool de pedidos.
       const maxActive = options.allowOverload ? getOverloadMaxActiveOrders() : getMaxActiveOrders();
-      if (activeOrdersCount >= maxActive) continue;
 
-      let assignedOrder: any;
-      try {
-        assignedOrder = await assignDriverToOrder({
-          prisma,
-          restaurantUserId,
-          orderId,
-          driverId: candidate.id,
-        });
-      } catch (assignErr) {
-        // Otra transacción concurrente (JIT job, sweep, asignación manual)
-        // ya asignó este pedido a otro repartidor. No es un fallo: hay que
-        // detener la cascada sin marcarlo como "sin repartidor".
-        if (isAppError(assignErr) && assignErr.code === 'ORDER_ALREADY_ASSIGNED') {
-          return 'ALREADY_ASSIGNED';
-        }
-        throw assignErr;
-      }
-
-      try {
-        const existingOrders = await prisma.order.findMany({
-          where: {
-            driverId: candidate.id,
-            id: { not: orderId },
-            status: { in: ['CONFIRMED', 'PREPARING', 'READY', 'PICKED_UP', 'IN_TRANSIT'] as any },
-          },
-          select: {
-            id: true,
-            batchId: true,
-            restaurantId: true,
-            latitude: true,
-            longitude: true,
-            status: true,
-          },
-        });
-
-        if (existingOrders.length > 0) {
-          const newOrderData = await prisma.order.findUnique({
-            where: { id: orderId },
-            select: { restaurantId: true, latitude: true, longitude: true },
+      // Mutex distribuido por repartidor: la evaluación del tope + el claim del
+      // pedido se serializan por driver. Si otro proceso concurrente (JIT job,
+      // sweep, auto-assign) está evaluando o acabó de asignar a este repartidor,
+      // se devuelve null y saltamos al siguiente candidato. Esto cierra la
+      // ventana TOCTOU en la que el groupBy (no atómico) podía ver un driver con
+      // cupo libre que ya había tomado otro claim.
+      const assignedOrder = await withDriverCapacityLock<
+        Awaited<ReturnType<typeof assignDriverToOrder>> | 'ALREADY_ASSIGNED' | null
+      >(
+        candidate.id,
+        async () => {
+          // Recalcular la carga DENTRO del lock para garantizar frescura antes
+          // del claim (ya sin competencia por este driver).
+          const freshCount = await prisma.order.groupBy({
+            by: ['driverId'],
+            where: {
+              driverId: candidate.id,
+              status: { in: ['CONFIRMED', 'PREPARING', 'READY', 'PICKED_UP', 'IN_TRANSIT'] as any },
+            },
+            _count: { _all: true },
           });
+          const freshActive = (freshCount[0]?._count?._all) ?? 0;
+          if (freshActive >= maxActive) return null;
 
-          if (newOrderData) {
-            const sameRestaurantOrders = existingOrders.filter(
-              (o) =>
-                o.restaurantId === newOrderData.restaurantId &&
-                // Solo agrupar si el driver aún no ha recogido (está esperando en el restaurante)
-                (o.status === 'CONFIRMED' || o.status === 'PREPARING')
-            );
-            const allOrders = [
-              ...sameRestaurantOrders,
-              { id: orderId, ...newOrderData, batchId: null, status: '' },
-            ];
-            if (allOrders.length >= 2) {
-              const { createOrJoinBatch } = await import('../services/batch.service');
-              const batchOrders = sameRestaurantOrders
-                .filter((o) => o.latitude != null && o.longitude != null)
-                .map((o) => ({
-                  id: o.id,
-                  batchId: o.batchId || null,
-                  latitude: o.latitude!,
-                  longitude: o.longitude!,
-                  restaurantId: o.restaurantId,
-                }));
-              if (
-                batchOrders.length > 0 &&
-                newOrderData.latitude != null &&
-                newOrderData.longitude != null
-              ) {
-                await createOrJoinBatch(
-                  prisma as any,
-                  orderId,
-                  batchOrders,
-                  newOrderData.latitude,
-                  newOrderData.longitude
+          let claimed: Awaited<ReturnType<typeof assignDriverToOrder>>;
+          try {
+            claimed = await assignDriverToOrder({
+              prisma,
+              restaurantUserId,
+              orderId,
+              driverId: candidate.id,
+            });
+          } catch (assignErr) {
+            // Otra transacción concurrente (JIT job, sweep, asignación manual)
+            // ya asignó este pedido a otro repartidor. No es un fallo: hay que
+            // detener la cascada sin marcarlo como "sin repartidor".
+            if (isAppError(assignErr) && assignErr.code === 'ORDER_ALREADY_ASSIGNED') {
+              return 'ALREADY_ASSIGNED';
+            }
+            throw assignErr;
+          }
+
+          try {
+            const existingOrders = await prisma.order.findMany({
+              where: {
+                driverId: candidate.id,
+                id: { not: orderId },
+                status: { in: ['CONFIRMED', 'PREPARING', 'READY', 'PICKED_UP', 'IN_TRANSIT'] as any },
+              },
+              select: {
+                id: true,
+                batchId: true,
+                restaurantId: true,
+                latitude: true,
+                longitude: true,
+                status: true,
+              },
+            });
+
+            if (existingOrders.length > 0) {
+              const newOrderData = await prisma.order.findUnique({
+                where: { id: orderId },
+                select: { restaurantId: true, latitude: true, longitude: true },
+              });
+
+              if (newOrderData) {
+                const sameRestaurantOrders = existingOrders.filter(
+                  (o) =>
+                    o.restaurantId === newOrderData.restaurantId &&
+                    // Solo agrupar si el driver aún no ha recogido (está esperando en el restaurante)
+                    (o.status === 'CONFIRMED' || o.status === 'PREPARING')
                 );
+                const allOrders = [
+                  ...sameRestaurantOrders,
+                  { id: orderId, ...newOrderData, batchId: null, status: '' },
+                ];
+                if (allOrders.length >= 2) {
+                  const { createOrJoinBatch } = await import('../services/batch.service');
+                  const batchOrders = sameRestaurantOrders
+                    .filter((o) => o.latitude != null && o.longitude != null)
+                    .map((o) => ({
+                      id: o.id,
+                      batchId: o.batchId || null,
+                      latitude: o.latitude!,
+                      longitude: o.longitude!,
+                      restaurantId: o.restaurantId,
+                    }));
+                  if (
+                    batchOrders.length > 0 &&
+                    newOrderData.latitude != null &&
+                    newOrderData.longitude != null
+                  ) {
+                    await createOrJoinBatch(
+                      prisma as any,
+                      orderId,
+                      batchOrders,
+                      newOrderData.latitude,
+                      newOrderData.longitude
+                    );
+                  }
+                }
               }
             }
+          } catch (batchErr) {
+            logger.warn(`[Batch] No se pudo crear batch para orden ${orderId}:`, batchErr);
           }
+
+          return claimed;
         }
-      } catch (batchErr) {
-        logger.warn(`[Batch] No se pudo crear batch para orden ${orderId}:`, batchErr);
+      );
+
+      if (assignedOrder === 'ALREADY_ASSIGNED') {
+        return 'ALREADY_ASSIGNED';
       }
+      if (!assignedOrder) continue;
 
       void sendPushNotification(candidate.userId, {
         title: '🛵 Nuevo pedido asignado',
@@ -2271,6 +2317,8 @@ export async function autoAssignDriver(
           url: `/?orderId=${assignedOrder.id}`,
         },
         tag: `order-assigned-${assignedOrder.id}`,
+      }).catch((pushErr) => {
+        logger.error(`[Push] Fallo al notificar nueva asignación al repartidor ${candidate.userId}`, pushErr);
       });
 
       // Si la orden ya está READY al asignar, enviar también push de recogida
@@ -2288,6 +2336,8 @@ export async function autoAssignDriver(
             event: 'order:ready',
             url: `/?orderId=${assignedOrder.id}`,
           },
+        }).catch((pushErr) => {
+          logger.error(`[Push] Fallo al notificar "listo para recoger" al repartidor ${candidate.userId}`, pushErr);
         });
       }
 
@@ -2567,6 +2617,8 @@ export async function refillDriverFreeSlot(
         url: `/?orderId=${order.id}`,
       },
       tag: `order-assigned-${order.id}`,
+    }).catch((pushErr) => {
+      logger.error(`[Push] Fallo al notificar reasignación al repartidor ${driver.id}`, pushErr);
     });
   }
 
@@ -2763,5 +2815,67 @@ export function notifyCustomerNoDriversAvailable(
       event: 'order:no-drivers-available',
       url: `/?orderId=${order.id}`,
     },
+  }).catch((pushErr) => {
+    logger.error(`[Push] Fallo al notificar "sin repartidor" al cliente ${customerUserId}`, pushErr);
   });
+}
+
+function randomNonce(): string {
+  try {
+    if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+      return crypto.randomUUID();
+    }
+  } catch {
+    // ignore
+  }
+  return `${process.pid}:${Math.random().toString(36).slice(2)}:${Date.now()}`;
+}
+
+/**
+ * Mutex distribuido por repartidor (Redis SET NX + TTL + liberación con script
+ * Lua que verifica el nonce). Serializa la evaluación del tope de carga y el
+ * claim del pedido del MISMO driver entre procesos concurrentes (JIT job,
+ * sweep, auto-assign), cerrando la ventana en la que dos transacciones podrían
+ * leer el conteo de pedidos activos sin ver el claim del otro.
+ *
+ * Fail-open: si Redis no está disponible, se ejecuta fn igual (sin bloqueo)
+ * para no detener la asignación en producción.
+ */
+async function withDriverCapacityLock<T>(
+  driverId: string,
+  fn: () => Promise<T>
+): Promise<T | null> {
+  const lockKey = `driver:capacity-lock:${driverId}`;
+  const nonce = randomNonce();
+  let redis: ReturnType<typeof getRedis> | null = null;
+  let acquired = false;
+  try {
+    redis = getRedis();
+    const res = await redis.set(lockKey, nonce, 'EX', 4, 'NX');
+    acquired = res === 'OK';
+  } catch (e) {
+    // Redis no disponible (incluye getRedis) → fail-open: proceder sin lock.
+    logger.warn(`[DriverCapacityLock] fallback sin lock (redis) para driver ${driverId}`, {
+      err: (e as Error).message,
+    });
+    return fn();
+  }
+  if (!acquired) return null;
+  try {
+    return await fn();
+  } finally {
+    try {
+      await redis!.eval(
+        "if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('del', KEYS[1]) else return 0 end",
+        1,
+        lockKey,
+        nonce
+      );
+    } catch (releaseErr) {
+      // El lock expira por TTL; no re-ejecutamos fn.
+      logger.warn(`[DriverCapacityLock] error al liberar lock para driver ${driverId}`, {
+        err: (releaseErr as Error).message,
+      });
+    }
+  }
 }

@@ -1293,9 +1293,13 @@ export async function registerDriverPanelRoutes(fastify: FastifyInstance): Promi
                     customerName: order.customer.user.name,
                     restaurantName: order.restaurant.name,
                     orderReference: order.orderReference,
-                  });
+                  }).catch((waErr) =>
+                    request.log.error({ err: waErr }, `Fallo WhatsApp de "pedido entregado" al cliente ${order.customer.user.id}`)
+                  );
                 }
-              } catch {}
+              } catch (notifErr) {
+                request.log.error({ err: notifErr }, `Fallo en notificación de entrega al cliente ${order.customer.user.id}`);
+              }
             })();
           }
           if (routeConfig.action === 'delivered' || routeConfig.action === 'reject') {

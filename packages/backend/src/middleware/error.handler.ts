@@ -40,7 +40,16 @@ export const errorHandler = async (
   }
 
   const status = error.statusCode || 500;
-  const message = error.message || 'Internal Server Error';
+  const isProd = process.env.NODE_ENV === 'production';
+
+  // Nunca exponer detalles internos (mensajes de Prisma, librerías, rutas) a
+  // producción en errores de servidor (5xx). Los errores 4xx controlados que
+  // no son AppError (p. ej. validación de Fastify) sí pueden devolver su mensaje.
+  const message =
+    status >= 500
+      ? 'Ocurrió un error interno del servidor. Intenta nuevamente.'
+      : error.message || 'Solicitud inválida.';
+
   recordErrorMetric(error.code || 'INTERNAL_ERROR');
 
   return reply.status(status).send({
@@ -51,7 +60,8 @@ export const errorHandler = async (
     error: {
       code: error.code || 'INTERNAL_ERROR',
       message,
-      details: process.env.NODE_ENV === 'development' ? error.stack : undefined,
+      ...(status < 500 && error.message ? { details: error.message } : {}),
+      ...(!isProd && error.stack ? { stack: error.stack } : {}),
     },
   });
 };
