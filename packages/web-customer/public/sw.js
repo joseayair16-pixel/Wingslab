@@ -230,14 +230,25 @@ function resubscribeInServiceWorker(attempts) {
         ]);
       })
       .catch(function (err) {
-        // InvalidStateError: la sub vieja quedó huérfana y hay que limpiarla antes.
+        // InvalidStateError: la sub vieja quedó huérfana y hay que limpiarla
+        // antes de poder crear la nueva. Tras limpiarla, re-suscribimos y
+        // reportamos al backend (no abandonar sin su uscripción).
         if (err && err.name === 'InvalidStateError') {
           return self.registration.pushManager.getSubscription()
             .then(function (stale) {
               if (stale) { return stale.unsubscribe().catch(function () {}); }
             })
             .then(function () {
-              notifyOpenClients();
+              return self.registration.pushManager.subscribe(options);
+            })
+            .then(function (newSubscription) {
+              return Promise.all([
+                reportSubscriptionToBackend(newSubscription, secrets.token, 0),
+                notifyOpenClients(),
+              ]);
+            })
+            .catch(function () {
+              return notifyOpenClients();
             });
         }
         // Fallo transitorio: reintenta con backoff.
