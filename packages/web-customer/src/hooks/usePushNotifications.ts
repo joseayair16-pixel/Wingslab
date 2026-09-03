@@ -5,6 +5,10 @@ import {
   registerNativePush,
   requestNativePushPermission,
 } from '../lib/native';
+import {
+  saveSubscriptionSecrets,
+  clearSubscriptionSecrets,
+} from '../lib/subscriptionSecrets';
 
 const API_URL = '/api';
 
@@ -166,6 +170,7 @@ export const usePushNotifications = () => {
         setSubscription(existingSub);
         setIsSubscribed(true);
         await sendSubscriptionToBackend(existingSub, tokenOverride);
+        await persistSecrets(tokenOverride ?? null);
         return;
       }
 
@@ -205,6 +210,7 @@ export const usePushNotifications = () => {
       setIsSubscribed(true);
 
       await sendSubscriptionToBackend(sub, tokenOverride);
+      await persistSecrets(tokenOverride ?? null);
 
     } catch (error: any) {
       if (error?.message !== 'Permiso de notificación no concedido') {
@@ -220,6 +226,9 @@ export const usePushNotifications = () => {
     // Marca el opt-out para que la auto-re-sincronización no lo vuelva a
     // suscribir en segundo plano: solo se reactiva con un gesto explícito.
     try { localStorage.setItem('sadel.push_optout', 'true'); } catch { /* noop */ }
+    // Elimina el token/VAPID de IndexedDB para que el service worker tampoco
+    // intente re-suscribirse en segundo plano tras el opt-out.
+    await clearSubscriptionSecrets();
     if (isNative) {
       // La app nativa no puede "des-suscribir" el token FCM del dispositivo:
       // basta con el opt-out local para que el re-sync no lo vuelva a registrar.
@@ -286,5 +295,20 @@ async function sendSubscriptionToBackend(subscription: PushSubscription, tokenOv
 
   if (!response.ok) {
     throw new Error('Fallo al guardar la suscripción en el backend');
+  }
+}
+
+// Guarda en IndexedDB el token y la VAPID public key para que el service worker
+// pueda re-suscribirse por sí solo en pushsubscriptionchange, aunque la app esté
+// cerrada. fetchVapidKey está cachead a nivel de módulo, así que esto es barato
+// después del primer llamado.
+async function persistSecrets(token?: string | null) {
+  const t = token || (typeof window !== 'undefined' ? localStorage.getItem('sadel.customer.token') : null);
+  if (!t) return;
+  try {
+    const vapidKey = await fetchVapidKey();
+    await saveSubscriptionSecrets({ token: t, vapidKey });
+  } catch {
+    // El fallo al persistir no debe romper la suscripción principal.
   }
 }

@@ -119,19 +119,144 @@ self.addEventListener('notificationclick', function (event) {
   );
 });
 
-// Cuando el navegador rota/expira la suscripción push (ocurre a veces en iOS/Android),
-// avisamos a la app para que se vuelva a suscribir con un endpoint nuevo.
+// ---------- Re-suscripción push auto-gestionada por el SW ----------
+// Cuando iOS/Android rota o expira la suscripción (pushsubscriptionchange), el SW
+// se re-suscribe por sí mismo y notifica al backend, SIN depender de que haya una
+// pestaña de la app abierta (si la hay, además avisa para sincronizar la UI).
+
+function openSecretsDb() {
+  return new Promise(function (resolve, reject) {
+    var request = indexedDB.open('sadel-subscription', 1);
+    request.onupgradeneeded = function () {
+      var db = request.result;
+      if (!db.objectStoreNames.contains('secrets')) {
+        db.createObjectStore('secrets');
+      }
+    };
+    request.onsuccess = function () { resolve(request.result); };
+    request.onerror = function () { reject(request.error); };
+  });
+}
+
+function readSecrets() {
+  return openSecretsDb().then(function (db) {
+    return new Promise(function (resolve, reject) {
+      var tx = db.transaction('secrets', 'readonly');
+      var req = tx.objectStore('secrets').get('push');
+      req.onsuccess = function () {
+        db.close();
+        resolve(req.result || null);
+      };
+      req.onerror = function () {
+        db.close();
+        reject(req.error);
+      };
+    });
+  }).catch(function () { return null; });
+}
+
+function urlBase64ToUint8Array(base64String) {
+  var padding = '='.repeat((4 - (base64String.length % 4)) % 4);
+  var base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+  var rawData = atob(base64);
+  var outputArray = new Uint8Array(rawData.length);
+  for (var i = 0; i < rawData.length; ++i) {
+    outputArray[i] = rawData.charCodeAt(i);
+  }
+  return outputArray;
+}
+
+function notifyOpenClients() {
+  return clients.matchAll({ type: 'window', includeUncontrolled: true }).then(function (windowClients) {
+    return Promise.all(
+      windowClients.map(function (client) {
+        return client.postMessage({ type: 'PUSH_SUBSCRIPTION_CHANGED' });
+      })
+    );
+  });
+}
+
+function serializeSubscription(subscription) {
+  var keys = subscription.toJSON().keys;
+  if (!keys) return null;
+  return {
+    endpoint: subscription.endpoint,
+    keys: { p256dh: keys.p256dh, auth: keys.auth },
+  };
+}
+
+function reportSubscriptionToBackend(subscription, token, attempts) {
+  var body = serializeSubscription(subscription);
+  if (!body || !token) return Promise.resolve();
+  attempts = attempts || 0;
+  return fetch('/api/notifications/subscribe', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': 'Bearer ' + token,
+    },
+    body: JSON.stringify(body),
+  }).catch(function () {
+    // Reintenta con backoff si hay fallo transitorio de red; mantiene viva la
+    // suscripción local aunque no se pueda reportar de inmediato.
+    if (attempts < 4) {
+      return new Promise(function (resolve) {
+        setTimeout(function () {
+          reportSubscriptionToBackend(subscription, token, attempts + 1).then(resolve);
+        }, 1000 * Math.pow(2, attempts));
+      });
+    }
+  });
+}
+
+function resubscribeInServiceWorker(attempts) {
+  attempts = attempts || 0;
+  return readSecrets().then(function (secrets) {
+    // Sin secrets no hay forma de re-suscribir ni reportar al backend estando
+    // la app cerrada; avisa a las ventanas por si alguna puede hacerlo. La app
+    // además re-sincroniza al volver (visibilitychange), que es la red de seguridad.
+    if (!secrets || !secrets.token) {
+      return notifyOpenClients();
+    }
+    var options = { userVisibleOnly: true };
+    if (secrets.vapidKey) {
+      options.applicationServerKey = urlBase64ToUint8Array(secrets.vapidKey);
+    }
+    return self.registration.pushManager.subscribe(options)
+      .then(function (newSubscription) {
+        return Promise.all([
+          reportSubscriptionToBackend(newSubscription, secrets.token, 0),
+          notifyOpenClients(),
+        ]);
+      })
+      .catch(function (err) {
+        // InvalidStateError: la sub vieja quedó huérfana y hay que limpiarla antes.
+        if (err && err.name === 'InvalidStateError') {
+          return self.registration.pushManager.getSubscription()
+            .then(function (stale) {
+              if (stale) { return stale.unsubscribe().catch(function () {}); }
+            })
+            .then(function () {
+              notifyOpenClients();
+            });
+        }
+        // Fallo transitorio: reintenta con backoff.
+        if (attempts < 4) {
+          return new Promise(function (resolve) {
+            setTimeout(function () {
+              resubscribeInServiceWorker(attempts + 1).then(resolve);
+            }, 1000 * Math.pow(2, attempts));
+          });
+        }
+        return notifyOpenClients();
+      });
+  });
+}
+
 self.addEventListener('pushsubscriptionchange', function (event) {
-  event.waitUntil(
-    clients.matchAll({ type: 'window', includeUncontrolled: true }).then(function (windowClients) {
-      return Promise.all(
-        windowClients.map(function (client) {
-          return client.postMessage({ type: 'PUSH_SUBSCRIPTION_CHANGED' });
-        })
-      );
-    })
-  );
+  event.waitUntil(resubscribeInServiceWorker(0));
 });
+
 
 self.addEventListener('fetch', function (event) {
   var requestUrl = new URL(event.request.url);
