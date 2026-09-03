@@ -47,6 +47,7 @@ import { ensureGoogleMapsScript, getGoogleMaps } from '../lib/googleMaps';
 import { ScheduleProposalModal } from '../components/ScheduleProposalModal';
 import { type Billboard } from '../components/BillboardCarousel';
 import { createPlacesSource } from '../lib/places';
+import InstallAppCard from '../components/InstallAppCard';
 
 const HomeView = dynamic(() => import('../views/HomeView').then(mod => mod.HomeView), { ssr: false });
 const ProfileView = dynamic(() => import('../views/ProfileView').then(mod => mod.ProfileView), { ssr: false });
@@ -5329,7 +5330,9 @@ export default function Home() {
                 <div className="md:col-span-4 space-y-3 text-left">
                   <h5 className="text-[10px] font-bold uppercase tracking-widest text-neutral-400">Únete a la plataforma</h5>
                   <div className="grid grid-cols-1 gap-3">
-                    
+
+                    <InstallAppCard />
+
                     {/* Card: Restaurante */}
                     <button
                       type="button"
