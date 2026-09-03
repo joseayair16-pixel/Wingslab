@@ -657,6 +657,7 @@ export default function RestaurantPage({
   const updateCartItemAction = useCartStore(state => state.updateItem);
   const clearCartAction = useCartStore(state => state.clearCart);
   const refreshCartItemImages = useCartStore(state => state.refreshItemImages);
+  const refreshCartItemPrices = useCartStore(state => state.refreshItemPrices);
   const [mounted, setMounted] = useState(false);
   useEffect(() => { setMounted(true); }, []);
   const cart: CartItem[] = mounted && cartRestaurantId === params.restaurantId ? cartItems : [];
@@ -1850,6 +1851,27 @@ export default function RestaurantPage({
       document.body.style.overflow = previousOverflow;
     };
   }, [isCartOpen, isCheckoutOpen]);
+
+  useEffect(() => {
+    if (!isCheckoutOpen || !rawRestaurant || cartItems.length === 0) return;
+    const freshByProduct: Record<string, { price: number; discountPrice?: number | null; maxStock?: number | null }> = {};
+    for (const category of rawRestaurant.categories) {
+      for (const product of category.products) {
+        freshByProduct[product.id] = {
+          price: product.price,
+          discountPrice: product.discountPrice ?? null,
+          maxStock: product.stock ?? null,
+        };
+      }
+    }
+    const updates: Array<{ productId: string; price: number; discountPrice?: number | null; maxStock?: number | null }> = [];
+    for (const item of cartItems) {
+      const fresh = freshByProduct[item.productId];
+      if (fresh) updates.push({ productId: item.productId, price: fresh.price, discountPrice: fresh.discountPrice, maxStock: fresh.maxStock });
+    }
+    if (updates.length) refreshCartItemPrices(updates);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isCheckoutOpen, rawRestaurant, refreshCartItemPrices, cartItems.length]);
 
   useEffect(() => {
     if (!activeOrder) {

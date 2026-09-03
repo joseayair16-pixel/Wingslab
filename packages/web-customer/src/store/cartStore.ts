@@ -41,6 +41,14 @@ type CartState = {
   clearCart: () => void;
   setCart: (items: CartItem[], restaurantId: string, deliveryFee?: number) => void;
   refreshItemImages: (updates: Array<{ cartItemId: string; image: string }>) => void;
+  refreshItemPrices: (updates: Array<ProductPriceUpdate>) => void;
+};
+
+export type ProductPriceUpdate = {
+  productId: string;
+  price: number;
+  discountPrice?: number | null;
+  maxStock?: number | null;
 };
 
 export const useCartStore = create<CartState>()(
@@ -161,6 +169,31 @@ export const useCartStore = create<CartState>()(
             imageById.has(item.cartItemId) ? { ...item, image: imageById.get(item.cartItemId)! } : item
           ),
         }));
+      },
+
+      refreshItemPrices: (updates) => {
+        if (!updates.length) return;
+        const byProductId = new Map<number | string, ProductPriceUpdate>();
+        for (const update of updates) byProductId.set(update.productId, update);
+        set((state) => {
+          const usedByProduct = new Map<string, number>();
+          const items = state.items.map((item) => {
+            const fresh = byProductId.get(item.productId);
+            if (!fresh) return item;
+            const price = fresh.price;
+            const discountPrice = fresh.discountPrice != null ? fresh.discountPrice : item.discountPrice;
+            const maxStock = fresh.maxStock != null ? fresh.maxStock : item.maxStock;
+            let quantity = item.quantity;
+            if (item.sellBy !== 'WEIGHT' && maxStock != null) {
+              const alreadyUsed = usedByProduct.get(item.productId) ?? 0;
+              const allowed = Math.max(0, maxStock - alreadyUsed);
+              if (quantity > allowed) quantity = allowed;
+              usedByProduct.set(item.productId, alreadyUsed + quantity);
+            }
+            return { ...item, price, discountPrice, maxStock, quantity };
+          }).filter((item) => item.quantity > 0);
+          return { items };
+        });
       },
     }),
     {
