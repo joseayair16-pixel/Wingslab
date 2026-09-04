@@ -9576,8 +9576,8 @@ export default function Home() {
                                 }`}
                             >
                               {/* Fila 1: Cabecera */}
-                              <div className="flex items-center justify-between mb-3">
-                                <div className="flex items-center gap-3">
+                              <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 mb-3">
+                                <div className="flex flex-wrap items-center gap-2 sm:gap-3 min-w-0">
                                   <p className="text-lg font-bold text-neutral-950">
                                     {(order as any).dailyCounter ? `#${String((order as any).dailyCounter).padStart(2, '0')}` : (
                                       <>
@@ -10657,8 +10657,8 @@ export default function Home() {
                               </button>
                             ) : null}
                           </div>
-                        </div>
-                        <div className="flex items-center gap-2">
+                                </div>
+                                  <div className="flex flex-wrap items-center gap-2 sm:justify-end">
                           {isSelectionMode ? (
                             <button
                               type="button"
