@@ -956,6 +956,8 @@ export default function Home() {
   const [userZone, setUserZone] = useState<string | null>(null);
   const [, setLocationDenied] = useState(false);
   const [, setLocationSource] = useState<'gps' | 'manual' | null>(null);
+  // Estado de "obteniendo GPS" para el botón de ubicación (modal y empty state).
+  const [isLocating, setIsLocating] = useState(false);
   const [isLocationChecked, setIsLocationChecked] = useState(false);
   const [fulfillmentType, setFulfillmentType] = useState<'DELIVERY' | 'PICKUP'>('DELIVERY');
   const isPickupOnly = selectedRestaurant?.pickupOnly === true;
@@ -2313,6 +2315,91 @@ export default function Home() {
     }
   }, [loadDashboard]);
 
+  // Refresco GPS explícito y confiable (botón "Usar/Actualizar mi ubicación"):
+  // - enableHighAccuracy + maximumAge: 0 → nunca usa un fix viejo de otro lugar.
+  // - Estado isLocating evita dobles toques y muestra progreso (nada de "lag").
+  // - Al actualizar userLocation, loadDashboard se re-ejecuta solo (es su dependencia).
+  const refreshUserGpsLocation = useCallback(() => {
+    if (typeof navigator === 'undefined' || !navigator.geolocation || isLocating) return;
+    setIsLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        const { latitude, longitude, accuracy } = position.coords;
+        let address = 'Ubicación actual';
+        let addressPayload: Record<string, any> | null = null;
+        try {
+          const google = getGoogleMaps();
+          if (google) {
+            const geocoder = new google.maps.Geocoder();
+            const results = await new Promise<any[]>((resolve) => {
+              geocoder.geocode(
+                { location: { lat: latitude, lng: longitude } },
+                (res: any, geocodeStatus: any) => resolve(geocodeStatus === 'OK' && res?.length ? res : [])
+              );
+            });
+            const data = results[0];
+            if (data) {
+              const components: any[] = data.address_components || [];
+              const pick = (types: string[]) =>
+                components.find((c: any) => types.some((t) => c.types.includes(t)))?.long_name || '';
+              address = data.formatted_address || address;
+              addressPayload = {
+                street: pick(['route']) || 'Ubicación actual',
+                number: pick(['street_number']),
+                apartment: '',
+                neighborhood: pick(['sublocality', 'neighborhood']),
+                city: pick(['locality']),
+                state: pick(['administrative_area_level_1']),
+                zipCode: pick(['postal_code']),
+                country: pick(['country']),
+                reference: data.formatted_address || address,
+                latitude,
+                longitude,
+              };
+            }
+          }
+        } catch {}
+        const loc = { latitude, longitude, accuracy, address, ts: Date.now() };
+        userLocationRef.current = loc;
+        setUserLocation(loc);
+        setLocationSource('gps');
+        setLocationDenied(false);
+        setLocationExpired(false);
+        setSelectedZoneName(null);
+        setExploringZone(false);
+        try {
+          localStorage.setItem('userLocation', JSON.stringify(loc));
+          localStorage.setItem('locationSource', 'gps');
+          localStorage.removeItem('locationDenied');
+          sessionStorage.removeItem('userLocation');
+          sessionStorage.removeItem('exploringZone');
+          sessionStorage.removeItem('selectedZoneName');
+        } catch {}
+        setIsLocating(false);
+        // Mantener la dirección verificada en el servidor (como hacía el modal).
+        if (token && addressPayload) {
+          fetch(`${apiBase}/customer/addresses/verify`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+            body: JSON.stringify(addressPayload),
+          }).catch(() => {});
+        }
+      },
+      (geoError) => {
+        setIsLocating(false);
+        const errCode = geoError && (geoError as any).code;
+        if (errCode === 1) {
+          setLocationDenied(true);
+          try { localStorage.setItem('locationDenied', '1'); } catch {}
+          alert('Permiso de ubicación denegado. Actívalo en la configuración de tu navegador o busca tu dirección manualmente.');
+        } else {
+          setError('No pudimos obtener tu ubicación exacta. Revisa tu señal GPS e inténtalo de nuevo.');
+        }
+      },
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+    );
+  }, [isLocating, token, apiBase]);
+
   const loadProfile = useCallback(async () => {
     if (!token) return;
     try {
@@ -2836,7 +2923,7 @@ export default function Home() {
         nativeWatch = await nativeGeoWatch(onPosition, onError, {
           enableHighAccuracy: false,
           timeout: 15000,
-          maximumAge: 60000,
+          maximumAge: 30000,
         });
         if (nativeWatch) return;
         if (!navigator.geolocation) return;
@@ -2858,7 +2945,7 @@ export default function Home() {
       watchId = navigator.geolocation.watchPosition(onPosition, onError, {
         enableHighAccuracy: false,
         timeout: 15000,
-        maximumAge: 60000,
+        maximumAge: 30000,
       });
     }
 
@@ -4081,114 +4168,24 @@ export default function Home() {
           <div className="mt-6">
             <button
               type="button"
-              onClick={() => {
-                if (!navigator.geolocation) {
-                  alert('Tu navegador no soporta geolocalización');
-                  return;
-                }
-                navigator.geolocation.getCurrentPosition(async (position) => {
-                  const { latitude, longitude, accuracy } = position.coords;
-                  try {
-                    const google = getGoogleMaps();
-                    if (!google) throw new Error("Google Maps not loaded");
-
-                    const geocoder = new google.maps.Geocoder();
-                    geocoder.geocode({ location: { lat: latitude, lng: longitude } }, async (results: any, status: any) => {
-                      if (status === "OK" && results && results[0]) {
-                        const data = results[0];
-                        let houseNumber = '';
-                        const houseComponent = data.address_components.find((c: any) => c.types.includes('street_number'));
-                        if (houseComponent) houseNumber = houseComponent.long_name;
-                        
-                        let street = 'Ubicación actual';
-                        const routeComponent = data.address_components.find((c: any) => c.types.includes('route'));
-                        if (routeComponent) street = routeComponent.long_name;
-                        
-                        let neighborhood = '';
-                        const sublocComponent = data.address_components.find((c: any) => c.types.includes('sublocality') || c.types.includes('neighborhood'));
-                        if (sublocComponent) neighborhood = sublocComponent.long_name;
-                        
-                        let city = '';
-                        const locComponent = data.address_components.find((c: any) => c.types.includes('locality'));
-                        if (locComponent) city = locComponent.long_name;
-                        
-                        let state = '';
-                        const adminComponent = data.address_components.find((c: any) => c.types.includes('administrative_area_level_1'));
-                        if (adminComponent) state = adminComponent.long_name;
-                        
-                        let zipCode = '';
-                        const zipComponent = data.address_components.find((c: any) => c.types.includes('postal_code'));
-                        if (zipComponent) zipCode = zipComponent.long_name;
-
-                        let country = '';
-                        const countryComponent = data.address_components.find((c: any) => c.types.includes('country'));
-                        if (countryComponent) country = countryComponent.long_name;
-
-                        const addressPayload = {
-                          street: street,
-                          number: houseNumber,
-                          apartment: '',
-                          neighborhood: neighborhood,
-                          city: city,
-                          state: state,
-                          zipCode: zipCode,
-                          country: country,
-                          reference: data.formatted_address || 'Ubicación actual',
-                          latitude,
-                          longitude,
-                        };
-
-                        const loc = { latitude, longitude, accuracy, address: addressPayload.reference, ts: Date.now() };
-                        try { localStorage.setItem('userLocation', JSON.stringify(loc)); localStorage.setItem('locationSource', 'gps'); } catch (e) { }
-                        setLocationExpired(false);
-                        setUserLocation(loc);
-                        setLocationSource('gps');
-                        setLocationDenied(false);
-
-                        // Call backend to verify/upsert address and mark it as verified
-                        try {
-                          if (token) {
-                            await fetch(`${apiBase}/customer/addresses/verify`, {
-                              method: 'POST',
-                              headers: {
-                                'Content-Type': 'application/json',
-                                'Authorization': `Bearer ${token}`,
-                              },
-                              body: JSON.stringify(addressPayload),
-                            });
-                          }
-                        } catch (e) {
-                          console.warn('Could not verify address on server:', e);
-                        }
-                      } else {
-                        throw new Error("No results");
-                      }
-                    });
-                  } catch (err) {
-                    const loc = { latitude, longitude, accuracy, address: 'Ubicación actual', ts: Date.now() };
-                    try { localStorage.setItem('userLocation', JSON.stringify(loc)); localStorage.setItem('locationSource', 'gps'); } catch (e) { }
-                    setLocationExpired(false);
-                    setUserLocation(loc);
-                    setLocationSource('gps');
-                    setLocationDenied(false);
-                  }
-                }, (err) => {
-                  const errCode = err && (err as any).code;
-                  if (errCode === 1) {
-                    setLocationDenied(true);
-                    try { localStorage.setItem('locationDenied', '1'); } catch (e) { }
-                    alert('Permiso de ubicación denegado. Puedes cambiar esto en la configuración de tu navegador o ingresar tu dirección manualmente.');
-                  } else if (errCode === 2) {
-                    console.warn('GPS no disponible temporalmente. El usuario puede intentar de nuevo o usar búsqueda manual.');
-                  } else {
-                    console.warn('Error de geolocalización:', err);
-                  }
-                }, { enableHighAccuracy: false, timeout: 10000, maximumAge: 60000 });
-              }}
-              className="flex w-full items-center justify-center gap-3 rounded-2xl bg-[#161616] px-5 py-3.5 text-sm font-semibold text-white transition hover:bg-neutral-800 active:scale-[0.98]"
+              onClick={refreshUserGpsLocation}
+              disabled={isLocating}
+              className="flex w-full items-center justify-center gap-3 rounded-2xl bg-[#161616] px-5 py-3.5 text-sm font-semibold text-white transition hover:bg-neutral-800 active:scale-[0.98] disabled:pointer-events-none disabled:opacity-70"
             >
-              <MapPin className="h-5 w-5" strokeWidth={1.8} />
-              Usar mi ubicación
+              {isLocating ? (
+                <>
+                  <svg className="h-5 w-5 animate-spin" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
+                  </svg>
+                  Detectando tu ubicación…
+                </>
+              ) : (
+                <>
+                  <MapPin className="h-5 w-5" strokeWidth={1.8} />
+                  Usar mi ubicación
+                </>
+              )}
             </button>
 
             <div className="mt-5 flex items-center justify-center gap-3">
@@ -5310,6 +5307,9 @@ export default function Home() {
             onLoadMoreRestaurants={loadMoreRestaurants}
             loadingMoreRestaurants={loadingMoreRestaurants}
             billboards={billboards}
+            currentLocationLabel={userLocation?.address || null}
+            onRefreshLocation={refreshUserGpsLocation}
+            isRefreshingLocation={isLocating}
           />
         ) : null}
       </div>

@@ -41,6 +41,9 @@ interface HomeViewProps {
   formatDeliverySummary: (distance: any) => string;
   activeZones?: any[];
   onZoneSelect?: (zone: any) => void;
+  currentLocationLabel?: string | null;
+  onRefreshLocation?: () => void;
+  isRefreshingLocation?: boolean;
   onJoinClick?: () => void;
   hasMoreRestaurants?: boolean;
   onLoadMoreRestaurants?: () => void;
@@ -78,6 +81,9 @@ export const HomeView = React.memo(function HomeView({
   formatDeliverySummary,
   activeZones = [],
   onZoneSelect,
+  currentLocationLabel,
+  onRefreshLocation,
+  isRefreshingLocation = false,
   onJoinClick,
   hasMoreRestaurants = false,
   onLoadMoreRestaurants,
@@ -940,6 +946,36 @@ export const HomeView = React.memo(function HomeView({
                 <p className="mt-2 max-w-md mx-auto text-[15px] font-medium leading-relaxed text-neutral-500">
                   Pero puedes explorar las ciudades donde ya estamos presentes y descubrir nuevos lugares:
                 </p>
+                {onRefreshLocation && (
+                  <div className="mt-4 flex flex-col items-center gap-2">
+                    {currentLocationLabel && (
+                      <p className="max-w-sm text-[12px] font-medium leading-snug text-neutral-400">
+                        Buscando cerca de: <span className="font-semibold text-neutral-600">{currentLocationLabel}</span>
+                      </p>
+                    )}
+                    <button
+                      type="button"
+                      onClick={onRefreshLocation}
+                      disabled={isRefreshingLocation}
+                      className="inline-flex items-center gap-2 rounded-full bg-neutral-900 px-5 py-2.5 text-[13px] font-bold text-white shadow-sm transition hover:bg-neutral-800 active:scale-[0.97] disabled:pointer-events-none disabled:opacity-60"
+                    >
+                      {isRefreshingLocation ? (
+                        <>
+                          <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
+                          </svg>
+                          Detectando tu ubicación…
+                        </>
+                      ) : (
+                        <>
+                          <MapPin className="h-4 w-4" strokeWidth={2.25} />
+                          Actualizar mi ubicación
+                        </>
+                      )}
+                    </button>
+                  </div>
+                )}
                 <div className="mt-6 flex flex-col gap-2.5 sm:grid sm:grid-cols-2 sm:gap-3">
                   {activeZones.slice().sort((a: any, b: any) => String(a.regionName).localeCompare(String(b.regionName))).map((zone: any) => (
                     <button
