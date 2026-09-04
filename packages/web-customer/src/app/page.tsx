@@ -2014,13 +2014,13 @@ export default function Home() {
       if (!loc) return;
       loaded = true;
 
-      const restaurantsPromise = requestJson<RestaurantListResponse>({
+      const restaurantsPromise = () => requestJson<RestaurantListResponse>({
         apiBase,
         path: `/restaurantes?limit=24&openOnly=false&latitude=${loc.latitude}&longitude=${loc.longitude}`,
         fallbackMessage: 'No se pudo cargar la oferta de restaurantes.',
       });
 
-      const ordersPromise = token
+      const ordersPromise = () => token
         ? requestJson<PaginatedOrdersResponse>({
             apiBase,
             path: '/me/pedidos?page=1&limit=15',
@@ -2032,12 +2032,12 @@ export default function Home() {
             data: { items: [], total: 0, page: 1, limit: 15, hasMore: false },
           } satisfies PaginatedOrdersResponse);
 
-      const featuredPromise = fetch(`${apiBase}/public/featured?latitude=${loc.latitude}&longitude=${loc.longitude}`)
+      const featuredPromise = () => fetch(`${apiBase}/public/featured?latitude=${loc.latitude}&longitude=${loc.longitude}`)
           .then(r => r.json())
           .then(d => d.success ? d.data : [])
           .catch(() => []);
 
-      const offersPromise = fetch(`${apiBase}/public/ofertas?latitude=${loc.latitude}&longitude=${loc.longitude}`)
+      const offersPromise = () => fetch(`${apiBase}/public/ofertas?latitude=${loc.latitude}&longitude=${loc.longitude}`)
           .then(r => r.json())
           .then(d => d.success ? d.data : [])
           .catch(() => []);
@@ -2050,11 +2050,23 @@ export default function Home() {
             setTimeout(() => reject(new Error('Tiempo de espera agotado')), TIMEOUT_MS)
           ),
         ]);
+      // Red mala: reintento silencioso (1 vez, tras 1.5s) antes de rendirse y
+      // mostrar "sin resultados" falsamente.
+      const withRetry = <T,>(factory: () => Promise<T>, retries = 1, delayMs = 1500): Promise<T> => {
+        const attempt = (left: number): Promise<T> =>
+          withTimeout(factory()).catch((err) => {
+            if (left <= 0) throw err;
+            return new Promise<T>((resolve, reject) =>
+              setTimeout(() => { attempt(left - 1).then(resolve, reject); }, delayMs)
+            );
+          });
+        return attempt(retries);
+      };
       const [restaurantsResult, ordersResult, featuredResult, offersResult] = await Promise.allSettled([
-        withTimeout(restaurantsPromise),
-        withTimeout(ordersPromise),
-        withTimeout(featuredPromise),
-        withTimeout(offersPromise),
+        withRetry(restaurantsPromise),
+        withRetry(ordersPromise),
+        withRetry(featuredPromise),
+        withRetry(offersPromise),
       ]);
       const restaurantsData = restaurantsResult.status === 'fulfilled' ? restaurantsResult.value : { success: true, data: { items: [], total: 0, page: 1, limit: 24, hasMore: false } } as RestaurantListResponse;
       const ordersData = ordersResult.status === 'fulfilled' ? ordersResult.value : { success: true, data: { items: [], total: 0, page: 1, limit: 15, hasMore: false } } as PaginatedOrdersResponse;
@@ -2315,6 +2327,35 @@ export default function Home() {
     }
   }, [loadDashboard]);
 
+  // Cuando Google Maps aún no carga al obtener el GPS, la dirección queda como
+  // "Ubicación actual". Este reintento perezoso la reemplaza por la dirección
+  // real en cuanto el SDK esté listo (sin tocar lat/lng ni pisar fixes nuevas).
+  const scheduleLazyGeocode = useCallback((latitude: number, longitude: number, forTs: number, attempt = 0) => {
+    if (attempt > 4) return;
+    const google = getGoogleMaps();
+    if (!google) {
+      setTimeout(() => scheduleLazyGeocode(latitude, longitude, forTs, attempt + 1), 2000);
+      return;
+    }
+    try {
+      const geocoder = new google.maps.Geocoder();
+      geocoder.geocode({ location: { lat: latitude, lng: longitude } }, (results: any, status: any) => {
+        const formatted = status === 'OK' && results?.[0]?.formatted_address;
+        if (!formatted) {
+          setTimeout(() => scheduleLazyGeocode(latitude, longitude, forTs, attempt + 1), 2500);
+          return;
+        }
+        const current = userLocationRef.current;
+        if (current && current.ts === forTs) {
+          const updated = { ...current, address: formatted };
+          userLocationRef.current = updated;
+          setUserLocation(updated);
+          try { localStorage.setItem('userLocation', JSON.stringify(updated)); } catch {}
+        }
+      });
+    } catch {}
+  }, []);
+
   // Refresco GPS explícito y confiable (botón "Usar/Actualizar mi ubicación"):
   // - enableHighAccuracy + maximumAge: 0 → nunca usa un fix viejo de otro lugar.
   // - Estado isLocating evita dobles toques y muestra progreso (nada de "lag").
@@ -2376,6 +2417,10 @@ export default function Home() {
           sessionStorage.removeItem('selectedZoneName');
         } catch {}
         setIsLocating(false);
+        // Si Google Maps aún no cargó, reemplazar "Ubicación actual" cuando esté listo.
+        if (address === 'Ubicación actual') {
+          scheduleLazyGeocode(latitude, longitude, loc.ts!);
+        }
         // Mantener la dirección verificada en el servidor (como hacía el modal).
         if (token && addressPayload) {
           fetch(`${apiBase}/customer/addresses/verify`, {
@@ -2398,7 +2443,7 @@ export default function Home() {
       },
       { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
     );
-  }, [isLocating, token, apiBase]);
+  }, [isLocating, token, apiBase, scheduleLazyGeocode]);
 
   const loadProfile = useCallback(async () => {
     if (!token) return;
@@ -2760,6 +2805,9 @@ export default function Home() {
                 console.warn('Could not persist userLocation:', e);
               }
               resolve(loc);
+              if (addressName === 'Ubicación actual') {
+                scheduleLazyGeocode(latitude, longitude, loc.ts);
+              }
             });
           } catch (err) {
             const loc = { latitude, longitude, accuracy, address: 'Ubicación actual', ts: Date.now() };
@@ -2769,6 +2817,8 @@ export default function Home() {
               console.warn('Could not persist userLocation:', e);
             }
             resolve(loc);
+            // Maps llegó tarde (red lenta): reemplaza "Ubicación actual" en un momento.
+            scheduleLazyGeocode(latitude, longitude, loc.ts);
           }
         });
 
@@ -2854,7 +2904,7 @@ export default function Home() {
     }
 
     void run().finally(() => setIsLocationChecked(true));
-  }, []);
+  }, [scheduleLazyGeocode]);
 
   // Watch position to detect when user enters/exits delivery range
   useEffect(() => {
@@ -2949,15 +2999,36 @@ export default function Home() {
       });
     }
 
-    startWatch();
-
-    return () => {
+    const stopWatch = () => {
       if (watchId !== null) {
         navigator.geolocation.clearWatch(watchId);
+        watchId = null;
       }
       if (nativeWatch) {
         nativeWatch.clear();
+        nativeWatch = null;
       }
+    };
+
+    // Batería: el watch GPS no tiene sentido con la app oculta — pausarlo.
+    // NO afecta notificaciones (Service Worker/Push) ni el tiempo real del
+    // pedido (socket.io + polling de respaldo): son canales independientes.
+    // Al volver a primer plano se reanuda y la primera fix se compara contra
+    // la ubicación mostrada, corrigiéndola al instante si el usuario se movió.
+    const handleVisibility = () => {
+      if (document.visibilityState === 'hidden') {
+        stopWatch();
+      } else if (watchId === null && !nativeWatch) {
+        void startWatch();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+
+    startWatch();
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibility);
+      stopWatch();
     };
   }, []);
 
