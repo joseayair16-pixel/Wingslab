@@ -837,13 +837,42 @@ export default function RestaurantPage({
   const loadActiveOrdersRef = useRef<() => void>(() => {});
   const creatingOrderRef = useRef(false);
   const clientOrderKeyRef = useRef('');
+  const cartSignatureRef = useRef('');
   const socketRef = useRef<any>(null);
 
-  // Clave de idempotencia: se regenera cuando cambia el carrito, pero se mantiene
-  // estable entre reintentos del mismo pedido (red caída, doble toque).
-  useEffect(() => {
+  // Clave de idempotencia: estable entre reintentos del MISMO contenido de carrito
+  // (red caída, timeout, doble toque) y solo cambia cuando cambia el contenido real.
+  // Se calcula por firma de items (no por identidad de array) para que un refresh
+  // de precios o una re-renderización NO la invaliden y dupliquen el pedido.
+  const computeCartSignature = useCallback((items: typeof cart) =>
+    items
+      .map((i) =>
+        [
+          i.productId,
+          i.quantity,
+          i.weightG ?? '',
+          (i.selectedOptions || []).map((o) => o.id).sort().join('.'),
+          (i.specialInstructions || '').trim(),
+        ].join('|')
+      )
+      .sort()
+      .join(';;'),
+  []);
+  const ensureClientOrderKey = useCallback((items: typeof cart) => {
+    const signature = computeCartSignature(items);
+    if (!clientOrderKeyRef.current || cartSignatureRef.current !== signature) {
+      clientOrderKeyRef.current =
+        typeof crypto !== 'undefined' && 'randomUUID' in crypto
+          ? crypto.randomUUID()
+          : `ord-${Date.now()}-${Math.random().toString(36).slice(2, 12)}`;
+      cartSignatureRef.current = signature;
+    }
+    return clientOrderKeyRef.current;
+  }, [computeCartSignature]);
+  const resetClientOrderKey = useCallback(() => {
     clientOrderKeyRef.current = '';
-  }, [cartItems]);
+    cartSignatureRef.current = '';
+  }, []);
 
   const [pickupReadyOrder, setPickupReadyOrder] = useState<CustomerOrderDetail | null>(null);
   const [scheduleProposalOrder, setScheduleProposalOrder] = useState<CustomerOrderDetail | null>(null);
@@ -2802,9 +2831,7 @@ function ProductImage({
 
       const body: Record<string, any> = {
         restaurantId: restaurant.id,
-        clientOrderKey: (clientOrderKeyRef.current ||= (typeof crypto !== 'undefined' && 'randomUUID' in crypto
-          ? crypto.randomUUID()
-          : `ord-${Date.now()}-${Math.random().toString(36).slice(2, 12)}`)),
+        clientOrderKey: ensureClientOrderKey(cart),
         items: cart.map((item) => ({
           productId: item.productId,
           quantity: item.quantity,
@@ -2907,6 +2934,10 @@ function ProductImage({
       }
 
       clearCartAction();
+      // Pedido creado y confirmado por el servidor: la próxima compra usa clave nueva.
+      // Si el POST hubiera fallado/timeout, la clave se conserva para que un reintento
+      // sea deduplicado por el backend (idempotencia) en vez de duplicar el pedido.
+      resetClientOrderKey();
       setCheckoutForm((prev) => ({ ...prev, notes: '', storeNotes: '', promoCode: '' }));
       setPromoCodeState('idle');
       setPromoCodeInfo(null);
