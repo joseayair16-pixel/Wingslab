@@ -6323,30 +6323,6 @@ export default function Home() {
                             <span className="font-bold">Ref:</span> {activeIncomingOrder.address.reference}
                           </div>
                         )}
-                        {activeIncomingOrder.deliveryPreference && (
-                          <div className={`mt-2 rounded-lg p-2 text-[12px] font-bold border flex items-center gap-2 shadow-sm ${
-                            activeIncomingOrder.deliveryPreference === 'NO_DOORBELL' ? 'border-orange-200 bg-orange-50 text-orange-700' :
-                            activeIncomingOrder.deliveryPreference === 'CALL_ON_ARRIVAL' ? 'border-blue-200 bg-blue-50 text-blue-700' :
-                            activeIncomingOrder.deliveryPreference === 'PREFER_WHATSAPP' ? 'border-green-200 bg-green-50 text-green-700' :
-                            activeIncomingOrder.deliveryPreference === 'HONK_ON_ARRIVAL' ? 'border-indigo-200 bg-indigo-50 text-indigo-700' :
-                            activeIncomingOrder.deliveryPreference === 'BEWARE_OF_DOG' ? 'border-rose-200 bg-rose-50 text-rose-700' : ''
-                          }`}>
-                            <span className="text-sm">
-                              {activeIncomingOrder.deliveryPreference === 'NO_DOORBELL' && '🤫'}
-                              {activeIncomingOrder.deliveryPreference === 'CALL_ON_ARRIVAL' && '📞'}
-                              {activeIncomingOrder.deliveryPreference === 'PREFER_WHATSAPP' && '💬'}
-                              {activeIncomingOrder.deliveryPreference === 'HONK_ON_ARRIVAL' && '🚗'}
-                              {activeIncomingOrder.deliveryPreference === 'BEWARE_OF_DOG' && '🐕'}
-                            </span>
-                            <span>
-                              {activeIncomingOrder.deliveryPreference === 'NO_DOORBELL' && 'No tocar el timbre'}
-                              {activeIncomingOrder.deliveryPreference === 'CALL_ON_ARRIVAL' && 'Llamar al llegar'}
-                              {activeIncomingOrder.deliveryPreference === 'PREFER_WHATSAPP' && 'Contactar por WhatsApp'}
-                              {activeIncomingOrder.deliveryPreference === 'HONK_ON_ARRIVAL' && 'Tocar claxon'}
-                              {activeIncomingOrder.deliveryPreference === 'BEWARE_OF_DOG' && 'Cuidado con el perro'}
-                            </span>
-                          </div>
-                        )}
                       </div>
                       )}
                     </div>
