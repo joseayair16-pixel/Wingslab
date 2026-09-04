@@ -3945,9 +3945,9 @@ function ProductImage({
         <div className="absolute inset-0 bg-black/50 backdrop-blur-[2px]" onClick={() => setIsCheckoutOpen(false)} />
         <div
           ref={checkoutRef}
-          className={`absolute right-0 top-0 flex h-full w-full max-w-[580px] flex-col overflow-hidden bg-[#faf9f6] shadow-[0_0_0_1px_rgba(0,0,0,0.04),0_40px_100px_rgba(15,15,15,0.25)] sm:rounded-l-[36px] transition-all duration-[350ms] ease-[cubic-bezier(0.16,1,0.3,1)] lg:inset-x-auto lg:left-1/2 lg:top-1/2 lg:h-fit lg:max-h-[92vh] lg:w-full lg:max-w-4xl lg:rounded-[32px] ${isCheckoutOpen ? 'translate-x-0 opacity-100 lg:-translate-x-1/2 lg:-translate-y-1/2 lg:scale-100' : 'translate-x-full opacity-100 lg:-translate-x-1/2 lg:-translate-y-1/2 lg:scale-95 lg:opacity-0'}`}
+          className={`absolute right-0 top-0 flex h-full w-full max-w-[580px] flex-col overflow-hidden bg-[#faf9f6] shadow-[0_0_0_1px_rgba(0,0,0,0.04),0_40px_100px_rgba(15,15,15,0.25)] sm:rounded-l-[36px] transition-all duration-[350ms] ease-[cubic-bezier(0.16,1,0.3,1)] lg:bottom-auto lg:right-auto lg:left-1/2 lg:top-1/2 lg:h-auto lg:max-h-[92vh] lg:w-full lg:max-w-4xl lg:rounded-[32px] ${isCheckoutOpen ? 'translate-x-0 opacity-100 lg:-translate-x-1/2 lg:-translate-y-1/2 lg:scale-100' : 'translate-x-full opacity-100 lg:-translate-x-1/2 lg:-translate-y-1/2 lg:scale-95 lg:opacity-0'}`}
         >
-            <section className="flex h-full flex-col">
+            <section className="flex h-full flex-col lg:h-auto lg:max-h-[92vh]">
               {/* ── Header ── */}
               <div className="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-black/[0.04] bg-white px-5 py-4 sm:px-6">
                 <div className="flex items-center gap-3.5">
@@ -3989,7 +3989,7 @@ function ProductImage({
                 </button>
               </div>
 
-              <div className="flex-1 overflow-y-auto px-4 pb-8 pt-5 sm:px-5 lg:px-6">
+              <div className="flex-1 min-h-0 overflow-y-auto px-4 pb-8 pt-5 sm:px-5 lg:px-6">
                 {/* Desktop: formulario (izq.) + pago (der.). Móvil: columna única. */}
                 <div className="space-y-4 lg:grid lg:grid-cols-2 lg:items-start lg:gap-5 lg:space-y-0 xl:gap-6">
                   <div className="space-y-4">
