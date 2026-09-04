@@ -62,6 +62,21 @@ function getPushSupportIssue(): string | null {
   return 'Tu iPhone necesita iOS 16.4 o superior para recibir notificaciones. Actualiza iOS e inténtalo de nuevo.';
 }
 
+function isPwaInstalled(): boolean {
+  if (typeof window === 'undefined') return false;
+  if (window.matchMedia('(display-mode: standalone)').matches) return true;
+  return (navigator as any).standalone === true;
+}
+
+// En iOS, Web Push SOLO existe si la PWA está instalada en la pantalla de
+// inicio (aunque sea iOS 16.4+, en Safari navegador no hay pushManager).
+// Si falta la instalación, no hay que intentar suscribir: hay que guiar.
+function needsIosPwaInstall(): boolean {
+  if (!isIosDevice()) return false;
+  if (getPushSupportIssue()) return false; // ya hay otro motivo (browser/versión)
+  return !isPwaInstalled();
+}
+
 export const usePushNotifications = () => {
   const [isSubscribed, setIsSubscribed] = useState(false);
   const [subscription, setSubscription] = useState<PushSubscription | null>(null);
@@ -69,6 +84,9 @@ export const usePushNotifications = () => {
   // Estado (no valor en render) para evitar mismatch de hidratación: en SSR es null,
   // y se calcula del lado del cliente tras montar.
   const [pushSupportIssue, setPushSupportIssue] = useState<string | null>(null);
+  // iOS con Web Push soportado pero PWA sin instalar: suscribir fallaría en
+  // silencio; la UI debe guiar a instalar en vez de intentar.
+  const [needsIosInstall, setNeedsIosInstall] = useState(false);
 
   // Dentro del WebView de la app nativa NO existe web-push (service worker /
   // pushManager): las notificaciones van por FCM nativo. Este flag corta todo
@@ -86,6 +104,7 @@ export const usePushNotifications = () => {
       return;
     }
     setPushSupportIssue(getPushSupportIssue());
+    setNeedsIosInstall(needsIosPwaInstall());
     if (typeof window !== 'undefined' && 'Notification' in window) {
       setPermission(Notification.permission);
       
@@ -139,6 +158,12 @@ export const usePushNotifications = () => {
       // el permiso 'default' se ignora en silencio y la suscripción nunca ocurre.
       if (pushSupportIssue) {
         throw new Error(pushSupportIssue);
+      }
+
+      if (needsIosInstall) {
+        throw new Error(
+          'En iPhone las notificaciones solo llegan a la app instalada: toca Compartir y elige "Añadir a pantalla de inicio", luego ábrela desde tu pantalla de inicio.'
+        );
       }
 
       if (Notification.permission === 'default') {
@@ -258,7 +283,7 @@ export const usePushNotifications = () => {
     return () => navigator.serviceWorker.removeEventListener('message', onMessage);
   }, [subscribe]);
 
-  return { isSubscribed, permission, pushSupportIssue, subscribe, unsubscribe };
+  return { isSubscribed, permission, pushSupportIssue, needsIosInstall, subscribe, unsubscribe };
 };
 
 function urlBase64ToUint8Array(base64String: string) {
