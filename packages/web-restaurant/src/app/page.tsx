@@ -6017,6 +6017,9 @@ export default function Home() {
                           <input
                             type="text"
                             inputMode="numeric"
+                            pattern="[0-9]*"
+                            autoComplete="off"
+                            enterKeyHint="done"
                             placeholder="06:30"
                             maxLength={5}
                             value={scheduledDeliveryTime}
