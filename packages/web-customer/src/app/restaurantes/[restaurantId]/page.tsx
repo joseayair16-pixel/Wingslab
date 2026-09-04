@@ -5346,8 +5346,8 @@ function ProductImage({
                 </div>
               )}
 
-              <div data-sticky-header className="sticky top-[calc(env(safe-area-inset-top)+72px)] z-20 -mx-4 mb-6 bg-[var(--menu-surface)] shadow-[0_1px_2px_rgba(0,0,0,0.03),0_8px_24px_rgba(0,0,0,0.05)] border-b border-black/[0.04] md:-mx-6 lg:-mx-7 dark:bg-[var(--menu-surface-dark)] dark:border-zinc-800/60">
-                <div className="px-4 py-3 md:px-6 md:py-3.5 lg:px-7">
+              <div data-sticky-header className="sticky top-[calc(env(safe-area-inset-top)+72px)] z-20 mb-6 rounded-[26px] border border-black/[0.05] bg-[var(--menu-surface)] shadow-[0_10px_36px_-14px_rgba(15,15,15,0.18)] dark:border-zinc-800/70 dark:bg-[var(--menu-surface-dark)] dark:shadow-[0_10px_36px_-14px_rgba(0,0,0,0.55)]">
+                <div className="px-5 pt-3.5 pb-2 md:pt-4">
                   <div className="relative w-full max-w-2xl mx-auto lg:mx-0">
                     <Search className="pointer-events-none absolute left-4 top-1/2 h-[18px] w-[18px] -translate-y-1/2 text-neutral-400 dark:text-zinc-500" strokeWidth={1.8} />
                     <input
@@ -5374,10 +5374,10 @@ function ProductImage({
                   </div>
                 </div>
                 {!productSearchQuery.trim() && (
-                <div className="pb-2.5">
+                <div className="pb-3">
                   <div
                     ref={categoryNavRef}
-                    className="flex overflow-x-auto px-4 pb-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden snap-x snap-proximity md:snap-none md:px-6 lg:px-7"
+                    className="flex overflow-x-auto px-5 pb-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden snap-x snap-proximity md:snap-none"
                   >
                     <div className="flex min-w-max gap-1.5 mx-auto sm:gap-2">
                       {(productSearchQuery.trim() ? (filteredRestaurant?.categories ?? []) : restaurant.categories).map((category) => {
