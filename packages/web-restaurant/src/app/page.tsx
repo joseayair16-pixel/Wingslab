@@ -9612,7 +9612,7 @@ export default function Home() {
                                     </button>
                                   )}
                                 </div>
-                                  <div className="flex items-center gap-2">
+                                  <div className="flex max-w-full min-w-0 flex-wrap items-center gap-2 sm:justify-end">
                                     {(() => {
                                       if (profile?.businessType === 'RESTAURANT') return null;
                                       if (!order.scheduledDeliveryAt) return null;
