@@ -1314,6 +1314,21 @@ export default function RestaurantPage({
             }
           });
           setActiveOrderDetailsMap(nextMap);
+
+          // Respaldo al socket: si hay una propuesta de horario pendiente que el
+          // cliente aún no acepta/rechaza, abrir el modal desde aquí también
+          // (igual que la home). Sin esto, si el evento socket se perdió o el
+          // cliente entró al menú DESPUÉS de la propuesta, nunca aparecía.
+          const pendingProposal = results.find(
+            (detail) =>
+              detail &&
+              detail.status === 'CONFIRMED' &&
+              detail.scheduledDeliveryAt &&
+              !detail.scheduledDeliveryCustomerAcceptedAt
+          );
+          if (pendingProposal) {
+            setScheduleProposalOrder((prev) => prev ?? pendingProposal);
+          }
         }
       } catch {
         if (!cancelled) {
