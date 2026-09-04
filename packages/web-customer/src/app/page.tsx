@@ -869,7 +869,7 @@ export default function Home() {
       }
     }, () => {
       alert('No se pudo determinar tu ubicación exacta en este momento. Por favor ingresa tu dirección manualmente o asegúrate de tener buena señal.');
-    }, { enableHighAccuracy: false, timeout: 10000, maximumAge: 60000 });
+    }, { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 });
   }
 
   const [restaurants, setRestaurants] = useState<RestaurantSummary[]>([]);
@@ -2307,7 +2307,7 @@ export default function Home() {
           setUserLocation(null);
           loadDashboard();
         },
-        { enableHighAccuracy: false, timeout: 10000, maximumAge: 60000 }
+        { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
       );
     } else {
       setUserLocation(null);
@@ -2776,7 +2776,7 @@ export default function Home() {
         // App nativa: usar el plugin de geolocalización (más confiable y
         // preciso en Android). Si falla, caer al navegador como respaldo.
         try {
-          const position = await nativeGetCurrentPosition({ enableHighAccuracy: false, timeout: 10000, maximumAge: 60000 });
+          const position = await nativeGetCurrentPosition({ enableHighAccuracy: true, timeout: 15000, maximumAge: 0 });
           if (position) return tryWith(position);
         } catch (e) {
           try {
@@ -2802,7 +2802,7 @@ export default function Home() {
             }
           } catch (e) { }
           resolve(null);
-        }, { enableHighAccuracy: false, timeout: 10000, maximumAge: 60000 });
+        }, { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 });
       });
     }
 
@@ -2860,34 +2860,34 @@ export default function Home() {
   useEffect(() => {
     let watchId: number | null = null;
     let nativeWatch: { clear: () => void } | null = null;
-    let lastPosition: { lat: number; lng: number } | null = null;
     let lastReloadAt = 0;
-    let isFirstCallback = true;
     const MIN_DISTANCE_M = 150;
     const RELOAD_COOLDOWN_MS = 30000;
     const MAX_ACCURACY_M = 500;
 
+    // Actualiza cuando la fix REAL difiere de la ubicación que se está MOSTRANDO
+    // (userLocationRef). Antes se comparaba contra la fix anterior del watcher y
+    // se ignoraba el primer callback: si el usuario abría la app ya quieto en un
+    // lugar nuevo, todas las fixes eran de ese lugar y entre sí no variaban,
+    // por lo que la UI se quedaba con la ubicación cacheada (p. ej. la escuela).
     const onPosition = (position: GeolocationPosition) => {
       if (exploringZoneRef.current) return;
       const { latitude, longitude, accuracy } = position.coords;
       if (accuracy > MAX_ACCURACY_M) return;
 
-      if (isFirstCallback) {
-        isFirstCallback = false;
-        lastPosition = { lat: latitude, lng: longitude };
-        return;
-      }
-
-      if (!lastPosition) return;
-      const dist = haversineKm(lastPosition.lat, lastPosition.lng, latitude, longitude);
-      if (dist * 1000 < MIN_DISTANCE_M) return;
-
       const now = Date.now();
-      if (now - lastReloadAt < RELOAD_COOLDOWN_MS) return;
-      lastReloadAt = now;
-      lastPosition = { lat: latitude, lng: longitude };
+      const current = userLocationRef.current;
+      const distFromShownM = current
+        ? haversineKm(current.latitude, current.longitude, latitude, longitude) * 1000
+        : Infinity;
 
-      const loc = { latitude, longitude, accuracy, address: 'Ubicación actual', ts: now };
+      // Misma zona que la mostrada: nada que hacer.
+      if (isFinite(distFromShownM) && distFromShownM < MIN_DISTANCE_M) return;
+      // Cooldown solo cuando ya hay ubicación mostrada (evita re-renders en loop).
+      if (isFinite(distFromShownM) && now - lastReloadAt < RELOAD_COOLDOWN_MS) return;
+      lastReloadAt = now;
+
+      const loc = { latitude, longitude, accuracy, address: current?.address || 'Ubicación actual', ts: now };
       userLocationRef.current = loc;
       setUserLocation(loc);
       setLocationDenied(false);
