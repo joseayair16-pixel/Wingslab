@@ -1,4 +1,4 @@
-const CACHE_NAME = 'sadel-restaurant-v3';
+const CACHE_NAME = 'sadel-restaurant-v4';
 const PRECACHE_URLS = [
   '/',
   '/sounds/notifica.wav',
