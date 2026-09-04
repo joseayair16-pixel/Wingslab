@@ -9647,7 +9647,7 @@ export default function Home() {
                                         </>
                                       );
                                     })()}
-                                    {profile?.businessType !== 'RESTAURANT' && order.preparationTimeMinutes && order.preparationTimeMinutes > 1 && (order.status === 'CONFIRMED' || order.status === 'PREPARING') && (() => {
+                                    {profile?.businessType !== 'RESTAURANT' && order.preparationTimeMinutes && order.preparationTimeMinutes > 1 && (order.status === 'CONFIRMED' || order.status === 'PREPARING') && isPrepCountdownRelevant(order, kitchenClockNow) && (() => {
                                       const remainingMs = getPreparationRemainingMs(order, kitchenClockNow);
                                       if (remainingMs !== null && remainingMs <= 0) return null;
                                       return (
@@ -9668,7 +9668,7 @@ export default function Home() {
                                         </button>
                                       );
                                     })()}
-                                    {profile?.businessType === 'RESTAURANT' && (order.status === 'CONFIRMED' || order.status === 'PREPARING') && (() => {
+                                    {profile?.businessType === 'RESTAURANT' && (order.status === 'CONFIRMED' || order.status === 'PREPARING') && isPrepCountdownRelevant(order, kitchenClockNow) && (() => {
                                       const remainingMs = getPreparationRemainingMs(order, kitchenClockNow);
                                       if (remainingMs !== null && remainingMs <= 0) return null;
                                       return (
@@ -10658,7 +10658,7 @@ export default function Home() {
                             ) : null}
                           </div>
                                 </div>
-                                  <div className="flex flex-wrap items-center gap-2 sm:justify-end">
+                                  <div className="flex max-w-full min-w-0 flex-wrap items-center gap-2 sm:justify-end">
                           {isSelectionMode ? (
                             <button
                               type="button"
@@ -15027,6 +15027,16 @@ function getPreparationRemainingMs(order: OrderItem, nowMs: number) {
 function isPreparationTimeUrgent(order: OrderItem, nowMs: number) {
   const remainingMs = getPreparationRemainingMs(order, nowMs);
   return typeof remainingMs === 'number' && remainingMs <= 2 * 60 * 1000;
+}
+
+// En pedidos programados la cuenta regresiva de preparación no debe mostrarse
+// hasta que falte (aprox.) el tiempo de preparación para la entrega; antes de
+// eso solo es ruido visual (chips gigantes tipo "1539:34 restantes").
+function isPrepCountdownRelevant(order: OrderItem, nowMs: number) {
+  if (!order.scheduledDeliveryAt) return true;
+  const prepMs = (order.preparationTimeMinutes || 0) * 60 * 1000;
+  // Colchón de 30 min para anticipar la preparación antes de la ventana.
+  return new Date(order.scheduledDeliveryAt).getTime() - nowMs <= prepMs + 30 * 60 * 1000;
 }
 
 function formatShortTime(date?: string | null) {
