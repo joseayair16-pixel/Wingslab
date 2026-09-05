@@ -87,6 +87,19 @@ export async function registerPublicDeliveryRoutes(fastify: FastifyInstance): Pr
         });
       }
 
+      // Revocación efectiva: si el pedido ya se cerró (entregado, cancelado o
+      // rechazado), el enlace muere aquí aunque siga vigente el TTL.
+      if (['DELIVERED', 'COMPLETED', 'CANCELLED', 'REJECTED'].includes(dToken.order.status)) {
+        await (prisma as any).deliveryToken.delete({ where: { id: dToken.id } });
+        return reply.status(410).send({
+          success: false,
+          error: {
+            code: 'ORDER_CLOSED',
+            message: 'Este pedido ya fue cerrado (entregado o cancelado). El enlace ya no es válido.',
+          },
+        });
+      }
+
       return reply.send({
         success: true,
         data: {
