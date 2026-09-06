@@ -1294,7 +1294,6 @@ export default function Home() {
   const [processingLogo, setProcessingLogo] = useState(false);
   const [pullDistance, setPullDistance] = useState(0);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const touchStartY = useRef(0);
   const [socketStatus, setSocketStatus] = useState<'idle' | 'connecting' | 'connected' | 'reconnecting'>('idle');
   const [socketAttempts, setSocketAttempts] = useState(0);
   const [carouselIndexMap, setCarouselIndexMap] = useState<Record<string, number>>({});
@@ -1594,34 +1593,86 @@ export default function Home() {
   const productPriceInputRef = useRef<HTMLInputElement | null>(null);
   const productModalScrollRef = useRef<HTMLDivElement | null>(null);
 
-  const handleTouchStart = (e: React.TouchEvent) => {
-    void warmup();
-    if (window.scrollY === 0) {
-      touchStartY.current = e.touches[0].clientY;
-    }
-  };
-
-  const handleTouchMove = (e: React.TouchEvent) => {
-    if (touchStartY.current === 0) return;
-    const currentY = e.touches[0].clientY;
-    const distance = currentY - touchStartY.current;
-    if (distance > 0 && window.scrollY === 0) {
-      setPullDistance(Math.min(distance * 0.5, 80));
-    }
-  };
-
-  const handleTouchEnd = () => {
-    if (pullDistance > 60) {
-      setIsRefreshing(true);
-      void loadDashboard().then(() => {
-        setIsRefreshing(false);
-        setPullDistance(0);
-      });
-    } else {
+  // Pull-to-refresh con listeners nativos en window (misma implementación que
+  // la app del cliente): el gesto se captura con passive:false + preventDefault
+  // para que el navegador no lo secuestre como scroll, y se excluyen contenedores
+  // scrolleables internos (listas, modales, carruseles).
+  const loadDashboardRef = useRef<() => Promise<void>>(async () => {});
+  const handlePullToRefresh = useCallback(async () => {
+    setIsRefreshing(true);
+    try {
+      await loadDashboardRef.current();
+    } finally {
+      setIsRefreshing(false);
       setPullDistance(0);
     }
-    touchStartY.current = 0;
-  };
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || !('ontouchstart' in window)) return;
+
+    let startY = -1;
+    let tracking = false;
+    let reloading = false;
+
+    const atTop = () => {
+      const docEl = document.documentElement;
+      const scrollTop = window.pageYOffset || docEl.scrollTop || 0;
+      return scrollTop <= 1;
+    };
+
+    const onTouchStart = (e: TouchEvent) => {
+      // Desbloquear audio de notificaciones en el primer toque (iOS).
+      void warmup();
+      if (reloading) return;
+      if (!atTop()) return;
+      const target = e.target as HTMLElement | null;
+      if (target && target.closest('.overflow-x-auto, .overflow-y-auto, .overflow-auto, [data-no-pull]')) return;
+      startY = e.touches[0]?.clientY ?? -1;
+      tracking = true;
+    };
+
+    const onTouchMove = (e: TouchEvent) => {
+      if (!tracking || reloading) return;
+      if (!atTop()) {
+        tracking = false;
+        setPullDistance(0);
+        return;
+      }
+      const currentY = e.touches[0]?.clientY ?? -1;
+      if (startY < 0 || currentY < 0) return;
+      const distance = currentY - startY;
+      if (distance <= 0) return;
+      e.preventDefault();
+      setPullDistance(Math.min(distance * 0.5, 80));
+    };
+
+    const onTouchEnd = () => {
+      if (!tracking || reloading) return;
+      tracking = false;
+      setPullDistance((current) => {
+        if (current > 40) {
+          reloading = true;
+          void handlePullToRefresh().finally(() => { reloading = false; });
+          return current;
+        }
+        return 0;
+      });
+      startY = -1;
+    };
+
+    window.addEventListener('touchstart', onTouchStart, { passive: true });
+    window.addEventListener('touchmove', onTouchMove, { passive: false });
+    window.addEventListener('touchend', onTouchEnd, { passive: true });
+    window.addEventListener('touchcancel', onTouchEnd, { passive: true });
+
+    return () => {
+      window.removeEventListener('touchstart', onTouchStart);
+      window.removeEventListener('touchmove', onTouchMove);
+      window.removeEventListener('touchend', onTouchEnd);
+      window.removeEventListener('touchcancel', onTouchEnd);
+    };
+  }, [handlePullToRefresh]);
 
   useEffect(() => {
     const fetchSettings = async () => {
@@ -2962,6 +3013,10 @@ export default function Home() {
       setLoading(false);
     }
   }, [apiBase, token]);
+
+  // El pull-to-refresh (listener nativo) usa esta referencia para evitar
+  // dependencias circulares: siempre apunta al loadDashboard vigente.
+  loadDashboardRef.current = loadDashboard;
 
   // Carga ligera solo de pedidos — para usar en eventos live sin recargar todo el panel
   const loadOrdersOnly = useCallback(async () => {
@@ -5861,9 +5916,6 @@ export default function Home() {
     <main
       className={`min-h-[100dvh] text-neutral-900 ${isRestaurantSession ? 'py-0' : 'px-4 py-5 md:px-6 lg:px-8'
         }`}
-      onTouchStart={handleTouchStart}
-      onTouchMove={handleTouchMove}
-      onTouchEnd={handleTouchEnd}
     >
       <PushEnableBanner
         visible={Boolean(token)}
