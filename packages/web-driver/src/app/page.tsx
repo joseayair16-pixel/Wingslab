@@ -546,6 +546,9 @@ export default function Home() {
   const driverProfileRef = useRef(driverProfile);
   driverProfileRef.current = driverProfile;
   const gpsRescheduleRef = useRef<(() => void) | null>(null);
+  // Ref a subscribeToPush (definida más abajo): el SW la invoca cuando el
+  // navegador rota/expira la suscripción (pushsubscriptionchange).
+  const subscribeToPushRef = useRef<((token: string) => Promise<unknown>) | null>(null);
 
   // Refs de audio de alarma estilo Uber y Screen Wake Lock
   const wakeLockRef = useRef<any>(null);
@@ -1332,6 +1335,31 @@ export default function Home() {
       return { ok: false, reason: 'SUBSCRIBE_FAILED' };
     }
   }, [apiBase]);
+
+  // Exponer subscribeToPush al listener del Service Worker (rotación de subs).
+  subscribeToPushRef.current = subscribeToPush;
+
+  // Re-suscripción automática: si el navegador rota o expira la suscripción
+  // (actualización de iOS/Chrome, inactividad), el SW avisa y aquí se recrea sin
+  // que el repartidor tenga que hacer nada. Sin esto, dejaba de recibir
+  // "Nuevo pedido asignado" hasta reabrir la app.
+  useEffect(() => {
+    if (typeof window === 'undefined' || !('serviceWorker' in navigator)) return;
+
+    const handleSWMessage = (event: MessageEvent) => {
+      if (event.data?.type === 'PUSH_SUBSCRIPTION_CHANGED') {
+        const storedToken = readStoredSession(storageKey).token;
+        if (storedToken && subscribeToPushRef.current) {
+          void subscribeToPushRef.current(storedToken);
+        }
+      }
+    };
+
+    navigator.serviceWorker.addEventListener('message', handleSWMessage);
+    return () => {
+      navigator.serviceWorker.removeEventListener('message', handleSWMessage);
+    };
+  }, []);
 
   useEffect(() => {
     if (!token || typeof window === 'undefined') return;
