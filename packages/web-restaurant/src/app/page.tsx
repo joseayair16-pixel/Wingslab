@@ -1312,6 +1312,9 @@ export default function Home() {
   ordersRef.current = orders;
   const pendingNotificationOrderIdRef = useRef<string | null>(null);
   const pendingEtaExtensionOrderIdRef = useRef<string | null>(null);
+  // Ref a la función de suscripción push (se define más abajo); el SW la invoca
+  // cuando el navegador rota/expira la suscripción (PUSH_SUBSCRIPTION_CHANGED).
+  const subscribeToPushRef = useRef<((token: string) => Promise<unknown>) | null>(null);
 
   // ============================================================
   // Tracking GPS del reparto propio / apoyo (reparto a cargo del
@@ -1794,6 +1797,15 @@ export default function Home() {
           navigateToOrder(orderId);
         }
       }
+      // El navegador rotó/expiró la suscripción push: re-suscribir de inmediato
+      // para que el restaurante no se quede sin avisos de pedidos. Sin esto la
+      // notificación solo volvía tras reabrir la app manualmente.
+      if (event.data?.type === 'PUSH_SUBSCRIPTION_CHANGED') {
+        const storedToken = readStoredSession(storageKey).token;
+        if (storedToken && subscribeToPushRef.current) {
+          void subscribeToPushRef.current(storedToken);
+        }
+      }
     };
 
     navigator.serviceWorker.addEventListener('message', handleSWMessage);
@@ -2192,6 +2204,9 @@ export default function Home() {
       return { ok: false, reason: 'SUBSCRIBE_FAILED' };
     }
   };
+
+  // Exponer subscribeToPush al listener del Service Worker (rotación de subs).
+  subscribeToPushRef.current = subscribeToPush;
 
   function clearSession(message?: string) {
     setToken('');
