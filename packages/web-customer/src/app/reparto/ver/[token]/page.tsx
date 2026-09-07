@@ -22,6 +22,8 @@ import {
 interface DeliveryTicketData {
   id: string;
   orderReference: string;
+  /** Número diario del pedido (01, 02…) como en el panel del restaurante. */
+  dailyCounter?: number | null;
   status: string;
   totalAmount: number;
   deliveryFee?: number;
@@ -1513,8 +1515,15 @@ export default function DeliveryTicketPage({ params }: PageProps) {
                           </span>
                         </div>
 
-                        {/* Nombre del Cliente */}
+                        {/* Nombre del Cliente + número diario del pedido */}
                         <h3 className={`text-base font-extrabold tracking-tight mt-3 truncate pr-8 ${textPrimary}`}>
+                          {typeof deliv.data.dailyCounter === 'number' && (
+                            <span className={`mr-1.5 align-middle ${
+                              darkMode ? 'text-neutral-400' : 'text-neutral-500'
+                            }`}>
+                              #{String(deliv.data.dailyCounter).padStart(2, '0')} ·
+                            </span>
+                          )}
                           {deliv.data.customer.name}
                         </h3>
 

@@ -105,6 +105,7 @@ export async function registerPublicDeliveryRoutes(fastify: FastifyInstance): Pr
         data: {
           id: dToken.order.id,
           orderReference: dToken.order.orderReference,
+          dailyCounter: dToken.order.dailyCounter ?? null,
           status: dToken.order.status,
           totalAmount: dToken.order.totalAmount,
           deliveryFee: dToken.order.deliveryFee,
