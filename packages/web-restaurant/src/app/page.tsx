@@ -30,7 +30,7 @@ import {
 } from '@sadel/shared';
 
 import { useForegroundPolling } from '../hooks/useForegroundPolling';
-import { printHtmlString } from '../utils/printHelper';
+import { printHtmlString, NativePrintError } from '../utils/printHelper';
 import { generateTicketHtml } from '../utils/ticketGenerator';
 import { SaDelLogo } from '../components/SaDelLogo';
 import { SaDelLoader } from '../components/SaDelLoader';
@@ -5378,11 +5378,22 @@ export default function Home() {
     if (!order) return;
     setIsPrintingTicket(true);
     try {
-      const html = generateTicketHtml(order, restaurantName, order.dailyCounter);
+      const paperWidth = (() => {
+        try {
+          return window.localStorage.getItem('sadel.restaurant.paperWidth') === '58' ? '58mm' as const : '80mm' as const;
+        } catch {
+          return '80mm' as const;
+        }
+      })();
+      const html = generateTicketHtml(order, restaurantName, order.dailyCounter, { paperWidth });
       await printHtmlString(html, `Comanda_${order.orderReference || 'Pedido'}`);
     } catch (error) {
       console.error('Error al imprimir ticket:', error);
-      alert('Hubo un problema al intentar imprimir la comanda. Verifica que la impresora esté conectada o que el navegador tenga permisos para imprimir.');
+      if (error instanceof NativePrintError) {
+        alert('No se pudo abrir la impresión del sistema. Verifica que el teléfono tenga una impresora configurada (Ajustes → Impresión) e inténtalo de nuevo.');
+      } else {
+        alert('Hubo un problema al intentar imprimir la comanda. Verifica que la impresora esté conectada o que el navegador tenga permisos para imprimir.');
+      }
     } finally {
       setIsPrintingTicket(false);
     }

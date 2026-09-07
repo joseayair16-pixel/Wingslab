@@ -146,6 +146,7 @@ export const SettingsSection = React.memo(function SettingsSection({
   storeDraft,
   setStoreDraft,
   platformCategories,
+
   isSearchingAddress,
   addressSuggestions,
   setAddressSuggestions,
@@ -194,6 +195,15 @@ export const SettingsSection = React.memo(function SettingsSection({
 }: SettingsSectionProps) {
   const currentSettingsTab = settingsTabs.find((t: any) => t.key === activeSettingsTab) ?? settingsTabs[0];
   const [showWhatsappConfirm, setShowWhatsappConfirm] = React.useState(false);
+  // Ancho de papel térmico preferido (58mm/80mm). Se guarda en localStorage:
+  // es una preferencia del DISPOSITIVO de impresión, no del restaurante en la nube.
+  const [paperWidth, setPaperWidth] = useState<'58' | '80'>(() => {
+    try {
+      return window.localStorage.getItem('sadel.restaurant.paperWidth') === '58' ? '58' : '80';
+    } catch {
+      return '80';
+    }
+  });
   const [copySourceDay, setCopySourceDay] = useState(1);
   const hoursDraft = (operatingHoursDraft ?? []) as HoursBlock[];
 
@@ -1478,6 +1488,33 @@ export const SettingsSection = React.memo(function SettingsSection({
                     }
                   }}
                 />
+                {storeDraft.enableTicketPrinting && (
+                  <div className="rounded-2xl border border-black/5 bg-neutral-50/60 p-4">
+                    <p className="text-sm font-bold text-neutral-900">Ancho del papel</p>
+                    <p className="mt-0.5 text-xs text-neutral-500">
+                      Ajusta el formato de la comanda al papel de tu impresora térmica.
+                    </p>
+                    <div className="mt-3 flex gap-2">
+                      {(['58', '80'] as const).map((w) => (
+                        <button
+                          key={w}
+                          type="button"
+                          onClick={() => {
+                            setPaperWidth(w);
+                            try { window.localStorage.setItem('sadel.restaurant.paperWidth', w); } catch {}
+                          }}
+                          className={`flex-1 rounded-xl border px-4 py-2.5 text-sm font-bold transition active:scale-[0.98] ${
+                            paperWidth === w
+                              ? 'border-sky-500 bg-sky-50 text-sky-700 shadow-sm'
+                              : 'border-black/10 bg-white text-neutral-500 hover:border-neutral-300'
+                          }`}
+                        >
+                          {w} mm{w === '80' ? ' · Estándar' : ''}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
                 <ToggleField
                   label="Notificaciones por WhatsApp"
                   description="Recibe un mensaje en WhatsApp cuando llegue un pedido nuevo (costo $0.50 MXN por pedido). Configura tu número en el perfil."

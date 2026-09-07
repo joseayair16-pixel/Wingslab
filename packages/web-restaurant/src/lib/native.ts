@@ -279,7 +279,7 @@ export async function nativePrintHtml(html: string): Promise<boolean> {
   const P = plugin('Printer');
   if (!P) return false;
   try {
-    await P.printHtml({ html });
+    await P.printHtml({ name: 'SaDeL Comanda', html });
     return true;
   } catch {
     return false;

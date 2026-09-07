@@ -1,9 +1,18 @@
 import { isNativePlatform, nativePrintHtml } from '../lib/native';
 
+// Error tipado para que el caller distinga fallo de impresión nativa del resto.
+export class NativePrintError extends Error {
+  constructor() {
+    super('NATIVE_PRINT_FAILED');
+    this.name = 'NativePrintError';
+  }
+}
+
 export async function printHtmlString(htmlString: string, title = 'Impresión') {
   if (isNativePlatform()) {
-    // En la app nativa el diálogo web de impresión no existe; se usa el
-    // PrintManager de Android. Si falla, se intenta el flujo web como fallback.
+    // En la app nativa existe el PrintManager de Android vía plugin Capacitor.
+    // Si falla, NO caer al flujo web: window.print() en un WebView no hace nada
+    // útil y el error termina siendo confuso para el usuario.
     const printed = await nativePrintHtml(`<!DOCTYPE html>
         <html>
           <head>
@@ -27,6 +36,7 @@ export async function printHtmlString(htmlString: string, title = 'Impresión') 
           </body>
         </html>`);
     if (printed) return;
+    throw new NativePrintError();
   }
 
   return new Promise<void>((resolve, reject) => {
