@@ -48,7 +48,10 @@ function buildPinIcon(google: any, emoji: string, bg: string) {
 
 export default function DeliveryRouteMap({ origin, destination, userPos, height = 200 }: Props) {
   const mapRef = useRef<HTMLDivElement>(null);
+  const mapInstanceRef = useRef<any>(null);
+  const userMarkerRef = useRef<any>(null);
   const [google, setGoogle] = useState<any>(null);
+  const [mapError, setMapError] = useState(false);
 
   useEffect(() => {
     const existing = getGoogleMaps();
@@ -58,7 +61,9 @@ export default function DeliveryRouteMap({ origin, destination, userPos, height 
     }
     let cancelled = false;
     void ensureGoogleMapsScript().then((g) => {
-      if (!cancelled) setGoogle(g);
+      if (cancelled) return;
+      setGoogle(g);
+      setMapError(!g);
     });
     return () => {
       cancelled = true;
@@ -76,6 +81,7 @@ export default function DeliveryRouteMap({ origin, destination, userPos, height 
       gestureHandling: 'greedy',
       styles: MAP_STYLES,
     });
+    mapInstanceRef.current = map;
 
     const markers: any[] = [];
     const addMarker = (point: MapPoint) => {
@@ -129,6 +135,7 @@ export default function DeliveryRouteMap({ origin, destination, userPos, height 
         icon: buildPinIcon(google, '🛵', '#0ea5e9'),
         title: 'Tu posición',
       });
+      userMarkerRef.current = userMarker;
       bounds.extend({ lat: userPos.lat, lng: userPos.lng });
     }
 
@@ -140,13 +147,53 @@ export default function DeliveryRouteMap({ origin, destination, userPos, height 
     }
 
     return () => {
+      if (userMarkerRef.current) {
+        userMarkerRef.current.setMap(null);
+        userMarkerRef.current = null;
+      }
       markers.forEach((m) => m.setMap(null));
-      if (userMarker) userMarker.setMap(null);
       if (directionsRenderer) directionsRenderer.setMap(null);
+      mapInstanceRef.current = null;
       if (container) container.innerHTML = '';
     };
+    // El mapa solo se crea cuando cambian el origen/destino estáticos o el
+    // script de Google Maps. La posición GPS NO está en las dependencias:
+    // mover el marcador por ref evita re-descargar los tiles del mapa en cada
+    // fix (ahorro de datos móviles real).
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [google, origin?.lat, origin?.lng, destination.lat, destination.lng, userPos?.lat, userPos?.lng]);
+  }, [google, origin?.lat, origin?.lng, destination.lat, destination.lng]);
 
-  return <div ref={mapRef} style={{ width: '100%', height }} className="rounded-[20px]" />;
+  // Ahorro de datos: la posición llega cada ~8 s; en lugar de re-montar el
+  // mapa (tiles descargados de nuevo), solo movemos el marcador del
+  // repartidor. El marcador se crea aquí si llega la primera posición después
+  // de crearse el mapa (caso típico: el GPS tarda unos segundos).
+  useEffect(() => {
+    if (!google || !userPos) return;
+    if (!userMarkerRef.current) {
+      if (!mapInstanceRef.current) return;
+      userMarkerRef.current = new google.maps.Marker({
+        position: { lat: userPos.lat, lng: userPos.lng },
+        map: mapInstanceRef.current,
+        icon: buildPinIcon(google, '🛵', '#0ea5e9'),
+        title: 'Tu posición',
+      });
+    } else {
+      userMarkerRef.current.setPosition({ lat: userPos.lat, lng: userPos.lng });
+    }
+  }, [google, userPos]);
+
+  return mapError ? (
+    <div
+      style={{ width: '100%', height }}
+      className="flex flex-col items-center justify-center rounded-[20px] bg-neutral-100 px-6 text-center dark:bg-zinc-900"
+    >
+      <span className="text-xl">🗺️</span>
+      <p className="mt-2 text-xs font-bold text-neutral-600 dark:text-zinc-300">No se pudo cargar el mapa</p>
+      <p className="mt-1 text-[10px] text-neutral-500 dark:text-zinc-500">
+        Verifica tu conexión; la navegación por voz sigue disponible.
+      </p>
+    </div>
+  ) : (
+    <div ref={mapRef} style={{ width: '100%', height }} className="rounded-[20px]" />
+  );
 }

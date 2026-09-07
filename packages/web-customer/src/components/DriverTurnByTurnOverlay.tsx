@@ -144,6 +144,7 @@ export default function DriverTurnByTurnOverlay({
   const [mapReady, setMapReady] = useState(false);
   const [loadError, setLoadError] = useState(false);
   const [gpsError, setGpsError] = useState(false);
+  const [routeError, setRouteError] = useState(false);
   const [driverPos, setDriverPos] = useState<Point | null>(initialDriverPos || null);
   const [nav, setNav] = useState<{
     emoji: string;
@@ -194,8 +195,14 @@ export default function DriverTurnByTurnOverlay({
   }, []);
 
   // Posición inicial: usar la pasada (restaurante/ticket) o pedir GPS.
-  useEffect(() => {
-    if (driverPos || typeof navigator === 'undefined' || !navigator.geolocation) return;
+  // Reintentable desde la UI (botón "Reintentar") — antes un solo fallo del
+  // GPS dejaba el overlay en "Calculando ruta…" para siempre.
+  const requestInitialLocation = () => {
+    if (typeof navigator === 'undefined' || !navigator.geolocation) {
+      setGpsError(true);
+      return;
+    }
+    setGpsError(false);
     navigator.geolocation.getCurrentPosition(
       (pos) => {
         setDriverPos({
@@ -204,8 +211,13 @@ export default function DriverTurnByTurnOverlay({
         });
       },
       () => setGpsError(true),
-      { enableHighAccuracy: true, timeout: 15000, maximumAge: 10000 }
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 5000 }
     );
+  };
+
+  useEffect(() => {
+    if (driverPos || typeof navigator === 'undefined' || !navigator.geolocation) return;
+    requestInitialLocation();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -312,6 +324,11 @@ export default function DriverTurnByTurnOverlay({
       return;
     }
 
+    // Ahorro de datos real: con la pantalla oculta no tiene sentido gastar la
+    // llamada de Directions (API de pago). Se recalcula al volver al frente.
+    if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
+
+    setRouteError(false);
     const directions = new google.maps.DirectionsService();
     directions.route(
       {
@@ -321,7 +338,11 @@ export default function DriverTurnByTurnOverlay({
         optimizeWaypoints: false,
       },
       (result: any, status: string) => {
-        if (status !== 'OK' || !result) return;
+        if (status !== 'OK' || !result) {
+          // Antes esto era silencioso: el overlay quedaba en loading infinito.
+          setRouteError(true);
+          return;
+        }
         routeOriginRef.current = originPoint;
 
         if (routeRef.current) {
@@ -396,16 +417,24 @@ export default function DriverTurnByTurnOverlay({
   // Seguir la posición del repartidor con watchPosition propio.
   useEffect(() => {
     if (typeof window === 'undefined' || !navigator.geolocation) return;
+    let hasValidFix = false;
     const id = navigator.geolocation.watchPosition(
       (pos) => {
+        // Ahorro: con la app oculta no actualizamos estado (ni mapa ni ruta).
+        if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
+        hasValidFix = true;
         const lat = parseFloat(pos.coords.latitude.toFixed(6));
         const lng = parseFloat(pos.coords.longitude.toFixed(6));
         setDriverPos((prev) => {
           if (prev && haversineMeters(prev, { lat, lng }) < 8) return prev;
           return { lat, lng };
         });
+        setGpsError(false);
       },
-      () => {},
+      () => {
+        // Solo mostramos error si aún no tenemos ninguna posición válida.
+        if (!hasValidFix) setGpsError(true);
+      },
       { enableHighAccuracy: true, timeout: 20000, maximumAge: 10000 }
     );
     watchIdRef.current = id;
@@ -512,6 +541,20 @@ export default function DriverTurnByTurnOverlay({
       }
     }, 1500);
     return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [driverPos, mapReady]);
+
+  // Ahorro de datos: la ruta no se pide con la app oculta; al retomar el
+  // primer plano, si la ruta quedó pendiente o ya no refleja la posición,
+  // se recalcula aquí.
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    const onVisible = () => {
+      if (document.visibilityState !== 'visible') return;
+      if (driverPos && mapRef.current) requestRoute();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [driverPos, mapReady]);
 
@@ -686,18 +729,75 @@ export default function DriverTurnByTurnOverlay({
               </div>
             </>
           ) : (
-            <div className="flex items-center gap-3">
-              <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-sky-500/10 text-2xl">
-                🛵
-              </span>
-              <div className="min-w-0 flex-1">
-                <p className={`text-sm font-black ${dark ? 'text-white' : 'text-neutral-900'}`}>
-                  {gpsError ? 'Calculando ruta…' : 'Obteniendo tu ubicación…'}
-                </p>
-                <p className={`text-xs mt-0.5 ${dark ? 'text-zinc-400' : 'text-neutral-500'}`}>
-                  Dirígete a: {dest.label}
-                </p>
+            <div className="space-y-3">
+              <div className="flex items-center gap-3">
+                {gpsError || routeError ? (
+                  <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-rose-500/10 text-xl">
+                    ⚠️
+                  </span>
+                ) : (
+                  <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-sky-500/10">
+                    <span className="h-6 w-6 animate-spin rounded-full border-2 border-sky-500/15 border-t-sky-500" />
+                  </span>
+                )}
+                <div className="min-w-0 flex-1">
+                  <p className={`text-sm font-black ${dark ? 'text-white' : 'text-neutral-900'}`}>
+                    {gpsError
+                      ? 'No pudimos obtener tu ubicación'
+                      : routeError
+                        ? 'No se pudo calcular la ruta'
+                        : driverPos
+                          ? 'Calculando la mejor ruta…'
+                          : 'Obteniendo tu ubicación…'}
+                  </p>
+                  <p className={`text-xs mt-0.5 ${dark ? 'text-zinc-400' : 'text-neutral-500'}`}>
+                    {gpsError
+                      ? 'Activa el GPS y permite la ubicación para navegar. Si la bloqueaste, actívala en los ajustes del navegador.'
+                      : routeError
+                        ? 'Verifica tu conexión o abre la ruta en una app externa.'
+                        : `Dirígete a: ${dest.label}`}
+                  </p>
+                </div>
               </div>
+
+              {(gpsError || routeError) && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (gpsError) {
+                        requestInitialLocation();
+                      } else {
+                        routeOriginRef.current = null;
+                        requestRoute();
+                      }
+                    }}
+                    className="w-full rounded-xl bg-sky-600 py-3 text-xs font-bold text-white shadow-lg shadow-sky-500/30 transition active:scale-[0.97]"
+                  >
+                    Reintentar
+                  </button>
+                  <div className="grid grid-cols-2 gap-2">
+                    <a
+                      href={openGoogleMapsUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center justify-center gap-1.5 rounded-xl bg-sky-500 py-2.5 text-[11px] font-bold text-white"
+                    >
+                      🗺️ Google Maps
+                    </a>
+                    <a
+                      href={openWazeUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className={`flex items-center justify-center gap-1.5 rounded-xl border py-2.5 text-[11px] font-bold ${
+                        dark ? 'border-white/10 text-white' : 'border-black/10 text-neutral-800'
+                      }`}
+                    >
+                      🚗 Waze
+                    </a>
+                  </div>
+                </>
+              )}
             </div>
           )}
         </div>

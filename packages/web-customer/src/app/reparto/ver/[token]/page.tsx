@@ -134,6 +134,28 @@ export default function DeliveryTicketPage({ params }: PageProps) {
   const [driverPos, setDriverPos] = useState<{ lat: number; lng: number } | null>(null);
   // Navegación turn-by-turn in-app: destino 'pickup' (restaurante) o 'delivery' (domicilio).
   const [navOpenFor, setNavOpenFor] = useState<'pickup' | 'delivery' | null>(null);
+  // Mapa embebido (abajo en la card de domicilio): por defecto NO se carga para
+  // ahorrar datos móviles; el repartidor lo activa con un toque y se recuerda.
+  const [mapEnabled, setMapEnabled] = useState<boolean>(false);
+
+  useEffect(() => {
+    try {
+      if (localStorage.getItem('sadel:driverMapOn') === '1') setMapEnabled(true);
+    } catch {
+      /* almacenamiento no disponible */
+    }
+  }, []);
+  const toggleMap = () => {
+    setMapEnabled((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem('sadel:driverMapOn', next ? '1' : '0');
+      } catch {
+        /* sin almacenamiento */
+      }
+      return next;
+    });
+  };
 
   // Modal "Agregar entrega": escáner QR o pegar enlace
   const [showAddModal, setShowAddModal] = useState(false);
@@ -1940,6 +1962,17 @@ export default function DeliveryTicketPage({ params }: PageProps) {
   const addressText = `${addressObj.street} ${addressObj.number}, ${addressObj.neighborhood}, ${addressObj.city}`;
   const googleMapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(addressText)}`;
 
+  // Distancia aproximada del recorrido (en línea recta) restaurante → domicilio.
+  const deliveryDistanceKm =
+    currentTicket.restaurant.latitude && currentTicket.restaurant.longitude && addressObj.latitude && addressObj.longitude
+      ? haversineKm(
+          currentTicket.restaurant.latitude,
+          currentTicket.restaurant.longitude,
+          addressObj.latitude,
+          addressObj.longitude
+        )
+      : null;
+
   const isCash = currentTicket.paymentMethod === 'CASH';
   const isTransfer = currentTicket.paymentMethod === 'TRANSFER';
 
@@ -2409,6 +2442,13 @@ export default function DeliveryTicketPage({ params }: PageProps) {
             <div className="min-w-0 flex-1">
               <p className={`text-base font-extrabold leading-snug ${textPrimary}`}>{addressObj.street} {addressObj.number}</p>
               <p className={`text-xs mt-1 ${textSecondary}`}>{addressObj.neighborhood}, {addressObj.city}</p>
+              {deliveryDistanceKm !== null && (
+                <span className={`mt-2 inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-extrabold tracking-wide uppercase ${
+                  darkMode ? 'bg-sky-500/10 text-sky-400' : 'bg-sky-50 text-sky-600'
+                }`}>
+                  🛵 ≈ {deliveryDistanceKm < 1 ? `${Math.round(deliveryDistanceKm * 1000)} m` : `${deliveryDistanceKm.toFixed(1)} km`}
+                </span>
+              )}
             </div>
           </div>
 
@@ -2425,7 +2465,7 @@ export default function DeliveryTicketPage({ params }: PageProps) {
 
           {/* Botones GPS y Waze */}
           <div className="mt-4">
-            {addressObj.latitude && addressObj.longitude && (
+            {addressObj.latitude && addressObj.longitude ? (
               <button
                 type="button"
                 onClick={() => { triggerHaptic([40]); setNavOpenFor('delivery'); }}
@@ -2437,6 +2477,10 @@ export default function DeliveryTicketPage({ params }: PageProps) {
                 </svg>
                 Navegar al domicilio
               </button>
+            ) : (
+              <div className={`mb-2.5 rounded-2xl border px-4 py-3 text-xs leading-relaxed ${darkMode ? 'border-amber-900/30 bg-amber-950/20 text-amber-300' : 'border-amber-200/60 bg-amber-50 text-amber-800'}`}>
+                Este pedido no registró coordenadas GPS de la dirección. Usa Google Maps o Waze para ubicar al cliente.
+              </div>
             )}
             <div className="flex gap-2.5">
             <a
@@ -2477,31 +2521,66 @@ export default function DeliveryTicketPage({ params }: PageProps) {
           </div>
         </div>
 
-        {/* ── MAPA DE NAVEGACIÓN IN-APP ── */}
+        {/* ── MAPA DE NAVEGACIÓN IN-APP (lazy: no gasta datos hasta activarlo) ── */}
         {addressObj.latitude && addressObj.longitude && (
           <div className={`mt-3 overflow-hidden rounded-[28px] border shadow-[0_4px_24px_rgba(0,0,0,0.015)] ${cardBorder}`}>
-            <DeliveryRouteMap
-              origin={
-                currentTicket.restaurant.latitude && currentTicket.restaurant.longitude
-                  ? {
-                      lat: currentTicket.restaurant.latitude,
-                      lng: currentTicket.restaurant.longitude,
-                      label: currentTicket.restaurant.name,
-                      emoji: '🏪',
-                      color: '#f59e0b',
-                    }
-                  : null
-              }
-              destination={{
-                lat: addressObj.latitude,
-                lng: addressObj.longitude,
-                label: addressText,
-                emoji: '🏠',
-                color: '#ef4444',
-              }}
-              userPos={driverPos}
-              height={200}
-            />
+            {!mapEnabled ? (
+              <button
+                type="button"
+                onClick={toggleMap}
+                className="flex w-full flex-col items-center gap-2 px-5 py-6 text-center transition active:scale-[0.99]"
+              >
+                <span className={`flex h-11 w-11 items-center justify-center rounded-2xl ${darkMode ? 'bg-sky-500/10 text-sky-400' : 'bg-sky-50 text-sky-600'}`}>
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor" className="w-5 h-5">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 6.75 3 9v11.25l6-2.25m0-11.25 6 2.25m-6-2.25V20.25m6-11.25 6-2.25V18l-6 2.25m0-11.25V20.25" />
+                  </svg>
+                </span>
+                <span className={`text-xs font-extrabold ${textPrimary}`}>Ver mapa del recorrido</span>
+                <span className={`text-[10px] leading-relaxed ${textSecondary}`}>
+                  Carga el mapa solo cuando lo necesites para ahorrar datos móviles.
+                </span>
+              </button>
+            ) : (
+              <>
+                <div className={`flex items-center justify-between px-4 pt-3 ${cardBg}`}>
+                  <p className={`text-[10px] font-black uppercase tracking-widest ${textSecondary}`}>
+                    {currentTicket.restaurant.latitude && currentTicket.restaurant.longitude ? 'Ruta del restaurante al domicilio' : 'Ubicación del domicilio'}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={toggleMap}
+                    aria-label="Ocultar mapa"
+                    className={`flex h-7 w-7 items-center justify-center rounded-lg text-[11px] font-bold transition active:scale-90 ${
+                      darkMode ? 'bg-zinc-800 text-zinc-300' : 'bg-neutral-100 text-neutral-600'
+                    }`}
+                  >
+                    ✕
+                  </button>
+                </div>
+                <DeliveryRouteMap
+                  origin={
+                    currentTicket.restaurant.latitude && currentTicket.restaurant.longitude
+                      ? {
+                          lat: currentTicket.restaurant.latitude,
+                          lng: currentTicket.restaurant.longitude,
+                          label: currentTicket.restaurant.name,
+                          emoji: '🏪',
+                          color: '#f59e0b',
+                        }
+                      : null
+                  }
+                  destination={{
+                    lat: addressObj.latitude,
+                    lng: addressObj.longitude,
+                    label: addressText,
+                    emoji: '🏠',
+                    color: '#ef4444',
+                  }}
+                  userPos={driverPos}
+                  height={220}
+                />
+              </>
+            )}
           </div>
         )}
 
