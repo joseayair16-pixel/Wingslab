@@ -351,13 +351,20 @@ function CarouselOrGrid({
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const [canLeft, setCanLeft] = useState(false);
   const [canRight, setCanRight] = useState(false);
+  const [hasOverflow, setHasOverflow] = useState(false);
+  const [scrollProgress, setScrollProgress] = useState(1);
+  const [thumbPct, setThumbPct] = useState(100);
 
   const updateArrows = useCallback(() => {
     const el = scrollRef.current;
     if (!el) return;
     const tolerance = 4;
+    const maxScroll = el.scrollWidth - el.clientWidth;
     setCanLeft(el.scrollLeft > tolerance);
-    setCanRight(el.scrollLeft < el.scrollWidth - el.clientWidth - tolerance);
+    setCanRight(el.scrollLeft < maxScroll - tolerance);
+    setHasOverflow(maxScroll > tolerance);
+    setScrollProgress(maxScroll > 0 ? Math.min(1, Math.max(0, el.scrollLeft / maxScroll)) : 1);
+    setThumbPct(maxScroll > 0 ? Math.min(100, (el.clientWidth / el.scrollWidth) * 100) : 100);
   }, []);
 
   useEffect(() => {
@@ -384,30 +391,53 @@ function CarouselOrGrid({
   };
 
   return (
-    <div className="relative">
-      <div
-        ref={scrollRef}
-        className="flex gap-3 overflow-x-auto pb-2 scroll-smooth snap-x snap-mandatory [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-      >
-        {children}
-        <div className="w-4 shrink-0 sm:w-8" />
+    <div>
+      <div className="relative">
+        <div
+          ref={scrollRef}
+          style={
+            canRight
+              ? {
+                  // Fundido en el borde derecho cuando aún hay contenido oculto:
+                  // la señal visual de "hay más" sin añadir elementos encima.
+                  WebkitMaskImage: 'linear-gradient(to right, black 88%, transparent 100%)',
+                  maskImage: 'linear-gradient(to right, black 88%, transparent 100%)',
+                }
+              : undefined
+          }
+          className="flex gap-3 overflow-x-auto pb-2 scroll-smooth snap-x snap-mandatory [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        >
+          {children}
+          <div className="w-4 shrink-0 sm:w-8" />
+        </div>
+        <button
+          type="button"
+          aria-label="Ver más productos"
+          onClick={() => scrollByAmount(1)}
+          className={`absolute right-3 top-1/2 z-20 hidden h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-white/95 text-neutral-600 shadow-lg shadow-black/10 ring-1 ring-black/5 backdrop-blur transition-all duration-200 hover:bg-white hover:text-neutral-900 active:scale-90 sm:flex ${canRight ? 'opacity-100' : 'pointer-events-none opacity-0'}`}
+        >
+          <ChevronRight className="h-4 w-4" strokeWidth={2.5} />
+        </button>
+        <button
+          type="button"
+          aria-label="Ver productos anteriores"
+          onClick={() => scrollByAmount(-1)}
+          className={`absolute left-3 top-1/2 z-20 hidden h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-white/95 text-neutral-600 shadow-lg shadow-black/10 ring-1 ring-black/5 backdrop-blur transition-all duration-200 hover:bg-white hover:text-neutral-900 active:scale-90 sm:flex ${canLeft ? 'opacity-100' : 'pointer-events-none opacity-0'}`}
+        >
+          <ChevronLeft className="h-4 w-4" strokeWidth={2.5} />
+        </button>
       </div>
-      <button
-        type="button"
-        aria-label="Ver más productos"
-        onClick={() => scrollByAmount(1)}
-        className={`absolute right-3 top-1/2 z-20 hidden h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-white/95 text-neutral-600 shadow-lg shadow-black/10 ring-1 ring-black/5 backdrop-blur transition-all duration-200 hover:bg-white hover:text-neutral-900 active:scale-90 sm:flex ${canRight ? 'opacity-100' : 'pointer-events-none opacity-0'}`}
-      >
-        <ChevronRight className="h-4 w-4" strokeWidth={2.5} />
-      </button>
-      <button
-        type="button"
-        aria-label="Ver productos anteriores"
-        onClick={() => scrollByAmount(-1)}
-        className={`absolute left-3 top-1/2 z-20 hidden h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-white/95 text-neutral-600 shadow-lg shadow-black/10 ring-1 ring-black/5 backdrop-blur transition-all duration-200 hover:bg-white hover:text-neutral-900 active:scale-90 sm:flex ${canLeft ? 'opacity-100' : 'pointer-events-none opacity-0'}`}
-      >
-        <ChevronLeft className="h-4 w-4" strokeWidth={2.5} />
-      </button>
+      {hasOverflow && (
+        <div
+          className="mx-1 mt-1.5 h-[3px] rounded-full bg-black/[0.06] dark:bg-white/10"
+          aria-hidden="true"
+        >
+          <div
+            className="relative h-full rounded-full bg-neutral-900/60 dark:bg-white/60"
+            style={{ width: `${thumbPct}%`, left: `${scrollProgress * (100 - thumbPct)}%` }}
+          />
+        </div>
+      )}
     </div>
   );
 }
