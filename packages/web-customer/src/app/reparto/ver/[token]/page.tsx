@@ -57,6 +57,7 @@ interface DeliveryTicketData {
   };
   customer: {
     name: string;
+    lastName?: string | null;
     phone: string;
   };
 }
@@ -82,8 +83,14 @@ interface PageProps {
 // repartidor escaneó dos QRs de la misma orden, hay dos entradas con tokens
 // distintos pero la misma orderReference. Conservamos la entrada más reciente
 // (mayor scannedAt) y descartamos el resto.
-function dedupeByOrderReference(list: ScannedDelivery[]): ScannedDelivery[] {
-  const latestByRef = new Map<string, ScannedDelivery>();
+/** Nombre completo del cliente (nombre + apellido cuando exista). */
+function fullCustomerName(customer: { name?: string | null; lastName?: string | null } | null | undefined): string {
+  const first = (customer?.name || '').trim();
+  const last = (customer?.lastName || '').trim();
+  return [first, last].filter(Boolean).join(' ') || 'Cliente';
+}
+
+function dedupeByOrderReference(list: ScannedDelivery[]): ScannedDelivery[] {  const latestByRef = new Map<string, ScannedDelivery>();
   for (const item of list) {
     const ref = item.data.orderReference;
     if (!ref) {
@@ -1333,7 +1340,7 @@ export default function DeliveryTicketPage({ params }: PageProps) {
                 }`}>1</span>
                 <span className="min-w-0 flex-1">
                   <span className={`block text-[10px] font-medium uppercase tracking-wider ${textTertiary}`}>Siguiente parada</span>
-                  <span className={`block text-sm font-semibold truncate mt-0.5 ${textPrimary}`}>{nextStop.data.customer.name}</span>
+                  <span className={`block text-sm font-semibold truncate mt-0.5 ${textPrimary}`}>{fullCustomerName(nextStop.data.customer)}</span>
                   <span className={`block text-[11px] truncate mt-0.5 ${textSecondary}`}>
                     {nextStop.data.deliveryAddress.street} {nextStop.data.deliveryAddress.number}
                   </span>
@@ -1524,7 +1531,7 @@ export default function DeliveryTicketPage({ params }: PageProps) {
                               #{String(deliv.data.dailyCounter).padStart(2, '0')} ·
                             </span>
                           )}
-                          {deliv.data.customer.name}
+                          {fullCustomerName(deliv.data.customer)}
                         </h3>
 
                         {/* Dirección */}
@@ -1949,7 +1956,7 @@ export default function DeliveryTicketPage({ params }: PageProps) {
         </div>
         <h3 className={`mt-5 text-lg font-bold tracking-tight ${textPrimary}`}>¡Entrega completada!</h3>
         <p className={`mt-1.5 text-xs max-w-[260px] leading-relaxed ${textSecondary}`}>
-          Pedido <strong className={textPrimary}>{currentTicket.orderReference}</strong> entregado a {currentTicket.customer.name}.
+          Pedido <strong className={textPrimary}>{currentTicket.orderReference}</strong> entregado a {fullCustomerName(currentTicket.customer)}.
         </p>
         
         <div className={`mt-5 w-full max-w-[280px] rounded-xl border p-4 text-left ${cardBg} ${cardBorder}`}>

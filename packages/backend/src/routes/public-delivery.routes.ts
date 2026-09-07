@@ -61,6 +61,7 @@ export async function registerPublicDeliveryRoutes(fastify: FastifyInstance): Pr
                     select: {
                       id: true,
                       name: true,
+                      lastName: true,
                       phone: true,
                     },
                   },
@@ -130,6 +131,7 @@ export async function registerPublicDeliveryRoutes(fastify: FastifyInstance): Pr
           },
           customer: {
             name: dToken.order.customer.user.name,
+            lastName: (dToken.order.customer.user as any).lastName ?? null,
             phone: dToken.order.customer.user.phone,
           },
         },
