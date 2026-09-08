@@ -19,7 +19,12 @@ const DELAY_GRACE_MINUTES = 5;
 const TERMINAL_STATUSES = ['DELIVERED', 'CANCELLED', 'REJECTED', 'DRIVER_ARRIVED'];
 
 export function computeDelayState(order: CompactOrderDetail, now: number): DelayState {
-  if (TERMINAL_STATUSES.includes(order.status)) {
+  // El repartidor llega con tracking DRIVER_ARRIVED y status real IN_TRANSIT:
+  // se trata como terminal para que no aparezca el aviso de retraso ("llegó").
+  const hasDriverArrived =
+    order.status === 'IN_TRANSIT' && order.tracking?.some((t) => t.notes === 'DRIVER_ARRIVED');
+
+  if (TERMINAL_STATUSES.includes(order.status) || hasDriverArrived) {
     return { isDelayed: false, level: 0, minutesOverdue: 0, referenceTime: null, isScheduled: false };
   }
 
