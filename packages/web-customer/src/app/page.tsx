@@ -2367,7 +2367,6 @@ export default function Home() {
       async (position) => {
         const { latitude, longitude, accuracy } = position.coords;
         let address = 'Ubicación actual';
-        let addressPayload: Record<string, any> | null = null;
         try {
           const google = getGoogleMaps();
           if (google) {
@@ -2379,25 +2378,7 @@ export default function Home() {
               );
             });
             const data = results[0];
-            if (data) {
-              const components: any[] = data.address_components || [];
-              const pick = (types: string[]) =>
-                components.find((c: any) => types.some((t) => c.types.includes(t)))?.long_name || '';
-              address = data.formatted_address || address;
-              addressPayload = {
-                street: pick(['route']) || 'Ubicación actual',
-                number: pick(['street_number']),
-                apartment: '',
-                neighborhood: pick(['sublocality', 'neighborhood']),
-                city: pick(['locality']),
-                state: pick(['administrative_area_level_1']),
-                zipCode: pick(['postal_code']),
-                country: pick(['country']),
-                reference: data.formatted_address || address,
-                latitude,
-                longitude,
-              };
-            }
+            if (data) address = data.formatted_address || address;
           }
         } catch {}
         const loc = { latitude, longitude, accuracy, address, ts: Date.now() };
@@ -2421,14 +2402,6 @@ export default function Home() {
         if (address === 'Ubicación actual') {
           scheduleLazyGeocode(latitude, longitude, loc.ts!);
         }
-        // Mantener la dirección verificada en el servidor (como hacía el modal).
-        if (token && addressPayload) {
-          fetch(`${apiBase}/customer/addresses/verify`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-            body: JSON.stringify(addressPayload),
-          }).catch(() => {});
-        }
       },
       (geoError) => {
         setIsLocating(false);
@@ -2443,7 +2416,7 @@ export default function Home() {
       },
       { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
     );
-  }, [isLocating, token, apiBase, scheduleLazyGeocode]);
+  }, [isLocating, scheduleLazyGeocode]);
 
   const loadProfile = useCallback(async () => {
     if (!token) return;
