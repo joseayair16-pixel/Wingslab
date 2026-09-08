@@ -146,6 +146,7 @@ export default function DriverTurnByTurnOverlay({
   const driverMarkerRef = useRef<any>(null);
   const destMarkerRef = useRef<any>(null);
   const routeOriginRef = useRef<Point | null>(null);
+  const routeInFlightRef = useRef(false);
   // Ruta proyectada: puntos del overview + longitud acumulada (1 solo Directions).
   const pathPointsRef = useRef<Point[]>([]);
   const pathCumLenRef = useRef<number[]>([]);
@@ -162,6 +163,7 @@ export default function DriverTurnByTurnOverlay({
   const [loadError, setLoadError] = useState(false);
   const [gpsError, setGpsError] = useState(false);
   const [routeError, setRouteError] = useState(false);
+  const [routeVersion, setRouteVersion] = useState(0);
   const [driverPos, setDriverPos] = useState<Point | null>(initialDriverPos || null);
   const [nav, setNav] = useState<{
     emoji: LucideIcon;
@@ -342,11 +344,15 @@ export default function DriverTurnByTurnOverlay({
       return;
     }
 
+    // Anti-concurrencia: no lanzar otra Directions si una sigue en vuelo.
+    if (routeInFlightRef.current) return;
+
     // Ahorro de datos real: con la pantalla oculta no tiene sentido gastar la
     // llamada de Directions (API de pago). Se recalcula al volver al frente.
     if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
 
     setRouteError(false);
+    routeInFlightRef.current = true;
     const directions = new google.maps.DirectionsService();
     directions.route(
       {
@@ -356,6 +362,7 @@ export default function DriverTurnByTurnOverlay({
         optimizeWaypoints: false,
       },
       (result: any, status: string) => {
+        routeInFlightRef.current = false;
         if (status !== 'OK' || !result) {
           // Antes esto era silencioso: el overlay quedaba en loading infinito.
           setRouteError(true);
@@ -428,6 +435,10 @@ export default function DriverTurnByTurnOverlay({
         map.fitBounds(bounds, 70);
         if (map.getZoom() > 16) map.setZoom(16);
         manualPanRef.current = false;
+
+        // Fuerza el recálculo de nav aunque el conductor no se haya movido:
+        // si no, un repartidor estacionario quedaba en "Calculando…" infinito.
+        setRouteVersion((v) => v + 1);
       }
     );
   };
@@ -541,8 +552,10 @@ export default function DriverTurnByTurnOverlay({
       progress,
       arrived,
     });
+    // Depende de routeVersion: cuando la ruta termina de cargar se vuelve a
+    // calcular nav aunque driverPos no haya cambiado (conductor estacionario).
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [driverPos]);
+  }, [driverPos, routeVersion]);
 
   // Recálculo de ruta si el repartidor se desvía del trayecto.
   useEffect(() => {
