@@ -9,19 +9,25 @@ type BeforeInstallPromptEvent = Event & {
   userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }>;
 };
 
-function detectPlatform(): 'ios' | 'android' | 'other' {
-  if (typeof window === 'undefined') return 'other';
-  const ua = navigator.userAgent;
-  if (/iPhone|iPad|iPod/i.test(ua)) return 'ios';
-  if (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1) return 'ios';
-  if (/Android/i.test(ua)) return 'android';
-  return 'other';
-}
+type Platform = 'ios' | 'android' | 'other';
+// Tipo de navegador de escritorio: determina qué herramienta de instalación
+// ofrece (Chromium: beforeinstallprompt; Safari: Añadir al Dock; Firefox: ninguna).
+type DesktopKind = 'chromium' | 'safari' | 'firefox' | 'unknown';
 
 function isIosSafari(): boolean {
   if (typeof window === 'undefined') return false;
   const ua = navigator.userAgent;
   return /Safari/i.test(ua) && !/CriOS|OPiOS|FxiOS|EdgiOS/i.test(ua);
+}
+
+function detectDesktopKind(): DesktopKind {
+  if (typeof window === 'undefined') return 'unknown';
+  const ua = navigator.userAgent;
+  if (/Firefox|FxiOS/i.test(ua)) return 'firefox';
+  if (/Edg|Edge/i.test(ua)) return 'chromium';
+  if (/Chrome|Chromium|CriOS/i.test(ua)) return 'chromium';
+  if (/Safari/i.test(ua) && !/Chrome|CriOS/i.test(ua)) return 'safari';
+  return 'unknown';
 }
 
 // Botón reutilizable con el estilo de las cards del footer (nivel premium).
@@ -78,7 +84,8 @@ function InstallCardShell({
 }
 
 export default function InstallAppCard() {
-  const [platform, setPlatform] = useState<'ios' | 'android' | 'other'>('other');
+  const [platform, setPlatform] = useState<Platform>('other');
+  const [desktopKind, setDesktopKind] = useState<DesktopKind>('unknown');
   const [isStandalone, setIsStandalone] = useState(false);
   const [isNativeApp, setIsNativeApp] = useState(false);
   const [apkUrl, setApkUrl] = useState<string | null>(null);
@@ -92,7 +99,16 @@ export default function InstallAppCard() {
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
-    setPlatform(detectPlatform());
+    // Detección con User-Agent directo dentro del effect: evitar depender del
+    // estado `platform` (aún 'other' en el primer render porque setState es
+    // asíncrono) para decidir si descargamos el APK en Android.
+    const ua = navigator.userAgent;
+    const isAndroid = /Android/i.test(ua);
+    const isIos = /iPhone|iPad|iPod/i.test(ua) ||
+      (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+
+    setPlatform(isIos ? 'ios' : isAndroid ? 'android' : 'other');
+    setDesktopKind(detectDesktopKind());
     setIsNativeApp(isNativePlatform());
 
     const mq = window.matchMedia('(display-mode: standalone)');
@@ -100,7 +116,7 @@ export default function InstallAppCard() {
     const onChange = (e: MediaQueryListEvent) => setIsStandalone(e.matches);
     mq.addEventListener?.('change', onChange);
 
-    if (platform === 'android' && !isNativePlatform()) {
+    if (isAndroid && !isNativePlatform()) {
       fetchPublishedAppVersion('/api')
         .then((v) => { if (v?.url) setApkUrl(v.url); })
         .catch(() => { /* sin APK publicado: la card ofrece PWA */ });
@@ -142,12 +158,6 @@ export default function InstallAppCard() {
   }
 
   const handleClick = () => {
-    // iOS: sin beforeinstallprompt; abrir la guía.
-    if (platform === 'ios') {
-      setOpen(true);
-      return;
-    }
-    // Android: si hay APK publicado, descargarlo; si no, PWA vía beforeinstallprompt.
     setOpen(true);
   };
 
@@ -160,14 +170,17 @@ export default function InstallAppCard() {
     if (!deferredPromptRef.current) {
       return;
     }
-    setInstalling(true);
-    await deferredPromptRef.current.prompt();
-    const { outcome } = await deferredPromptRef.current.userChoice;
-    setInstalling(false);
-    if (outcome === 'accepted') {
-      setDeferredPrompt(null);
-      setIsStandalone(true);
-      setOpen(false);
+    try {
+      setInstalling(true);
+      await deferredPromptRef.current.prompt();
+      const { outcome } = await deferredPromptRef.current.userChoice;
+      if (outcome === 'accepted') {
+        setDeferredPrompt(null);
+        setIsStandalone(true);
+        setOpen(false);
+      }
+    } finally {
+      setInstalling(false);
     }
   };
 
@@ -215,9 +228,14 @@ export default function InstallAppCard() {
             ) : platform === 'android' && apkUrl ? (
               <AndroidApkGuide apkUrl={apkUrl} installing={installing} onDownload={handleAndroidAction} />
             ) : platform === 'android' ? (
-              <AndroidPwaGuide installing={installing} onInstall={handleAndroidAction} />
+              <AndroidPwaGuide installing={installing} promptAvailable={Boolean(deferredPrompt)} onInstall={handleAndroidAction} />
             ) : (
-              <DesktopPwaGuide installing={installing} onInstall={handleAndroidAction} />
+              <DesktopGuide
+                desktopKind={desktopKind}
+                installing={installing}
+                promptAvailable={Boolean(deferredPrompt)}
+                onInstall={handleAndroidAction}
+              />
             )}
           </div>
         </div>
@@ -307,7 +325,7 @@ function AndroidApkGuide({ apkUrl, installing, onDownload }: { apkUrl: string; i
   );
 }
 
-function AndroidPwaGuide({ installing, onInstall }: { installing: boolean; onInstall: () => void }) {
+function AndroidPwaGuide({ installing, promptAvailable, onInstall }: { installing: boolean; promptAvailable: boolean; onInstall: () => void }) {
   return (
     <div>
       <p className="mb-4 text-sm leading-relaxed text-neutral-600">
@@ -317,20 +335,28 @@ function AndroidPwaGuide({ installing, onInstall }: { installing: boolean; onIns
       <button
         type="button"
         onClick={onInstall}
-        disabled={installing}
+        disabled={installing || !promptAvailable}
         className="flex w-full items-center justify-center gap-2 rounded-full bg-neutral-950 py-3 text-sm font-bold text-white transition hover:bg-neutral-800 active:scale-[0.98] disabled:opacity-70"
       >
         <Download className="h-4 w-4" />
         {installing ? 'Instalando…' : 'Instalar SaDeL'}
       </button>
       <p className="mt-3 text-center text-[10px] leading-relaxed text-neutral-400">
-        Si el botón no responde, usa el menú del navegador › «Instalar app».
+        {promptAvailable
+          ? 'Si el botón no responde, usa el menú del navegador › «Instalar app».'
+          : 'El navegador aún no habilita la instalación. Ábrelo en el menú › «Instalar app» cuando aparezca.'}
       </p>
     </div>
   );
 }
 
-function DesktopPwaGuide({ installing, onInstall }: { installing: boolean; onInstall: () => void }) {
+function DesktopGuide({ desktopKind, installing, promptAvailable, onInstall }: { desktopKind: DesktopKind; installing: boolean; promptAvailable: boolean; onInstall: () => void }) {
+  if (desktopKind === 'safari') {
+    return <SafariDesktopGuide />;
+  }
+  if (desktopKind === 'firefox') {
+    return <FirefoxDesktopGuide />;
+  }
   return (
     <div>
       <p className="mb-4 text-sm leading-relaxed text-neutral-600">
@@ -340,15 +366,70 @@ function DesktopPwaGuide({ installing, onInstall }: { installing: boolean; onIns
       <button
         type="button"
         onClick={onInstall}
-        disabled={installing}
+        disabled={installing || !promptAvailable}
         className="flex w-full items-center justify-center gap-2 rounded-full bg-neutral-950 py-3 text-sm font-bold text-white transition hover:bg-neutral-800 active:scale-[0.98] disabled:opacity-70"
       >
         <Download className="h-4 w-4" />
         {installing ? 'Instalando…' : 'Instalar SaDeL'}
       </button>
       <p className="mt-3 text-center text-[10px] leading-relaxed text-neutral-400">
-        Si el botón no responde, usa el ícono «Instalar» en la barra del navegador.
+        {promptAvailable
+          ? 'Si el botón no responde, usa el ícono «Instalar» en la barra del navegador.'
+          : 'El navegador aún no habilita la instalación automática. Usa el ícono «Instalar» de la barra de direcciones cuando aparezca.'}
       </p>
+    </div>
+  );
+}
+
+function SafariDesktopGuide() {
+  return (
+    <div>
+      <p className="mb-4 text-sm leading-relaxed text-neutral-600">
+        Safari para escritorio instala las apps web desde el menú <Bold>Archivo</Bold>.
+      </p>
+      <ol className="space-y-3 text-sm">
+        <Step n={1}>
+          Abre SaDeL en <Bold>Safari</Bold> (esta página ya lo está).
+        </Step>
+        <Step n={2}>
+          En la barra superior, abre el menú <Bold>Archivo</Bold> y toca{' '}
+          <Bold>Añadir al Dock</Bold>.
+        </Step>
+        <Step n={3}>
+          Toca <Bold>Añadir</Bold>. SaDeL quedará en tu Dock y se abrirá como app.
+        </Step>
+      </ol>
+      <div className="mt-4 rounded-xl bg-sky-50 p-3 text-xs leading-relaxed text-sky-800">
+        ¿No aparece la opción? Abre SaDeL en <Bold>Google Chrome</Bold> o{' '}
+        <Bold>Microsoft Edge</Bold> y usa el ícono <Bold>Instalar</Bold>{' '}
+        de la barra de direcciones.
+      </div>
+    </div>
+  );
+}
+
+function FirefoxDesktopGuide() {
+  return (
+    <div>
+      <p className="mb-4 text-sm leading-relaxed text-neutral-600">
+        <Bold>Firefox</Bold> para escritorio no instala apps web. Para tener SaDeL
+        como app de escritorio:
+      </p>
+      <ol className="space-y-3 text-sm">
+        <Step n={1}>
+          Abre SaDeL en <Bold>Google Chrome</Bold> o <Bold>Microsoft Edge</Bold>.
+        </Step>
+        <Step n={2}>
+          Toca el ícono <Bold>Instalar</Bold>{' '}
+          <InlineIcon>⤴</InlineIcon> que aparece en la barra de direcciones.
+        </Step>
+        <Step n={3}>
+          Confirma la instalación. SaDeL se abrirá como app de escritorio.
+        </Step>
+      </ol>
+      <div className="mt-4 rounded-xl bg-amber-50 p-3 text-xs leading-relaxed text-amber-800">
+        Recomendamos Chrome o Edge para la mejor experiencia con notificaciones.
+      </div>
     </div>
   );
 }

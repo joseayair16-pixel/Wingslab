@@ -31,7 +31,7 @@ export const metadata: Metadata = {
   description:
     'Pide comida y productos en línea desde tu localidad. Entrega a domicilio o recogida en tienda, pago en efectivo o por transferencia y seguimiento en tiempo real. El comercio local, ahora en digital con SaDeL.',
   applicationName: 'SaDeL',
-  manifest: '/manifest.json',
+  manifest: '/manifest.webmanifest',
   alternates: {
     canonical: '/',
   },
