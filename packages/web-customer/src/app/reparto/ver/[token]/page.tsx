@@ -42,6 +42,7 @@ interface DeliveryTicketData {
   };
   notes?: string | null;
   handoverPin?: string | null;
+  driverArrivedAtCustomer?: string | null;
   isSupportDelivery?: boolean;
   supportRestaurant?: {
     id: string;
@@ -109,6 +110,31 @@ function dedupeByOrderReference(list: ScannedDelivery[]): ScannedDelivery[] {  c
   });
 }
 
+// Reloj MM:SS para la espera sin contacto (negativos → 00:00).
+function formatCountdown(remainingMs: number): string {
+  const totalSec = Math.max(0, Math.ceil(remainingMs / 1000));
+  const min = Math.floor(totalSec / 60);
+  const sec = totalSec % 60;
+  return `${String(min).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
+}
+
+// Timestamp (ms) de cuando el repartidor llegó al domicilio del cliente.
+function getCustomerArrivalTime(ticket: DeliveryTicketData, token?: string): number {
+  if (ticket.driverArrivedAtCustomer) {
+    const ts = new Date(ticket.driverArrivedAtCustomer).getTime();
+    if (!Number.isNaN(ts)) return ts;
+  }
+  // Fallback: localStorage (persistido por el botón "Notificar: Ya llegué").
+  if (token && typeof window !== 'undefined') {
+    const raw = localStorage.getItem(`sadel_arrivedat_${token}`);
+    if (raw) {
+      const ts = parseInt(raw, 10);
+      if (!Number.isNaN(ts) && ts > 0) return ts;
+    }
+  }
+  return 0;
+}
+
 export default function DeliveryTicketPage({ params }: PageProps) {
   const token = params.token;
   
@@ -127,6 +153,16 @@ export default function DeliveryTicketPage({ params }: PageProps) {
   const [llegueError, setLlegueError] = useState('');
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [modalOpenedFromDashboard, setModalOpenedFromDashboard] = useState(false);
+  // Reloj de cuenta regresiva para la espera sin contacto (lugar seguro / no salió).
+  const [deliveryClock, setDeliveryClock] = useState<number>(() => Date.now());
+  // Tokens para los modales de confirmación de "dejar en lugar seguro" y
+  // "cliente no salió — liberar pedido" (entrega abandonada).
+  const [safePlaceConfirmToken, setSafePlaceConfirmToken] = useState<string | null>(null);
+  const [lugarSeguroSubmitting, setLugarSeguroSubmitting] = useState(false);
+  const [lugarSeguroError, setLugarSeguroError] = useState('');
+  const [noShowConfirmToken, setNoShowConfirmToken] = useState<string | null>(null);
+  const [noShowSubmitting, setNoShowSubmitting] = useState(false);
+  const [noShowError, setNoShowError] = useState('');
   // Repartidor de apoyo: tokens cuyo repartidor YA llegó al restaurante origen y
   // está esperando que confirme la entrega (PIN en transferencia / efectivo).
   const [waitingHandoverTokens, setWaitingHandoverTokens] = useState<string[]>([]);
@@ -180,6 +216,12 @@ export default function DeliveryTicketPage({ params }: PageProps) {
   // Tick del reloj: refresca el tiempo de jornada cada 30s.
   useEffect(() => {
     const id = setInterval(() => setShiftNow(Date.now()), 30000);
+    return () => clearInterval(id);
+  }, []);
+
+  // Tick del reloj de espera sin contacto (cada segundo para cuenta regresiva en vivo).
+  useEffect(() => {
+    const id = setInterval(() => setDeliveryClock(Date.now()), 1000);
     return () => clearInterval(id);
   }, []);
 
@@ -689,6 +731,7 @@ export default function DeliveryTicketPage({ params }: PageProps) {
         if (typeof window !== 'undefined') {
           localStorage.setItem('sadel_scanned_deliveries', JSON.stringify(newList));
           localStorage.setItem(`sadel_arrived_${targetToken}`, 'true');
+          localStorage.setItem(`sadel_arrivedat_${targetToken}`, String(Date.now()));
         }
         return newList;
       });
@@ -850,6 +893,107 @@ export default function DeliveryTicketPage({ params }: PageProps) {
       triggerHaptic([300, 100, 300]);
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  // ── ESPERA SIN CONTACTO ────────────────────────────────────────────────
+  // Completar entrega: dejar el pedido en un lugar seguro (transferencia).
+  const handleLugarSeguro = async () => {
+    const targetToken = safePlaceConfirmToken;
+    if (!targetToken) return;
+
+    try {
+      setLugarSeguroSubmitting(true);
+      setLugarSeguroError('');
+      triggerHaptic([40]);
+
+      const response = await fetch(`${apiBase}/public/delivery-ticket/${targetToken}/lugar-seguro`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      const data = await response.json();
+
+      if (!response.ok || !data.success) {
+        throw new Error(data.error?.message || 'No se pudo dejar el pedido en lugar seguro.');
+      }
+
+      setDeliveries(prev => {
+        const newList = prev.map(item => {
+          if (item.token === targetToken) {
+            return {
+              ...item,
+              delivered: true,
+              deliveredAt: Date.now(),
+              data: { ...item.data, status: 'DELIVERED' },
+            };
+          }
+          return item;
+        });
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('sadel_scanned_deliveries', JSON.stringify(newList));
+        }
+        return newList;
+      });
+
+      setSafePlaceConfirmToken(null);
+      triggerHaptic([100, 50, 100, 50, 200]);
+    } catch (err: any) {
+      console.error(err);
+      setLugarSeguroError(err.message || 'No se pudo completar la entrega.');
+      triggerHaptic([300, 100, 300]);
+    } finally {
+      setLugarSeguroSubmitting(false);
+    }
+  };
+
+  // Completar entrega: cliente no salió — liberar pedido (efectivo).
+  const handleNoShow = async () => {
+    const targetToken = noShowConfirmToken;
+    if (!targetToken) return;
+
+    try {
+      setNoShowSubmitting(true);
+      setNoShowError('');
+      triggerHaptic([40]);
+
+      const response = await fetch(`${apiBase}/public/delivery-ticket/${targetToken}/cliente-no-salio`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      const data = await response.json();
+
+      if (!response.ok || !data.success) {
+        throw new Error(data.error?.message || 'No se pudo liberar el pedido.');
+      }
+
+      setDeliveries(prev => {
+        const newList = prev.map(item => {
+          if (item.token === targetToken) {
+            return {
+              ...item,
+              delivered: true,
+              deliveredAt: Date.now(),
+              data: { ...item.data, status: 'DELIVERED' },
+            };
+          }
+          return item;
+        });
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('sadel_scanned_deliveries', JSON.stringify(newList));
+        }
+        return newList;
+      });
+
+      setNoShowConfirmToken(null);
+      triggerHaptic([100, 50, 100, 50, 200]);
+    } catch (err: any) {
+      console.error(err);
+      setNoShowError(err.message || 'No se pudo liberar el pedido.');
+      triggerHaptic([300, 100, 300]);
+    } finally {
+      setNoShowSubmitting(false);
     }
   };
 
@@ -2740,6 +2884,89 @@ export default function DeliveryTicketPage({ params }: PageProps) {
           </form>
         </div>
 
+        {/* ── ESPERA SIN CONTACTO: LUGAR SEGURO / CLIENTE NO SALIÓ ── */}
+        {(() => {
+          const arrivalTime = getCustomerArrivalTime(currentTicket, selectedToken ?? undefined);
+          const elapsedMs = arrivalTime ? deliveryClock - arrivalTime : 0;
+          const SAFE_PLACE_MS = 10 * 60 * 1000;
+          const NO_SHOW_MS = 15 * 60 * 1000;
+          const remainingSafe = SAFE_PLACE_MS - elapsedMs;
+          const remainingNoShow = NO_SHOW_MS - elapsedMs;
+          const safePlaceReady = isTransfer && remainingSafe <= 0;
+          const noShowReady = isCash && remainingNoShow <= 0;
+          // Solo mostrar la sección en el último minuto de espera para
+          // no presionar al repartidor mientras aún hay tiempo.
+          const LAST_MINUTE_MS = 60 * 1000;
+          const showTimer = (isCash || isTransfer) && arrivalTime > 0 &&
+            (isTransfer ? remainingSafe <= LAST_MINUTE_MS : remainingNoShow <= LAST_MINUTE_MS);
+
+          if (!showTimer || currentDelivered) return null;
+
+          return (
+            <div className={`mt-3 rounded-[28px] border p-5 space-y-4 ${
+              darkMode ? 'border-amber-900/30 bg-zinc-900' : 'border-amber-200 bg-white'
+            }`}>
+              <div className="flex items-center justify-between">
+                <p className={`text-[10px] font-bold uppercase tracking-widest ${
+                  darkMode ? 'text-amber-400' : 'text-amber-700'
+                }`}>
+                  Espera sin contacto
+                </p>
+                {arrivalTime > 0 ? (
+                  <span className={`text-xs font-black tabular-nums ${
+                    darkMode ? 'text-amber-300' : 'text-amber-800'
+                  }`}>
+                    {isTransfer
+                      ? `Lugar seguro en ${formatCountdown(remainingSafe)}`
+                      : `Liberar en ${formatCountdown(remainingNoShow)}`}
+                  </span>
+                ) : null}
+              </div>
+              <p className={`text-[10px] leading-snug ${
+                darkMode ? 'text-amber-400/70' : 'text-amber-700/70'
+              }`}>
+                {isTransfer
+                  ? 'Si el cliente no sale, podrás dejar el pedido en un lugar seguro y marcar la entrega.'
+                  : 'Si el cliente no sale, podrás liberar el pedido; se le cobrará al cliente.'}
+              </p>
+
+              {isTransfer && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    triggerHaptic([30, 20, 60]);
+                    setLugarSeguroError('');
+                    setSafePlaceConfirmToken(selectedToken);
+                  }}
+                  disabled={!safePlaceReady || lugarSeguroSubmitting}
+                  className="w-full py-3 rounded-2xl border-2 border-amber-300 dark:border-amber-700/60 bg-white dark:bg-zinc-900 text-amber-800 dark:text-amber-300 text-sm font-black tracking-wide transition active:scale-[0.97] disabled:opacity-35 disabled:cursor-not-allowed"
+                >
+                  {lugarSeguroSubmitting
+                    ? <span className="flex items-center justify-center gap-2"><span className="h-4 w-4 rounded-full border-2 border-current border-t-transparent animate-spin" />Procesando…</span>
+                    : 'Dejar en un lugar seguro'}
+                </button>
+              )}
+
+              {isCash && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    triggerHaptic([30, 20, 60]);
+                    setNoShowError('');
+                    setNoShowConfirmToken(selectedToken);
+                  }}
+                  disabled={!noShowReady || noShowSubmitting}
+                  className="w-full py-3 rounded-2xl border-2 border-rose-300 dark:border-rose-700/60 bg-white dark:bg-zinc-900 text-rose-700 dark:text-rose-400 text-sm font-black tracking-wide transition active:scale-[0.97] disabled:opacity-35 disabled:cursor-not-allowed"
+                >
+                  {noShowSubmitting
+                    ? <span className="flex items-center justify-center gap-2"><span className="h-4 w-4 rounded-full border-2 border-current border-t-transparent animate-spin" />Procesando…</span>
+                    : 'El cliente no salió — Liberar pedido'}
+                </button>
+              )}
+            </div>
+          );
+        })()}
+
         {/* ── SOPORTE / RESTAURANTE ── */}
         <div className={`mt-3 rounded-[28px] border p-5 flex items-center justify-between gap-3 shadow-[0_4px_24px_rgba(0,0,0,0.015)] ${cardBg} ${cardBorder}`}>
           <div className="min-w-0">
@@ -2882,6 +3109,154 @@ export default function DeliveryTicketPage({ params }: PageProps) {
         )}
 
       </main>
+
+      {/* ═══════════════════════════════════════════════════════════════════
+          MODAL: DEJAR EN LUGAR SEGURO (entrega abandonada - transferencia)
+          ═══════════════════════════════════════════════════════════════════ */}
+      {safePlaceConfirmToken && (() => {
+        const safeOrder = deliveries.find(d => d.token === safePlaceConfirmToken);
+        const arrivalTime = safeOrder ? getCustomerArrivalTime(safeOrder.data, safePlaceConfirmToken ?? undefined) : null;
+        const waitMin = arrivalTime ? Math.floor((Date.now() - arrivalTime) / 60000) : 0;
+        return (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm px-4">
+            <div className={`w-full max-w-md rounded-3xl p-6 shadow-2xl animate-in fade-in zoom-in-95 duration-200 ${
+              darkMode ? 'bg-zinc-900' : 'bg-white'
+            }`}>
+              <div className="flex flex-col items-center text-center">
+                <div className={`flex h-16 w-16 items-center justify-center rounded-full text-3xl mb-4 ${
+                  darkMode ? 'bg-amber-950/30 text-amber-300' : 'bg-amber-100 text-amber-600'
+                }`}>
+                  📦
+                </div>
+                <h2 className={`text-xl font-black ${darkMode ? 'text-zinc-50' : 'text-neutral-950'}`}>
+                  ¿Dejar en un lugar seguro?
+                </h2>
+                <p className={`text-sm mt-2 leading-relaxed ${darkMode ? 'text-zinc-400' : 'text-muted'}`}>
+                  Has esperado <strong className={darkMode ? 'text-zinc-300' : 'text-foreground'}>{waitMin} minutos</strong> sin que el cliente salga.
+                  Puedes dejar el pedido en un lugar seguro y marcarlo como entregado.
+                </p>
+                <div className="w-full text-left mt-4 space-y-2.5">
+                  <div className={`rounded-2xl border px-4 py-3 ${
+                    darkMode ? 'border-sky-900/30 bg-zinc-900' : 'border-sky-200 bg-sky-50'
+                  }`}>
+                    <p className={`text-[10px] font-bold uppercase tracking-widest mb-1 ${
+                      darkMode ? 'text-sky-400' : 'text-sky-600'
+                    }`}>Para el cliente</p>
+                    <p className={`text-xs leading-relaxed ${darkMode ? 'text-zinc-300' : 'text-muted'}`}>
+                      El cliente <strong className={darkMode ? 'text-zinc-200' : 'text-foreground'}>ya pagó por transferencia</strong>. Deja el pedido donde pueda recogerlo; el pago ya está cubierto.
+                    </p>
+                  </div>
+                  <div className={`rounded-2xl border px-4 py-3 ${
+                    darkMode ? 'border-emerald-900/30 bg-zinc-900' : 'border-emerald-200 bg-emerald-50'
+                  }`}>
+                    <p className={`text-[10px] font-bold uppercase tracking-widest mb-1 ${
+                      darkMode ? 'text-emerald-400' : 'text-emerald-600'
+                    }`}>Resultado</p>
+                    <p className={`text-xs leading-relaxed ${darkMode ? 'text-zinc-300' : 'text-muted'}`}>
+                      La entrega quedará marcada como completada. El cliente será notificado para que recoja su pedido.
+                    </p>
+                  </div>
+                </div>
+                {lugarSeguroError && (
+                  <div className={`w-full mt-4 rounded-xl px-4 py-3 text-xs font-semibold text-center border ${
+                    darkMode ? 'bg-red-950/20 border-red-900/30 text-red-400' : 'bg-red-50 border-red-200/50 text-red-600'
+                  }`}>
+                    {lugarSeguroError}
+                  </div>
+                )}
+                <div className="flex gap-3 w-full mt-6">
+                  <button
+                    type="button"
+                    onClick={() => { setSafePlaceConfirmToken(null); setLugarSeguroError(''); triggerHaptic([10]); }}
+                    className={`flex-1 py-3.5 rounded-2xl border text-sm font-bold transition active:scale-[0.97] ${
+                      darkMode
+                        ? 'border-zinc-700 bg-zinc-800 text-zinc-400 hover:bg-zinc-700'
+                        : 'border-neutral-200 bg-neutral-50 text-muted hover:bg-neutral-100'
+                    }`}
+                  >
+                    Volver
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { void handleLugarSeguro(); }}
+                    disabled={lugarSeguroSubmitting}
+                    className="flex-1 py-3.5 rounded-2xl bg-amber-500 text-sm font-bold text-white shadow-lg shadow-amber-500/30 transition active:scale-[0.97] hover:bg-amber-600 disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none"
+                  >
+                    {lugarSeguroSubmitting ? 'Procesando…' : 'Dejar en lugar seguro'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* ═══════════════════════════════════════════════════════════════════
+          MODAL: CLIENTE NO SALIÓ (entrega abandonada - efectivo)
+          ═══════════════════════════════════════════════════════════════════ */}
+      {noShowConfirmToken && (() => {
+        const noShowOrder = deliveries.find(d => d.token === noShowConfirmToken);
+        const arrivalTime = noShowOrder ? getCustomerArrivalTime(noShowOrder.data, noShowConfirmToken ?? undefined) : null;
+        const waitMin = arrivalTime ? Math.floor((Date.now() - arrivalTime) / 60000) : 0;
+        return (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm px-4">
+            <div className={`w-full max-w-md rounded-3xl p-6 shadow-2xl animate-in fade-in zoom-in-95 duration-200 ${
+              darkMode ? 'bg-zinc-900' : 'bg-white'
+            }`}>
+              <div className="flex flex-col items-center text-center">
+                <div className={`flex h-16 w-16 items-center justify-center rounded-full text-3xl mb-4 ${
+                  darkMode ? 'bg-rose-950/30 text-rose-300' : 'bg-rose-100 text-rose-600'
+                }`}>
+                  ⚠️
+                </div>
+                <h2 className={`text-xl font-black ${darkMode ? 'text-zinc-50' : 'text-neutral-950'}`}>
+                  ¿Liberar el pedido?
+                </h2>
+                <p className={`text-sm mt-2 leading-relaxed ${darkMode ? 'text-zinc-400' : 'text-muted'}`}>
+                  Has esperado <strong className={darkMode ? 'text-zinc-300' : 'text-foreground'}>{waitMin} minutos</strong> y el cliente no salió a recibir.
+                </p>
+                <div className={`w-full mt-4 rounded-2xl border px-4 py-3 ${
+                  darkMode ? 'border-amber-900/30 bg-zinc-900' : 'border-amber-200 bg-amber-50'
+                }`}>
+                  <p className={`text-xs leading-relaxed ${darkMode ? 'text-zinc-300' : 'text-muted'}`}>
+                    Asegúrate de haber intentado contactar al cliente. Al liberar el pedido{' '}
+                    <strong className={darkMode ? 'text-zinc-200' : 'text-foreground'}>se le cobrará el monto total del pedido</strong> y{' '}
+                    <strong className={darkMode ? 'text-zinc-200' : 'text-foreground'}>su cuenta quedará suspendida</strong> hasta que liquide el saldo pendiente.
+                  </p>
+                </div>
+                {noShowError && (
+                  <div className={`w-full mt-4 rounded-xl px-4 py-3 text-xs font-semibold text-center border ${
+                    darkMode ? 'bg-red-950/20 border-red-900/30 text-red-400' : 'bg-red-50 border-red-200/50 text-red-600'
+                  }`}>
+                    {noShowError}
+                  </div>
+                )}
+                <div className="flex gap-3 w-full mt-6">
+                  <button
+                    type="button"
+                    onClick={() => { setNoShowConfirmToken(null); setNoShowError(''); triggerHaptic([10]); }}
+                    className={`flex-1 py-3.5 rounded-2xl border text-sm font-bold transition active:scale-[0.97] ${
+                      darkMode
+                        ? 'border-zinc-700 bg-zinc-800 text-zinc-400 hover:bg-zinc-700'
+                        : 'border-neutral-200 bg-neutral-50 text-muted hover:bg-neutral-100'
+                    }`}
+                  >
+                    Volver
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { void handleNoShow(); }}
+                    disabled={noShowSubmitting}
+                    className="flex-1 py-3.5 rounded-2xl bg-rose-500 text-sm font-bold text-white shadow-lg shadow-rose-500/30 transition active:scale-[0.97] hover:bg-rose-600 disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none"
+                  >
+                    {noShowSubmitting ? 'Procesando…' : 'Liberar pedido'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {navOpenFor === 'delivery' && addressObj.latitude && addressObj.longitude && (
         <DriverTurnByTurnOverlay

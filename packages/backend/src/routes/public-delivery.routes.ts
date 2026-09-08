@@ -108,6 +108,7 @@ export async function registerPublicDeliveryRoutes(fastify: FastifyInstance): Pr
           orderReference: dToken.order.orderReference,
           dailyCounter: dToken.order.dailyCounter ?? null,
           status: dToken.order.status,
+          driverArrivedAtCustomer: dToken.order.driverArrivedAtCustomer ?? null,
           totalAmount: dToken.order.totalAmount,
           deliveryFee: dToken.order.deliveryFee,
           paymentMethod: dToken.order.paymentMethod,
@@ -136,6 +137,534 @@ export async function registerPublicDeliveryRoutes(fastify: FastifyInstance): Pr
           },
         },
       });
+    } catch (error) {
+      return sendAppError(reply, error);
+    }
+  });
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // LUGAR SEGURO (entrega abandonada - transferencia/online)
+  // ─────────────────────────────────────────────────────────────────────────
+  // Si el repartidor llegó al domicilio y esperó 10+ minutos sin contacto con
+  // el cliente, puede dejar el pedido en un lugar seguro. El pago (transferencia
+  // o en línea) ya está cubierto, por lo que la entrega simplemente se marca
+  // como DELIVERED sin tocar el paymentStatus y se notifica al comensal.
+  fastify.post('/public/delivery-ticket/:token/lugar-seguro', async (request, reply) => {
+    const params = z.object({ token: z.string().min(1) }).safeParse(request.params);
+
+    if (!params.success) {
+      return reply.status(400).send({
+        success: false,
+        error: { code: 'INVALID_PARAMS', message: 'Token invalido.' },
+      });
+    }
+
+    try {
+      const { hashToken } = require('../utils/crypto');
+      const hashedToken = hashToken(params.data.token);
+      const dToken = await (prisma as any).deliveryToken.findFirst({
+        where: {
+          OR: [
+            { token: hashedToken },
+            { token: params.data.token }
+          ]
+        },
+        include: {
+          order: {
+            include: {
+              restaurant: true,
+              customer: {
+                include: {
+                  user: true,
+                },
+              },
+            },
+          },
+        },
+      }) as any;
+
+      if (!dToken) {
+        return reply.status(404).send({
+          success: false,
+          error: { code: 'TOKEN_NOT_FOUND', message: 'El enlace de reparto no existe o ya fue completado.' },
+        });
+      }
+
+      if (new Date() > dToken.expiresAt) {
+        await (prisma as any).deliveryToken.delete({ where: { id: dToken.id } });
+        return reply.status(410).send({
+          success: false,
+          error: { code: 'TOKEN_EXPIRED', message: 'El enlace de reparto ha expirado.' },
+        });
+      }
+
+      const order = dToken.order;
+
+      if (order.status === OrderStatus.DELIVERED) {
+        await (prisma as any).deliveryToken
+          .delete({ where: { id: dToken.id } })
+          .catch((err: unknown) => request.log.error({ err }, `Fallo al invalidar token de entrega ${dToken.id} (lugar seguro, ya entregado)`));
+        return reply.send({
+          success: true,
+          message: 'El pedido ya fue entregado.',
+          data: order,
+        });
+      }
+
+      // Solo aplica a pagos ya cubiertos (transferencia / en línea).
+      if (order.paymentMethod === 'CASH') {
+        return reply.status(400).send({
+          success: false,
+          error: {
+            code: 'INVALID_PAYMENT_METHOD',
+            message: 'Un pedido de pago en efectivo no puede dejarse en un lugar seguro.',
+          },
+        });
+      }
+
+      // Debe haber registrado la llegada al domicilio para anclar la espera.
+      if (!order.driverArrivedAtCustomer) {
+        return reply.status(409).send({
+          success: false,
+          error: {
+            code: 'DRIVER_NOT_ARRIVED',
+            message: 'Debes registrar que llegaste con el cliente antes de continuar.',
+          },
+        });
+      }
+
+      const waitMs = Date.now() - new Date(order.driverArrivedAtCustomer).getTime();
+      const SAFE_PLACE_WAIT_MS = 10 * 60 * 1000;
+      if (waitMs < SAFE_PLACE_WAIT_MS) {
+        const faltaMin = Math.ceil((SAFE_PLACE_WAIT_MS - waitMs) / 60000);
+        return reply.status(409).send({
+          success: false,
+          error: {
+            code: 'ARRIVAL_TIMEOUT_NOT_ELAPSED',
+            message: `Aun no han pasado los 10 minutos. Intenta en ${faltaMin} minuto(s) o confirma la entrega con el cliente.`,
+          },
+        });
+      }
+
+      const DELIVERABLE_STATES: OrderStatus[] = ['READY', 'PICKED_UP', 'IN_TRANSIT'];
+      const claimed = await prisma.order.updateMany({
+        where: {
+          id: order.id,
+          status: { in: DELIVERABLE_STATES },
+        },
+        data: {
+          status: OrderStatus.DELIVERED,
+          deliveredAt: new Date(),
+        },
+      });
+
+      if (claimed.count === 0) {
+        await (prisma as any).deliveryToken
+          .delete({ where: { id: dToken.id } })
+          .catch((err: unknown) => request.log.error({ err }, `Fallo al invalidar token de entrega ${dToken.id} (lugar seguro, ya cerrado)`));
+        return reply.status(409).send({
+          success: false,
+          error: { code: 'ALREADY_DELIVERED', message: 'Este pedido ya fue entregado.' },
+        });
+      }
+
+      const updatedOrder = await prisma.order.findUnique({
+        where: { id: order.id },
+        include: {
+          restaurant: true,
+          customer: { include: { user: true } },
+        },
+      }) as any;
+
+      await prisma.orderTracking.create({
+        data: {
+          orderId: order.id,
+          status: OrderStatus.DELIVERED,
+          notes: 'Pedido dejado en un lugar seguro por el repartidor (sin contacto con el cliente).',
+        },
+      });
+
+      await (prisma as any).deliveryToken.delete({ where: { id: dToken.id } });
+
+      // Sockets
+      emitNotification(
+        fastify.io,
+        order.restaurant.userId,
+        'RESTAURANT',
+        'order:delivered',
+        {
+          orderId: order.id,
+          orderReference: order.orderReference,
+          status: 'safe_place',
+          customerName: order.customer?.user?.name,
+        },
+        {
+          orderId: order.id,
+        }
+      );
+
+      emitNotification(
+        fastify.io,
+        order.customer.user.id,
+        'CUSTOMER',
+        'order:delivered',
+        {
+          orderId: order.id,
+          status: 'safe_place',
+          message: 'Tu pedido fue dejado en un lugar seguro.',
+        },
+        {
+          orderId: order.id,
+        }
+      );
+
+      // Push notification
+      try {
+        const pushResult = await sendPushNotification(order.customer.user.id, {
+          title: 'Tu pedido fue dejado en un lugar seguro',
+          body: 'El repartidor espero mas de 10 minutos y dejo tu pedido en un lugar seguro. ¡Recogelo cuando puedas!',
+          icon: '/app-icon-192.png',
+          badge: '/badge.png',
+          vibrate: [300, 100, 300],
+          requireInteraction: true,
+          data: {
+            orderId: order.id,
+            event: 'order:delivered',
+            url: `/?orderId=${order.id}`,
+          },
+        });
+        request.log.info(`[Push] Resultado de notificacion push (lugar seguro) para comensal ${order.customer.user.id}: ${JSON.stringify(pushResult)}`);
+      } catch (pushErr) {
+        request.log.error(pushErr as any, `[Push] Error al notificar entrega en lugar seguro (comensal ${order.customer.user.id})`);
+      }
+
+      return reply.send({
+        success: true,
+        message: 'El pedido fue dejado en un lugar seguro y marcado como entregado.',
+        data: updatedOrder,
+      });
+    } catch (error) {
+      return sendAppError(reply, error);
+    }
+  });
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // CLIENTE NO SALIÓ - LIBERAR PEDIDO (entrega abandonada - efectivo)
+  // ─────────────────────────────────────────────────────────────────────────
+  // Pedidos en efectivo: tras 15 minutos sin que el cliente salga a recibir, el
+  // repartidor puede liberar el pedido. Se crea un CustomerBillingSettlement por
+  // el total, la cuenta del comensal queda suspendida hasta que liquide y el
+  // pedido se marca como DELIVERED sin paymentStatus (el efectivo nunca se cobró).
+  fastify.post('/public/delivery-ticket/:token/cliente-no-salio', async (request, reply) => {
+    const params = z.object({ token: z.string().min(1) }).safeParse(request.params);
+
+    if (!params.success) {
+      return reply.status(400).send({
+        success: false,
+        error: { code: 'INVALID_PARAMS', message: 'Token invalido.' },
+      });
+    }
+
+    try {
+      const { hashToken } = require('../utils/crypto');
+      const hashedToken = hashToken(params.data.token);
+      const dToken = await (prisma as any).deliveryToken.findFirst({
+        where: {
+          OR: [
+            { token: hashedToken },
+            { token: params.data.token }
+          ]
+        },
+        include: {
+          order: {
+            include: {
+              restaurant: true,
+              customer: {
+                include: {
+                  user: true,
+                },
+              },
+              driver: {
+                include: {
+                  user: true,
+                },
+              },
+            },
+          },
+        },
+      }) as any;
+
+      if (!dToken) {
+        return reply.status(404).send({
+          success: false,
+          error: { code: 'TOKEN_NOT_FOUND', message: 'El enlace de reparto no existe o ya fue completado.' },
+        });
+      }
+
+      if (new Date() > dToken.expiresAt) {
+        await (prisma as any).deliveryToken.delete({ where: { id: dToken.id } });
+        return reply.status(410).send({
+          success: false,
+          error: { code: 'TOKEN_EXPIRED', message: 'El enlace de reparto ha expirado.' },
+        });
+      }
+
+      const order = dToken.order;
+
+      if (order.status === OrderStatus.DELIVERED) {
+        await (prisma as any).deliveryToken
+          .delete({ where: { id: dToken.id } })
+          .catch((err: unknown) => request.log.error({ err }, `Fallo al invalidar token de entrega ${dToken.id} (no salio, ya entregado)`));
+        return reply.send({
+          success: true,
+          message: 'El pedido ya fue entregado.',
+          data: order,
+        });
+      }
+
+      // Solo aplica a pedidos en efectivo (el dinero que nunca se cobró se
+      // convierte en deuda). Si el pago ya estaba cubierto, el repartidor debe
+      // usar el flujo de "lugar seguro".
+      if (order.paymentMethod !== 'CASH') {
+        return reply.status(400).send({
+          success: false,
+          error: {
+            code: 'INVALID_PAYMENT_METHOD',
+            message: 'Este flujo es solo para pedidos de pago en efectivo. Usa lugar seguro para pedidos pagados.',
+          },
+        });
+      }
+
+      if (!order.driverArrivedAtCustomer) {
+        return reply.status(409).send({
+          success: false,
+          error: {
+            code: 'DRIVER_NOT_ARRIVED',
+            message: 'Debes registrar que llegaste con el cliente antes de continuar.',
+          },
+        });
+      }
+
+      const arrivedAtCustomer = order.driverArrivedAtCustomer;
+      const waitMs = Date.now() - new Date(arrivedAtCustomer).getTime();
+      const NO_SHOW_WAIT_MS = 15 * 60 * 1000;
+      if (waitMs < NO_SHOW_WAIT_MS) {
+        const faltaMin = Math.ceil((NO_SHOW_WAIT_MS - waitMs) / 60000);
+        return reply.status(409).send({
+          success: false,
+          error: {
+            code: 'ARRIVAL_TIMEOUT_NOT_ELAPSED',
+            message: `Aun no han pasado los 15 minutos. Intenta en ${faltaMin} minuto(s) o confirma la entrega con el cliente.`,
+          },
+        });
+      }
+
+      // Idempotency guard: nunca crear una segunda deuda para el mismo pedido.
+      const existingSettlement = await prisma.customerBillingSettlement.findUnique({
+        where: { orderId: order.id },
+        select: { id: true },
+      });
+      if (existingSettlement) {
+        return reply.status(409).send({
+          success: false,
+          error: {
+            code: 'SETTLEMENT_ALREADY_EXISTS',
+            message: 'Este pedido ya genero una deuda. Revisa con soporte.',
+          },
+        });
+      }
+
+      // 1) Crear la deuda + suspender al cliente + abrir ticket de soporte DE
+      //    FORMA ATÓMICA. El unique(orderId) serializa lanzamientos simultáneos.
+      //    Crear la deuda ANTES de marcar el pedido entregado garantiza que nunca
+      //    exista un pedido entregado sin facturar.
+      let settlementId: string;
+      try {
+        const created = await prisma.$transaction(async (tx) => {
+          const reference = `CUS-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}-${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
+
+          const settlement = await tx.customerBillingSettlement.create({
+            data: {
+              customerId: order.customer.id,
+              reference,
+              orderId: order.id,
+              amount: order.totalAmount,
+              status: 'PENDING',
+              dueDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+              notes: `Pedido no recibido - el repartidor llego y espero 15+ minutos sin respuesta del cliente. Pedido #${order.orderReference}.`,
+            },
+          });
+
+          // debtAmount acumula: un cliente puede deber por más de un pedido.
+          await tx.customer.update({
+            where: { id: order.customer.id },
+            data: { isSuspendedByDebt: true, debtAmount: { increment: order.totalAmount } },
+          });
+
+          await tx.user.update({
+            where: { id: order.customer.user.id },
+            data: { status: 'SUSPENDED' },
+          });
+
+          await tx.supportTicket.create({
+            data: {
+              type: 'ORDER',
+              subject: 'Cliente no salio a recibir pedido',
+              description: [
+                `Pedido: #${order.orderReference}`,
+                `Repartidor: ${order.driver?.user?.name || 'N/A'}`,
+                `Hora de llegada al domicilio: ${arrivedAtCustomer.toISOString()}`,
+                `Tiempo de espera: 15+ minutos`,
+                `Monto del pedido: $${order.totalAmount.toFixed(2)}`,
+                `Restaurante: ${order.restaurant.name}`,
+                `Referencia de deuda: ${settlement.reference}`,
+              ].join('\n'),
+              status: 'PENDING',
+              customerId: order.customer.id,
+              orderNumber: order.orderReference,
+              storeName: order.restaurant.name,
+            },
+          });
+
+          return settlement;
+        });
+        settlementId = created.id;
+      } catch (debtErr: any) {
+        if (debtErr?.code === 'P2002') {
+          return reply.status(409).send({
+            success: false,
+            error: {
+              code: 'SETTLEMENT_ALREADY_EXISTS',
+              message: 'Este pedido ya genero una deuda. Revisa con soporte.',
+            },
+          });
+        }
+        throw debtErr;
+      }
+
+      // 2) Completar la entrega (DELIVERED, token invalidado) con la marca del
+      //    release. Si falla, revertir la deuda para no cobrar al cliente un
+      //    pedido que en realidad no fue liberado.
+      try {
+        const DELIVERABLE_STATES: OrderStatus[] = ['READY', 'PICKED_UP', 'IN_TRANSIT'];
+        const claimed = await prisma.order.updateMany({
+          where: {
+            id: order.id,
+            status: { in: DELIVERABLE_STATES },
+          },
+          data: {
+            status: OrderStatus.DELIVERED,
+            deliveredAt: new Date(),
+            noShowReleasedAt: new Date(),
+          },
+        });
+
+        if (claimed.count === 0) {
+          throw new Error('El pedido cambió de estado o fue cerrado por otro flujo.');
+        }
+
+        const updatedOrder = await prisma.order.findUnique({
+          where: { id: order.id },
+          include: {
+            restaurant: true,
+            customer: { include: { user: true } },
+          },
+        }) as any;
+
+        await prisma.orderTracking.create({
+          data: {
+            orderId: order.id,
+            status: OrderStatus.DELIVERED,
+            notes: 'Cliente no salio a recibir. Pedido liberado por el repartidor.',
+          },
+        });
+
+        await (prisma as any).deliveryToken.delete({ where: { id: dToken.id } });
+
+        emitNotification(
+          fastify.io,
+          order.restaurant.userId,
+          'RESTAURANT',
+          'order:delivered',
+          {
+            orderId: order.id,
+            orderReference: order.orderReference,
+            status: 'no_show',
+            customerName: order.customer?.user?.name,
+          },
+          {
+            orderId: order.id,
+          }
+        );
+
+        emitNotification(
+          fastify.io,
+          order.customer.user.id,
+          'CUSTOMER',
+          'account:suspended',
+          {
+            reason: 'unpaid_delivery',
+            orderId: order.id,
+          },
+          {
+            orderId: order.id,
+          }
+        );
+
+        try {
+          await sendPushNotification(order.customer.user.id, {
+            title: 'No pudimos entregar tu pedido',
+            body: 'El repartidor llego a tu domicilio y espero, pero no saliste a recibirlo. Para volver a pedir en SaDeL, cubre el saldo pendiente en la app.',
+            icon: '/app-icon-192.png',
+            badge: '/badge.png',
+            vibrate: [300, 100, 300],
+            requireInteraction: true,
+            data: {
+              orderId: order.id,
+              event: 'account:suspended',
+              url: '/mi-deuda',
+            },
+          });
+        } catch (pushErr) {
+          request.log.error(pushErr as any, `[Push] Error al notificar suspension de cuenta (comensal ${order.customer.user.id})`);
+        }
+
+        return reply.send({
+          success: true,
+          message: 'El pedido fue liberado y la deuda quedó registrada. La cuenta del comensal está suspendida hasta que liquide.',
+          data: updatedOrder,
+        });
+      } catch (deliveryErr) {
+        // Compensación: revertir la deuda si la entrega no pudo completarse.
+        try {
+          await prisma.$transaction(async (tx) => {
+            await tx.customerBillingSettlement.delete({ where: { id: settlementId } });
+            const remaining = await tx.customerBillingSettlement.aggregate({
+              where: { customerId: order.customer.id, status: { not: 'PAID' } },
+              _sum: { amount: true },
+            });
+            const remainingDebt = remaining._sum.amount || 0;
+            await tx.customer.update({
+              where: { id: order.customer.id },
+              data: remainingDebt > 0
+                ? { isSuspendedByDebt: true, debtAmount: remainingDebt }
+                : { isSuspendedByDebt: false, debtAmount: 0 },
+            });
+            if (remainingDebt === 0) {
+              await tx.user.update({
+                where: { id: order.customer.user.id },
+                data: { status: 'ACTIVE' },
+              });
+            }
+          });
+        } catch (compErr) {
+          request.log.error(
+            compErr as any,
+            '[Deuda] No se pudo revertir la deuda tras fallar la entrega'
+          );
+        }
+        return sendAppError(reply, deliveryErr);
+      }
     } catch (error) {
       return sendAppError(reply, error);
     }
