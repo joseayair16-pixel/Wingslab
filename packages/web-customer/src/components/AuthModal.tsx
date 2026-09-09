@@ -179,6 +179,7 @@ export const AuthModal = memo(function AuthModal({ isOpen, onClose, onSuccess, a
         storageKey: 'sadel.customer',
         apiBase,
         token: payload.data.token,
+        refreshToken: payload.data.refreshToken,
         user: payload.data.user,
       });
 
@@ -318,6 +319,7 @@ export const AuthModal = memo(function AuthModal({ isOpen, onClose, onSuccess, a
           storageKey: 'sadel.customer',
           apiBase,
           token: payload.data.token,
+          refreshToken: payload.data.refreshToken,
           user: payload.data.user,
         });
 
@@ -358,6 +360,7 @@ export const AuthModal = memo(function AuthModal({ isOpen, onClose, onSuccess, a
         storageKey: 'sadel.customer',
         apiBase,
         token: payload.data.token,
+        refreshToken: payload.data.refreshToken,
         user: payload.data.user,
       });
 

@@ -23,6 +23,7 @@ import {
   persistStoredSession,
   readStoredSession,
   requestJson,
+  setDefaultRefreshConfig,
   convertImageFileToDataUrl,
   preload,
   warmup,
@@ -773,13 +774,14 @@ export default function Home() {
     }
   };
 
-  function persistSession(nextToken: string, user: AuthUser) {
+  function persistSession(nextToken: string, user: AuthUser, refreshToken?: string) {
     setToken(nextToken);
     setSessionUser(user);
     persistStoredSession({
       storageKey,
       apiBase,
       token: nextToken,
+      refreshToken,
       user,
     });
   }
@@ -798,6 +800,38 @@ export default function Home() {
       setAuthMessage(message);
     }
   }
+
+  // Sesión deslizante de 30 días: cuando el access token expira, requestJson
+  // renueva en silencio con el refresh token y guarda el token fresco.
+  const clearSessionRef = useRef(clearSession);
+  useEffect(() => {
+    clearSessionRef.current = clearSession;
+  });
+  const sessionUserRef = useRef(sessionUser);
+  useEffect(() => {
+    sessionUserRef.current = sessionUser;
+  }, [sessionUser]);
+  useEffect(() => {
+    setDefaultRefreshConfig({
+      refreshToken: () => readStoredSession(storageKey).refreshToken,
+      onRefreshed: (newToken, newRefreshToken) => {
+        setToken(newToken);
+        const currentUser = sessionUserRef.current;
+        if (currentUser) {
+          persistStoredSession({
+            storageKey,
+            apiBase,
+            token: newToken,
+            refreshToken: newRefreshToken,
+            user: currentUser,
+          });
+        }
+      },
+      onRefreshFailed: () => {
+        clearSessionRef.current('La sesión ha expirado. Ingresa de nuevo.');
+      },
+    });
+  }, [storageKey, apiBase, setToken]);
 
   function pushToast(tone: ToastTone, title: string, message: string) {
     setToasts((current) => {
@@ -947,7 +981,7 @@ export default function Home() {
         return;
       }
 
-      persistSession(payload.data.token, payload.data.user);
+      persistSession(payload.data.token, payload.data.user, payload.data.refreshToken);
     } catch (requestError) {
       const message = getRequestErrorMessage(requestError, 'Error al iniciar sesión.');
       setError(message);

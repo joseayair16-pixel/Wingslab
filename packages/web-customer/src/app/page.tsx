@@ -13,6 +13,7 @@ import {
   persistStoredSession,
   readStoredSession,
   requestJson,
+  setDefaultRefreshConfig,
   setGlobalSessionExpiredHandler,
   forceSessionExpired,
   submitReview,
@@ -1903,6 +1904,35 @@ export default function Home() {
     });
     return () => setGlobalSessionExpiredHandler(null);
   }, []);
+
+  // Sesión deslizante de 30 días: cuando el access token expira, requestJson
+  // renueva en silencio con el refresh token y guarda el token fresco. Evita
+  // que el usuario tenga que volver a iniciar sesión cada 7 días.
+  const sessionUserRef = useRef(sessionUser);
+  useEffect(() => {
+    sessionUserRef.current = sessionUser;
+  }, [sessionUser]);
+  useEffect(() => {
+    setDefaultRefreshConfig({
+      refreshToken: () => readStoredSession(storageKey).refreshToken,
+      onRefreshed: (newToken, newRefreshToken) => {
+        setToken(newToken);
+        const currentUser = sessionUserRef.current;
+        if (currentUser) {
+          persistStoredSession({
+            storageKey,
+            apiBase,
+            token: newToken,
+            refreshToken: newRefreshToken,
+            user: currentUser,
+          });
+        }
+      },
+      onRefreshFailed: () => {
+        clearSessionRef.current('Tu sesión ha expirado. Por favor, inicia sesión de nuevo.');
+      },
+    });
+  }, [storageKey, apiBase, setToken]);
 
   // Sync userLocation to a ref to prevent GPS fluctuations from triggering/aborting the search effect
   const userLocationRef = useRef(userLocation);
