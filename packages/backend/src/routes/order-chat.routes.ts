@@ -102,7 +102,6 @@ export async function registerOrderChatRoutes(fastify: FastifyInstance): Promise
     } catch (error) {
       const err = error as Error;
       fastify.log.error({ err: err.message, stack: err.stack }, '[order-chat] GET /orders/:orderId/messages failed');
-      console.error('[order-chat] GET error:', err.message, err.stack);
       return reply.status(500).send({
         success: false,
         error: {
@@ -242,7 +241,6 @@ export async function registerOrderChatRoutes(fastify: FastifyInstance): Promise
     } catch (error) {
       const err = error as Error;
       fastify.log.error({ err: err.message, stack: err.stack }, '[order-chat] POST /orders/:orderId/messages failed');
-      console.error('[order-chat] POST error:', err.message, err.stack);
       return reply.status(500).send({
         success: false,
         error: {

@@ -2744,12 +2744,12 @@ export async function registerAdminRoutes(fastify: FastifyInstance): Promise<voi
           data: settlement,
         });
       } catch (error) {
-        console.error('[ADMIN FORCE-SETTLE ERROR]:', error);
+        request.log.error({ err: error instanceof Error ? error.message : String(error) }, '[admin] force-settle failed');
         return reply.status(500).send({
           success: false,
           error: {
             code: 'SETTLEMENT_ERROR',
-            message: error instanceof Error ? error.message : 'Error al crear el corte.',
+            message: 'No se pudo generar el corte. Intenta nuevamente.',
           },
         });
       }
@@ -2940,9 +2940,10 @@ export async function registerAdminRoutes(fastify: FastifyInstance): Promise<voi
           data: requests,
         });
       } catch (error: any) {
+        request.log.error({ err: error?.message || String(error) }, '[admin] get-platform-requests failed');
         return reply.status(500).send({
           success: false,
-          error: { message: error.message || 'Error al obtener solicitudes.' },
+          error: { code: 'PLATFORM_REQUESTS_ERROR', message: 'No se pudieron obtener las solicitudes.' },
         });
       }
     });
