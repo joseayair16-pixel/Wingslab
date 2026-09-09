@@ -5,6 +5,7 @@ import fastifyRateLimit from '@fastify/rate-limit';
 import fastifyCompress from '@fastify/compress';
 import fastifySocketIO from 'fastify-socket.io';
 import Fastify, { FastifyInstance } from 'fastify';
+import crypto from 'node:crypto';
 import http from 'http';
 import { UserRole } from '@prisma/client';
 import { createAdapter } from '@socket.io/redis-adapter';
@@ -62,10 +63,12 @@ if (!process.env.JWT_SECRET) {
   if (NODE_ENV === 'production') {
     throw new Error('FATAL: JWT_SECRET is required in production.');
   }
-  console.warn('[AUTH] JWT_SECRET no configurado — usando secreto inseguro solo para desarrollo.');
+  console.warn('[AUTH] JWT_SECRET no configurado — generando secreto efimero de desarrollo. Las sesiones se invalidan al reiniciar.');
 }
 
-const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
+// Nunca usar un secreto hardcodeado. En desarrollo, si falta JWT_SECRET, se
+// genera uno aleatorio por proceso (sesiones efímeras, seguro por defecto).
+const JWT_SECRET = process.env.JWT_SECRET || crypto.randomBytes(32).toString('hex');
 
 export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyInstance> {
   const { enableRateLimit = true, enableSocketIO = true, enableJobs = true } = options;

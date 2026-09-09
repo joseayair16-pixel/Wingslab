@@ -121,6 +121,12 @@ type EnvVar = {
 const REQUIRED_ENV_VARS: EnvVar[] = [
   { key: 'DATABASE_URL', required: true, secret: true },
   { key: 'JWT_SECRET', required: true, secret: true },
+  // Clave dedicada para cifrar datos sensibles (cuentas bancarias). Separada de
+  // JWT_SECRET para no reutilizar material entre firmas (HS256) y cifrado (AES-GCM).
+  { key: 'DATABASE_ENCRYPTION_KEY', required: true, secret: true },
+  // Claves históricas (comma-separated) que permiten descifrar datos cifrados
+  // con una clave anterior durante una rotación. Nunca se usan para cifrar.
+  { key: 'DATABASE_ENCRYPTION_KEYS', required: false, secret: true },
   { key: 'REDIS_URL', required: false, secret: false },
   { key: 'CORS_ORIGIN', required: false, secret: false },
   { key: 'VAPID_PUBLIC_KEY', required: false, secret: false },
@@ -128,6 +134,13 @@ const REQUIRED_ENV_VARS: EnvVar[] = [
   { key: 'RATE_LIMIT_MAX', required: false, secret: false },
   { key: 'RATE_LIMIT_WINDOW_MS', required: false, secret: false },
 ];
+
+const PLACEHOLDER_SECRET_PATTERN =
+  /your[_-\s]?(secret|database|key|password|token)|change[_-\s]?in[_-\s]?production|changeme|replace[_-\s]?me|sample[_-\s]?secret/i;
+
+function isPlaceholderSecret(value: string): boolean {
+  return PLACEHOLDER_SECRET_PATTERN.test(value);
+}
 
 export function validateEnvironment(): void {
   const missing: string[] = [];
@@ -138,7 +151,7 @@ export function validateEnvironment(): void {
     if (v.required && !value) {
       missing.push(v.key);
     }
-    if (v.secret && value && value.includes('your-secret')) {
+    if (v.secret && value && isPlaceholderSecret(value)) {
       insecure.push(v.key);
     }
   }

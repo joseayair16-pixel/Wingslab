@@ -482,7 +482,8 @@ export async function registerDriverPanelRoutes(fastify: FastifyInstance): Promi
 
         return reply.send({ success: true, data: settlements });
       } catch (err: any) {
-        return reply.status(500).send({ success: false, error: err.message, stack: err.stack });
+        request.log.error({ err }, '[driver-panel] No se pudieron recuperar las liquidaciones');
+        return reply.status(500).send({ success: false, error: { code: 'SERVER_ERROR', message: 'Error al recuperar las liquidaciones.' } });
       }
     });
 
@@ -635,7 +636,8 @@ export async function registerDriverPanelRoutes(fastify: FastifyInstance): Promi
           },
         });
       } catch (err: any) {
-        return reply.status(500).send({ success: false, error: err.message });
+        request.log.error({ err }, '[driver-panel] No se pudo calcular la deuda del repartidor');
+        return reply.status(500).send({ success: false, error: { code: 'SERVER_ERROR', message: 'Error al calcular la deuda.' } });
       }
     });
 

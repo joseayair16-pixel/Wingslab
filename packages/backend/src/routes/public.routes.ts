@@ -1058,10 +1058,12 @@ export async function registerPublicRoutes(fastify: FastifyInstance): Promise<vo
         data: result,
       });
     } catch (error: any) {
+      request.log.error({ err: error }, '[public] No se pudo guardar la solicitud de plataforma');
       return reply.status(500).send({
         success: false,
         error: {
-          message: error.message || 'Error al guardar la solicitud.',
+          code: 'SERVER_ERROR',
+          message: 'Error al guardar la solicitud.',
         },
       });
     }
@@ -1155,9 +1157,10 @@ export async function registerPublicRoutes(fastify: FastifyInstance): Promise<vo
 
       return reply.send({ success: true, data });
     } catch (error: any) {
+      request.log.error({ err: error }, '[public] No se pudieron obtener las zonas activas');
       return reply.status(500).send({
         success: false,
-        error: { message: error.message || 'Error al obtener zonas activas.' },
+        error: { code: 'SERVER_ERROR', message: 'Error al obtener zonas activas.' },
       });
     }
   });
