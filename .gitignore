@@ -83,7 +83,13 @@ test-drivers.js
 test-port.js
 test-time.js
 *.bak
+packages/web-customer/src/views/ProfileView*.txt
 packages/backend/scratch-*
+packages/backend/scratch_*
+packages/backend/test-db.js
 packages/backend/src/check_transfer_db.*
 .env*
 .vercel
+
+# Editor/AI session state
+.continue/

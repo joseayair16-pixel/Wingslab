@@ -239,40 +239,45 @@ describe('order lifecycle integration flow', () => {
   beforeAll(async () => {
     app = await buildApp({
       enableRateLimit: false,
-      enableSocketIO: false,
+      enableSocketIO: true,
+      enableJobs: false,
     });
   });
 
   beforeEach(() => {
+    jest.spyOn(prisma.user, 'findUnique').mockResolvedValue({ status: 'ACTIVE' } as never);
     state = createInitialState();
     jest.spyOn(prisma.pushSubscription, 'findMany').mockResolvedValue([] as never);
 
     jest.spyOn(orderService, 'createOrderForCustomer').mockImplementation(async () => ({
-      id: state.orderId,
-      orderReference: state.orderReference,
-      totalAmount: state.totalAmount,
-      paymentMethod: state.paymentMethod,
-      status: state.status,
-      restaurant: {
-        id: state.restaurantId,
-        userId: state.restaurantUserId,
-        name: state.restaurantName,
-        hasOwnDelivery: false,
-        deliveryFee: state.deliveryFee,
-      },
-      customer: {
-        id: state.customerProfileId,
-        user: {
-          id: state.customerUserId,
-          name: state.customerName,
-          phone: '+5215511111111',
+      order: {
+        id: state.orderId,
+        orderReference: state.orderReference,
+        totalAmount: state.totalAmount,
+        paymentMethod: state.paymentMethod,
+        status: state.status,
+        restaurant: {
+          id: state.restaurantId,
+          userId: state.restaurantUserId,
+          name: state.restaurantName,
+          hasOwnDelivery: false,
+          deliveryFee: state.deliveryFee,
+        },
+        customer: {
+          id: state.customerProfileId,
+          user: {
+            id: state.customerUserId,
+            name: state.customerName,
+            phone: '+5215511111111',
+          },
+        },
+        tracking: state.tracking,
+        items: state.items,
+        address: {
+          id: state.address.id,
         },
       },
-      tracking: state.tracking,
-      items: state.items,
-      address: {
-        id: state.address.id,
-      },
+      isDuplicate: false,
     }) as never);
 
     jest
@@ -641,7 +646,7 @@ describe('order lifecycle integration flow', () => {
 
     const driverHistoryBody = parseJson<{
       success: boolean;
-      data: Array<{ id: string; status: OrderStatus }>;
+      data: { items: Array<{ id: string; status: OrderStatus }>; hasMore: boolean };
     }>(driverHistoryResponse.body);
 
     expect(restaurantAcceptResponse.statusCode).toBe(200);
@@ -675,8 +680,8 @@ describe('order lifecycle integration flow', () => {
       OrderStatus.IN_TRANSIT,
       OrderStatus.DELIVERED,
     ]);
-    expect(driverHistoryBody.data).toHaveLength(1);
-    expect(driverHistoryBody.data[0]?.status).toBe(OrderStatus.DELIVERED);
+    expect(driverHistoryBody.data.items).toHaveLength(1);
+    expect(driverHistoryBody.data.items[0]?.status).toBe(OrderStatus.DELIVERED);
 
     expect(emitNotificationSpy).toHaveBeenCalledWith(
       expect.anything(),

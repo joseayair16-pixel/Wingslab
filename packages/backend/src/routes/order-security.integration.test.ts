@@ -37,19 +37,24 @@ describe('order security validation', () => {
     app = await buildApp({
       enableRateLimit: false,
       enableSocketIO: false,
+      enableJobs: false,
     });
   });
 
   beforeEach(() => {
+    jest.spyOn(prisma.user, 'findUnique').mockResolvedValue({ status: 'ACTIVE' } as never);
     jest.spyOn(orderService, 'createOrderForCustomer').mockResolvedValue({
-      id: 'mock-order-1',
-      orderReference: 'SAD-REF-001',
-      dailyCounter: 1,
-      totalAmount: 100,
-      paymentMethod: 'TRANSFER',
-      createdAt: new Date(),
-      restaurant: { id: 'test-restaurant-1', userId: 'restaurant-user-1' },
-      customer: { user: { name: 'Test Customer' } },
+      order: {
+        id: 'mock-order-1',
+        orderReference: 'SAD-REF-001',
+        dailyCounter: 1,
+        totalAmount: 100,
+        paymentMethod: 'TRANSFER',
+        createdAt: new Date(),
+        restaurant: { id: 'test-restaurant-1', userId: 'restaurant-user-1' },
+        customer: { user: { name: 'Test Customer' } },
+      },
+      isDuplicate: false,
     } as any);
     jest.spyOn(orderWorkflowService, 'enqueueRestaurantOrder').mockResolvedValue({
       position: 1,

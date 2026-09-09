@@ -49,9 +49,7 @@ export function playAlertSound(src: string): void {
     audio.preload = 'auto';
     audio.volume = 1;
     const played = audio.play();
-    if (played && typeof played.catch === 'function') {
-      played.catch(() => undefined); // autoplay bloqueado: se ignora sin romper el flujo
-    }
+    void played.catch(() => undefined); // autoplay bloqueado: se ignora sin romper el flujo
   } catch {
     // Entorno sin audio: no debe romper la asignación del pedido.
   }

@@ -19,10 +19,19 @@ describe('order lifecycle failure contracts', () => {
     app = await buildApp({
       enableRateLimit: false,
       enableSocketIO: false,
+      enableJobs: false,
     });
   });
 
   beforeEach(() => {
+    jest.spyOn(prisma.user, 'findUnique').mockResolvedValue({ status: 'ACTIVE' } as never);
+    jest.spyOn(prisma.order, 'findUnique').mockResolvedValue({
+      supportRestaurantId: null,
+      status: 'READY',
+      driverId: null,
+      fulfillmentType: 'DELIVERY',
+      restaurant: { hasOwnDelivery: false },
+    } as never);
     jest.spyOn(orderWorkflowService, 'autoAssignDriver').mockResolvedValue({
       success: false,
       driver: null,

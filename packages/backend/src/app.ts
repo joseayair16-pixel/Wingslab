@@ -46,6 +46,9 @@ import { startThankYouMessagesJob } from './jobs/thank-you-messages.job';
 type BuildAppOptions = {
   enableRateLimit?: boolean;
   enableSocketIO?: boolean;
+  // Los trabajos de fondo (jobs/crons) acceden a la BD al arrancar. En tests
+  // se desactivan para que el suite sea hermético y no dependa de Postgres.
+  enableJobs?: boolean;
 };
 
 const NODE_ENV = process.env.NODE_ENV || 'development';
@@ -65,7 +68,7 @@ if (!process.env.JWT_SECRET) {
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
 
 export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyInstance> {
-  const { enableRateLimit = true, enableSocketIO = true } = options;
+  const { enableRateLimit = true, enableSocketIO = true, enableJobs = true } = options;
 
   const httpServer = http.createServer();
 
@@ -220,33 +223,35 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
 
   await setupRoutes(fastify);
 
-  startBillingJob();
-  startBillingOverdueJob();
-  startPaymentRemindersJob();
-  startThankYouMessagesJob();
+  if (enableJobs) {
+    startBillingJob();
+    startBillingOverdueJob();
+    startPaymentRemindersJob();
+    startThankYouMessagesJob();
 
-  const cutoffStartup = startDriverBillingCutoffJob();
-  scheduleDriverBillingOverdueCron();
-  cutoffStartup.then(() => {
-    processOverdueDriverSettlements();
-    console.log('[App] Driver billing overdue startup check completed after cutoff sync.');
-  });
+    const cutoffStartup = startDriverBillingCutoffJob();
+    scheduleDriverBillingOverdueCron();
+    cutoffStartup.then(() => {
+      processOverdueDriverSettlements();
+      console.log('[App] Driver billing overdue startup check completed after cutoff sync.');
+    });
 
-  startOrderTimeoutJob(fastify);
-  startRestaurantHoursJob(fastify);
-  startJitDispatchJob(fastify);
-  startDriverPickupAlertJob(fastify);
-  startStuckOrderJob(fastify);
-  startFeaturedExpirationJob(fastify);
-  startPickupReadyJob(fastify);
-  startOwnDeliveryTimeoutJob(fastify);
-  startCustomerPickupReminderJob(fastify);
-  startCustomerArrivalReminderJob(fastify);
-  startOverduePreparationJob(fastify);
-  startCleanupProofsJob();
-  startCleanupOrphanMediaJob();
-  startCleanupPushSubscriptionsJob();
-  startNotificationRetryJob();
+    startOrderTimeoutJob(fastify);
+    startRestaurantHoursJob(fastify);
+    startJitDispatchJob(fastify);
+    startDriverPickupAlertJob(fastify);
+    startStuckOrderJob(fastify);
+    startFeaturedExpirationJob(fastify);
+    startPickupReadyJob(fastify);
+    startOwnDeliveryTimeoutJob(fastify);
+    startCustomerPickupReminderJob(fastify);
+    startCustomerArrivalReminderJob(fastify);
+    startOverduePreparationJob(fastify);
+    startCleanupProofsJob();
+    startCleanupOrphanMediaJob();
+    startCleanupPushSubscriptionsJob();
+    startNotificationRetryJob();
+  }
 
   fastify.setErrorHandler(errorHandler);
 

@@ -62,9 +62,9 @@ jobs:
           NODE_ENV: test
 
   build:
-    name: Build
+    name: Build web apps
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -73,4 +73,7 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run build -w @sadel/shared
-      - run: npm run pages:build -w @sadel/web-customer
+      - run: npm run build -w @sadel/web-customer
+      - run: npm run build -w @sadel/web-admin
+      - run: npm run build -w @sadel/web-restaurant
+      - run: npm run build -w @sadel/web-driver

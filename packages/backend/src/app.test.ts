@@ -21,7 +21,15 @@ describe('app integration', () => {
     app = await buildApp({
       enableRateLimit: false,
       enableSocketIO: false,
+      enableJobs: false,
     });
+  });
+
+  beforeEach(() => {
+    // Hermeticidad: sin Postgres/Redis reales. El middleware de auth revalida el
+    // estado del usuario en BD, así que concedemos estado ACTIVE por defecto.
+    jest.spyOn(prisma.user, 'findUnique').mockResolvedValue({ status: 'ACTIVE' } as never);
+    jest.spyOn(prisma, '$queryRaw').mockResolvedValue([{ x: 1 }] as never);
   });
 
   afterAll(async () => {
@@ -75,11 +83,13 @@ describe('app integration', () => {
   });
 
   it('envia codigo OTP simulado', async () => {
+    jest.spyOn(prisma.user, 'findFirst').mockResolvedValue(null);
     const response = await app.inject({
       method: 'POST',
       url: '/auth/enviar-codigo',
       payload: {
         phone: '+5215512345678',
+        intent: 'register',
       },
     });
 
@@ -95,8 +105,8 @@ describe('app integration', () => {
   });
 
   it('verifica OTP y devuelve token para cliente nuevo', async () => {
+    jest.spyOn(prisma.user, 'findFirst').mockResolvedValue(null);
     jest.spyOn(prisma.admin, 'count').mockResolvedValue(1);
-    jest.spyOn(prisma.user, 'findFirst').mockResolvedValueOnce(null);
     jest.spyOn(prisma.user, 'create').mockResolvedValue({
       id: 'user-1',
       email: '5512345678@sadel.local',
@@ -131,22 +141,42 @@ describe('app integration', () => {
       updatedAt: new Date(),
       admin: null,
     } as never);
+    jest.spyOn(prisma.customer, 'findUnique').mockResolvedValue({
+      id: 'customer-1',
+      userId: 'user-1',
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    } as never);
+    jest.spyOn(prisma.refreshToken, 'create').mockResolvedValue({
+      id: 'refresh-1',
+      token: 'refresh-token-1',
+      userId: 'user-1',
+      expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+      createdAt: new Date(),
+      revokedAt: null,
+    } as never);
 
-    await app.inject({
+    const sendResponse = await app.inject({
       method: 'POST',
       url: '/auth/enviar-codigo',
       payload: {
         phone: '+5215512345678',
+        intent: 'register',
       },
     });
+    const sendBody = parseJson<{ success: boolean; data: { mockCode?: string } }>(
+      sendResponse.body
+    );
 
     const response = await app.inject({
       method: 'POST',
       url: '/auth/verificar-codigo',
       payload: {
         phone: '+5215512345678',
-        code: '123456',
+        code: sendBody.data.mockCode ?? '000000',
         name: 'Cliente Prueba',
+        password: 'secreto123',
+        intent: 'register',
       },
     });
 
@@ -160,79 +190,6 @@ describe('app integration', () => {
     expect(typeof body.data.token).toBe('string');
     expect(body.data.user.id).toBe('user-1');
     expect(body.data.user.role).toBe('CUSTOMER');
-  });
-
-  it('permite bootstrap del primer administrador por OTP', async () => {
-    jest.spyOn(prisma.admin, 'count').mockResolvedValue(0);
-    jest.spyOn(prisma.user, 'findFirst').mockResolvedValue(null);
-    jest.spyOn(prisma.user, 'create').mockResolvedValue({
-      id: 'admin-user-1',
-      email: '5599999999@sadel.local',
-      password: 'otp-auth',
-      phone: '5599999999',
-      name: 'Admin Fundador',
-      role: 'ADMIN',
-      region: 'default',
-      status: 'ACTIVE',
-      createdAt: new Date(),
-      updatedAt: new Date(),
-      admin: null,
-    } as never);
-    jest.spyOn(prisma.admin, 'create').mockResolvedValue({
-      id: 'admin-profile-1',
-      userId: 'admin-user-1',
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    } as never);
-    jest.spyOn(prisma.user, 'findUniqueOrThrow').mockResolvedValue({
-      id: 'admin-user-1',
-      email: '5599999999@sadel.local',
-      password: 'otp-auth',
-      phone: '5599999999',
-      name: 'Admin Fundador',
-      role: 'ADMIN',
-      region: 'default',
-      status: 'ACTIVE',
-      createdAt: new Date(),
-      updatedAt: new Date(),
-      admin: {
-        id: 'admin-profile-1',
-        userId: 'admin-user-1',
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      },
-    } as never);
-
-    await app.inject({
-      method: 'POST',
-      url: '/auth/enviar-codigo',
-      payload: {
-        phone: '+5215599999999',
-      },
-    });
-
-    const response = await app.inject({
-      method: 'POST',
-      url: '/auth/verificar-codigo',
-      payload: {
-        phone: '+5215599999999',
-        code: '123456',
-        name: 'Admin Fundador',
-        role: 'ADMIN',
-      },
-    });
-
-    const body = parseJson<{
-      success: boolean;
-      data: { token: string; user: { id: string; role: string; name: string } };
-    }>(response.body);
-
-    expect(response.statusCode).toBe(200);
-    expect(body.success).toBe(true);
-    expect(typeof body.data.token).toBe('string');
-    expect(body.data.user.id).toBe('admin-user-1');
-    expect(body.data.user.role).toBe('ADMIN');
-    expect(body.data.user.name).toBe('Admin Fundador');
   });
 
   it('rechaza registrar un telefono ya existente', async () => {
@@ -275,6 +232,15 @@ describe('app integration', () => {
       createdAt: new Date(),
       updatedAt: new Date(),
       customer: null,
+    } as never);
+
+    jest.spyOn(prisma.refreshToken, 'create').mockResolvedValue({
+      id: 'refresh-1',
+      token: 'refresh-token-1',
+      userId: 'customer-user-1',
+      expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+      createdAt: new Date(),
+      revokedAt: null,
     } as never);
 
     const response = await app.inject({

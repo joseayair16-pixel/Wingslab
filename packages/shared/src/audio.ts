@@ -251,9 +251,7 @@ function playAudioElement(el: HTMLAudioElement, loop: boolean): SoundHandle {
   el.currentTime = 0;
   el.volume = 1;
   const playPromise = el.play();
-  if (playPromise && typeof playPromise.catch === 'function') {
-    playPromise.catch(() => undefined);
-  }
+  void playPromise.catch(() => undefined);
   return {
     stop: () => {
       el.pause();

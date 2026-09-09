@@ -4,11 +4,19 @@
 
 import Redis from 'ioredis';
 import { logger } from '../utils/logger';
+import { InMemoryRedis } from './redis.memory';
 
 let redisInstance: Redis | null = null;
 
 export function getRedis(): Redis {
   if (redisInstance) {
+    return redisInstance;
+  }
+
+  // En tests usamos un Redis en memoria para que el suite no dependa de un
+  // servidor real (hermético y reproducible en CI y en dev locales).
+  if (process.env.NODE_ENV === 'test') {
+    redisInstance = new InMemoryRedis() as unknown as Redis;
     return redisInstance;
   }
 

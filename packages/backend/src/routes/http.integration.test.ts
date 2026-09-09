@@ -5,6 +5,7 @@ import { buildApp } from '../app';
 import { prisma } from '../config/database';
 import { AppError } from '../errors/app-error';
 import * as orderService from '../services/order.service';
+import * as driverBillingService from '../services/driver-billing.service';
 import * as restaurantBillingService from '../services/restaurant-billing.service';
 import * as orderWorkflowService from '../services/order-workflow.service';
 import * as socketService from '../services/socket.service';
@@ -26,12 +27,23 @@ describe('http integration contracts', () => {
   beforeAll(async () => {
     app = await buildApp({
       enableRateLimit: false,
-      enableSocketIO: false,
+      enableSocketIO: true,
+      enableJobs: false,
     });
   });
 
   beforeEach(() => {
+    // El middleware de auth consulta el estado del usuario; concedemos ACTIVE
+    // salvo en los tests que mockean SUSPENDED a propósito.
+    jest.spyOn(prisma.user, 'findUnique').mockResolvedValue({ status: 'ACTIVE' } as never);
+    jest.spyOn(prisma.user, 'findFirst').mockResolvedValue(null);
     jest.spyOn(prisma.pushSubscription, 'findMany').mockResolvedValue([] as never);
+    jest.spyOn(prisma.fcmToken, 'findMany').mockResolvedValue([] as never);
+    jest.spyOn(prisma.restaurantBillingSettlement, 'findMany').mockResolvedValue([] as never);
+    jest.spyOn(prisma.region, 'findMany').mockResolvedValue([] as never);
+    jest.spyOn(prisma, '$transaction').mockImplementation((queries: unknown[]) =>
+      Promise.all(queries)
+    );
     jest.spyOn(orderWorkflowService, 'autoAssignDriver').mockResolvedValue({
       success: false,
       driver: null,
@@ -76,31 +88,34 @@ describe('http integration contracts', () => {
       .mockImplementation(() => undefined);
 
     jest.spyOn(orderService, 'createOrderForCustomer').mockResolvedValue({
-      id: 'order-1',
-      orderReference: 'SAD-ORDER-1',
-      totalAmount: 245,
-      paymentMethod: PaymentMethod.CASH,
-      status: OrderStatus.PENDING,
-      restaurant: {
-        id: 'restaurant-1',
-        userId: 'restaurant-user-1',
-        name: 'Tacos Centro',
-        hasOwnDelivery: false,
-        deliveryFee: 35,
-      },
-      customer: {
-        id: 'customer-1',
-        user: {
-          id: 'customer-user-1',
-          name: 'Cliente Demo',
-          phone: '+5215511111111',
+      order: {
+        id: 'order-1',
+        orderReference: 'SAD-ORDER-1',
+        totalAmount: 245,
+        paymentMethod: PaymentMethod.CASH,
+        status: OrderStatus.PENDING,
+        restaurant: {
+          id: 'restaurant-1',
+          userId: 'restaurant-user-1',
+          name: 'Tacos Centro',
+          hasOwnDelivery: false,
+          deliveryFee: 35,
+        },
+        customer: {
+          id: 'customer-1',
+          user: {
+            id: 'customer-user-1',
+            name: 'Cliente Demo',
+            phone: '+5215511111111',
+          },
+        },
+        tracking: [],
+        items: [],
+        address: {
+          id: 'address-1',
         },
       },
-      tracking: [],
-      items: [],
-      address: {
-        id: 'address-1',
-      },
+      isDuplicate: false,
     } as never);
 
     const response = await app.inject({
@@ -165,32 +180,35 @@ describe('http integration contracts', () => {
     });
 
     jest.spyOn(orderService, 'createOrderForCustomer').mockResolvedValue({
-      id: 'order-transfer-1',
-      orderReference: 'SAD-TRANSFER-1',
-      totalAmount: 310,
-      paymentMethod: PaymentMethod.TRANSFER,
-      paymentProofUrl: 'https://images.example.com/payment-proof.jpg',
-      status: OrderStatus.PENDING,
-      restaurant: {
-        id: 'restaurant-1',
-        userId: 'restaurant-user-1',
-        name: 'Tacos Centro',
-        hasOwnDelivery: false,
-        deliveryFee: 35,
-      },
-      customer: {
-        id: 'customer-2',
-        user: {
-          id: 'customer-user-2',
-          name: 'Cliente Transfer',
-          phone: '+5215512121212',
+      order: {
+        id: 'order-transfer-1',
+        orderReference: 'SAD-TRANSFER-1',
+        totalAmount: 310,
+        paymentMethod: PaymentMethod.TRANSFER,
+        paymentProofUrl: 'https://images.example.com/payment-proof.jpg',
+        status: OrderStatus.PENDING,
+        restaurant: {
+          id: 'restaurant-1',
+          userId: 'restaurant-user-1',
+          name: 'Tacos Centro',
+          hasOwnDelivery: false,
+          deliveryFee: 35,
+        },
+        customer: {
+          id: 'customer-2',
+          user: {
+            id: 'customer-user-2',
+            name: 'Cliente Transfer',
+            phone: '+5215512121212',
+          },
+        },
+        tracking: [],
+        items: [],
+        address: {
+          id: 'address-2',
         },
       },
-      tracking: [],
-      items: [],
-      address: {
-        id: 'address-2',
-      },
+      isDuplicate: false,
     } as never);
 
     const response = await app.inject({
@@ -949,6 +967,7 @@ describe('http integration contracts', () => {
       },
     ] as never);
     jest.spyOn(prisma.transaction, 'findMany').mockResolvedValue([] as never);
+    jest.spyOn(prisma.customer, 'count').mockResolvedValue(1);
 
     const response = await app.inject({
       method: 'GET',
@@ -978,23 +997,18 @@ describe('http integration contracts', () => {
       role: UserRole.ADMIN,
     });
 
-    const userFindUniqueSpy = jest.spyOn(prisma.user, 'findUnique');
-    userFindUniqueSpy
-      .mockResolvedValueOnce({
-        status: 'ACTIVE',
-      } as never)
-      .mockResolvedValueOnce({
-        id: 'customer-user-1',
-        name: 'Cliente Demo',
-        phone: '+5215511111111',
-        email: 'cliente@sadel.local',
-        role: 'CUSTOMER',
-        region: 'michoacan-puruaran',
-        status: 'ACTIVE',
-        customer: {
-          id: 'customer-1',
-        },
-      } as never);
+    jest.spyOn(prisma.user, 'findUnique').mockResolvedValue({
+      id: 'customer-user-1',
+      name: 'Cliente Demo',
+      phone: '+5215511111111',
+      email: 'cliente@sadel.local',
+      role: 'CUSTOMER',
+      region: 'michoacan-puruaran',
+      status: 'ACTIVE',
+      customer: {
+        id: 'customer-1',
+      },
+    } as never);
 
     jest.spyOn(prisma.order, 'count').mockResolvedValue(0);
     jest.spyOn(prisma.user, 'update').mockResolvedValue({
@@ -1112,6 +1126,12 @@ describe('http integration contracts', () => {
       },
     ] as never);
     jest.spyOn(prisma.order, 'count').mockResolvedValue(1);
+    jest.spyOn(prisma.driverBillingSettlement, 'aggregate').mockResolvedValue({
+      _sum: { amount: null },
+    } as never);
+    jest.spyOn(prisma.order, 'aggregate').mockResolvedValue({
+      _sum: { driverPlatformFee: null },
+    } as never);
 
     const response = await app.inject({
       method: 'GET',
@@ -1654,6 +1674,7 @@ describe('http integration contracts', () => {
       data: {
         coverImage: dataUrl,
         deliveryFee: null,
+        pickupOnly: false,
       },
     });
   });
@@ -1692,7 +1713,7 @@ describe('http integration contracts', () => {
       },
       payload: {
         kind: 'restaurant-logo',
-        source: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGNgYPgPAAEDAQAIicLsAAAAAElFTkSuQmCC',
+        source: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=',
         fileName: 'logo.png',
       },
     });
@@ -1772,7 +1793,7 @@ describe('http integration contracts', () => {
         if (typeof cb === 'function') {
           return cb({
             restaurant: { update: restaurantUpdateSpy },
-            user: { update: userUpdateSpy },
+            user: { updateMany: userUpdateSpy },
             product: { updateMany: productUpdateManySpy },
             featuredPurchase: { deleteMany: featuredDeleteManySpy },
           } as never);
@@ -2031,6 +2052,11 @@ describe('http integration contracts', () => {
         region: 'cdmx-centro',
         status: 'ACTIVE',
       },
+    } as never);
+    jest.spyOn(driverBillingService, 'enforceDriverBillingSuspension').mockResolvedValue(undefined as never);
+    jest.spyOn(driverBillingService, 'checkDriverSuspension').mockResolvedValue({
+      isSuspendedByDebt: false,
+      suspendedDebtAmount: 0,
     } as never);
 
     const response = await app.inject({

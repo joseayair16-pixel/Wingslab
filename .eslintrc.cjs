@@ -6,6 +6,8 @@ module.exports = {
     'build/',
     '.next/',
     '**/next-env.d.ts',
+    // Apps Android (Capacitor): no pertenecen a ningún tsconfig del monorepo.
+    'apps/**',
     // Utilidades dev / scripts / tests que no pertenecen a ningún tsconfig del
     // monorepo (no se compilan ni se despliegan): se excluyen del lint.
     'packages/backend/**/*.test.ts',

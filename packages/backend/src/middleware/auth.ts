@@ -101,7 +101,7 @@ export async function authenticate(request: FastifyRequest, reply: FastifyReply)
       });
     }
 
-    if (status !== 'ACTIVE' && status !== 'SUSPENDED') {
+    if (status !== 'ACTIVE') {
       const requestContext = getOrCreateRequestContext(request);
       recordErrorMetric('UNAUTHORIZED');
       return reply.status(403).send({
