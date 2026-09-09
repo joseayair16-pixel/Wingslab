@@ -36,6 +36,12 @@ describe('http integration contracts', () => {
     // El middleware de auth consulta el estado del usuario; concedemos ACTIVE
     // salvo en los tests que mockean SUSPENDED a propósito.
     jest.spyOn(prisma.user, 'findUnique').mockResolvedValue({ status: 'ACTIVE' } as never);
+    jest.spyOn(prisma.restaurant, 'findUnique').mockResolvedValue({
+      id: 'restaurant-1',
+      userId: 'restaurant-user-1',
+      status: 'ACTIVE',
+      statusReason: null,
+    } as never);
     jest.spyOn(prisma.user, 'findFirst').mockResolvedValue(null);
     jest.spyOn(prisma.pushSubscription, 'findMany').mockResolvedValue([] as never);
     jest.spyOn(prisma.fcmToken, 'findMany').mockResolvedValue([] as never);
@@ -1045,15 +1051,25 @@ describe('http integration contracts', () => {
     expect(body.data.reason).toBe('Cancelaciones reiteradas.');
   });
 
-  it('bloquea la autenticacion de cuentas suspendidas cuando el estado se puede validar', async () => {
+  it('permite autenticar a un comensal suspendido pero le bloquea crear pedidos', async () => {
     const token = await createToken({
       sub: 'customer-user-suspended',
       phone: '+5215599999999',
       role: UserRole.CUSTOMER,
     });
 
+    // El middleware deja pasar a SUSPENDED (puede ver su cuenta), pero el
+    // guard de creación de pedidos lo bloquea.
     jest.spyOn(prisma.user, 'findUnique').mockResolvedValue({
       status: 'SUSPENDED',
+    } as never);
+    jest.spyOn(prisma.customer, 'findUnique').mockResolvedValue({
+      id: 'customer-1',
+      isSuspendedByDebt: false,
+      debtAmount: 0,
+      user: {
+        status: 'SUSPENDED',
+      },
     } as never);
 
     const response = await app.inject({
@@ -1092,7 +1108,161 @@ describe('http integration contracts', () => {
 
     expect(response.statusCode).toBe(403);
     expect(body.success).toBe(false);
-    expect(body.error.code).toBe('ACCOUNT_DISABLED');
+    expect(body.error.code).toBe('ACCOUNT_SUSPENDED');
+  });
+
+  it('permite a un comensal suspendido consultar su deuda', async () => {
+    const token = await createToken({
+      sub: 'customer-user-suspended',
+      phone: '+5215599999999',
+      role: UserRole.CUSTOMER,
+    });
+
+    jest.spyOn(prisma.user, 'findUnique').mockResolvedValue({ status: 'SUSPENDED' } as never);
+    jest.spyOn(prisma.customer, 'findUnique').mockResolvedValue({
+      id: 'customer-1',
+      isSuspendedByDebt: true,
+      debtAmount: 120,
+    } as never);
+    jest.spyOn(prisma.customerBillingSettlement, 'findFirst').mockResolvedValue({
+      id: 'settlement-1',
+      reference: 'REF-1',
+      amount: 120,
+      status: 'PENDING',
+      paymentProofUrl: null,
+      createdAt: new Date(),
+      dueDate: new Date(),
+      order: {
+        orderReference: 'SAD-ORDER-1',
+        totalAmount: 120,
+        createdAt: new Date(),
+        restaurant: { name: 'Tacos Centro' },
+      },
+    } as never);
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/customer/deuda',
+      headers: { authorization: `Bearer ${token}` },
+    });
+
+    const body = parseJson<{
+      success: boolean;
+      data: { hasDebt: boolean; isSuspendedByDebt: boolean; debtAmount: number };
+    }>(response.body);
+
+    expect(response.statusCode).toBe(200);
+    expect(body.success).toBe(true);
+    expect(body.data.hasDebt).toBe(true);
+    expect(body.data.debtAmount).toBe(120);
+  });
+
+  it('permite a un comensal suspendido registrar el pago de su deuda', async () => {
+    const token = await createToken({
+      sub: 'customer-user-suspended',
+      phone: '+5215599999999',
+      role: UserRole.CUSTOMER,
+    });
+
+    jest.spyOn(prisma.user, 'findUnique').mockResolvedValue({ status: 'SUSPENDED' } as never);
+    jest.spyOn(prisma.customer, 'findUnique').mockResolvedValue({ id: 'customer-1' } as never);
+    jest.spyOn(prisma.customerBillingSettlement, 'findFirst').mockResolvedValue({
+      id: 'settlement-1',
+      status: 'PENDING',
+    } as never);
+    jest.spyOn(prisma.customerBillingSettlement, 'update').mockResolvedValue({
+      id: 'settlement-1',
+      status: 'IN_REVIEW',
+      paymentProofUrl: 'https://cdn.example.com/proof.jpg',
+    } as never);
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/customer/deuda/pagar',
+      headers: { authorization: `Bearer ${token}` },
+      payload: {
+        settlementId: 'settlement-1',
+        paymentProofUrl: 'https://cdn.example.com/proof.jpg',
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    const body = parseJson<{ success: boolean; data: { status: string } }>(response.body);
+    expect(body.success).toBe(true);
+    expect(body.data.status).toBe('IN_REVIEW');
+  });
+
+  it('bloquea a un repartidor suspendido para ponerse disponible', async () => {
+    const token = await createToken({
+      sub: 'driver-user-suspended',
+      phone: '+5215588888888',
+      role: UserRole.DRIVER,
+    });
+
+    jest.spyOn(prisma.user, 'findUnique').mockResolvedValue({ status: 'SUSPENDED' } as never);
+    jest.spyOn(prisma.driver, 'findUnique').mockResolvedValue({
+      id: 'driver-suspended',
+      userId: 'driver-user-suspended',
+      lastBillingSettledAt: null,
+      createdAt: new Date(),
+      availability: DriverAvailability.OFFLINE,
+      status: 'SUSPENDED',
+    } as never);
+    jest.spyOn(driverBillingService, 'enforceDriverBillingSuspension').mockResolvedValue(undefined as never);
+    jest.spyOn(driverBillingService, 'checkDriverSuspension').mockResolvedValue({
+      isSuspendedByDebt: true,
+      suspendedDebtAmount: 80,
+    } as never);
+
+    const response = await app.inject({
+      method: 'PATCH',
+      url: '/driver-panel/disponibilidad',
+      headers: { authorization: `Bearer ${token}` },
+      payload: { availability: DriverAvailability.AVAILABLE },
+    });
+
+    const body = parseJson<{
+      success: boolean;
+      error: { code: string; message: string };
+    }>(response.body);
+
+    expect(response.statusCode).toBe(403);
+    expect(body.success).toBe(false);
+    expect(body.error.code).toBe('DRIVER_SUSPENDED');
+    expect(body.error.message).toContain('80');
+  });
+
+  it('bloquea a un restaurante suspendido para operar pero le permite operaciones de cuenta', async () => {
+    const token = await createToken({
+      sub: 'restaurant-user-suspended',
+      phone: '+5215577777777',
+      role: UserRole.RESTAURANT,
+    });
+
+    // El user.status del restaurante queda ACTIVE; la suspension vive en
+    // restaurant.status y el guard requireRestaurantOperable la hace cumplir.
+    jest.spyOn(prisma.user, 'findUnique').mockResolvedValue({ status: 'ACTIVE' } as never);
+    jest.spyOn(prisma.restaurant, 'findUnique').mockResolvedValue({
+      id: 'restaurant-suspended',
+      userId: 'restaurant-user-suspended',
+      status: 'SUSPENDED',
+      statusReason: 'Pago vencido.',
+    } as never);
+
+    const deleteResponse = await app.inject({
+      method: 'DELETE',
+      url: '/restaurant-panel/productos/product-1',
+      headers: { authorization: `Bearer ${token}` },
+    });
+
+    const deleteBody = parseJson<{
+      success: boolean;
+      error: { code: string };
+    }>(deleteResponse.body);
+
+    expect(deleteResponse.statusCode).toBe(409);
+    expect(deleteBody.success).toBe(false);
+    expect(deleteBody.error.code).toBe('RESTAURANT_STATUS_BLOCKED');
   });
 
   it('expone el overview ejecutivo de repartidores para administracion', async () => {
@@ -1601,6 +1771,7 @@ describe('http integration contracts', () => {
       id: 'restaurant-9',
       userId: 'restaurant-user-9',
       name: 'Burgers Roma',
+      status: 'ACTIVE',
     } as never);
 
     jest.spyOn(prisma.user, 'findUnique').mockResolvedValue({
@@ -1847,6 +2018,7 @@ describe('http integration contracts', () => {
       id: 'restaurant-5',
       userId: 'restaurant-user-5',
       name: 'Sushi Demo',
+      status: 'ACTIVE',
     } as never);
 
     jest.spyOn(prisma.product, 'findFirst').mockResolvedValue({

@@ -1,5 +1,5 @@
 import { UserRole } from '@prisma/client';
-import { FastifyInstance } from 'fastify';
+import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import bcryptjs from 'bcryptjs';
 import { MENU_THEME_IDS } from '@sadel/shared';
@@ -311,6 +311,49 @@ async function getOwnedRestaurant(userId: string) {
   return restaurant;
 }
 
+export async function requireRestaurantOperable(request: FastifyRequest, reply: FastifyReply): Promise<void> {
+  // Un restaurante suspendido (por deuda o por admin) puede consultar su cuenta
+  // (lecturas) y realizar las mutaciones de cuenta/pago (cambiar contraseña y
+  // subir comprobante de liquidacion), pero NO operar el negocio. Este guard
+  // bloquea todas las mutaciones (POST/PATCH/PUT/DELETE) salvo esas dos.
+  const method = request.method;
+  if (method !== 'POST' && method !== 'PATCH' && method !== 'PUT' && method !== 'DELETE') {
+    return;
+  }
+
+  const routerPath = request.routerPath ?? request.url;
+  if (routerPath.endsWith('/password')) return;
+  if (routerPath.endsWith('/comprobante')) return;
+
+  const user = getAuthenticatedUser(request);
+  const ownedRestaurant = await prisma.restaurant.findUnique({
+    where: { userId: user.sub },
+    select: { status: true, statusReason: true },
+  });
+
+  if (!ownedRestaurant) {
+    return reply.status(404).send({
+      success: false,
+      error: {
+        code: 'RESTAURANT_NOT_FOUND',
+        message: 'No se encontro el restaurante asociado a este usuario.',
+      },
+    });
+  }
+
+  if (ownedRestaurant.status !== 'ACTIVE') {
+    return reply.status(409).send({
+      success: false,
+      error: {
+        code: 'RESTAURANT_STATUS_BLOCKED',
+        message:
+          ownedRestaurant.statusReason ||
+          'Este restaurante no puede operar porque su estado administrativo no es activo.',
+      },
+    });
+  }
+}
+
 function parseBody<T>(result: z.SafeParseReturnType<unknown, T>) {
   if (result.success) {
     return { data: result.data };
@@ -331,6 +374,7 @@ export async function registerRestaurantPanelRoutes(fastify: FastifyInstance): P
   fastify.register(async function restaurantScope(restaurant) {
     restaurant.addHook('preHandler', authenticate);
     restaurant.addHook('preHandler', authorize([UserRole.RESTAURANT]));
+    restaurant.addHook('preHandler', requireRestaurantOperable);
 
     restaurant.get('/restaurant-panel/perfil', async (request, reply) => {
       const user = getAuthenticatedUser(request);

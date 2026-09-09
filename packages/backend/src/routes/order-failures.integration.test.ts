@@ -25,6 +25,12 @@ describe('order lifecycle failure contracts', () => {
 
   beforeEach(() => {
     jest.spyOn(prisma.user, 'findUnique').mockResolvedValue({ status: 'ACTIVE' } as never);
+    jest.spyOn(prisma.restaurant, 'findUnique').mockResolvedValue({
+      id: 'restaurant-1',
+      userId: 'restaurant-user-1',
+      status: 'ACTIVE',
+      statusReason: null,
+    } as never);
     jest.spyOn(prisma.order, 'findUnique').mockResolvedValue({
       supportRestaurantId: null,
       status: 'READY',

@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { prisma } from '../config/database';
 import { sendAppError } from '../errors/http';
 import { authenticate, authorize, getAuthenticatedUser } from '../middleware/auth';
+import { requireRestaurantOperable } from './restaurant-panel.routes';
 import { emitNotification } from '../services/socket.service';
 import { sendPushNotification } from '../services/notification.service';
 import {
@@ -55,6 +56,7 @@ export async function registerRestaurantOrderRoutes(fastify: FastifyInstance): P
   fastify.register(async function restaurantOrdersScope(restaurantOrders) {
     restaurantOrders.addHook('preHandler', authenticate);
     restaurantOrders.addHook('preHandler', authorize([UserRole.RESTAURANT]));
+    restaurantOrders.addHook('preHandler', requireRestaurantOperable);
 
     restaurantOrders.get('/restaurant-panel/pedidos', async (request, reply) => {
       const parsed = listOrdersQuerySchema.safeParse(request.query);

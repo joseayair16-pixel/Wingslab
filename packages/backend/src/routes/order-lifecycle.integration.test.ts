@@ -246,6 +246,12 @@ describe('order lifecycle integration flow', () => {
 
   beforeEach(() => {
     jest.spyOn(prisma.user, 'findUnique').mockResolvedValue({ status: 'ACTIVE' } as never);
+    jest.spyOn(prisma.restaurant, 'findUnique').mockResolvedValue({
+      id: 'restaurant-1',
+      userId: 'restaurant-user-1',
+      status: 'ACTIVE',
+      statusReason: null,
+    } as never);
     state = createInitialState();
     jest.spyOn(prisma.pushSubscription, 'findMany').mockResolvedValue([] as never);
 

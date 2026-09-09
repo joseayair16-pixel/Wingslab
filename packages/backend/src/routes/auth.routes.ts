@@ -710,8 +710,6 @@ export async function registerAuthRoutes(fastify: FastifyInstance): Promise<void
 
     if ('error' in result) {
       const statusMap: Record<string, [number, string]> = {
-        ACCOUNT_SUSPENDED: [403, 'Tu cuenta ha sido suspendida. Contacta a soporte.'],
-        ACCOUNT_INACTIVE:  [403, 'Tu cuenta está inactiva. Contacta al administrador.'],
         INVALID_CREDENTIALS: [401, 'Teléfono o contraseña incorrectos.'],
       };
       const [httpStatus, message] = statusMap[result.error as string] ?? [401, 'Credenciales inválidas.'];
@@ -771,8 +769,6 @@ export async function registerAuthRoutes(fastify: FastifyInstance): Promise<void
 
     if ('error' in result) {
       const statusMap: Record<string, [number, string]> = {
-        ACCOUNT_SUSPENDED: [403, 'Tu cuenta ha sido suspendida. Contacta a soporte.'],
-        ACCOUNT_INACTIVE:  [403, 'Tu cuenta está inactiva. Contacta al administrador.'],
         INVALID_CREDENTIALS: [401, 'Teléfono o contraseña incorrectos.'],
       };
       const [httpStatus, message] = statusMap[result.error as string] ?? [401, 'Credenciales inválidas.'];
@@ -833,8 +829,6 @@ export async function registerAuthRoutes(fastify: FastifyInstance): Promise<void
 
     if ('error' in result) {
       const statusMap: Record<string, [number, string]> = {
-        ACCOUNT_SUSPENDED: [403, 'Tu cuenta ha sido suspendida. Contacta a soporte.'],
-        ACCOUNT_INACTIVE:  [403, 'Tu cuenta está inactiva. Contacta al administrador.'],
         INVALID_CREDENTIALS: [401, 'Usuario o contraseña incorrectos.'],
       };
       const [httpStatus, message] = statusMap[result.error as string] ?? [401, 'Credenciales inválidas.'];

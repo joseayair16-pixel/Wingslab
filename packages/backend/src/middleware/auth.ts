@@ -101,7 +101,11 @@ export async function authenticate(request: FastifyRequest, reply: FastifyReply)
       });
     }
 
-    if (status !== 'ACTIVE') {
+    if (status === 'INACTIVE') {
+      // Baja lógica: sin acceso a la cuenta. Las cuentas SUSPENDED sí pueden
+      // iniciar sesión y consultar su cuenta (perfil, deuda, pagar), pero sus
+      // operaciones (pedir, repartir, abrir negocio) quedan bloqueadas en cada
+      // ruta con checks específicos.
       const requestContext = getOrCreateRequestContext(request);
       recordErrorMetric('UNAUTHORIZED');
       return reply.status(403).send({
