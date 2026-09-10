@@ -5240,8 +5240,8 @@ function ProductImage({
                         <div className="flex items-center gap-1 text-[12px] font-semibold text-neutral-700 dark:text-zinc-200">
                           {isPickupOnly ? (
                             <>
-                              <ShoppingBag className="h-3 w-3 text-emerald-600" strokeWidth={2.5} />
-                              <span className="text-emerald-700 font-bold">Solo en tienda</span>
+                              <ShoppingBag className="h-3 w-3 shrink-0 text-emerald-600" strokeWidth={2.5} />
+                              <span className="text-emerald-700 font-bold whitespace-nowrap">Solo recoger en tienda</span>
                             </>
                           ) : (
                             <>
