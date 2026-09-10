@@ -3,8 +3,8 @@ import fastifyHelmet from '@fastify/helmet';
 import fastifyJwt from '@fastify/jwt';
 import fastifyRateLimit from '@fastify/rate-limit';
 import fastifyCompress from '@fastify/compress';
-import fastifySocketIO from 'fastify-socket.io';
 import Fastify, { FastifyInstance } from 'fastify';
+import { Server as SocketIOServer } from 'socket.io';
 import crypto from 'node:crypto';
 import http from 'http';
 import { UserRole } from '@prisma/client';
@@ -44,6 +44,12 @@ import { startNotificationRetryJob } from './jobs/notification-retry.job';
 import { startPaymentRemindersJob } from './jobs/payment-reminders.job';
 import { startThankYouMessagesJob } from './jobs/thank-you-messages.job';
 
+declare module 'fastify' {
+  interface FastifyInstance {
+    io: SocketIOServer;
+  }
+}
+
 type BuildAppOptions = {
   enableRateLimit?: boolean;
   enableSocketIO?: boolean;
@@ -80,9 +86,11 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     bodyLimit: 10485760,
     requestTimeout: 30000,
     // Behind a reverse proxy (Railway/cloud) all requests share the proxy IP.
-    // Trust exactly one proxy hop so request.ip resolves the real client IP
-    // while attacker-controlled X-Forwarded-For chains cannot spoof new IPs.
-    trustProxy: 1,
+    // Confiamos exactamente un salto (el proxy inmediato) para que request.ip
+    // resuelva el IP real del cliente; cadenas X-Forwarded-For fabricadas no
+    // pueden inventar direcciones extra (en Fastify 5 el formato numérico de
+    // trustProxy cambió de semántica y ya no confía, por eso la función).
+    trustProxy: (_address, hop) => hop === 0,
     serverFactory: (handler) => {
       httpServer.on('request', (req, res) => {
         if (req.url?.startsWith('/socket.io')) {
@@ -149,14 +157,20 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   }
 
   if (enableSocketIO) {
-    await fastify.register(fastifySocketIO, {
-      cors: {
-        origin: process.env.CORS_ORIGIN || '*',
-        credentials: true,
-      },
-      pingInterval: 10000,
-      pingTimeout: 5000,
-    });
+    // Socket.io se adjunta directamente al httpServer que Fastify comparte por
+    // serverFactory (el mismo que ya enruta /socket.io fuera de fastify). Esto
+    // elimina la dependencia fastify-socket.io, que no soporta Fastify 5.
+    fastify.decorate(
+      'io',
+      new SocketIOServer(httpServer, {
+        cors: {
+          origin: process.env.CORS_ORIGIN || '*',
+          credentials: true,
+        },
+        pingInterval: 10000,
+        pingTimeout: 5000,
+      })
+    );
   }
 
   fastify.addHook('onRequest', async (request, reply) => {

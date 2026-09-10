@@ -321,7 +321,7 @@ export async function requireRestaurantOperable(request: FastifyRequest, reply: 
     return;
   }
 
-  const routerPath = request.routerPath ?? request.url;
+  const routerPath = request.routeOptions?.url ?? request.url;
   if (routerPath.endsWith('/password')) return;
   if (routerPath.endsWith('/comprobante')) return;
 
