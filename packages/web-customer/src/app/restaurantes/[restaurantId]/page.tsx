@@ -1416,6 +1416,7 @@ export default function RestaurantPage({
 
     socket.on('connect', () => {
       socket.emit('join-room', sessionUser.id, 'CUSTOMER');
+      loadActiveOrdersRef.current();
     });
 
     socket.on('connect_error', (err) => {
