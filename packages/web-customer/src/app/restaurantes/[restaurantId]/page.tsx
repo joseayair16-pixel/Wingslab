@@ -302,6 +302,10 @@ if (typeof window !== 'undefined') {
       } catch {
         // ignore storage failures
       }
+      // Sincronizar el token renovado con las vistas montadas (chat + llamadas
+      // API usan el estado React, no solo localStorage). Mismo patrón que
+      // 'order-updated'.
+      window.dispatchEvent(new CustomEvent<string>('sadel:token-refreshed', { detail: token }));
     },
     onRefreshFailed: () => forceSessionExpired(),
   });
@@ -1054,6 +1058,15 @@ export default function RestaurantPage({
   );
 
   useEffect(() => {
+    // Un refresh silencioso de acceso (requestJson) renueva el token en
+    // localStorage pero no el estado React; suscribirse al evento lo mantiene
+    // al día para el chat y las llamadas API que usan el estado.
+    const onTokenRefreshed = (event: Event) => {
+      const nextToken = (event as CustomEvent<string>).detail;
+      if (nextToken) setToken(nextToken);
+    };
+    window.addEventListener('sadel:token-refreshed', onTokenRefreshed);
+
     try {
       const savedSession = readStoredSession(storageKey);
 
@@ -1144,6 +1157,7 @@ export default function RestaurantPage({
 
     return () => {
       document.documentElement.classList.remove('pure-dark');
+      window.removeEventListener('sadel:token-refreshed', onTokenRefreshed);
     };
   }, []);
 
