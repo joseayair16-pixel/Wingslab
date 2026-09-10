@@ -134,6 +134,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
       }
     },
     credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
   });
 
   await fastify.register(fastifyJwt, {
