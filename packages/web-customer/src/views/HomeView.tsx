@@ -864,9 +864,9 @@ export const HomeView = React.memo(function HomeView({
                                  ) : null;
                                })()}
                                {restaurant.pickupOnly ? (
-                                 <span className="inline-flex items-center gap-1 rounded-full border border-emerald-100/70 bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-700">
-                                   <ShoppingBag className="h-3 w-3" strokeWidth={2} />
-                                   Solo recoger en tienda
+                                 <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-full border border-emerald-100/70 bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-700">
+                                   <ShoppingBag className="h-3 w-3 shrink-0" strokeWidth={2} />
+                                   Solo en tienda
                                  </span>
                                ) : restaurant.effectiveDeliveryFee === 0 ? (
                                  <span className="inline-flex items-center gap-1 rounded-full border border-emerald-100/70 bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-700">
