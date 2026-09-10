@@ -1677,8 +1677,17 @@ export default function Home() {
   useEffect(() => {
     const fetchSettings = async () => {
       try {
-        const response = await fetch(`${apiBase}/settings`);
-        const data = await response.json();
+        const data = await requestJson<{
+          success: boolean;
+          data: {
+            restaurantWelcomeImage?: string;
+            restaurantPromoModalEnabled?: boolean;
+            restaurantPromoModalImage?: string;
+            adminBankName?: string;
+            adminBankAccount?: string;
+            adminBankBeneficiary?: string;
+          };
+        }>({ apiBase, path: '/settings', token });
         if (data.success) {
           if (data.data.restaurantWelcomeImage) {
             setWelcomeImage(data.data.restaurantWelcomeImage);
@@ -1724,7 +1733,7 @@ export default function Home() {
       }
     };
     fetchSettings();
-  }, [apiBase]);
+  }, [apiBase, token]);
 
   useEffect(() => {
     const savedSession = readStoredSession(storageKey);
