@@ -1,7 +1,7 @@
 'use client';
 import { AlertTriangle, ArrowLeft, Banknote, Bell, BellOff, Bike, Check, ChevronLeft, ChevronRight, ChevronUp, CircleCheck, CirclePlus, ClipboardCheck, Clock, Copy, DollarSign, Gift, Home, Landmark, Loader2, Mail, Map, MapPin, MessageCircle, Minus, Package, Plus, RefreshCw, Search, ShoppingBag, Store, Tag, Ticket,   Trash2, Upload, User, X, ZoomIn } from 'lucide-react';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { use, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { AuthUser, clearStoredSession, readStoredSession, requestJson, submitReview, uploadMediaAsset, convertImageFileToDataUrl, getOrderStatusLabel, isRestaurant, ApiRequestError, isAuthRequestError, setGlobalSessionExpiredHandler, forceSessionExpired, setDefaultRefreshConfig } from '@sadel/shared';
 import { io } from 'socket.io-client';
@@ -450,9 +450,13 @@ export default function RestaurantPage({
   params,
   searchParams,
 }: {
-  params: { restaurantId: string };
-  searchParams?: { [key: string]: string | string[] | undefined };
+  params: Promise<{ restaurantId: string }>;
+  searchParams?: Promise<{ [key: string]: string | string[] | undefined }>;
 }) {
+  // En Next 15+ params/searchParams son Promises en client components: se
+  // 'desenvuelven' con use() (un solo resultado, estable entre renders).
+  const urlParams = use(params);
+  const urlSearchParams = searchParams ? use(searchParams) : undefined;
   const router = useRouter();
   const [apiBase, setApiBase] = useState(defaultApiBase);
   const [token, setToken] = useState('');
@@ -694,7 +698,7 @@ export default function RestaurantPage({
   const refreshCartItemPrices = useCartStore(state => state.refreshItemPrices);
   const [mounted, setMounted] = useState(false);
   useEffect(() => { setMounted(true); }, []);
-  const cart: CartItem[] = mounted && cartRestaurantId === params.restaurantId ? cartItems : [];
+  const cart: CartItem[] = mounted && cartRestaurantId === urlParams.restaurantId ? cartItems : [];
 
   // El carrito guarda un snapshot de `image` al agregar el producto. Si la
   // imagen se subió con posterioridad (o el producto no la tenía al agregarse),
@@ -738,7 +742,7 @@ export default function RestaurantPage({
   const [loadingRestaurant, setLoadingRestaurant] = useState(true);
   const [creatingOrder, setCreatingOrder] = useState(false);
   const [isCartOpen, setIsCartOpen] = useState(false);
-  const [isCheckoutOpen, setIsCheckoutOpen] = useState(() => searchParams?.checkout === 'true');
+  const [isCheckoutOpen, setIsCheckoutOpen] = useState(() => urlSearchParams?.checkout === 'true');
   const [cartJustUpdated, setCartJustUpdated] = useState(false);
   const [cartPulse, setCartPulse] = useState(false);
   const [hideCartButton, setHideCartButton] = useState(false);
@@ -766,7 +770,7 @@ export default function RestaurantPage({
   const [menuReloadKey, setMenuReloadKey] = useState(0);
   const [deliveryErrorModal, setDeliveryErrorModal] = useState('');
   const [fulfillmentType, setFulfillmentType] = useState<'DELIVERY' | 'PICKUP'>(
-    searchParams?.fulfillment === 'PICKUP' ? 'PICKUP' : 'DELIVERY'
+    urlSearchParams?.fulfillment === 'PICKUP' ? 'PICKUP' : 'DELIVERY'
   );
 
   // Negocios configurados como "solo recoger en tienda": nunca se ofrece entrega.
@@ -784,14 +788,14 @@ export default function RestaurantPage({
   }, [isPickupOnly]);
 
   useEffect(() => {
-    if (searchParams?.fulfillment === 'PICKUP') {
+    if (urlSearchParams?.fulfillment === 'PICKUP') {
       setFulfillmentType('PICKUP');
     }
-  }, [searchParams]);
+  }, [urlSearchParams]);
 
   useEffect(() => {
-    if (searchParams?.product && restaurant) {
-      const productId = typeof searchParams.product === 'string' ? searchParams.product : searchParams.product[0];
+    if (urlSearchParams?.product && restaurant) {
+      const productId = typeof urlSearchParams.product === 'string' ? urlSearchParams.product : urlSearchParams.product[0];
       for (const category of restaurant.categories) {
         const prod = category.products.find((p) => p.id === productId);
         if (prod) {
@@ -800,11 +804,11 @@ export default function RestaurantPage({
         }
       }
     }
-  }, [searchParams, restaurant]);
+  }, [urlSearchParams, restaurant]);
 
   useEffect(() => {
-    if (!searchParams?.focusProduct || !restaurant) return;
-    const productId = typeof searchParams.focusProduct === 'string' ? searchParams.focusProduct : searchParams.focusProduct[0];
+    if (!urlSearchParams?.focusProduct || !restaurant) return;
+    const productId = typeof urlSearchParams.focusProduct === 'string' ? urlSearchParams.focusProduct : urlSearchParams.focusProduct[0];
     let cleanupTimer: ReturnType<typeof setTimeout> | null = null;
     const timer = setTimeout(() => {
       const el = document.getElementById(productId);
@@ -820,7 +824,7 @@ export default function RestaurantPage({
       clearTimeout(timer);
       if (cleanupTimer) clearTimeout(cleanupTimer);
     };
-  }, [searchParams, restaurant]);
+  }, [urlSearchParams, restaurant]);
 
   const [transientNotice, setTransientNotice] = useState<TransientNotice | null>(null);
   // Latido del banner de pedido activo al crear un pedido (scroll + animación).
@@ -1195,7 +1199,7 @@ export default function RestaurantPage({
       try {
         const payload = await requestJson<{ success: true; data: PublicRestaurantDetail }>({
           apiBase,
-          path: `/restaurantes/${params.restaurantId}${getUserLocationQuery()}`,
+          path: `/restaurantes/${urlParams.restaurantId}${getUserLocationQuery()}`, 
           token: token || undefined,
           fallbackMessage: 'No se pudo cargar el menu del restaurante.',
           timeoutMs: 10_000,
@@ -1222,7 +1226,7 @@ export default function RestaurantPage({
     return () => {
       cancelled = true;
     };
-  }, [apiBase, params.restaurantId, menuReloadKey, token]);
+  }, [apiBase, urlParams.restaurantId, menuReloadKey, token]);
 
   useEffect(() => {
     if (!document.documentElement) return;
@@ -2314,7 +2318,7 @@ function ProductImage({
       selectedOptions: [],
       sellBy: 'UNIT',
       maxStock: availability.tracked ? (product.stock ?? 0) : null,
-    } as any, params.restaurantId as string, restaurant?.serviceFee || 0, restaurant?.effectiveDeliveryFee || 0);
+    } as any, urlParams.restaurantId as string, restaurant?.serviceFee || 0, restaurant?.effectiveDeliveryFee || 0);
     setCartJustUpdated(true);
     triggerHaptic(15); // Small vibration
   }
@@ -2376,7 +2380,7 @@ function ProductImage({
       weightG: isWeightProduct ? customizingWeight : null,
       unitPrice: isWeightProduct ? customizingProduct.unitPrice : null,
       maxStock: availability.tracked ? (customizingProduct.stock ?? 0) : null,
-    } as any, params.restaurantId as string, restaurant?.serviceFee || 0, restaurant?.effectiveDeliveryFee || 0);
+    } as any, urlParams.restaurantId as string, restaurant?.serviceFee || 0, restaurant?.effectiveDeliveryFee || 0);
 
     setCustomizingProduct(null);
     setWeightLimitWarning(false);

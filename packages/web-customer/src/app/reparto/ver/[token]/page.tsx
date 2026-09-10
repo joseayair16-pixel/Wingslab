@@ -7,7 +7,7 @@
 /* eslint-disable @typescript-eslint/no-unsafe-argument */
 /* eslint-disable react-hooks/exhaustive-deps */
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, use } from 'react';
 import DeliveryRouteMap from '../../../../components/DeliveryRouteMap';
 import DriverTurnByTurnOverlay from '../../../../components/DriverTurnByTurnOverlay';
 import { Html5Qrcode } from 'html5-qrcode';
@@ -74,9 +74,9 @@ interface ScannedDelivery {
 }
 
 interface PageProps {
-  params: {
+  params: Promise<{
     token: string;
-  };
+  }>;
 }
 
 // NORMALIZACIÓN ANTI-DUPLICADOS: el restaurante puede regenerar el QR de la
@@ -136,7 +136,7 @@ function getCustomerArrivalTime(ticket: DeliveryTicketData, token?: string): num
 }
 
 export default function DeliveryTicketPage({ params }: PageProps) {
-  const token = params.token;
+  const { token } = use(params);
   
   const [isMounted, setIsMounted] = useState(false);
   const [deliveries, setDeliveries] = useState<ScannedDelivery[]>([]);

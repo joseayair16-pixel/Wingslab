@@ -80,9 +80,10 @@ function buildRestaurantJsonLd(restaurant: RestaurantMeta) {
   return schema;
 }
 
-export async function generateMetadata({ params }: { params: { restaurantId: string } }): Promise<Metadata> {
-  const restaurant = await getRestaurant(params.restaurantId);
-  const canonical = `${siteUrl}/restaurantes/${params.restaurantId}`;
+export async function generateMetadata({ params }: { params: Promise<{ restaurantId: string }> }): Promise<Metadata> {
+  const { restaurantId } = await params;
+  const restaurant = await getRestaurant(restaurantId);
+  const canonical = `${siteUrl}/restaurantes/${restaurantId}`;
 
   if (!restaurant) {
     return {
@@ -142,10 +143,11 @@ export default async function RestaurantLayout({
   params,
   children,
 }: {
-  params: { restaurantId: string };
+  params: Promise<{ restaurantId: string }>;
   children: React.ReactNode;
 }) {
-  const restaurant = await getRestaurant(params.restaurantId);
+  const { restaurantId } = await params;
+  const restaurant = await getRestaurant(restaurantId);
   const accent =
     restaurant?.accentColor && /^#[0-9a-fA-F]{6}$/.test(restaurant.accentColor)
       ? restaurant.accentColor
