@@ -166,3 +166,18 @@ export function authorize(allowedRoles: UserRole[]) {
 export function getAuthenticatedUser(request: FastifyRequest): AuthenticatedUser {
   return request.user as AuthenticatedUser;
 }
+
+export type OptionalAuthenticatedUser = AuthenticatedUser | null;
+
+export async function tryAuthenticate(request: FastifyRequest): Promise<OptionalAuthenticatedUser> {
+  try {
+    await request.jwtVerify();
+    const user = request.user as AuthenticatedUser | undefined;
+    if (user?.sub) {
+      return user;
+    }
+  } catch {
+    // Sin token o token inválido: el request continúa como anónimo.
+  }
+  return null;
+}

@@ -6,16 +6,27 @@
 /* eslint-disable @typescript-eslint/no-unnecessary-type-assertion */
 
 import { OrderStatus } from '@prisma/client';
-import { FastifyInstance } from 'fastify';
+import { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { prisma } from '../config/database';
 import { sendAppError } from '../errors/http';
 import { emitNotification } from '../services/socket.service';
 import { sendPushNotification } from '../services/notification.service';
+import { hashToken } from '../utils/crypto';
 
 
 export async function registerPublicDeliveryRoutes(fastify: FastifyInstance): Promise<void> {
-  fastify.get('/public/delivery-ticket/:token', async (request, reply) => {
+  const deliveryTicketRateLimitConfig = {
+    config: {
+      rateLimit: {
+        max: 60,
+        timeWindow: '1 minute',
+        keyGenerator: (request: FastifyRequest) => request.ip,
+      },
+    },
+  };
+
+  fastify.get('/public/delivery-ticket/:token', deliveryTicketRateLimitConfig, async (request, reply) => {
     const params = z.object({ token: z.string().min(1) }).safeParse(request.params);
 
     if (!params.success) {
@@ -26,7 +37,6 @@ export async function registerPublicDeliveryRoutes(fastify: FastifyInstance): Pr
     }
 
     try {
-      const { hashToken } = require('../utils/crypto');
       const hashedToken = hashToken(params.data.token);
       const dToken = await (prisma as any).deliveryToken.findFirst({
         where: {
@@ -149,7 +159,7 @@ export async function registerPublicDeliveryRoutes(fastify: FastifyInstance): Pr
   // el cliente, puede dejar el pedido en un lugar seguro. El pago (transferencia
   // o en línea) ya está cubierto, por lo que la entrega simplemente se marca
   // como DELIVERED sin tocar el paymentStatus y se notifica al comensal.
-  fastify.post('/public/delivery-ticket/:token/lugar-seguro', async (request, reply) => {
+  fastify.post('/public/delivery-ticket/:token/lugar-seguro', deliveryTicketRateLimitConfig, async (request, reply) => {
     const params = z.object({ token: z.string().min(1) }).safeParse(request.params);
 
     if (!params.success) {
@@ -160,7 +170,6 @@ export async function registerPublicDeliveryRoutes(fastify: FastifyInstance): Pr
     }
 
     try {
-      const { hashToken } = require('../utils/crypto');
       const hashedToken = hashToken(params.data.token);
       const dToken = await (prisma as any).deliveryToken.findFirst({
         where: {
@@ -355,7 +364,7 @@ export async function registerPublicDeliveryRoutes(fastify: FastifyInstance): Pr
   // repartidor puede liberar el pedido. Se crea un CustomerBillingSettlement por
   // el total, la cuenta del comensal queda suspendida hasta que liquide y el
   // pedido se marca como DELIVERED sin paymentStatus (el efectivo nunca se cobró).
-  fastify.post('/public/delivery-ticket/:token/cliente-no-salio', async (request, reply) => {
+  fastify.post('/public/delivery-ticket/:token/cliente-no-salio', deliveryTicketRateLimitConfig, async (request, reply) => {
     const params = z.object({ token: z.string().min(1) }).safeParse(request.params);
 
     if (!params.success) {
@@ -366,7 +375,6 @@ export async function registerPublicDeliveryRoutes(fastify: FastifyInstance): Pr
     }
 
     try {
-      const { hashToken } = require('../utils/crypto');
       const hashedToken = hashToken(params.data.token);
       const dToken = await (prisma as any).deliveryToken.findFirst({
         where: {
@@ -670,7 +678,7 @@ export async function registerPublicDeliveryRoutes(fastify: FastifyInstance): Pr
     }
   });
 
-  fastify.post('/public/delivery-ticket/:token/entregar', async (request, reply) => {
+  fastify.post('/public/delivery-ticket/:token/entregar', deliveryTicketRateLimitConfig, async (request, reply) => {
     const params = z.object({ token: z.string().min(1) }).safeParse(request.params);
     const bodySchema = z.object({ pin: z.string().optional() });
     const body = bodySchema.safeParse(request.body);
@@ -683,7 +691,6 @@ export async function registerPublicDeliveryRoutes(fastify: FastifyInstance): Pr
     }
 
     try {
-      const { hashToken } = require('../utils/crypto');
       const hashedToken = hashToken(params.data.token);
       const dToken = await (prisma as any).deliveryToken.findFirst({
         where: {
@@ -876,7 +883,7 @@ export async function registerPublicDeliveryRoutes(fastify: FastifyInstance): Pr
     }
   });
 
-  fastify.post('/public/delivery-ticket/:token/ubicacion', async (request, reply) => {
+  fastify.post('/public/delivery-ticket/:token/ubicacion', deliveryTicketRateLimitConfig, async (request, reply) => {
     const params = z.object({ token: z.string().min(1) }).safeParse(request.params);
     const bodySchema = z.object({
       coords: z
@@ -900,7 +907,6 @@ export async function registerPublicDeliveryRoutes(fastify: FastifyInstance): Pr
     }
 
     try {
-      const { hashToken } = require('../utils/crypto');
       const hashedToken = hashToken(params.data.token);
       const dToken = await (prisma as any).deliveryToken.findFirst({
         where: {
@@ -972,7 +978,7 @@ export async function registerPublicDeliveryRoutes(fastify: FastifyInstance): Pr
     }
   });
 
-  fastify.post('/public/delivery-ticket/:token/llegue', async (request, reply) => {
+  fastify.post('/public/delivery-ticket/:token/llegue', deliveryTicketRateLimitConfig, async (request, reply) => {
     const params = z.object({ token: z.string().min(1) }).safeParse(request.params);
 
     if (!params.success) {
@@ -983,7 +989,6 @@ export async function registerPublicDeliveryRoutes(fastify: FastifyInstance): Pr
     }
 
     try {
-      const { hashToken } = require('../utils/crypto');
       const hashedToken = hashToken(params.data.token);
       const dToken = await (prisma as any).deliveryToken.findFirst({
         where: {
@@ -1108,7 +1113,7 @@ export async function registerPublicDeliveryRoutes(fastify: FastifyInstance): Pr
     }
   });
 
-  fastify.post('/public/delivery-ticket/:token/llegue-restaurante', async (request, reply) => {
+  fastify.post('/public/delivery-ticket/:token/llegue-restaurante', deliveryTicketRateLimitConfig, async (request, reply) => {
     const params = z.object({ token: z.string().min(1) }).safeParse(request.params);
 
     if (!params.success) {
@@ -1119,7 +1124,6 @@ export async function registerPublicDeliveryRoutes(fastify: FastifyInstance): Pr
     }
 
     try {
-      const { hashToken } = require('../utils/crypto');
       const hashedToken = hashToken(params.data.token);
       const dToken = await (prisma as any).deliveryToken.findFirst({
         where: {

@@ -5,7 +5,7 @@ import bcryptjs from 'bcryptjs';
 
 import { prisma } from '../config/database';
 import { authenticate, authorize, getAuthenticatedUser } from '../middleware/auth';
-import { encrypt, decrypt } from '../utils/crypto';
+import { encrypt, decrypt, maskAccountNumber } from '../utils/crypto';
 import { checkDriverSuspension } from '../services/driver-billing.service';
 import { emitNotification } from '../services/socket.service';
 
@@ -192,7 +192,7 @@ export async function registerAdminDriverRoutes(fastify: FastifyInstance): Promi
 
           return {
             ...item,
-            bankAccount: item.bankAccount ? decrypt(item.bankAccount) : item.bankAccount,
+            bankAccount: item.bankAccount ? maskAccountNumber(decrypt(item.bankAccount)) : item.bankAccount,
             licenseState: getLicenseState(item.licenseExpiry),
             activeDebt,
             debtStatus,
@@ -410,7 +410,7 @@ export async function registerAdminDriverRoutes(fastify: FastifyInstance): Promi
       ]);
 
       if (driver) {
-        driver.bankAccount = driver.bankAccount ? decrypt(driver.bankAccount) : driver.bankAccount;
+        driver.bankAccount = driver.bankAccount ? maskAccountNumber(decrypt(driver.bankAccount)) : driver.bankAccount;
       }
 
       const suspensionCheck = await checkDriverSuspension(prisma, driver.id, driver.lastBillingSettledAt, driver.createdAt);
@@ -902,7 +902,7 @@ export async function registerAdminDriverRoutes(fastify: FastifyInstance): Promi
       });
 
       if (driver) {
-        driver.bankAccount = driver.bankAccount ? decrypt(driver.bankAccount) : driver.bankAccount;
+        driver.bankAccount = driver.bankAccount ? maskAccountNumber(decrypt(driver.bankAccount)) : driver.bankAccount;
       }
 
       return reply.status(201).send({
@@ -977,7 +977,9 @@ export async function registerAdminDriverRoutes(fastify: FastifyInstance): Promi
             ...(driverData.licenseExpiry !== undefined
               ? { licenseExpiry: driverData.licenseExpiry ? new Date(driverData.licenseExpiry) : null }
               : {}),
-            ...(driverData.bankAccount !== undefined ? { bankAccount: driverData.bankAccount ? encrypt(driverData.bankAccount) : null } : {}),
+            ...(driverData.bankAccount !== undefined && (!driverData.bankAccount || !driverData.bankAccount.includes('*'))
+              ? { bankAccount: driverData.bankAccount ? encrypt(driverData.bankAccount.trim()) : null }
+              : {}),
             ...(driverData.status ? { status: driverData.status } : {}),
             ...(driverData.availability ? { availability: driverData.availability } : {}),
             ...(driverData.platformFeePerOrder !== undefined ? { platformFeePerOrder: driverData.platformFeePerOrder } : {}),
@@ -1004,6 +1006,42 @@ export async function registerAdminDriverRoutes(fastify: FastifyInstance): Promi
       return reply.send({
         success: true,
         data: updatedDriver,
+      });
+    });
+
+    adminDrivers.post('/admin/repartidores/:id/ver-cuenta', async (request, reply) => {
+      const params = z.object({ id: z.string().min(1) }).safeParse(request.params);
+
+      if (!params.success) {
+        return reply.status(400).send({
+          success: false,
+          error: {
+            code: 'INVALID_PARAMS',
+            message: 'Parametros invalidos.',
+          },
+        });
+      }
+
+      const driver = await prisma.driver.findUnique({
+        where: { id: params.data.id },
+        select: { id: true, bankAccount: true },
+      });
+
+      if (!driver) {
+        return reply.status(404).send({
+          success: false,
+          error: {
+            code: 'DRIVER_NOT_FOUND',
+            message: 'No se encontro el repartidor.',
+          },
+        });
+      }
+
+      return reply.send({
+        success: true,
+        data: {
+          bankAccount: driver.bankAccount ? decrypt(driver.bankAccount) : null,
+        },
       });
     });
 

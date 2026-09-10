@@ -1182,6 +1182,7 @@ export default function RestaurantPage({
         const payload = await requestJson<{ success: true; data: PublicRestaurantDetail }>({
           apiBase,
           path: `/restaurantes/${params.restaurantId}${getUserLocationQuery()}`,
+          token: token || undefined,
           fallbackMessage: 'No se pudo cargar el menu del restaurante.',
           timeoutMs: 10_000,
           retry: { attempts: 1, backoffMs: 300 },
@@ -1207,7 +1208,7 @@ export default function RestaurantPage({
     return () => {
       cancelled = true;
     };
-  }, [apiBase, params.restaurantId, menuReloadKey]);
+  }, [apiBase, params.restaurantId, menuReloadKey, token]);
 
   useEffect(() => {
     if (!document.documentElement) return;

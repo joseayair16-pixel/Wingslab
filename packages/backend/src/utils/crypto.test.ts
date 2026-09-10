@@ -1,4 +1,4 @@
-import { encrypt, decrypt } from './crypto';
+import { encrypt, decrypt, hashToken, hmacToken, maskAccountNumber } from './crypto';
 
 describe('crypto (cifrado de datos sensibles)', () => {
   const originalKey = process.env.DATABASE_ENCRYPTION_KEY;
@@ -81,5 +81,63 @@ describe('crypto (cifrado de datos sensibles)', () => {
     delete process.env.DATABASE_ENCRYPTION_KEY;
     delete process.env.JWT_SECRET;
     expect(() => encrypt('dato')).toThrow(/encryption key/i);
+  });
+
+  it('hashToken produce un hash SHA-256 determinista', () => {
+    const token = 'abc123';
+    expect(hashToken(token)).toHaveLength(64);
+    expect(hashToken(token)).toBe(hashToken(token));
+    expect(hashToken(token)).not.toBe(token);
+  });
+
+  describe('maskAccountNumber', () => {
+    it('enmascara solo los últimos 4 caracteres', () => {
+      expect(maskAccountNumber('1234 5678 9012 3456')).toBe('**** 3456');
+    });
+
+    it('devuelve **** para valores de 4 o menos caracteres', () => {
+      expect(maskAccountNumber('1234')).toBe('****');
+      expect(maskAccountNumber('12')).toBe('****');
+    });
+
+    it('devuelve null sin valor', () => {
+      expect(maskAccountNumber(null)).toBeNull();
+      expect(maskAccountNumber(undefined)).toBeNull();
+      expect(maskAccountNumber('')).toBeNull();
+    });
+  });
+
+  describe('hmacToken', () => {
+    const originalKey = process.env.DATABASE_ENCRYPTION_KEY;
+    const originalJwt = process.env.JWT_SECRET;
+
+    afterEach(() => {
+      if (originalKey === undefined) delete process.env.DATABASE_ENCRYPTION_KEY;
+      else process.env.DATABASE_ENCRYPTION_KEY = originalKey;
+      if (originalJwt === undefined) delete process.env.JWT_SECRET;
+      else process.env.JWT_SECRET = originalJwt;
+    });
+
+    it('es determinista para la misma entrada y clave', () => {
+      process.env.DATABASE_ENCRYPTION_KEY = 'token-key';
+      const a = hmacToken('order-1');
+      const b = hmacToken('order-1');
+      expect(a).toBe(b);
+      expect(a).toHaveLength(64);
+    });
+
+    it('cambia el valor si cambia la clave', () => {
+      process.env.DATABASE_ENCRYPTION_KEY = 'token-key-a';
+      const a = hmacToken('order-1');
+      process.env.DATABASE_ENCRYPTION_KEY = 'token-key-b';
+      const b = hmacToken('order-1');
+      expect(a).not.toBe(b);
+    });
+
+    it('lanza error si no hay clave configurada', () => {
+      delete process.env.DATABASE_ENCRYPTION_KEY;
+      delete process.env.JWT_SECRET;
+      expect(() => hmacToken('order-1')).toThrow(/encryption key/i);
+    });
   });
 });

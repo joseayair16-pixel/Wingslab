@@ -1,5 +1,6 @@
 import crypto from 'node:crypto';
 import { prisma } from '../config/database';
+import { hashToken } from '../utils/crypto';
 
 const REFRESH_TOKEN_BYTES = 48;
 const REFRESH_TOKEN_EXPIRY_MS = 30 * 24 * 60 * 60 * 1000;
@@ -12,7 +13,7 @@ export async function createRefreshToken(userId: string): Promise<string> {
   const token = generateToken();
   await prisma.refreshToken.create({
     data: {
-      token,
+      token: hashToken(token),
       userId,
       expiresAt: new Date(Date.now() + REFRESH_TOKEN_EXPIRY_MS),
     },
@@ -23,25 +24,61 @@ export async function createRefreshToken(userId: string): Promise<string> {
 export async function validateAndRotateRefreshToken(
   currentToken: string,
 ): Promise<{ userId: string; refreshToken: string } | null> {
-  const stored = await prisma.refreshToken.findUnique({
-    where: { token: currentToken },
+  // Lookup primario por hash. Si no existe, se intenta con el token en claro
+  // (retrocompatibilidad con filas creadas antes de este cambio).
+  let stored = await prisma.refreshToken.findUnique({
+    where: { token: hashToken(currentToken) },
   });
+
+  if (!stored) {
+    const legacy = await prisma.refreshToken.findUnique({
+      where: { token: currentToken },
+    });
+    if (legacy) {
+      stored = legacy;
+    }
+  }
 
   if (!stored || stored.revokedAt || stored.expiresAt < new Date()) {
     return null;
   }
 
-  await prisma.refreshToken.update({
-    where: { id: stored.id },
-    data: { revokedAt: new Date() },
-  });
+  const storedId = stored.id;
+  const storedUserId = stored.userId;
 
-  const newToken = await createRefreshToken(stored.userId);
+  try {
+    const newToken = await prisma.$transaction(async (tx) => {
+      await tx.refreshToken.update({
+        where: { id: storedId },
+        data: { revokedAt: new Date() },
+      });
 
-  return { userId: stored.userId, refreshToken: newToken };
+      const next = generateToken();
+      await tx.refreshToken.create({
+        data: {
+          token: hashToken(next),
+          userId: storedUserId,
+          expiresAt: new Date(Date.now() + REFRESH_TOKEN_EXPIRY_MS),
+        },
+      });
+
+      return next;
+    });
+
+    return { userId: storedUserId, refreshToken: newToken };
+  } catch {
+    // Si la rotación falla a medias, la transacción revierte la revocación:
+    // el token actual permanece válido para reintentarlo.
+    return null;
+  }
 }
 
 export async function revokeRefreshToken(token: string): Promise<void> {
+  const tokenHash = hashToken(token);
+  await prisma.refreshToken.updateMany({
+    where: { token: tokenHash, revokedAt: null },
+    data: { revokedAt: new Date() },
+  });
   await prisma.refreshToken.updateMany({
     where: { token, revokedAt: null },
     data: { revokedAt: new Date() },

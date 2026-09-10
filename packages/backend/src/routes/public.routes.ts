@@ -8,6 +8,7 @@ import { calculateDistanceDeliveryFee } from '../utils/delivery-pricing';
 import { applyPromotionRoleFilter } from '../utils/promotion-targeting';
 import { createPlatformRequest } from '../utils/platform-requests';
 import { decrypt } from '../utils/crypto';
+import { tryAuthenticate } from '../middleware/auth';
 
 
 const listRestaurantsQuerySchema = z.object({
@@ -430,6 +431,8 @@ export async function registerPublicRoutes(fastify: FastifyInstance): Promise<vo
       restaurant.isPaused,
       restaurant.operatingHours
     );
+
+    const authenticated = await tryAuthenticate(request);
     const regionConfig = await prisma.region.findUnique({
       where: { code: restaurant.region },
       select: {
@@ -469,7 +472,13 @@ export async function registerPublicRoutes(fastify: FastifyInstance): Promise<vo
         categories: restaurant.categories?.filter((category) => category.products?.length > 0) || [],
         storeCategories: restaurant.storeCategories?.map(sc => sc.category) || [],
         transferBankName: restaurant.transferBankName,
-        transferAccountNumber: restaurant.transferAccountNumber ? decrypt(restaurant.transferAccountNumber) : restaurant.transferAccountNumber,
+        ...(authenticated
+          ? {
+              transferAccountNumber: restaurant.transferAccountNumber
+                ? decrypt(restaurant.transferAccountNumber)
+                : restaurant.transferAccountNumber,
+            }
+          : {}),
         transferBeneficiaryName: restaurant.transferBeneficiaryName,
       },
     });
@@ -495,6 +504,52 @@ export async function registerPublicRoutes(fastify: FastifyInstance): Promise<vo
   });
 
   fastify.get('/settings', async (request, reply) => {
+    const DEFAULT_WELCOME_IMAGE = "https://images.unsplash.com/photo-1552566626-52f8b828add9?auto=format&fit=crop&w=1600&q=80";
+
+    const buildSettingsData = (settingsMap: Record<string, string>) => {
+      const data: {
+        restaurantWelcomeImage: string;
+        driverWelcomeImage: string;
+        promoModalEnabled: boolean;
+        promoModalImage: string;
+        restaurantPromoModalEnabled: boolean;
+        restaurantPromoModalImage: string;
+        customerThankYouWhatsappEnabled: boolean;
+        socialInstagram: string;
+        socialFacebook: string;
+        socialTiktok: string;
+        adminBankName?: string;
+        adminBankAccount?: string;
+        adminBankBeneficiary?: string;
+      } = {
+        restaurantWelcomeImage: settingsMap['restaurantWelcomeImage'] || DEFAULT_WELCOME_IMAGE,
+        driverWelcomeImage: settingsMap['driverWelcomeImage'] || DEFAULT_WELCOME_IMAGE,
+        promoModalEnabled: settingsMap['promoModalEnabled'] === 'true',
+        promoModalImage: settingsMap['promoModalImage'] || "",
+        restaurantPromoModalEnabled: settingsMap['restaurantPromoModalEnabled'] === 'true',
+        restaurantPromoModalImage: settingsMap['restaurantPromoModalImage'] || "",
+        customerThankYouWhatsappEnabled: settingsMap['customerThankYouWhatsappEnabled'] === 'true',
+        socialInstagram: settingsMap['socialInstagram'] || "",
+        socialFacebook: settingsMap['socialFacebook'] || "",
+        socialTiktok: settingsMap['socialTiktok'] || "",
+      };
+
+      if (authenticatedUser) {
+        data.adminBankName = decrypt(settingsMap['adminBankName'] || "") || "";
+        data.adminBankAccount = decrypt(settingsMap['adminBankAccount'] || "") || "";
+        data.adminBankBeneficiary = decrypt(settingsMap['adminBankBeneficiary'] || "") || "";
+      }
+
+      return data;
+    };
+
+    let authenticatedUser: Awaited<ReturnType<typeof tryAuthenticate>>;
+    try {
+      authenticatedUser = await tryAuthenticate(request);
+    } catch {
+      authenticatedUser = null;
+    }
+
     try {
       const settings = await prisma.systemSetting.findMany();
       const settingsMap = settings.reduce((acc, curr) => {
@@ -504,40 +559,12 @@ export async function registerPublicRoutes(fastify: FastifyInstance): Promise<vo
 
       return reply.send({
         success: true,
-        data: {
-          restaurantWelcomeImage: settingsMap['restaurantWelcomeImage'] || "https://images.unsplash.com/photo-1552566626-52f8b828add9?auto=format&fit=crop&w=1600&q=80",
-          driverWelcomeImage: settingsMap['driverWelcomeImage'] || "https://images.unsplash.com/photo-1552566626-52f8b828add9?auto=format&fit=crop&w=1600&q=80",
-          adminBankName: decrypt(settingsMap['adminBankName'] || "") || "Banco del Centro",
-          adminBankAccount: decrypt(settingsMap['adminBankAccount'] || "") || "1234 5678 9012 3456",
-          adminBankBeneficiary: decrypt(settingsMap['adminBankBeneficiary'] || "") || "Administrador SaDeL",
-          promoModalEnabled: settingsMap['promoModalEnabled'] === 'true',
-          promoModalImage: settingsMap['promoModalImage'] || "",
-          restaurantPromoModalEnabled: settingsMap['restaurantPromoModalEnabled'] === 'true',
-          restaurantPromoModalImage: settingsMap['restaurantPromoModalImage'] || "",
-          customerThankYouWhatsappEnabled: settingsMap['customerThankYouWhatsappEnabled'] === 'true',
-          socialInstagram: settingsMap['socialInstagram'] || "",
-          socialFacebook: settingsMap['socialFacebook'] || "",
-          socialTiktok: settingsMap['socialTiktok'] || "",
-        },
+        data: buildSettingsData(settingsMap),
       });
     } catch (error) {
       return reply.send({
         success: true,
-        data: {
-          restaurantWelcomeImage: "https://images.unsplash.com/photo-1552566626-52f8b828add9?auto=format&fit=crop&w=1600&q=80",
-          driverWelcomeImage: "https://images.unsplash.com/photo-1552566626-52f8b828add9?auto=format&fit=crop&w=1600&q=80",
-          adminBankName: "Banco del Centro",
-          adminBankAccount: "1234 5678 9012 3456",
-          adminBankBeneficiary: "Administrador SaDeL",
-          promoModalEnabled: false,
-          promoModalImage: "",
-          restaurantPromoModalEnabled: false,
-          restaurantPromoModalImage: "",
-          customerThankYouWhatsappEnabled: false,
-          socialInstagram: "",
-          socialFacebook: "",
-          socialTiktok: "",
-        }
+        data: buildSettingsData({}),
       });
     }
   });

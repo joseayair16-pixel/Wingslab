@@ -40,21 +40,23 @@ export async function deliverOtp(params: {
   const result = (await preferredFirst()) ?? (await fallback());
   if (result) return result;
 
-  // Sin canal real disponible: modo simulación (dev) o error claro en producción
-  logger.warn(
-    '[OTP] Sin canal de entrega real (email/SMS): el código solo se muestra en modo simulación.',
-  );
-  console.log(`\n--- [OTP SIMULATOR] ---`);
-  console.log(`Para: ${email ?? 'sin email'} / tel ${phone}`);
-  console.log(`Código OTP: ${code}`);
-  console.log(`------------------------\n`);
-
   // Se lee en cada llamada para permitir config/entornos dinámicos (y tests).
   const allowMockInProd = process.env.ALLOW_MOCK_OTP_IN_PROD === 'true';
 
+  // Sin canal real disponible y el modo simulación está permitido (fuera de
+  // producción o con la bandera explícita): el código solo se muestra ahí.
   if (process.env.NODE_ENV !== 'production' || allowMockInProd) {
+    logger.warn(
+      '[OTP] Sin canal de entrega real (email/SMS): el código solo se muestra en modo simulación.',
+    );
+    console.log(`\n--- [OTP SIMULATOR] ---`);
+    console.log(`Para: ${email ?? 'sin email'} / tel ${phone}`);
+    console.log(`Código OTP: ${code}`);
+    console.log(`------------------------\n`);
     return { ok: true, channel: 'mock', mockCode: code };
   }
 
+  // En producción sin bandera no se finge éxito ni se imprime el código.
+  logger.warn('[OTP] Sin canal de entrega real (email/SMS) en producción.');
   return { ok: false, channel: 'mock' };
 }

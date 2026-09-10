@@ -115,3 +115,30 @@ export function hashToken(token: string): string {
   if (!token) return token;
   return crypto.createHash('sha256').update(token).digest('hex');
 }
+
+/**
+ * Enmascara una cuenta bancaria o dato numérico sensible mostrando solo los
+ * últimos 4 caracteres (p. ej. "**** 1234"). Devuelve null si no hay valor.
+ */
+export function maskAccountNumber(value: string | null | undefined): string | null {
+  if (!value) return null;
+  const trimmed = value.trim();
+  if (trimmed.length <= 4) return '****';
+  return `**** ${trimmed.slice(-4)}`;
+}
+
+/**
+ * Deriva un valor determinista (HMAC-SHA-256) a partir de una entrada usando la
+ * clave de cifrado del entorno. Sirve para generar tokens reproducibles por
+ * pedido sin guardarlos en claro (p. ej. tokens de reparto).
+ */
+export function hmacToken(input: string): string {
+  if (!input) return input;
+  const secret = process.env.DATABASE_ENCRYPTION_KEY || process.env.JWT_SECRET;
+  if (!secret) {
+    throw new Error(
+      'No encryption key configured. Set DATABASE_ENCRYPTION_KEY (or JWT_SECRET in dev).'
+    );
+  }
+  return crypto.createHmac('sha256', secret).update(input).digest('hex');
+}

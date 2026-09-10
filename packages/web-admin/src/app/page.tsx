@@ -657,6 +657,7 @@ export default function Home() {
   const [, setLoadingDriverDetail] = useState(false);
   const [selectedDriverId, setSelectedDriverId] = useState('');
   const [selectedDriver, setSelectedDriver] = useState<DriverDetail | null>(null);
+  const [accountRevealState, setAccountRevealState] = useState<Record<string, { revealed: boolean; bankAccount: string | null }>>({});
   const [driverSettlements, setDriverSettlements] = useState<any[]>([]);
   const [settlementActionLoading, setSettlementActionLoading] = useState<string | null>(null);
   const [viewingDriverProofUrl, setViewingDriverProofUrl] = useState<string | null>(null);
@@ -785,7 +786,9 @@ export default function Home() {
   useEffect(() => {
     const fetchSettings = async () => {
       try {
-        const response = await fetch(`${apiBase}/settings`);
+        const response = await fetch(`${apiBase}/settings`, {
+          headers: token ? { 'Authorization': `Bearer ${token}` } : {},
+        });
         const data = await response.json();
         if (data.success) {
           setRestaurantWelcomeImage(data.data.restaurantWelcomeImage || '');
@@ -807,7 +810,7 @@ export default function Home() {
       }
     };
     fetchSettings();
-  }, [apiBase]);
+  }, [apiBase, token]);
 
   async function saveBrandSettings() {
     if (isSavingBrandSettings) return;
@@ -2713,6 +2716,26 @@ export default function Home() {
       );
     } finally {
       setUpdatingDriverStatus(false);
+    }
+  }
+
+  async function revealDriverAccount(driverId: string) {
+    const current = accountRevealState[driverId];
+    if (current?.revealed) {
+      setAccountRevealState((state) => ({ ...state, [driverId]: { revealed: false, bankAccount: null } }));
+      return;
+    }
+    try {
+      const payload = await requestJson<{ success: true; data: { bankAccount: string | null } }>({
+        apiBase,
+        path: `/admin/repartidores/${driverId}/ver-cuenta`,
+        token,
+        options: { method: 'POST', body: JSON.stringify({}) },
+        fallbackMessage: 'No se pudo ver la cuenta bancaria.',
+      });
+      setAccountRevealState((state) => ({ ...state, [driverId]: { revealed: true, bankAccount: payload.data.bankAccount } }));
+    } catch {
+      // requestJson ya muestra el mensaje de error.
     }
   }
 
@@ -4882,7 +4905,25 @@ export default function Home() {
                                 </div>
                                 <div className="flex justify-between border-b border-black/5 pb-2 text-sm">
                                   <span className="font-medium text-neutral-500">Cuenta Bancaria</span>
-                                  <span className="font-bold text-neutral-900">{selectedDriver.bankAccount || 'No registrada'}</span>
+                                  <span className="flex items-center gap-2">
+                                    <span className="font-bold text-neutral-900">
+                                      {accountRevealState[selectedDriver.id]?.revealed
+                                        ? (accountRevealState[selectedDriver.id].bankAccount || 'No registrada')
+                                        : (selectedDriver.bankAccount || 'No registrada')}
+                                    </span>
+                                    {selectedDriver.bankAccount && (
+                                      <button
+                                        type="button"
+                                        onClick={(event) => {
+                                          event.stopPropagation();
+                                          void revealDriverAccount(selectedDriver.id);
+                                        }}
+                                        className="rounded-full bg-neutral-100 px-2 py-0.5 text-xs font-semibold text-neutral-600 hover:bg-neutral-200"
+                                      >
+                                        {accountRevealState[selectedDriver.id]?.revealed ? 'Ocultar' : 'Ver'}
+                                      </button>
+                                    )}
+                                  </span>
                                 </div>
                                 <div className="flex justify-between pt-1 text-sm">
                                   <span className="font-medium text-neutral-500">Creación</span>

@@ -4056,7 +4056,7 @@ export default function Home() {
         requestJson<{
           success: true;
           data: { adminBankName: string; adminBankAccount: string; adminBankBeneficiary: string };
-        }>({ apiBase, path: '/settings' }),
+        }>({ apiBase, path: '/settings', token }),
       ]);
       if (debtRes.success && debtRes.data) {
         setDebtData(debtRes.data);

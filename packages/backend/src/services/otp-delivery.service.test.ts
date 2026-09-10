@@ -90,6 +90,22 @@ describe('otp-delivery.service', () => {
       expect(r).toEqual({ ok: false, channel: 'mock' });
     });
 
+    it('no imprime el código OTP en producción sin canal real', async () => {
+      const logSpy = jest.spyOn(console, 'log').mockImplementation(() => {});
+      setEnv({ NODE_ENV: 'production', ALLOW_MOCK_OTP_IN_PROD: undefined });
+      await deliverOtp({ phone: '5512345678', email: 'a@b.com', code: '123456' });
+      expect(logSpy).not.toHaveBeenCalled();
+      logSpy.mockRestore();
+    });
+
+    it('sí imprime el código en desarrollo sin canal real (modo simulación)', async () => {
+      const logSpy = jest.spyOn(console, 'log').mockImplementation(() => {});
+      setEnv({ NODE_ENV: 'development' });
+      await deliverOtp({ phone: '5512345678', code: '123456' });
+      expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('123456'));
+      logSpy.mockRestore();
+    });
+
     it('sí filtra el código en producción cuando ALLOW_MOCK_OTP_IN_PROD=true', async () => {
       setEnv({ NODE_ENV: 'production', ALLOW_MOCK_OTP_IN_PROD: 'true' });
       const r = await deliverOtp({ phone: '5512345678', code: '123456' });
