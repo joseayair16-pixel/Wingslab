@@ -2204,8 +2204,8 @@ export default function RestaurantPage({
       : 0;
   const orderTotal = Math.max(0, effectiveSubtotal - couponDiscount - minOrderDiscount + serviceFee + (fulfillmentType === 'PICKUP' ? 0 : deliveryFee));
   const checkoutValidationMessage = useMemo(() => {
-    return getCheckoutValidationMessage(checkoutForm, cart, restaurant, token, Boolean(transferProofSource));
-  }, [cart, checkoutForm, restaurant, token, transferProofSource]);
+    return getCheckoutValidationMessage(checkoutForm, cart, restaurant, token, Boolean(transferProofSource), fulfillmentType);
+  }, [cart, checkoutForm, restaurant, token, transferProofSource, fulfillmentType]);
 
 function triggerHaptic(pattern: number | number[] = 10) {
   if (typeof window !== 'undefined' && navigator.vibrate) {
@@ -7110,7 +7110,8 @@ function getCheckoutValidationMessage(
   cart: CartItem[],
   selectedRestaurant: PublicRestaurantDetail | null,
   token: string,
-  hasTransferProof: boolean
+  hasTransferProof: boolean,
+  fulfillmentType: 'DELIVERY' | 'PICKUP'
 ) {
   if (!token) {
     return 'Inicia sesion como cliente para confirmar pedidos.';
@@ -7141,9 +7142,10 @@ function getCheckoutValidationMessage(
   }
 
   if (
-    !checkoutForm.street.trim() ||
-    !checkoutForm.number.trim() ||
-    !checkoutForm.neighborhood.trim()
+    fulfillmentType !== 'PICKUP' &&
+    (!checkoutForm.street.trim() ||
+      !checkoutForm.number.trim() ||
+      !checkoutForm.neighborhood.trim())
   ) {
     return 'Completa la dirección de entrega para continuar.';
   }
