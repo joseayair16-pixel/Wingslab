@@ -2915,6 +2915,31 @@ export async function registerAdminRoutes(fastify: FastifyInstance): Promise<voi
           return settlement;
         });
 
+        // El restaurante subió su comprobante y el admin lo confirmó: avisar
+        // por push + socket que su pago quedó registrado. Solo al transitar
+        // hacia PAID (PAID→PAID no vuelve a notificar).
+        if (body.data.status === 'PAID' && currentSettlement.status !== 'PAID') {
+          const restaurantUserId = updatedSettlement.restaurant?.userId;
+          if (restaurantUserId) {
+            emitNotification(fastify.io, restaurantUserId, 'RESTAURANT', 'billing:settlement-paid', {
+              settlementId: updatedSettlement.id,
+              reference: updatedSettlement.reference,
+              amount: updatedSettlement.amount,
+              status: 'PAID',
+            });
+            void sendPushNotification(restaurantUserId, {
+              title: 'Pago de corte confirmado',
+              body: `Tu pago del corte ${updatedSettlement.reference} por $${updatedSettlement.amount} fue confirmado. Tu cuenta quedó al corriente.`,
+              tag: `billing-paid-${updatedSettlement.id}`,
+              data: {
+                type: 'billing-settlement-paid',
+                settlementId: updatedSettlement.id,
+                reference: updatedSettlement.reference,
+              },
+            });
+          }
+        }
+
         return reply.send({
           success: true,
           message: `Estado actualizado a ${body.data.status}`,
