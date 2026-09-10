@@ -5236,12 +5236,21 @@ function ProductImage({
                         </div>
                       </div>
                       <div className="flex flex-1 lg:flex-none flex-col items-center justify-center gap-0 rounded-xl lg:rounded-none bg-neutral-50 lg:bg-transparent px-2 py-1.5 lg:px-4 dark:bg-transparent">
-                        <span className="text-[9px] font-extrabold uppercase tracking-widest text-neutral-400 dark:text-zinc-500">Envío</span>
+                        <span className="text-[9px] font-extrabold uppercase tracking-widest text-neutral-400 dark:text-zinc-500">{isPickupOnly ? 'Servicio' : 'Envío'}</span>
                         <div className="flex items-center gap-1 text-[12px] font-semibold text-neutral-700 dark:text-zinc-200">
-                          <svg className="h-3 w-3 text-neutral-400 dark:text-zinc-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                          </svg>
-                          <span>{formatDeliverySummary(deliveryFee)}</span>
+                          {isPickupOnly ? (
+                            <>
+                              <ShoppingBag className="h-3 w-3 text-emerald-600" strokeWidth={2.5} />
+                              <span className="text-emerald-700 font-bold">Solo en tienda</span>
+                            </>
+                          ) : (
+                            <>
+                              <svg className="h-3 w-3 text-neutral-400 dark:text-zinc-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                              </svg>
+                              <span>{formatDeliverySummary(deliveryFee)}</span>
+                            </>
+                          )}
                         </div>
                       </div>
                       <div className="flex flex-1 lg:flex-none flex-col items-center justify-center gap-0 rounded-xl lg:rounded-none bg-neutral-50 lg:bg-transparent px-2 py-1.5 lg:px-4 dark:bg-transparent">
@@ -5284,6 +5293,7 @@ function ProductImage({
                   {(() => {
                     const promos: { key: string; icon: 'delivery' | 'percent'; title: string; subtitle: string }[] = [];
                     if (
+                      !isPickupOnly &&
                       restaurant.promoFreeDeliveryThreshold != null &&
                       restaurant.promoFreeDeliveryThreshold > 0
                     ) {

@@ -4,7 +4,7 @@ import { useStore } from '../store';
 import { StoreCategoryItem } from '../app/page';
 import { BillboardCarousel, type Billboard } from '../components/BillboardCarousel';
 import { CategoryIcon } from '../components/CategoryIcon';
-import { BadgePercent, Bike, ChevronRight, ChevronUp, Clock, Flame, MapPin, Sparkles } from 'lucide-react';
+import { BadgePercent, Bike, ChevronRight, ChevronUp, Clock, Flame, MapPin, ShoppingBag, Sparkles } from 'lucide-react';
 import { SectionHeader } from '../components/SectionHeader';
 
 const isRestaurantType = (type?: string | null) => !type || type === 'RESTAURANT';
@@ -863,7 +863,12 @@ export const HomeView = React.memo(function HomeView({
                                    </span>
                                  ) : null;
                                })()}
-                               {restaurant.effectiveDeliveryFee === 0 ? (
+                               {restaurant.pickupOnly ? (
+                                 <span className="inline-flex items-center gap-1 rounded-full border border-emerald-100/70 bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-700">
+                                   <ShoppingBag className="h-3 w-3" strokeWidth={2} />
+                                   Solo recoger en tienda
+                                 </span>
+                               ) : restaurant.effectiveDeliveryFee === 0 ? (
                                  <span className="inline-flex items-center gap-1 rounded-full border border-emerald-100/70 bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-700">
                                    <Bike className="h-3 w-3" strokeWidth={2} />
                                    Envío gratis
