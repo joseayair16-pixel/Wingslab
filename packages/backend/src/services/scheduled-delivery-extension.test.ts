@@ -89,6 +89,23 @@ describe('extendOrderPreparationTime — pedido programado', () => {
     const data = tx.order.update.mock.calls[0][0].data;
     expect(data.scheduledDeliveryAt).toBeUndefined();
   });
+
+  it('en recoger-en-tienda el deadline coincide con la hora acordada (travel = 0)', async () => {
+    const order = makeScheduledOrder({ fulfillmentType: 'PICKUP' });
+    const { prisma, tx } = mockPrisma(order);
+
+    await extendOrderPreparationTime({
+      prisma,
+      restaurantUserId: 'rest-user-1',
+      orderId: order.id,
+      additionalMinutes: 20,
+    });
+
+    const data = tx.order.update.mock.calls[0][0].data;
+    // Para pickup no hay trayecto: preparationDeadlineAt debe coincidir con
+    // scheduledDeliveryAt (no desplazarse por estimateDeliveryTravelMinutes).
+    expect(data.preparationDeadlineAt.getTime()).toBe(data.scheduledDeliveryAt.getTime());
+  });
 });
 
 describe('rescheduleDeliveryTime', () => {

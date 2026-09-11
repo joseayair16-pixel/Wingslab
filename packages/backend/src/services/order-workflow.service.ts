@@ -473,7 +473,13 @@ export async function updateOrderStatusByRestaurant({
           : {}),
         ...(isAccepting && scheduledDeliveryAt
           ? (() => {
-              const travelMinutes = estimateDeliveryTravelMinutes(order.restaurant, order);
+              // En recoger-en-tienda no hay trayecto de reparto: el cliente va a
+              // la sucursal, así que el deadline de preparación coincide con la
+              // hora acordada (travel = 0). Consistente con calculateOrderEta.
+              const travelMinutes =
+                order.fulfillmentType === 'PICKUP'
+                  ? 0
+                  : estimateDeliveryTravelMinutes(order.restaurant, order);
               const scheduledDate = new Date(scheduledDeliveryAt);
               const deadline = new Date(scheduledDate.getTime() - travelMinutes * 60 * 1000);
               return {
@@ -1025,7 +1031,9 @@ export async function extendOrderPreparationTime({
   // preparación igual que al aceptar el pedido (hora - trayecto estimado).
   const hasScheduledDelivery = Boolean(order.scheduledDeliveryAt);
   const travelMinutes = hasScheduledDelivery
-    ? estimateDeliveryTravelMinutes(order.restaurant, order)
+    ? order.fulfillmentType === 'PICKUP'
+      ? 0
+      : estimateDeliveryTravelMinutes(order.restaurant, order)
     : 0;
   const nextScheduledDeliveryAt = hasScheduledDelivery
     ? new Date(new Date(order.scheduledDeliveryAt!).getTime() + actualAddedMs)
