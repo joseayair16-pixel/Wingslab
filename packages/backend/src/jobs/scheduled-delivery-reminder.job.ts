@@ -32,6 +32,12 @@ export function startScheduledDeliveryReminderJob(fastify: FastifyInstance) {
           restaurant: {
             select: { id: true, userId: true, name: true, businessType: true },
           },
+          customer: {
+            select: {
+              userId: true,
+              user: { select: { id: true } },
+            },
+          },
         },
         take: 100,
       });
@@ -91,6 +97,46 @@ export function startScheduledDeliveryReminderJob(fastify: FastifyInstance) {
               fulfillmentType: order.fulfillmentType,
             }
           );
+
+          // Avisar también al comensal: su entrega/recogida se acerca.
+          const customerUserId = order.customer?.user?.id || order.customer?.userId;
+          if (customerUserId) {
+            await sendPushNotification(customerUserId, {
+              title: isPickup ? '🛍️ Recogida programada · 15 min' : '⏰ Tu entrega está cerca',
+              body: isPickup
+                ? `Tu pedido ${orderRef} en ${order.restaurant.name} está programado para recogerse a las ${timeLabel}. Acércate a tiempo.`
+                : `Tu pedido ${orderRef} de ${order.restaurant.name} está programado para llegar a las ${timeLabel}.`,
+              icon: PUSH_ICON_URL,
+              badge: PUSH_ICON_URL,
+              tag: `scheduled-reminder-customer-${order.id}`,
+              vibrate: [300, 100, 300],
+              requireInteraction: false,
+              data: {
+                orderId: order.id,
+                event: 'order:scheduled-upcoming',
+                url: `/?orderId=${order.id}`,
+              },
+            }).catch((custErr) => {
+              logger.warn(
+                `[ScheduledDeliveryReminder] Error al notificar al comensal ${customerUserId}:`,
+                custErr
+              );
+            });
+
+            emitNotification(
+              fastify.io,
+              customerUserId,
+              'CUSTOMER',
+              'order:scheduled-upcoming',
+              {
+                orderId: order.id,
+                orderReference: orderRef,
+                scheduledAt: order.scheduledDeliveryAt,
+                minutesLeft: REMINDER_WINDOW_MIN,
+                fulfillmentType: order.fulfillmentType,
+              }
+            );
+          }
 
           logger.info(
             `[ScheduledDeliveryReminder] Recordatorio previo enviado para pedido ${order.id} (${orderRef}) a ${businessRef}.`

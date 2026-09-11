@@ -497,6 +497,7 @@ const liveEvents = [
   'order:schedule-rejected',
   'order:no-drivers-available',
   'order:delay',
+  'order:scheduled-upcoming',
 ] as const;
 
 function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
@@ -3601,6 +3602,27 @@ export default function Home() {
             showTransientNotice({
               key: `${eventName}:${liveEventKey}`,
               title: eventName === 'order:rescheduled' ? 'Entrega reprogramada' : 'Hora actualizada',
+              description: buildNotificationMessage(eventName, payload),
+              tone: 'info',
+            });
+          }
+        } else if (eventName === 'order:scheduled-upcoming') {
+          if (payload.orderId) {
+            requestJson<{ success: true; data: CustomerOrderDetail }>({
+              apiBase,
+              path: `/me/pedidos/${payload.orderId}`,
+              token,
+            }).then((detailRes) => {
+              if (detailRes.success) {
+                setActiveOrderDetailsMap((prev) => ({
+                  ...prev,
+                  [payload.orderId!]: detailRes.data,
+                }));
+              }
+            }).catch(() => {});
+            showTransientNotice({
+              key: `${eventName}:${liveEventKey}`,
+              title: buildNotificationMessage.length ? 'Entrega/recogida cercana' : 'Tu entrega está cerca',
               description: buildNotificationMessage(eventName, payload),
               tone: 'info',
             });
@@ -7670,6 +7692,7 @@ const notificationTitleMap: Record<(typeof liveEvents)[number], string> = {
   'order:schedule-rejected': 'Fecha de entrega rechazada',
   'order:no-drivers-available': 'Buscando repartidor',
   'order:delay': 'Tu pedido va con retraso',
+  'order:scheduled-upcoming': 'Tu entrega está cerca',
 };
 
 function isActiveOrderStatus(status: string) {
@@ -7730,6 +7753,12 @@ function buildNotificationMessage(
 
   if (eventName === 'order:eta-updated') {
     return 'El negocio actualizó la hora estimada de tu pedido.';
+  }
+
+  if (eventName === 'order:scheduled-upcoming') {
+    return (payload as any).fulfillmentType === 'PICKUP'
+      ? 'Tu recogida está programada en 15 minutos. Acércate a tiempo.'
+      : 'Tu entrega está programada en 15 minutos.';
   }
 
   return payload.orderId
