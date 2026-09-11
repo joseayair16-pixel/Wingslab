@@ -4960,88 +4960,120 @@ function ProductImage({
       {/* Pre-confirm Order Modal (estilo Uber Eats) */}
       {isPreConfirmOpen && (
         <div className="fixed inset-0 z-[70] flex items-end justify-center sm:items-center">
-          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={clearPreConfirm} />
-          <div className="relative w-full max-w-sm rounded-t-[28px] bg-white p-6 shadow-2xl sm:rounded-[32px] animate-in zoom-in-95 duration-200">
-            <div className="flex items-center gap-3">
-              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[var(--accent)] text-white">
-                <Loader2 className="h-6 w-6 animate-spin" strokeWidth={2} />
+          <div className="absolute inset-0 bg-black/70 backdrop-blur-md" onClick={clearPreConfirm} />
+          <div className="relative w-full max-w-sm overflow-hidden rounded-t-[32px] bg-white pb-7 shadow-[0_40px_120px_rgba(0,0,0,0.4)] sm:rounded-[36px] animate-in zoom-in-95 duration-200">
+            {/* Cabecera con gradiente y cuenta regresiva */}
+            <div className="relative bg-gradient-to-br from-[var(--accent)] to-[var(--accent-strong)] px-6 pb-8 pt-7 text-white">
+              <div className="pointer-events-none absolute -right-10 -top-10 h-40 w-40 rounded-full bg-white/10 blur-2xl" />
+              <div className="pointer-events-none absolute -bottom-12 -left-8 h-40 w-40 rounded-full bg-black/10 blur-2xl" />
+
+              <div className="relative flex items-center gap-4">
+                {/* Cuenta regresiva con anillo de progreso */}
+                <div className="relative h-24 w-24 shrink-0">
+                  <svg className="h-24 w-24 -rotate-90" viewBox="0 0 96 96">
+                    <circle cx="48" cy="48" r="42" fill="none" stroke="rgba(255,255,255,0.18)" strokeWidth="7" />
+                    <circle
+                      cx="48" cy="48" r="42" fill="none"
+                      stroke="white" strokeWidth="7" strokeLinecap="round"
+                      strokeDasharray={`${2 * Math.PI * 42}`}
+                      strokeDashoffset={`${2 * Math.PI * 42 * (1 - preConfirmCountdown / 3)}`}
+                      className="transition-[stroke-dashoffset] duration-1000 ease-linear"
+                    />
+                  </svg>
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <span className="text-[42px] font-black leading-none tabular-nums drop-shadow-sm">{preConfirmCountdown}</span>
+                  </div>
+                </div>
+
+                <div className="relative min-w-0 flex-1">
+                  <p className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.22em] text-white/80">
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" strokeWidth={2.5} />
+                    Creando pedido
+                  </p>
+                  <h2 className="mt-1 text-xl font-extrabold leading-tight tracking-tight">
+                    Confirma tu pedido
+                  </h2>
+                  <p className="mt-1 text-[13px] leading-snug text-white/80">
+                    Revisa la dirección y el monto antes de enviar.
+                  </p>
+                </div>
               </div>
-              <div className="min-w-0">
-                <p className="text-lg font-bold tracking-tight text-neutral-950">Creando pedido</p>
-                <p className="text-xs font-medium text-neutral-500">
-                  Se creará en {preConfirmCountdown}s… confirma que todo está bien.
+            </div>
+
+            {/* Cuerpo */}
+            <div className="px-6">
+              {/* Dirección o recogida */}
+              <div className="-mt-3 rounded-2xl border border-black/[0.05] bg-neutral-50 p-4 shadow-[0_12px_30px_rgba(15,15,15,0.06)]">
+                {fulfillmentType === 'PICKUP' ? (
+                  <div className="flex items-start gap-3">
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-100 text-emerald-700">
+                      <Store className="h-5 w-5" strokeWidth={2} />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-[10px] font-bold uppercase tracking-widest text-neutral-400">Recoger en tienda</p>
+                      <p className="text-[15px] font-bold text-neutral-900 mt-0.5">{restaurant?.name}</p>
+                      {restaurant?.address && (
+                        <p className="text-xs text-neutral-500 mt-0.5 truncate">{restaurant.address}</p>
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex items-start gap-3">
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-sky-100 text-sky-600">
+                      <MapPin className="h-5 w-5" strokeWidth={2} />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-[10px] font-bold uppercase tracking-widest text-neutral-400">Dirección de entrega</p>
+                      <p className="text-[15px] font-bold text-neutral-900 mt-0.5 leading-snug">
+                        {checkoutForm.street} {checkoutForm.number}
+                      </p>
+                      <p className="text-xs text-neutral-500 mt-0.5 truncate">
+                        {[checkoutForm.neighborhood, checkoutForm.city].filter(Boolean).join(', ') || 'Sin dirección'}
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Total + resumen */}
+              <div className="mt-3 rounded-2xl bg-neutral-950 p-5 text-white shadow-[0_16px_40px_rgba(15,15,15,0.25)]">
+                <div className="flex items-center justify-between">
+                  <span className="text-[13px] font-medium text-neutral-300">
+                    {totalProducts} {totalProducts === 1 ? 'producto' : 'productos'}
+                  </span>
+                  <span className="rounded-full bg-white/10 px-2.5 py-1 text-[10px] font-bold uppercase tracking-widest text-neutral-300">
+                    {checkoutForm.paymentMethod === 'CASH' ? 'Total a pagar' : 'Total pagado'}
+                  </span>
+                </div>
+                <p className="mt-2 text-[34px] font-extrabold leading-none tracking-tight">
+                  {formatCurrency(orderTotal)}
+                </p>
+                <p className="mt-2 text-[11px] font-medium text-neutral-400">
+                  {checkoutForm.paymentMethod === 'CASH'
+                    ? fulfillmentType === 'PICKUP' ? 'Pagas al recoger en tienda' : 'Pagas al recibir'
+                    : 'Pago por transferencia confirmado'}
                 </p>
               </div>
-            </div>
 
-            {/* Dirección o recogida */}
-            <div className="mt-5 rounded-2xl border border-black/[0.06] bg-neutral-50 p-4">
-              {fulfillmentType === 'PICKUP' ? (
-                <div className="flex items-start gap-3">
-                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-emerald-100 text-emerald-700">
-                    <Store className="h-5 w-5" strokeWidth={2} />
-                  </div>
-                  <div className="min-w-0">
-                    <p className="text-[10px] font-bold uppercase tracking-widest text-neutral-400">Recoger en tienda</p>
-                    <p className="text-sm font-bold text-neutral-900 mt-0.5">{restaurant?.name}</p>
-                    {restaurant?.address && (
-                      <p className="text-xs text-neutral-500 mt-0.5 truncate">{restaurant.address}</p>
-                    )}
-                  </div>
-                </div>
-              ) : (
-                <div className="flex items-start gap-3">
-                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-sky-100 text-sky-600">
-                    <MapPin className="h-5 w-5" strokeWidth={2} />
-                  </div>
-                  <div className="min-w-0">
-                    <p className="text-[10px] font-bold uppercase tracking-widest text-neutral-400">Dirección de entrega</p>
-                    <p className="text-sm font-bold text-neutral-900 mt-0.5">
-                      {checkoutForm.street} {checkoutForm.number}
-                    </p>
-                    <p className="text-xs text-neutral-500 mt-0.5 truncate">
-                      {[checkoutForm.neighborhood, checkoutForm.city].filter(Boolean).join(', ') || 'Sin dirección'}
-                    </p>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Total + resumen */}
-            <div className="mt-3 rounded-2xl border border-black/[0.06] bg-white p-4">
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-medium text-neutral-600">{totalProducts} {totalProducts === 1 ? 'producto' : 'productos'}</span>
-                <span className="text-[10px] font-bold uppercase tracking-widest text-neutral-400">
-                  {checkoutForm.paymentMethod === 'CASH' ? 'Total a pagar' : 'Total pagado'}
-                </span>
+              {/* Acciones */}
+              <div className="mt-5 flex flex-col gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => { clearPreConfirm(); void createOrder(); }}
+                  className="group relative flex w-full items-center justify-center gap-2 overflow-hidden rounded-2xl bg-[var(--accent)] px-5 py-3.5 text-[15px] font-bold text-white shadow-[0_12px_28px_-8px_rgba(14,165,233,0.6)] transition-all hover:bg-[var(--accent-strong)] hover:shadow-[0_16px_32px_-10px_rgba(14,165,233,0.7)] active:scale-[0.98]"
+                >
+                  <div className="absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/20 to-transparent transition-transform duration-1000 group-hover:translate-x-full" />
+                  <Check className="h-4 w-4" strokeWidth={2.5} />
+                  Todo bien
+                </button>
+                <button
+                  type="button"
+                  onClick={clearPreConfirm}
+                  className="flex w-full items-center justify-center gap-2 rounded-2xl border border-neutral-200 bg-white px-5 py-3.5 text-[15px] font-semibold text-neutral-700 transition-all hover:bg-neutral-50 hover:border-neutral-300 active:scale-[0.98]"
+                >
+                  Cancelar
+                </button>
               </div>
-              <p className="mt-1 text-right text-2xl font-extrabold tracking-tight text-neutral-950">
-                {formatCurrency(orderTotal)}
-              </p>
-              <p className="mt-1 text-right text-[10px] font-medium text-neutral-400">
-                {checkoutForm.paymentMethod === 'CASH'
-                  ? fulfillmentType === 'PICKUP' ? 'Pagas al recoger en tienda' : 'Pagas al recibir'
-                  : 'Pago por transferencia confirmado'}
-              </p>
-            </div>
-
-            {/* Acciones */}
-            <div className="mt-5 flex flex-col gap-2.5">
-              <button
-                type="button"
-                onClick={() => { clearPreConfirm(); void createOrder(); }}
-                className="group relative flex w-full items-center justify-center gap-2 overflow-hidden rounded-2xl bg-[var(--accent)] px-5 py-3.5 text-[15px] font-bold text-white shadow-[0_8px_20px_-6px_rgba(14,165,233,0.4)] transition-all hover:bg-[var(--accent-strong)] active:scale-[0.98]"
-              >
-                <Check className="h-4 w-4" strokeWidth={2.5} />
-                Todo bien
-              </button>
-              <button
-                type="button"
-                onClick={clearPreConfirm}
-                className="flex w-full items-center justify-center gap-2 rounded-2xl border border-black/10 bg-white px-5 py-3.5 text-[15px] font-semibold text-neutral-700 transition-all hover:bg-neutral-50 active:scale-[0.98]"
-              >
-                Cancelar
-              </button>
             </div>
           </div>
         </div>
