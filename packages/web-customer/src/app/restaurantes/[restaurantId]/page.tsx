@@ -698,6 +698,13 @@ export default function RestaurantPage({
   const refreshCartItemPrices = useCartStore(state => state.refreshItemPrices);
   const [mounted, setMounted] = useState(false);
   useEffect(() => { setMounted(true); }, []);
+  useEffect(() => {
+    return () => {
+      if (preConfirmTimerRef.current !== null) {
+        window.clearInterval(preConfirmTimerRef.current);
+      }
+    };
+  }, []);
   const cart: CartItem[] = mounted && cartRestaurantId === urlParams.restaurantId ? cartItems : [];
 
   // El carrito guarda un snapshot de `image` al agregar el producto. Si la
@@ -741,6 +748,9 @@ export default function RestaurantPage({
   const couponFeedbackTimerRef = useRef<number | null>(null);
   const [loadingRestaurant, setLoadingRestaurant] = useState(true);
   const [creatingOrder, setCreatingOrder] = useState(false);
+  const [isPreConfirmOpen, setIsPreConfirmOpen] = useState(false);
+  const [preConfirmCountdown, setPreConfirmCountdown] = useState(3);
+  const preConfirmTimerRef = useRef<number | null>(null);
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(() => urlSearchParams?.checkout === 'true');
   const [cartJustUpdated, setCartJustUpdated] = useState(false);
@@ -2753,6 +2763,35 @@ function ProductImage({
       const msg = e instanceof Error ? e.message : 'El código promocional no es válido.';
       showCouponFeedback('error', 'Cupón no válido', msg);
     }
+  }
+
+  function clearPreConfirm() {
+    if (preConfirmTimerRef.current !== null) {
+      window.clearInterval(preConfirmTimerRef.current);
+      preConfirmTimerRef.current = null;
+    }
+    setIsPreConfirmOpen(false);
+    setPreConfirmCountdown(3);
+  }
+
+  function openPreConfirm() {
+    if (isPreConfirmOpen) return;
+    setPreConfirmCountdown(3);
+    setIsPreConfirmOpen(true);
+    preConfirmTimerRef.current = window.setInterval(() => {
+      setPreConfirmCountdown((prev) => {
+        const next = prev - 1;
+        if (next <= 0) {
+          window.clearInterval(preConfirmTimerRef.current!);
+          preConfirmTimerRef.current = null;
+          setIsPreConfirmOpen(false);
+          setPreConfirmCountdown(3);
+          void createOrder();
+          return 0;
+        }
+        return next;
+      });
+    }, 1000);
   }
 
   async function createOrder() {
@@ -4893,7 +4932,7 @@ function ProductImage({
                           if (pushPermission !== 'granted') {
                             setIsPushReminderModalOpen(true);
                           } else {
-                            void createOrder();
+                            openPreConfirm();
                           }
                         }}
                         aria-disabled={creatingOrder || Boolean(checkoutValidationMessage)}
@@ -4917,6 +4956,96 @@ function ProductImage({
               </section>
           </div>
         </div>
+
+      {/* Pre-confirm Order Modal (estilo Uber Eats) */}
+      {isPreConfirmOpen && (
+        <div className="fixed inset-0 z-[70] flex items-end justify-center sm:items-center">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={clearPreConfirm} />
+          <div className="relative w-full max-w-sm rounded-t-[28px] bg-white p-6 shadow-2xl sm:rounded-[32px] animate-in zoom-in-95 duration-200">
+            <div className="flex items-center gap-3">
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[var(--accent)] text-white">
+                <Loader2 className="h-6 w-6 animate-spin" strokeWidth={2} />
+              </div>
+              <div className="min-w-0">
+                <p className="text-lg font-bold tracking-tight text-neutral-950">Creando pedido</p>
+                <p className="text-xs font-medium text-neutral-500">
+                  Se creará en {preConfirmCountdown}s… confirma que todo está bien.
+                </p>
+              </div>
+            </div>
+
+            {/* Dirección o recogida */}
+            <div className="mt-5 rounded-2xl border border-black/[0.06] bg-neutral-50 p-4">
+              {fulfillmentType === 'PICKUP' ? (
+                <div className="flex items-start gap-3">
+                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-emerald-100 text-emerald-700">
+                    <Store className="h-5 w-5" strokeWidth={2} />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-neutral-400">Recoger en tienda</p>
+                    <p className="text-sm font-bold text-neutral-900 mt-0.5">{restaurant?.name}</p>
+                    {restaurant?.address && (
+                      <p className="text-xs text-neutral-500 mt-0.5 truncate">{restaurant.address}</p>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <div className="flex items-start gap-3">
+                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-sky-100 text-sky-600">
+                    <MapPin className="h-5 w-5" strokeWidth={2} />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-neutral-400">Dirección de entrega</p>
+                    <p className="text-sm font-bold text-neutral-900 mt-0.5">
+                      {checkoutForm.street} {checkoutForm.number}
+                    </p>
+                    <p className="text-xs text-neutral-500 mt-0.5 truncate">
+                      {[checkoutForm.neighborhood, checkoutForm.city].filter(Boolean).join(', ') || 'Sin dirección'}
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Total + resumen */}
+            <div className="mt-3 rounded-2xl border border-black/[0.06] bg-white p-4">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium text-neutral-600">{totalProducts} {totalProducts === 1 ? 'producto' : 'productos'}</span>
+                <span className="text-[10px] font-bold uppercase tracking-widest text-neutral-400">
+                  {checkoutForm.paymentMethod === 'CASH' ? 'Total a pagar' : 'Total pagado'}
+                </span>
+              </div>
+              <p className="mt-1 text-right text-2xl font-extrabold tracking-tight text-neutral-950">
+                {formatCurrency(orderTotal)}
+              </p>
+              <p className="mt-1 text-right text-[10px] font-medium text-neutral-400">
+                {checkoutForm.paymentMethod === 'CASH'
+                  ? fulfillmentType === 'PICKUP' ? 'Pagas al recoger en tienda' : 'Pagas al recibir'
+                  : 'Pago por transferencia confirmado'}
+              </p>
+            </div>
+
+            {/* Acciones */}
+            <div className="mt-5 flex flex-col gap-2.5">
+              <button
+                type="button"
+                onClick={() => { clearPreConfirm(); void createOrder(); }}
+                className="group relative flex w-full items-center justify-center gap-2 overflow-hidden rounded-2xl bg-[var(--accent)] px-5 py-3.5 text-[15px] font-bold text-white shadow-[0_8px_20px_-6px_rgba(14,165,233,0.4)] transition-all hover:bg-[var(--accent-strong)] active:scale-[0.98]"
+              >
+                <Check className="h-4 w-4" strokeWidth={2.5} />
+                Todo bien
+              </button>
+              <button
+                type="button"
+                onClick={clearPreConfirm}
+                className="flex w-full items-center justify-center gap-2 rounded-2xl border border-black/10 bg-white px-5 py-3.5 text-[15px] font-semibold text-neutral-700 transition-all hover:bg-neutral-50 active:scale-[0.98]"
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Push Reminder Modal */}
       {isPushReminderModalOpen && (
