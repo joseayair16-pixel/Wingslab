@@ -526,6 +526,9 @@ model Order {
   overdueAlertLevel Int       @default(0)
   overdueAlertedAt  DateTime?
 
+  // Recordatorio previo (15 min antes) de entrega/recogida programada
+  scheduledReminderSentAt DateTime?
+
   transactions               Transaction[]
   tracking                   OrderTracking[]
   review                     Review?
@@ -549,6 +552,7 @@ model Order {
   @@index([overdueAlertLevel, status])
   @@index([driverAssignedAt])
   @@index([preparationDeadlineAt])
+  @@index([scheduledDeliveryAt, status])
   @@index([isAcceptedByDriver, driverId, status])
   @@index([isSupportRequested, supportRestaurantId])
 }

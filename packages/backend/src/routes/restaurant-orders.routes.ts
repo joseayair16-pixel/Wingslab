@@ -681,10 +681,12 @@ export async function registerRestaurantOrderRoutes(fastify: FastifyInstance): P
 
         await sendPushNotification(order.customer.user.id, {
           title: 'Actualizamos tu hora estimada',
-          body: `${getBusinessArticleCapitalized(order.restaurant?.businessType)} ${getBusinessRef(order.restaurant?.businessType)} agrego ${parsedBody.data.additionalMinutes} min para preparar bien tu pedido.`,
+          body: `${getBusinessArticleCapitalized(order.restaurant?.businessType)} ${getBusinessRef(order.restaurant?.businessType)} agrego ${parsedBody.data.additionalMinutes} min para preparar bien tu pedido.${order.estimatedDeliveryTime ? ` Nueva ETA: ${new Date(order.estimatedDeliveryTime).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })}.` : ''}`,
           data: {
             orderId: order.id,
             event: 'order:eta-updated',
+            estimatedDeliveryTime: order.estimatedDeliveryTime,
+            scheduledDeliveryAt: order.scheduledDeliveryAt,
             url: `/?orderId=${order.id}`,
           },
         }).catch((error) => {
@@ -756,7 +758,9 @@ export async function registerRestaurantOrderRoutes(fastify: FastifyInstance): P
           body: `${getBusinessArticleCapitalized(order.restaurant?.businessType)} ${getBusinessRef(order.restaurant?.businessType)} reprogramo la entrega para ${new Date(parsedBody.data.estimatedDeliveryAt).toLocaleString('es-MX', { dateStyle: 'long', timeStyle: 'short' })}.`,
           data: {
             orderId: order.id,
-            event: 'order:eta-updated',
+            event: 'order:rescheduled',
+            estimatedDeliveryTime: order.estimatedDeliveryTime,
+            scheduledDeliveryAt: order.scheduledDeliveryAt,
             url: `/?orderId=${order.id}`,
           },
         }).catch((error) => {

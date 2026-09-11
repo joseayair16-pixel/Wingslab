@@ -482,6 +482,7 @@ const liveEvents = [
   'order:picked-up',
   'order:in-transit',
   'order:eta-updated',
+  'order:rescheduled',
   'order:driver-arrived',
   'order:driver_arrived',
   'order:arrival-reminder',
@@ -3581,6 +3582,29 @@ export default function Home() {
               }));
             }
           }).catch(() => {});
+        } else if (eventName === 'order:rescheduled' || eventName === 'order:eta-updated') {
+          // El negocio reprogramó/agregó tiempo: refresca el detalle para
+          // reflejar la nueva hora y limpiar cualquier indicador de retraso.
+          if (payload.orderId) {
+            requestJson<{ success: true; data: CustomerOrderDetail }>({
+              apiBase,
+              path: `/me/pedidos/${payload.orderId}`,
+              token,
+            }).then((detailRes) => {
+              if (detailRes.success) {
+                setActiveOrderDetailsMap((prev) => ({
+                  ...prev,
+                  [payload.orderId!]: detailRes.data,
+                }));
+              }
+            }).catch(() => {});
+            showTransientNotice({
+              key: `${eventName}:${liveEventKey}`,
+              title: eventName === 'order:rescheduled' ? 'Entrega reprogramada' : 'Hora actualizada',
+              description: buildNotificationMessage(eventName, payload),
+              tone: 'info',
+            });
+          }
         } else if (eventName === 'order:schedule-proposal') {
           try {
             if (window.localStorage.getItem('customerAlertSoundEnabled') !== 'false') {
@@ -7631,6 +7655,7 @@ const notificationTitleMap: Record<(typeof liveEvents)[number], string> = {
   'order:picked-up': 'Pedido recogido',
   'order:in-transit': 'En camino',
   'order:eta-updated': 'Hora estimada actualizada',
+  'order:rescheduled': 'Entrega reprogramada',
   'order:driver-arrived': '¡Ya llegué!',
   'order:driver_arrived': '¡Ya llegué!',
   'order:arrival-reminder': 'El repartidor ya está en tu puerta',
@@ -7697,6 +7722,14 @@ function buildNotificationMessage(
 
   if (eventName === 'order:delay') {
     return 'Tu pedido va con retraso. El negocio ya fue notificado y está trabajando para que llegue lo antes posible.';
+  }
+
+  if (eventName === 'order:rescheduled') {
+    return 'El negocio reprogramó la entrega de tu pedido. Revisa la nueva hora en tu pedido activo.';
+  }
+
+  if (eventName === 'order:eta-updated') {
+    return 'El negocio actualizó la hora estimada de tu pedido.';
   }
 
   return payload.orderId

@@ -1019,16 +1019,35 @@ export async function extendOrderPreparationTime({
 
   const nextEta = new Date(currentEta.getTime() + actualAddedMs);
 
+  // Pedido programado (entrega/recogida en una hora acordada): al agregar tiempo
+  // la hora acordada también debe desplazarse, o seguiría apareciendo "rezagado"
+  // aunque el restaurante ya extendió el plazo. Se recalcula el deadline de
+  // preparación igual que al aceptar el pedido (hora - trayecto estimado).
+  const hasScheduledDelivery = Boolean(order.scheduledDeliveryAt);
+  const travelMinutes = hasScheduledDelivery
+    ? estimateDeliveryTravelMinutes(order.restaurant, order)
+    : 0;
+  const nextScheduledDeliveryAt = hasScheduledDelivery
+    ? new Date(new Date(order.scheduledDeliveryAt!).getTime() + actualAddedMs)
+    : null;
+  const nextScheduledDeadline = nextScheduledDeliveryAt
+    ? new Date(nextScheduledDeliveryAt.getTime() - travelMinutes * 60 * 1000)
+    : null;
+
   const updatedOrder = await prisma.$transaction(async (tx) => {
     const updated = await tx.order.update({
       where: { id: order.id },
       data: {
         preparationTimeMinutes: currentPreparationMinutes + actualAddedMinutes,
-        preparationDeadlineAt: nextDeadline,
+        preparationDeadlineAt: nextScheduledDeadline ?? nextDeadline,
         etaExtendedMinutes: (order.etaExtendedMinutes || 0) + actualAddedMinutes,
-        estimatedDeliveryTime: nextEta,
+        estimatedDeliveryTime: nextScheduledDeliveryAt ?? nextEta,
+        ...(nextScheduledDeliveryAt
+          ? { scheduledDeliveryAt: nextScheduledDeliveryAt }
+          : {}),
         overdueAlertLevel: 0,
         overdueAlertedAt: null,
+        scheduledReminderSentAt: null,
       },
       select: restaurantOrderWorkflowSelect,
     });
@@ -1088,6 +1107,9 @@ export async function rescheduleDeliveryTime({
       data: {
         estimatedDeliveryTime: newEta,
         scheduledDeliveryAt: newEta,
+        overdueAlertLevel: 0,
+        overdueAlertedAt: null,
+        scheduledReminderSentAt: null,
       },
       select: restaurantOrderWorkflowSelect,
     });

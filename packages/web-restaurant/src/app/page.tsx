@@ -9976,11 +9976,20 @@ export default function Home() {
                                           <span className="text-xs font-black uppercase tracking-wider text-center">Pedido rezagado</span>
                                           <span className="text-[10px] font-bold opacity-90">Atrasado {overdueMinutes} min · Toca para reprogramar</span>
                                         </div>
-                                      </button>
-                                    );
-                                  }
-                                  return null;
-                                })()}
+</button>
+                                     );
+                                   }
+                                   if (validStatus && order.scheduledDeliveryAt && !isDelayed) {
+                                     const scheduledTime = new Date(order.scheduledDeliveryAt).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' });
+                                     return (
+                                       <div className="mt-3 w-full flex items-center justify-center gap-2 rounded-xl border border-sky-100 bg-sky-50/70 px-3 py-2.5 text-xs font-semibold text-sky-800">
+                                         <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><path d="M12 6v6l4 2" /></svg>
+                                         <span>{order.fulfillmentType === 'PICKUP' ? 'Recogida programada' : 'Entrega programada'} · {scheduledTime}</span>
+                                       </div>
+                                     );
+                                   }
+                                   return null;
+                                 })()}
 
                                 {(order as any).fulfillmentType !== 'PICKUP' && (order.status === 'CONFIRMED' || order.status === 'PREPARING') && !order.driver && !order.noDriversAvailable && !hasOwnDelivery && (
                   <div className="mt-2 flex items-center gap-2 rounded-xl border border-sky-100 bg-sky-50/70 px-3 py-2 text-xs font-semibold text-sky-800 shadow-sm animate-pulse w-fit">
