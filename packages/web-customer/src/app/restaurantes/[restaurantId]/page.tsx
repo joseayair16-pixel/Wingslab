@@ -5003,33 +5003,38 @@ function ProductImage({
             {/* Cuerpo */}
             <div className="px-6">
               {/* Dirección o recogida */}
-              <div className="-mt-3 rounded-2xl border border-black/[0.05] bg-neutral-50 p-4 shadow-[0_12px_30px_rgba(15,15,15,0.06)]">
+              <div className="-mt-3 rounded-2xl border border-[var(--accent)]/20 bg-white p-5 shadow-[0_12px_30px_rgba(15,15,15,0.08)] ring-1 ring-[var(--accent)]/10">
                 {fulfillmentType === 'PICKUP' ? (
-                  <div className="flex items-start gap-3">
-                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-100 text-emerald-700">
-                      <Store className="h-5 w-5" strokeWidth={2} />
+                  <div className="flex items-start gap-4">
+                    <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-emerald-100 text-emerald-700 shadow-sm">
+                      <Store className="h-6 w-6" strokeWidth={2} />
                     </div>
                     <div className="min-w-0">
-                      <p className="text-[10px] font-bold uppercase tracking-widest text-neutral-400">Recoger en tienda</p>
-                      <p className="text-[15px] font-bold text-neutral-900 mt-0.5">{restaurant?.name}</p>
+                      <p className="text-[11px] font-bold uppercase tracking-widest text-emerald-600">Recoger en tienda</p>
+                      <p className="mt-1 text-lg font-bold leading-tight text-neutral-900">{restaurant?.name}</p>
                       {restaurant?.address && (
-                        <p className="text-xs text-neutral-500 mt-0.5 truncate">{restaurant.address}</p>
+                        <p className="mt-1 text-sm leading-snug text-neutral-600">{restaurant.address}</p>
                       )}
                     </div>
                   </div>
                 ) : (
-                  <div className="flex items-start gap-3">
-                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-sky-100 text-sky-600">
-                      <MapPin className="h-5 w-5" strokeWidth={2} />
+                  <div className="flex items-start gap-4">
+                    <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-sky-100 text-sky-600 shadow-sm">
+                      <MapPin className="h-6 w-6" strokeWidth={2} />
                     </div>
                     <div className="min-w-0">
-                      <p className="text-[10px] font-bold uppercase tracking-widest text-neutral-400">Dirección de entrega</p>
-                      <p className="text-[15px] font-bold text-neutral-900 mt-0.5 leading-snug">
+                      <p className="text-[11px] font-bold uppercase tracking-widest text-sky-600">Dirección de entrega</p>
+                      <p className="mt-1 text-lg font-bold leading-tight text-neutral-900">
                         {checkoutForm.street} {checkoutForm.number}
                       </p>
-                      <p className="text-xs text-neutral-500 mt-0.5 truncate">
+                      <p className="mt-1 text-sm font-medium leading-snug text-neutral-700">
                         {[checkoutForm.neighborhood, checkoutForm.city].filter(Boolean).join(', ') || 'Sin dirección'}
                       </p>
+                      {checkoutForm.reference?.trim() ? (
+                        <p className="mt-1 text-[13px] leading-snug text-neutral-500">
+                          <span className="font-semibold text-neutral-600">Ref:</span> {checkoutForm.reference.trim()}
+                        </p>
+                      ) : null}
                     </div>
                   </div>
                 )}
