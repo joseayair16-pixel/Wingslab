@@ -703,6 +703,9 @@ export default function RestaurantPage({
       if (preConfirmTimerRef.current !== null) {
         window.clearInterval(preConfirmTimerRef.current);
       }
+      if (preConfirmCommitTimerRef.current !== null) {
+        window.clearTimeout(preConfirmCommitTimerRef.current);
+      }
     };
   }, []);
   const cart: CartItem[] = mounted && cartRestaurantId === urlParams.restaurantId ? cartItems : [];
@@ -751,6 +754,7 @@ export default function RestaurantPage({
   const [isPreConfirmOpen, setIsPreConfirmOpen] = useState(false);
   const [preConfirmCountdown, setPreConfirmCountdown] = useState(3);
   const preConfirmTimerRef = useRef<number | null>(null);
+  const preConfirmCommitTimerRef = useRef<number | null>(null);
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(() => urlSearchParams?.checkout === 'true');
   const [cartJustUpdated, setCartJustUpdated] = useState(false);
@@ -2765,13 +2769,28 @@ function ProductImage({
     }
   }
 
-  function clearPreConfirm() {
+  function stopPreConfirmTimers() {
     if (preConfirmTimerRef.current !== null) {
       window.clearInterval(preConfirmTimerRef.current);
       preConfirmTimerRef.current = null;
     }
+    if (preConfirmCommitTimerRef.current !== null) {
+      window.clearTimeout(preConfirmCommitTimerRef.current);
+      preConfirmCommitTimerRef.current = null;
+    }
+  }
+
+  function clearPreConfirm() {
+    stopPreConfirmTimers();
     setIsPreConfirmOpen(false);
     setPreConfirmCountdown(3);
+  }
+
+  function commitPreOrder() {
+    stopPreConfirmTimers();
+    setIsPreConfirmOpen(false);
+    setPreConfirmCountdown(3);
+    void createOrder();
   }
 
   function openPreConfirm() {
@@ -2784,9 +2803,11 @@ function ProductImage({
         if (next <= 0) {
           window.clearInterval(preConfirmTimerRef.current!);
           preConfirmTimerRef.current = null;
-          setIsPreConfirmOpen(false);
-          setPreConfirmCountdown(3);
-          void createOrder();
+          // Al llegar a 0 se mantiene visible 1 s más (muestra "0") antes de
+          // crear el pedido, dando margen para cancelar en el último instante.
+          preConfirmCommitTimerRef.current = window.setTimeout(() => {
+            commitPreOrder();
+          }, 1000);
           return 0;
         }
         return next;
@@ -4957,81 +4978,82 @@ function ProductImage({
           </div>
         </div>
 
-      {/* Pre-confirm Order Modal (estilo Uber Eats) */}
+      {/* Pre-confirm Order Modal (estilo SaDeL) */}
       {isPreConfirmOpen && (
         <div className="fixed inset-0 z-[70] flex items-end justify-center sm:items-center">
-          <div className="absolute inset-0 bg-black/70 backdrop-blur-md" onClick={clearPreConfirm} />
-          <div className="relative w-full max-w-sm overflow-hidden rounded-t-[32px] bg-white pb-7 shadow-[0_40px_120px_rgba(0,0,0,0.4)] sm:rounded-[36px] animate-in zoom-in-95 duration-200">
-            {/* Cabecera con gradiente y cuenta regresiva */}
-            <div className="relative bg-gradient-to-br from-[var(--accent)] to-[var(--accent-strong)] px-6 pb-8 pt-7 text-white">
-              <div className="pointer-events-none absolute -right-10 -top-10 h-40 w-40 rounded-full bg-white/10 blur-2xl" />
-              <div className="pointer-events-none absolute -bottom-12 -left-8 h-40 w-40 rounded-full bg-black/10 blur-2xl" />
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-md" onClick={clearPreConfirm} />
+          <div className="relative flex max-h-[92vh] w-full max-w-sm flex-col overflow-hidden rounded-t-[32px] bg-white shadow-[0_-24px_80px_rgba(15,15,15,0.35)] sm:rounded-[36px] animate-in slide-in-from-bottom-4 fade-in duration-300">
+            {/* Drag handle */}
+            <div className="flex justify-center pt-3">
+              <div className="h-1.5 w-10 rounded-full bg-neutral-300" />
+            </div>
 
-              <div className="relative flex items-center gap-4">
-                {/* Cuenta regresiva con anillo de progreso */}
-                <div className="relative h-24 w-24 shrink-0">
-                  <svg className="h-24 w-24 -rotate-90" viewBox="0 0 96 96">
-                    <circle cx="48" cy="48" r="42" fill="none" stroke="rgba(255,255,255,0.18)" strokeWidth="7" />
+            {/* Cabecera */}
+            <div className="px-6 pb-4 pt-3 text-center">
+              <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-[var(--accent-soft-strong)] text-[var(--accent-strong)]">
+                <Loader2 className="h-7 w-7 animate-spin" strokeWidth={2.2} />
+              </div>
+              <h2 className="mt-3 text-xl font-extrabold tracking-tight text-neutral-950">Confirma tu pedido</h2>
+              <p className="mt-1 text-[13px] font-medium text-neutral-500">Revisa la dirección y el monto antes de enviar</p>
+            </div>
+
+            {/* Cuenta regresiva */}
+            <div className="px-6">
+              <div className="flex items-center justify-center gap-3 rounded-2xl border border-black/[0.06] bg-neutral-50 py-3">
+                <div className="relative h-14 w-14">
+                  <svg className="h-14 w-14 -rotate-90" viewBox="0 0 56 56">
+                    <circle cx="28" cy="28" r="24" fill="none" stroke="rgba(0,0,0,0.08)" strokeWidth="5" />
                     <circle
-                      cx="48" cy="48" r="42" fill="none"
-                      stroke="white" strokeWidth="7" strokeLinecap="round"
-                      strokeDasharray={`${2 * Math.PI * 42}`}
-                      strokeDashoffset={`${2 * Math.PI * 42 * (1 - preConfirmCountdown / 3)}`}
+                      cx="28" cy="28" r="24" fill="none"
+                      stroke="var(--accent)" strokeWidth="5" strokeLinecap="round"
+                      strokeDasharray={`${2 * Math.PI * 24}`}
+                      strokeDashoffset={`${2 * Math.PI * 24 * (1 - preConfirmCountdown / 3)}`}
                       className="transition-[stroke-dashoffset] duration-1000 ease-linear"
                     />
                   </svg>
                   <div className="absolute inset-0 flex items-center justify-center">
-                    <span className="text-[42px] font-black leading-none tabular-nums drop-shadow-sm">{preConfirmCountdown}</span>
+                    <span className="text-2xl font-black tabular-nums text-neutral-900">{preConfirmCountdown}</span>
                   </div>
                 </div>
-
-                <div className="relative min-w-0 flex-1">
-                  <p className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.22em] text-white/80">
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" strokeWidth={2.5} />
-                    Creando pedido
-                  </p>
-                  <h2 className="mt-1 text-xl font-extrabold leading-tight tracking-tight">
-                    Confirma tu pedido
-                  </h2>
-                  <p className="mt-1 text-[13px] leading-snug text-white/80">
-                    Revisa la dirección y el monto antes de enviar.
-                  </p>
+                <div className="text-left">
+                  <p className="text-sm font-bold text-neutral-900">El pedido se enviará automáticamente</p>
+                  <p className="text-xs font-medium text-neutral-500">Toca «Todo bien» para enviarlo ahora</p>
                 </div>
               </div>
             </div>
 
-            {/* Cuerpo */}
-            <div className="px-6">
+            {/* Cuerpo scrolleable */}
+            <div className="mt-4 min-h-0 flex-1 overflow-y-auto px-6 pb-2">
               {/* Dirección o recogida */}
-              <div className="-mt-3 rounded-2xl border border-[var(--accent)]/20 bg-white p-5 shadow-[0_12px_30px_rgba(15,15,15,0.08)] ring-1 ring-[var(--accent)]/10">
+              <div className="rounded-2xl border border-black/[0.06] bg-neutral-50 p-4">
                 {fulfillmentType === 'PICKUP' ? (
-                  <div className="flex items-start gap-4">
-                    <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-emerald-100 text-emerald-700 shadow-sm">
-                      <Store className="h-6 w-6" strokeWidth={2} />
+                  <div className="flex items-start gap-3">
+                    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-emerald-100 text-emerald-700">
+                      <Store className="h-5 w-5" strokeWidth={2} />
                     </div>
                     <div className="min-w-0">
-                      <p className="text-[11px] font-bold uppercase tracking-widest text-emerald-600">Recoger en tienda</p>
-                      <p className="mt-1 text-lg font-bold leading-tight text-neutral-900">{restaurant?.name}</p>
+                      <p className="text-[10px] font-bold uppercase tracking-widest text-neutral-400">Recoger en tienda</p>
+                      <p className="mt-0.5 text-base font-bold leading-tight text-neutral-900">{restaurant?.name}</p>
                       {restaurant?.address && (
-                        <p className="mt-1 text-sm leading-snug text-neutral-600">{restaurant.address}</p>
+                        <p className="mt-0.5 text-sm leading-snug text-neutral-600">{restaurant.address}</p>
                       )}
                     </div>
                   </div>
                 ) : (
-                  <div className="flex items-start gap-4">
-                    <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-sky-100 text-sky-600 shadow-sm">
-                      <MapPin className="h-6 w-6" strokeWidth={2} />
+                  <div className="flex items-start gap-3">
+                    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-sky-100 text-sky-600">
+                      <MapPin className="h-5 w-5" strokeWidth={2} />
                     </div>
                     <div className="min-w-0">
-                      <p className="text-[11px] font-bold uppercase tracking-widest text-sky-600">Dirección de entrega</p>
-                      <p className="mt-1 text-lg font-bold leading-tight text-neutral-900">
+                      <p className="text-[10px] font-bold uppercase tracking-widest text-neutral-400">Dirección de entrega</p>
+                      <p className="mt-0.5 text-base font-bold leading-tight text-neutral-900">
                         {checkoutForm.street} {checkoutForm.number}
                       </p>
-                      <p className="mt-1 text-sm font-medium leading-snug text-neutral-700">
+                      <p className="mt-0.5 text-[13px] font-medium leading-snug text-neutral-600">
                         {[checkoutForm.neighborhood, checkoutForm.city].filter(Boolean).join(', ') || 'Sin dirección'}
                       </p>
                       {checkoutForm.reference?.trim() ? (
-                        <p className="mt-1 text-[13px] leading-snug text-neutral-500">
+                        <p className="mt-1 text-xs leading-snug text-neutral-500">
                           <span className="font-semibold text-neutral-600">Ref:</span> {checkoutForm.reference.trim()}
                         </p>
                       ) : null}
@@ -5040,17 +5062,17 @@ function ProductImage({
                 )}
               </div>
 
-              {/* Total + resumen */}
-              <div className="mt-3 rounded-2xl bg-neutral-950 p-5 text-white shadow-[0_16px_40px_rgba(15,15,15,0.25)]">
+              {/* Total */}
+              <div className="mt-3 rounded-2xl bg-neutral-950 p-5 text-white">
                 <div className="flex items-center justify-between">
                   <span className="text-[13px] font-medium text-neutral-300">
-                    {totalProducts} {totalProducts === 1 ? 'producto' : 'productos'}
+                    {totalProducts} {totalProducts === 1 ? 'artículo' : 'artículos'}
                   </span>
                   <span className="rounded-full bg-white/10 px-2.5 py-1 text-[10px] font-bold uppercase tracking-widest text-neutral-300">
                     {checkoutForm.paymentMethod === 'CASH' ? 'Total a pagar' : 'Total pagado'}
                   </span>
                 </div>
-                <p className="mt-2 text-[34px] font-extrabold leading-none tracking-tight">
+                <p className="mt-2 text-3xl font-extrabold leading-none tracking-tight">
                   {formatCurrency(orderTotal)}
                 </p>
                 <p className="mt-2 text-[11px] font-medium text-neutral-400">
@@ -5059,13 +5081,15 @@ function ProductImage({
                     : 'Pago por transferencia confirmado'}
                 </p>
               </div>
+            </div>
 
-              {/* Acciones */}
-              <div className="mt-5 flex flex-col gap-2.5">
+            {/* Acciones */}
+            <div className="border-t border-black/[0.06] px-6 pb-[calc(1.25rem+env(safe-area-inset-bottom))] pt-4">
+              <div className="flex flex-col gap-2.5">
                 <button
                   type="button"
-                  onClick={() => { clearPreConfirm(); void createOrder(); }}
-                  className="group relative flex w-full items-center justify-center gap-2 overflow-hidden rounded-2xl bg-[var(--accent)] px-5 py-3.5 text-[15px] font-bold text-white shadow-[0_12px_28px_-8px_rgba(14,165,233,0.6)] transition-all hover:bg-[var(--accent-strong)] hover:shadow-[0_16px_32px_-10px_rgba(14,165,233,0.7)] active:scale-[0.98]"
+                  onClick={commitPreOrder}
+                  className="group relative flex w-full items-center justify-center gap-2 overflow-hidden rounded-2xl bg-[var(--accent)] px-5 py-3.5 text-[15px] font-bold text-white shadow-[0_10px_24px_-8px_rgba(14,165,233,0.55)] transition-all hover:bg-[var(--accent-strong)] active:scale-[0.98]"
                 >
                   <div className="absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/20 to-transparent transition-transform duration-1000 group-hover:translate-x-full" />
                   <Check className="h-4 w-4" strokeWidth={2.5} />
