@@ -979,6 +979,7 @@ export default function Home() {
 
   const [supportTickets, setSupportTickets] = useState<any[]>([]);
   const [loadingSupportTickets, setLoadingSupportTickets] = useState(false);
+  const [expandedTicketId, setExpandedTicketId] = useState<string | null>(null);
 
   const loadSupportTickets = useCallback(async () => {
     const localToken = token || localStorage.getItem('sadel.customer.token');
@@ -4967,48 +4968,88 @@ export default function Home() {
                       <p className="mt-1 text-sm font-medium text-neutral-500">No tienes reportes activos en este momento.</p>
                     </div>
                   ) : (
-                    supportTickets.map((ticket) => (
-                      <div key={ticket.id} className="p-4 md:p-6 transition-colors hover:bg-neutral-50/30">
-                        <div className="flex items-center justify-between gap-2 mb-2.5">
-                          <div className="flex items-center gap-3 min-w-0">
-                            <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-neutral-100 text-neutral-600">
-                              <span className="text-lg">{ticket.type === 'APP' ? '📱' : '🍔'}</span>
+                    supportTickets.map((ticket) => {
+                        const isExpanded = expandedTicketId === ticket.id;
+                        return (
+                          <button
+                            key={ticket.id}
+                            type="button"
+                            onClick={() => setExpandedTicketId(isExpanded ? null : ticket.id)}
+                            aria-expanded={isExpanded}
+                            className="w-full text-left p-4 md:p-6 transition-colors hover:bg-neutral-50/30"
+                          >
+                            <div className="flex items-center justify-between gap-2 mb-3">
+                              <div className="flex items-center gap-3 min-w-0">
+                                <div className={`flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-2xl text-lg shadow-sm ${
+                                  ticket.type === 'APP' ? 'bg-sky-50' : 'bg-orange-50'
+                                }`}>
+                                  <span>{ticket.type === 'APP' ? '📱' : '🍔'}</span>
+                                </div>
+                                <div className="min-w-0">
+                                  <p className="text-[14px] font-bold text-neutral-950 truncate">
+                                    {ticket.type === 'APP' ? 'Problema con la App' : 'Problema con Pedido'}
+                                  </p>
+                                  <p className="text-[11px] font-medium text-neutral-400 mt-0.5">
+                                    {new Date(ticket.createdAt).toLocaleString('es-MX', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                                  </p>
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-2 shrink-0">
+                                <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full tracking-wide uppercase ${
+                                  ticket.status === 'PENDING' ? 'bg-amber-50 text-amber-700 border border-amber-200/60' :
+                                  ticket.status === 'IN_PROGRESS' ? 'bg-sky-50 text-sky-700 border border-sky-200/60' :
+                                  'bg-emerald-50 text-emerald-700 border border-emerald-200/60'
+                                }`}>
+                                  {ticket.status === 'PENDING' ? 'Pendiente' :
+                                   ticket.status === 'IN_PROGRESS' ? 'En Proceso' : 'Resuelto'}
+                                </span>
+                                <svg
+                                  className={`h-4 w-4 text-neutral-400 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`}
+                                  fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.5"
+                                >
+                                  <path strokeLinecap="round" strokeLinejoin="round" d="m6 9 6 6 6-6" />
+                                </svg>
+                              </div>
                             </div>
-                            <div className="min-w-0">
-                              <p className="text-[14px] font-bold text-neutral-900 truncate">
-                                {ticket.type === 'APP' ? 'Problema con la App' : 'Problema con Pedido'}
-                              </p>
-                              <p className="text-[11px] text-neutral-400 mt-0.5">{new Date(ticket.createdAt).toLocaleString()}</p>
-                            </div>
-                          </div>
-                          <span className={`text-[10px] font-black px-2.5 py-0.5 rounded-full tracking-wider uppercase ${
-                            ticket.status === 'PENDING' ? 'bg-amber-50 text-amber-700 border border-amber-200/50' :
-                            ticket.status === 'IN_PROGRESS' ? 'bg-sky-50 text-sky-700 border border-sky-200/50' :
-                            'bg-emerald-50 text-emerald-700 border border-emerald-200/50'
-                          }`}>
-                            {ticket.status === 'PENDING' ? 'Pendiente' :
-                             ticket.status === 'IN_PROGRESS' ? 'En Proceso' : 'Resuelto'}
-                          </span>
-                        </div>
-                        
-                        <div className="text-[13px] text-neutral-600 space-y-1 bg-neutral-50/50 rounded-xl p-3 border border-neutral-100">
-                          {ticket.subject && <p><span className="font-semibold text-neutral-800">Asunto:</span> {ticket.subject}</p>}
-                          {ticket.storeName && <p><span className="font-semibold text-neutral-800">Tienda:</span> {ticket.storeName}</p>}
-                          {ticket.orderNumber && <p><span className="font-semibold text-neutral-800">Pedido:</span> #{ticket.orderNumber}</p>}
-                          <p className="pt-1 text-neutral-700 leading-relaxed">{ticket.description}</p>
-                        </div>
 
-                        {ticket.response && (
-                          <div className="mt-3 bg-emerald-50/60 border border-emerald-100/80 rounded-xl p-3.5">
-                            <p className="text-[13px] font-bold text-emerald-800 mb-1">Respuesta de Soporte:</p>
-                            <p className="text-[13px] text-emerald-700 whitespace-pre-wrap leading-relaxed">{ticket.response}</p>
-                            <p className="text-[10px] text-emerald-500 mt-1.5 font-medium">
-                              Respondido el: {new Date(ticket.respondedAt).toLocaleString()}
+                            {/* Resumen de una línea */}
+                            <p className="text-[13px] font-medium text-neutral-600 line-clamp-1">
+                              {ticket.subject || ticket.description}
                             </p>
-                          </div>
-                        )}
-                      </div>
-                    ))
+
+                            {isExpanded && (
+                              <div className="mt-3 flex flex-col gap-3">
+                                <div className="bg-neutral-50 rounded-2xl p-4 border border-neutral-100">
+                                  <div className="flex flex-col gap-1.5 text-[13px] text-neutral-600">
+                                    {ticket.subject && (
+                                      <p><span className="font-semibold text-neutral-800">Asunto:</span> {ticket.subject}</p>
+                                    )}
+                                    {ticket.storeName && (
+                                      <p><span className="font-semibold text-neutral-800">Tienda:</span> {ticket.storeName}</p>
+                                    )}
+                                    {ticket.orderNumber && (
+                                      <p><span className="font-semibold text-neutral-800">Pedido:</span> #{ticket.orderNumber}</p>
+                                    )}
+                                  </div>
+                                  <p className="mt-2 text-[13px] text-neutral-700 leading-relaxed whitespace-pre-wrap">
+                                    {ticket.description}
+                                  </p>
+                                </div>
+
+                                {ticket.response && (
+                                  <div className="bg-emerald-50/70 border border-emerald-100 rounded-2xl p-4">
+                                    <p className="text-[13px] font-bold text-emerald-800 mb-1">Respuesta de Soporte:</p>
+                                    <p className="text-[13px] text-emerald-700 whitespace-pre-wrap leading-relaxed">{ticket.response}</p>
+                                    <p className="text-[10px] text-emerald-500 mt-1.5 font-medium">
+                                      Respondido el: {new Date(ticket.respondedAt).toLocaleString('es-MX', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                                    </p>
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </button>
+                        );
+                      })
                   )}
                 </div>
               </div>
