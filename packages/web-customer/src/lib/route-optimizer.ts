@@ -176,8 +176,20 @@ export function reorderByTokens<T extends { token: string }>(
 export function extractTokenFromRaw(raw: string): string {
   const trimmed = raw.trim();
   if (!trimmed) return '';
-  const match = trimmed.match(/(?:reparto\/ver\/)?([a-f0-9]{8,})/i);
-  return match ? match[1] : trimmed;
+
+  // Caso: URL completa tipo ".../reparto/ver/<TOKEN>". Se captura el segmento
+  // final. Los tokens de reparto son alfanuméricos (base62/urlsafe: mayúsculas,
+  // minúsculas, dígitos y guiones), no hexadecimales, por eso se usa [A-Za-z0-9_-].
+  const urlMatch = trimmed.match(/reparto\/ver\/([A-Za-z0-9_-]{8,})/i);
+  if (urlMatch) return urlMatch[1];
+
+  // Caso: token pegado directamente (o extraído de un QR).
+  const tokenMatch = trimmed.match(/^[A-Za-z0-9_-]{8,}$/);
+  if (tokenMatch) return tokenMatch[0];
+
+  // Último recurso: si el contenido tiene algún segmento largo alfanumérico.
+  const looseMatch = trimmed.match(/([A-Za-z0-9_-]{8,})$/);
+  return looseMatch ? looseMatch[1] : trimmed;
 }
 
 /** Calcula las métricas de la jornada del repartidor a partir de sus entregas. */
