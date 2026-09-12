@@ -399,17 +399,14 @@ function CarouselOrGrid({
       <div className="relative">
         <div
           ref={scrollRef}
-          style={
-            canRight
-              ? {
-                  // Fundido en el borde derecho cuando aún hay contenido oculto:
-                  // la señal visual de "hay más" sin añadir elementos encima.
-                  WebkitMaskImage: 'linear-gradient(to right, black 88%, transparent 100%)',
-                  maskImage: 'linear-gradient(to right, black 88%, transparent 100%)',
-                }
-              : undefined
-          }
-          className="flex gap-3 overflow-x-auto pb-2 scroll-smooth snap-x snap-mandatory [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+          style={{
+            // Fundido estable en el borde derecho: aplicar SIEMPRE el gradiente
+            // (sin oscilar entre montado/desmontado según canRight) evita el
+            // repintado/parpadeo del mask en Safari/iOS al hacer scroll.
+            WebkitMaskImage: 'linear-gradient(to right, black 88%, transparent 100%)',
+            maskImage: 'linear-gradient(to right, black 88%, transparent 100%)',
+          }}
+          className="flex gap-3 overflow-x-auto pb-2 scroll-smooth snap-x snap-proximity [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
         >
           {children}
           <div className="w-4 shrink-0 sm:w-8" />
