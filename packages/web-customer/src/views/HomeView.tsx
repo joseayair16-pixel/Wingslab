@@ -843,8 +843,8 @@ export const HomeView = React.memo(function HomeView({
 
                           <div className="min-w-0 flex-1 pb-0.5">
                             <div className="flex items-start justify-between gap-2">
-                              <h3 className="min-w-0 truncate text-lg font-extrabold tracking-tight">{restaurant.name}</h3>
-                              <span className="flex shrink-0 items-center gap-1 text-xs font-semibold text-neutral-700">
+                              <h3 className="min-w-0 flex-1 line-clamp-2 break-words text-lg font-extrabold leading-tight tracking-tight text-neutral-900 min-h-[44px]">{restaurant.name}</h3>
+                              <span className="flex shrink-0 items-center gap-1 pt-0.5 text-xs font-semibold text-neutral-700">
                                 <span className="text-amber-400">★</span>
                                 {restaurant.rating ? restaurant.rating.toFixed(1) : 'Nuevo'}
                                 {(restaurant.reviewCount ?? 0) > 0 && (
