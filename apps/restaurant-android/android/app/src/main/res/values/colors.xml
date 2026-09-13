@@ -7,4 +7,6 @@
     <!-- Fondo del status bar / barra de navegación (cohesión con la web) -->
     <color name="statusBarColor">#0369A1</color>
     <color name="navigationBarColor">#FFFFFF</color>
+    <!-- Fondo de la ventana mientras carga el WebView (coincide con --app-bg #f6f6f4) -->
+    <color name="windowBackground">#F6F6F4</color>
 </resources>
