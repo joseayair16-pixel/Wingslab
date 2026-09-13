@@ -6,6 +6,8 @@ import android.media.AudioAttributes;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
+import android.webkit.WebSettings;
+import android.webkit.WebView;
 import com.getcapacitor.BridgeActivity;
 
 public class MainActivity extends BridgeActivity {
@@ -14,6 +16,28 @@ public class MainActivity extends BridgeActivity {
         registerNotificationChannels();
         super.onCreate(savedInstanceState);
         registerPlugin(BatteryHelperPlugin.class);
+        configureWebViewForNativeLook();
+    }
+
+    /**
+     * El WebView de Android aplica por defecto "font auto-sizing" y respeta el
+     * tamaño de fuente del sistema, lo que hace que la misma web se vea con
+     * textos más grandes y recortados respecto a la PWA/navegador. Aquí se
+     * desactiva para que la UI sea idéntica en todos los dispositivos.
+     */
+    private void configureWebViewForNativeLook() {
+        try {
+            WebView webView = getBridge().getWebView();
+            if (webView == null) return;
+            WebSettings settings = webView.getSettings();
+            settings.setTextZoom(100);
+            // Desactivar el font autosizing del WebView (Android 8+).
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                settings.setTextAutosizingEnabled(false);
+            }
+        } catch (Throwable t) {
+            // Nunca romper el arranque por un ajuste de presentación.
+        }
     }
 
     /**
