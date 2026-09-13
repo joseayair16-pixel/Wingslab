@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Identidad SaDeL (Azul Celeste) -->
+    <color name="colorPrimary">#0284C7</color>
+    <color name="colorPrimaryDark">#0369A1</color>
+    <color name="colorAccent">#38BDF8</color>
+    <!-- Fondo del status bar / barra de navegación (cohesión con la web) -->
+    <color name="statusBarColor">#0369A1</color>
+    <color name="navigationBarColor">#FFFFFF</color>
+</resources>
