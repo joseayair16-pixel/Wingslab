@@ -128,6 +128,10 @@ export default function RootLayout({
         />
         <meta name="color-scheme" content="light" />
         <meta name="theme-color" content="#fafafa" />
+        <meta
+          name="viewport"
+          content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover"
+        />
         <link rel="preconnect" href="https://maps.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
       </head>
