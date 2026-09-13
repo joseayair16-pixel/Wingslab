@@ -310,6 +310,11 @@ html.dark.pure-dark {
 
 html {
   color-scheme: light;
+  /* Desactiva el "font boosting/inflation" del WebView Android (suele inflar el
+     tamaño de letra en textos largos y cortar nombres). Mantiene las fuentes
+     exactamente igual que en web/PWA. Sin efecto en navegadores de escritorio. */
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
 }
 
 body {

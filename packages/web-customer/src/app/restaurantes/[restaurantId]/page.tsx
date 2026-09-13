@@ -3085,6 +3085,12 @@ function ProductImage({
       });
       triggerHaptic([30, 50, 30]); // Double vibration
 
+      // Recordatorio de notificaciones (no bloqueante): se sugiere activar push
+      // tras el éxito del pedido, en lugar de condicionar la confirmación.
+      if (pushPermission !== 'granted') {
+        setIsPushReminderModalOpen(true);
+      }
+
       // Lleva al usuario arriba para ver el banner del pedido activo y lo "late".
       if (typeof window !== 'undefined') {
         window.setTimeout(() => {
@@ -4947,11 +4953,11 @@ function ProductImage({
                               return;
                             }
                           }
-                          if (pushPermission !== 'granted') {
-                            setIsPushReminderModalOpen(true);
-                          } else {
-                            openPreConfirm();
-                          }
+                          // El modal de confirmación (cuenta regresiva) NO depende del
+                          // permiso de notificaciones: debe aparecer SIEMPRE al confirmar,
+                          // igual en web, PWA y app nativa. El recordatorio de push se
+                          // muestra aparte, sin bloquear el cierre del pedido.
+                          openPreConfirm();
                         }}
                         aria-disabled={creatingOrder || Boolean(checkoutValidationMessage)}
                         className={`group relative flex-1 overflow-hidden rounded-2xl px-5 py-3.5 text-[15px] font-bold text-white transition-all active:scale-[0.97] active-scale ${

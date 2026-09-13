@@ -1250,8 +1250,16 @@ export default function Home() {
           localStorage.removeItem('sadel_persistent_modal');
           return;
         }
-        if (parsed.type === 'pickup_ready' && detailRes.data.fulfillmentType === 'PICKUP') {
-          setPickupReadyOrder(detailRes.data);
+        if (parsed.type === 'pickup_ready') {
+          const status = normalizeOrderStatusValue(detailRes.data.status);
+          // Solo re-mostrar "tu pedido está listo" si el pedido AÚN está en READY.
+          // Si ya fue recogido/completado, el modal no debe volver a aparecer.
+          if (detailRes.data.fulfillmentType === 'PICKUP' && status === 'READY') {
+            setPickupReadyOrder(detailRes.data);
+          } else {
+            localStorage.removeItem('sadel_persistent_modal');
+            localStorage.removeItem('sadel_pickup_ready_order');
+          }
         } else if (parsed.type === 'driver_arrived') {
           // El modal de llegada lo gestiona el listener global (DriverArrivalModal),
           // que restaura el estado desde el pedido. Aquí solo se limpia la
@@ -3555,6 +3563,16 @@ export default function Home() {
           const pickedOrder = orders.find((o: any) => o.id === payload.orderId);
           const isPickupOrder = (pickedOrder as any)?.fulfillmentType === 'PICKUP';
           if (isPickupOrder) {
+            // El pedido ya fue recogido: no debe quedar ningún modal "listo" pendiente.
+            if (pickupReadyOrder?.id === payload.orderId) setPickupReadyOrder(null);
+            try {
+              const raw = localStorage.getItem('sadel_persistent_modal');
+              if (raw) {
+                const parsed = JSON.parse(raw);
+                if (parsed?.orderId === payload.orderId) localStorage.removeItem('sadel_persistent_modal');
+              }
+              localStorage.removeItem('sadel_pickup_ready_order');
+            } catch {}
             if (localStorage.getItem(`sadel_dismissed_rating_${payload.orderId}`)) return;
             setOrderToRate(payload.orderId);
             setRatingBusinessType((pickedOrder as any)?.restaurant?.businessType || null);
@@ -3562,6 +3580,15 @@ export default function Home() {
             setIsRatingModalOpen(true);
           }
         } else if (eventName === 'order:completed' && payload.orderId) {
+          if (pickupReadyOrder?.id === payload.orderId) setPickupReadyOrder(null);
+          try {
+            const raw = localStorage.getItem('sadel_persistent_modal');
+            if (raw) {
+              const parsed = JSON.parse(raw);
+              if (parsed?.orderId === payload.orderId) localStorage.removeItem('sadel_persistent_modal');
+            }
+            localStorage.removeItem('sadel_pickup_ready_order');
+          } catch {}
           if (localStorage.getItem(`sadel_dismissed_rating_${payload.orderId}`)) return;
           setOrderToRate(payload.orderId);
           const completedOrder = orders.find((o: any) => o.id === payload.orderId);
@@ -6443,6 +6470,7 @@ export default function Home() {
                   onClick={() => {
                     setPickupReadyOrder(null);
                     localStorage.removeItem('sadel_pickup_ready_order');
+                    localStorage.removeItem('sadel_persistent_modal');
                   }}
                   className="w-full rounded-full bg-neutral-950 text-white py-3.5 text-sm font-bold shadow-md transition hover:bg-neutral-800 active:scale-95"
                 >
