@@ -67,7 +67,20 @@ export default function PushEnableBanner({ visible, onEnable }: Props) {
     };
 
     refresh();
-    if (window.localStorage.getItem(STORAGE_KEY) === 'true') setDismissed(true);
+
+    // El descarte del banner expira a las 24h: si el restaurante cerró el banner
+    // sin activar, se le vuelve a ofrecer en lugar de quedar sin notificaciones
+    // para siempre (en Android es común perdérselo tras instalar la PWA).
+    const dismissedAtRaw = window.localStorage.getItem(STORAGE_KEY);
+    if (dismissedAtRaw) {
+      const dismissedAt = parseInt(dismissedAtRaw, 10);
+      const isExpired = !Number.isFinite(dismissedAt) || Date.now() - dismissedAt > 24 * 60 * 60 * 1000;
+      if (isExpired) {
+        setDismissed(false);
+      } else {
+        setDismissed(true);
+      }
+    }
 
     const onMessage = (event: MessageEvent) => {
       // El navegador rotó la suscripción push: re-suscribir con un endpoint nuevo
@@ -79,9 +92,19 @@ export default function PushEnableBanner({ visible, onEnable }: Props) {
       }
     };
     navigator.serviceWorker.addEventListener('message', onMessage);
-    return () => navigator.serviceWorker.removeEventListener('message', onMessage);
+
+    // Re-evaluar al volver a primer plano (Android no dispara eventos de permiso).
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible') refresh();
+    };
+    document.addEventListener('visibilitychange', onVisibilityChange);
+
+    return () => {
+      navigator.serviceWorker.removeEventListener('message', onMessage);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [visible]);
 
   const insecureContext = typeof window !== 'undefined' && window.isSecureContext === false;
 
@@ -152,7 +175,7 @@ export default function PushEnableBanner({ visible, onEnable }: Props) {
             <button
               type="button"
               onClick={() => {
-                window.localStorage.setItem(STORAGE_KEY, 'true');
+                window.localStorage.setItem(STORAGE_KEY, String(Date.now()));
                 setDismissed(true);
               }}
               aria-label="Descartar"

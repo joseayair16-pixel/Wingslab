@@ -11526,6 +11526,7 @@ export default function Home() {
                     savePasswordChange={savePasswordChange}
                     handleOrderAlertSoundToggle={handleOrderAlertSoundToggle}
                     playIncomingOrderAlert={playIncomingOrderAlert}
+                    onEnablePush={() => subscribeToPush(token || '')}
                     pushToast={pushToast}
                     businessTypeLabel={businessTypeLabel}
                     Field={Field}

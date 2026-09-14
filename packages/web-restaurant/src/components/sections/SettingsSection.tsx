@@ -132,6 +132,7 @@ interface SettingsSectionProps {
   savePasswordChange: () => void;
   handleOrderAlertSoundToggle: (checked: boolean) => void;
   playIncomingOrderAlert: () => void;
+  onEnablePush?: () => Promise<{ ok: boolean; reason?: string }>;
   pushToast: (tone: 'info' | 'success' | 'error', title: string, message: string) => void;
   businessTypeLabel: (type?: string | null) => string;
   Field: React.ComponentType<{ label: string; value: string; onChange: (value: string) => void; placeholder: string; type?: string }>;
@@ -186,8 +187,9 @@ export const SettingsSection = React.memo(function SettingsSection({
   saveOperatingHours,
   savePasswordChange,
   handleOrderAlertSoundToggle,
-  playIncomingOrderAlert,
-  pushToast,
+    playIncomingOrderAlert,
+    onEnablePush,
+    pushToast,
   businessTypeLabel,
   Field,
   TextAreaField,
@@ -195,6 +197,35 @@ export const SettingsSection = React.memo(function SettingsSection({
 }: SettingsSectionProps) {
   const currentSettingsTab = settingsTabs.find((t: any) => t.key === activeSettingsTab) ?? settingsTabs[0];
   const [showWhatsappConfirm, setShowWhatsappConfirm] = React.useState(false);
+  // Diagnóstico de notificaciones push (visible en el bloque Diagnóstico):
+  // permite al restaurante verificar y re-activar la suscripción sin tocar el
+  // banner superior (útil en Android PWA, donde el permiso live a nivel de SO).
+  const [pushDiagPermission, setPushDiagPermission] = useState<NotificationPermission>('default');
+  const [pushDiagSubscribed, setPushDiagSubscribed] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || !('Notification' in window)) return;
+    const refresh = () => {
+      setPushDiagPermission(Notification.permission);
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.ready
+          .then((reg) => reg.pushManager.getSubscription())
+          .then((sub) => setPushDiagSubscribed(!!sub))
+          .catch(() => {});
+      }
+    };
+    refresh();
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible') refresh();
+    };
+    const onFocus = () => refresh();
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    window.addEventListener('focus', onFocus);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+      window.removeEventListener('focus', onFocus);
+    };
+  }, []);
   // Ancho de papel térmico preferido (58mm/80mm). Se guarda en localStorage:
   // es una preferencia del DISPOSITIVO de impresión, no del restaurante en la nube.
   const [paperWidth, setPaperWidth] = useState<'58' | '80'>(() => {
@@ -1555,7 +1586,67 @@ export const SettingsSection = React.memo(function SettingsSection({
                 </div>
                 <div className="rounded-[20px] border border-black/5 bg-neutral-50 p-4">
                   <p className="text-xs font-semibold uppercase tracking-wider text-neutral-400 mb-3">Diagnóstico</p>
+                  {/* Estado real de las notificaciones push en este dispositivo:
+                      permite al restaurante verificar qué falta (permiso vs
+                      suscripción) sin abrir ajustes del navegador. */}
+                  <div className="mb-3 rounded-xl border border-black/5 bg-white px-3.5 py-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="text-xs font-medium text-neutral-500">Estado del permiso</span>
+                      <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-bold ${
+                        pushDiagPermission === 'granted'
+                          ? 'bg-emerald-50 text-emerald-700 border border-emerald-200/60'
+                          : pushDiagPermission === 'denied'
+                            ? 'bg-rose-50 text-rose-700 border border-rose-200/60'
+                            : 'bg-amber-50 text-amber-700 border border-amber-200/60'
+                      }`}>
+                        {pushDiagPermission === 'granted'
+                          ? 'Permitido'
+                          : pushDiagPermission === 'denied'
+                            ? 'Bloqueado'
+                            : 'Pendiente'}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between gap-3 mt-2">
+                      <span className="text-xs font-medium text-neutral-500">Suscripción activa</span>
+                      <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-bold ${
+                        pushDiagSubscribed
+                          ? 'bg-emerald-50 text-emerald-700 border border-emerald-200/60'
+                          : 'bg-amber-50 text-amber-700 border border-amber-200/60'
+                      }`}>
+                        {pushDiagSubscribed ? 'Sí' : 'No'}
+                      </span>
+                    </div>
+                    {pushDiagSubscribed && pushDiagPermission === 'granted' ? (
+                      <p className="mt-2.5 text-[11px] font-medium text-emerald-700 bg-emerald-50 border border-emerald-200/60 rounded-lg px-2.5 py-1.5">
+                        ✓ Todo en orden. Este dispositivo recibirá pedidos con notificación push.
+                      </p>
+                    ) : (
+                      <p className="mt-2.5 text-[11px] font-medium text-amber-700 bg-amber-50 border border-amber-200/60 rounded-lg px-2.5 py-1.5">
+                        {pushDiagPermission === 'denied'
+                          ? 'El permiso está bloqueado en este dispositivo. Actívalo en los ajustes de la app/navegador y luego pulsa "Activar notificaciones".'
+                          : 'Este dispositivo aún no recibe notificaciones. Toca "Activar notificaciones" para registrarlo.'}
+                      </p>
+                    )}
+                  </div>
                   <div className="flex flex-col gap-2">
+                    {(!pushDiagSubscribed || pushDiagPermission !== 'granted') && onEnablePush && (
+                      <button
+                        onClick={async () => {
+                          const res = await onEnablePush();
+                          if (res.ok) {
+                            setPushDiagSubscribed(true);
+                            setPushDiagPermission('granted');
+                            pushToast('success', 'Notificaciones activadas', 'Este dispositivo ya recibirá los pedidos con notificación push.');
+                          } else {
+                            pushToast('error', 'No se pudieron activar', 'Revisa el permiso de notificaciones en los ajustes del dispositivo y vuelve a intentar.');
+                          }
+                        }}
+                        className="flex items-center gap-2 rounded-xl bg-sky-600 px-3.5 py-2.5 text-sm font-semibold text-white hover:bg-sky-700 transition-colors"
+                      >
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+                        Activar notificaciones
+                      </button>
+                    )}
                     <button
                       onClick={async () => {
                         try {
