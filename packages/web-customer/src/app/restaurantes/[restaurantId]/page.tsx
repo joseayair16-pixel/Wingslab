@@ -7,6 +7,7 @@ import { AuthUser, clearStoredSession, readStoredSession, requestJson, submitRev
 import { io } from 'socket.io-client';
 import { AuthModal } from '../../../components/AuthModal';
 import { CompactActiveOrderBanner, computeDelayState, formatEstimatedArrivalMinutes, formatOverdueMinutes } from '../../../components/CompactActiveOrderBanner';
+import { buildWeekSchedule, formatHour12, formatNextOpen, getCurrentShiftClose } from '../../../lib/operatingHours';
 import { ensureGoogleMapsScript, getGoogleMaps } from '../../../lib/googleMaps';
 import RatingModal from '../../../components/RatingModal';
 import { useForegroundPolling } from '../../../hooks/useForegroundPolling';
@@ -7407,76 +7408,9 @@ function formatDate(date: string) {
     timeStyle: 'short',
   }).format(new Date(date));
 }
-
 // ── Horario de atención (modal del chip "Estado") ──────────────────────────
-
-const WEEKDAY_LABELS = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'] as const;
-
-function parseHHMM(value: string): number {
-  const [h, m] = value.split(':').map((p) => parseInt(p, 10));
-  return (Number.isFinite(h) ? h : 0) * 60 + (Number.isFinite(m) ? m : 0);
-}
-
-/** 13:00 → "1:00 pm". */
-function formatHour12(hhmm: string): string {
-  const minutes = parseHHMM(hhmm);
-  let h = Math.floor(minutes / 60);
-  const m = minutes % 60;
-  const suffix = h >= 12 ? 'p.m.' : 'a.m.';
-  h = h % 12 === 0 ? 12 : h % 12;
-  return `${h}:${String(m).padStart(2, '0')} ${suffix}`;
-}
-
-type WeekRow = { dayOfWeek: number; label: string; shifts: { openTime: string; closeTime: string }[] };
-
-/** Semana Lunes→Domingo con los turnos de cada día (agrupados y ordenados). */
-function buildWeekSchedule(operatingHours: PublicRestaurantDetail['operatingHours']): WeekRow[] {
-  // NB: "Map" global está ensombrecido por el icono Map de lucide-react en este
-  // archivo, por eso se agrupa con un objeto plano.
-  const byDay: Record<number, { openTime: string; closeTime: string }[]> = {};
-  for (const b of operatingHours ?? []) {
-    if (b.isClosed) continue;
-    const list = byDay[b.dayOfWeek] ?? (byDay[b.dayOfWeek] = []);
-    list.push({ openTime: b.openTime, closeTime: b.closeTime });
-  }
-  // dayOfWeek: 0=domingo … 6=sábado → mostramos lunes primero.
-  const orderedDays = [1, 2, 3, 4, 5, 6, 0];
-  return orderedDays.map((dayOfWeek) => ({
-    dayOfWeek,
-    label: WEEKDAY_LABELS[dayOfWeek === 0 ? 6 : dayOfWeek - 1],
-    shifts: (byDay[dayOfWeek] ?? []).sort((a: { openTime: string }, b: { openTime: string }) => parseHHMM(a.openTime) - parseHHMM(b.openTime)),
-  }));
-}
-
-/** Con el pedido abierto, la hora de cierre del turno vigente (respeta madrugada). */
-function getCurrentShiftClose(hours: PublicRestaurantDetail['operatingHours'], now: Date): string | null {  if (!hours?.length) return null;
-  const day = now.getDay();
-  const nowMin = now.getHours() * 60 + now.getMinutes();
-  const inShift = (open: string, close: string) => {
-    const o = parseHHMM(open);
-    const c = parseHHMM(close);
-    return o <= c ? nowMin >= o && nowMin < c : nowMin >= o || nowMin < c; // overnight
-  };
-  const yesterday = (day + 6) % 7;
-  const candidates = hours.filter(
-    (b) => !b.isClosed && ((b.dayOfWeek === day && inShift(b.openTime, b.closeTime)) || (b.dayOfWeek === yesterday && parseHHMM(b.closeTime) < parseHHMM(b.openTime) && nowMin < parseHHMM(b.closeTime))),
-  );
-  return candidates[0]?.closeTime ?? null;
-}
-
-/** "2026-09-11T21:00:00Z" → "mañana a las 9:00 pm" / "el lunes a las 9:00 am". */
-function formatNextOpen(iso: string): string {
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return '';
-  const time = new Intl.DateTimeFormat('es-MX', { hour: 'numeric', minute: '2-digit' }).format(date);
-  const now = new Date();
-  const startOfDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
-  const diffDays = Math.round((startOfDay(date) - startOfDay(now)) / 86400000);
-  if (diffDays === 0) return `hoy a las ${time}`;
-  if (diffDays === 1) return `mañana a las ${time}`;
-  const weekday = new Intl.DateTimeFormat('es-MX', { weekday: 'long' }).format(date);
-  return `el ${weekday} a las ${time}`;
-}
+// Los helpers viven en `lib/operatingHours` (los usa también HomeView para el
+// modal de un negocio cerrado); solo se importan y consumen aquí.
 
 function buildDetailAddressLabel(address: CustomerOrderDetail['address'] | null | undefined) {
   if (!address) return '';

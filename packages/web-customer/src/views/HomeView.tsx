@@ -4,8 +4,9 @@ import { useStore } from '../store';
 import { StoreCategoryItem } from '../app/page';
 import { BillboardCarousel, type Billboard } from '../components/BillboardCarousel';
 import { CategoryIcon } from '../components/CategoryIcon';
-import { BadgePercent, Bike, ChevronRight, ChevronUp, Clock, Flame, MapPin, ShoppingBag, Sparkles } from 'lucide-react';
+import { BadgePercent, Bike, ChevronRight, ChevronUp, Clock, Flame, MapPin, ShoppingBag, Sparkles, X } from 'lucide-react';
 import { SectionHeader } from '../components/SectionHeader';
+import { buildWeekSchedule, formatHour12, formatNextOpen, type OperatingHourItem } from '../lib/operatingHours';
 
 const isRestaurantType = (type?: string | null) => !type || type === 'RESTAURANT';
 
@@ -94,6 +95,9 @@ export const HomeView = React.memo(function HomeView({
   const searchType = useStore(state => state.searchType);
 
   const [businessTypeFilter, setBusinessTypeFilter] = useState<BusinessTypeTab>('all');
+  // Modal de horarios: se abre al tocar una card cerrada/pausada (en vez de
+  // no hacer nada). `hoursModalRestaurant` guarda el negocio seleccionado.
+  const [hoursModalRestaurant, setHoursModalRestaurant] = useState<any | null>(null);
 
   const filteredOfferProducts = useMemo(() => {
     if (businessTypeFilter === 'all') return offerProducts;
@@ -768,11 +772,17 @@ export const HomeView = React.memo(function HomeView({
                         : 'border-black/5 bg-neutral-50 opacity-[0.85] grayscale-[30%]'
                     }`}
                   >
-                    {/* Clickable Area for Restaurant/Store */}
-                    <div
-                      onClick={() => restaurant.isOpen && router.push(`/restaurantes/${restaurant.id}`)}
-                      className={restaurant.isOpen ? 'cursor-pointer' : ''}
-                    >
+{/* Clickable Area for Restaurant/Store */}
+                      <div
+                        onClick={() => {
+                          if (restaurant.isOpen) {
+                            router.push(`/restaurantes/${restaurant.id}`);
+                          } else if (restaurant.operatingHours && restaurant.operatingHours.length > 0) {
+                            setHoursModalRestaurant(restaurant);
+                          }
+                        }}
+                        className={restaurant.isOpen ? 'cursor-pointer' : restaurant.operatingHours?.length ? 'cursor-pointer' : ''}
+                      >
                       <div className="relative overflow-hidden h-40 sm:h-44">
                         {restaurant.coverImage ? (
                           <Image
@@ -1041,6 +1051,109 @@ export const HomeView = React.memo(function HomeView({
           )}
         </Panel>
       </div>
+
+      {/* Modal: horario del negocio (desde card cerrada en home) */}
+      {hoursModalRestaurant && (
+        <div className="fixed inset-0 z-[70] flex items-end justify-center p-4 sm:items-center sm:p-6">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setHoursModalRestaurant(null)} />
+          <div className="relative flex max-h-[90vh] w-full max-w-sm flex-col overflow-hidden rounded-[28px] bg-white shadow-[0_32px_90px_rgba(15,15,15,0.4)] animate-in zoom-in-95 fade-in duration-200">
+            {/* Cabecera */}
+            <div className="flex items-center gap-3.5 px-6 pt-6 pb-4">
+              {hoursModalRestaurant.logo ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={hoursModalRestaurant.logo}
+                  alt={`Logo de ${hoursModalRestaurant.name}`}
+                  className="h-12 w-12 shrink-0 rounded-2xl border border-black/5 object-cover shadow-sm"
+                />
+              ) : (
+                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-neutral-100 text-neutral-400">
+                  <Clock className="h-6 w-6" strokeWidth={1.8} />
+                </div>
+              )}
+              <div className="min-w-0 flex-1">
+                <p className="text-[10px] font-bold uppercase tracking-widest text-neutral-400">Horario de atención</p>
+                <h3 className="truncate text-lg font-extrabold tracking-tight text-neutral-950">{hoursModalRestaurant.name}</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setHoursModalRestaurant(null)}
+                aria-label="Cerrar"
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-neutral-100 text-neutral-500 transition hover:bg-neutral-200 active:scale-90"
+              >
+                <X className="h-4 w-4" strokeWidth={2.5} />
+              </button>
+            </div>
+
+            {/* Estado actual */}
+            <div className="px-6">
+              <div className={`flex items-center gap-2.5 rounded-2xl border px-4 py-3 ${
+                hoursModalRestaurant.isOpen ? 'border-emerald-200 bg-emerald-50' : 'border-rose-200/70 bg-rose-50'
+              }`}>
+                <span className="relative flex h-2 w-2 shrink-0">
+                  <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${hoursModalRestaurant.isOpen ? 'bg-emerald-500' : 'bg-rose-500'}`} />
+                  <span className={`relative inline-flex h-2 w-2 rounded-full ${hoursModalRestaurant.isOpen ? 'bg-emerald-500' : 'bg-rose-500'}`} />
+                </span>
+                <p className={`text-[13px] font-bold leading-snug ${hoursModalRestaurant.isOpen ? 'text-emerald-800' : 'text-rose-800'}`}>
+                  {hoursModalRestaurant.isOpen
+                    ? 'Abierto ahora'
+                    : `Cerrado ahora${hoursModalRestaurant.nextOpenTime ? ` · Abre ${formatNextOpen(hoursModalRestaurant.nextOpenTime)}` : ''}`}
+                </p>
+              </div>
+            </div>
+
+            {/* Semana */}
+            <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-2 pt-4">
+              <div className="overflow-hidden rounded-2xl border border-black/[0.05] bg-white">
+                {buildWeekSchedule(hoursModalRestaurant.operatingHours as OperatingHourItem[]).map((row, idx) => {
+                  const isToday = new Date().getDay() === row.dayOfWeek;
+                  return (
+                    <div
+                      key={row.dayOfWeek}
+                      className={`flex items-center justify-between gap-3 px-4 py-3 ${idx > 0 ? 'border-t border-black/[0.04]' : ''} ${isToday ? 'bg-neutral-50' : ''}`}
+                    >
+                      <div className="flex items-center gap-2.5">
+                        {isToday && <span className="h-1.5 w-1.5 rounded-full bg-neutral-900" />}
+                        <span className={`text-[13px] ${isToday ? 'font-black text-neutral-950' : 'font-semibold text-neutral-700'}`}>{row.label}</span>
+                        {isToday && (
+                          <span className="rounded-full bg-neutral-950 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-white">Hoy</span>
+                        )}
+                      </div>
+                      <div className="text-right">
+                        {row.shifts.length === 0 ? (
+                          <span className="text-[12px] font-medium text-neutral-400">Cerrado</span>
+                        ) : (
+                          <div className="flex flex-col items-end">
+                            {row.shifts.map((s, i) => (
+                              <span key={i} className={`text-[12px] font-semibold tabular-nums ${isToday ? 'text-neutral-950' : 'text-neutral-600'}`}>
+                                {formatHour12(s.openTime)} – {formatHour12(s.closeTime)}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+              <p className="mt-3 text-center text-[11px] font-medium text-neutral-400">
+                Los horarios pueden variar en días festivos.
+              </p>
+            </div>
+
+            {/* Acción */}
+            <div className="border-t border-black/[0.05] px-6 py-4">
+              <button
+                type="button"
+                onClick={() => setHoursModalRestaurant(null)}
+                className="w-full rounded-full bg-neutral-950 px-5 py-3.5 text-sm font-bold text-white transition hover:bg-neutral-800 active:scale-[0.98]"
+              >
+                Entendido
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 });
