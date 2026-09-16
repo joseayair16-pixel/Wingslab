@@ -395,8 +395,14 @@ export const HomeView = React.memo(function HomeView({
                     </>
                   );
                   if (closed) {
+                    const canShowHours = Array.isArray(fr.operatingHours) && fr.operatingHours.length > 0;
                     return (
-                      <div key={fr.id} className={classes}>
+                      <div
+                        key={fr.id}
+                        className={`${classes} ${canShowHours ? 'cursor-pointer' : ''}`}
+                        onClick={() => { if (canShowHours) setHoursModalRestaurant(fr); }}
+                        role={canShowHours ? 'button' : undefined}
+                      >
                         {cardBody}
                       </div>
                     );
@@ -648,8 +654,14 @@ export const HomeView = React.memo(function HomeView({
                   >
                     {/* Compact Restaurant Header */}
                     <div
-                      onClick={() => restaurant.isOpen && router.push(`/restaurantes/${restaurant.id}`)}
-                      className={`flex items-center gap-3.5 p-4 ${restaurant.isOpen ? 'cursor-pointer' : ''}`}
+                    onClick={() => {
+                      if (restaurant.isOpen) {
+                        router.push(`/restaurantes/${restaurant.id}`);
+                      } else if (restaurant.operatingHours?.length) {
+                        setHoursModalRestaurant(restaurant);
+                      }
+                    }}
+                    className={`flex items-center gap-3.5 p-4 ${restaurant.isOpen || restaurant.operatingHours?.length ? 'cursor-pointer' : ''}`}
                     >
                       {/* Restaurant Logo */}
                       <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-black/5 bg-white shadow-sm relative">

@@ -285,6 +285,7 @@ export async function registerPublicRoutes(fastify: FastifyInstance): Promise<vo
           isPaused: restaurant.isPaused,
           isFeatured: restaurant.isFeatured,
           nextOpenTime: !isOpen && !restaurant.isPaused ? getNextOpenTime(restaurant.operatingHours) : null,
+          operatingHours: restaurant.operatingHours,
           categories: restaurant.categories,
           storeCategories: restaurant.storeCategories?.map(sc => sc.category) || [],
           hasOwnDelivery: restaurant.hasOwnDelivery,
@@ -842,6 +843,7 @@ export async function registerPublicRoutes(fastify: FastifyInstance): Promise<vo
             isOpen,
             isPaused: p.restaurant.isPaused,
             nextOpenTime: !isOpen && !p.restaurant.isPaused ? getNextOpenTime(p.restaurant.operatingHours) : null,
+            operatingHours: p.restaurant.operatingHours,
             distanceKm,
             deliveryRadius,
           };
