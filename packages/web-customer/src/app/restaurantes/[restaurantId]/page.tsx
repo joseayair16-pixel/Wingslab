@@ -86,6 +86,14 @@ type PublicRestaurantDetail = {
   promoFreeDeliveryThreshold?: number | null;
   promoMinOrderAmount?: number | null;
   promoMinOrderPercent?: number | null;
+  operatingHours?: Array<{
+    dayOfWeek: number; // 0 = domingo
+    shiftIndex?: number;
+    openTime: string; // HH:mm
+    closeTime: string; // HH:mm
+    isClosed: boolean;
+  }>;
+  nextOpenTime?: string | null;
   categories: Array<{
     id: string;
     name: string;
@@ -749,6 +757,7 @@ export default function RestaurantPage({
   const [loadingRestaurant, setLoadingRestaurant] = useState(true);
   const [creatingOrder, setCreatingOrder] = useState(false);
   const [isPreConfirmOpen, setIsPreConfirmOpen] = useState(false);
+  const [isHoursModalOpen, setIsHoursModalOpen] = useState(false);
   const [preConfirmCountdown, setPreConfirmCountdown] = useState(3);
   const preConfirmTimerRef = useRef<number | null>(null);
   const preConfirmCommitTimerRef = useRef<number | null>(null);
@@ -5111,6 +5120,139 @@ function ProductImage({
         </div>
       )}
 
+      {/* Horario de atención */}
+      {isHoursModalOpen && restaurant && (
+        <div className="fixed inset-0 z-[70] flex items-end justify-center sm:items-center">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setIsHoursModalOpen(false)} />
+          <div className="relative flex max-h-[92vh] w-full max-w-sm flex-col overflow-hidden rounded-t-[32px] bg-white shadow-[0_-24px_80px_rgba(15,15,15,0.35)] sm:rounded-[32px] animate-in slide-in-from-bottom-4 fade-in duration-300">
+            {/* Drag handle */}
+            <div className="flex justify-center pt-3">
+              <div className="h-1.5 w-10 rounded-full bg-neutral-300" />
+            </div>
+
+            {/* Cabecera */}
+            <div className="flex items-center gap-4 px-6 pb-4 pt-3">
+              {restaurant.logo ? (
+                <img
+                  src={restaurant.logo}
+                  alt={`Logo de ${restaurant.name}`}
+                  className="h-12 w-12 shrink-0 rounded-2xl border border-black/5 object-cover shadow-sm"
+                />
+              ) : (
+                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-neutral-100 text-neutral-400">
+                  <Clock className="h-6 w-6" strokeWidth={1.8} />
+                </div>
+              )}
+              <div className="min-w-0 flex-1">
+                <p className="text-[10px] font-bold uppercase tracking-widest text-neutral-400">Horario de atención</p>
+                <h3 className="truncate text-lg font-extrabold tracking-tight text-neutral-950">{restaurant.name}</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsHoursModalOpen(false)}
+                aria-label="Cerrar"
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-neutral-100 text-neutral-500 transition hover:bg-neutral-200 hover:text-neutral-700 active:scale-90"
+              >
+                <X className="h-4 w-4" strokeWidth={2.5} />
+              </button>
+            </div>
+
+            {/* Estado actual */}
+            {(() => {
+              const hours = restaurant.operatingHours;
+              const hasHours = Array.isArray(hours) && hours.length > 0;
+              const currentClose = hasHours ? getCurrentShiftClose(hours, new Date()) : null;
+              return (
+                <div className="px-6">
+                  {hasHours ? (
+                    <div className={`flex items-center gap-2.5 rounded-2xl border px-4 py-3 ${
+                      restaurant.isOpen
+                        ? 'border-emerald-200 bg-emerald-50'
+                        : 'border-rose-200/70 bg-rose-50'
+                    }`}>
+                      <span className="relative flex h-2 w-2 shrink-0">
+                        <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${restaurant.isOpen ? 'bg-emerald-500' : 'bg-rose-500'}`} />
+                        <span className={`relative inline-flex h-2 w-2 rounded-full ${restaurant.isOpen ? 'bg-emerald-500' : 'bg-rose-500'}`} />
+                      </span>
+                      <p className={`text-[13px] font-bold leading-snug ${restaurant.isOpen ? 'text-emerald-800' : 'text-rose-800'}`}>
+                        {restaurant.isOpen
+                          ? `Abierto ahora${currentClose ? ` · Cierra a las ${formatHour12(currentClose)}` : ''}`
+                          : `Cerrado ahora${restaurant.nextOpenTime ? ` · Abre ${formatNextOpen(restaurant.nextOpenTime)}` : ''}`}
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2.5 rounded-2xl border border-sky-200/70 bg-sky-50 px-4 py-3">
+                      <Clock className="h-4 w-4 shrink-0 text-sky-600" strokeWidth={2} />
+                      <p className="text-[13px] font-semibold leading-snug text-sky-800">
+                        Este negocio no tiene un horario configurado; atiende en horario libre.
+                      </p>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
+
+            {/* Semana */}
+            {Array.isArray(restaurant.operatingHours) && restaurant.operatingHours.length > 0 && (
+              <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-2 pt-4">
+                <div className="overflow-hidden rounded-2xl border border-black/[0.05] bg-white">
+                  {buildWeekSchedule(restaurant.operatingHours).map((row, idx) => {
+                    const isToday = new Date().getDay() === row.dayOfWeek;
+                    return (
+                      <div
+                        key={row.dayOfWeek}
+                        className={`flex items-center justify-between gap-3 px-4 py-3 ${
+                          idx > 0 ? 'border-t border-black/[0.04]' : ''
+                        } ${isToday ? 'bg-[var(--menu-soft)] ring-1 ring-inset ring-black/[0.03]' : ''}`}
+                      >
+                        <div className="flex items-center gap-2.5">
+                          {isToday && <span className="h-1.5 w-1.5 rounded-full bg-[var(--menu-accent)]" />}
+                          <span className={`text-[13px] ${isToday ? 'font-black text-neutral-950' : 'font-semibold text-neutral-700'}`}>
+                            {row.label}
+                          </span>
+                          {isToday && (
+                            <span className="rounded-full bg-neutral-950 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-white">
+                              Hoy
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-right">
+                          {row.shifts.length === 0 ? (
+                            <span className="text-[12px] font-medium text-neutral-400">Cerrado</span>
+                          ) : (
+                            <div className="flex flex-col items-end">
+                              {row.shifts.map((s, i) => (
+                                <span key={i} className={`text-[12px] font-semibold tabular-nums ${isToday ? 'text-neutral-950' : 'text-neutral-600'}`}>
+                                  {formatHour12(s.openTime)} – {formatHour12(s.closeTime)}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+                <p className="mt-3 text-center text-[11px] font-medium text-neutral-400">
+                  Los horarios pueden variar en días festivos.
+                </p>
+              </div>
+            )}
+
+            {/* Acción */}
+            <div className="border-t border-black/[0.05] px-6 pb-[calc(1.25rem+env(safe-area-inset-bottom))] pt-4">
+              <button
+                type="button"
+                onClick={() => setIsHoursModalOpen(false)}
+                className="w-full rounded-full bg-neutral-950 px-5 py-3.5 text-sm font-bold text-white transition hover:bg-neutral-800 active:scale-[0.98]"
+              >
+                Entendido
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Push Reminder Modal */}
       {isPushReminderModalOpen && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
@@ -5446,7 +5588,12 @@ function ProductImage({
                           )}
                         </div>
                       </div>
-                      <div className="flex flex-1 lg:flex-none flex-col items-center justify-center gap-0 rounded-xl lg:rounded-none bg-neutral-50 lg:bg-transparent px-2 py-1.5 lg:px-4 dark:bg-transparent">
+                      <button
+                        type="button"
+                        onClick={() => setIsHoursModalOpen(true)}
+                        title="Ver horarios del negocio"
+                        className="flex flex-1 lg:flex-none flex-col items-center justify-center gap-0 rounded-xl lg:rounded-none bg-neutral-50 lg:bg-transparent px-2 py-1.5 lg:px-4 dark:bg-transparent transition-colors hover:bg-neutral-100 lg:hover:bg-black/[0.03] active:scale-[0.97] cursor-pointer lg:cursor-pointer"
+                      >
                         <span className="text-[9px] font-extrabold uppercase tracking-widest text-neutral-400 dark:text-zinc-500">Estado</span>
                         <div className="flex items-center gap-1.5 text-[12px]">
                           <span className="relative flex h-2 w-2 shrink-0">
@@ -5455,7 +5602,7 @@ function ProductImage({
                           </span>
                           <span className={`font-bold ${restaurant.isOpen ? 'text-emerald-600' : 'text-red-600'}`}>{restaurant.isOpen ? 'Abierto' : 'Cerrado'}</span>
                         </div>
-                      </div>
+                      </button>
                       {(() => {
                         const accepted = restaurant.acceptedPaymentMethods ?? (hasTransferDetails(restaurant) ? ['CASH', 'TRANSFER'] : ['CASH']);
                         const onlyCash = accepted.length === 1 && accepted[0] === 'CASH';
@@ -7254,7 +7401,6 @@ function getMultiBuyInfo(product: {
     savingsPerGroup: basePrice * (buy - pay),
   };
 }
-
 function formatDate(date: string) {
   return new Intl.DateTimeFormat('es-MX', {
     dateStyle: 'medium',
@@ -7262,7 +7408,75 @@ function formatDate(date: string) {
   }).format(new Date(date));
 }
 
+// ── Horario de atención (modal del chip "Estado") ──────────────────────────
 
+const WEEKDAY_LABELS = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'] as const;
+
+function parseHHMM(value: string): number {
+  const [h, m] = value.split(':').map((p) => parseInt(p, 10));
+  return (Number.isFinite(h) ? h : 0) * 60 + (Number.isFinite(m) ? m : 0);
+}
+
+/** 13:00 → "1:00 pm". */
+function formatHour12(hhmm: string): string {
+  const minutes = parseHHMM(hhmm);
+  let h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  const suffix = h >= 12 ? 'p.m.' : 'a.m.';
+  h = h % 12 === 0 ? 12 : h % 12;
+  return `${h}:${String(m).padStart(2, '0')} ${suffix}`;
+}
+
+type WeekRow = { dayOfWeek: number; label: string; shifts: { openTime: string; closeTime: string }[] };
+
+/** Semana Lunes→Domingo con los turnos de cada día (agrupados y ordenados). */
+function buildWeekSchedule(operatingHours: PublicRestaurantDetail['operatingHours']): WeekRow[] {
+  // NB: "Map" global está ensombrecido por el icono Map de lucide-react en este
+  // archivo, por eso se agrupa con un objeto plano.
+  const byDay: Record<number, { openTime: string; closeTime: string }[]> = {};
+  for (const b of operatingHours ?? []) {
+    if (b.isClosed) continue;
+    const list = byDay[b.dayOfWeek] ?? (byDay[b.dayOfWeek] = []);
+    list.push({ openTime: b.openTime, closeTime: b.closeTime });
+  }
+  // dayOfWeek: 0=domingo … 6=sábado → mostramos lunes primero.
+  const orderedDays = [1, 2, 3, 4, 5, 6, 0];
+  return orderedDays.map((dayOfWeek) => ({
+    dayOfWeek,
+    label: WEEKDAY_LABELS[dayOfWeek === 0 ? 6 : dayOfWeek - 1],
+    shifts: (byDay[dayOfWeek] ?? []).sort((a: { openTime: string }, b: { openTime: string }) => parseHHMM(a.openTime) - parseHHMM(b.openTime)),
+  }));
+}
+
+/** Con el pedido abierto, la hora de cierre del turno vigente (respeta madrugada). */
+function getCurrentShiftClose(hours: PublicRestaurantDetail['operatingHours'], now: Date): string | null {  if (!hours?.length) return null;
+  const day = now.getDay();
+  const nowMin = now.getHours() * 60 + now.getMinutes();
+  const inShift = (open: string, close: string) => {
+    const o = parseHHMM(open);
+    const c = parseHHMM(close);
+    return o <= c ? nowMin >= o && nowMin < c : nowMin >= o || nowMin < c; // overnight
+  };
+  const yesterday = (day + 6) % 7;
+  const candidates = hours.filter(
+    (b) => !b.isClosed && ((b.dayOfWeek === day && inShift(b.openTime, b.closeTime)) || (b.dayOfWeek === yesterday && parseHHMM(b.closeTime) < parseHHMM(b.openTime) && nowMin < parseHHMM(b.closeTime))),
+  );
+  return candidates[0]?.closeTime ?? null;
+}
+
+/** "2026-09-11T21:00:00Z" → "mañana a las 9:00 pm" / "el lunes a las 9:00 am". */
+function formatNextOpen(iso: string): string {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return '';
+  const time = new Intl.DateTimeFormat('es-MX', { hour: 'numeric', minute: '2-digit' }).format(date);
+  const now = new Date();
+  const startOfDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+  const diffDays = Math.round((startOfDay(date) - startOfDay(now)) / 86400000);
+  if (diffDays === 0) return `hoy a las ${time}`;
+  if (diffDays === 1) return `mañana a las ${time}`;
+  const weekday = new Intl.DateTimeFormat('es-MX', { weekday: 'long' }).format(date);
+  return `el ${weekday} a las ${time}`;
+}
 
 function buildDetailAddressLabel(address: CustomerOrderDetail['address'] | null | undefined) {
   if (!address) return '';
