@@ -451,23 +451,14 @@ export const HomeView = React.memo(function HomeView({
                               sizes="(max-width:640px) 112px, 176px"
                               className="object-cover transition duration-300 group-hover:scale-105"
                             />
-                        ) : (
-                          <div className="aspect-[4/3] w-full bg-gradient-to-br from-neutral-100 to-neutral-200 flex items-center justify-center">
-                            <svg className="w-8 h-8 text-neutral-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607zM13.5 10.5h-3" />
-                            </svg>
-                          </div>
-                        )}
-                        {product.discountPrice != null && Number(product.discountPrice) > 0 && Number(product.price) > 0 ? (
-                          <div className="absolute top-1.5 left-1.5 flex items-center gap-1 bg-rose-500/90 backdrop-blur-sm rounded-full px-2 py-0.5 text-[10px] font-bold text-white shadow-sm">
-                            <span>-{Math.max(1, Math.round((Number(product.savings ?? 0) / Number(product.price)) * 100))}%</span>
-                          </div>
-                        ) : product.promoType === 'MULTI_BUY' && product.promoBuyQuantity > 0 && product.promoPayQuantity > 0 ? (
-                          <div className="absolute top-1.5 left-1.5 flex items-center gap-1 bg-rose-500/90 backdrop-blur-sm rounded-full px-2 py-0.5 text-[10px] font-bold text-white shadow-sm">
-                            <span>{product.promoBuyQuantity} x {product.promoPayQuantity}</span>
-                          </div>
-                        ) : null}
-                      </div>
+                          ) : (
+                            <div className="aspect-[4/3] w-full bg-gradient-to-br from-neutral-100 to-neutral-200 flex items-center justify-center">
+                              <svg className="w-8 h-8 text-neutral-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607zM13.5 10.5h-3" />
+                              </svg>
+                            </div>
+                          )}
+                        </div>
                       <div className="px-2 pb-2 pt-2">
                         <div className="flex items-center gap-1.5 mb-1">
                           {restaurant.logo && (
@@ -482,6 +473,16 @@ export const HomeView = React.memo(function HomeView({
                           <div className="flex items-center gap-1.5 mt-1">
                             <span className="text-sm font-black text-rose-600">${Number(product.discountPrice).toFixed(2)}</span>
                             <span className="text-[10px] font-medium text-neutral-400 line-through">${Number(product.price ?? 0).toFixed(2)}</span>
+                            <span className="inline-flex items-center rounded-full bg-rose-50 px-1.5 py-0.5 text-[9px] font-bold text-rose-600">
+                              -{Math.max(1, Math.round((Number(product.savings ?? 0) / Number(product.price)) * 100))}%
+                            </span>
+                          </div>
+                        ) : product.promoType === 'MULTI_BUY' && product.promoBuyQuantity > 0 && product.promoPayQuantity > 0 ? (
+                          <div className="flex items-center gap-1.5 mt-1">
+                            <span className="text-sm font-black text-rose-600">${Number(product.price ?? 0).toFixed(2)}</span>
+                            <span className="inline-flex items-center rounded-full bg-rose-50 px-1.5 py-0.5 text-[9px] font-bold text-rose-600">
+                              {product.promoBuyQuantity} x {product.promoPayQuantity}
+                            </span>
                           </div>
                         ) : (
                           <div className="flex items-center gap-1.5 mt-1">
