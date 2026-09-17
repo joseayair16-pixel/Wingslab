@@ -471,7 +471,7 @@ export const HomeView = React.memo(function HomeView({
                         <h3 className="text-xs font-bold text-neutral-900 truncate leading-tight">{product.name}</h3>
                         {product.discountPrice != null && Number(product.discountPrice) > 0 ? (
                           <div className="flex items-center gap-1.5 mt-1">
-                            <span className="text-sm font-black text-rose-600">${Number(product.discountPrice).toFixed(2)}</span>
+                            <span className="text-sm font-black text-neutral-900">${Number(product.discountPrice).toFixed(2)}</span>
                             <span className="text-[10px] font-medium text-neutral-400 line-through">${Number(product.price ?? 0).toFixed(2)}</span>
                             <span className="inline-flex items-center rounded-full bg-rose-50 px-1.5 py-0.5 text-[9px] font-bold text-rose-600">
                               -{Math.max(1, Math.round((Number(product.savings ?? 0) / Number(product.price)) * 100))}%
@@ -479,7 +479,7 @@ export const HomeView = React.memo(function HomeView({
                           </div>
                         ) : product.promoType === 'MULTI_BUY' && product.promoBuyQuantity > 0 && product.promoPayQuantity > 0 ? (
                           <div className="flex items-center gap-1.5 mt-1">
-                            <span className="text-sm font-black text-rose-600">${Number(product.price ?? 0).toFixed(2)}</span>
+                            <span className="text-sm font-black text-neutral-900">${Number(product.price ?? 0).toFixed(2)}</span>
                             <span className="inline-flex items-center rounded-full bg-rose-50 px-1.5 py-0.5 text-[9px] font-bold text-rose-600">
                               {product.promoBuyQuantity} x {product.promoPayQuantity}
                             </span>
