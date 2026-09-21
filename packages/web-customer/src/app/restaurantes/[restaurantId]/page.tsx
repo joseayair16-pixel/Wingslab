@@ -4083,11 +4083,11 @@ function ProductImage({
         <div className="absolute inset-0 bg-black/50 backdrop-blur-[2px]" onClick={() => setIsCheckoutOpen(false)} />
         <div
           ref={checkoutRef}
-          className={`absolute right-0 top-0 flex h-full w-full max-w-[580px] flex-col overflow-hidden bg-[#faf9f6] shadow-[0_0_0_1px_rgba(0,0,0,0.04),0_40px_100px_rgba(15,15,15,0.25)] sm:rounded-l-[36px] transition-all duration-[350ms] ease-[cubic-bezier(0.16,1,0.3,1)] lg:bottom-auto lg:right-auto lg:left-1/2 lg:top-1/2 lg:h-auto lg:max-h-[92vh] lg:w-full lg:max-w-4xl lg:rounded-[32px] ${isCheckoutOpen ? 'translate-x-0 opacity-100 lg:-translate-x-1/2 lg:-translate-y-1/2 lg:scale-100' : 'translate-x-full opacity-100 lg:-translate-x-1/2 lg:-translate-y-1/2 lg:scale-95 lg:opacity-0'}`}
+          className={`absolute right-0 top-0 flex h-full w-full max-w-[580px] flex-col overflow-hidden bg-[#faf9f6] dark:bg-[#0c0c0e] shadow-[0_0_0_1px_rgba(0,0,0,0.04),0_40px_100px_rgba(15,15,15,0.25)] sm:rounded-l-[36px] transition-all duration-[350ms] ease-[cubic-bezier(0.16,1,0.3,1)] lg:bottom-auto lg:right-auto lg:left-1/2 lg:top-1/2 lg:h-auto lg:max-h-[92vh] lg:w-full lg:max-w-4xl lg:rounded-[32px] ${isCheckoutOpen ? 'translate-x-0 opacity-100 lg:-translate-x-1/2 lg:-translate-y-1/2 lg:scale-100' : 'translate-x-full opacity-100 lg:-translate-x-1/2 lg:-translate-y-1/2 lg:scale-95 lg:opacity-0'}`}
         >
             <section className="flex h-full flex-col lg:h-auto lg:max-h-[92vh]">
               {/* ── Header ── */}
-              <div className="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-black/[0.04] bg-white px-5 py-4 sm:px-6">
+              <div className="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-black/[0.04] dark:border-white/10 bg-white dark:bg-neutral-950 px-5 py-4 sm:px-6">
                 <div className="flex items-center gap-3.5">
                   <div className="relative flex h-12 w-12 items-center justify-center rounded-[18px] bg-gradient-to-br from-[var(--accent)] to-[var(--accent-strong)] text-white shadow-lg shadow-accent/25">
                     <ClipboardCheck className="h-5 w-5" strokeWidth={1.8} />
@@ -4100,7 +4100,7 @@ function ProductImage({
                   <div>
                     <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-neutral-400">Finalizar</p>
                     <div className="flex items-center gap-2">
-                      <h2 className="text-lg font-bold tracking-[-0.03em] text-neutral-950">Confirmar pedido</h2>
+                      <h2 className="text-lg font-bold tracking-[-0.03em] text-neutral-950 dark:text-neutral-50">Confirmar pedido</h2>
                       {isPickupOnly ? (
                         <span className="rounded-full bg-[var(--accent-soft-strong)] px-2.5 py-0.5 text-[10px] font-bold text-[var(--accent-strong)] ring-1 ring-[var(--accent-soft-strong)]">
                           <ShoppingBag className="h-3 w-3 inline-block align-text-bottom" strokeWidth={1.5} /> Solo recoger
@@ -4133,32 +4133,32 @@ function ProductImage({
                   <div className="space-y-4">
 
                   {fulfillmentType === 'PICKUP' ? (
-                    <div className="rounded-[22px] border border-black/[0.04] bg-white p-3 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
+                    <div className="rounded-[22px] border border-black/[0.04] bg-white dark:bg-neutral-900 p-3 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
                       <div className="mb-2 flex items-center justify-between">
                         <div className="flex items-center gap-2">
-                          <div className="flex h-6 w-6 items-center justify-center rounded-full bg-sky-50">
+                          <div className="flex h-6 w-6 items-center justify-center rounded-full bg-sky-50 dark:bg-sky-900/40">
                             <Store className="h-3 w-3 text-[var(--accent)]" strokeWidth={1.5} />
                           </div>
                           <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-neutral-400">
                             Recoger en
                           </p>
                         </div>
-                        <span className="rounded-full bg-sky-50 px-2 py-0.5 text-[9px] font-bold text-[var(--accent)]">
+                        <span className="rounded-full bg-sky-50 dark:bg-sky-900/40 px-2 py-0.5 text-[9px] font-bold text-[var(--accent)]">
                           Paso 1
                         </span>
                       </div>
-                      <div className="overflow-hidden rounded-2xl border border-black/[0.04] bg-gradient-to-br from-white to-neutral-50/80 shadow-sm">
+                      <div className="overflow-hidden rounded-2xl border border-black/[0.04] dark:border-white/10 bg-gradient-to-br from-white to-neutral-50/80 dark:from-neutral-900 dark:to-zinc-900 shadow-sm">
                         <div className="p-4 pb-0">
                           <div className="flex items-start gap-3">
                             <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-[var(--accent)] to-[var(--accent-strong)] shadow-sm shadow-[0_2px_8px_var(--accent-soft)]">
                               <Store className="h-5 w-5 text-white" strokeWidth={1.5} />
                             </div>
                             <div className="min-w-0 flex-1 pt-0.5">
-                              <p className="text-[14px] font-bold leading-tight text-neutral-900">
+                              <p className="text-[14px] font-bold leading-tight text-neutral-900 dark:text-neutral-100">
                                 {restaurant?.name || 'Restaurante'}
                               </p>
                               {restaurant?.address && (
-                                <p className="mt-0.5 text-[12px] leading-relaxed text-neutral-500 line-clamp-1">
+                                <p className="mt-0.5 text-[12px] leading-relaxed text-neutral-500 dark:text-zinc-400 line-clamp-1">
                                   {restaurant.address}
                                 </p>
                               )}
@@ -4166,11 +4166,11 @@ function ProductImage({
                           </div>
                         </div>
                         <div className="px-4 pb-4">
-                          <div className="mt-2 flex items-center gap-2 rounded-xl bg-amber-50/80 px-3 py-2.5">
-                            <div className="flex h-5 w-5 items-center justify-center rounded-full bg-amber-100">
-                              <Clock className="h-3 w-3 text-amber-700" strokeWidth={1.5} />
+                          <div className="mt-2 flex items-center gap-2 rounded-xl bg-amber-50/80 dark:bg-amber-500/10 px-3 py-2.5">
+                            <div className="flex h-5 w-5 items-center justify-center rounded-full bg-amber-100 dark:bg-amber-500/20">
+                              <Clock className="h-3 w-3 text-amber-700 dark:text-amber-400" strokeWidth={1.5} />
                             </div>
-                            <p className="text-[11px] font-medium leading-snug text-amber-700">
+                            <p className="text-[11px] font-medium leading-snug text-amber-700 dark:text-amber-400">
                               Te avisaremos cuando esté listo
                             </p>
                           </div>
@@ -4179,12 +4179,12 @@ function ProductImage({
                     </div>
                   ) : (
                   /* ── PASO 1 (DELIVERY): DIRECCIÓN DE ENTREGA ── */
-                  <div className="rounded-[22px] border border-black/[0.04] bg-white p-4 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
-                    <div className="mb-4 flex items-center justify-between border-b border-black/[0.05] pb-3">
+                  <div className="rounded-[22px] border border-black/[0.04] bg-white dark:bg-neutral-900 p-4 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
+                    <div className="mb-4 flex items-center justify-between border-b border-black/[0.05] dark:border-white/10 pb-3">
                       <div className="flex items-center gap-2.5">
                         <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[var(--accent)] text-[11px] font-black text-white">1</span>
                         <div>
-                          <h3 className="text-[13px] font-bold tracking-tight text-neutral-900">Dirección de entrega</h3>
+                          <h3 className="text-[13px] font-bold tracking-tight text-neutral-900 dark:text-neutral-100">Dirección de entrega</h3>
                           <p className="text-[11px] font-medium text-neutral-500 dark:text-zinc-400">¿A dónde enviamos tu pedido?</p>
                         </div>
                       </div>
@@ -4345,7 +4345,7 @@ function ProductImage({
                                     setAddressSearchQuery(e.target.value);
                                     void searchAddress(e.target.value, setAddressSuggestions, setIsSearchingAddress);
                                   }}
-                                  className="w-full rounded-2xl border border-black/10 bg-white p-3.5 text-sm focus:border-[var(--accent)] focus:outline-none focus:ring-2 focus:ring-sky-300/20 pr-10 shadow-sm transition-all placeholder:text-neutral-400"
+                                  className="w-full rounded-2xl border border-black/10 dark:border-white/15 bg-white dark:bg-zinc-800 p-3.5 text-sm dark:text-neutral-100 focus:border-[var(--accent)] focus:outline-none focus:ring-2 focus:ring-sky-300/20 pr-10 shadow-sm transition-all placeholder:text-neutral-400 dark:placeholder:text-zinc-500"
                                 />
                                 {isSearchingAddress ? (
                                   <div className="absolute right-3.5 top-1/2 -translate-y-1/2">
@@ -4366,7 +4366,7 @@ function ProductImage({
                               </div>
 
                               {addressSuggestions.length > 0 && (
-                                <div className="absolute z-[999] mt-2 w-full rounded-2xl border border-black/5 bg-white shadow-xl overflow-hidden transition-all duration-200">
+                                <div className="absolute z-[999] mt-2 w-full rounded-2xl border border-black/5 dark:border-white/15 bg-white dark:bg-neutral-900 shadow-xl overflow-hidden transition-all duration-200">
                                   {addressSuggestions.map((suggestion, idx) => (
                                     <button
                                       key={idx}
@@ -4380,13 +4380,13 @@ function ProductImage({
                                           setNewAddressStep
                                         );
                                       }}
-                                      className="w-full px-4 py-3.5 text-left text-sm hover:bg-sky-50/40 border-b border-black/5 last:border-b-0 transition-colors flex flex-col gap-0.5"
+                                      className="w-full px-4 py-3.5 text-left text-sm hover:bg-sky-50/40 dark:hover:bg-neutral-800/60 border-b border-black/5 dark:border-white/10 last:border-b-0 transition-colors flex flex-col gap-0.5 dark:text-neutral-200"
                                     >
                                       <div className="flex items-center gap-2">
                                         <span className="text-[var(--accent)]"><MapPin className="h-3.5 w-3.5" strokeWidth={1.5} /></span>
-                                        <p className="font-semibold text-neutral-900 line-clamp-1">{suggestion.name}</p>
+                                        <p className="font-semibold text-neutral-900 dark:text-neutral-100 line-clamp-1">{suggestion.name}</p>
                                       </div>
-                                      <p className="text-xs text-neutral-500 truncate pl-6">{suggestion.description}</p>
+                                      <p className="text-xs text-neutral-500 dark:text-zinc-400 truncate pl-6">{suggestion.description}</p>
                                     </button>
                                   ))}
                                 </div>
@@ -4439,11 +4439,11 @@ function ProductImage({
                           </div>
                         ) : (
                           <div className="space-y-4">
-                            <div className="rounded-2xl border border-neutral-100 bg-neutral-50 p-3.5 flex items-start justify-between gap-3 shadow-sm">
+                            <div className="rounded-2xl border border-neutral-100 dark:border-white/10 bg-neutral-50 dark:bg-zinc-800/70 p-3.5 flex items-start justify-between gap-3 shadow-sm">
                               <div className="flex-1 min-w-0">
                                 <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider">Dirección base</p>
-                                <p className="text-sm font-bold text-neutral-900 truncate mt-0.5">{checkoutForm.street} {checkoutForm.number}</p>
-                                <p className="text-xs text-neutral-500 truncate mt-0.5">{checkoutForm.neighborhood || 'Sin colonia'}, {checkoutForm.city || 'Sin ciudad'}</p>
+                                <p className="text-sm font-bold text-neutral-900 dark:text-neutral-100 truncate mt-0.5">{checkoutForm.street} {checkoutForm.number}</p>
+                                <p className="text-xs text-neutral-500 dark:text-zinc-400 truncate mt-0.5">{checkoutForm.neighborhood || 'Sin colonia'}, {checkoutForm.city || 'Sin ciudad'}</p>
                               </div>
                               <button
                                 type="button"
@@ -4452,13 +4452,13 @@ function ProductImage({
                                   setAddressSearchQuery('');
                                   setAddressSuggestions([]);
                                 }}
-                                className="rounded-xl border border-sky-100 bg-white px-3 py-1.5 text-xs font-bold text-[var(--accent)] transition hover:bg-sky-50 shadow-sm shrink-0"
+                                className="rounded-xl border border-sky-100 dark:border-white/15 bg-white dark:bg-zinc-800 px-3 py-1.5 text-xs font-bold text-[var(--accent)] transition hover:bg-sky-50 dark:hover:bg-zinc-700 shadow-sm shrink-0"
                               >
                                 Cambiar
                               </button>
                             </div>
 
-                            <div className="flex items-center gap-2.5 rounded-2xl bg-sky-50/50 px-4 py-3 text-xs text-[var(--accent-strong)] border border-sky-100 shadow-sm">
+                            <div className="flex items-center gap-2.5 rounded-2xl bg-sky-50/50 dark:bg-sky-500/10 px-4 py-3 text-xs text-[var(--accent-strong)] dark:text-sky-200 border border-sky-100 dark:border-sky-500/30 shadow-sm">
                               <span className="text-base shrink-0"><MapPin className="h-4 w-4" strokeWidth={1.5} /></span>
                               <p className="font-semibold leading-relaxed">Mueve el pin en el mapa para ubicar exactamente el lugar de tu entrega.</p>
                             </div>
@@ -4520,7 +4520,7 @@ function ProductImage({
                   )}
 
                   {/* ── PASO 2: INSTRUCCIONES (colapsable, opcional) ── */}
-                  <div className="rounded-[22px] border border-black/[0.04] bg-white p-4 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
+                  <div className="rounded-[22px] border border-black/[0.04] dark:border-white/10 bg-white dark:bg-neutral-900 p-4 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
                     <button
                       type="button"
                       onClick={() => setShowInstructions((v) => !v)}
@@ -4530,7 +4530,7 @@ function ProductImage({
                       <div className="flex items-center gap-2.5">
                         <span className="flex h-6 w-6 items-center justify-center rounded-full bg-neutral-200 text-[11px] font-black text-neutral-500 dark:bg-zinc-700 dark:text-zinc-300">2</span>
                         <div>
-                          <h3 className="text-[13px] font-bold tracking-tight text-neutral-900">Instrucciones</h3>
+                          <h3 className="text-[13px] font-bold tracking-tight text-neutral-900 dark:text-neutral-100">Instrucciones</h3>
                           <p className="text-[11px] font-medium text-neutral-500 dark:text-zinc-400">Opcional · para la tienda o el repartidor</p>
                         </div>
                       </div>
@@ -4556,7 +4556,7 @@ function ProductImage({
                   </div>
 
                   {/* ── PASO 2.5: CUPÓN (opcional, colapsable) ── */}
-                  <div className="rounded-[22px] border border-black/[0.04] bg-white p-4 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
+                  <div className="rounded-[22px] border border-black/[0.04] dark:border-white/10 bg-white dark:bg-neutral-900 p-4 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
                     <button
                       type="button"
                       onClick={() => setIsCouponOpen((v) => !v)}
@@ -4568,7 +4568,7 @@ function ProductImage({
                           <Ticket className="h-3.5 w-3.5" strokeWidth={1.8} />
                         </span>
                         <div>
-                          <h3 className="text-[13px] font-bold tracking-tight text-neutral-900">Cupón de descuento</h3>
+                          <h3 className="text-[13px] font-bold tracking-tight text-neutral-900 dark:text-neutral-100">Cupón de descuento</h3>
                           <p className="text-[11px] font-medium text-neutral-500 dark:text-zinc-400">¿Tienes un código? Aplícalo aquí</p>
                         </div>
                       </div>
@@ -4668,12 +4668,12 @@ function ProductImage({
                   {/* ── Columna derecha (desktop): PAGO Y DETALLES ── */}
                   <div className="space-y-4">
                   {/* ── PASO 3: PAGO Y DETALLES ── */}
-                  <div className="rounded-[22px] border border-black/[0.04] bg-white p-4 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
+                  <div className="rounded-[22px] border border-black/[0.04] dark:border-white/10 bg-white dark:bg-neutral-900 p-4 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
                     <div className="mb-4 flex items-center justify-between border-b border-black/[0.05] pb-3">
                       <div className="flex items-center gap-2.5">
                         <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[var(--accent)] text-[11px] font-black text-white">3</span>
                         <div>
-                          <h3 className="text-[13px] font-bold tracking-tight text-neutral-900">Método de pago</h3>
+                          <h3 className="text-[13px] font-bold tracking-tight text-neutral-900 dark:text-neutral-100">Método de pago</h3>
                           <p className="text-[11px] font-medium text-neutral-500 dark:text-zinc-400">¿Cómo prefieres pagar?</p>
                         </div>
                       </div>
@@ -4688,7 +4688,7 @@ function ProductImage({
                           const showTransfer = accepted.includes('TRANSFER');
                           if (!showCash && !showTransfer) return null;
                           return (
-                            <div className="flex gap-1.5 rounded-2xl bg-neutral-100 p-1">
+                            <div className="flex gap-1.5 rounded-2xl bg-neutral-100 dark:bg-zinc-800 p-1">
                               {showCash && (
                                 <button
                                   type="button"
@@ -4732,7 +4732,7 @@ function ProductImage({
                       {checkoutForm.paymentMethod === 'TRANSFER' && (
                         <div className="space-y-4 pt-2 animate-in fade-in duration-300">
                           {hasTransferDetails(restaurant) ? (
-                            <div className="rounded-2xl border border-[var(--accent)] bg-white p-4">
+                            <div className="rounded-2xl border border-[var(--accent)] bg-white dark:bg-neutral-900 p-4">
                               <p className="text-xs font-semibold text-neutral-500 mb-3 flex items-center gap-1.5">
                                 <Landmark className="h-4 w-4 text-[var(--accent)]" strokeWidth={1.5} />
                                 Transferencia bancaria
@@ -4745,19 +4745,19 @@ function ProductImage({
                                 <ChevronRight className="h-3 w-3" strokeWidth={2.5} />
                                 <span className="flex items-center gap-1"><span className="flex h-4 w-4 items-center justify-center rounded-full bg-[var(--accent-soft-strong)] text-[9px] font-black text-[var(--accent-strong)]">3</span>Confirmamos tu pedido</span>
                               </div>
-                              <div className="rounded-xl bg-neutral-50 px-4 py-3 text-center mb-3">
+                              <div className="rounded-xl bg-neutral-50 dark:bg-zinc-800 px-4 py-3 text-center mb-3">
                                 <p className="text-[11px] text-neutral-500 font-medium">Monto exacto a transferir</p>
-                                <p className="text-xl font-extrabold text-neutral-900 mt-0.5">{formatCurrency(orderTotal)}</p>
+                                <p className="text-xl font-extrabold text-neutral-900 dark:text-neutral-50 mt-0.5">{formatCurrency(orderTotal)}</p>
                               </div>
-                              <div className="space-y-2.5 text-sm">
-                                <div className="flex items-center justify-between border-b border-neutral-100 pb-2">
-                                  <span className="text-neutral-500 text-[13px]">Banco</span>
-                                  <span className="font-semibold text-neutral-900">{restaurant?.transferBankName}</span>
+                              <div className="space-y-2.5 text-sm dark:text-zinc-300">
+                                <div className="flex items-center justify-between border-b border-neutral-100 dark:border-white/10 pb-2">
+                                  <span className="text-neutral-500 dark:text-zinc-400 text-[13px]">Banco</span>
+                                  <span className="font-semibold text-neutral-900 dark:text-neutral-100">{restaurant?.transferBankName}</span>
                                 </div>
-                                <div className="flex items-center justify-between border-b border-neutral-100 pb-2">
-                                  <span className="text-neutral-500 text-[13px]">Cuenta</span>
+                                <div className="flex items-center justify-between border-b border-neutral-100 dark:border-white/10 pb-2">
+                                  <span className="text-neutral-500 dark:text-zinc-400 text-[13px]">Cuenta</span>
                                   <div className="flex items-center gap-2">
-                                    <span className="font-mono font-semibold text-neutral-900 select-all">{restaurant?.transferAccountNumber}</span>
+                                    <span className="font-mono font-semibold text-neutral-900 dark:text-neutral-100 select-all">{restaurant?.transferAccountNumber}</span>
                                     <button
                                       type="button"
                                       onClick={() => handleCopyText(restaurant?.transferAccountNumber, 'account')}
@@ -4773,9 +4773,9 @@ function ProductImage({
                                   </div>
                                 </div>
                                 <div className="flex items-center justify-between">
-                                  <span className="text-neutral-500 text-[13px]">Beneficiario</span>
+                                  <span className="text-neutral-500 dark:text-zinc-400 text-[13px]">Beneficiario</span>
                                   <div className="flex items-center gap-2">
-                                    <span className="font-semibold text-neutral-900">{restaurant?.transferBeneficiaryName}</span>
+                                    <span className="font-semibold text-neutral-900 dark:text-neutral-100">{restaurant?.transferBeneficiaryName}</span>
                                     <button
                                       type="button"
                                       onClick={() => handleCopyText(restaurant?.transferBeneficiaryName, 'beneficiary')}
@@ -4793,14 +4793,14 @@ function ProductImage({
                               </div>
                             </div>
                           ) : (
-                            <div className="rounded-2xl border border-amber-200 bg-amber-50/50 p-4 text-sm text-amber-800 leading-relaxed">
+                            <div className="rounded-2xl border border-amber-200 dark:border-amber-500/30 bg-amber-50/50 dark:bg-amber-500/10 p-4 text-sm text-amber-800 dark:text-amber-300 leading-relaxed">
                               <AlertTriangle className="h-4 w-4 inline-block align-text-bottom" strokeWidth={1.5} /> Este restaurante aún no ha configurado sus datos de transferencia. Usa efectivo o vuelve más tarde.
                             </div>
                           )}
 
                           {/* Zona de Carga de Archivos Premium */}
                           <div className="space-y-2">
-                            <label className="text-sm font-semibold text-neutral-800">Comprobante de transferencia</label>
+                            <label className="text-sm font-semibold text-neutral-800 dark:text-neutral-200">Comprobante de transferencia</label>
                             {transferProofSource ? (
                               <div className="space-y-3">
                                 <div className="relative overflow-hidden rounded-2xl border border-black/[0.06] bg-neutral-900/5">
@@ -4877,11 +4877,11 @@ function ProductImage({
 
                   {/* Redundant login card transformed into a premium callout */}
                   {checkoutValidationMessage && !token && (
-                    <div className="rounded-2xl border border-sky-100 bg-sky-50/60 p-5 text-center shadow-sm animate-in fade-in duration-300">
-                      <p className="text-sm font-bold text-neutral-900">
+                    <div className="rounded-2xl border border-sky-100 dark:border-sky-500/30 bg-sky-50/60 dark:bg-sky-500/10 p-5 text-center shadow-sm animate-in fade-in duration-300">
+                      <p className="text-sm font-bold text-neutral-900 dark:text-neutral-100">
                         ¿Listo para confirmar tu pedido?
                       </p>
-                      <p className="text-xs text-neutral-500 mt-1.5 leading-relaxed">
+                      <p className="text-xs text-neutral-500 dark:text-zinc-400 mt-1.5 leading-relaxed">
                         Inicia sesión o regístrate para que podamos guardar tus datos y procesar tu envío de inmediato.
                       </p>
                       <button
@@ -4897,7 +4897,7 @@ function ProductImage({
                   </div>
                 </div>
 
-                <div className="sticky bottom-0 z-10 border-t border-black/[0.04] bg-white/95 px-4 pt-4 pb-[calc(1.5rem+env(safe-area-inset-bottom))] backdrop-blur-xl sm:px-5 shadow-[0_-12px_30px_-8px_rgba(0,0,0,0.08)]">
+                <div className="sticky bottom-0 z-10 border-t border-black/[0.04] dark:border-white/10 bg-white/95 dark:bg-neutral-950/95 px-4 pt-4 pb-[calc(1.5rem+env(safe-area-inset-bottom))] backdrop-blur-xl sm:px-5 shadow-[0_-12px_30px_-8px_rgba(0,0,0,0.08)]">
                   {/* Validation Warning Callout (Animated and Professional) */}
                   {checkoutValidationMessage && token && (
                     <div className="mb-3.5 flex justify-center animate-in slide-in-from-bottom-2 fade-in duration-300">
@@ -4995,10 +4995,10 @@ function ProductImage({
       {isPreConfirmOpen && (
         <div className="fixed inset-0 z-[70] flex items-end justify-center sm:items-center">
           <div className="absolute inset-0 bg-black/60 backdrop-blur-md" onClick={clearPreConfirm} />
-          <div className="relative flex max-h-[92vh] w-full max-w-sm flex-col overflow-hidden rounded-t-[32px] bg-white shadow-[0_-24px_80px_rgba(15,15,15,0.35)] sm:rounded-[36px] animate-in slide-in-from-bottom-4 fade-in duration-300">
+          <div className="relative flex max-h-[92vh] w-full max-w-sm flex-col overflow-hidden rounded-t-[32px] bg-white dark:bg-neutral-950 shadow-[0_-24px_80px_rgba(15,15,15,0.35)] sm:rounded-[36px] animate-in slide-in-from-bottom-4 fade-in duration-300">
             {/* Drag handle */}
             <div className="flex justify-center pt-3">
-              <div className="h-1.5 w-10 rounded-full bg-neutral-300" />
+              <div className="h-1.5 w-10 rounded-full bg-neutral-300 dark:bg-zinc-700" />
             </div>
 
             {/* Cabecera */}
@@ -5025,7 +5025,7 @@ function ProductImage({
                     />
                   </svg>
                   <div className="absolute inset-0 flex items-center justify-center">
-                    <span className="text-2xl font-black tabular-nums text-neutral-900">{preConfirmCountdown}</span>
+                    <span className="text-2xl font-black tabular-nums text-neutral-900 dark:text-neutral-50">{preConfirmCountdown}</span>
                   </div>
                 </div>
                 <div className="text-left">
@@ -5046,9 +5046,9 @@ function ProductImage({
                     </div>
                     <div className="min-w-0">
                       <p className="text-[10px] font-bold uppercase tracking-widest text-neutral-400">Recoger en tienda</p>
-                      <p className="mt-0.5 text-base font-bold leading-tight text-neutral-900">{restaurant?.name}</p>
+                      <p className="mt-0.5 text-base font-bold leading-tight text-neutral-900 dark:text-neutral-100">{restaurant?.name}</p>
                       {restaurant?.address && (
-                        <p className="mt-0.5 text-sm leading-snug text-neutral-600">{restaurant.address}</p>
+                        <p className="mt-0.5 text-sm leading-snug text-neutral-600 dark:text-zinc-400">{restaurant.address}</p>
                       )}
                     </div>
                   </div>
@@ -5059,15 +5059,15 @@ function ProductImage({
                     </div>
                     <div className="min-w-0">
                       <p className="text-[10px] font-bold uppercase tracking-widest text-neutral-400">Dirección de entrega</p>
-                      <p className="mt-0.5 text-base font-bold leading-tight text-neutral-900">
+                      <p className="mt-0.5 text-base font-bold leading-tight text-neutral-900 dark:text-neutral-100">
                         {checkoutForm.street} {checkoutForm.number}
                       </p>
-                      <p className="mt-0.5 text-[13px] font-medium leading-snug text-neutral-600">
+                      <p className="mt-0.5 text-[13px] font-medium leading-snug text-neutral-600 dark:text-zinc-400">
                         {[checkoutForm.neighborhood, checkoutForm.city].filter(Boolean).join(', ') || 'Sin dirección'}
                       </p>
                       {checkoutForm.reference?.trim() ? (
                         <p className="mt-1 text-xs leading-snug text-neutral-500">
-                          <span className="font-semibold text-neutral-600">Ref:</span> {checkoutForm.reference.trim()}
+                          <span className="font-semibold text-neutral-600 dark:text-zinc-300">Ref:</span> {checkoutForm.reference.trim()}
                         </p>
                       ) : null}
                     </div>
@@ -5128,7 +5128,7 @@ function ProductImage({
           <div className="relative flex max-h-[92vh] w-full max-w-sm flex-col overflow-hidden rounded-t-[32px] bg-white shadow-[0_-24px_80px_rgba(15,15,15,0.35)] sm:rounded-[32px] animate-in slide-in-from-bottom-4 fade-in duration-300">
             {/* Drag handle */}
             <div className="flex justify-center pt-3">
-              <div className="h-1.5 w-10 rounded-full bg-neutral-300" />
+              <div className="h-1.5 w-10 rounded-full bg-neutral-300 dark:bg-zinc-700" />
             </div>
 
             {/* Cabecera */}
@@ -7175,14 +7175,14 @@ function Field({
   type?: string;
 }) {
   return (
-    <label className="grid gap-1.5 text-sm text-neutral-600">
-      <span className="text-[11px] font-bold uppercase tracking-[0.08em] text-neutral-500">{label}</span>
+    <label className="grid gap-1.5 text-sm text-neutral-600 dark:text-zinc-300">
+      <span className="text-[11px] font-bold uppercase tracking-[0.08em] text-neutral-500 dark:text-zinc-400">{label}</span>
       <input
         value={value}
         onChange={(event) => onChange(event.target.value)}
         placeholder={placeholder}
         type={type}
-        className="rounded-xl border border-black/[0.08] bg-neutral-50/70 px-4 py-3 text-sm text-neutral-950 outline-none transition placeholder:text-neutral-400/80 focus:border-sky-400 focus:bg-white focus:ring-4 focus:ring-sky-400/15"
+        className="rounded-xl border border-black/[0.08] dark:border-white/10 bg-neutral-50/70 dark:bg-zinc-800 px-4 py-3 text-sm text-neutral-950 dark:text-neutral-100 outline-none transition placeholder:text-neutral-400/80 dark:placeholder:text-zinc-500 focus:border-sky-400 focus:bg-white dark:focus:bg-zinc-700 focus:ring-4 focus:ring-sky-400/15"
       />
     </label>
   );

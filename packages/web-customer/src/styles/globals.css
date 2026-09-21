@@ -312,6 +312,18 @@ html {
   color-scheme: light;
 }
 
+/* El restaurante solo personaliza su acento en MODO CLARO. En modo oscuro se
+   ignoran por completo: --menu-accent* se fuerzan a los valores por defecto de
+   SaDeL (diseñados para fondos oscuros). `!important` gana incluso sobre el
+   style.setProperty en línea que la página del restaurante aplica en runtime. */
+html.dark {
+  --menu-accent: #38BDF8 !important;
+  --menu-accent-strong: #0ea5e9 !important;
+  --menu-accent-hover: #0284c7 !important;
+  --menu-accent-soft: rgba(56, 189, 248, 0.14) !important;
+  --menu-accent-soft-strong: rgba(56, 189, 248, 0.22) !important;
+}
+
 /* Desactiva el "font boosting/inflation" del WebView Android (suele inflar el
    tamaño de letra en textos largos y cortar nombres). Se aplica en html, body y
    todos los elementos con !important para que el WebView de Capacitor no lo
