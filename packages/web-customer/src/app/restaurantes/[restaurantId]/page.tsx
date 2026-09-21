@@ -3235,15 +3235,14 @@ function ProductImage({
 
   return (
     <main
-      className="min-h-[100dvh] bg-[var(--menu-bg)] text-neutral-900 transition-colors duration-500 dark:bg-[var(--menu-bg-dark)] dark:text-zinc-100"
-      style={{ background: 'var(--menu-bg)', backgroundAttachment: 'fixed' }}
+      className="min-h-[100dvh] bg-[var(--menu-bg)] bg-fixed text-neutral-900 transition-colors duration-500 dark:bg-[var(--menu-bg-dark)] dark:text-zinc-100"
     >
       {/* Pull to refresh indicator */}
       <div
         className={`fixed top-0 left-0 right-0 z-50 flex justify-center pt-2 pointer-events-none transition-opacity ${pullDistance > 0 || isRefreshing ? 'opacity-100' : 'opacity-0'}`}
         style={{ transform: `translateY(${Math.max(0, pullDistance - 40)}px)` }}
       >
-        <div className="rounded-full bg-white p-2 shadow-lg border border-black/5 flex items-center justify-center">
+        <div className="rounded-full bg-white dark:bg-zinc-800 p-2 shadow-lg border border-black/5 dark:border-white/10 flex items-center justify-center">
           <RefreshCw className={`h-5 w-5 ${isRefreshing ? 'animate-spin' : ''}`} />
         </div>
       </div>
@@ -3336,7 +3335,7 @@ function ProductImage({
       </div>
 
     {activeOrderListItems.length > 0 ? (
-        <div className="border-b border-black/5 bg-white">
+        <div className="border-b border-black/5 bg-white dark:border-zinc-800 dark:bg-neutral-900">
             <div className="mx-auto max-w-7xl px-4 py-4 md:px-6">
               <div className="relative">
               
@@ -3345,7 +3344,7 @@ function ProductImage({
                 <button
                   type="button"
                   onClick={() => setCarouselIndex((prev) => (prev > 0 ? prev - 1 : activeOrderListItems.length - 1))}
-                  className="absolute -left-3 md:-left-5 top-1/2 -translate-y-1/2 z-10 flex h-8 w-8 items-center justify-center rounded-full border border-black/10 bg-white/90 text-neutral-800 shadow-md backdrop-blur transition hover:bg-neutral-50 active:scale-95 active-scale"
+                  className="absolute -left-3 md:-left-5 top-1/2 -translate-y-1/2 z-10 flex h-8 w-8 items-center justify-center rounded-full border border-black/10 bg-white/90 text-neutral-800 shadow-md backdrop-blur transition hover:bg-neutral-50 active:scale-95 active-scale dark:border-white/10 dark:bg-zinc-800/90 dark:text-zinc-200 dark:hover:bg-zinc-700"
                   aria-label="Pedido anterior"
                 >
                   <ChevronLeft className="h-4 w-4" strokeWidth={2.5} />
@@ -3382,7 +3381,7 @@ function ProductImage({
                 <button
                   type="button"
                   onClick={() => setCarouselIndex((prev) => (prev < activeOrderListItems.length - 1 ? prev + 1 : 0))}
-                  className="absolute -right-3 md:-right-5 top-1/2 -translate-y-1/2 z-10 flex h-8 w-8 items-center justify-center rounded-full border border-black/10 bg-white/90 text-neutral-800 shadow-md backdrop-blur transition hover:bg-neutral-50 active:scale-95 active-scale"
+                  className="absolute -right-3 md:-right-5 top-1/2 -translate-y-1/2 z-10 flex h-8 w-8 items-center justify-center rounded-full border border-black/10 bg-white/90 text-neutral-800 shadow-md backdrop-blur transition hover:bg-neutral-50 active:scale-95 active-scale dark:border-white/10 dark:bg-zinc-800/90 dark:text-zinc-200 dark:hover:bg-zinc-700"
                   aria-label="Siguiente pedido"
                 >
                   <ChevronRight className="h-4 w-4" strokeWidth={2.5} />
@@ -3628,8 +3627,8 @@ function ProductImage({
                                 onClick={() => setCustomizingWeight(p)}
                                 className={`rounded-full border px-4 py-2 text-sm font-semibold transition-all ${
                                   customizingWeight === p
-                                    ? 'border-sky-400 bg-sky-50 text-sky-600'
-                                    : 'border-black/5 bg-white text-neutral-600 hover:bg-neutral-50'
+                                    ? 'border-sky-400 bg-sky-50 text-sky-600 dark:border-sky-500/40 dark:bg-sky-500/10 dark:text-sky-300'
+                                    : 'border-black/5 bg-white text-neutral-600 hover:bg-neutral-50 dark:border-white/10 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700'
                                 }`}
                               >
                                 {formatGrams(p)}
@@ -3646,7 +3645,7 @@ function ProductImage({
                             className={`flex h-10 w-10 items-center justify-center rounded-full border text-lg text-neutral-600 transition ${
                               customizingWeight <= minG
                                 ? 'border-black/5 opacity-30 cursor-not-allowed'
-                                : 'border-black/5 hover:bg-neutral-50'
+                                : 'border-black/5 hover:bg-neutral-50 dark:border-white/10 dark:hover:bg-zinc-800'
                             }`}
                           >
                             -
@@ -3659,7 +3658,7 @@ function ProductImage({
                               step={stepG}
                               value={customizingWeight}
                               onChange={(e) => handleWeightInput(e.target.value)}
-                              className="w-full rounded-2xl border border-black/10 bg-white px-4 py-3 text-center text-lg font-bold text-neutral-950 outline-none focus:border-sky-400"
+                              className="w-full rounded-2xl border border-black/10 bg-white px-4 py-3 text-center text-lg font-bold text-neutral-950 outline-none focus:border-sky-400 dark:border-white/15 dark:bg-zinc-800 dark:text-neutral-100"
                             />
                             <span className="absolute right-4 top-1/2 -translate-y-1/2 text-sm font-semibold text-neutral-400">gramos</span>
                           </div>
@@ -3670,7 +3669,7 @@ function ProductImage({
                             className={`flex h-10 w-10 items-center justify-center rounded-full border text-lg text-neutral-600 transition ${
                               customizingWeight >= maxG
                                 ? 'border-black/5 opacity-30 cursor-not-allowed'
-                                : 'border-black/5 hover:bg-neutral-50'
+                                : 'border-black/5 hover:bg-neutral-50 dark:border-white/10 dark:hover:bg-zinc-800'
                             }`}
                           >
                             +
@@ -3903,7 +3902,7 @@ function ProductImage({
             aria-modal="true"
             aria-labelledby="cancelled-order-title"
           >
-            <div className="relative w-full max-w-[460px] overflow-hidden rounded-[28px] border border-black/5 bg-white p-6 shadow-[0_32px_110px_rgba(15,15,15,0.35)]">
+            <div className="relative w-full max-w-[460px] overflow-hidden rounded-[28px] border border-black/5 bg-white p-6 shadow-[0_32px_110px_rgba(15,15,15,0.35)] dark:border-white/10 dark:bg-neutral-900">
               <div className="text-center">
                 <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full border border-rose-100 bg-rose-50 text-rose-600">
                   <svg className="h-7 w-7" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -3911,7 +3910,7 @@ function ProductImage({
                     <path d="m15 9-6 6m0-6 6 6" />
                   </svg>
                 </div>
-                <h3 id="cancelled-order-title" className="text-xl font-bold tracking-tight text-neutral-950">
+                <h3 id="cancelled-order-title" className="text-xl font-bold tracking-tight text-neutral-950 dark:text-neutral-50">
                   Pedido cancelado
                 </h3>
                 <p className="mt-2 text-sm leading-relaxed text-neutral-500">
@@ -3920,9 +3919,9 @@ function ProductImage({
                 </p>
 
                 {cancelledOrderNotice.cancellationReason && (
-                  <div className="mt-4 rounded-2xl border border-amber-100/70 bg-amber-50/80 p-4 text-left">
+                  <div className="mt-4 rounded-2xl border border-amber-100/70 bg-amber-50/80 p-4 text-left dark:border-amber-500/30 dark:bg-amber-500/10">
                     <p className="mb-1 text-[11px] font-bold uppercase tracking-wider text-amber-600">Motivo de la cancelación</p>
-                    <p className="text-sm font-semibold leading-relaxed text-amber-900">
+                    <p className="text-sm font-semibold leading-relaxed text-amber-900 dark:text-amber-200">
                       {cancelledOrderNotice.cancellationReason}
                     </p>
                   </div>
@@ -3953,14 +3952,14 @@ function ProductImage({
         {pickupReadyOrder && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 backdrop-blur-sm px-4 py-6" onClick={() => setPickupReadyOrder(null)}>
             <div
-              className="bg-white rounded-3xl border border-black/[0.03] shadow-[0_20px_50px_rgba(0,0,0,0.15)] p-7 w-full max-w-md h-fit max-h-[90vh] overflow-y-auto relative transition-all"
+              className="bg-white dark:bg-neutral-900 rounded-3xl border border-black/[0.03] dark:border-white/10 shadow-[0_20px_50px_rgba(0,0,0,0.15)] p-7 w-full max-w-md h-fit max-h-[90vh] overflow-y-auto relative transition-all"
               onClick={(e) => e.stopPropagation()}
             >
               <div className="text-center mb-6">
                 <div className="w-20 h-20 bg-emerald-200 rounded-full flex items-center justify-center mx-auto mb-4 border-4 border-emerald-100 shadow-inner">
                   <span className="text-4xl"><svg className="h-10 w-10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15.75 10.5V6a3.75 3.75 0 10-7.5 0v4.5m11.356-1.993l1.263 12c.07.665-.45 1.243-1.119 1.243H4.25a1.125 1.125 0 01-1.12-1.243l1.264-12A1.125 1.125 0 015.513 7.5h12.974c.576 0 1.059.435 1.119 1.007zM8.625 10.5a.375.375 0 11-.75 0 .375.375 0 01.75 0zm7.5 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z" /></svg></span>
                 </div>
-                <h3 className="text-2xl font-black text-neutral-950 tracking-tight">¡Tu pedido está listo!</h3>
+                <h3 className="text-2xl font-black text-neutral-950 dark:text-neutral-50 tracking-tight">¡Tu pedido está listo!</h3>
                 <p className="text-sm text-neutral-500 mt-1">Pasa por tu pedido a {pickupReadyOrder.restaurant.name}.</p>
                 {pickupReadyOrder.dailyCounter && (
                   <p className="text-xs font-bold text-neutral-400 mt-2">
@@ -3971,7 +3970,7 @@ function ProductImage({
 
               <div className="space-y-4">
                 {/* Total a pagar */}
-                <div className="p-5 rounded-2xl bg-emerald-50/40 border border-emerald-100/50">
+                <div className="p-5 rounded-2xl bg-emerald-50/40 border border-emerald-100/50 dark:bg-emerald-500/10 dark:border-emerald-500/30">
                   <div className="flex justify-between items-center">
                     <div>
                       <p className="text-[10px] font-semibold text-neutral-500 uppercase tracking-wider">
@@ -4017,7 +4016,7 @@ function ProductImage({
                     href={`https://www.google.com/maps/dir/?api=1&destination=${pickupReadyOrder.restaurant.latitude},${pickupReadyOrder.restaurant.longitude}`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="w-full flex items-center justify-center gap-2.5 rounded-full border-2 border-sky-200 bg-sky-50 py-3.5 text-sm font-bold text-sky-600 shadow-sm transition hover:bg-sky-100 hover:shadow-md active:scale-[0.97]"
+                    className="w-full flex items-center justify-center gap-2.5 rounded-full border-2 border-sky-200 bg-sky-50 py-3.5 text-sm font-bold text-sky-600 shadow-sm transition hover:bg-sky-100 hover:shadow-md active:scale-[0.97] dark:border-sky-500/30 dark:bg-sky-500/10 dark:text-sky-300 dark:hover:bg-sky-500/20"
                   >
                     <svg className="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.828 0l-4.243-4.243a8 8 0 1111.314 0z" />
@@ -4120,7 +4119,7 @@ function ProductImage({
                 <button
                   type="button"
                   onClick={() => setIsCheckoutOpen(false)}
-                  className="flex h-10 w-10 items-center justify-center rounded-full bg-neutral-100 text-neutral-500 transition-all hover:bg-neutral-200 hover:text-neutral-700 active:scale-90"
+                  className="flex h-10 w-10 items-center justify-center rounded-full bg-neutral-100 text-neutral-500 transition-all hover:bg-neutral-200 hover:text-neutral-700 active:scale-90 dark:bg-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-700 dark:hover:text-zinc-200"
                   aria-label="Cerrar checkout"
                 >
                   <X className="h-5 w-5" />
@@ -4219,7 +4218,7 @@ function ProductImage({
                                 className={`relative flex w-64 shrink-0 flex-col rounded-2xl border p-3.5 text-left transition-all ${
                                   isSelected
                                     ? 'border-[var(--accent)] bg-[color-mix(in_srgb,var(--menu-accent)_7%,white)] ring-2 ring-[var(--accent)]/35'
-                                    : 'border-black/[0.08] bg-white opacity-95 hover:border-black/20 hover:opacity-100'
+                                    : 'border-black/[0.08] bg-white opacity-95 hover:border-black/20 hover:opacity-100 dark:border-white/15 dark:bg-zinc-800 dark:hover:border-white/25'
                                 }`}
                               >
                                 <div className="flex items-center justify-between gap-2">
@@ -4263,7 +4262,7 @@ function ProductImage({
                                 longitude: '-99.1332',
                               }));
                             }}
-                            className="flex w-32 shrink-0 flex-col items-center justify-center rounded-2xl border border-dashed border-sky-200 bg-sky-50/20 p-3.5 text-center transition-all hover:bg-sky-50/50"
+                            className="flex w-32 shrink-0 flex-col items-center justify-center rounded-2xl border border-dashed border-sky-200 bg-sky-50/20 p-3.5 text-center transition-all hover:bg-sky-50/50 dark:border-sky-500/30 dark:bg-sky-500/10"
                           >
                             <span className="text-xl text-[var(--accent)] font-bold">+</span>
                             <span className="text-xs font-bold text-[var(--accent)] mt-0.5">Nueva</span>
@@ -4295,7 +4294,7 @@ function ProductImage({
                               longitude: '-99.1332',
                             }));
                           }}
-                          className="w-full rounded-2xl border border-[var(--accent)] bg-sky-50 px-4 py-4 text-sm font-bold text-[var(--accent-strong)] transition-all active-scale hover:bg-[var(--accent-soft-strong)]/50 shadow-sm flex items-center justify-center gap-2"
+                          className="w-full rounded-2xl border border-[var(--accent)] bg-sky-50 px-4 py-4 text-sm font-bold text-[var(--accent-strong)] transition-all active-scale hover:bg-[var(--accent-soft-strong)]/50 shadow-sm flex items-center justify-center gap-2 dark:bg-sky-500/15 dark:text-sky-200"
                         >
                           <CirclePlus className="h-4 w-4" strokeWidth={1.5} /> Agregar dirección de entrega
                         </button>
@@ -4310,7 +4309,7 @@ function ProductImage({
                         className={`mt-3 inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-[11px] font-bold transition-all active:scale-95 ${
                           showMapForAddress
                             ? 'border-[var(--accent)] bg-[var(--accent)] text-white shadow-sm shadow-[0_4px_14px_var(--accent-soft)]'
-                            : 'border-sky-200 bg-sky-50/60 text-[var(--accent)] hover:bg-[var(--accent-soft-strong)]'
+                            : 'border-sky-200 bg-sky-50/60 text-[var(--accent)] hover:bg-[var(--accent-soft-strong)] dark:border-sky-500/30 dark:bg-sky-500/10 dark:text-sky-300'
                         }`}
                       >
                         <Map className="h-3.5 w-3.5" strokeWidth={1.5} />
@@ -4429,7 +4428,7 @@ function ProductImage({
                                       }));
                                     }
                                   }}
-                                  className="flex w-full items-center justify-center gap-2 rounded-2xl border border-neutral-200 bg-white px-4 py-3 text-xs font-bold text-neutral-600 transition-all hover:border-neutral-300 hover:text-neutral-900 active:scale-[0.98] shadow-sm"
+                                  className="flex w-full items-center justify-center gap-2 rounded-2xl border border-neutral-200 bg-white px-4 py-3 text-xs font-bold text-neutral-600 transition-all hover:border-neutral-300 hover:text-neutral-900 active:scale-[0.98] shadow-sm dark:border-white/15 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:border-white/25 dark:hover:text-zinc-50"
                                 >
                                   <ArrowLeft className="h-4 w-4 shrink-0" strokeWidth={2} />
                                   Ver direcciones guardadas ({addresses.length})
@@ -4484,7 +4483,7 @@ function ProductImage({
                                   setAddressSearchQuery('');
                                   setAddressSuggestions([]);
                                 }}
-                                className="rounded-xl border border-black/10 bg-white px-4 py-2.5 text-xs font-bold text-neutral-600 transition hover:bg-neutral-50 shadow-sm"
+                                className="rounded-xl border border-black/10 bg-white px-4 py-2.5 text-xs font-bold text-neutral-600 transition hover:bg-neutral-50 shadow-sm dark:border-white/15 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"
                               >
                                 Atrás
                               </button>
@@ -4510,7 +4509,7 @@ function ProductImage({
                         <button
                           type="button"
                           onClick={() => setShowMapForAddress(null)}
-                          className="absolute right-2 top-2 z-10 flex items-center gap-1 rounded-full bg-white/95 px-3 py-1 text-[10px] font-bold text-neutral-600 shadow-md backdrop-blur transition-all hover:bg-white active:scale-95"
+                          className="absolute right-2 top-2 z-10 flex items-center gap-1 rounded-full bg-white/95 px-3 py-1 text-[10px] font-bold text-neutral-600 shadow-md backdrop-blur transition-all hover:bg-white active:scale-95 dark:bg-zinc-800/95 dark:text-zinc-300 dark:hover:bg-zinc-700"
                         >
                           <X className="h-3 w-3" strokeWidth={2.5} /> Ocultar mapa
                         </button>
@@ -4761,7 +4760,7 @@ function ProductImage({
                                     <button
                                       type="button"
                                       onClick={() => handleCopyText(restaurant?.transferAccountNumber, 'account')}
-                                      className="flex h-7 w-7 items-center justify-center rounded-lg text-neutral-400 hover:bg-neutral-100 hover:text-neutral-600 active:scale-90 transition-all relative"
+                                      className="flex h-7 w-7 items-center justify-center rounded-lg text-neutral-400 hover:bg-neutral-100 hover:text-neutral-600 active:scale-90 transition-all relative dark:text-zinc-500 dark:hover:bg-zinc-800 dark:hover:text-zinc-300"
                                       title="Copiar"
                                     >
                                       {copiedField === 'account' ? (
@@ -4779,7 +4778,7 @@ function ProductImage({
                                     <button
                                       type="button"
                                       onClick={() => handleCopyText(restaurant?.transferBeneficiaryName, 'beneficiary')}
-                                      className="flex h-7 w-7 items-center justify-center rounded-lg text-neutral-400 hover:bg-neutral-100 hover:text-neutral-600 active:scale-90 transition-all relative"
+                                      className="flex h-7 w-7 items-center justify-center rounded-lg text-neutral-400 hover:bg-neutral-100 hover:text-neutral-600 active:scale-90 transition-all relative dark:text-zinc-500 dark:hover:bg-zinc-800 dark:hover:text-zinc-300"
                                       title="Copiar"
                                     >
                                       {copiedField === 'beneficiary' ? (
@@ -4808,7 +4807,7 @@ function ProductImage({
                                     src={transferProofSource}
                                     alt={transferProofName}
                                     loading="lazy" decoding="async"
-                                    className="w-full h-48 object-contain bg-neutral-100"
+                                    className="w-full h-48 object-contain bg-neutral-100 dark:bg-zinc-800"
                                   />
                                   <button
                                     type="button"
@@ -4821,14 +4820,14 @@ function ProductImage({
                                     ✕
                                   </button>
                                 </div>
-                                <label className="relative flex cursor-pointer items-center justify-center gap-2.5 rounded-2xl border-2 border-dashed border-neutral-200 bg-white px-5 py-4 text-sm font-bold text-neutral-700 transition-all hover:border-[var(--accent)] hover:bg-sky-50/40 hover:text-[var(--accent-strong)] active:scale-[0.97] shadow-sm hover:shadow-md group">
+                                <label className="relative flex cursor-pointer items-center justify-center gap-2.5 rounded-2xl border-2 border-dashed border-neutral-200 bg-white px-5 py-4 text-sm font-bold text-neutral-700 transition-all hover:border-[var(--accent)] hover:bg-sky-50/40 hover:text-[var(--accent-strong)] active:scale-[0.97] shadow-sm hover:shadow-md group dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-sky-500/10">
                                   <input
                                     type="file"
                                     accept="image/*"
                                     onChange={(event) => void handleTransferProofChange(event)}
                                     className="sr-only"
                                   />
-                                  <div className="flex h-9 w-9 items-center justify-center rounded-full bg-sky-50 text-[var(--accent)] group-hover:bg-[var(--accent-soft-strong)] transition-colors">
+                                  <div className="flex h-9 w-9 items-center justify-center rounded-full bg-sky-50 text-[var(--accent)] group-hover:bg-[var(--accent-soft-strong)] transition-colors dark:bg-sky-500/15 dark:text-sky-300">
                                     <Upload className="h-4 w-4" strokeWidth={1.5} />
                                   </div>
                                   <div className="flex flex-col items-start">
@@ -4843,7 +4842,7 @@ function ProductImage({
                                 className={`relative flex cursor-pointer items-center justify-center gap-2.5 rounded-2xl border-2 border-dashed px-5 py-4 text-sm font-bold transition-all active:scale-[0.97] shadow-sm group ${
                                   attemptedCheckout && checkoutForm.paymentMethod === 'TRANSFER'
                                     ? 'border-rose-300 bg-rose-50/50 text-rose-700 hover:border-rose-400'
-                                    : 'border-neutral-200 bg-white text-neutral-700 hover:border-[var(--accent)] hover:bg-sky-50/40 hover:text-[var(--accent-strong)] hover:shadow-md'
+                                    : 'border-neutral-200 bg-white text-neutral-700 hover:border-[var(--accent)] hover:bg-sky-50/40 hover:text-[var(--accent-strong)] hover:shadow-md dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300'
                                 }`}
                               >
                                 <input
@@ -4852,7 +4851,7 @@ function ProductImage({
                                   onChange={(event) => void handleTransferProofChange(event)}
                                   className="sr-only"
                                 />
-                                <div className={`flex h-9 w-9 items-center justify-center rounded-full transition-colors ${attemptedCheckout && checkoutForm.paymentMethod === 'TRANSFER' ? 'bg-rose-100 text-rose-500' : 'bg-sky-50 text-[var(--accent)] group-hover:bg-[var(--accent-soft-strong)]'}`}>
+                                <div className={`flex h-9 w-9 items-center justify-center rounded-full transition-colors ${attemptedCheckout && checkoutForm.paymentMethod === 'TRANSFER' ? 'bg-rose-100 text-rose-500 dark:bg-rose-500/20 dark:text-rose-400' : 'bg-sky-50 text-[var(--accent)] group-hover:bg-[var(--accent-soft-strong)] dark:bg-sky-500/15 dark:text-sky-300'}`}>
                                   <Upload className="h-4 w-4" strokeWidth={1.5} />
                                 </div>
                                 <div className="flex flex-col items-start">
@@ -4925,7 +4924,7 @@ function ProductImage({
                         setIsCheckoutOpen(false);
                         setIsCartOpen(true);
                       }}
-                      className="group flex items-center justify-center gap-1.5 rounded-2xl bg-neutral-100/80 px-4 py-3.5 text-sm font-semibold text-neutral-600 transition-all hover:bg-neutral-200/80 active:scale-[0.97] active-scale shrink-0"
+                      className="group flex items-center justify-center gap-1.5 rounded-2xl bg-neutral-100/80 px-4 py-3.5 text-sm font-semibold text-neutral-600 transition-all hover:bg-neutral-200/80 active:scale-[0.97] active-scale shrink-0 dark:bg-zinc-800/80 dark:text-zinc-300 dark:hover:bg-zinc-700/80"
                     >
                       <ChevronLeft className="h-4 w-4 text-neutral-500 transition-transform group-hover:-translate-x-0.5" strokeWidth={2.5} />
                       <span className="hidden sm:inline">Volver</span>
@@ -5006,13 +5005,13 @@ function ProductImage({
               <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-[var(--accent-soft-strong)] text-[var(--accent-strong)]">
                 <Loader2 className="h-7 w-7 animate-spin" strokeWidth={2.2} />
               </div>
-              <h2 className="mt-3 text-xl font-extrabold tracking-tight text-neutral-950">Confirma tu pedido</h2>
+              <h2 className="mt-3 text-xl font-extrabold tracking-tight text-neutral-950 dark:text-neutral-50">Confirma tu pedido</h2>
               <p className="mt-1 text-[13px] font-medium text-neutral-500">Revisa la dirección y el monto antes de enviar</p>
             </div>
 
             {/* Cuenta regresiva */}
             <div className="px-6">
-              <div className="flex items-center justify-center gap-3 rounded-2xl border border-black/[0.06] bg-neutral-50 py-3">
+              <div className="flex items-center justify-center gap-3 rounded-2xl border border-black/[0.06] bg-neutral-50 py-3 dark:border-white/10 dark:bg-zinc-900">
                 <div className="relative h-14 w-14">
                   <svg className="h-14 w-14 -rotate-90" viewBox="0 0 56 56">
                     <circle cx="28" cy="28" r="24" fill="none" stroke="rgba(0,0,0,0.08)" strokeWidth="5" />
@@ -5029,7 +5028,7 @@ function ProductImage({
                   </div>
                 </div>
                 <div className="text-left">
-                  <p className="text-sm font-bold text-neutral-900">El pedido se enviará automáticamente</p>
+                  <p className="text-sm font-bold text-neutral-900 dark:text-neutral-100">El pedido se enviará automáticamente</p>
                   <p className="text-xs font-medium text-neutral-500">Toca «Todo bien» para enviarlo ahora</p>
                 </div>
               </div>
@@ -5038,7 +5037,7 @@ function ProductImage({
             {/* Cuerpo scrolleable */}
             <div className="mt-4 min-h-0 flex-1 overflow-y-auto px-6 pb-2">
               {/* Dirección o recogida */}
-              <div className="rounded-2xl border border-black/[0.06] bg-neutral-50 p-4">
+              <div className="rounded-2xl border border-black/[0.06] bg-neutral-50 p-4 dark:border-white/10 dark:bg-zinc-900">
                 {fulfillmentType === 'PICKUP' ? (
                   <div className="flex items-start gap-3">
                     <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-emerald-100 text-emerald-700">
@@ -5111,7 +5110,7 @@ function ProductImage({
                 <button
                   type="button"
                   onClick={clearPreConfirm}
-                  className="flex w-full items-center justify-center gap-2 rounded-2xl border border-neutral-200 bg-white px-5 py-3.5 text-[15px] font-semibold text-neutral-700 transition-all hover:bg-neutral-50 hover:border-neutral-300 active:scale-[0.98]"
+                  className="flex w-full items-center justify-center gap-2 rounded-2xl border border-neutral-200 bg-white px-5 py-3.5 text-[15px] font-semibold text-neutral-700 transition-all hover:bg-neutral-50 hover:border-neutral-300 active:scale-[0.98] dark:border-white/15 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"
                 >
                   Cancelar
                 </button>
@@ -5125,7 +5124,7 @@ function ProductImage({
       {isHoursModalOpen && restaurant && (
         <div className="fixed inset-0 z-[70] flex items-end justify-center sm:items-center">
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setIsHoursModalOpen(false)} />
-          <div className="relative flex max-h-[92vh] w-full max-w-sm flex-col overflow-hidden rounded-t-[32px] bg-white shadow-[0_-24px_80px_rgba(15,15,15,0.35)] sm:rounded-[32px] animate-in slide-in-from-bottom-4 fade-in duration-300">
+          <div className="relative flex max-h-[92vh] w-full max-w-sm flex-col overflow-hidden rounded-t-[32px] bg-white dark:bg-neutral-950 shadow-[0_-24px_80px_rgba(15,15,15,0.35)] sm:rounded-[32px] animate-in slide-in-from-bottom-4 fade-in duration-300">
             {/* Drag handle */}
             <div className="flex justify-center pt-3">
               <div className="h-1.5 w-10 rounded-full bg-neutral-300 dark:bg-zinc-700" />
@@ -5140,19 +5139,19 @@ function ProductImage({
                   className="h-12 w-12 shrink-0 rounded-2xl border border-black/5 object-cover shadow-sm"
                 />
               ) : (
-                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-neutral-100 text-neutral-400">
+                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-neutral-100 text-neutral-400 dark:bg-zinc-800 dark:text-zinc-500">
                   <Clock className="h-6 w-6" strokeWidth={1.8} />
                 </div>
               )}
               <div className="min-w-0 flex-1">
                 <p className="text-[10px] font-bold uppercase tracking-widest text-neutral-400">Horario de atención</p>
-                <h3 className="truncate text-lg font-extrabold tracking-tight text-neutral-950">{restaurant.name}</h3>
+                <h3 className="truncate text-lg font-extrabold tracking-tight text-neutral-950 dark:text-neutral-50">{restaurant.name}</h3>
               </div>
               <button
                 type="button"
                 onClick={() => setIsHoursModalOpen(false)}
                 aria-label="Cerrar"
-                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-neutral-100 text-neutral-500 transition hover:bg-neutral-200 hover:text-neutral-700 active:scale-90"
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-neutral-100 text-neutral-500 transition hover:bg-neutral-200 hover:text-neutral-700 active:scale-90 dark:bg-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-700 dark:hover:text-zinc-200"
               >
                 <X className="h-4 w-4" strokeWidth={2.5} />
               </button>
@@ -5168,23 +5167,23 @@ function ProductImage({
                   {hasHours ? (
                     <div className={`flex items-center gap-2.5 rounded-2xl border px-4 py-3 ${
                       restaurant.isOpen
-                        ? 'border-emerald-200 bg-emerald-50'
-                        : 'border-rose-200/70 bg-rose-50'
+                        ? 'border-emerald-200 bg-emerald-50 dark:border-emerald-500/30 dark:bg-emerald-500/10'
+                        : 'border-rose-200/70 bg-rose-50 dark:border-rose-500/30 dark:bg-rose-500/10'
                     }`}>
                       <span className="relative flex h-2 w-2 shrink-0">
                         <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${restaurant.isOpen ? 'bg-emerald-500' : 'bg-rose-500'}`} />
                         <span className={`relative inline-flex h-2 w-2 rounded-full ${restaurant.isOpen ? 'bg-emerald-500' : 'bg-rose-500'}`} />
                       </span>
-                      <p className={`text-[13px] font-bold leading-snug ${restaurant.isOpen ? 'text-emerald-800' : 'text-rose-800'}`}>
+                      <p className={`text-[13px] font-bold leading-snug ${restaurant.isOpen ? 'text-emerald-800 dark:text-emerald-300' : 'text-rose-800 dark:text-rose-300'}`}>
                         {restaurant.isOpen
                           ? `Abierto ahora${currentClose ? ` · Cierra a las ${formatHour12(currentClose)}` : ''}`
                           : `Cerrado ahora${restaurant.nextOpenTime ? ` · Abre ${formatNextOpen(restaurant.nextOpenTime)}` : ''}`}
                       </p>
                     </div>
                   ) : (
-                    <div className="flex items-center gap-2.5 rounded-2xl border border-sky-200/70 bg-sky-50 px-4 py-3">
+                    <div className="flex items-center gap-2.5 rounded-2xl border border-sky-200/70 bg-sky-50 px-4 py-3 dark:border-sky-500/30 dark:bg-sky-500/10">
                       <Clock className="h-4 w-4 shrink-0 text-sky-600" strokeWidth={2} />
-                      <p className="text-[13px] font-semibold leading-snug text-sky-800">
+                      <p className="text-[13px] font-semibold leading-snug text-sky-800 dark:text-sky-300">
                         Este negocio no tiene un horario configurado; atiende en horario libre.
                       </p>
                     </div>
@@ -5196,7 +5195,7 @@ function ProductImage({
             {/* Semana */}
             {Array.isArray(restaurant.operatingHours) && restaurant.operatingHours.length > 0 && (
               <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-2 pt-4">
-                <div className="overflow-hidden rounded-2xl border border-black/[0.05] bg-white">
+                <div className="overflow-hidden rounded-2xl border border-black/[0.05] bg-white dark:border-white/10 dark:bg-zinc-900">
                   {buildWeekSchedule(restaurant.operatingHours).map((row, idx) => {
                     const isToday = new Date().getDay() === row.dayOfWeek;
                     return (
@@ -6358,14 +6357,14 @@ function ProductImage({
       {/* Modal de Detalle de Pedido */}
       {isDetailModalOpen && selectedOrderId && activeOrderDetailsMap[selectedOrderId] && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4 py-6">
-          <div className="relative w-full max-w-[480px] rounded-[32px] bg-[#f9fafb] shadow-[0_30px_100px_rgba(0,0,0,0.2)] h-fit max-h-[90vh] overflow-y-auto no-scrollbar">
+          <div className="relative w-full max-w-[480px] rounded-[32px] bg-[#f9fafb] shadow-[0_30px_100px_rgba(0,0,0,0.2)] h-fit max-h-[90vh] overflow-y-auto no-scrollbar dark:bg-[#0c0c0e]">
             {/* Encabezado Fijo con Botón de Cierre */}
-            <div className="sticky top-0 z-10 flex items-center justify-between bg-[#f9fafb]/90 backdrop-blur-md px-6 py-5 border-b border-black/5">
+            <div className="sticky top-0 z-10 flex items-center justify-between bg-[#f9fafb]/90 backdrop-blur-md px-6 py-5 border-b border-black/5 dark:bg-[#0c0c0e]/90 dark:border-white/10">
               <h3 className="text-lg font-bold tracking-tight text-neutral-900">Detalles del pedido</h3>
               <button
                 type="button"
                 onClick={() => setIsDetailModalOpen(false)}
-                className="flex h-8 w-8 items-center justify-center rounded-full bg-neutral-200/60 text-neutral-600 transition hover:bg-neutral-300 hover:text-neutral-900"
+                className="flex h-8 w-8 items-center justify-center rounded-full bg-neutral-200/60 text-neutral-600 transition hover:bg-neutral-300 hover:text-neutral-900 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700 dark:hover:text-zinc-100"
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M18 6 6 18"/><path d="m6 6 12 12"/>
@@ -6377,7 +6376,7 @@ function ProductImage({
               <div className="space-y-6">
                 {/* Header del Restaurante */}
                 <div className="flex flex-col items-center text-center">
-                  <div className="flex h-20 w-20 items-center justify-center rounded-3xl bg-white shadow-[0_8px_24px_rgba(0,0,0,0.04)] mb-4 border border-black/[0.03]">
+                  <div className="flex h-20 w-20 items-center justify-center rounded-3xl bg-white dark:bg-zinc-800 shadow-[0_8px_24px_rgba(0,0,0,0.04)] mb-4 border border-black/[0.03] dark:border-white/10">
                     <span className="text-2xl font-black tracking-tight text-neutral-800">
                       {activeOrderDetailsMap[selectedOrderId].restaurant.name.substring(0, 2).toUpperCase()}
                     </span>
@@ -6542,7 +6541,7 @@ function ProductImage({
                 })()}
 
                 {/* Ticket unificado */}
-                <div className="bg-white rounded-3xl border border-black/5 shadow-sm p-6 space-y-6">
+                <div className="bg-white rounded-3xl border border-black/5 shadow-sm p-6 space-y-6 dark:bg-neutral-900 dark:border-white/10">
                   <div className="space-y-4">
                     <p className="text-[11px] font-bold uppercase tracking-widest text-neutral-400">Resumen</p>
                     <div className="space-y-4">
@@ -6569,7 +6568,7 @@ function ProductImage({
                     </div>
                   </div>
 
-                  <div className="border-t border-dashed border-neutral-200 pt-5 space-y-3 text-sm">
+                  <div className="border-t border-dashed border-neutral-200 pt-5 space-y-3 text-sm dark:border-zinc-700">
                     <div className="flex justify-between text-neutral-600">
                       <p>Subtotal</p>
                       <p className="font-medium text-neutral-900">{formatCurrency(activeOrderDetailsMap[selectedOrderId].subtotal)}</p>
@@ -6588,7 +6587,7 @@ function ProductImage({
                         <p className="font-bold text-sky-700">-{formatCurrency(Number(activeOrderDetailsMap[selectedOrderId].promoDiscountAmount))}</p>
                       </div>
                     )}
-                    <div className="flex justify-between font-bold text-neutral-900 text-lg pt-4 border-t border-dashed border-neutral-200 mt-4">
+                    <div className="flex justify-between font-bold text-neutral-900 text-lg pt-4 border-t border-dashed border-neutral-200 mt-4 dark:border-zinc-700 dark:text-neutral-50">
                       <p>Total a pagar</p>
                       <p>{formatCurrency(activeOrderDetailsMap[selectedOrderId].totalAmount)}</p>
                     </div>
@@ -6597,7 +6596,7 @@ function ProductImage({
 
                 {activeOrderDetailsMap[selectedOrderId].fulfillmentType === 'PICKUP' ? (
                   /* Datos de Recolección */
-                  <div className="bg-white rounded-3xl border border-black/5 shadow-sm p-6 space-y-4">
+                  <div className="bg-white rounded-3xl border border-black/5 shadow-sm p-6 space-y-4 dark:bg-neutral-900 dark:border-white/10">
                     <p className="text-[11px] font-bold uppercase tracking-widest text-neutral-400">Recolección</p>
                     <div className="flex items-start gap-3">
                       <div className="mt-0.5 flex h-8 w-8 items-center justify-center rounded-full bg-emerald-100 text-emerald-600 shrink-0">
@@ -6620,7 +6619,7 @@ function ProductImage({
                   </div>
                 ) : (
                   /* Datos de Entrega */
-                  <div className="bg-white rounded-3xl border border-black/5 shadow-sm p-6 space-y-4">
+                  <div className="bg-white rounded-3xl border border-black/5 shadow-sm p-6 space-y-4 dark:bg-neutral-900 dark:border-white/10">
                     <p className="text-[11px] font-bold uppercase tracking-widest text-neutral-400">Entrega</p>
                     <div className="flex items-start gap-3">
                       <div className="mt-0.5 flex h-8 w-8 items-center justify-center rounded-full bg-neutral-100 text-neutral-600 shrink-0">

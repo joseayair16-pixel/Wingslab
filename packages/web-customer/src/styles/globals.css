@@ -316,12 +316,24 @@ html {
    ignoran por completo: --menu-accent* se fuerzan a los valores por defecto de
    SaDeL (diseñados para fondos oscuros). `!important` gana incluso sobre el
    style.setProperty en línea que la página del restaurante aplica en runtime. */
+/* En modo oscuro el menú del restaurante ignora por completo el tema/color
+   elegido por el restaurante (los themes y accentColor). Se fuerzan aquí las
+   superficies a los neutros SaDeL con !important porque las declaraciones del
+   layout.tsx (sobre :root) y las inyecciones runtime no llevan !important. */
 html.dark {
   --menu-accent: #38BDF8 !important;
   --menu-accent-strong: #0ea5e9 !important;
   --menu-accent-hover: #0284c7 !important;
   --menu-accent-soft: rgba(56, 189, 248, 0.14) !important;
   --menu-accent-soft-strong: rgba(56, 189, 248, 0.22) !important;
+  --menu-bg: #0b0b0d !important;
+  --menu-bg-dark: #0b0b0d !important;
+  --menu-surface: #0c0c0e !important;
+  --menu-surface-dark: #0c0c0e !important;
+  --menu-header: #0c0c0e !important;
+  --menu-header-dark: #0c0c0e !important;
+  --menu-card: #0c0c0e !important;
+  --menu-card-dark: #0c0c0e !important;
 }
 
 /* Desactiva el "font boosting/inflation" del WebView Android (suele inflar el
