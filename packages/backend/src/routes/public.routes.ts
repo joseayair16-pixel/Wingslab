@@ -9,7 +9,12 @@ import { applyPromotionRoleFilter } from '../utils/promotion-targeting';
 import { createPlatformRequest } from '../utils/platform-requests';
 import { decrypt } from '../utils/crypto';
 import { tryAuthenticate } from '../middleware/auth';
+import { getCached, setCache } from '../services/cache.service';
 
+
+const CACHE_ENABLED = process.env.NODE_ENV !== 'test';
+const RESTAURANT_LIST_CACHE_PREFIX = 'restaurants-list';
+const RESTAURANT_LIST_CACHE_TTL = 30;
 
 const listRestaurantsQuerySchema = z.object({
   page: z.coerce.number().int().positive().default(1),
@@ -124,6 +129,14 @@ export async function registerPublicRoutes(fastify: FastifyInstance): Promise<vo
           message: parsed.error.issues[0]?.message || 'Query invalida.',
         },
       });
+    }
+
+    const cacheIdentifier = request.url;
+    if (CACHE_ENABLED) {
+      const cached = await getCached<Record<string, unknown>>(RESTAURANT_LIST_CACHE_PREFIX, cacheIdentifier);
+      if (cached) {
+        return reply.send({ success: true, data: cached });
+      }
     }
 
     const { page, limit, search, searchType, region, categoryId, storeCategoryId, latitude, longitude, openOnly } = parsed.data;
@@ -348,16 +361,22 @@ export async function registerPublicRoutes(fastify: FastifyInstance): Promise<vo
     const total = mapped.length;
     const items = mapped.slice((page - 1) * limit, page * limit);
 
+    const data = {
+      items,
+      total,
+      page,
+      limit,
+      hasMore: page * limit < total,
+      activeCategories,
+    };
+
+    if (CACHE_ENABLED) {
+      await setCache(RESTAURANT_LIST_CACHE_PREFIX, cacheIdentifier, data, RESTAURANT_LIST_CACHE_TTL);
+    }
+
     return reply.send({
       success: true,
-      data: {
-        items,
-        total,
-        page,
-        limit,
-        hasMore: page * limit < total,
-        activeCategories,
-      },
+      data,
     });
   });
 

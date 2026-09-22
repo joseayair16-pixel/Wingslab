@@ -2399,8 +2399,8 @@ export async function registerDriverPanelRoutes(fastify: FastifyInstance): Promi
 
     driverPanel.get('/driver-panel/historial', async (request, reply) => {
       const { query } = request as { query: { page?: string; limit?: string } };
-      const page = parseInt(query.page || '1', 10);
-      const limit = parseInt(query.limit || '20', 10);
+      const page = Math.max(parseInt(query.page || '1', 10) || 1, 1);
+      const limit = Math.min(Math.max(parseInt(query.limit || '20', 10) || 20, 1), 100);
       const skip = (page - 1) * limit;
 
       const user = getAuthenticatedUser(request);

@@ -8,14 +8,21 @@ import { sendPushNotification } from '../services/notification.service';
 import { createTransferRefundTicket } from '../services/refund-ticket.service';
 import { restoreStockForOrder } from '../services/stock.service';
 
+const posInt = (min: number, max?: number) =>
+  z
+    .string()
+    .regex(/^\d+$/)
+    .transform(Number)
+    .refine((n) => n >= min && (max === undefined || n <= max));
+
 const querySchema = z.object({
   status: z.nativeEnum(OrderStatus).optional(),
   restaurantId: z.string().optional(),
   customerId: z.string().optional(),
   noDriversAvailable: z.enum(['true', 'false']).optional(),
   date: z.string().optional(),
-  page: z.string().regex(/^\d+$/).transform(Number).default('1'),
-  limit: z.string().regex(/^\d+$/).transform(Number).default('20'),
+  page: posInt(1).default('1'),
+  limit: posInt(1, 100).default('20'),
 });
 
 const cancelSchema = z.object({
