@@ -155,50 +155,115 @@ export async function registerAdminDriverRoutes(fastify: FastifyInstance): Promi
         prisma.driver.count({ where }),
       ]);
 
-      const itemsWithDebt = await Promise.all(
-        items.map(async (item) => {
-          const debtAnchor = item.lastBillingSettledAt || item.createdAt;
+      const driverIds = items.map((item) => item.id);
 
-          const [activeDebtAgg, overdueCount, pendingCount] = await Promise.all([
-            prisma.order.aggregate({
-              where: {
-                driverId: item.id,
-                status: OrderStatus.DELIVERED,
-                deliveredAt: { gt: debtAnchor },
-              },
-              _sum: { driverPlatformFee: true },
-            }),
-            prisma.driverBillingSettlement.count({
-              where: { driverId: item.id, status: 'OVERDUE' },
-            }),
-            prisma.driverBillingSettlement.count({
-              where: { driverId: item.id, status: 'PENDING' },
-            }),
-          ]);
+      const now = new Date();
+      let orderDaysByDriver = new Map<string | null, Array<{ deliveredAt: Date; fee: number }>>();
+      let overdueCounts = new Map<string | null, number>();
+      let pendingCounts = new Map<string | null, number>();
+      let settlementSums = new Map<string | null, number>();
 
-          const activeDebt = activeDebtAgg._sum.driverPlatformFee || 0;
-          const suspensionCheck = await checkDriverSuspension(prisma, item.id, item.lastBillingSettledAt, item.createdAt);
+      if (driverIds.length > 0) {
+        const minAnchor = new Date(
+          Math.min(...items.map((item) => (item.lastBillingSettledAt || item.createdAt).getTime()))
+        );
 
-          let debtStatus: 'none' | 'current' | 'overdue' | 'suspended';
-          if (suspensionCheck.isSuspendedByDebt) {
-            debtStatus = 'suspended';
-          } else if (overdueCount > 0) {
-            debtStatus = 'overdue';
-          } else if (activeDebt > 0 || pendingCount > 0) {
-            debtStatus = 'current';
-          } else {
-            debtStatus = 'none';
+        const [orderDays, overdueAgg, pendingAgg, settlementAgg] = await Promise.all([
+          prisma.order.groupBy({
+            by: ['driverId', 'deliveredAt'],
+            where: {
+              driverId: { in: driverIds },
+              status: OrderStatus.DELIVERED,
+              deliveredAt: { gt: minAnchor },
+            },
+            _sum: { driverPlatformFee: true },
+            orderBy: { deliveredAt: 'asc' },
+          }),
+          prisma.driverBillingSettlement.groupBy({
+            by: ['driverId'],
+            where: { driverId: { in: driverIds }, status: 'OVERDUE' },
+            _count: { _all: true },
+          }),
+          prisma.driverBillingSettlement.groupBy({
+            by: ['driverId'],
+            where: { driverId: { in: driverIds }, status: 'PENDING' },
+            _count: { _all: true },
+          }),
+          prisma.driverBillingSettlement.groupBy({
+            by: ['driverId'],
+            where: {
+              driverId: { in: driverIds },
+              status: { in: ['OVERDUE', 'PENDING'] },
+              dueDate: { lte: now },
+            },
+            _sum: { amount: true },
+          }),
+        ]);
+
+        for (const row of orderDays) {
+          if (row.driverId === null || row.deliveredAt === null) continue;
+          const rows = orderDaysByDriver.get(row.driverId) ?? [];
+          rows.push({ deliveredAt: row.deliveredAt, fee: row._sum.driverPlatformFee || 0 });
+          orderDaysByDriver.set(row.driverId, rows);
+        }
+        overdueCounts = new Map(overdueAgg.map((row) => [row.driverId, row._count._all]));
+        pendingCounts = new Map(pendingAgg.map((row) => [row.driverId, row._count._all]));
+        settlementSums = new Map(settlementAgg.map((row) => [row.driverId, row._sum.amount || 0]));
+      }
+
+      const itemsWithDebt = items.map((item) => {
+        const debtAnchor = item.lastBillingSettledAt || item.createdAt;
+        const rows = orderDaysByDriver.get(item.id) ?? [];
+
+        let activeDebt = 0;
+        let oldestUnpaidDeliveredAt: Date | null = null;
+        for (const row of rows) {
+          if (row.deliveredAt <= debtAnchor) continue;
+          activeDebt += row.fee;
+          if (row.fee > 0 && oldestUnpaidDeliveredAt === null) {
+            oldestUnpaidDeliveredAt = row.deliveredAt;
           }
+        }
 
-          return {
-            ...item,
-            bankAccount: item.bankAccount ? maskAccountNumber(decrypt(item.bankAccount)) : item.bankAccount,
-            licenseState: getLicenseState(item.licenseExpiry),
-            activeDebt,
-            debtStatus,
-          };
-        })
-      );
+        const overdueCount = overdueCounts.get(item.id) ?? 0;
+        const pendingCount = pendingCounts.get(item.id) ?? 0;
+
+        let suspendedDebt = settlementSums.get(item.id) ?? 0;
+        if (suspendedDebt <= 0 && oldestUnpaidDeliveredAt) {
+          const d = new Date(oldestUnpaidDeliveredAt);
+          const daysToSunday = d.getDay() === 0 ? 0 : 7 - d.getDay();
+          const cutoffSunday = new Date(d);
+          cutoffSunday.setDate(d.getDate() + daysToSunday);
+          cutoffSunday.setHours(23, 59, 59, 999);
+          const suspensionWednesday = new Date(cutoffSunday);
+          suspensionWednesday.setDate(cutoffSunday.getDate() + 3);
+          suspensionWednesday.setHours(23, 59, 59, 999);
+
+          if (now > suspensionWednesday) {
+            suspendedDebt = activeDebt;
+          }
+        }
+        const isSuspendedByDebt = suspendedDebt > 0;
+
+        let debtStatus: 'none' | 'current' | 'overdue' | 'suspended';
+        if (isSuspendedByDebt) {
+          debtStatus = 'suspended';
+        } else if (overdueCount > 0) {
+          debtStatus = 'overdue';
+        } else if (activeDebt > 0 || pendingCount > 0) {
+          debtStatus = 'current';
+        } else {
+          debtStatus = 'none';
+        }
+
+        return {
+          ...item,
+          bankAccount: item.bankAccount ? maskAccountNumber(decrypt(item.bankAccount)) : item.bankAccount,
+          licenseState: getLicenseState(item.licenseExpiry),
+          activeDebt,
+          debtStatus,
+        };
+      });
 
       let filteredItems = itemsWithDebt;
       if (debt) {
