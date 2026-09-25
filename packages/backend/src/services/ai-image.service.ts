@@ -66,18 +66,26 @@ export type GenerateFoodImageParams = {
 function buildPrompt(params: GenerateFoodImageParams): string {
   const parts: string[] = [];
 
-  if (params.foodName?.trim()) {
-    parts.push(`platillo "${params.foodName.trim().slice(0, 80)}"`);
-  } else {
-    parts.push('platillo');
+  const foodName = params.foodName?.trim() ?? '';
+  const category = params.category?.trim() ?? '';
+  const description = params.description?.trim() ?? '';
+
+  // El plato es el SUJETO de la foto; la descripción solo lo matiza. FLUX schnell
+  // rinde mejor con un objeto claro y frases cortas que con escenas largas.
+  const subject = foodName
+    ? `${foodName.toLowerCase()}`
+    : category
+      ? `un plato de la categoria ${category.toLowerCase()}`
+      : 'un platillo';
+
+  parts.push(`fotografia de menu de ${subject}`);
+
+  if (category && category.toLowerCase() !== foodName.toLowerCase()) {
+    parts.push(`categoria: ${category.slice(0, 60)}`);
   }
 
-  if (params.category?.trim()) {
-    parts.push(`categoria: ${params.category.trim().slice(0, 60)}`);
-  }
-
-  if (params.description?.trim()) {
-    parts.push(`detalles: ${params.description.trim().slice(0, 200)}`);
+  if (description) {
+    parts.push(`para que se vea como: ${description.slice(0, 200)}`);
   }
 
   if (params.restaurantName?.trim()) {
@@ -85,8 +93,8 @@ function buildPrompt(params: GenerateFoodImageParams): string {
   }
 
   parts.push(
-    'fotografia profesional de menu, encuadre centrado, fondo limpio y claro, ' +
-      'iluminacion natural suave, platillo apetitoso, estilo food photography, ' +
+    'foto realista de comida, plato centrado sobre fondo limpio y claro, ' +
+      'iluminacion natural suave, aspecto apetitoso, estilo food photography, ' +
       'sin texto, sin marcas de agua, sin manos'
   );
 
