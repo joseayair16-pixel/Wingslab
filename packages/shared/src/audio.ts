@@ -172,6 +172,15 @@ export async function warmup(): Promise<boolean> {
 export function play(name: SoundName, options?: { loop?: boolean }): PlayResult {
   const loop = options?.loop ?? false;
   if (!isBrowser()) return 'unsupported';
+
+  // Antes del primer gesto NO se crea ni se intenta arrancar el AudioContext:
+  // Chrome lo marca como "not allowed to start" y arroja el warning de consola.
+  // El primer gesto (warmup) lo crea dentro de la user activation y lo
+  // desbloquea para toda la sesión; en adelante play() sí puede reproducir.
+  if (!hasInteracted) {
+    return 'blocked';
+  }
+
   const ctx = getOrCreateContext();
 
   if (!ctx) {
@@ -180,16 +189,11 @@ export function play(name: SoundName, options?: { loop?: boolean }): PlayResult 
     if (!el) return 'unsupported';
     const audioHandle = playAudioElement(el, loop);
     activeHandles.add(audioHandle);
-    return hasInteracted ? 'played' : 'blocked';
+    return 'played';
   }
 
   if (ctx.state === 'suspended') {
     ctx.resume().catch(() => undefined);
-  }
-
-  if (!hasInteracted && ctx.state !== 'running') {
-    // No hay gesto todavía: no se puede oír. Se registra como bloqueado.
-    return 'blocked';
   }
 
   const buffer = buffers.get(name);

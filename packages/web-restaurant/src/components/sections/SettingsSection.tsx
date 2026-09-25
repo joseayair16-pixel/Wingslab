@@ -1447,7 +1447,13 @@ export const SettingsSection = React.memo(function SettingsSection({
 
             {/* ─── SEGURIDAD ─── */}
             {activeSettingsTab === 'seguridad' && (
-              <div className="grid gap-4 max-w-md">
+              <form
+                className="grid gap-4 max-w-md"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  void savePasswordChange();
+                }}
+              >
                 <div className="rounded-[18px] border border-rose-100 bg-rose-50 p-4 text-sm text-rose-800">
                   Usa una contraseña segura de al menos 6 caracteres. No la compartas con nadie.
                 </div>
@@ -1473,14 +1479,13 @@ export const SettingsSection = React.memo(function SettingsSection({
                   type="password"
                 />
                 <button
-                  type="button"
-                  onClick={() => void savePasswordChange()}
+                  type="submit"
                   disabled={savingPassword}
                   className="w-full rounded-full bg-rose-600 px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-rose-700 disabled:bg-neutral-300"
                 >
                   {savingPassword ? 'Actualizando...' : 'Cambiar contraseña'}
                 </button>
-              </div>
+              </form>
             )}
 
             {/* ─── PREFERENCIAS ─── */}

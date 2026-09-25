@@ -556,6 +556,17 @@ import {
   resolveSellBy,
 } from '../utils/csvImport';
 
+// Logs de depuración: solo con ?debug en la URL para mantener la consola limpia en producción.
+function isDebugEnabled(): boolean {
+  return typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('debug');
+}
+function debugLog(...args: unknown[]): void {
+  if (isDebugEnabled()) {
+    // eslint-disable-next-line no-console
+    console.log(...args);
+  }
+}
+
 const defaultApiBase = 'https://sadel-production.up.railway.app';
 function getCanonicalCustomerUrl(): string {
   return 'https://pideloporsadel.app';
@@ -2202,7 +2213,7 @@ export default function Home() {
             body: JSON.stringify(existingSub)
           });
           if (subResponse.ok) {
-            console.log('Push subscription already active, re-synced to server');
+            debugLog('Push subscription already active, re-synced to server');
             return { ok: true };
           }
           // La sub quedó huérfana/inservible: descartarla y re-suscribir abajo.
@@ -2258,7 +2269,7 @@ export default function Home() {
         return { ok: false, reason: 'SUBSCRIBE_FAILED' };
       }
 
-      console.log('Subscribed to push notifications');
+      debugLog('Subscribed to push notifications');
       return { ok: true };
     } catch (error) {
       console.error('Failed to subscribe to push:', error);
@@ -3163,7 +3174,7 @@ export default function Home() {
     setSocketAttempts(0);
     if (socketRef.current) {
       if (process.env.NODE_ENV !== 'production') {
-        console.log('[Socket] Conectado. Socket ID:', socketRef.current.id, '| Uniéndome al room RESTAURANT:', sessionUser?.id);
+        debugLog('[Socket] Conectado. Socket ID:', socketRef.current.id, '| Uniéndome al room RESTAURANT:', sessionUser?.id);
       }
       if (sessionUser) {
         socketRef.current.emit('join-room', sessionUser.id, 'RESTAURANT');
@@ -3175,13 +3186,13 @@ export default function Home() {
 
   handleLiveEventRef.current = (eventName: any, payload: any) => {
     if (process.env.NODE_ENV !== 'production') {
-      console.log('[Socket] Live event procesando:', eventName, payload);
+      debugLog('[Socket] Live event procesando:', eventName, payload);
     }
     const liveEventKey = buildLiveEventKey(eventName, payload);
 
     if (seenLiveEventKeysRef.current.has(liveEventKey)) {
       if (process.env.NODE_ENV !== 'production') {
-        console.log('[Socket] Evento duplicado ignorado. Key:', liveEventKey);
+        debugLog('[Socket] Evento duplicado ignorado. Key:', liveEventKey);
       }
       return;
     }
@@ -3303,7 +3314,7 @@ export default function Home() {
     if (!token || !sessionUser || sessionUser.role !== 'RESTAURANT') {
       if (socketRef.current) {
         if (process.env.NODE_ENV !== 'production') {
-          console.log('[Socket] Limpiando/desconectando socket por cambio de sesión.');
+          debugLog('[Socket] Limpiando/desconectando socket por cambio de sesión.');
         }
         socketRef.current.disconnect();
         socketRef.current = null;
@@ -3315,7 +3326,7 @@ export default function Home() {
     // Reuse existing connection to prevent connection storms and Fast Refresh disconnects
     if (socketRef.current && socketRef.current.connected) {
       if (process.env.NODE_ENV !== 'production') {
-        console.log('[Socket] Reutilizando conexión activa:', socketRef.current.id);
+        debugLog('[Socket] Reutilizando conexión activa:', socketRef.current.id);
       }
       socketRef.current.emit('join-room', sessionUser.id, 'RESTAURANT');
       return;
@@ -3324,7 +3335,7 @@ export default function Home() {
     // Always disconnect stale socket on re-mount (handles Fast Refresh)
     if (socketRef.current) {
       if (process.env.NODE_ENV !== 'production') {
-        console.log('[Socket] Cerrando socket previo por re-montaje.');
+        debugLog('[Socket] Cerrando socket previo por re-montaje.');
       }
       socketRef.current.removeAllListeners();
       socketRef.current.disconnect();
@@ -3387,7 +3398,7 @@ export default function Home() {
     // Debug: escuchar CUALQUIER evento que llegue
     if (process.env.NODE_ENV !== 'production') {
       socket.onAny((eventName: string, ...args: unknown[]) => {
-        console.log('[Socket] Evento recibido:', eventName, JSON.stringify(args).slice(0, 300));
+        debugLog('[Socket] Evento recibido:', eventName, JSON.stringify(args).slice(0, 300));
       });
     }
 
@@ -5061,7 +5072,8 @@ export default function Home() {
 
   async function handleGenerateProductImage() {
     const productName = productDraft.name.trim();
-    if (!token || generatingProductImage || productName.length < 2) {
+    const productDescription = productDraft.description.trim();
+    if (!token || generatingProductImage || productName.length < 2 || productDescription.length < 4) {
       return;
     }
 
@@ -5078,7 +5090,8 @@ export default function Home() {
           method: 'POST',
           body: JSON.stringify({
             name: productName,
-            description: productDraft.description.trim() || undefined,
+            description: productDescription,
+            category: categories.find((category) => category.id === productDraft.categoryId)?.name || undefined,
           }),
         },
         fallbackMessage: 'No se pudo generar la imagen con IA.',
@@ -8289,12 +8302,18 @@ export default function Home() {
                               <button
                                 type="button"
                                 onClick={() => void handleGenerateProductImage()}
-                                disabled={generatingProductImage || productDraft.name.trim().length < 2}
+                                disabled={
+                                  generatingProductImage ||
+                                  productDraft.name.trim().length < 2 ||
+                                  productDraft.description.trim().length < 4
+                                }
                                 className="shrink-0 rounded-full bg-sky-600 px-4 py-2 text-xs font-bold text-white transition hover:bg-sky-500 disabled:cursor-not-allowed disabled:bg-sky-300"
                                 title={
                                   productDraft.name.trim().length < 2
                                     ? 'Escribe el nombre del producto para poder generar la imagen.'
-                                    : 'Generar una imagen con IA para este producto'
+                                    : productDraft.description.trim().length < 4
+                                      ? 'Escribe la descripcion del producto para que la imagen coincida con lo que se ofrece.'
+                                      : 'Generar una imagen con IA para este producto'
                                 }
                               >
                                 {generatingProductImage ? 'Creando...' : 'Generar'}
@@ -9388,7 +9407,13 @@ export default function Home() {
                   </button>
                 </div>
 
-                <div className="mt-6 grid gap-4">
+                <form
+                  className="mt-6 grid gap-4"
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    void loginWithPassword();
+                  }}
+                >
                   <Field
                     label="Teléfono"
                     value={phone}
@@ -9404,10 +9429,7 @@ export default function Home() {
                   />
 
                   <button
-                    type="button"
-                    onClick={() => {
-                      void loginWithPassword();
-                    }}
+                    type="submit"
                     disabled={verifyingCode || !phone.trim() || !password.trim()}
                     className="mt-2 w-full rounded-full bg-sky-500 px-5 py-3.5 text-sm font-semibold text-white shadow-lg shadow-sky-500/30 transition-all duration-300 hover:bg-sky-600 hover:shadow-xl hover:shadow-sky-500/40 disabled:cursor-not-allowed disabled:bg-neutral-300 disabled:shadow-none"
                   >
@@ -9424,7 +9446,7 @@ export default function Home() {
                       {error}
                     </div>
                   ) : null}
-                </div>
+                </form>
               </div>
             </div>
           ) : null}
