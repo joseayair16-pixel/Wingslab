@@ -1,5 +1,5 @@
 'use client';
-import { AlertTriangle, Check, ChevronUp, Clock, Info, Mail, MessageCircle, Minus, Package, Pencil, Plus, RefreshCw, Tag, Trash2, User, X } from 'lucide-react';
+import { AlertTriangle, Check, ChevronUp, Clock, Info, Mail, MessageCircle, Minus, Package, Pencil, Plus, RefreshCw, Sparkles, Tag, Trash2, User, Wand2, X } from 'lucide-react';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { io } from 'socket.io-client';
@@ -1203,6 +1203,7 @@ export default function Home() {
   const [creatingProduct, setCreatingProduct] = useState(false);
   const [savingProductChanges, setSavingProductChanges] = useState(false);
   const [processingProductImage, setProcessingProductImage] = useState(false);
+  const [generatingProductImage, setGeneratingProductImage] = useState(false);
   const [productImageValidationError, setProductImageValidationError] = useState('');
   const [activeAvailabilityProductId, setActiveAvailabilityProductId] = useState<string | null>(null);
   const [continueAfterSave, setContinueAfterSave] = useState(false);
@@ -5058,6 +5059,49 @@ export default function Home() {
     }
   }
 
+  async function handleGenerateProductImage() {
+    const productName = productDraft.name.trim();
+    if (!token || generatingProductImage || productName.length < 2) {
+      return;
+    }
+
+    setGeneratingProductImage(true);
+    setError('');
+    setProductImageValidationError('');
+
+    try {
+      const response = await requestJson<SuccessResponse<{ url: string }>>({
+        apiBase,
+        path: '/restaurant-panel/productos/generar-imagen',
+        token,
+        options: {
+          method: 'POST',
+          body: JSON.stringify({
+            name: productName,
+            description: productDraft.description.trim() || undefined,
+          }),
+        },
+        fallbackMessage: 'No se pudo generar la imagen con IA.',
+      });
+
+      const generatedUrl = response.data.url;
+
+      setProductDraft((current) => ({
+        ...current,
+        image: generatedUrl,
+        images: current.images.length > 0 ? [generatedUrl, ...current.images] : [generatedUrl],
+      }));
+
+      pushToast('success', 'Imagen generada', 'La imagen con IA ya esta lista para guardarse.');
+    } catch (requestError) {
+      const message = getRequestErrorMessage(requestError, 'No se pudo generar la imagen con IA.');
+      setError(message);
+      pushToast('error', 'Imagen no generada', message);
+    } finally {
+      setGeneratingProductImage(false);
+    }
+  }
+
   async function handleProductExtraImageFileChange(event: React.ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     if (!file || !file.type.startsWith('image/')) {
@@ -5837,6 +5881,67 @@ export default function Home() {
       pushToast('success', 'Productos eliminados', `${deletedCount} producto${deletedCount === 1 ? '' : 's'} eliminado${deletedCount === 1 ? '' : 's'}.`);
     } catch (requestError) {
       const message = getRequestErrorMessage(requestError, 'No se pudo eliminar los productos.');
+      setError(message);
+      pushToast('error', 'Error', message);
+    } finally {
+      setBulkActionLoading(false);
+    }
+  }
+
+  async function handleBulkGenerateMissingImages() {
+    if (!token || bulkActionLoading) {
+      return;
+    }
+
+    const missingCount = products.filter((product) => !product.image?.trim()).length;
+
+    if (missingCount === 0) {
+      pushToast('info', 'Nada que generar', 'Todos tus productos ya tienen imagen.');
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `Se generaran imagenes con IA para ${missingCount} producto${missingCount === 1 ? '' : 's'} sin foto. Puede tardar un par de minutos y respeta el limite diario. \u00bfContinuar?`
+    );
+    if (!confirmed) {
+      return;
+    }
+
+    setBulkActionLoading(true);
+    setError('');
+    try {
+      const response = await requestJson<SuccessResponse<{
+        generadas: number;
+        fallidas: number;
+        pendientes: number;
+        limiteDiario: number;
+      }>>({
+        apiBase,
+        path: '/restaurant-panel/productos/generar-imagenes-faltantes',
+        token,
+        options: {
+          method: 'POST',
+          body: JSON.stringify({}),
+        },
+        fallbackMessage: 'No se pudieron generar las imagenes.',
+      });
+
+      await loadDashboard();
+
+      const { generadas, fallidas, pendientes, limiteDiario } = response.data;
+      pushToast(
+        'success',
+        'Imagenes generadas',
+        `${generadas} imagen${generadas === 1 ? '' : 'es'} creada${generadas === 1 ? '' : 's'}${
+          fallidas > 0 ? `, ${fallidas} fallida${fallidas === 1 ? '' : 's'}` : ''
+        }${
+          pendientes > 0
+            ? `, ${pendientes} pendiente${pendientes === 1 ? '' : 's'} (limite diario ${limiteDiario})`
+            : ''
+        }.`
+      );
+    } catch (requestError) {
+      const message = getRequestErrorMessage(requestError, 'No se pudieron generar las imagenes.');
       setError(message);
       pushToast('error', 'Error', message);
     } finally {
@@ -8168,6 +8273,31 @@ export default function Home() {
                                 className="shrink-0 rounded-full bg-neutral-900 px-4 py-2 text-xs font-bold text-white transition hover:bg-neutral-800 disabled:opacity-50"
                               >
                                 {processingProductImage ? 'Cargando...' : 'Examinar'}
+                              </button>
+                            </div>
+
+                            <div className="flex items-center gap-3 rounded-2xl border border-dashed border-sky-200 bg-sky-50 p-4 transition-colors">
+                              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-sky-100 text-sky-600 shadow-sm">
+                                <Wand2 className="h-5 w-5" />
+                              </div>
+                              <div className="flex-1">
+                                <p className="text-sm font-bold text-sky-900">Generar con IA</p>
+                                <p className="text-xs text-sky-700/70">
+                                  Se crea con el nombre y la descripcion del producto.
+                                </p>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => void handleGenerateProductImage()}
+                                disabled={generatingProductImage || productDraft.name.trim().length < 2}
+                                className="shrink-0 rounded-full bg-sky-600 px-4 py-2 text-xs font-bold text-white transition hover:bg-sky-500 disabled:cursor-not-allowed disabled:bg-sky-300"
+                                title={
+                                  productDraft.name.trim().length < 2
+                                    ? 'Escribe el nombre del producto para poder generar la imagen.'
+                                    : 'Generar una imagen con IA para este producto'
+                                }
+                              >
+                                {generatingProductImage ? 'Creando...' : 'Generar'}
                               </button>
                             </div>
                           </div>
@@ -10831,17 +10961,27 @@ export default function Home() {
                           >
                             + Agregar categoria
                           </button>
-                          <button
-                            type="button"
-                            onClick={openImportModal}
-                            className="inline-flex items-center gap-2 rounded-full border border-sky-200 bg-white px-5 py-2.5 text-[13px] font-bold text-sky-800 shadow-sm transition hover:bg-sky-50 hover:border-sky-400"
-                            title="Importa todo tu menú pegando una tabla de Excel o Sheets"
-                          >
-                            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                            </svg>
-                            Importar menú
-                          </button>
+<button
+                              type="button"
+                              onClick={openImportModal}
+                              className="inline-flex items-center gap-2 rounded-full border border-sky-200 bg-white px-5 py-2.5 text-[13px] font-bold text-sky-800 shadow-sm transition hover:bg-sky-50 hover:border-sky-400"
+                              title="Importa todo tu menú pegando una tabla de Excel o Sheets"
+                            >
+                              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                              </svg>
+                              Importar menú
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => void handleBulkGenerateMissingImages()}
+                              disabled={bulkActionLoading}
+                              className="inline-flex items-center gap-2 rounded-full border border-sky-200 bg-white px-5 py-2.5 text-[13px] font-bold text-sky-800 shadow-sm transition hover:bg-sky-50 hover:border-sky-400 disabled:cursor-not-allowed disabled:opacity-50"
+                              title="Genera con IA una imagen para cada producto del menú que todavía no tiene foto"
+                            >
+                              <Sparkles className="h-4 w-4" />
+                              {bulkActionLoading ? 'Generando...' : 'Generar imágenes'}
+                            </button>
                         </div>
                       </div>
 
