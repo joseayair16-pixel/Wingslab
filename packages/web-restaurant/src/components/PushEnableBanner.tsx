@@ -3,7 +3,7 @@ import { X } from 'lucide-react';
 
 import { useEffect, useState } from 'react';
 
-import { isNativePlatform, nativeOpenBatterySettings } from '../lib/native';
+import { checkNativePushPermission, isNativePlatform, nativeOpenBatterySettings } from '../lib/native';
 
 type EnableStatus = 'DENIED' | 'BLOCKED' | 'INSECURE' | 'NOT_SUPPORTED' | 'VAPID_NOT_CONFIGURED' | 'SUBSCRIBE_FAILED' | 'UNKNOWN';
 
@@ -50,19 +50,44 @@ export default function PushEnableBanner({ visible, onEnable }: Props) {
   const [subscribed, setSubscribed] = useState(false);
   const [dismissed, setDismissed] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [initialized, setInitialized] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   // Estado de permiso/suscripción + listener de rotación de suscripción del SW
   useEffect(() => {
-    if (typeof window === 'undefined' || !('Notification' in window)) return;
-
     const refresh = () => {
+      // App nativa (Capacitor): el push es FCM, no hay suscripción web. Si el
+      // permiso nativo ya está concedido, la app ya está activa: se oculta el
+      // banner en vez de volver a pedir activación en cada entrada.
+      if (isNativePlatform()) {
+        void checkNativePushPermission()
+          .then((granted) => {
+            setPermission(granted ? 'granted' : 'denied');
+            setSubscribed(granted);
+          })
+          .catch(() => {
+            setPermission('denied');
+            setSubscribed(false);
+          })
+          .finally(() => setInitialized(true));
+        return;
+      }
+
+      if (typeof window === 'undefined' || !('Notification' in window)) {
+        setPermission('denied');
+        setInitialized(true);
+        return;
+      }
+
       setPermission(Notification.permission);
       if ('serviceWorker' in navigator) {
         navigator.serviceWorker.ready
           .then((reg) => reg.pushManager.getSubscription())
           .then((sub) => setSubscribed(!!sub))
-          .catch(() => {});
+          .catch(() => {})
+          .finally(() => setInitialized(true));
+      } else {
+        setInitialized(true);
       }
     };
 
@@ -108,13 +133,14 @@ export default function PushEnableBanner({ visible, onEnable }: Props) {
 
   const insecureContext = typeof window !== 'undefined' && window.isSecureContext === false;
 
-  if (!visible || dismissed || busy) return null;
+  if (!visible || !initialized || dismissed || busy) return null;
   if (subscribed) return null;
   if (permission === 'denied') {
     return (
       <div className="fixed inset-x-0 top-0 z-[9991] bg-amber-50 px-4 py-2.5 text-center text-xs font-medium text-amber-800 shadow-sm border-b border-amber-100">
-        Notificaciones bloqueadas. Para activarlas: toca el ícono 🔒 (o ℹ️) junto a la URL y habilita
-        «Notificaciones» en Chrome / «Permisos → Notificaciones» en Safari.
+        {isNativePlatform()
+          ? 'Notificaciones bloqueadas en la app. Actívalas en: Ajustes → Aplicaciones → SaDeL → Notificaciones.'
+          : 'Notificaciones bloqueadas. Para activarlas: toca el ícono 🔒 (o ℹ️) junto a la URL y habilita «Notificaciones» en Chrome / «Permisos → Notificaciones» en Safari.'}
       </div>
     );
   }
