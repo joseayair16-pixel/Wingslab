@@ -31,6 +31,8 @@ public class MainActivity extends BridgeActivity {
             if (webView == null) return;
             WebSettings settings = webView.getSettings();
             settings.setTextZoom(100);
+            // Permite el bucle de alarma web sin requerir el primer toque.
+            settings.setMediaPlaybackRequiresUserGesture(false);
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 settings.setTextAutosizingEnabled(false);
             }

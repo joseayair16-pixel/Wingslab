@@ -31,6 +31,10 @@ public class MainActivity extends BridgeActivity {
             if (webView == null) return;
             WebSettings settings = webView.getSettings();
             settings.setTextZoom(100);
+            // Permite el bucle de alarma de "Pedido nuevo" sin requerir el primer
+            // toque: sin esto, Android silencia el audio web hasta la 1ª
+            // interacción y solo suena la notificación nativa (un solo disparo).
+            settings.setMediaPlaybackRequiresUserGesture(false);
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 settings.setTextAutosizingEnabled(false);
             }

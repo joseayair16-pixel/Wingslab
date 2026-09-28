@@ -6138,6 +6138,7 @@ export default function Home() {
                 {/* TIMER PILL (timer aislado para no re-renderizar la página) */}
                 <IncomingOrderCountdown
                   key={activeIncomingOrder.id}
+                  createdAt={activeIncomingOrder.createdAt}
                   windowMs={
                     activeIncomingOrder.paymentMethod === 'TRANSFER'
                       ? 10 * 60 * 1000
@@ -15249,8 +15250,14 @@ function formatCountdown(remainingMs: number) {
 
 // Countdown aislado del countdown del modal: mantiene su propio timer para que
 // re-renderizar cada segundo no redibuje toda la página del panel.
-function IncomingOrderCountdown({ windowMs }: { windowMs: number }) {
-  const [remainingMs, setRemainingMs] = useState(windowMs);
+function IncomingOrderCountdown({ createdAt, windowMs }: { createdAt: string; windowMs: number }) {
+  // El tiempo restante se calcula desde que el pedido llegó (createdAt), no desde
+  // que el modal se abre: si la app se abrió 30s tarde, debe mostrar 1:30, no 2:00.
+  const [remainingMs, setRemainingMs] = useState<number>(() => {
+    const createdMs = new Date(createdAt).getTime();
+    if (!Number.isFinite(createdMs)) return windowMs;
+    return Math.max(0, createdMs + windowMs - Date.now());
+  });
 
   useEffect(() => {
     const timer = window.setInterval(() => {

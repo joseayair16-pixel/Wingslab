@@ -173,15 +173,16 @@ export function play(name: SoundName, options?: { loop?: boolean }): PlayResult 
   const loop = options?.loop ?? false;
   if (!isBrowser()) return 'unsupported';
 
-  // Antes del primer gesto NO se crea ni se intenta arrancar el AudioContext:
-  // Chrome lo marca como "not allowed to start" y arroja el warning de consola.
-  // El primer gesto (warmup) lo crea dentro de la user activation y lo
-  // desbloquea para toda la sesión; en adelante play() sí puede reproducir.
-  if (!hasInteracted) {
+  // Antes del primer gesto, Chromium (Chrome/PWA) bloquea el audio y no se
+  // intenta resume(): de lo contrario Chrome avisa en consola. Pero si el
+  // AudioContext ya está 'running', el entorno permite autoplay sin gesto
+  // (ej. WebView Capacitor con setMediaPlaybackRequiresUserGesture(false));
+  // en ese caso sí se reproduce para que la alarma suene en bucle.
+  const ctx = getOrCreateContext();
+
+  if (!hasInteracted && (!ctx || ctx.state === 'suspended')) {
     return 'blocked';
   }
-
-  const ctx = getOrCreateContext();
 
   if (!ctx) {
     // Sin Web Audio API: último recurso con <audio>.
