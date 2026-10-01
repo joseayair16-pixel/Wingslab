@@ -900,6 +900,9 @@ model FcmToken {
 
   token     String   @unique
   platform  String   @default("android")
+  // versionCode nativo del APK que registró el token (null = desconocido/legacy).
+  // Permite enviar data-messages de alarma continua solo a apps compatibles.
+  appVersion Int?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

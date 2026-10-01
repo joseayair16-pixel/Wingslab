@@ -919,6 +919,8 @@ export async function registerRestaurantOrderRoutes(fastify: FastifyInstance): P
             vibrate: [500, 200, 500, 200, 500],
             requireInteraction: true,
             sound: '/sounds/notifica.wav',
+            nativeRing: true,
+            nativeRingExpiresAt: Date.now() + 2 * 60 * 1000,
             data: {
               orderId: order.id,
               orderReference: order.orderReference,

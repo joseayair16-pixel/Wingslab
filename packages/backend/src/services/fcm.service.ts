@@ -72,6 +72,33 @@ export function isFcmConfigured(): boolean {
 }
 
 /**
+ * Versión mínima del APK (versionCode nativo) que soporta la alarma continua
+ * por Foreground Service. Los tokens de versiones anteriores siguen recibiendo
+ * la notificación normal (retrocompatible).
+ */
+export const RING_MIN_APP_VERSION = 2;
+
+/** ¿El token pertenece a una app capaz de alarma continua? */
+export function isRingCapableAppVersion(appVersion?: number | null): boolean {
+  return typeof appVersion === 'number' && Number.isFinite(appVersion) && appVersion >= RING_MIN_APP_VERSION;
+}
+
+/**
+ * ¿Este payload es una alarma de pedido (nuevo pedido / asignación) que debe
+ * usar la alarma continua en el dispositivo nativo? Se marca explícitamente con
+ * `nativeRing`, y además se detecta por convención de `tag` como red de
+ * seguridad para no depender de que cada sitio de envío lo recuerde. Un
+ * `nativeRing: false` explícito manda sobre la convención (p. ej. pedidos que
+ * esperan en cola y aún no tienen la ventana de decisión corriendo).
+ */
+export function isRingPayload(payload: NotificationPayload): boolean {
+  if (payload.nativeRing === true) return true;
+  if (payload.nativeRing === false) return false;
+  const tag = typeof payload.tag === 'string' ? payload.tag : '';
+  return tag.startsWith('new-order-') || tag.startsWith('order-assigned-');
+}
+
+/**
  * Mapea un canal de sonido (path del .wav en la web) al channelId nativo Android.
  * En la app nativa cada canal está registrado con su propio sonido en res/raw/.
  */
@@ -116,7 +143,14 @@ function inferSoundFromEvent(payload: NotificationPayload): string | undefined {
  * - data → data (para deep-link al pedido al tocar).
  * - prioridad alta siempre (anti-Doze; la importancia de sonido la define el canal).
  */
-export function buildFcmMessage(payload: NotificationPayload): BaseMessage {
+export function buildFcmMessage(
+  payload: NotificationPayload,
+  options: { supportsDataRing?: boolean } = {}
+): BaseMessage {
+  if (options.supportsDataRing && isRingPayload(payload)) {
+    return buildRingDataMessage(payload);
+  }
+
   const effectiveSound = payload.sound || inferSoundFromEvent(payload);
   const channelId = mapSoundToChannelId(effectiveSound) || 'default';
 
@@ -141,6 +175,31 @@ export function buildFcmMessage(payload: NotificationPayload): BaseMessage {
   };
 
   return message;
+}
+
+/**
+ * Construye un data-message (sin bloque `notification`) para que la app nativa
+ * inicie la alarma continua. El sistema NO muestra nada por sí solo: es la app
+ * (OrderAlarmService) la que muestra una única notificación y reproduce el
+ * sonido en bucle. Llega incluso con la app cerrada porque se envía con
+ * prioridad alta.
+ */
+export function buildRingDataMessage(payload: NotificationPayload): BaseMessage {
+  const effectiveSound = payload.sound || inferSoundFromEvent(payload) || '/sounds/notifica.wav';
+  const rawSound = mapSoundToChannelId(effectiveSound) || 'notifica';
+
+  return {
+    android: { priority: 'high' },
+    data: {
+      ...(payload.data ? stringifyData(payload.data) : {}),
+      type: 'order-ring-start',
+      title: payload.title,
+      body: payload.body,
+      sound: rawSound,
+      expiresAt: String(payload.nativeRingExpiresAt && payload.nativeRingExpiresAt > 0 ? payload.nativeRingExpiresAt : 0),
+      click_action: 'OPEN_ORDER',
+    },
+  };
 }
 
 function stringifyData(data: Record<string, unknown>): Record<string, string> {
@@ -199,19 +258,25 @@ export async function sendFcmNotification(
 
   const tokens = await prisma.fcmToken.findMany({
     where: { userId },
-    select: { id: true, token: true },
+    select: { id: true, token: true, appVersion: true },
   });
 
   if (tokens.length === 0) {
     return { success: false, totalSent: 0, totalAttempted: 0 };
   }
 
-  const message = buildFcmMessage(payload);
+  // Mensaje normal (notificación del sistema) para dispositivos no compatibles
+  // o para avisos que no son alarma.
+  const normalMessage = buildFcmMessage(payload);
+  // Data-message de alarma continua para dispositivos compatibles.
+  const ringMessage = isRingPayload(payload) ? buildRingDataMessage(payload) : null;
   let sent = 0;
 
   const results = await Promise.allSettled(
     tokens.map(async (t) => {
-      const msg = { ...message, token: t.token } as Message;
+      const base =
+        ringMessage && isRingCapableAppVersion(t.appVersion) ? ringMessage : normalMessage;
+      const msg = { ...base, token: t.token } as Message;
       let lastError: any = null;
 
       for (let attempt = 1; attempt <= FCM_MAX_ATTEMPTS; attempt++) {
@@ -263,6 +328,62 @@ export async function sendFcmNotification(
 
   const totalAttempted = tokens.length;
   return { success: sent > 0, totalSent: sent, totalAttempted };
+}
+
+/**
+ * Envía un data-message (sin bloque `notification`) a todos los tokens del
+ * usuario. Se usa para iniciar/detener la alarma continua nativa. Solo se envía
+ * a dispositivos capaces (appVersion >= RING_MIN_APP_VERSION), de modo que los
+ * APKs antiguos no reciben data-messages que no sabrían interpretar.
+ * Los tokens muertos se eliminan. Nunca lanza.
+ */
+export async function sendFcmDataMessage(
+  userId: string,
+  data: Record<string, string>,
+  options: { minAppVersion?: number } = {}
+): Promise<{ success: boolean; totalSent: number; totalAttempted: number }> {
+  if (!fcmConfigured) {
+    return { success: false, totalSent: 0, totalAttempted: 0 };
+  }
+
+  const minVersion = options.minAppVersion ?? RING_MIN_APP_VERSION;
+  const tokens = await prisma.fcmToken.findMany({
+    where: { userId },
+    select: { id: true, token: true, appVersion: true },
+  });
+
+  const capableTokens = tokens.filter((t) => isRingCapableAppVersion(t.appVersion) && (t.appVersion ?? 0) >= minVersion);
+  if (capableTokens.length === 0) {
+    return { success: false, totalSent: 0, totalAttempted: 0 };
+  }
+
+  let sent = 0;
+  await Promise.allSettled(
+    capableTokens.map(async (t) => {
+      try {
+        await messagingInstance!.send({
+          token: t.token,
+          android: { priority: 'high' },
+          data,
+        });
+        sent += 1;
+      } catch (error: any) {
+        const code = error?.errorInfo?.code || error?.code || '';
+        if (code === 'messaging/registration-token-not-registered' || code === 'messaging/invalid-argument') {
+          prisma.fcmToken
+            .delete({ where: { id: t.id } })
+            .then(() => logger.info(`[FcmService] Token FCM inválido eliminado: ${t.id}`))
+            .catch(() => undefined);
+        } else {
+          logger.warn(
+            `[FcmService] Error enviando data-message a token ${t.token.slice(0, 12)}… (${code || 'unknown'}): ${error?.message || 'desconocido'}`
+          );
+        }
+      }
+    })
+  );
+
+  return { success: sent > 0, totalSent: sent, totalAttempted: capableTokens.length };
 }
 
 /**

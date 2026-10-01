@@ -10,12 +10,15 @@ import android.webkit.WebSettings;
 import android.webkit.WebView;
 import com.getcapacitor.BridgeActivity;
 
+import java.lang.reflect.Method;
+
 public class MainActivity extends BridgeActivity {
     @Override
     public void onCreate(Bundle savedInstanceState) {
         registerNotificationChannels();
         super.onCreate(savedInstanceState);
         registerPlugin(BatteryHelperPlugin.class);
+        registerPlugin(OrderAlarmPlugin.class);
         configureWebViewForNativeLook();
     }
 
@@ -31,12 +34,24 @@ public class MainActivity extends BridgeActivity {
             if (webView == null) return;
             WebSettings settings = webView.getSettings();
             settings.setTextZoom(100);
-            // Permite el bucle de alarma web sin requerir el primer toque.
+            // Permite el audio del WebView sin requerir el primer toque: sin esto,
+            // Android silencia el audio web hasta la 1ª interacción.
             settings.setMediaPlaybackRequiresUserGesture(false);
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                settings.setTextAutosizingEnabled(false);
-            }
+            disableTextAutosizing(settings);
         } catch (Throwable t) {
+        }
+    }
+
+    /**
+     * `WebSettings.setTextAutosizingEnabled` no está expuesto en el android.jar
+     * de compileSdk 36, así que se invoca por reflexión: si el método existe en
+     * el dispositivo se desactiva el auto-ajuste de fuente; si no, no se hace nada.
+     */
+    private void disableTextAutosizing(WebSettings settings) {
+        try {
+            Method method = WebSettings.class.getMethod("setTextAutosizingEnabled", boolean.class);
+            method.invoke(settings, Boolean.FALSE);
+        } catch (Throwable ignored) {
         }
     }
 

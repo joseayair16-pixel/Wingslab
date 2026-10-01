@@ -7,8 +7,8 @@ android {
         applicationId "app.sadel.restaurant"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1
-        versionName "1.0"
+        versionCode 2
+        versionName "1.1.0"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
@@ -52,6 +52,10 @@ dependencies {
     androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"
     androidTestImplementation "androidx.test.espresso:espresso-core:$androidxEspressoCoreVersion"
     implementation project(':capacitor-cordova-android-plugins')
+    // Necesario para SaDelMessagingService (receptor FCM propio de la alarma
+    // continua). El plugin de push lo expone como `implementation`, por lo que
+    // no es visible desde el módulo app salvo que se declare aquí.
+    implementation "com.google.firebase:firebase-messaging:$firebaseMessagingVersion"
 }
 
 apply from: 'capacitor.build.gradle'

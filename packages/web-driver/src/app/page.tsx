@@ -7,7 +7,7 @@ import { IncomingOrderModal } from '../components/IncomingOrderModal';
 import DriverNavigationMap from '../components/DriverNavigationMap';
 import DriverTurnByTurnOverlay from '../components/DriverTurnByTurnOverlay';
 import PushEnableBanner from '../components/PushEnableBanner';
-import { isNativePlatform, requestNativePushPermission, registerNativePush, checkNativePushPermission, onNativeNotificationTap, nativeKeepAwake, nativeAllowSleep } from '../lib/native';
+import { isNativePlatform, requestNativePushPermission, registerNativePush, checkNativePushPermission, onNativeNotificationTap, nativeKeepAwake, nativeAllowSleep, hasNativeOrderAlarm, stopNativeOrderAlarm } from '../lib/native';
 import { playAlertSound } from '../lib/sound';
 import { SettlementStatusBadge } from '../components/ui/Badge';
 import { EmptyState } from '../components/ui/EmptyState';
@@ -35,6 +35,19 @@ import {
 } from '@sadel/shared';
 
 import { AlertTriangle, Bike, Star, Briefcase, ArrowRight, CreditCard, Calendar, Moon, Settings, Menu, Hourglass, MapPin, Store, ClipboardList, BellOff, Map as MapIcon, CheckCircle2, Banknote, Package, Unlink, Phone, Wallet, Image as ImageIcon, Search, RadioTower, PartyPopper, Ban, Camera, Info } from 'lucide-react';
+
+/**
+ * ¿El sonido de "nuevo pedido" lo pone la app nativa (Foreground Service) en
+ * lugar de esta página?
+ *
+ * Cuando el APK incluye el plugin `OrderAlarm` la alarma suena aunque el panel
+ * esté en segundo plano y se detiene sola al vencer la ventana de decisión, así
+ * que aquí el audio web se desactiva para no duplicarlo. En navegador, PWA y
+ * APKs antiguos (sin el plugin) se mantiene el bucle web de siempre.
+ */
+function nativeAlarmHandlesSound(): boolean {
+  return isNativePlatform() && hasNativeOrderAlarm();
+}
 
 type DriverAvailability = 'AVAILABLE' | 'BUSY' | 'OFFLINE';
 type OrderStatus = 'CONFIRMED' | 'PREPARING' | 'READY' | 'PICKED_UP' | 'IN_TRANSIT' | 'DELIVERED';
@@ -636,9 +649,14 @@ export default function Home() {
       }
 
       // El AudioContext debe estar desbloqueado (gesto previo) para que suene.
-      void warmup().finally(() => {
-        play('notifica', { loop: true });
-      });
+      // Con el plugin de alarma nativa el sonido lo pone el Foreground Service
+      // (suena en segundo plano y se corta al aceptar): aquí lo saltamos para
+      // no duplicarlo. Navegador, PWA y APKs antiguos siguen con el bucle web.
+      if (!nativeAlarmHandlesSound()) {
+        void warmup().finally(() => {
+          play('notifica', { loop: true });
+        });
+      }
 
       // Vibración física repetitiva en dispositivos Android
       if (typeof window !== 'undefined' && 'vibrate' in navigator) {
@@ -1989,6 +2007,13 @@ export default function Home() {
     setError('');
     setAuthMessage('');
     triggerHaptic(40);
+
+    // Al aceptar o rechazar, la alarma continua nativa ya no debe sonar: se
+    // corta al instante, sin esperar al push de "stop" del backend. Se hace
+    // fuera del try para que un fallo de red no deje sonando la alarma.
+    if (actionKey === 'accept' || actionKey === 'reject') {
+      stopNativeOrderAlarm(orderId);
+    }
 
     try {
       await requestJson<SuccessResponse<DriverOrder>>({

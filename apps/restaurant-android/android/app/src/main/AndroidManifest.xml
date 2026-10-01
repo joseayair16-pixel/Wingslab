@@ -1,5 +1,6 @@
-<?xml version="1.0" encoding="utf-8" ?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
     <application
         android:allowBackup="false"
         android:fullBackupContent="false"
@@ -20,6 +21,29 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- Alarma continua de pedidos: Foreground Service (única forma de
+             reproducir un sonido en bucle y poder detenerlo). -->
+        <service
+            android:name=".OrderAlarmService"
+            android:exported="false"
+            android:foregroundServiceType="mediaPlayback" />
+
+        <!-- Receptor de FCM propio: distingue los mensajes de alarma (data-only)
+             y delega el resto en el plugin de Capacitor. -->
+        <service
+            android:name=".SaDelMessagingService"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.google.firebase.MESSAGING_EVENT" />
+            </intent-filter>
+        </service>
+
+        <!-- El servicio del plugin de Capacitor se reemplaza por el de arriba:
+             Android solo puede tener uno escuchando MESSAGING_EVENT. -->
+        <service
+            android:name="com.capacitorjs.plugins.pushnotifications.MessagingService"
+            tools:node="remove" />
 
         <provider
             android:name="androidx.core.content.FileProvider"
@@ -43,4 +67,9 @@
 
     <!-- Mantener pantalla encendida (cocina/despacho) -->
     <uses-permission android:name="android.permission.WAKE_LOCK" />
+
+    <!-- Alarma continua de pedidos (Foreground Service, Android 9+) -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <!-- Android 14+ exige tipar el servicio en primer plano -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
 </manifest>

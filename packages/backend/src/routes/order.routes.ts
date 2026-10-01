@@ -12,6 +12,7 @@ import { getOrCreateRequestContext } from '../utils/request-context';
 import { createOrderForCustomer } from '../services/order.service';
 import { sendPushNotification } from '../services/notification.service';
 import { enqueueRestaurantOrder, requestOrderCancellation, retractCancellationRequest } from '../services/order-workflow.service';
+import { decisionWindowMs } from '../services/order-ring.service';
 import { createTransferRefundTicket } from '../services/refund-ticket.service';
 import { sendWhatsAppNewOrder } from '../services/whatsapp.service';
 
@@ -255,6 +256,11 @@ export async function registerOrderRoutes(fastify: FastifyInstance): Promise<voi
 
         // Send Push Notification to Restaurant
         const restaurantEarnings = order.subtotal + ((order.restaurant as any)?.hasOwnDelivery ? order.deliveryFee : 0);
+        // Solo el pedido que está al frente de la cola tiene la ventana de
+        // decisión corriendo; ese es el que debe sonar de forma continua en la
+        // app nativa. Los siguientes suenan como aviso normal (un toque) hasta
+        // que el primero se resuelva y pasen a ser el activo.
+        const isQueueHead = queueInfo.position <= 1;
         void sendPushNotification(order.restaurant.userId, {
           title: '¡Nuevo Pedido Recibido!',
           body: `Pedido ${order.orderReference} — Ingreso: $${restaurantEarnings.toFixed(2)}.`,
@@ -263,6 +269,11 @@ export async function registerOrderRoutes(fastify: FastifyInstance): Promise<voi
           vibrate: [500, 200, 500, 200, 500],
           requireInteraction: true,
           sound: '/sounds/notifica.wav',
+          nativeRing: isQueueHead,
+          nativeRingExpiresAt: isQueueHead
+            ? order.createdAt.getTime() +
+              decisionWindowMs(order.paymentMethod, (order.restaurant as any)?.businessType)
+            : undefined,
           data: {
             orderId: order.id,
             orderReference: order.orderReference,

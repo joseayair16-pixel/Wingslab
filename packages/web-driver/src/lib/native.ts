@@ -57,6 +57,10 @@ export async function requestNativePushPermission(): Promise<PushPermissionState
 /**
  * Registra el token FCM en el backend. El listener de `registration` debe
  * registrarse antes de llamar a `register()` porque el evento llega una vez.
+ *
+ * Se envía también el `versionCode` nativo: el backend lo usa para saber si el
+ * dispositivo soporta la alarma continua por Foreground Service (y, si no,
+ * seguir enviando la notificación normal).
  */
 export function registerNativePush(
   apiBase: string,
@@ -93,7 +97,11 @@ export function registerNativePush(
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${authToken}`,
           },
-          body: JSON.stringify({ token: value, platform: 'android' }),
+          body: JSON.stringify({
+            token: value,
+            platform: 'android',
+            ...(await nativeAppVersion()),
+          }),
         });
         finish(res.ok, res.ok ? undefined : 'SERVER_REJECTED');
       } catch {
@@ -111,6 +119,46 @@ export function registerNativePush(
       finish(false, 'REGISTER_CALL_FAILED');
     }
   });
+}
+
+/** `versionCode` del APK en ejecución (null si no se puede leer). */
+async function nativeAppVersion(): Promise<{ appVersion?: number }> {
+  try {
+    const App = plugin('App');
+    if (!App?.getInfo) return {};
+    const info = await App.getInfo();
+    const build = Number.parseInt(String(info?.build ?? ''), 10);
+    if (!Number.isFinite(build) || build < 0) return {};
+    return { appVersion: build };
+  } catch {
+    return {};
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Alarma continua de pedidos
+// ---------------------------------------------------------------------------
+
+/**
+ * ¿El APK incluye el plugin de alarma continua (Foreground Service)? Los APKs
+ * antiguos no lo tienen: en ese caso se conserva el bucle de audio web para no
+ * perder el aviso.
+ */
+export function hasNativeOrderAlarm(): boolean {
+  return Boolean(plugin('OrderAlarm'));
+}
+
+/**
+ * Silencia la alarma nativa del pedido. Si no se indica `orderId` se detiene
+ * toda. Es un no-op en navegador y en APKs sin el plugin.
+ */
+export function stopNativeOrderAlarm(orderId?: string): void {
+  const Alarm = plugin('OrderAlarm');
+  if (!Alarm) return;
+  try {
+    const promise = orderId ? Alarm.stop({ orderId }) : Alarm.stop({});
+    if (promise?.catch) promise.catch(() => { /* noop */ });
+  } catch { /* noop */ }
 }
 
 /**

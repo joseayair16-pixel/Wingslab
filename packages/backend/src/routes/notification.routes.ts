@@ -14,6 +14,8 @@ const subscribeSchema = z.object({
 const fcmTokenSchema = z.object({
   token: z.string().min(1),
   platform: z.string().max(50).optional(),
+  // versionCode nativo del APK (para habilitar la alarma continua por FGS).
+  appVersion: z.number().int().nonnegative().max(1_000_000).optional(),
 });
 
 export async function registerNotificationRoutes(fastify: FastifyInstance): Promise<void> {
@@ -102,7 +104,7 @@ export async function registerNotificationRoutes(fastify: FastifyInstance): Prom
     }
 
     const payload = request.user as { sub: string };
-    const { token, platform } = parsed.data;
+    const { token, platform, appVersion } = parsed.data;
 
     try {
       await prisma.fcmToken.upsert({
@@ -110,11 +112,13 @@ export async function registerNotificationRoutes(fastify: FastifyInstance): Prom
         update: {
           userId: payload.sub,
           platform: platform || 'android',
+          ...(appVersion !== undefined ? { appVersion } : {}),
         },
         create: {
           userId: payload.sub,
           token,
           platform: platform || 'android',
+          appVersion: appVersion ?? null,
         },
       });
 

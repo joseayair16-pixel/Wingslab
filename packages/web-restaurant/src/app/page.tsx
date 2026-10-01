@@ -51,7 +51,22 @@ import {
   nativeKeepAwake,
   nativeAllowSleep,
   nativeHaptic,
+  hasNativeOrderAlarm,
+  stopNativeOrderAlarm,
 } from '../lib/native';
+
+/**
+ * ¿El sonido de "pedido nuevo" lo pone la app nativa (Foreground Service) en
+ * lugar de esta página?
+ *
+ * Cuando el APK incluye el plugin `OrderAlarm` la alarma suena aunque el panel
+ * esté en segundo plano y se detiene sola al vencer la ventana de decisión, así
+ * que aquí el audio web se desactiva para no duplicarlo. En navegador, PWA y
+ * APKs antiguos (sin el plugin) se mantiene el bucle web de siempre.
+ */
+function nativeAlarmHandlesSound(): boolean {
+  return isNativePlatform() && hasNativeOrderAlarm();
+}
 
 type OrderStatus =
   | 'PENDING'
@@ -2522,6 +2537,11 @@ export default function Home() {
   const playIncomingOrderAlert = useCallback(async () => {
     if (!isOrderAlertSoundEnabled) return false;
 
+    // Con el plugin de alarma nativa el sonido lo pone el Foreground Service
+    // (funciona en segundo plano y se corta al aceptar). Si lo dejamos aquí se
+    // oiría dos veces a la vez.
+    if (nativeAlarmHandlesSound()) return false;
+
     // Cross-tab dedup: skip if another tab just played (within 1s)
     if (typeof window !== 'undefined' && (window as any).__sadelLastAlertFromOtherTab) {
       const elapsed = Date.now() - (window as any).__sadelLastAlertFromOtherTab;
@@ -3633,6 +3653,12 @@ export default function Home() {
       return;
     }
 
+    // En la app nativa la alarma continua ya está sonando por push: este bucle
+    // solo aplica a navegador/PWA (y a APKs antiguos sin el plugin).
+    if (nativeAlarmHandlesSound()) {
+      return;
+    }
+
     void playIncomingOrderAlert();
 
     const workerCode = `
@@ -3779,6 +3805,12 @@ export default function Home() {
     setActiveActionKey(`${orderId}:${actionKey}`);
     setError('');
     setAuthMessage('');
+
+    // Al aceptar o rechazar, la alarma continua nativa ya no debe sonar: se
+    // corta al instante, sin esperar al push de "stop" del backend.
+    if (actionKey === 'accept' || actionKey === 'reject') {
+      stopNativeOrderAlarm(orderId);
+    }
 
     const preserveFailedAction = options?.preserveFailedAction ?? true;
     const silentSuccess = options?.silentSuccess ?? false;

@@ -42,6 +42,7 @@ import { startCleanupProofsJob } from './jobs/cleanup-proofs.job';
 import { startCleanupOrphanMediaJob } from './jobs/cleanup-orphan-media.job';
 import { startCleanupPushSubscriptionsJob } from './jobs/cleanup-push-subscriptions.job';
 import { startNotificationRetryJob } from './jobs/notification-retry.job';
+import { startOrderRingJob } from './jobs/order-ring.job';
 import { startPaymentRemindersJob } from './jobs/payment-reminders.job';
 import { startThankYouMessagesJob } from './jobs/thank-you-messages.job';
 
@@ -271,6 +272,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     startCleanupOrphanMediaJob();
     startCleanupPushSubscriptionsJob();
     startNotificationRetryJob();
+    startOrderRingJob();
   }
 
   fastify.setErrorHandler(errorHandler);
