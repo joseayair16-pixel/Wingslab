@@ -204,6 +204,21 @@ export function stopNativeOrderAlarm(orderId?: string): void {
   } catch { /* noop */ }
 }
 
+/**
+ * ¿El panel nativo está en segundo plano (app cerrada, minimizada o con la
+ * pantalla apagada)?
+ *
+ * El WebView sigue ejecutando JavaScript con la app en segundo plano, así que
+ * los sonidos que reproduce la web se oirían junto a la notificación del
+ * sistema, que ya suena con su propio canal. Cuando esto es `true` el sonido lo
+ * pone Android y la web debe callarse para que solo se oiga una vez.
+ */
+export function isNativeAppInBackground(): boolean {
+  if (!isNativePlatform()) return false;
+  if (typeof document === 'undefined') return true;
+  return document.visibilityState !== 'visible';
+}
+
 // ---------------------------------------------------------------------------
 // Geolocalización nativa
 // ---------------------------------------------------------------------------

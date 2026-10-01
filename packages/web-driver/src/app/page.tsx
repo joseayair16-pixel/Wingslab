@@ -7,7 +7,7 @@ import { IncomingOrderModal } from '../components/IncomingOrderModal';
 import DriverNavigationMap from '../components/DriverNavigationMap';
 import DriverTurnByTurnOverlay from '../components/DriverTurnByTurnOverlay';
 import PushEnableBanner from '../components/PushEnableBanner';
-import { isNativePlatform, requestNativePushPermission, registerNativePush, checkNativePushPermission, onNativeNotificationTap, nativeKeepAwake, nativeAllowSleep, hasNativeOrderAlarm, stopNativeOrderAlarm } from '../lib/native';
+import { isNativePlatform, requestNativePushPermission, registerNativePush, checkNativePushPermission, onNativeNotificationTap, nativeKeepAwake, nativeAllowSleep, hasNativeOrderAlarm, stopNativeOrderAlarm, isNativeAppInBackground } from '../lib/native';
 import { playAlertSound } from '../lib/sound';
 import { SettlementStatusBadge } from '../components/ui/Badge';
 import { EmptyState } from '../components/ui/EmptyState';
@@ -1774,7 +1774,11 @@ export default function Home() {
       const liveMessage = buildDriverLiveMessage('order:assigned', payload);
       setAuthMessage(liveMessage);
       // Alerta sonora en primer plano (en segundo plano suena el canal nativo).
-      playAlertSound('/sounds/notifica.wav');
+      // Con el plugin de alarma nativa el sonido lo pone el Foreground Service
+      // en ambos casos, así que aquí no se duplica en ninguna situación.
+      if (!nativeAlarmHandlesSound() && !isNativeAppInBackground()) {
+        playAlertSound('/sounds/notifica.wav');
+      }
       // Pedido entrante es crítico: refrescar sin debounce
       void loadPendingOrders();
       void loadDashboard();

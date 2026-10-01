@@ -15,7 +15,15 @@ const config: CapacitorConfig = {
   },
   plugins: {
     PushNotifications: {
-      presentationOptions: ['badge', 'sound', 'alert'],
+      // Sin 'alert'/'banner'/'list': el plugin NO crea una notificación propia
+      // cuando la app está en primer plano.
+      //
+      // Motivo: en primer plano el aviso lo pone el propio panel (socket.io +
+      // UI) y la alarma continua suena en el Foreground Service; si además el
+      // plugin pintara una notificación del sistema habría dos sonidos. En
+      // segundo plano Android muestra la notificación con el canal y el .wav
+      // correctos. Un único sonido en cada situación.
+      presentationOptions: ['badge'],
     },
   },
 };

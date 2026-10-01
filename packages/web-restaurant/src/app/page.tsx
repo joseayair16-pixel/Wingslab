@@ -53,6 +53,7 @@ import {
   nativeHaptic,
   hasNativeOrderAlarm,
   stopNativeOrderAlarm,
+  isNativeAppInBackground,
 } from '../lib/native';
 
 /**
@@ -2638,6 +2639,9 @@ export default function Home() {
 
   const playChatPopSound = useCallback(async () => {
     if (!isOrderAlertSoundEnabled) return;
+    // Con la app en segundo plano la notificación del sistema ya suena por el
+    // canal "Mensaje de chat"; si la web también sonara se oiría doble.
+    if (isNativeAppInBackground()) return;
     play('mensaje');
   }, [isOrderAlertSoundEnabled]);
 
