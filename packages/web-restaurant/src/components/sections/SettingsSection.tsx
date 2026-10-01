@@ -131,7 +131,9 @@ interface SettingsSectionProps {
   saveOperatingHours: () => void;
   savePasswordChange: () => void;
   handleOrderAlertSoundToggle: (checked: boolean) => void;
-  playIncomingOrderAlert: () => void;
+  // `force` se usa desde "Probar sonido de alerta" para que suene también
+  // cuando la alarma nativa está disponible.
+  playIncomingOrderAlert: (force?: boolean) => void;
   onEnablePush?: () => Promise<{ ok: boolean; reason?: string }>;
   pushToast: (tone: 'info' | 'success' | 'error', title: string, message: string) => void;
   businessTypeLabel: (type?: string | null) => string;
@@ -1671,7 +1673,7 @@ export const SettingsSection = React.memo(function SettingsSection({
                       Probar notificación push
                     </button>
                     <button
-                      onClick={() => { void playIncomingOrderAlert(); }}
+                      onClick={() => { void playIncomingOrderAlert(true); }}
                       className="flex items-center gap-2 rounded-xl border border-black/10 bg-white px-3.5 py-2.5 text-sm font-semibold text-neutral-900 hover:bg-neutral-100 transition-colors"
                     >
                       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>

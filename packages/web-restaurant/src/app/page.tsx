@@ -2534,13 +2534,14 @@ export default function Home() {
     return ok;
   }, []);
 
-  const playIncomingOrderAlert = useCallback(async () => {
+  const playIncomingOrderAlert = useCallback(async (force = false) => {
     if (!isOrderAlertSoundEnabled) return false;
 
     // Con el plugin de alarma nativa el sonido lo pone el Foreground Service
     // (funciona en segundo plano y se corta al aceptar). Si lo dejamos aquí se
-    // oiría dos veces a la vez.
-    if (nativeAlarmHandlesSound()) return false;
+    // oiría dos veces a la vez. `force` lo omite para el botón "Probar sonido"
+    // de ajustes, que debe sonar aunque la alarma nativa esté disponible.
+    if (!force && nativeAlarmHandlesSound()) return false;
 
     // Cross-tab dedup: skip if another tab just played (within 1s)
     if (typeof window !== 'undefined' && (window as any).__sadelLastAlertFromOtherTab) {

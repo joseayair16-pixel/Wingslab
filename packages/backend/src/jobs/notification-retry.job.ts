@@ -3,6 +3,14 @@ import { prisma } from '../config/database';
 import { logger } from '../utils/logger';
 import { sendPushNotification, type NotificationPayload } from '../services/notification.service';
 import { MAX_RETRY_ATTEMPTS } from '../services/notification-retry.service';
+import { isRingPayload } from '../services/fcm.service';
+
+/**
+ * Ventana que se re-estampa al reenviar una alarma de pedido. El `expiresAt`
+ * original es un instante absoluto: si el reintento ocurre después, la app
+ * nativa lo descarta por vencido y el aviso no llegaría de ninguna forma.
+ */
+const RING_RETRY_WINDOW_MS = 2 * 60 * 1000;
 
 /**
  * Reenvía notificaciones críticas que fallaron en su primer intento y quedaron
@@ -55,6 +63,15 @@ export async function processNotificationRetries(batchSize = 50): Promise<number
     }
 
     try {
+      // La alarma continua es la única notificación con caducidad propia: el
+      // `expiresAt` que se encoló ya está vencido (los reintentos empiezan un
+      // minuto después y el TTL llega a horas), así que se recalcula la ventana
+      // desde ahora. Si no se re-sella, la app nativa descarta el data-message
+      // y el reintento no serviría de nada.
+      if (isRingPayload(payload) && payload.nativeRingExpiresAt !== undefined) {
+        payload = { ...payload, nativeRingExpiresAt: Date.now() + RING_RETRY_WINDOW_MS };
+      }
+
       const result = await sendPushNotification(retry.userId, payload, { skipRetryQueue: true });
       if (result.success) {
         delivered += 1;

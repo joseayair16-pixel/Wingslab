@@ -135,22 +135,21 @@ function inferSoundFromEvent(payload: NotificationPayload): string | undefined {
 }
 
 /**
- * Convierte un NotificationPayload (web-push) a un mensaje FCM.
+ * Convierte un NotificationPayload (web-push) a un mensaje FCM normal, con el
+ * bloque `notification` del sistema.
  * - title/body → notification del sistema.
  * - sound → channelId (canal nativo con el .wav empaquetado).
  * - vibrate → patrón de vibración.
  * - requireInteraction → sticky (requiere interacción para cerrar).
  * - data → data (para deep-link al pedido al tocar).
  * - prioridad alta siempre (anti-Doze; la importancia de sonido la define el canal).
+ *
+ * NUNCA se usa para la alarma continua: el mensaje de alarma debe ser
+ * data-only y decidir por token (capability del APK), y eso lo hace
+ * `sendFcmNotification`, que llama a `buildRingDataMessage` solo para los
+ * tokens con appVersion >= RING_MIN_APP_VERSION.
  */
-export function buildFcmMessage(
-  payload: NotificationPayload,
-  options: { supportsDataRing?: boolean } = {}
-): BaseMessage {
-  if (options.supportsDataRing && isRingPayload(payload)) {
-    return buildRingDataMessage(payload);
-  }
-
+export function buildFcmMessage(payload: NotificationPayload): BaseMessage {
   const effectiveSound = payload.sound || inferSoundFromEvent(payload);
   const channelId = mapSoundToChannelId(effectiveSound) || 'default';
 
@@ -352,7 +351,11 @@ export async function sendFcmDataMessage(
     select: { id: true, token: true, appVersion: true },
   });
 
-  const capableTokens = tokens.filter((t) => isRingCapableAppVersion(t.appVersion) && (t.appVersion ?? 0) >= minVersion);
+  const capableTokens = tokens.filter((t) => {
+    const version = t.appVersion;
+    if (typeof version !== 'number' || !Number.isFinite(version)) return false;
+    return version >= Math.max(RING_MIN_APP_VERSION, minVersion);
+  });
   if (capableTokens.length === 0) {
     return { success: false, totalSent: 0, totalAttempted: 0 };
   }
