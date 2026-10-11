@@ -4433,61 +4433,6 @@ export default function Home() {
     setIsProductModalOpen(true);
   }
 
-  function openDuplicateProductModal(product: ProductItem) {
-    setProductImageValidationError('');
-    setProductConfigInherited(false);
-    setProductDraft({
-      id: undefined,
-      categoryId: product.categoryId || product.category?.id || '',
-      name: `${product.name} (Copia)`,
-      description: product.description,
-      price: String(product.price),
-      discountPrice: product.discountPrice ? String(product.discountPrice) : '',
-      promoType: product.promoType || null,
-      promoBuyQuantity: product.promoBuyQuantity ? String(product.promoBuyQuantity) : '',
-      promoPayQuantity: product.promoPayQuantity ? String(product.promoPayQuantity) : '',
-      sellBy: product.sellBy || 'UNIT',
-      unitPrice: product.unitPrice ? String(product.unitPrice) : '',
-      minWeightG: product.minWeightG ? String(product.minWeightG) : '100',
-      maxWeightG: product.maxWeightG ? String(product.maxWeightG) : '5000',
-      stepWeightG: product.stepWeightG ? String(product.stepWeightG) : '100',
-      weightPresets: product.weightPresets || [100, 200, 300, 500, 1000],
-      image: product.image || '',
-      images: product.images?.length ? product.images : (product.image ? [product.image] : []),
-      imagePosition: product.imagePosition || '50% 50%',
-      imageZoom: product.imageZoom || 100,
-      isAdultOnly: product.isAdultOnly || false,
-      trackStock: product.trackStock || false,
-      stock: product.stock != null ? String(product.stock) : '',
-      lowStockThreshold: product.lowStockThreshold != null ? String(product.lowStockThreshold) : '5',
-      optionGroups: product.optionGroups || [],
-    });
-    setIsProductModalOpen(true);
-
-    if (token) {
-      void requestJson<SuccessResponse<ProductItem>>({
-        apiBase,
-        path: `/restaurant-panel/productos/${product.id}`,
-        token,
-        fallbackMessage: 'No se pudieron cargar los detalles del producto.',
-      }).then((response) => {
-        if (response.success && response.data) {
-          setProductDraft((current) => {
-            if (!current.id) {
-              return {
-                ...current,
-                optionGroups: response.data.optionGroups || [],
-              };
-            }
-            return current;
-          });
-        }
-      }).catch((err) => {
-        console.error('Error fetching full product details:', err);
-      });
-    }
-  }
-
   function openEditProductModal(product: ProductItem) {
     setProductImageValidationError('');
     setProductConfigInherited(false);
@@ -11078,22 +11023,22 @@ export default function Home() {
                                             <p className="mt-1 truncate text-[13px] text-neutral-500">{product.description}</p>
                                           ) : null}
                                         </div>
-                                        <div className="flex flex-wrap items-center justify-between gap-3 sm:w-auto sm:flex-nowrap sm:justify-start sm:gap-4">
-                                          <div className="flex items-center gap-1.5">
+                                        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3 sm:w-auto sm:flex-nowrap sm:justify-start sm:gap-4">
+                                          <div className="flex items-center gap-3">
                                             <span className="text-[15px] font-bold text-neutral-900">{product.discountPrice ? formatCurrency(product.discountPrice) : formatCurrency(product.price)}</span>
+                                            <button
+                                              type="button"
+                                              role="switch"
+                                              aria-checked={product.isAvailable}
+                                              onClick={() => void toggleProductAvailability(product)}
+                                              disabled={activeAvailabilityProductId === product.id}
+                                              className={`relative inline-flex h-11 w-[68px] shrink-0 items-center rounded-full border px-1 transition active:scale-95 ${product.isAvailable ? 'border-emerald-300 bg-emerald-500' : 'border-neutral-300 bg-neutral-300'} disabled:cursor-not-allowed disabled:opacity-60`}
+                                            >
+                                              <span className={`inline-flex h-8 w-8 items-center justify-center rounded-full bg-white text-[10px] font-bold uppercase tracking-[0.08em] text-neutral-700 shadow-sm transition ${product.isAvailable ? 'translate-x-[26px]' : 'translate-x-0'}`}>
+                                                {product.isAvailable ? 'On' : 'Off'}
+                                              </span>
+                                            </button>
                                           </div>
-                                          <button
-                                            type="button"
-                                            role="switch"
-                                            aria-checked={product.isAvailable}
-                                            onClick={() => void toggleProductAvailability(product)}
-                                            disabled={activeAvailabilityProductId === product.id}
-                                            className={`relative inline-flex h-11 w-[68px] items-center rounded-full border px-1 transition active:scale-95 ${product.isAvailable ? 'border-emerald-300 bg-emerald-500' : 'border-neutral-300 bg-neutral-300'} disabled:cursor-not-allowed disabled:opacity-60`}
-                                          >
-                                            <span className={`inline-flex h-8 w-8 items-center justify-center rounded-full bg-white text-[10px] font-bold uppercase tracking-[0.08em] text-neutral-700 shadow-sm transition ${product.isAvailable ? 'translate-x-[26px]' : 'translate-x-0'}`}>
-                                              {product.isAvailable ? 'On' : 'Off'}
-                                            </span>
-                                          </button>
                                           <div className="flex items-center gap-1.5">
                                             <button
                                               type="button"
@@ -11102,15 +11047,6 @@ export default function Home() {
                                               aria-label={`Editar ${product.name}`}
                                             >
                                               <Pencil className="h-4 w-4" strokeWidth={1.9} />
-                                            </button>
-                                            <button
-                                              type="button"
-                                              onClick={() => openDuplicateProductModal(product)}
-                                              className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-sky-100 bg-sky-50 text-sky-600 transition active:scale-90 hover:bg-sky-100"
-                                              aria-label={`Duplicar ${product.name}`}
-                                              title="Duplicar producto"
-                                            >
-                                              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.9} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
                                             </button>
                                             <button
                                               type="button"
