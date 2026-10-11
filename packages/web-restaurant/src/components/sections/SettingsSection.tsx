@@ -85,6 +85,14 @@ function formatDaySummary(blocks: HoursBlock[]): string {
     .join(' · ');
 }
 
+function normalizeSearchText(value?: string | null): string {
+  return (value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim();
+}
+
 interface SettingsSectionProps {
   profile: any;
   setProfile: (profile: any) => void;
@@ -238,6 +246,11 @@ export const SettingsSection = React.memo(function SettingsSection({
     }
   });
   const [copySourceDay, setCopySourceDay] = useState(1);
+  const [categorySearch, setCategorySearch] = useState('');
+  const [showAllCategories, setShowAllCategories] = useState(false);
+  const [canScrollTabsLeft, setCanScrollTabsLeft] = useState(false);
+  const [canScrollTabsRight, setCanScrollTabsRight] = useState(false);
+  const tabsScrollRef = React.useRef<HTMLDivElement | null>(null);
   const hoursDraft = (operatingHoursDraft ?? []) as HoursBlock[];
 
   const [promoCodes, setPromoCodes] = useState<PromoCodeItem[]>([]);
@@ -522,7 +535,27 @@ export const SettingsSection = React.memo(function SettingsSection({
       ? (savingOperatingHours ? 'Guardando horarios...' : 'Guardar horarios')
       : activeSettingsTab === 'seguridad'
         ? (savingPassword ? 'Actualizando...' : 'Cambiar contraseña')
-        : (savingStoreProfile ? 'Guardando ajustes...' : 'Guardar cambios');
+        : activeSettingsTab === 'ubicacion'
+          ? (savingStoreProfile ? 'Guardando...' : 'Guardar ubicación')
+          : activeSettingsTab === 'entrega'
+            ? (savingStoreProfile ? 'Guardando...' : 'Guardar entrega')
+            : activeSettingsTab === 'pagos'
+              ? (savingStoreProfile ? 'Guardando...' : 'Guardar datos bancarios')
+              : (savingStoreProfile ? 'Guardando...' : 'Guardar perfil');
+
+  // La barra de guardado inferior es el ÚNICO punto de guardado manual:
+  // Preferencias y Cupones se guardan solos (toggles, CRUD y promociones inline).
+  const showSaveBar = activeSettingsTab !== 'preferencias' && activeSettingsTab !== 'cupones';
+
+  const saveBarCopy: Record<string, { title: string; subtitle: string }> = {
+    perfil: { title: 'Perfil público', subtitle: 'Nombre, contacto y marca' },
+    ubicacion: { title: 'Ubicación', subtitle: 'Dirección y mapa' },
+    entrega: { title: 'Entrega', subtitle: 'Modalidad, tiempos y tarifas' },
+    horarios: { title: 'Horarios', subtitle: 'Días y turnos de servicio' },
+    pagos: { title: 'Métodos de pago', subtitle: 'Efectivo y transferencias' },
+    seguridad: { title: 'Seguridad', subtitle: 'Contraseña y acceso' },
+  };
+  const activeSaveBarCopy = saveBarCopy[activeSettingsTab] ?? saveBarCopy.perfil;
 
   const applyWhatsappNotifications = async (checked: boolean) => {
     setStoreDraft((c: any) => ({ ...c, whatsappNotifications: checked }));
@@ -573,6 +606,46 @@ export const SettingsSection = React.memo(function SettingsSection({
       pushToast('error', 'Error', 'No se pudo actualizar la configuración.');
     }
   };
+
+  const toggleStoreCategory = (catId: string) => {
+    setStoreDraft((prev: any) => {
+      const selected: string[] = prev.storeCategories || [];
+      if (selected.includes(catId)) {
+        return { ...prev, storeCategories: selected.filter((id: string) => id !== catId) };
+      }
+      if (selected.length >= 2) return prev;
+      return { ...prev, storeCategories: [...selected, catId] };
+    });
+  };
+
+  const normalizedCategorySearch = normalizeSearchText(categorySearch);
+  const filteredPlatformCategories = platformCategories.filter((cat: any) =>
+    !normalizedCategorySearch || normalizeSearchText(cat.name).includes(normalizedCategorySearch)
+  );
+
+  // Affordance de scroll en las tabs: fades laterales + auto-centrado de la activa.
+  useEffect(() => {
+    const el = tabsScrollRef.current;
+    if (!el) return;
+    const update = () => {
+      setCanScrollTabsLeft(el.scrollLeft > 8);
+      setCanScrollTabsRight(el.scrollWidth - el.clientWidth - el.scrollLeft > 8);
+    };
+    update();
+    el.addEventListener('scroll', update, { passive: true });
+    window.addEventListener('resize', update);
+    return () => {
+      el.removeEventListener('scroll', update);
+      window.removeEventListener('resize', update);
+    };
+  }, []);
+
+  useEffect(() => {
+    tabsScrollRef.current
+      ?.querySelector('[data-active="true"]')
+      ?.scrollIntoView({ inline: 'center', block: 'nearest', behavior: 'smooth' });
+  }, [activeSettingsTab]);
+
   return (
     <div className="flex flex-col gap-6 w-full max-w-[1400px] mx-auto min-w-0">
         {/* Cabecera Premium */}
@@ -587,32 +660,23 @@ export const SettingsSection = React.memo(function SettingsSection({
               <h2 className="text-2xl font-black tracking-[-0.04em] text-neutral-950 md:text-3xl">Configuración de {businessTypeLabel(profile?.businessType)}</h2>
               <p className="mt-1.5 text-sm font-medium text-neutral-500">Gestiona tu perfil, horarios, repartidores y preferencias.</p>
             </div>
-            <button
-              type="button"
-              onClick={handleGlobalSave}
-              disabled={globalSaving || activeSettingsTab === 'preferencias' || activeSettingsTab === 'cupones'}
-              title={activeSettingsTab === 'preferencias' ? 'Esta sección se guarda automáticamente' : activeSettingsTab === 'cupones' ? 'Los cupones se guardan uno por uno' : undefined}
-              className="group relative w-full sm:w-auto shrink-0 overflow-hidden rounded-full bg-neutral-950 px-6 py-3.5 text-sm font-bold text-white shadow-[0_8px_20px_rgba(15,15,15,0.2)] transition-all hover:-translate-y-0.5 hover:shadow-[0_12px_25px_rgba(15,15,15,0.3)] disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0"
-            >
-              <div className="absolute inset-0 bg-gradient-to-r from-sky-500/0 via-white/20 to-sky-500/0 -translate-x-full transition-transform duration-700 group-hover:translate-x-full"></div>
-              <span className="relative z-10">{activeSettingsTab === 'preferencias' ? 'Se guarda automáticamente' : activeSettingsTab === 'cupones' ? 'Cupones' : globalLabel}</span>
-            </button>
           </div>
         </div>
 
         {/* Contenedor Principal */}
         <div className="flex flex-col gap-6 min-w-0">
           {/* Navegación Horizontal */}
-          <nav className="w-full shrink-0 z-10">
-            <div className="flex gap-2 overflow-x-auto pb-4 scrollbar-none flex-nowrap -mx-1 px-1 snap-x snap-proximity" style={{ WebkitOverflowScrolling: 'touch', scrollPaddingLeft: '0.25rem', scrollPaddingRight: '0.25rem' }}>
+          <nav className="relative w-full shrink-0 z-10">
+            <div ref={tabsScrollRef} className="flex gap-2 overflow-x-auto overscroll-x-contain pb-4 scrollbar-none flex-nowrap -mx-1 px-1 snap-x snap-proximity" style={{ WebkitOverflowScrolling: 'touch', scrollPaddingLeft: '0.25rem', scrollPaddingRight: '0.25rem' }}>
               {settingsTabs.map((tab: any) => {
                 const isActive = activeSettingsTab === tab.key;
                 return (
                   <button
                     key={tab.key}
                     type="button"
+                    data-active={isActive}
                     onClick={() => setActiveSettingsTab(tab.key)}
-                    className={`group relative flex items-center gap-2.5 rounded-[18px] px-3 py-2.5 text-left transition-all duration-300 shrink-0 whitespace-nowrap snap-start active:scale-[0.98] sm:gap-3 sm:rounded-[20px] sm:px-4 sm:py-3 ${
+                    className={`group relative flex items-center gap-2.5 rounded-[18px] px-3 py-2.5 text-left transition-all duration-300 shrink-0 whitespace-nowrap snap-start touch-manipulation active:scale-[0.98] sm:gap-3 sm:rounded-[20px] sm:px-4 sm:py-3 ${
                       isActive
                         ? 'bg-gradient-to-br from-sky-600 to-blue-600 text-white shadow-[0_12px_30px_-10px_rgba(2,132,199,0.4)]'
                         : 'bg-white/50 text-neutral-600 hover:bg-white hover:shadow-sm hover:text-neutral-950 border border-transparent hover:border-black/5'
@@ -632,6 +696,8 @@ export const SettingsSection = React.memo(function SettingsSection({
                 );
               })}
             </div>
+            <div aria-hidden="true" className={`pointer-events-none absolute inset-y-0 bottom-4 left-0 w-10 bg-gradient-to-r from-[#f8f7f4] to-transparent transition-opacity duration-300 ${canScrollTabsLeft ? 'opacity-100' : 'opacity-0'}`} />
+            <div aria-hidden="true" className={`pointer-events-none absolute inset-y-0 bottom-4 right-0 w-10 bg-gradient-to-l from-[#f8f7f4] to-transparent transition-opacity duration-300 ${canScrollTabsRight ? 'opacity-100' : 'opacity-0'}`} />
           </nav>
 
           {/* Área de Contenido Glassmórfica */}
@@ -849,18 +915,43 @@ export const SettingsSection = React.memo(function SettingsSection({
                 <div className="sm:col-span-2 min-w-0">
                   <div className="flex items-center justify-between gap-3 mb-3">
                     <div className="min-w-0 flex-1">
-                      <label className="block text-[13px] font-semibold text-neutral-900">Categorías</label>
+                      <label htmlFor="sadel-category-search" className="block text-[13px] font-semibold text-neutral-900">Categorías</label>
                       <p className="text-xs text-neutral-500 mt-0.5 break-words">Selecciona hasta 2 categorías que mejor describan tu negocio para aparecer en esas secciones de la app cliente.</p>
                     </div>
                     <span className={`inline-flex shrink-0 items-center gap-1 text-[11px] font-medium ${storeDraft.storeCategories.length >= 2 ? 'text-sky-600' : 'text-neutral-400'}`}>
                       {storeDraft.storeCategories.length}/2
                     </span>
                   </div>
+                  <div className="relative mb-3">
+                    <svg className="pointer-events-none absolute left-4 top-1/2 h-[18px] w-[18px] -translate-y-1/2 text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M17 10a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+                    <input
+                      id="sadel-category-search"
+                      type="search"
+                      enterKeyHint="search"
+                      autoComplete="off"
+                      value={categorySearch}
+                      onChange={(event) => setCategorySearch(event.target.value)}
+                      placeholder="Buscar categoría..."
+                      className="h-12 w-full rounded-2xl border border-black/10 bg-neutral-100/80 pl-11 pr-10 text-[16px] font-medium text-neutral-900 outline-none transition placeholder:text-neutral-400 focus:border-sky-500 focus:bg-white focus:ring-4 focus:ring-sky-500/15 sm:text-sm"
+                    />
+                    {categorySearch ? (
+                      <button
+                        type="button"
+                        onClick={() => setCategorySearch('')}
+                        className="absolute right-2.5 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full text-neutral-400 transition active:scale-90 hover:bg-neutral-200 hover:text-neutral-700"
+                        aria-label="Limpiar búsqueda de categorías"
+                      >
+                        <span className="text-base font-bold leading-none">×</span>
+                      </button>
+                    ) : null}
+                  </div>
                   {platformCategories.length === 0 ? (
                     <p className="text-sm text-neutral-500 italic">No hay categorías disponibles. Contacta a soporte.</p>
+                  ) : filteredPlatformCategories.length === 0 ? (
+                    <p className="text-sm text-neutral-500 italic">Sin resultados para “{categorySearch.trim()}”.</p>
                   ) : (
-                    <div className="scrollbar-none flex gap-3 overflow-x-auto pb-3 -mx-1 px-1 snap-x snap-mandatory">
-                      {platformCategories.map((cat: any) => {
+                    <div className="scrollbar-none flex gap-3 overflow-x-auto overscroll-x-contain pb-3 -mx-1 px-1 snap-x snap-mandatory" style={{ WebkitOverflowScrolling: 'touch' }}>
+                      {filteredPlatformCategories.map((cat: any) => {
                         const isSelected = storeDraft.storeCategories.includes(cat.id);
                         const atLimit = storeDraft.storeCategories.length >= 2 && !isSelected;
                         return (
@@ -868,19 +959,10 @@ export const SettingsSection = React.memo(function SettingsSection({
                             key={cat.id}
                             type="button"
                             disabled={atLimit}
-                            onClick={() => {
-                              setStoreDraft((prev: any) => ({
-                                ...prev,
-                                storeCategories: isSelected 
-                                  ? prev.storeCategories.filter((id: string) => id !== cat.id) 
-                                  : prev.storeCategories.length >= 2 
-                                    ? prev.storeCategories 
-                                    : [...prev.storeCategories, cat.id]
-                              }))
-                            }}
-                            className={`flex w-[150px] shrink-0 snap-start items-center gap-2 rounded-xl border p-3 text-left transition ${
-                              isSelected 
-                                ? 'border-neutral-900 bg-neutral-900 text-white' 
+                            onClick={() => toggleStoreCategory(cat.id)}
+                            className={`flex w-[150px] shrink-0 snap-start items-center gap-2 rounded-xl border p-3 text-left transition touch-manipulation active:scale-[0.98] ${
+                              isSelected
+                                ? 'border-neutral-900 bg-neutral-900 text-white'
                                 : atLimit
                                   ? 'border-black/5 bg-neutral-50 text-neutral-300 cursor-not-allowed'
                                   : 'border-black/10 bg-white text-neutral-700 hover:border-black/20 hover:bg-neutral-50'
@@ -891,6 +973,14 @@ export const SettingsSection = React.memo(function SettingsSection({
                           </button>
                         );
                       })}
+                      <button
+                        type="button"
+                        onClick={() => setShowAllCategories(true)}
+                        className="flex w-[150px] shrink-0 snap-start flex-col items-center justify-center gap-1 rounded-xl border-2 border-dashed border-sky-300/70 bg-sky-50/40 p-3 text-center transition touch-manipulation active:scale-[0.98] hover:bg-sky-50"
+                      >
+                        <span className="text-[13px] font-bold text-sky-700">Ver todas</span>
+                        <span className="text-[11px] font-medium text-sky-600/70">{platformCategories.length} categorías</span>
+                      </button>
                     </div>
                   )}
                 </div>
@@ -900,16 +990,6 @@ export const SettingsSection = React.memo(function SettingsSection({
                   {(profile as RestaurantProfile | null)?.status === 'ACTIVE'
                     ? (profile as RestaurantProfile | null)?.isAcceptingOrders ? '🟢 Abierto y aceptando pedidos' : '🟡 Cerrado temporalmente'
                     : (profile as RestaurantProfile | null)?.status === 'DELETED' ? '🔴 Cuenta eliminada' : '🟠 Cuenta suspendida'}
-                </div>
-                <div className="sm:col-span-2 flex justify-end">
-                  <button
-                    type="button"
-                    onClick={() => void saveStoreProfile('perfil')}
-                    disabled={savingStoreProfile}
-                    className="w-full sm:w-auto rounded-full bg-neutral-950 px-5 py-3 text-sm font-semibold text-white transition hover:bg-neutral-800 disabled:bg-neutral-300"
-                  >
-                    {savingStoreProfile ? 'Guardando...' : 'Guardar perfil'}
-                  </button>
                 </div>
               </div>
             )}
@@ -1006,16 +1086,6 @@ export const SettingsSection = React.memo(function SettingsSection({
                     <span className="text-[11px] font-semibold uppercase tracking-wider text-neutral-400">Longitud</span>
                     <code className="block text-sm font-mono font-bold text-neutral-800 break-all">{storeDraft.longitude || 'Sin configurar'}</code>
                   </div>
-                </div>
-                <div className="sm:col-span-2 flex justify-end">
-                  <button
-                    type="button"
-                    onClick={() => void saveStoreProfile('ubicacion')}
-                    disabled={savingStoreProfile}
-                    className="w-full sm:w-auto rounded-full bg-neutral-950 px-5 py-3 text-sm font-semibold text-white transition hover:bg-neutral-800 disabled:bg-neutral-300"
-                  >
-                    {savingStoreProfile ? 'Guardando...' : 'Guardar ubicación'}
-                  </button>
                 </div>
             </div>
 
@@ -1177,16 +1247,6 @@ export const SettingsSection = React.memo(function SettingsSection({
                     </div>
                   </>
                 )}
-                <div className="sm:col-span-2 flex justify-end">
-                  <button
-                    type="button"
-                    onClick={() => void saveStoreProfile('entrega')}
-                    disabled={savingStoreProfile}
-                    className="w-full sm:w-auto rounded-full bg-neutral-950 px-5 py-3 text-sm font-semibold text-white transition hover:bg-neutral-800 disabled:bg-neutral-300"
-                  >
-                    {savingStoreProfile ? 'Guardando...' : 'Guardar configuración de entrega'}
-                  </button>
-                </div>
               </div>
             )}
 
@@ -1372,16 +1432,6 @@ export const SettingsSection = React.memo(function SettingsSection({
                     Revisa los horarios marcados en rojo antes de guardar.
                   </p>
                 )}
-                <div className="flex justify-end">
-                  <button
-                    type="button"
-                    onClick={() => void saveOperatingHours()}
-                    disabled={savingOperatingHours || hasInvalidHours}
-                    className="w-full sm:w-auto rounded-full bg-neutral-950 px-5 py-3 text-sm font-semibold text-white transition hover:bg-neutral-800 disabled:bg-neutral-300"
-                  >
-                    {savingOperatingHours ? 'Guardando horarios...' : 'Guardar horarios'}
-                  </button>
-                </div>
               </div>
               );
             })()}
@@ -1434,22 +1484,13 @@ export const SettingsSection = React.memo(function SettingsSection({
                     placeholder="Tacos Centro SA de CV"
                   />
                 </div>
-                <div className="sm:col-span-2 flex justify-end">
-                  <button
-                    type="button"
-                    onClick={() => void saveStoreProfile('pagos')}
-                    disabled={savingStoreProfile}
-                    className="w-full sm:w-auto rounded-full bg-neutral-950 px-5 py-3 text-sm font-semibold text-white transition hover:bg-neutral-800 disabled:bg-neutral-300"
-                  >
-                    {savingStoreProfile ? 'Guardando...' : 'Guardar datos bancarios'}
-                  </button>
-                </div>
               </div>
             )}
 
             {/* ─── SEGURIDAD ─── */}
             {activeSettingsTab === 'seguridad' && (
               <form
+                id="sadel-security-form"
                 className="grid gap-4 max-w-md"
                 onSubmit={(event) => {
                   event.preventDefault();
@@ -1480,13 +1521,6 @@ export const SettingsSection = React.memo(function SettingsSection({
                   placeholder="Repite la nueva contraseña"
                   type="password"
                 />
-                <button
-                  type="submit"
-                  disabled={savingPassword}
-                  className="w-full rounded-full bg-rose-600 px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-rose-700 disabled:bg-neutral-300"
-                >
-                  {savingPassword ? 'Actualizando...' : 'Cambiar contraseña'}
-                </button>
               </form>
             )}
 
@@ -1894,7 +1928,38 @@ export const SettingsSection = React.memo(function SettingsSection({
 
           </div>
         </div>
+        {showSaveBar && <div className="h-20 shrink-0" aria-hidden="true" />}
       </div>
+      {showSaveBar && (
+        <div className="pointer-events-none fixed inset-x-0 bottom-0 z-[60] px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+          <div className="pointer-events-auto mx-auto flex max-w-2xl items-center gap-3 rounded-[24px] border border-black/10 bg-white/95 p-3 pl-5 shadow-[0_20px_50px_rgba(15,15,15,0.25)] backdrop-blur-xl">
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-[13px] font-bold text-neutral-900">{activeSaveBarCopy.title}</p>
+              <p className="truncate text-[11px] text-neutral-500">{activeSaveBarCopy.subtitle}</p>
+            </div>
+            {activeSettingsTab === 'seguridad' ? (
+              <button
+                type="submit"
+                form="sadel-security-form"
+                disabled={globalSaving}
+                className="shrink-0 rounded-full bg-neutral-950 px-6 py-3.5 text-sm font-bold text-white transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {globalLabel}
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={handleGlobalSave}
+                disabled={globalSaving || (activeSettingsTab === 'horarios' && hasInvalidHours)}
+                title={activeSettingsTab === 'horarios' && hasInvalidHours ? 'Revisa los horarios marcados en rojo antes de guardar.' : undefined}
+                className="shrink-0 rounded-full bg-neutral-950 px-6 py-3.5 text-sm font-bold text-white transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {globalLabel}
+              </button>
+            )}
+          </div>
+        </div>
+      )}
       {promoCodeModalOpen && (
         <div className="fixed inset-0 z-[96] flex items-end justify-center bg-black/60 animate-fade-in sm:items-center sm:p-5"
           onClick={() => setPromoCodeModalOpen(false)}>
@@ -2051,6 +2116,83 @@ export const SettingsSection = React.memo(function SettingsSection({
                   {promoCodeSaving ? 'Guardando...' : editingPromoCode ? 'Guardar cambios' : 'Crear cupón'}
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showAllCategories && (
+        <div className="fixed inset-0 z-[97] flex items-end justify-center bg-black/60 animate-fade-in sm:items-center sm:p-5"
+          onClick={() => setShowAllCategories(false)}>
+          <div className="flex max-h-[88dvh] w-full flex-col overflow-hidden rounded-t-[28px] bg-white shadow-[0_32px_110px_rgba(15,15,15,0.35)] sm:max-w-2xl sm:rounded-[28px]"
+            onClick={(e) => e.stopPropagation()}>
+            <div className="flex shrink-0 justify-center bg-white pt-2.5 sm:hidden" aria-hidden="true">
+              <span className="h-1.5 w-12 rounded-full bg-neutral-300" />
+            </div>
+            <div className="flex shrink-0 items-center justify-between gap-3 border-b border-black/5 px-5 py-4">
+              <div className="min-w-0">
+                <h3 className="text-lg font-black tracking-[-0.02em] text-neutral-900">Todas las categorías</h3>
+                <p className="mt-0.5 text-xs font-medium text-neutral-500">{storeDraft.storeCategories.length}/2 seleccionadas</p>
+              </div>
+              <button onClick={() => setShowAllCategories(false)}
+                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-neutral-100 text-neutral-500 transition active:scale-90 hover:bg-neutral-200 hover:text-neutral-700"
+                aria-label="Cerrar">
+                ✕
+              </button>
+            </div>
+            <div className="shrink-0 border-b border-black/5 px-5 py-3">
+              <div className="relative">
+                <svg className="pointer-events-none absolute left-4 top-1/2 h-[18px] w-[18px] -translate-y-1/2 text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M17 10a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+                <input
+                  type="search"
+                  enterKeyHint="search"
+                  autoComplete="off"
+                  value={categorySearch}
+                  onChange={(event) => setCategorySearch(event.target.value)}
+                  placeholder="Buscar categoría..."
+                  className="h-12 w-full rounded-2xl border border-black/10 bg-neutral-100/80 pl-11 pr-4 text-[16px] font-medium text-neutral-900 outline-none transition placeholder:text-neutral-400 focus:border-sky-500 focus:bg-white focus:ring-4 focus:ring-sky-500/15 sm:text-sm"
+                />
+              </div>
+            </div>
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-4" style={{ WebkitOverflowScrolling: 'touch' }}>
+              {filteredPlatformCategories.length === 0 ? (
+                <p className="py-10 text-center text-sm text-neutral-500 italic">Sin resultados para “{categorySearch.trim()}”.</p>
+              ) : (
+                <div className="grid grid-cols-2 gap-2.5">
+                  {filteredPlatformCategories.map((cat: any) => {
+                    const isSelected = storeDraft.storeCategories.includes(cat.id);
+                    const atLimit = storeDraft.storeCategories.length >= 2 && !isSelected;
+                    return (
+                      <button
+                        key={cat.id}
+                        type="button"
+                        disabled={atLimit}
+                        onClick={() => toggleStoreCategory(cat.id)}
+                        className={`flex min-h-[56px] items-center gap-2 rounded-2xl border p-3 text-left transition touch-manipulation active:scale-[0.98] ${
+                          isSelected
+                            ? 'border-neutral-900 bg-neutral-900 text-white'
+                            : atLimit
+                              ? 'border-black/5 bg-neutral-50 text-neutral-300 cursor-not-allowed'
+                              : 'border-black/10 bg-white text-neutral-700 hover:border-black/20'
+                        }`}
+                      >
+                        <CategoryIcon name={cat.icon} className="h-6 w-6 shrink-0" />
+                        <span className="min-w-0 flex-1 truncate text-[13px] font-semibold leading-tight">{cat.name}</span>
+                        {isSelected && <span className="shrink-0 text-sm font-black">✓</span>}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+            <div className="shrink-0 border-t border-black/5 bg-white px-5 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3">
+              <button
+                type="button"
+                onClick={() => setShowAllCategories(false)}
+                className="min-h-[52px] w-full rounded-full bg-neutral-950 px-6 py-3.5 text-sm font-bold text-white transition active:scale-[0.98]"
+              >
+                Listo
+              </button>
             </div>
           </div>
         </div>

@@ -1323,7 +1323,6 @@ export default function Home() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [socketStatus, setSocketStatus] = useState<'idle' | 'connecting' | 'connected' | 'reconnecting'>('idle');
   const [socketAttempts, setSocketAttempts] = useState(0);
-  const [carouselIndexMap, setCarouselIndexMap] = useState<Record<string, number>>({});
   const [toasts, setToasts] = useState<ToastItem[]>([]);
   const toastTimeoutsRef = useRef<Map<string, NodeJS.Timeout>>(new Map());
 
@@ -4423,78 +4422,6 @@ export default function Home() {
       pushToast('error', 'Categoria no eliminada', message);
     } finally {
       setActiveActionKey((current) => (current === actionKey ? null : current));
-    }
-  }
-
-  async function moveCategoryUp(categoryId: string) {
-    if (!token) return;
-    const index = categories.findIndex((c) => c.id === categoryId);
-    if (index <= 0) return;
-
-    const currentCategory = categories[index];
-    const prevCategory = categories[index - 1];
-
-    try {
-      await requestJson<void>({
-        apiBase,
-        path: `/restaurant-panel/categorias/${currentCategory.id}`,
-        token,
-        options: {
-          method: 'PATCH',
-          body: JSON.stringify({ order: prevCategory.order }),
-        },
-      });
-
-      await requestJson<void>({
-        apiBase,
-        path: `/restaurant-panel/categorias/${prevCategory.id}`,
-        token,
-        options: {
-          method: 'PATCH',
-          body: JSON.stringify({ order: currentCategory.order }),
-        },
-      });
-
-      await loadDashboard();
-      pushToast('success', 'Orden actualizado', 'Se ha movido la categoría.');
-    } catch (requestError) {
-      pushToast('error', 'Error', 'No se pudo mover la categoría.');
-    }
-  }
-
-  async function moveCategoryDown(categoryId: string) {
-    if (!token) return;
-    const index = categories.findIndex((c) => c.id === categoryId);
-    if (index < 0 || index >= categories.length - 1) return;
-
-    const currentCategory = categories[index];
-    const nextCategory = categories[index + 1];
-
-    try {
-      await requestJson<void>({
-        apiBase,
-        path: `/restaurant-panel/categorias/${currentCategory.id}`,
-        token,
-        options: {
-          method: 'PATCH',
-          body: JSON.stringify({ order: nextCategory.order }),
-        },
-      });
-
-      await requestJson<void>({
-        apiBase,
-        path: `/restaurant-panel/categorias/${nextCategory.id}`,
-        token,
-        options: {
-          method: 'PATCH',
-          body: JSON.stringify({ order: currentCategory.order }),
-        },
-      });
-
-      await loadDashboard();
-      pushToast('success', 'Orden actualizado', 'Se ha movido la categoría.');
-    } catch (requestError) {
-      pushToast('error', 'Error', 'No se pudo mover la categoría.');
     }
   }
 
@@ -11023,273 +10950,156 @@ export default function Home() {
                         </div>
                       </div>
 
-                      <div className="space-y-6">
-                        {filteredStoreCategories.map((category) => (
-                          <section key={category.id} className="rounded-[24px] px-0 py-0">
-                      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4">
-                              <div className="min-w-0">
-                                <div className="flex min-w-0 items-center gap-3">
-                                  <h2 className="min-w-0 text-2xl font-semibold tracking-[-0.03em] text-neutral-950 break-words">
-                                    {category.name}
-                                  </h2>
-                                  <div className="flex shrink-0 items-center gap-1">
+                        <div className="space-y-6">
+                          {filteredStoreCategories.length === 0 ? (
+                            <div className="overflow-hidden rounded-[28px] border border-sky-100/60 bg-white/80 shadow-[0_10px_30px_rgba(15,15,15,0.04)]">
+                              <EmptyState text={storeSearchQuery.trim() ? 'No hay resultados para tu busqueda.' : 'Aun no tienes productos. Agrega el primero o importa tu menu.'} />
+                            </div>
+                          ) : (
+                            filteredStoreCategories.map((category) => (
+                              <section key={category.id} className="overflow-hidden rounded-[28px] border border-sky-100/60 bg-white/80 shadow-[0_10px_30px_rgba(15,15,15,0.04)]">
+                                <div className="flex flex-col gap-2 border-b border-black/5 px-4 py-3.5 sm:flex-row sm:items-center sm:justify-between sm:px-5">
+                                  <div className="flex items-center gap-3">
+                                    <h3 className="text-[15px] font-bold tracking-tight text-neutral-900">{category.name}</h3>
+                                    <span className="inline-flex items-center rounded-full bg-sky-50 px-2.5 py-0.5 text-[11px] font-bold text-sky-700 ring-1 ring-sky-200/70">
+                                      {category.products.length} producto{category.products.length === 1 ? '' : 's'}
+                                    </span>
+                                  </div>
+                                  <div className="flex items-center gap-2">
                                     <button
                                       type="button"
-                                      onClick={() => void moveCategoryUp(category.id)}
-                                      className="p-1.5 rounded-full hover:bg-neutral-100 text-neutral-500 hover:text-sky-600 transition"
-                                      title="Subir categoría"
+                                      onClick={() => openProductModal(category.id)}
+                                      className="inline-flex min-h-[44px] items-center gap-1.5 rounded-full bg-neutral-950 px-3.5 py-2 text-[12px] font-bold text-white transition hover:bg-neutral-800 active:scale-[0.97]"
                                     >
-                                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
-                                      </svg>
+                                      <Plus className="h-3.5 w-3.5" strokeWidth={2.5} />
+                                      Agregar producto
                                     </button>
                                     <button
                                       type="button"
-                                      onClick={() => void moveCategoryDown(category.id)}
-                                      className="p-1.5 rounded-full hover:bg-neutral-100 text-neutral-500 hover:text-sky-600 transition"
-                                      title="Bajar categoría"
+                                      onClick={() => void deleteCategory(category.id, category.name, category.products.length)}
+                                      disabled={Boolean(activeActionKey) || category.products.length > 0}
+                                      title={category.products.length > 0 ? 'Primero elimina o mueve sus productos.' : `Eliminar categoria ${category.name}`}
+                                      className="inline-flex items-center gap-1.5 rounded-full border border-black/10 bg-white px-3.5 py-2 text-[12px] font-semibold text-neutral-700 transition hover:border-rose-200 hover:bg-rose-50 hover:text-rose-700 disabled:cursor-not-allowed disabled:border-black/5 disabled:bg-neutral-100 disabled:text-neutral-400"
                                     >
-                                      <ChevronUp className="w-4 h-4" />
+                                      <Trash2 className="h-3.5 w-3.5" strokeWidth={1.9} />
+                                      {activeActionKey === `category:${category.id}:delete` ? 'Eliminando...' : 'Eliminar'}
                                     </button>
                                   </div>
                                 </div>
-                                <p className="mt-1 text-sm text-neutral-500">
-                                  {category.products.length} productos en esta categoria
-                                </p>
-                              </div>
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  void deleteCategory(
-                                    category.id,
-                                    category.name,
-                                    category.products.length
-                                  )
-                                }
-                                disabled={
-                                  Boolean(activeActionKey) || category.products.length > 0
-                                }
-                                className={`rounded-full border px-4 py-2 text-sm font-semibold transition ${category.products.length > 0
-                                  ? 'cursor-not-allowed border-black/5 bg-neutral-100 text-neutral-400'
-                                  : 'border-black/10 bg-white text-neutral-700 hover:border-rose-200 hover:bg-rose-50 hover:text-rose-700'
-                                  } disabled:cursor-not-allowed`}
-                                title={
-                                  category.products.length > 0
-                                    ? 'Primero elimina o mueve sus productos.'
-                                    : `Eliminar categoria ${category.name}`
-                                }
-                              >
-                                {activeActionKey === `category:${category.id}:delete`
-                                  ? 'Eliminando...'
-                                  : 'Eliminar categoria'}
-                              </button>
-                            </div>
-
-                            <div className="mt-5 grid grid-cols-1 min-[420px]:grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3 xl:grid-cols-4">
-                              {category.products.map((product) => (
-                                <article
-                                  key={product.id}
-                                  className="group overflow-hidden rounded-[20px] border border-sky-100/50 bg-white/70 backdrop-blur-md shadow-[0_4px_20px_rgba(14,165,233,0.03)] ring-1 ring-black/5 transition-all duration-200 touch-manipulation active:scale-[0.98] hover:bg-white hover:shadow-[0_12px_32px_rgba(14,165,233,0.12)] hover:ring-sky-200/60"
-                                >
-                                  <div className="flex h-full flex-col">
-                                    <div className="relative aspect-[4/3] w-full shrink-0">
-                                      {isSelectionMode ? (
-                                        <button
-                                          type="button"
-                                          onClick={() => toggleProductSelection(product.id)}
-                                          className={`absolute left-3 top-3 z-10 flex h-9 w-9 items-center justify-center rounded-full border-2 shadow-md transition ${selectedProductIds.has(product.id) ? 'border-sky-500 bg-sky-500 text-white' : 'border-white bg-white/90 text-transparent hover:border-sky-300 hover:text-sky-200'}`}
-                                          aria-label={selectedProductIds.has(product.id) ? `Quitar ${product.name} de la selección` : `Seleccionar ${product.name}`}
-                                        >
-                                          <Check className="h-5 w-5" strokeWidth={3} />
-                                        </button>
-                                      ) : null}
-                                      {product.image ? (
-                                        <>
-                                          <div
-                                            className="h-full w-full overflow-hidden"
-                                            style={{ transform: `scale(${(product.imageZoom ?? 100) / 100})`, transformOrigin: 'center center' }}
-                                          >
-                                            <img
-                                              src={(product.images?.length ?? 0) > 1 && carouselIndexMap[product.id] ? product.images![carouselIndexMap[product.id]] : product.image}
-                                              alt={product.name}
-                                              className="h-full w-full object-cover transition-opacity duration-300"
-                                              style={{ objectPosition: product.imagePosition || undefined }}
-                                              loading="lazy"
-                                              decoding="async"
-                                            />
-                                          </div>
-                                          {(product.images?.length ?? 0) > 1 && (
-                                            <>
-                                              <button
-                                                type="button"
-                                                onClick={(e) => {
-                                                  e.stopPropagation();
-                                                  setCarouselIndexMap((prev) => {
-                                                    const images = product.images || [];
-                                                    const current = prev[product.id] || 0;
-                                                    return { ...prev, [product.id]: (current - 1 + images.length) % images.length };
-                                                  });
-                                                }}
-                                                className="absolute left-2 top-1/2 z-10 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full bg-white/80 text-sm text-neutral-800 shadow-md backdrop-blur-sm transition hover:bg-white"
-                                              >
-                                                ‹
-                                              </button>
-                                              <button
-                                                type="button"
-                                                onClick={(e) => {
-                                                  e.stopPropagation();
-                                                  setCarouselIndexMap((prev) => {
-                                                    const images = product.images || [];
-                                                    const current = prev[product.id] || 0;
-                                                    return { ...prev, [product.id]: (current + 1) % images.length };
-                                                  });
-                                                }}
-                                                className="absolute right-2 top-1/2 z-10 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full bg-white/80 text-sm text-neutral-800 shadow-md backdrop-blur-sm transition hover:bg-white"
-                                              >
-                                                ›
-                                              </button>
-                                              <div className="absolute bottom-2 left-1/2 z-10 flex -translate-x-1/2 gap-1.5">
-                                                {(product.images || []).map((_, idx) => (
-                                                  <span
-                                                    key={idx}
-                                                    className={`h-1.5 rounded-full transition-all ${idx === (carouselIndexMap[product.id] || 0) ? 'w-4 bg-white' : 'w-1.5 bg-white/60'}`}
-                                                  />
-                                                ))}
-                                              </div>
-                                            </>
-                                          )}
-                                        </>
-                                      ) : (
-                                        <div className="h-full w-full bg-gradient-to-br from-neutral-100 to-neutral-200" />
-                                      )}
-                                    </div>
-
-                                    <div className="flex flex-1 flex-col justify-between p-4 sm:p-5">
-                                      <div>
-                                        <div className="flex items-start justify-between gap-2">
-                                          <h3 className="flex min-w-0 items-center gap-2 text-base font-semibold text-neutral-950 sm:text-lg break-words">
-                                            {product.name}
-                                            {product.isAdultOnly && (
-                                              <span className="shrink-0 rounded bg-rose-100 px-1.5 py-0.5 text-[10px] font-bold text-rose-700 tracking-wider">
-                                                +18
-                                              </span>
-                                            )}
-                                          </h3>
-                                        </div>
-                                        <p className="mt-2 text-sm leading-6 text-neutral-600 break-words line-clamp-3">
-                                          {product.description}
+                                <div className="divide-y divide-black/5">
+                                  {category.products.length === 0 ? (
+                                    <div className="flex flex-col items-center gap-3 px-4 py-8 text-center sm:flex-row sm:justify-between sm:px-5 sm:text-left">
+                                      <div className="min-w-0">
+                                        <p className="text-[13px] font-semibold text-neutral-700">
+                                          Esta categoria no tiene productos aun.
                                         </p>
-                                        {product.promoType === 'MULTI_BUY' && product.promoBuyQuantity != null && product.promoPayQuantity != null && product.promoBuyQuantity > 0 && product.promoPayQuantity > 0 ? (
-                                          <div className="mt-3 inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50/70 px-2.5 py-1 text-[11px] font-bold text-emerald-700">
-                                            <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M5 12h14M12 5v14" /></svg>
-                                            {product.promoBuyQuantity} x {product.promoPayQuantity}
-                                          </div>
-                                        ) : null}
-                                        {product.discountPrice ? (
-                                          <div className="mt-3 flex items-center gap-2">
-                                            <p className="text-lg font-bold text-sky-600 sm:text-xl">
-                                              {formatCurrency(product.discountPrice)}
-                                            </p>
-                                            <p className="text-sm font-medium text-neutral-400 line-through">
-                                              {formatCurrency(product.price)}
-                                            </p>
-                                          </div>
-                                        ) : (
-                                          <p className="mt-3 text-lg font-semibold text-neutral-950 sm:text-xl">
-                                            {formatCurrency(product.price)}
-                                          </p>
-                                        )}
+                                        <p className="mt-0.5 text-[12px] text-neutral-400">
+                                          Agrega el primero para publicarlo en tu menu.
+                                        </p>
                                       </div>
-
-                                      <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
-                                        <div className="flex flex-wrap items-center gap-2">
+                                      <button
+                                        type="button"
+                                        onClick={() => openProductModal(category.id)}
+                                        className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-neutral-950 px-4 py-2 text-[12px] font-bold text-white transition hover:bg-neutral-800 active:scale-[0.97]"
+                                      >
+                                        <Plus className="h-3.5 w-3.5" strokeWidth={2.5} />
+                                        Agregar producto
+                                      </button>
+                                    </div>
+                                  ) : (
+                                    category.products.map((product) => (
+                                      <div
+                                        key={product.id}
+                                        className={`flex flex-col gap-3 px-4 py-3.5 transition active:bg-sky-50/60 hover:bg-sky-50/40 sm:flex-row sm:items-center sm:gap-4 ${selectedProductIds.has(product.id) ? 'bg-sky-50/60' : ''}`}
+                                      >
+                                        {isSelectionMode ? (
+                                          <button
+                                            type="button"
+                                            onClick={() => toggleProductSelection(product.id)}
+                                            className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-md border-2 transition ${selectedProductIds.has(product.id) ? 'border-sky-500 bg-sky-500 text-white' : 'border-neutral-300 bg-white text-transparent hover:border-sky-300'}`}
+                                            aria-label={selectedProductIds.has(product.id) ? `Quitar ${product.name} de la selección` : `Seleccionar ${product.name}`}
+                                          >
+                                            <Check className="h-4 w-4" strokeWidth={3} />
+                                          </button>
+                                        ) : null}
+                                        <div className="h-14 w-14 shrink-0 overflow-hidden rounded-2xl border border-black/5 bg-neutral-100">
+                                          {product.image ? (
+                                            <img src={product.image} alt={product.name} className="h-full w-full object-cover" loading="lazy" />
+                                          ) : (
+                                            <div className="flex h-full w-full items-center justify-center text-lg font-bold text-neutral-300">{product.name.charAt(0).toUpperCase()}</div>
+                                          )}
+                                        </div>
+                                        <div className="min-w-0 flex-1">
+                                          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                                            <p className="truncate text-[15px] font-bold text-neutral-900">{product.name}</p>
+                                            <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-sky-50 px-2.5 py-0.5 text-[11px] font-bold text-sky-700 ring-1 ring-sky-200/70">
+                                              {category.name}
+                                            </span>
+                                            {product.promoType === 'MULTI_BUY' && product.promoBuyQuantity != null && product.promoPayQuantity != null && product.promoBuyQuantity > 0 && product.promoPayQuantity > 0 ? (
+                                              <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-0.5 text-[11px] font-bold text-emerald-700">
+                                                {product.promoBuyQuantity} x {product.promoPayQuantity}
+                                              </span>
+                                            ) : null}
+                                            {!product.isAvailable ? (
+                                              <span className="rounded-full bg-neutral-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-neutral-500">Agotado</span>
+                                            ) : null}
+                                          </div>
+                                          {product.description ? (
+                                            <p className="mt-1 truncate text-[13px] text-neutral-500">{product.description}</p>
+                                          ) : null}
+                                        </div>
+                                        <div className="flex flex-wrap items-center justify-between gap-3 sm:w-auto sm:flex-nowrap sm:justify-start sm:gap-4">
+                                          <div className="flex items-center gap-1.5">
+                                            <span className="text-[15px] font-bold text-neutral-900">{product.discountPrice ? formatCurrency(product.discountPrice) : formatCurrency(product.price)}</span>
+                                          </div>
                                           <button
                                             type="button"
                                             role="switch"
                                             aria-checked={product.isAvailable}
                                             onClick={() => void toggleProductAvailability(product)}
                                             disabled={activeAvailabilityProductId === product.id}
-                                            className={`relative inline-flex h-11 w-[74px] items-center rounded-full border px-1 transition ${product.isAvailable
-                                              ? 'border-emerald-300 bg-emerald-500'
-                                              : 'border-neutral-300 bg-neutral-300'
-                                              } disabled:cursor-not-allowed disabled:opacity-60`}
+                                            className={`relative inline-flex h-11 w-[68px] items-center rounded-full border px-1 transition active:scale-95 ${product.isAvailable ? 'border-emerald-300 bg-emerald-500' : 'border-neutral-300 bg-neutral-300'} disabled:cursor-not-allowed disabled:opacity-60`}
                                           >
-                                            <span
-                                              className={`inline-flex h-9 w-9 items-center justify-center rounded-full bg-white text-[10px] font-bold uppercase tracking-[0.08em] text-neutral-700 shadow-sm transition ${product.isAvailable ? 'translate-x-[28px]' : 'translate-x-0'
-                                                }`}
-                                            >
+                                            <span className={`inline-flex h-8 w-8 items-center justify-center rounded-full bg-white text-[10px] font-bold uppercase tracking-[0.08em] text-neutral-700 shadow-sm transition ${product.isAvailable ? 'translate-x-[26px]' : 'translate-x-0'}`}>
                                               {product.isAvailable ? 'On' : 'Off'}
                                             </span>
                                           </button>
-                                          <button
-                                            type="button"
-                                            onClick={() => openEditProductModal(product)}
-                                            className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-black/10 bg-white text-neutral-800 transition hover:bg-neutral-100"
-                                            aria-label={`Editar ${product.name}`}
-                                          >
-                                            <Pencil className="h-4 w-4" strokeWidth={1.9} />
-                                          </button>
-                                          <button
-                                            type="button"
-                                            onClick={() => openDuplicateProductModal(product)}
-                                            className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-sky-100 bg-sky-50 text-sky-600 transition hover:bg-sky-100"
-                                            aria-label={`Duplicar ${product.name}`}
-                                            title="Duplicar producto"
-                                          >
-                                            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                              <path
-                                                strokeLinecap="round"
-                                                strokeLinejoin="round"
-                                                strokeWidth={1.9}
-                                                d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
-                                              />
-                                            </svg>
-                                          </button>
-                                          <button
-                                            type="button"
-                                            onClick={() => openDeleteProductModal(product)}
-                                            className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-rose-200 bg-rose-50 text-rose-600 transition hover:bg-rose-100"
-                                            aria-label={`Eliminar ${product.name}`}
-                                          >
-                                            <Trash2 className="h-4 w-4" strokeWidth={1.9} />
-                                          </button>
+                                          <div className="flex items-center gap-1.5">
+                                            <button
+                                              type="button"
+                                              onClick={() => openEditProductModal(product)}
+                                              className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-black/10 bg-white text-neutral-800 transition active:scale-90 hover:bg-neutral-100"
+                                              aria-label={`Editar ${product.name}`}
+                                            >
+                                              <Pencil className="h-4 w-4" strokeWidth={1.9} />
+                                            </button>
+                                            <button
+                                              type="button"
+                                              onClick={() => openDuplicateProductModal(product)}
+                                              className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-sky-100 bg-sky-50 text-sky-600 transition active:scale-90 hover:bg-sky-100"
+                                              aria-label={`Duplicar ${product.name}`}
+                                              title="Duplicar producto"
+                                            >
+                                              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.9} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
+                                            </button>
+                                            <button
+                                              type="button"
+                                              onClick={() => openDeleteProductModal(product)}
+                                              className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-rose-200 bg-rose-50 text-rose-600 transition active:scale-90 hover:bg-rose-100"
+                                              aria-label={`Eliminar ${product.name}`}
+                                            >
+                                              <Trash2 className="h-4 w-4" strokeWidth={1.9} />
+                                            </button>
+                                          </div>
                                         </div>
-                                        <span className="text-sm text-neutral-400">
-                                          {activeAvailabilityProductId === product.id
-                                            ? 'Actualizando disponibilidad...'
-                                            : product.isAvailable
-                                              ? 'Disponible y visible en cliente'
-                                              : 'Agotado y oculto en cliente'}
-                                        </span>
                                       </div>
-                                    </div>
-                                  </div>
-                                </article>
-                              ))}
-
-                              <button
-                                type="button"
-                                onClick={() => openProductModal(category.id)}
-                                className="group flex min-h-[200px] flex-col items-center justify-center rounded-[32px] border-2 border-dashed border-sky-200/60 bg-sky-50/20 text-center shadow-sm transition-all hover:border-sky-400 hover:bg-sky-50/60 hover:shadow-[0_12px_32px_rgba(14,165,233,0.1)] sm:min-h-[260px]"
-                              >
-                                <span className="flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-sky-400 to-sky-500 text-2xl font-light text-white shadow-lg shadow-sky-500/20 transition-transform duration-300 group-hover:scale-110 sm:h-16 sm:w-16 sm:text-3xl">
-                                  +
-                                </span>
-                                <p className="mt-4 text-base font-semibold text-sky-900 sm:mt-5 sm:text-lg">Agregar producto</p>
-                                <p className="mt-2 max-w-[16rem] px-3 text-[12px] leading-6 text-sky-700/70 sm:max-w-[18rem] sm:text-[13px]">
-                                  Crea un nuevo producto dentro de <span className="font-bold">{category.name}</span> con imagen, descripcion y costo.
-                                </p>
-                              </button>
-                            </div>
-                          </section>
-                        ))}
-
-                        {storeCategories.length === 0 ? (
-                          <EmptyState text="Todavia no tienes categorias. Crea la primera para empezar a publicar tu menu." />
-                        ) : filteredStoreCategories.length === 0 ? (
-                          <EmptyState text="No hay resultados para tu busqueda." />
-                        ) : null}
-                      </div>
+                                    ))
+                                  )}
+                                </div>
+                              </section>
+                            ))
+                          )}
+                        </div>
 
                       {isSelectionMode ? (
                         <div className="fixed inset-x-0 bottom-[max(1rem,env(safe-area-inset-bottom))] z-[70] px-4">
