@@ -1301,7 +1301,6 @@ export default function Home() {
     skipped: number;
     errors: { index: number; name: string; message: string }[];
   } | null>(null);
-  const [storeViewMode, setStoreViewMode] = useState<'cards' | 'list'>('list');
   const [storeSearchQuery, setStoreSearchQuery] = useState('');
   const [isSelectionMode, setIsSelectionMode] = useState(false);
   const [selectedProductIds, setSelectedProductIds] = useState<Set<string>>(new Set());
@@ -7806,7 +7805,10 @@ export default function Home() {
             }
           }}
         >
-          <div className="relative flex h-[94vh] w-full max-w-[760px] flex-col overflow-hidden rounded-t-[36px] bg-white shadow-[0_32px_120px_rgba(14,165,233,0.25)] ring-1 ring-sky-100 sm:h-auto sm:max-h-[92vh] sm:rounded-[36px]">
+          <div className="relative flex h-[94dvh] w-full max-w-[760px] flex-col overflow-hidden rounded-t-[28px] bg-white shadow-[0_32px_120px_rgba(14,165,233,0.25)] ring-1 ring-sky-100 sm:h-auto sm:max-h-[92vh] sm:rounded-[36px]">
+            <div className="flex shrink-0 justify-center bg-white/80 pt-2.5 backdrop-blur-xl sm:hidden" aria-hidden="true">
+              <span className="h-1.5 w-12 rounded-full bg-neutral-300" />
+            </div>
             
             {/* Ambient Background Glows */}
             <div className="pointer-events-none absolute -left-20 -top-20 h-64 w-64 rounded-full bg-sky-300/20 blur-[80px]" />
@@ -7849,7 +7851,7 @@ export default function Home() {
                     setProductConfigInherited(false);
                     setProductDraft(buildEmptyProductDraft(categories[0]?.id || ''));
                   }}
-                  className="group inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-sky-50 text-sky-600 transition-all hover:bg-sky-100 hover:text-sky-900 sm:h-12 sm:w-12"
+                  className="group inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-sky-50 text-sky-600 transition-all active:scale-90 hover:bg-sky-100 hover:text-sky-900 sm:h-12 sm:w-12"
                   aria-label="Cerrar"
                 >
                   <X className="h-5 w-5 transition-transform duration-300 group-hover:rotate-90" strokeWidth={2.5} />
@@ -7858,8 +7860,8 @@ export default function Home() {
             </div>
 
             {/* Scrollable Content */}
-            <div ref={productModalScrollRef} className="relative flex-1 overflow-y-auto bg-gradient-to-b from-sky-50/30 to-white px-5 py-6 sm:px-10 sm:py-8">
-              <div className="space-y-10">
+            <div ref={productModalScrollRef} className="relative flex-1 overflow-y-auto overscroll-contain bg-gradient-to-b from-sky-50/30 to-white px-4 py-6 min-[420px]:px-5 sm:px-10 sm:py-8" style={{ WebkitOverflowScrolling: 'touch' }}>
+              <div className="space-y-8 sm:space-y-10">
                 
                 {/* 1. Información Básica */}
                 <section>
@@ -8836,7 +8838,7 @@ export default function Home() {
                                             return { ...current, optionGroups: nextGroups };
                                           });
                                         }}
-                                        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-white text-neutral-400 shadow-sm ring-1 ring-black/5 transition hover:bg-rose-50 hover:text-rose-600 sm:opacity-0 sm:group-hover/opt:opacity-100"
+                                        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white text-neutral-400 shadow-sm ring-1 ring-black/5 transition active:scale-90 hover:bg-rose-50 hover:text-rose-600 sm:opacity-0 sm:group-hover/opt:opacity-100"
                                       >
                                         <X className="h-4 w-4" />
                                       </button>
@@ -8855,7 +8857,7 @@ export default function Home() {
             </div>
 
             {/* Sticky Footer */}
-            <div className="relative shrink-0 border-t border-sky-100/50 bg-white/70 px-5 py-4 backdrop-blur-xl sm:px-10 sm:py-5">
+            <div className="relative shrink-0 border-t border-sky-100/50 bg-white/70 px-4 py-4 backdrop-blur-xl min-[420px]:px-5 sm:px-10 sm:py-5" style={{ paddingBottom: 'max(1rem, env(safe-area-inset-bottom))' }}>
               {!productDraft.id ? (
                 <div className="mb-3 flex items-center justify-between gap-3">
                   <label className="flex cursor-pointer select-none items-center gap-2.5 rounded-full border border-sky-100 bg-sky-50/60 px-4 py-2.5 text-[13px] font-semibold text-sky-800 transition hover:bg-sky-50">
@@ -8876,7 +8878,7 @@ export default function Home() {
                 <button
                   type="button"
                   onClick={() => setIsProductModalOpen(false)}
-                  className="flex-1 rounded-full border border-black/10 px-5 py-3 text-sm font-bold text-neutral-600 transition hover:bg-neutral-100 hover:text-neutral-900 sm:flex-none"
+                  className="min-h-[48px] flex-1 rounded-full border border-black/10 px-5 py-3.5 text-sm font-bold text-neutral-600 transition active:scale-[0.98] hover:bg-neutral-100 hover:text-neutral-900 sm:flex-none"
                 >
                   Cancelar
                 </button>
@@ -8884,7 +8886,7 @@ export default function Home() {
                   type="button"
                   onClick={() => void submitProductNow()}
                   disabled={creatingProduct || savingProductChanges || processingProductImage || !canSubmitProduct}
-                  className="group relative flex-1 overflow-hidden rounded-full bg-gradient-to-r from-sky-500 to-sky-400 px-6 py-3 text-sm font-bold text-white shadow-[0_4px_16px_rgba(14,165,233,0.35)] ring-1 ring-sky-400/50 transition-all hover:scale-105 disabled:pointer-events-none disabled:opacity-60 disabled:shadow-none disabled:grayscale sm:flex-none"
+                  className="group relative min-h-[48px] flex-1 overflow-hidden rounded-full bg-gradient-to-r from-sky-500 to-sky-400 px-6 py-3.5 text-sm font-bold text-white shadow-[0_4px_16px_rgba(14,165,233,0.35)] ring-1 ring-sky-400/50 transition-all active:scale-[0.98] disabled:pointer-events-none disabled:opacity-60 disabled:shadow-none disabled:grayscale sm:flex-none"
                 >
                   <div className="absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/30 to-transparent transition-transform duration-1000 group-hover:translate-x-full" />
                   <span className="relative z-10">
@@ -10768,27 +10770,27 @@ export default function Home() {
 
                 {activeSection === 'store' && profile ? (
                     <div className={`space-y-6 ${isSelectionMode ? 'pb-32' : ''}`}>
-                      <section className="overflow-hidden rounded-[32px] border border-black/5 bg-white shadow-[0_18px_60px_rgba(15,15,15,0.05)]">
+                      <section className="overflow-hidden rounded-[24px] border border-black/5 bg-white shadow-[0_18px_60px_rgba(15,15,15,0.05)] sm:rounded-[32px]">
                         <div className="relative">
                           {storeDraft.coverImage.trim() ? (
                             <img
                               src={storeDraft.coverImage}
                               alt={`Portada de ${storeDraft.name || 'tu tienda'}`}
-                              className="h-64 w-full object-cover md:h-80 lg:h-96"
+                              className="h-52 w-full bg-neutral-200 object-cover min-[420px]:h-64 md:h-80 lg:h-96"
                             />
                           ) : (
-                            <div className="h-64 w-full bg-gradient-to-br from-sky-400 via-sky-600 to-sky-900 md:h-80 lg:h-96" />
+                            <div className="h-52 w-full bg-gradient-to-br from-sky-400 via-sky-600 to-sky-900 min-[420px]:h-64 md:h-80 lg:h-96" />
                           )}
                           <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
-                          <div className="absolute inset-x-0 top-0 flex flex-wrap items-start justify-between gap-3 p-4 md:p-6 lg:p-8">
-                            <div className="flex flex-wrap min-w-0 items-center gap-2">
-                              <div className="rounded-full bg-white/90 backdrop-blur-md px-4 py-2.5 text-[11px] font-bold uppercase tracking-widest text-sky-900 shadow-sm border border-white/40 ring-1 ring-black/5">
+                          <div className="absolute inset-x-0 top-0 flex items-start justify-between gap-2 p-3 min-[420px]:p-4 md:p-6 lg:p-8">
+                            <div className="flex min-w-0 flex-wrap items-center gap-2">
+                              <div className="hidden rounded-full border border-white/40 bg-white/90 px-4 py-2.5 text-[11px] font-bold uppercase tracking-widest text-sky-900 shadow-sm ring-1 ring-black/5 backdrop-blur-md sm:block">
                                 Vista Previa: Tu Tienda
                               </div>
                               <button
                                 type="button"
                                 onClick={() => setShowMenuPreview(true)}
-                                className="rounded-full bg-white/90 backdrop-blur-md px-4 py-2.5 text-[11px] font-bold uppercase tracking-widest text-neutral-700 shadow-sm border border-white/40 ring-1 ring-black/5 transition hover:bg-white hover:text-sky-900"
+                                className="inline-flex min-h-[44px] items-center rounded-full border border-white/40 bg-white/90 px-4 py-2.5 text-[11px] font-bold uppercase tracking-widest text-neutral-700 shadow-sm ring-1 ring-black/5 backdrop-blur-md transition active:scale-95 hover:bg-white hover:text-sky-900"
                               >
                                 📱 Menu en cliente
                               </button>
@@ -10796,10 +10798,11 @@ export default function Home() {
                             <button
                               type="button"
                               onClick={openCoverImageModal}
-                              className="inline-flex items-center gap-2 rounded-full bg-white/92 px-4 py-2.5 text-sm font-semibold text-neutral-800 shadow-[0_10px_20px_rgba(15,15,15,0.12)] transition hover:bg-white"
+                              className="inline-flex min-h-[44px] shrink-0 items-center gap-2 rounded-full bg-white/90 px-4 py-2.5 text-sm font-semibold text-neutral-800 shadow-[0_10px_20px_rgba(15,15,15,0.12)] transition active:scale-95 hover:bg-white"
                             >
                               <Pencil className="h-4 w-4" strokeWidth={1.9} />
-                              Editar portada
+                              <span className="hidden min-[420px]:inline">Editar portada</span>
+                              <span className="min-[420px]:hidden">Portada</span>
                             </button>
                           </div>
                           <div className="absolute inset-x-0 bottom-0 hidden p-6 md:p-8 lg:block">
@@ -10819,7 +10822,7 @@ export default function Home() {
                                 <button
                                   type="button"
                                   onClick={openLogoModal}
-                                  className="absolute bottom-1.5 right-1.5 inline-flex h-8 w-8 items-center justify-center rounded-full bg-white/95 text-sky-600 shadow-md transition hover:bg-white hover:text-sky-800 hover:scale-110"
+                                  className="absolute bottom-1.5 right-1.5 inline-flex h-9 w-9 items-center justify-center rounded-full bg-white/95 text-sky-600 shadow-md transition active:scale-90 hover:bg-white hover:text-sky-800"
                                   aria-label="Editar logo"
                                 >
                                   <Pencil className="h-4 w-4" />
@@ -10839,7 +10842,7 @@ export default function Home() {
 
                         <div className="relative px-4 pb-5 pt-0 text-sm text-neutral-600 md:px-6 md:pb-6 lg:px-7 lg:pt-5">
                           <div className="-mt-12 flex flex-col items-center text-center lg:hidden relative z-10">
-                            <div className="relative flex h-24 w-24 items-center justify-center overflow-hidden rounded-[32px] border-4 border-white bg-white shadow-[0_12px_32px_rgba(0,0,0,0.12)]">
+                            <div className="relative flex h-20 w-20 items-center justify-center overflow-hidden rounded-[24px] border-4 border-white bg-white shadow-[0_12px_32px_rgba(0,0,0,0.12)] min-[420px]:h-24 min-[420px]:w-24 min-[420px]:rounded-[32px]">
                               {storeDraft.logo.trim() ? (
                                 <img
                                   src={storeDraft.logo}
@@ -10854,13 +10857,13 @@ export default function Home() {
                               <button
                                 type="button"
                                 onClick={openLogoModal}
-                                className="absolute bottom-1 right-1 inline-flex h-8 w-8 items-center justify-center rounded-full bg-white/95 text-sky-600 shadow-md transition hover:bg-white hover:text-sky-800 hover:scale-110"
+                                className="absolute bottom-1 right-1 inline-flex h-9 w-9 items-center justify-center rounded-full bg-white/95 text-sky-600 shadow-md transition active:scale-90 hover:bg-white hover:text-sky-800"
                                 aria-label="Editar logo"
                               >
                                 <Pencil className="h-4 w-4" />
                               </button>
                             </div>
-                            <p className="mt-4 text-3xl font-bold tracking-tight text-neutral-950 break-words">
+                            <p className="mt-4 text-2xl font-bold tracking-tight text-neutral-950 break-words min-[420px]:text-3xl">
                               {storeDraft.name || 'Nombre de tu tienda'}
                             </p>
                             <p className="mt-2 max-w-sm text-[15px] font-medium leading-relaxed text-neutral-500 break-words">
@@ -10868,8 +10871,8 @@ export default function Home() {
                             </p>
                           </div>
 
-                          <div className="mt-5 flex flex-wrap justify-center gap-3 lg:mt-6 lg:justify-start">
-                            <div className="group flex max-w-full min-w-0 items-center gap-2 rounded-full bg-white/80 backdrop-blur-md px-4 py-2.5 text-[13px] font-medium text-neutral-700 shadow-sm ring-1 ring-black/5 transition hover:bg-white hover:shadow-md">
+                          <div className="mt-5 flex flex-wrap justify-center gap-2.5 min-[420px]:gap-3 lg:mt-6 lg:justify-start">
+                            <div className="group flex w-full min-w-0 items-center gap-2 rounded-2xl bg-white/80 backdrop-blur-md px-4 py-3 text-[13px] font-medium text-neutral-700 shadow-sm ring-1 ring-black/5 transition active:scale-[0.99] min-[480px]:w-auto min-[480px]:rounded-full hover:bg-white hover:shadow-md">
                               <svg className="h-4 w-4 shrink-0 text-sky-500 transition-transform group-hover:scale-110" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.243-4.243a8 8 0 1111.314 0z" />
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
@@ -10914,55 +10917,35 @@ export default function Home() {
                         </div>
                       </section>
 
-                      <div className="flex flex-col gap-3 rounded-[24px] border border-black/5 bg-white p-3 shadow-[0_10px_30px_rgba(15,15,15,0.04)] sm:flex-row sm:items-center sm:justify-between">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <div className="inline-flex rounded-full border border-black/10 bg-neutral-100/70 p-1 shadow-inner">
+                      <div className="flex flex-col gap-3 rounded-[20px] border border-black/5 bg-white p-3 shadow-[0_10px_30px_rgba(15,15,15,0.04)] sm:flex-row sm:items-center sm:justify-between">
+                        <div className="relative min-w-0 flex-1 sm:max-w-md">
+                          <svg className="pointer-events-none absolute left-4 top-1/2 h-[18px] w-[18px] -translate-y-1/2 text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M17 10a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+                          <input
+                            type="search"
+                            enterKeyHint="search"
+                            autoComplete="off"
+                            value={storeSearchQuery}
+                            onChange={(event) => setStoreSearchQuery(event.target.value)}
+                            placeholder="Buscar en tu menú..."
+                            className="h-12 w-full rounded-2xl border border-black/10 bg-neutral-100/80 pl-11 pr-10 text-[16px] font-medium text-neutral-900 outline-none transition placeholder:text-neutral-400 focus:border-sky-500 focus:bg-white focus:ring-4 focus:ring-sky-500/15 sm:text-sm"
+                          />
+                          {storeSearchQuery ? (
                             <button
                               type="button"
-                              onClick={() => setStoreViewMode('list')}
-                              aria-pressed={storeViewMode === 'list'}
-                              className={`inline-flex items-center gap-2 rounded-full px-4 py-2 text-[13px] font-bold transition ${storeViewMode === 'list' ? 'bg-white text-sky-700 shadow-sm' : 'text-neutral-500 hover:text-neutral-800'}`}
+                              onClick={() => setStoreSearchQuery('')}
+                              className="absolute right-2.5 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full text-neutral-400 transition active:scale-90 hover:bg-neutral-200 hover:text-neutral-700"
+                              aria-label="Limpiar búsqueda"
                             >
-                              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M4 14h16M4 18h16" /></svg>
-                              Lista
+                              <X className="h-4 w-4" strokeWidth={2.5} />
                             </button>
-                            <button
-                              type="button"
-                              onClick={() => setStoreViewMode('cards')}
-                              aria-pressed={storeViewMode === 'cards'}
-                              className={`inline-flex items-center gap-2 rounded-full px-4 py-2 text-[13px] font-bold transition ${storeViewMode === 'cards' ? 'bg-white text-sky-700 shadow-sm' : 'text-neutral-500 hover:text-neutral-800'}`}
-                            >
-                              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" /></svg>
-                              Tarjetas
-                            </button>
-                          </div>
-                          <div className="relative min-w-0 flex-1 sm:min-w-[220px] sm:max-w-xs">
-                            <svg className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M17 10a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
-                            <input
-                              type="text"
-                              value={storeSearchQuery}
-                              onChange={(event) => setStoreSearchQuery(event.target.value)}
-                              placeholder="Buscar en tu menú..."
-                              className="w-full rounded-full border border-black/10 bg-neutral-50 py-2.5 pl-10 pr-9 text-base font-medium text-neutral-900 shadow-inner outline-none transition placeholder:text-neutral-400 focus:border-sky-400 focus:bg-white focus:ring-4 focus:ring-sky-400/20 sm:text-sm"
-                            />
-                            {storeSearchQuery ? (
-                              <button
-                                type="button"
-                                onClick={() => setStoreSearchQuery('')}
-                                className="absolute right-2 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-full text-neutral-400 transition hover:bg-neutral-200 hover:text-neutral-700"
-                                aria-label="Limpiar búsqueda"
-                              >
-                                <X className="h-3.5 w-3.5" strokeWidth={2.5} />
-                              </button>
-                            ) : null}
-                          </div>
-                                </div>
+                          ) : null}
+                        </div>
                                   <div className="flex max-w-full min-w-0 flex-wrap items-center gap-2 sm:justify-end">
                           {isSelectionMode ? (
                             <button
                               type="button"
                               onClick={exitSelectionMode}
-                              className="rounded-full border border-sky-200 bg-sky-50 px-4 py-2.5 text-[13px] font-bold text-sky-800 transition hover:bg-sky-100"
+                              className="min-h-[44px] rounded-full border border-sky-200 bg-sky-50 px-4 py-2.5 text-[13px] font-bold text-sky-800 transition active:scale-95 hover:bg-sky-100"
                             >
                               Salir de selección
                             </button>
@@ -10970,7 +10953,7 @@ export default function Home() {
                             <button
                               type="button"
                               onClick={enterSelectionMode}
-                              className="inline-flex items-center gap-2 rounded-full border border-black/10 bg-white px-4 py-2.5 text-[13px] font-bold text-neutral-700 transition hover:bg-neutral-50 hover:text-neutral-900"
+                              className="inline-flex min-h-[44px] items-center gap-2 rounded-full border border-black/10 bg-white px-4 py-2.5 text-[13px] font-bold text-neutral-700 transition active:scale-95 hover:bg-neutral-50 hover:text-neutral-900"
                             >
                               <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" /></svg>
                               Seleccionar varios
@@ -10979,7 +10962,7 @@ export default function Home() {
                         </div>
                       </div>
 
-                      <div className="-mx-1 overflow-x-auto px-1 pb-4 pt-2 scrollbar-none sticky top-0 z-20 bg-gradient-to-b from-[#f8f8f8] via-[#f8f8f8]/95 to-transparent backdrop-blur-sm">
+                      <div className="-mx-1 overflow-x-auto px-1 pb-4 pt-2 scrollbar-none sticky top-0 z-20 bg-gradient-to-b from-[#f8f8f8] via-[#f8f8f8]/95 to-transparent backdrop-blur-md" style={{ WebkitOverflowScrolling: 'touch' }}>
                         <div className="flex min-w-max gap-3 px-2">
                           {storeCategories.map((category) => (
                             <div
@@ -11045,7 +11028,6 @@ export default function Home() {
                         </div>
                       </div>
 
-                      {storeViewMode === 'cards' ? (
                       <div className="space-y-6">
                         {filteredStoreCategories.map((category) => (
                           <section key={category.id} className="rounded-[24px] px-0 py-0">
@@ -11112,7 +11094,7 @@ export default function Home() {
                               {category.products.map((product) => (
                                 <article
                                   key={product.id}
-                                  className="group overflow-hidden rounded-[32px] border border-sky-100/50 bg-white/70 backdrop-blur-md shadow-[0_4px_20px_rgba(14,165,233,0.03)] ring-1 ring-black/5 transition-all hover:scale-[1.02] hover:bg-white hover:shadow-[0_12px_32px_rgba(14,165,233,0.12)] hover:ring-sky-200/60"
+                                  className="group overflow-hidden rounded-[20px] border border-sky-100/50 bg-white/70 backdrop-blur-md shadow-[0_4px_20px_rgba(14,165,233,0.03)] ring-1 ring-black/5 transition-all duration-200 touch-manipulation active:scale-[0.98] hover:bg-white hover:shadow-[0_12px_32px_rgba(14,165,233,0.12)] hover:ring-sky-200/60"
                                 >
                                   <div className="flex h-full flex-col">
                                     <div className="relative aspect-[4/3] w-full shrink-0">
@@ -11313,161 +11295,9 @@ export default function Home() {
                           <EmptyState text="No hay resultados para tu busqueda." />
                         ) : null}
                       </div>
-                      ) : (
-                        <div className="space-y-6">
-                          {filteredStoreCategories.length === 0 ? (
-                            <div className="overflow-hidden rounded-[28px] border border-sky-100/60 bg-white/80 shadow-[0_10px_30px_rgba(15,15,15,0.04)]">
-                              <EmptyState text={storeSearchQuery.trim() ? 'No hay resultados para tu busqueda.' : 'Aun no tienes productos. Agrega el primero o importa tu menu.'} />
-                            </div>
-                          ) : (
-                            filteredStoreCategories.map((category) => (
-                              <section key={category.id} className="overflow-hidden rounded-[28px] border border-sky-100/60 bg-white/80 shadow-[0_10px_30px_rgba(15,15,15,0.04)]">
-                                <div className="flex flex-col gap-2 border-b border-black/5 px-4 py-3.5 sm:flex-row sm:items-center sm:justify-between sm:px-5">
-                                  <div className="flex items-center gap-3">
-                                    <h3 className="text-[15px] font-bold tracking-tight text-neutral-900">{category.name}</h3>
-                                    <span className="inline-flex items-center rounded-full bg-sky-50 px-2.5 py-0.5 text-[11px] font-bold text-sky-700 ring-1 ring-sky-200/70">
-                                      {category.products.length} producto{category.products.length === 1 ? '' : 's'}
-                                    </span>
-                                  </div>
-                                  <div className="flex items-center gap-2">
-                                    <button
-                                      type="button"
-                                      onClick={() => openProductModal(category.id)}
-                                      className="inline-flex items-center gap-1.5 rounded-full bg-neutral-950 px-3.5 py-2 text-[12px] font-bold text-white transition hover:bg-neutral-800 active:scale-[0.97]"
-                                    >
-                                      <Plus className="h-3.5 w-3.5" strokeWidth={2.5} />
-                                      Agregar producto
-                                    </button>
-                                    <button
-                                      type="button"
-                                      onClick={() => void deleteCategory(category.id, category.name, category.products.length)}
-                                      disabled={Boolean(activeActionKey) || category.products.length > 0}
-                                      title={category.products.length > 0 ? 'Primero elimina o mueve sus productos.' : `Eliminar categoria ${category.name}`}
-                                      className="inline-flex items-center gap-1.5 rounded-full border border-black/10 bg-white px-3.5 py-2 text-[12px] font-semibold text-neutral-700 transition hover:border-rose-200 hover:bg-rose-50 hover:text-rose-700 disabled:cursor-not-allowed disabled:border-black/5 disabled:bg-neutral-100 disabled:text-neutral-400"
-                                    >
-                                      <Trash2 className="h-3.5 w-3.5" strokeWidth={1.9} />
-                                      {activeActionKey === `category:${category.id}:delete` ? 'Eliminando...' : 'Eliminar'}
-                                    </button>
-                                  </div>
-                                </div>
-                                <div className="divide-y divide-black/5">
-                                  {category.products.length === 0 ? (
-                                    <div className="flex flex-col items-center gap-3 px-4 py-8 text-center sm:flex-row sm:justify-between sm:px-5 sm:text-left">
-                                      <div className="min-w-0">
-                                        <p className="text-[13px] font-semibold text-neutral-700">
-                                          Esta categoria no tiene productos aun.
-                                        </p>
-                                        <p className="mt-0.5 text-[12px] text-neutral-400">
-                                          Agrega el primero para publicarlo en tu menu.
-                                        </p>
-                                      </div>
-                                      <button
-                                        type="button"
-                                        onClick={() => openProductModal(category.id)}
-                                        className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-neutral-950 px-4 py-2 text-[12px] font-bold text-white transition hover:bg-neutral-800 active:scale-[0.97]"
-                                      >
-                                        <Plus className="h-3.5 w-3.5" strokeWidth={2.5} />
-                                        Agregar producto
-                                      </button>
-                                    </div>
-                                  ) : (
-                                    category.products.map((product) => (
-                                      <div
-                                        key={product.id}
-                                        className={`flex flex-col gap-3 px-4 py-3.5 transition hover:bg-sky-50/40 sm:flex-row sm:items-center sm:gap-4 ${selectedProductIds.has(product.id) ? 'bg-sky-50/60' : ''}`}
-                                      >
-                                        {isSelectionMode ? (
-                                          <button
-                                            type="button"
-                                            onClick={() => toggleProductSelection(product.id)}
-                                            className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-md border-2 transition ${selectedProductIds.has(product.id) ? 'border-sky-500 bg-sky-500 text-white' : 'border-neutral-300 bg-white text-transparent hover:border-sky-300'}`}
-                                            aria-label={selectedProductIds.has(product.id) ? `Quitar ${product.name} de la selección` : `Seleccionar ${product.name}`}
-                                          >
-                                            <Check className="h-4 w-4" strokeWidth={3} />
-                                          </button>
-                                        ) : null}
-                                        <div className="h-14 w-14 shrink-0 overflow-hidden rounded-2xl border border-black/5 bg-neutral-100">
-                                          {product.image ? (
-                                            <img src={product.image} alt={product.name} className="h-full w-full object-cover" loading="lazy" />
-                                          ) : (
-                                            <div className="flex h-full w-full items-center justify-center text-lg font-bold text-neutral-300">{product.name.charAt(0).toUpperCase()}</div>
-                                          )}
-                                        </div>
-                                        <div className="min-w-0 flex-1">
-                                          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                                            <p className="truncate text-[15px] font-bold text-neutral-900">{product.name}</p>
-                                            <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-sky-50 px-2.5 py-0.5 text-[11px] font-bold text-sky-700 ring-1 ring-sky-200/70">
-                                              {category.name}
-                                            </span>
-                                            {product.promoType === 'MULTI_BUY' && product.promoBuyQuantity != null && product.promoPayQuantity != null && product.promoBuyQuantity > 0 && product.promoPayQuantity > 0 ? (
-                                              <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-0.5 text-[11px] font-bold text-emerald-700">
-                                                {product.promoBuyQuantity} x {product.promoPayQuantity}
-                                              </span>
-                                            ) : null}
-                                            {!product.isAvailable ? (
-                                              <span className="rounded-full bg-neutral-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-neutral-500">Agotado</span>
-                                            ) : null}
-                                          </div>
-                                          {product.description ? (
-                                            <p className="mt-1 truncate text-[13px] text-neutral-500">{product.description}</p>
-                                          ) : null}
-                                        </div>
-                                        <div className="flex flex-wrap items-center justify-between gap-3 sm:w-auto sm:flex-nowrap sm:justify-start sm:gap-4">
-                                          <div className="flex items-center gap-1.5">
-                                            <span className="text-[15px] font-bold text-neutral-900">{product.discountPrice ? formatCurrency(product.discountPrice) : formatCurrency(product.price)}</span>
-                                          </div>
-                                          <button
-                                            type="button"
-                                            role="switch"
-                                            aria-checked={product.isAvailable}
-                                            onClick={() => void toggleProductAvailability(product)}
-                                            disabled={activeAvailabilityProductId === product.id}
-                                            className={`relative inline-flex h-10 w-[68px] items-center rounded-full border px-1 transition ${product.isAvailable ? 'border-emerald-300 bg-emerald-500' : 'border-neutral-300 bg-neutral-300'} disabled:cursor-not-allowed disabled:opacity-60`}
-                                          >
-                                            <span className={`inline-flex h-8 w-8 items-center justify-center rounded-full bg-white text-[10px] font-bold uppercase tracking-[0.08em] text-neutral-700 shadow-sm transition ${product.isAvailable ? 'translate-x-[26px]' : 'translate-x-0'}`}>
-                                              {product.isAvailable ? 'On' : 'Off'}
-                                            </span>
-                                          </button>
-                                          <div className="flex items-center gap-1.5">
-                                            <button
-                                              type="button"
-                                              onClick={() => openEditProductModal(product)}
-                                              className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-black/10 bg-white text-neutral-800 transition hover:bg-neutral-100"
-                                              aria-label={`Editar ${product.name}`}
-                                            >
-                                              <Pencil className="h-4 w-4" strokeWidth={1.9} />
-                                            </button>
-                                            <button
-                                              type="button"
-                                              onClick={() => openDuplicateProductModal(product)}
-                                              className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-sky-100 bg-sky-50 text-sky-600 transition hover:bg-sky-100"
-                                              aria-label={`Duplicar ${product.name}`}
-                                              title="Duplicar producto"
-                                            >
-                                              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.9} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
-                                            </button>
-                                            <button
-                                              type="button"
-                                              onClick={() => openDeleteProductModal(product)}
-                                              className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-rose-200 bg-rose-50 text-rose-600 transition hover:bg-rose-100"
-                                              aria-label={`Eliminar ${product.name}`}
-                                            >
-                                              <Trash2 className="h-4 w-4" strokeWidth={1.9} />
-                                            </button>
-                                          </div>
-                                        </div>
-                                      </div>
-                                    ))
-                                  )}
-                                </div>
-                              </section>
-                            ))
-                          )}
-                        </div>
-                      )}
 
                       {isSelectionMode ? (
-                        <div className="fixed inset-x-0 bottom-4 z-[70] px-4">
+                        <div className="fixed inset-x-0 bottom-[max(1rem,env(safe-area-inset-bottom))] z-[70] px-4">
                           <div className="mx-auto flex max-w-2xl flex-wrap items-center justify-center gap-2 rounded-3xl border border-sky-100 bg-white/95 px-4 py-3 shadow-[0_20px_50px_rgba(15,15,15,0.2)] backdrop-blur-xl ring-1 ring-black/5">
                             <span className="mx-1 text-[13px] font-bold text-neutral-900">
                               {selectedProductCount === 0 ? 'Nada seleccionado' : `${selectedProductCount} seleccionado${selectedProductCount === 1 ? '' : 's'}`}
