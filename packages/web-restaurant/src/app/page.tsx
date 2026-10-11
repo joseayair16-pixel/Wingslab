@@ -10815,7 +10815,7 @@ export default function Home() {
                         </div>
                       </section>
 
-                      <div className="flex flex-col gap-3 rounded-[20px] border border-black/5 bg-white p-3 shadow-[0_10px_30px_rgba(15,15,15,0.04)] sm:flex-row sm:items-center sm:justify-between">
+                      <div className="flex flex-col gap-3 -mx-3 min-[420px]:-mx-4 rounded-none border-x-0 border-y border-black/5 bg-white p-3 shadow-[0_10px_30px_rgba(15,15,15,0.04)] sm:mx-0 sm:flex-row sm:items-center sm:justify-between sm:rounded-[20px] sm:border">
                         <div className="relative min-w-0 flex-1 sm:max-w-md">
                           <svg className="pointer-events-none absolute left-4 top-1/2 h-[18px] w-[18px] -translate-y-1/2 text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M17 10a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
                           <input
@@ -10928,7 +10928,7 @@ export default function Home() {
 
                         <div className="w-full space-y-4 sm:space-y-6">
                           {filteredStoreCategories.length === 0 ? (
-                            <div className="overflow-hidden rounded-[28px] border border-sky-100/60 bg-white/80 shadow-[0_10px_30px_rgba(15,15,15,0.04)]">
+                            <div className="overflow-hidden -mx-3 min-[420px]:-mx-4 rounded-none border-x-0 border-y border-sky-100/60 bg-white/80 shadow-[0_10px_30px_rgba(15,15,15,0.04)] sm:mx-0 sm:rounded-[28px] sm:border">
                               <EmptyState text={storeSearchQuery.trim() ? 'No hay resultados para tu busqueda.' : 'Aun no tienes productos. Agrega el primero o importa tu menu.'} />
                             </div>
                           ) : (
