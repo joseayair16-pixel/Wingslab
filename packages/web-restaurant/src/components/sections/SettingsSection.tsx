@@ -647,9 +647,9 @@ export const SettingsSection = React.memo(function SettingsSection({
   }, [activeSettingsTab]);
 
   return (
-    <div className="flex flex-col gap-6 w-full max-w-[1400px] mx-auto min-w-0">
+    <div className="flex flex-col gap-4 sm:gap-6 w-full max-w-[1400px] mx-auto min-w-0">
         {/* Cabecera Premium */}
-        <div className="relative overflow-hidden rounded-[32px] border border-white/60 bg-gradient-to-b from-white/95 to-white/70 px-5 py-6 shadow-[0_20px_60px_-15px_rgba(0,0,0,0.05)] backdrop-blur-xl sm:px-6 md:px-8 md:py-8">
+        <div className="relative overflow-hidden rounded-[24px] border border-white/60 bg-gradient-to-b from-white/95 to-white/70 px-4 py-5 shadow-[0_20px_60px_-15px_rgba(0,0,0,0.05)] backdrop-blur-xl sm:rounded-[32px] sm:px-6 md:px-8 md:py-8">
           <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-sky-500 via-blue-500 to-purple-500 opacity-20"></div>
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-5 relative z-10">
             <div className="w-full min-w-0 sm:w-auto">
@@ -664,10 +664,10 @@ export const SettingsSection = React.memo(function SettingsSection({
         </div>
 
         {/* Contenedor Principal */}
-        <div className="flex flex-col gap-6 min-w-0">
+        <div className="flex flex-col gap-4 sm:gap-6 min-w-0">
           {/* Navegación Horizontal */}
           <nav className="relative w-full shrink-0 z-10">
-            <div ref={tabsScrollRef} className="flex gap-2 overflow-x-auto overscroll-x-contain pb-4 scrollbar-none flex-nowrap -mx-1 px-1 snap-x snap-proximity" style={{ WebkitOverflowScrolling: 'touch', scrollPaddingLeft: '0.25rem', scrollPaddingRight: '0.25rem' }}>
+            <div ref={tabsScrollRef} className="flex gap-2 overflow-x-auto overscroll-x-contain pb-4 scrollbar-none flex-nowrap snap-x snap-proximity" style={{ WebkitOverflowScrolling: 'touch', scrollPaddingLeft: '0.25rem', scrollPaddingRight: '0.25rem' }}>
               {settingsTabs.map((tab: any) => {
                 const isActive = activeSettingsTab === tab.key;
                 return (
@@ -702,10 +702,10 @@ export const SettingsSection = React.memo(function SettingsSection({
 
           {/* Área de Contenido Glassmórfica */}
           <div className="min-w-0 flex-1 animate-fade-in">
-            <div className="relative rounded-[32px] border border-white/60 bg-white/70 p-4 shadow-[0_8px_40px_-12px_rgba(0,0,0,0.08)] backdrop-blur-2xl sm:p-6 md:p-10 min-h-[500px] overflow-hidden">
+            <div className="relative rounded-[24px] border border-white/60 bg-white/70 p-3 shadow-[0_8px_40px_-12px_rgba(0,0,0,0.08)] backdrop-blur-2xl min-[420px]:p-4 sm:rounded-[32px] sm:p-6 md:p-10 min-h-[500px] overflow-hidden">
               
               {/* Encabezado de sección dinámico */}
-              <div className="mb-6 sm:mb-8 flex items-start sm:items-center gap-3 sm:gap-4 border-b border-black/5 pb-5 sm:pb-6">
+              <div className="mb-5 sm:mb-8 flex items-start sm:items-center gap-3 sm:gap-4 border-b border-black/5 pb-4 sm:pb-6">
                 <div className="flex h-12 w-12 sm:h-14 sm:w-14 shrink-0 items-center justify-center rounded-[18px] sm:rounded-[20px] bg-gradient-to-br from-sky-100 to-blue-50 text-sky-600 border border-sky-200/50 shadow-inner">
                   <span className="scale-110 sm:scale-125">{currentSettingsTab.icon}</span>
                 </div>

@@ -31,12 +31,22 @@ public class MainActivity extends BridgeActivity {
             if (webView == null) return;
             WebSettings settings = webView.getSettings();
             settings.setTextZoom(100);
-            // Desactivar el font autosizing del WebView (Android 8+).
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                settings.setTextAutosizingEnabled(false);
-            }
+            disableTextAutosizing(settings);
         } catch (Throwable t) {
             // Nunca romper el arranque por un ajuste de presentación.
+        }
+    }
+
+    /**
+     * `WebSettings.setTextAutosizingEnabled` no está expuesto en el android.jar
+     * de compilación, así que se invoca por reflexión: si el método existe en
+     * el dispositivo se desactiva el auto-ajuste de fuente; si no, no se hace nada.
+     */
+    private void disableTextAutosizing(WebSettings settings) {
+        try {
+            java.lang.reflect.Method method = WebSettings.class.getMethod("setTextAutosizingEnabled", boolean.class);
+            method.invoke(settings, Boolean.FALSE);
+        } catch (Throwable ignored) {
         }
     }
 

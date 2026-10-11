@@ -9535,7 +9535,7 @@ export default function Home() {
             </aside>
 
             <div className="flex-1 bg-[#f8f8f8] lg:ml-[260px] min-w-0">
-              <div className="p-4 md:p-6 max-w-full overflow-hidden">
+              <div className="p-3 min-[420px]:p-4 md:p-6 max-w-full overflow-hidden">
                 {(() => {
                   const overdueCount = billingSummary?.recentSettlements?.filter((s: any) => s.status === 'OVERDUE').length ?? 0;
                   const isSuspended = profile?.status === 'SUSPENDED';
@@ -10671,7 +10671,7 @@ export default function Home() {
                 ) : null}
 
                 {activeSection === 'store' && profile ? (
-                    <div className={`space-y-6 ${isSelectionMode ? 'pb-32' : ''}`}>
+                    <div className={`w-full space-y-4 sm:space-y-6 ${isSelectionMode ? 'pb-32' : ''}`}>
                       <section className="overflow-hidden rounded-[24px] border border-black/5 bg-white shadow-[0_18px_60px_rgba(15,15,15,0.05)] sm:rounded-[32px]">
                         <div className="relative">
                           {storeDraft.coverImage.trim() ? (
@@ -10807,9 +10807,10 @@ export default function Home() {
                           <button
                             type="button"
                             onClick={() => setShowMenuPreview(true)}
-                            className="mt-5 inline-flex min-h-[48px] w-full items-center justify-center gap-2 rounded-2xl border border-sky-200/70 bg-sky-50/60 px-4 py-3 text-[13px] font-bold text-sky-800 transition active:scale-[0.99] hover:bg-sky-50 lg:mt-6 lg:w-auto"
+                            className="mt-5 inline-flex min-h-[52px] w-full items-center justify-center gap-2.5 rounded-2xl bg-sky-600 px-5 py-3.5 text-sm font-bold text-white shadow-[0_8px_20px_rgba(2,132,199,0.35)] transition active:scale-[0.98] hover:bg-sky-500 lg:mt-6 lg:w-auto"
                           >
-                            📱 Ver mi menú como cliente
+                            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" /></svg>
+                            Ver mi menú como cliente
                           </button>
                         </div>
                       </section>
@@ -10859,7 +10860,7 @@ export default function Home() {
                         </div>
                       </div>
 
-                      <div className="-mx-1 overflow-x-auto px-1 pb-4 pt-2 scrollbar-none sticky top-0 z-20 bg-gradient-to-b from-[#f8f8f8] via-[#f8f8f8]/95 to-transparent backdrop-blur-md" style={{ WebkitOverflowScrolling: 'touch' }}>
+                      <div className="overflow-x-auto overscroll-x-contain pb-4 pt-2 scrollbar-none sticky top-0 z-20 bg-gradient-to-b from-[#f8f8f8] via-[#f8f8f8]/95 to-transparent backdrop-blur-md" style={{ WebkitOverflowScrolling: 'touch' }}>
                         <div className="flex min-w-max gap-3 px-2">
                           {storeCategories.map((category) => (
                             <div
@@ -10925,26 +10926,26 @@ export default function Home() {
                         </div>
                       </div>
 
-                        <div className="space-y-6">
+                        <div className="w-full space-y-4 sm:space-y-6">
                           {filteredStoreCategories.length === 0 ? (
                             <div className="overflow-hidden rounded-[28px] border border-sky-100/60 bg-white/80 shadow-[0_10px_30px_rgba(15,15,15,0.04)]">
                               <EmptyState text={storeSearchQuery.trim() ? 'No hay resultados para tu busqueda.' : 'Aun no tienes productos. Agrega el primero o importa tu menu.'} />
                             </div>
                           ) : (
                             filteredStoreCategories.map((category) => (
-                              <section key={category.id} className="overflow-hidden rounded-[28px] border border-sky-100/60 bg-white/80 shadow-[0_10px_30px_rgba(15,15,15,0.04)]">
-                                <div className="flex flex-col gap-2 border-b border-black/5 px-4 py-3.5 sm:flex-row sm:items-center sm:justify-between sm:px-5">
-                                  <div className="flex items-center gap-3">
-                                    <h3 className="text-[15px] font-bold tracking-tight text-neutral-900">{category.name}</h3>
-                                    <span className="inline-flex items-center rounded-full bg-sky-50 px-2.5 py-0.5 text-[11px] font-bold text-sky-700 ring-1 ring-sky-200/70">
+                              <section key={category.id} className="overflow-hidden rounded-[24px] border border-sky-100 bg-white shadow-[0_10px_30px_rgba(15,15,15,0.05)] sm:rounded-[28px]">
+                                <div className="flex flex-col gap-3 border-b border-sky-100/70 bg-sky-50/50 px-4 py-3.5 sm:flex-row sm:items-center sm:justify-between sm:px-5">
+                                  <div className="flex min-w-0 items-center gap-2.5">
+                                    <h3 className="min-w-0 flex-1 truncate text-base font-extrabold tracking-tight text-neutral-950">{category.name}</h3>
+                                    <span className="inline-flex shrink-0 items-center rounded-full bg-sky-600 px-2.5 py-0.5 text-[11px] font-bold text-white">
                                       {category.products.length} producto{category.products.length === 1 ? '' : 's'}
                                     </span>
                                   </div>
-                                  <div className="flex items-center gap-2">
+                                  <div className="flex items-center justify-end gap-2">
                                     <button
                                       type="button"
                                       onClick={() => openProductModal(category.id)}
-                                      className="inline-flex min-h-[44px] items-center gap-1.5 rounded-full bg-neutral-950 px-3.5 py-2 text-[12px] font-bold text-white transition hover:bg-neutral-800 active:scale-[0.97]"
+                                      className="inline-flex min-h-[44px] shrink-0 items-center gap-1.5 rounded-full bg-neutral-950 px-3.5 py-2 text-[12px] font-bold text-white transition hover:bg-neutral-800 active:scale-[0.97]"
                                     >
                                       <Plus className="h-3.5 w-3.5" strokeWidth={2.5} />
                                       Agregar producto
@@ -10954,7 +10955,7 @@ export default function Home() {
                                       onClick={() => void deleteCategory(category.id, category.name, category.products.length)}
                                       disabled={Boolean(activeActionKey) || category.products.length > 0}
                                       title={category.products.length > 0 ? 'Primero elimina o mueve sus productos.' : `Eliminar categoria ${category.name}`}
-                                      className="inline-flex items-center gap-1.5 rounded-full border border-black/10 bg-white px-3.5 py-2 text-[12px] font-semibold text-neutral-700 transition hover:border-rose-200 hover:bg-rose-50 hover:text-rose-700 disabled:cursor-not-allowed disabled:border-black/5 disabled:bg-neutral-100 disabled:text-neutral-400"
+                                      className="inline-flex min-h-[44px] shrink-0 items-center gap-1.5 rounded-full border border-black/10 bg-white px-3.5 py-2 text-[12px] font-semibold text-neutral-700 transition hover:border-rose-200 hover:bg-rose-50 hover:text-rose-700 disabled:cursor-not-allowed disabled:border-black/5 disabled:bg-neutral-100 disabled:text-neutral-400"
                                     >
                                       <Trash2 className="h-3.5 w-3.5" strokeWidth={1.9} />
                                       {activeActionKey === `category:${category.id}:delete` ? 'Eliminando...' : 'Eliminar'}
