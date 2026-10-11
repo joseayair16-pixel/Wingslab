@@ -10672,7 +10672,7 @@ export default function Home() {
 
                 {activeSection === 'store' && profile ? (
                     <div className={`w-full space-y-4 sm:space-y-6 ${isSelectionMode ? 'pb-32' : ''}`}>
-                      <section className="overflow-hidden rounded-[24px] border border-black/5 bg-white shadow-[0_18px_60px_rgba(15,15,15,0.05)] sm:rounded-[32px]">
+                      <section className="overflow-hidden -mx-3 -mt-3 min-[420px]:-mx-4 min-[420px]:-mt-4 rounded-b-[24px] rounded-t-none border-x-0 border-b border-t-0 border-black/5 bg-white shadow-[0_18px_60px_rgba(15,15,15,0.05)] sm:mx-0 sm:mt-0 sm:rounded-[32px] sm:border">
                         <div className="relative">
                           {storeDraft.coverImage.trim() ? (
                             <img
