@@ -293,6 +293,91 @@ function resolveRefreshToken(config: RefreshConfig): string | null | undefined {
   return typeof config.refreshToken === 'function' ? config.refreshToken() : config.refreshToken;
 }
 
+type RefreshOutcome =
+  | { ok: true; token: string; refreshToken: string }
+  | { ok: false; definitive: boolean };
+
+// Vuelos de refresh en curso, claveados por destino + token. Todas las
+// peticiones que reciben 401 al mismo tiempo comparten UNA sola rotación en
+// el backend: sin esto, cada una rota por su cuenta, la primera revoca el
+// token de las demás y esas terminan deslogueando al usuario aunque todo
+// fuera válido (carrera clásica de refresh).
+const inflightRefreshes = new Map<string, Promise<RefreshOutcome>>();
+
+/**
+ * Renueva el access token con reintento ante fallos transitorios (red,
+ * timeout, 5xx, 429). Solo un rechazo definitivo del servidor (4xx o
+ * respuesta inválida con 200) marca `definitive: true`, que es el ÚNICO caso
+ * en que la app debe cerrar la sesión. Un fallo transitorio persistente se
+ * reporta como no-definitivo para que la sesión se conserve y la UI reintente.
+ */
+export async function refreshAccessToken(
+  apiBase: string,
+  refreshToken: string,
+  timeoutMs: number,
+): Promise<RefreshOutcome> {
+  const key = `${apiBase}::${refreshToken}`;
+  const existing = inflightRefreshes.get(key);
+  if (existing) return existing;
+
+  const task = (async (): Promise<RefreshOutcome> => {
+    const maxAttempts = 3;
+    for (let i = 0; i < maxAttempts; i += 1) {
+      let res: Response;
+      try {
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), Math.max(1, timeoutMs));
+        try {
+          res = await fetch(`${apiBase}/auth/refresh`, {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ refreshToken }),
+            signal: controller.signal,
+          });
+        } finally {
+          clearTimeout(timer);
+        }
+      } catch {
+        // Red caída o timeout: reintentar con backoff, nunca desloguear por esto.
+        if (i < maxAttempts - 1) {
+          await wait(400 * (i + 1));
+          continue;
+        }
+        return { ok: false, definitive: false };
+      }
+
+      if (res.status === 429 || res.status >= 500) {
+        if (i < maxAttempts - 1) {
+          await wait(500 * (i + 1));
+          continue;
+        }
+        return { ok: false, definitive: false };
+      }
+
+      let payload: { success?: boolean; data?: { token?: string; refreshToken?: string } } | null = null;
+      try {
+        payload = (await res.json()) as { success?: boolean; data?: { token?: string; refreshToken?: string } };
+      } catch {
+        payload = null;
+      }
+
+      if (res.ok && payload?.success && payload.data?.token) {
+        return { ok: true, token: payload.data.token, refreshToken: payload.data.refreshToken || refreshToken };
+      }
+      // 4xx o 200 inválido: el servidor rechazó el refresh de forma definitiva.
+      return { ok: false, definitive: true };
+    }
+    return { ok: false, definitive: false };
+  })();
+
+  inflightRefreshes.set(key, task);
+  try {
+    return await task;
+  } finally {
+    inflightRefreshes.delete(key);
+  }
+}
+
 export async function requestJson<T>(params: {
   apiBase: string;
   path: string;
@@ -314,6 +399,10 @@ export async function requestJson<T>(params: {
   const useRequestCache = !hasBody && params.options?.cache === 'force-cache';
   const cacheKey = useRequestCache ? getCacheKey(params.apiBase, params.path) : '';
   let currentToken = params.token;
+  // Se activa cuando el refresh se intentó pero falló por causa transitoria
+  // (red/timeout/5xx): en ese caso NO se debe cerrar la sesión, solo reportar
+  // un error reintentable para que la UI reintente sin desloguear.
+  let refreshTransientFailure = false;
 
   if (cacheKey) {
     const entry = requestCache.get(cacheKey);
@@ -344,47 +433,41 @@ export async function requestJson<T>(params: {
 
       const refreshConfig = params.refreshConfig ?? defaultRefreshConfig;
       if (!response.ok && response.status === 401 && refreshConfig && attempt === 0) {
-        try {
-          const refreshController = new AbortController();
-          const refreshTimer = setTimeout(() => refreshController.abort(), timeoutMs);
-          let refreshRes: Response;
-          try {
-            refreshRes = await fetch(`${params.apiBase}/auth/refresh`, {
-              method: 'POST',
-              headers: { 'content-type': 'application/json' },
-              body: JSON.stringify({ refreshToken: resolveRefreshToken(refreshConfig) }),
-              signal: refreshController.signal,
-            });
-          } finally {
-            clearTimeout(refreshTimer);
+        const storedRefreshToken = resolveRefreshToken(refreshConfig);
+        if (!storedRefreshToken) {
+          refreshConfig.onRefreshFailed();
+        } else {
+          const outcome = await refreshAccessToken(params.apiBase, storedRefreshToken, timeoutMs);
+          if (outcome.ok) {
+            refreshConfig.onRefreshed(outcome.token, outcome.refreshToken);
+            currentToken = outcome.token;
+            continue;
           }
-
-          if (refreshRes.ok) {
-            const refreshPayload = await refreshRes.json();
-            if (refreshPayload.success && refreshPayload.data) {
-              refreshConfig.onRefreshed(
-                refreshPayload.data.token,
-                refreshPayload.data.refreshToken,
-              );
-              currentToken = refreshPayload.data.token;
-              continue;
-            }
+          if (outcome.definitive) {
+            refreshConfig.onRefreshFailed();
+          } else {
+            refreshTransientFailure = true;
           }
-        } catch {
-          // Refresh failed — fall through to original error
         }
-        refreshConfig.onRefreshFailed();
       }
 
       const rawBody = await response.text();
       const payload = rawBody ? (JSON.parse(rawBody) as T | ApiErrorResponse) : null;
 
       if (!response.ok) {
-        if (response.status === 401) {
+        if (response.status === 401 && !refreshTransientFailure) {
           // Session no longer valid (e.g. user deleted): notify the app to log out.
           notifySessionExpired();
         }
         const fallback = params.fallbackMessage || 'No se pudo completar la solicitud.';
+        if (response.status === 401 && refreshTransientFailure) {
+          throw new ApiRequestError({
+            message: 'Error de conexión. Intenta de nuevo.',
+            status: response.status,
+            kind: 'network',
+            isTransient: true,
+          });
+        }
         const classification = classifyResponseError(response.status);
 
         throw new ApiRequestError({
@@ -528,46 +611,31 @@ export async function submitReview(params: {
     return { ok: false, message: 'Error de conexión. Intenta de nuevo.' };
   }
 
-  if (response.status === 401 && refreshToken) {
-    try {
-      const refreshController = new AbortController();
-      const refreshTimer = setTimeout(() => refreshController.abort(), timeoutMs);
-      let refreshRes: Response;
-      try {
-        refreshRes = await fetch(`${params.apiBase}/auth/refresh`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ refreshToken }),
-          signal: refreshController.signal,
-        });
-      } finally {
-        clearTimeout(refreshTimer);
-      }
+  // Igual que en requestJson: un refresh que falla por causa transitoria no
+  // debe cerrar la sesión; solo un rechazo definitivo lo justifica.
+  let refreshTransientFailure = false;
 
-      if (refreshRes.ok) {
-        const refreshPayload = (await refreshRes.json()) as {
-          success: boolean;
-          data?: { token: string; refreshToken?: string };
-        };
-        if (refreshPayload.success && refreshPayload.data) {
-          const newToken = refreshPayload.data.token;
-          const newRefreshToken = refreshPayload.data.refreshToken || refreshToken;
-          const user = params.getUser?.() || session.user;
-          if (user) {
-            persistStoredSession({
-              storageKey: params.storageKey,
-              apiBase: params.apiBase,
-              token: newToken,
-              refreshToken: newRefreshToken,
-              user,
-            });
-          }
-          params.onTokenRefreshed?.(newToken, newRefreshToken);
-          response = await doSubmit(newToken);
-        }
+  if (response.status === 401 && refreshToken) {
+    const outcome = await refreshAccessToken(params.apiBase, refreshToken, timeoutMs);
+    if (outcome.ok) {
+      const newToken = outcome.token;
+      const newRefreshToken = outcome.refreshToken;
+      const user = params.getUser?.() || session.user;
+      if (user) {
+        persistStoredSession({
+          storageKey: params.storageKey,
+          apiBase: params.apiBase,
+          token: newToken,
+          refreshToken: newRefreshToken,
+          user,
+        });
       }
-    } catch {
-      // Refresh failed — fall through to error handling below
+      params.onTokenRefreshed?.(newToken, newRefreshToken);
+      response = await doSubmit(newToken);
+    } else if (!outcome.definitive) {
+      // Fallo transitorio (red/timeout/5xx): no desloguear; el 401 original se
+      // reporta abajo como error reintentable.
+      refreshTransientFailure = true;
     }
   }
 
@@ -591,8 +659,11 @@ export async function submitReview(params: {
   }
 
   if (response.status === 401) {
-    params.onSessionExpired?.();
-    return { ok: false, message: 'Tu sesión ha expirado. Inicia sesión de nuevo.' };
+    if (!refreshTransientFailure) {
+      params.onSessionExpired?.();
+      return { ok: false, message: 'Tu sesión ha expirado. Inicia sesión de nuevo.' };
+    }
+    return { ok: false, message: 'No se pudo guardar tu calificación. Intenta de nuevo.' };
   }
 
   return {
