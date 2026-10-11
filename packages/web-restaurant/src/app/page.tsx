@@ -10782,19 +10782,7 @@ export default function Home() {
                             <div className="h-52 w-full bg-gradient-to-br from-sky-400 via-sky-600 to-sky-900 min-[420px]:h-64 md:h-80 lg:h-96" />
                           )}
                           <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
-                          <div className="absolute inset-x-0 top-0 flex items-start justify-between gap-2 p-3 min-[420px]:p-4 md:p-6 lg:p-8">
-                            <div className="flex min-w-0 flex-wrap items-center gap-2">
-                              <div className="hidden rounded-full border border-white/40 bg-white/90 px-4 py-2.5 text-[11px] font-bold uppercase tracking-widest text-sky-900 shadow-sm ring-1 ring-black/5 backdrop-blur-md sm:block">
-                                Vista Previa: Tu Tienda
-                              </div>
-                              <button
-                                type="button"
-                                onClick={() => setShowMenuPreview(true)}
-                                className="inline-flex min-h-[44px] items-center rounded-full border border-white/40 bg-white/90 px-4 py-2.5 text-[11px] font-bold uppercase tracking-widest text-neutral-700 shadow-sm ring-1 ring-black/5 backdrop-blur-md transition active:scale-95 hover:bg-white hover:text-sky-900"
-                              >
-                                📱 Menu en cliente
-                              </button>
-                            </div>
+                          <div className="absolute inset-x-0 top-0 flex items-start justify-end gap-2 p-3 min-[420px]:p-4 md:p-6 lg:p-8">
                             <button
                               type="button"
                               onClick={openCoverImageModal}
@@ -10914,6 +10902,13 @@ export default function Home() {
                               </span>
                             </div>
                           </div>
+                          <button
+                            type="button"
+                            onClick={() => setShowMenuPreview(true)}
+                            className="mt-5 inline-flex min-h-[48px] w-full items-center justify-center gap-2 rounded-2xl border border-sky-200/70 bg-sky-50/60 px-4 py-3 text-[13px] font-bold text-sky-800 transition active:scale-[0.99] hover:bg-sky-50 lg:mt-6 lg:w-auto"
+                          >
+                            📱 Ver mi menú como cliente
+                          </button>
                         </div>
                       </section>
 
