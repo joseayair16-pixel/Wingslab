@@ -9089,17 +9089,26 @@ export default function Home() {
         </div>
       ) : null}
       {isLogoModalOpen ? (
-        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/55 px-4 py-5">
-          <div className="w-full max-w-[680px] rounded-[28px] bg-white p-5 shadow-[0_28px_90px_rgba(15,15,15,0.34)] sm:p-6">
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.22em] text-neutral-400">Imagen de perfil</p>
-                <h3 className="mt-2 text-2xl font-semibold tracking-[-0.03em] text-neutral-950">
-                  Editar logo del restaurante
+        <div className="fixed inset-0 z-[80] flex items-end justify-center bg-black/55 sm:items-center sm:px-4 sm:py-5"
+          onClick={() => { setIsLogoModalOpen(false); setLogoValidationError(''); setLogoPreviewError(false); }}>
+          <div className="flex max-h-[92dvh] w-full max-w-[680px] flex-col overflow-hidden rounded-t-[28px] bg-white shadow-[0_28px_90px_rgba(15,15,15,0.34)] sm:rounded-[28px]"
+            onClick={(e) => e.stopPropagation()}>
+            <div className="flex shrink-0 justify-center bg-white pt-2.5 sm:hidden" aria-hidden="true">
+              <span className="h-1.5 w-12 rounded-full bg-neutral-300" />
+            </div>
+            <div className="flex shrink-0 items-center gap-3 border-b border-black/5 px-5 py-4">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-neutral-100">
+                {logoDraft.trim() && !logoPreviewError ? (
+                  <img src={logoDraft} alt="" className="h-full w-full object-cover" />
+                ) : (
+                  <span className="text-base font-bold text-neutral-400">{buildRestaurantInitials(storeDraft.name || profile?.name || 'Tu tienda')}</span>
+                )}
+              </div>
+              <div className="min-w-0 flex-1">
+                <h3 className="truncate text-lg font-bold tracking-tight text-neutral-950">
+                  Logo del restaurante
                 </h3>
-                <p className="mt-2 text-sm leading-6 text-neutral-600">
-                  Puedes pegar una URL o subir una imagen desde tu equipo. Al guardar, el logo se actualiza en tu tienda.
-                </p>
+                <p className="truncate text-[13px] text-neutral-500">Se muestra en tu tienda y tus comandas</p>
               </div>
               <button
                 type="button"
@@ -9108,16 +9117,17 @@ export default function Home() {
                   setLogoValidationError('');
                   setLogoPreviewError(false);
                 }}
-                className="rounded-full border border-black/10 px-4 py-2 text-sm font-semibold text-neutral-700 transition hover:bg-neutral-100"
+                className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-neutral-100 text-neutral-500 transition active:scale-90 hover:bg-neutral-200 hover:text-neutral-700"
+                aria-label="Cerrar"
               >
-                Cerrar
+                <X className="h-5 w-5" strokeWidth={2.5} />
               </button>
             </div>
 
-            <div className="mt-6 grid gap-5 lg:grid-cols-[0.95fr_1.05fr]">
-              <div className="flex items-center justify-center overflow-hidden rounded-[24px] border border-black/5 bg-neutral-50 p-8">
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-5" style={{ WebkitOverflowScrolling: 'touch' }}>
+              <div className="flex items-center justify-center rounded-[24px] border border-black/5 bg-neutral-50 p-6">
                 {logoDraft.trim() && !logoPreviewError ? (
-                  <div className="flex h-40 w-40 items-center justify-center overflow-hidden rounded-[36px] border-4 border-white bg-white shadow-[0_10px_24px_rgba(15,15,15,0.14)]">
+                  <div className="flex h-32 w-32 items-center justify-center overflow-hidden rounded-[28px] border-4 border-white bg-white shadow-[0_10px_24px_rgba(15,15,15,0.14)]">
                     <img
                       src={logoDraft}
                       alt="Vista previa del logo"
@@ -9127,15 +9137,15 @@ export default function Home() {
                     />
                   </div>
                 ) : (
-                  <div className="flex h-40 w-40 items-center justify-center rounded-[36px] border-4 border-white bg-[linear-gradient(135deg,#fcd34d_0%,#f97316_100%)] text-3xl font-semibold text-white shadow-[0_10px_24px_rgba(15,15,15,0.14)]">
+                  <div className="flex h-32 w-32 items-center justify-center rounded-[28px] border-4 border-white bg-[linear-gradient(135deg,#fcd34d_0%,#f97316_100%)] text-3xl font-semibold text-white shadow-[0_10px_24px_rgba(15,15,15,0.14)]">
                     {logoDraft.trim() ? '!' : buildRestaurantInitials(storeDraft.name || profile?.name || 'Tu tienda')}
                   </div>
                 )}
               </div>
 
-              <div className="grid gap-4">
+              <div className="mt-4 grid gap-4">
                 <Field
-                  label="URL actual"
+                  label="URL del logo"
                   value={logoDraft}
                   onChange={(value) => {
                     setLogoDraft(value);
@@ -9151,59 +9161,71 @@ export default function Home() {
                   </p>
                 ) : null}
 
-                <div className="rounded-[24px] border border-black/5 bg-neutral-50 p-4">
-                  <p className="text-sm font-semibold text-neutral-950">Subir imagen</p>
-                  <p className="mt-1 text-sm leading-6 text-neutral-500">
-                    Selecciona una imagen cuadrada o centrada y la prepararemos para guardarla como logo.
-                  </p>
-                  <input
-                    ref={logoInputRef}
-                    type="file"
-                    accept="image/*"
-                    onChange={(event) => void handleLogoFileChange(event)}
-                    className="hidden"
-                  />
+                <input
+                  ref={logoInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={(event) => void handleLogoFileChange(event)}
+                  className="hidden"
+                />
+                <div>
                   <button
                     type="button"
                     onClick={() => logoInputRef.current?.click()}
                     disabled={processingLogo}
-                    className="mt-4 rounded-full border border-black/10 bg-white px-4 py-3 text-sm font-semibold text-neutral-800 transition hover:bg-neutral-100 disabled:cursor-not-allowed disabled:bg-neutral-200"
+                    className="flex min-h-[52px] w-full items-center justify-center gap-2 rounded-2xl bg-neutral-950 px-5 py-3.5 text-sm font-bold text-white transition active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-60"
                   >
-                    {processingLogo ? 'Procesando imagen...' : 'Subir imagen'}
+                    <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
+                    {processingLogo ? 'Procesando imagen...' : 'Subir desde tu equipo'}
                   </button>
-                </div>
-
-                <div className="rounded-[24px] border border-black/5 bg-neutral-50 p-4 text-sm leading-6 text-neutral-500">
-                  Recomendacion: usa una imagen clara, centrada y preferentemente cuadrada para que el logo se vea bien en todos los tamaños.
+                  <p className="mt-2 text-center text-xs text-neutral-400">PNG o JPG · cuadrada se ve mejor en todos los tamaños</p>
                 </div>
               </div>
             </div>
 
-            <div className="mt-6 flex justify-end">
-              <button
-                type="button"
-                onClick={() => void saveLogo()}
-                disabled={savingLogo || processingLogo || Boolean(getImageValidationMessage(logoDraft.trim(), 'logo'))}
-                className="rounded-full bg-neutral-950 px-5 py-3 text-sm font-semibold text-white transition hover:bg-neutral-800 disabled:cursor-not-allowed disabled:bg-neutral-300"
-              >
-                {savingLogo ? 'Guardando...' : 'Guardar logo'}
-              </button>
+            <div className="shrink-0 border-t border-black/5 bg-white/90 px-5 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3 backdrop-blur-xl">
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsLogoModalOpen(false);
+                    setLogoValidationError('');
+                    setLogoPreviewError(false);
+                  }}
+                  className="min-h-[52px] flex-1 rounded-full border border-black/10 px-5 py-3.5 text-sm font-bold text-neutral-600 transition active:scale-[0.98] hover:bg-neutral-100"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void saveLogo()}
+                  disabled={savingLogo || processingLogo || Boolean(getImageValidationMessage(logoDraft.trim(), 'logo'))}
+                  className="min-h-[52px] flex-1 rounded-full bg-neutral-950 px-5 py-3.5 text-sm font-bold text-white transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {savingLogo ? 'Guardando...' : 'Guardar logo'}
+                </button>
+              </div>
             </div>
           </div>
         </div>
       ) : null}
       {isCoverImageModalOpen ? (
-        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/55 px-4 py-5">
-          <div className="w-full max-w-[680px] rounded-[28px] bg-white p-5 shadow-[0_28px_90px_rgba(15,15,15,0.34)] sm:p-6">
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.22em] text-neutral-400">Portada</p>
-                <h3 className="mt-2 text-2xl font-semibold tracking-[-0.03em] text-neutral-950">
-                  Editar imagen de portada
+        <div className="fixed inset-0 z-[80] flex items-end justify-center bg-black/55 sm:items-center sm:px-4 sm:py-5"
+          onClick={() => { setIsCoverImageModalOpen(false); setCoverImageValidationError(''); setCoverImagePreviewError(false); }}>
+          <div className="flex max-h-[92dvh] w-full max-w-[680px] flex-col overflow-hidden rounded-t-[28px] bg-white shadow-[0_28px_90px_rgba(15,15,15,0.34)] sm:rounded-[28px]"
+            onClick={(e) => e.stopPropagation()}>
+            <div className="flex shrink-0 justify-center bg-white pt-2.5 sm:hidden" aria-hidden="true">
+              <span className="h-1.5 w-12 rounded-full bg-neutral-300" />
+            </div>
+            <div className="flex shrink-0 items-center gap-3 border-b border-black/5 px-5 py-4">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-neutral-100 text-neutral-400">
+                <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+              </div>
+              <div className="min-w-0 flex-1">
+                <h3 className="truncate text-lg font-bold tracking-tight text-neutral-950">
+                  Portada de la tienda
                 </h3>
-                <p className="mt-2 text-sm leading-6 text-neutral-600">
-                  Puedes pegar una URL o subir una imagen desde tu equipo. Al guardar, la portada se actualiza en tu tienda.
-                </p>
+                <p className="truncate text-[13px] text-neutral-500">La imagen grande arriba de tu menú</p>
               </div>
               <button
                 type="button"
@@ -9212,32 +9234,33 @@ export default function Home() {
                   setCoverImageValidationError('');
                   setCoverImagePreviewError(false);
                 }}
-                className="rounded-full border border-black/10 px-4 py-2 text-sm font-semibold text-neutral-700 transition hover:bg-neutral-100"
+                className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-neutral-100 text-neutral-500 transition active:scale-90 hover:bg-neutral-200 hover:text-neutral-700"
+                aria-label="Cerrar"
               >
-                Cerrar
+                <X className="h-5 w-5" strokeWidth={2.5} />
               </button>
             </div>
 
-            <div className="mt-6 grid gap-5 lg:grid-cols-[1.08fr_0.92fr]">
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-5" style={{ WebkitOverflowScrolling: 'touch' }}>
               <div className="overflow-hidden rounded-[24px] border border-black/5 bg-neutral-50">
                 {coverImageDraft.trim() && !coverImagePreviewError ? (
                   <img
                     src={coverImageDraft}
                     alt="Vista previa de la portada"
-                    className="h-[260px] w-full object-cover"
+                    className="h-44 w-full object-cover"
                     onLoad={() => setCoverImagePreviewError(false)}
                     onError={() => setCoverImagePreviewError(true)}
                   />
                 ) : (
-                  <div className="flex h-[260px] items-center justify-center bg-[linear-gradient(135deg,#fcd34d_0%,#f97316_100%)] text-center text-sm font-medium text-white/90">
+                  <div className="flex h-44 items-center justify-center bg-[linear-gradient(135deg,#fcd34d_0%,#f97316_100%)] px-6 text-center text-sm font-medium text-white/90">
                     {coverImageDraft.trim() ? 'No se pudo mostrar esa imagen' : 'Tu portada se verá aquí'}
                   </div>
                 )}
               </div>
 
-              <div className="grid gap-4">
+              <div className="mt-4 grid gap-4">
                 <Field
-                  label="URL actual"
+                  label="URL de la portada"
                   value={coverImageDraft}
                   onChange={(value) => {
                     setCoverImageDraft(value);
@@ -9253,47 +9276,54 @@ export default function Home() {
                   </p>
                 ) : null}
 
-                <div className="rounded-[24px] border border-black/5 bg-neutral-50 p-4">
-                  <p className="text-sm font-semibold text-neutral-950">Subir imagen</p>
-                  <p className="mt-1 text-sm leading-6 text-neutral-500">
-                    Selecciona una imagen y la prepararemos para guardarla como portada.
-                  </p>
-                  <input
-                    ref={coverImageInputRef}
-                    type="file"
-                    accept="image/*"
-                    onChange={(event) => void handleCoverImageFileChange(event)}
-                    className="hidden"
-                  />
+                <input
+                  ref={coverImageInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={(event) => void handleCoverImageFileChange(event)}
+                  className="hidden"
+                />
+                <div>
                   <button
                     type="button"
                     onClick={() => coverImageInputRef.current?.click()}
                     disabled={processingCoverImage}
-                    className="mt-4 rounded-full border border-black/10 bg-white px-4 py-3 text-sm font-semibold text-neutral-800 transition hover:bg-neutral-100 disabled:cursor-not-allowed disabled:bg-neutral-200"
+                    className="flex min-h-[52px] w-full items-center justify-center gap-2 rounded-2xl bg-neutral-950 px-5 py-3.5 text-sm font-bold text-white transition active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-60"
                   >
-                    {processingCoverImage ? 'Procesando imagen...' : 'Subir imagen'}
+                    <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
+                    {processingCoverImage ? 'Procesando imagen...' : 'Subir desde tu equipo'}
                   </button>
-                </div>
-
-                <div className="rounded-[24px] border border-black/5 bg-neutral-50 p-4 text-sm leading-6 text-neutral-500">
-                  Recomendacion: usa una imagen horizontal, ligera y bien iluminada para que se vea bien en web y movil.
+                  <p className="mt-2 text-center text-xs text-neutral-400">Horizontal y liviana se ve mejor en web y móvil</p>
                 </div>
               </div>
             </div>
 
-            <div className="mt-6 flex justify-end">
-              <button
-                type="button"
-                onClick={() => void saveCoverImage()}
-                disabled={
-                  savingCoverImage ||
-                  processingCoverImage ||
-                  Boolean(getImageValidationMessage(coverImageDraft.trim(), 'cover'))
-                }
-                className="rounded-full bg-neutral-950 px-5 py-3 text-sm font-semibold text-white transition hover:bg-neutral-800 disabled:cursor-not-allowed disabled:bg-neutral-300"
-              >
-                {savingCoverImage ? 'Guardando...' : 'Guardar portada'}
-              </button>
+            <div className="shrink-0 border-t border-black/5 bg-white/90 px-5 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3 backdrop-blur-xl">
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsCoverImageModalOpen(false);
+                    setCoverImageValidationError('');
+                    setCoverImagePreviewError(false);
+                  }}
+                  className="min-h-[52px] flex-1 rounded-full border border-black/10 px-5 py-3.5 text-sm font-bold text-neutral-600 transition active:scale-[0.98] hover:bg-neutral-100"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void saveCoverImage()}
+                  disabled={
+                    savingCoverImage ||
+                    processingCoverImage ||
+                    Boolean(getImageValidationMessage(coverImageDraft.trim(), 'cover'))
+                  }
+                  className="min-h-[52px] flex-1 rounded-full bg-neutral-950 px-5 py-3.5 text-sm font-bold text-white transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {savingCoverImage ? 'Guardando...' : 'Guardar portada'}
+                </button>
+              </div>
             </div>
           </div>
         </div>
