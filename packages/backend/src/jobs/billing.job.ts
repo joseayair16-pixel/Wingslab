@@ -15,8 +15,10 @@ async function processAllRestaurants(): Promise<void> {
   for (const restaurant of restaurants) {
     try {
       console.log(`[BillingJob] Processing ${restaurant.name} (${restaurant.id})...`);
-      await createBillingSettlement(restaurant.id);
-      console.log(`[BillingJob] Successfully created settlement for ${restaurant.name}.`);
+      const settlement = await createBillingSettlement(restaurant.id);
+      if (settlement) {
+        console.log(`[BillingJob] Successfully created settlement for ${restaurant.name}.`);
+      }
     } catch (error) {
       console.error(`[BillingJob] Failed to create settlement for ${restaurant.name}:`, error);
     }

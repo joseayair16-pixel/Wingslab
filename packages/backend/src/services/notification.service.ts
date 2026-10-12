@@ -164,7 +164,9 @@ export const sendPushNotification = async (
           await sendWithRetry(pushSubscription, payloadString, { ttl, urgency });
           return { success: true, endpoint: sub.endpoint };
         } catch (error: any) {
-          logger.error(`[PushService] Fallo definitivo al enviar push a ${sub.endpoint}`, {
+          // Privacidad: nunca loguear el endpoint completo (contiene el token
+          // de empuje). El id de suscripción basta para depurar.
+          logger.error(`[PushService] Fallo definitivo al enviar push (suscripción ${sub.id})`, {
             error: error.message,
             statusCode: error.statusCode,
             title: payload.title,
