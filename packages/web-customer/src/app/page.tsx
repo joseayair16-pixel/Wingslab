@@ -23,6 +23,7 @@ import {
 } from '@sadel/shared';
 import { Icon } from '@iconify/react';
 import { usePushNotifications } from '../hooks/usePushNotifications';
+import { buildOrderAcceptedNotice } from '../lib/orderStatusNotices';
 import {
   isNativePlatform,
   nativeAllowSleep,
@@ -3718,6 +3719,26 @@ export default function Home() {
             requiresAcknowledgement: false,
             orderReference: matchingOrder?.orderReference,
             orderId: payload.orderId,
+          });
+        } else if (eventName === 'order:accepted' && payload.orderId) {
+          // El restaurante confirmó el pedido: avisar aunque el comensal esté
+          // en otra sección. Sin esta rama el evento solo entraba al centro de
+          // notificaciones en silencio y se perdía de vista.
+          try {
+            if (window.localStorage.getItem('customerAlertSoundEnabled') !== 'false') {
+              void playLlegue();
+            }
+            if (navigator.vibrate) navigator.vibrate([300, 100, 300]);
+          } catch (e) {}
+          const matchingOrder = orders.find((o) => o.id === payload.orderId);
+          const acceptedNotice = buildOrderAcceptedNotice(payload.orderId, matchingOrder?.orderReference);
+          showTransientNotice({
+            key: acceptedNotice.key,
+            title: acceptedNotice.title,
+            description: acceptedNotice.description,
+            tone: acceptedNotice.tone,
+            orderId: acceptedNotice.orderId,
+            orderReference: acceptedNotice.orderReference,
           });
         } else if (eventName === 'order:ready') {
           try {

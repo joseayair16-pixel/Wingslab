@@ -9,6 +9,7 @@ import { AuthModal } from '../../../components/AuthModal';
 import { CompactActiveOrderBanner, computeDelayState, formatEstimatedArrivalMinutes, formatOverdueMinutes } from '../../../components/CompactActiveOrderBanner';
 import { buildWeekSchedule, formatHour12, formatNextOpen, getCurrentShiftClose } from '../../../lib/operatingHours';
 import { completeOrderIntent, resolveOrderIntentKey } from '../../../lib/orderIntentKey';
+import { buildOrderAcceptedNotice, buildOrderReadyNotice } from '../../../lib/orderStatusNotices';
 import { ensureGoogleMapsScript, getGoogleMaps } from '../../../lib/googleMaps';
 import RatingModal from '../../../components/RatingModal';
 import { useForegroundPolling } from '../../../hooks/useForegroundPolling';
@@ -1641,7 +1642,36 @@ export default function RestaurantPage({
           });
         }
 
+        if (eventName === 'order:accepted' && payload.orderId) {
+          // El restaurante confirmó el pedido mientras el comensal navega el
+          // menú: avisar aquí mismo, porque esta vista no entra al centro de
+          // notificaciones del inicio.
+          try {
+            if (window.localStorage.getItem('customerAlertSoundEnabled') !== 'false') {
+              void playLlegue();
+            }
+            if (navigator.vibrate) navigator.vibrate([300, 100, 300]);
+          } catch (e) {}
+          const matchingOrder = activeOrderListItems.find((o) => o.id === payload.orderId)
+            || (recentCreatedOrderRef.current?.id === payload.orderId ? recentCreatedOrderRef.current : null);
+          const acceptedNotice = buildOrderAcceptedNotice(payload.orderId, matchingOrder?.orderReference);
+          setTransientNotice({
+            id: acceptedNotice.key,
+            title: acceptedNotice.title,
+            description: acceptedNotice.description,
+            tone: acceptedNotice.tone,
+            orderId: acceptedNotice.orderId,
+            orderReference: acceptedNotice.orderReference,
+          });
+        }
+
         if (eventName === 'order:ready' && payload.orderId) {
+          try {
+            if (window.localStorage.getItem('customerAlertSoundEnabled') !== 'false') {
+              void playLlegue();
+            }
+            if (navigator.vibrate) navigator.vibrate([300, 100, 300]);
+          } catch (e) {}
           requestJson<{ success: true; data: CustomerOrderDetail }>({
             apiBase,
             path: `/me/pedidos/${payload.orderId}`,
@@ -1650,8 +1680,33 @@ export default function RestaurantPage({
           }).then((res) => {
             if (res.success && res.data.fulfillmentType === 'PICKUP') {
               setPickupReadyOrder(res.data);
+            } else {
+              // Delivery (o detalle no disponible): aviso visible con sonido,
+              // igual que en el inicio. Antes esta rama quedaba en silencio.
+              const readyNotice = buildOrderReadyNotice(
+                payload.orderId,
+                res.success ? res.data.orderReference : undefined
+              );
+              setTransientNotice({
+                id: readyNotice.key,
+                title: readyNotice.title,
+                description: readyNotice.description,
+                tone: readyNotice.tone,
+                orderId: readyNotice.orderId,
+                orderReference: readyNotice.orderReference,
+              });
             }
-          }).catch(() => {});
+          }).catch(() => {
+            const readyNotice = buildOrderReadyNotice(payload.orderId);
+            setTransientNotice({
+              id: readyNotice.key,
+              title: readyNotice.title,
+              description: readyNotice.description,
+              tone: readyNotice.tone,
+              orderId: readyNotice.orderId,
+              orderReference: readyNotice.orderReference,
+            });
+          });
         }
 
         if (eventName === 'order:schedule-proposal' && payload.orderId) {
