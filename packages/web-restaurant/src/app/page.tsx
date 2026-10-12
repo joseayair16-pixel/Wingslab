@@ -899,9 +899,9 @@ export default function Home() {
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [verifyingCode, setVerifyingCode] = useState(false);
-  const telefonoValido = /^[0-9+\-\s()]{8,20}$/.test(phone.trim());
-  const contrasenaValida = password.trim().length >= 6;
-  const telefonoError = !phone.trim() ? '' : telefonoValido ? '' : 'Ingresa un teléfono válido.';
+  const telefonoValido = /^\d{10}$/.test(phone);
+  const contrasenaValida = password.length >= 6;
+  const telefonoError = !phone ? '' : telefonoValido ? '' : 'El teléfono debe tener 10 dígitos.';
   const contrasenaError = !password.trim() ? '' : contrasenaValida ? '' : 'La contraseña debe tener al menos 6 caracteres.';
   const puedeEnviar = Boolean(phone.trim()) && Boolean(password.trim()) && telefonoValido && contrasenaValida;
   const [error, setError] = useState('');
@@ -9277,7 +9277,7 @@ export default function Home() {
       {!isRestaurantSession ? (
         <div className="min-h-dvh bg-white lg:grid lg:grid-cols-[minmax(0,1.04fr)_minmax(0,1fr)] lg:items-stretch lg:bg-slate-50">
           {/* Identidad y bienvenida: fotografía del restaurante + mensaje de marca */}
-          <section className="relative isolate flex min-h-[clamp(7.5rem,24dvh,13rem)] flex-col justify-end overflow-hidden bg-slate-900 px-5 pb-6 pt-10 sm:px-8 lg:min-h-dvh lg:px-12 lg:pb-12 lg:pt-10 xl:px-16">
+          <section className="relative isolate flex min-h-[clamp(9.5rem,32dvh,15rem)] flex-col justify-end overflow-hidden bg-slate-900 px-5 pb-7 pt-12 sm:px-8 lg:min-h-dvh lg:px-12 lg:pb-14 lg:pt-12 xl:px-16">
             <picture>
               {welcomeImage ? null : (
                 <source media="(max-width: 1023px)" srcSet="/login-restaurante-movil-900.jpg" />
@@ -9295,22 +9295,22 @@ export default function Home() {
             <div aria-hidden="true" className="absolute inset-0 -z-10 bg-slate-950/40" />
             <div
               aria-hidden="true"
-              className="absolute inset-0 -z-10 bg-gradient-to-t from-slate-950 via-slate-950/75 to-slate-950/25 lg:bg-gradient-to-br lg:from-slate-950 lg:via-slate-950/70 lg:to-slate-950/30"
+              className="absolute inset-0 -z-10 bg-gradient-to-t from-slate-950 via-slate-950/80 to-slate-950/35 lg:bg-gradient-to-br lg:from-slate-950 lg:via-slate-950/75 lg:to-slate-950/35"
             />
 
             <div className="hidden lg:block">
-              <SaDelLogo className="on-dark h-9 w-auto object-contain xl:h-10" />
+              <SaDelLogo className="on-dark h-10 w-auto object-contain xl:h-12" />
             </div>
 
             <div className="mx-auto mt-auto w-full max-w-lg lg:mx-0">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-sky-300">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-sky-300 lg:text-xs">
                 SaDeL para restaurantes
               </p>
-              <h1 className="mt-3 text-[clamp(1.6rem,5.2vw,2.6rem)] font-bold leading-[1.1] tracking-tight text-white lg:mt-4 lg:text-[clamp(2.1rem,3.1vw,3.05rem)]">
+              <h1 className="mt-3 text-[clamp(1.75rem,5.6vw,2.85rem)] font-bold leading-[1.08] tracking-tight text-white lg:mt-5 lg:text-[clamp(2.3rem,3.3vw,3.3rem)]">
                 Tu restaurante,{' '}
                 <span className="text-sky-400">en buenas manos</span>
               </h1>
-              <p className="mt-3 max-w-md text-[15px] leading-relaxed text-slate-200/90 lg:mt-4 lg:text-base">
+              <p className="mt-3 max-w-md text-[15px] leading-relaxed text-slate-200/90 lg:mt-5 lg:text-[17px]">
                 Gestiona tus pedidos, menú y operación desde un solo lugar.
               </p>
 
@@ -9339,7 +9339,7 @@ export default function Home() {
 
           {/* Formulario de acceso */}
           <section className="flex items-center justify-center bg-white px-5 pb-[max(2rem,env(safe-area-inset-bottom))] pt-8 sm:px-8 lg:bg-slate-50/60 lg:px-10 lg:py-14">
-            <div className="w-full max-w-[26rem]">
+            <div className="w-full max-w-[27rem]">
               <header className="lg:hidden">
                 <SaDelLogo className="h-9 w-auto object-contain" />
               </header>
@@ -9348,13 +9348,13 @@ export default function Home() {
                 <p className="text-[11px] font-bold uppercase tracking-[0.24em] text-sky-600">
                   Panel de administración
                 </p>
-                <span className="mt-5 hidden h-12 w-12 items-center justify-center rounded-2xl bg-sky-50 text-sky-600 ring-1 ring-inset ring-sky-100 lg:flex">
-                  <ChefHat className="h-6 w-6" aria-hidden="true" />
+                <span className="mt-6 hidden h-14 w-14 items-center justify-center rounded-2xl bg-sky-50 text-sky-600 ring-1 ring-inset ring-sky-100 lg:flex">
+                  <ChefHat className="h-7 w-7" aria-hidden="true" />
                 </span>
-                <h2 className="mt-4 text-[clamp(1.55rem,5vw,1.9rem)] font-bold tracking-tight text-slate-900 lg:mt-5 lg:text-[2rem]">
+                <h2 className="mt-4 text-[clamp(1.75rem,5.4vw,2.15rem)] font-bold tracking-tight text-slate-900 lg:mt-5 lg:text-[2.35rem] lg:leading-[1.12]">
                   ¡Bienvenido de nuevo!
                 </h2>
-                <p className="mt-2 text-[15px] leading-relaxed text-slate-500">
+                <p className="mt-2.5 text-[15px] leading-relaxed text-slate-500 lg:text-base">
                   Accede a tu restaurante y comienza a gestionar todo desde un solo lugar.
                 </p>
               </div>
@@ -9369,21 +9369,25 @@ export default function Home() {
                 }}
               >
                 <Field
+                  variant="app"
                   id="login-telefono"
                   label="Teléfono"
                   value={phone}
                   onChange={(value) => {
-                    setPhone(value);
+                    // Solo dígitos y 10 posiciones: si llega un número con prefijo (+52…),
+                    // se conservan los últimos 10, igual que normaliza el backend.
+                    setPhone(value.replace(/\D/g, '').slice(-10));
                     if (error) setError('');
                   }}
                   placeholder="5512345678"
                   autoComplete="tel"
-                  inputMode="tel"
-                  icon={<Phone className="h-[18px] w-[18px]" />}
+                  inputMode="numeric"
+                  icon={<Phone className="h-[19px] w-[19px]" />}
                   disabled={verifyingCode}
                   error={telefonoError || undefined}
                 />
                 <Field
+                  variant="app"
                   id="login-contrasena"
                   label="Contraseña"
                   value={password}
@@ -9394,6 +9398,7 @@ export default function Home() {
                   placeholder="••••••••"
                   type="password"
                   autoComplete="current-password"
+                  icon={<Lock className="h-[19px] w-[19px]" />}
                   disabled={verifyingCode}
                   error={contrasenaError || undefined}
                 />
@@ -9402,7 +9407,7 @@ export default function Home() {
                   type="submit"
                   disabled={verifyingCode || !puedeEnviar}
                   aria-busy={verifyingCode}
-                  className="mt-1 inline-flex min-h-[52px] w-full items-center justify-center gap-2 rounded-2xl bg-sky-600 px-5 text-[15px] font-semibold text-white shadow-lg shadow-sky-600/25 transition duration-200 hover:bg-sky-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-600 active:scale-[0.99] disabled:cursor-not-allowed disabled:bg-sky-300 disabled:shadow-none"
+                  className="mt-1 inline-flex h-14 w-full items-center justify-center gap-2 rounded-xl bg-sky-600 px-5 text-base font-semibold tracking-tight text-white shadow-[0_10px_28px_-12px] shadow-sky-600/60 transition duration-200 hover:bg-sky-700 hover:shadow-[0_12px_32px_-12px] hover:shadow-sky-700/60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-600 active:scale-[0.99] disabled:cursor-not-allowed disabled:bg-sky-200 disabled:text-white/90 disabled:shadow-none"
                 >
                   {verifyingCode ? (
                     <>
@@ -14230,11 +14235,13 @@ function Field({
   id,
   autoComplete,
   inputMode,
+  maxLength,
   error,
   hint,
   disabled = false,
   required = false,
   icon,
+  variant = 'default',
 }: {
   label: string;
   value: string;
@@ -14246,25 +14253,62 @@ function Field({
   id?: string;
   autoComplete?: string;
   inputMode?: 'text' | 'tel' | 'email' | 'numeric' | 'decimal' | 'search' | 'url' | 'none';
+  maxLength?: number;
   error?: string;
   hint?: string;
   disabled?: boolean;
   required?: boolean;
   icon?: React.ReactNode;
+  /** `app`: tratamiento de producto (login). `default`: estilo vigente del panel. */
+  variant?: 'default' | 'app';
 }) {
   const [showPassword, setShowPassword] = useState(false);
   const isPassword = type === 'password';
   const errorId = error && id ? `${id}-error` : undefined;
   const hintId = hint && id ? `${id}-hint` : undefined;
+  const isApp = variant === 'app';
+  const hasAdornment = Boolean(icon) || isPassword;
+
+  const inputClassName = isApp
+    ? [
+        'block w-full min-w-0 rounded-xl border bg-white text-[15px] font-medium text-slate-900',
+        'transition-[border-color,box-shadow] duration-150 outline-none',
+        'placeholder:font-normal placeholder:text-slate-400',
+        'disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400',
+        hasAdornment ? 'h-14' : 'h-14 px-4',
+        icon ? 'pl-12' : 'pl-4',
+        isPassword ? 'pr-12' : 'pr-4',
+        error
+          ? 'border-rose-300 focus:border-rose-500 focus:ring-4 focus:ring-rose-500/10'
+          : 'border-slate-200 hover:border-slate-300 focus:border-sky-500 focus:ring-4 focus:ring-sky-500/15',
+      ].join(' ')
+    : `block w-full min-w-0 rounded-[18px] border py-3.5 text-base font-medium text-neutral-950 transition-all duration-300 outline-none placeholder:text-neutral-400 hover:bg-neutral-100/80 focus:bg-white focus:ring-4 disabled:cursor-not-allowed disabled:opacity-60 sm:text-[15px] ${
+        error
+          ? 'border-rose-300 bg-rose-50/40 focus:border-rose-400 focus:ring-rose-400/20'
+          : 'border-black/5 bg-neutral-100/50 focus:border-sky-400 focus:ring-sky-400/20 focus:shadow-md'
+      } ${isPassword ? 'pr-14' : 'pr-5'} ${icon ? 'pl-12' : 'pl-5'}`;
 
   return (
-    <label className="group grid min-w-0 gap-2 text-sm text-neutral-600" htmlFor={id}>
-      <span className="text-[12px] font-bold uppercase tracking-[0.1em] text-neutral-600 transition-colors group-focus-within:text-sky-500">
+    <label className="group grid min-w-0 gap-2" htmlFor={id}>
+      <span
+        className={
+          isApp
+            ? 'text-[13px] font-medium leading-none text-slate-500 transition-colors group-focus-within:text-sky-600'
+            : 'text-[12px] font-bold uppercase tracking-[0.1em] text-neutral-600 transition-colors group-focus-within:text-sky-500'
+        }
+      >
         {label}
       </span>
       <div className="relative">
         {icon ? (
-          <span className="pointer-events-none absolute inset-y-0 left-0 my-auto flex h-5 w-5 items-center justify-center text-neutral-400 transition-colors group-focus-within:text-sky-500" aria-hidden="true">
+          <span
+            className={`pointer-events-none absolute inset-y-0 left-0 flex w-12 items-center justify-center ${
+              isApp
+                ? 'text-slate-400 transition-colors group-focus-within:text-sky-600'
+                : 'text-neutral-400 transition-colors group-focus-within:text-sky-500'
+            }`}
+            aria-hidden="true"
+          >
             {icon}
           </span>
         ) : null}
@@ -14278,35 +14322,37 @@ function Field({
           placeholder={placeholder}
           autoComplete={autoComplete}
           inputMode={inputMode}
+          maxLength={maxLength}
           required={required}
           disabled={disabled}
           aria-invalid={error ? true : undefined}
           aria-describedby={[errorId, hintId].filter(Boolean).join(' ') || undefined}
-          className={`block w-full min-w-0 rounded-[18px] border bg-neutral-100/50 py-3.5 text-base font-medium text-neutral-950 shadow-inner outline-none transition-all duration-300 placeholder:text-neutral-400 hover:bg-neutral-100/80 focus:bg-white focus:ring-4 disabled:cursor-not-allowed disabled:opacity-60 sm:text-[15px] ${
-            error
-              ? 'border-rose-300 bg-rose-50/40 focus:border-rose-400 focus:ring-rose-400/20'
-              : 'border-black/5 focus:border-sky-400 focus:ring-sky-400/20 focus:shadow-md'
-          } ${isPassword ? 'pr-14' : 'pr-5'} ${icon ? 'pl-12' : 'pl-5'}`}
+          className={inputClassName}
         />
         {isPassword && (
           <button
             type="button"
             onClick={() => setShowPassword((current) => !current)}
             aria-label={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+            aria-pressed={showPassword}
             disabled={disabled}
-            className="absolute right-2 inset-y-0 my-auto flex h-8 w-8 items-center justify-center rounded-full text-neutral-400 transition-colors duration-200 hover:bg-sky-500/10 hover:text-sky-600 active:scale-95 focus-visible:text-sky-600"
+            className={`absolute inset-y-0 right-0 flex w-12 items-center justify-center transition-colors duration-150 ${
+              isApp
+                ? 'rounded-r-xl text-slate-400 hover:text-sky-600 focus-visible:text-sky-600'
+                : 'my-auto h-8 w-8 rounded-full text-neutral-400 hover:bg-sky-500/10 hover:text-sky-600'
+            }`}
           >
             {showPassword ? <EyeSlashIcon /> : <EyeIcon />}
           </button>
         )}
       </div>
       {error ? (
-        <span id={errorId} role="alert" className="text-[13px] font-medium text-rose-600">
+        <span id={errorId} role="alert" className={`text-[13px] font-medium ${isApp ? 'text-rose-600' : 'text-rose-600'}`}>
           {error}
         </span>
       ) : null}
       {!error && hint ? (
-        <span id={hintId} className="text-[13px] text-neutral-500">
+        <span id={hintId} className={`text-[13px] ${isApp ? 'text-slate-500' : 'text-neutral-500'}`}>
           {hint}
         </span>
       ) : null}
