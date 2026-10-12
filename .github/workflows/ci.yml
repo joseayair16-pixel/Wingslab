@@ -45,7 +45,24 @@ jobs:
   test:
     name: Tests
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
+    # PostgreSQL efímero y aislado SOLO para este job: credenciales de prueba
+    # descartables, base recién creada y destruida al terminar el job. Nunca
+    # hay conexión a la base de producción desde CI.
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: sadel
+          POSTGRES_PASSWORD: sadel_test
+          POSTGRES_DB: sadel_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U sadel -d sadel_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -54,6 +71,17 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run build -w @sadel/shared
+      # `prisma db push` y no `migrate deploy`: la cadena de migraciones del
+      # repo no es reproducible sobre una base VACÍA (la migración
+      # 20260714000000_add_hardware_store_business_type usa el enum BusinessType
+      # antes de que exista y aborta con P3018/42704). En una base efímera sin
+      # datos no hay riesgo de perder nada, y db push además genera el cliente
+      # de Prisma que necesitan los tests. Para desarrollo y producción se
+      # sigue usando `npm run db:migrate` (ver README/QUICKSTART).
+      - name: Preparar el esquema de la base de pruebas
+        run: npm run db:push -w @sadel/backend
+        env:
+          DATABASE_URL: postgresql://sadel:sadel_test@localhost:5432/sadel_test
       - run: npm run test -w @sadel/backend
         env:
           DATABASE_URL: postgresql://sadel:sadel_test@localhost:5432/sadel_test

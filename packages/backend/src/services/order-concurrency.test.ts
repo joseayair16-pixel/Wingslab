@@ -139,19 +139,92 @@ describe('creación de pedidos — concurrencia real', () => {
     const { customer } = await createCustomer();
     const { restaurant, category } = await createRestaurant();
     const product = await createProduct(category.id, restaurant.id, { trackStock: true, stock: 5 });
+    const promo = await prisma.promoCode.create({
+      data: {
+        restaurantId: restaurant.id,
+        code: `PROMO${TAG}`.slice(0, 20),
+        type: 'PERCENT',
+        value: 10,
+        maxUses: 5,
+      },
+    });
     const key = `idem-key-${TAG}-b`;
     const before = await prisma.customer.findUniqueOrThrow({ where: { id: customer.id }, select: { totalOrders: true } });
 
-    const first = await createOrderForCustomer({ prisma, customerUserId: customer.userId, input: baseInput(restaurant.id, product.id, { clientOrderKey: key }) });
+    const first = await createOrderForCustomer({ prisma, customerUserId: customer.userId, input: baseInput(restaurant.id, product.id, { clientOrderKey: key, promoCode: promo.code }) });
     expect(first.isDuplicate).toBe(false);
-    const second = await createOrderForCustomer({ prisma, customerUserId: customer.userId, input: baseInput(restaurant.id, product.id, { clientOrderKey: key }) });
+    const second = await createOrderForCustomer({ prisma, customerUserId: customer.userId, input: baseInput(restaurant.id, product.id, { clientOrderKey: key, promoCode: promo.code }) });
     expect(second.isDuplicate).toBe(true);
     expect(second.order.id).toBe(first.order.id);
 
+    // El reintento no puede re-consumir NADA: ni stock, ni usos del cupón,
+    // ni el contador de pedidos del cliente.
     const stock = await prisma.product.findUniqueOrThrow({ where: { id: product.id }, select: { stock: true } });
     expect(stock.stock).toBe(3);
+    const promoAfter = await prisma.promoCode.findUniqueOrThrow({ where: { id: promo.id }, select: { usesCount: true } });
+    expect(promoAfter.usesCount).toBe(1);
     const after = await prisma.customer.findUniqueOrThrow({ where: { id: customer.id }, select: { totalOrders: true } });
     expect(after.totalOrders).toBe(before.totalOrders + 1);
+    expect(await prisma.orderItem.count({ where: { orderId: first.order.id } })).toBe(1);
+  }, 30000);
+
+  it('reintento secuencial tras perder la respuesta (recarga) no crea un segundo pedido', async () => {
+    const { customer } = await createCustomer();
+    const { restaurant, category } = await createRestaurant();
+    const product = await createProduct(category.id, restaurant.id, { trackStock: true, stock: 10 });
+    const key = `idem-key-${TAG}-h`;
+
+    // 1) El cliente envía el pedido y PIERDE la respuesta (timeout/red caída).
+    //    El servidor sí lo creó: el cliente no lo sabe.
+    const lost = await createOrderForCustomer({ prisma, customerUserId: customer.userId, input: baseInput(restaurant.id, product.id, { clientOrderKey: key }) });
+    expect(lost.isDuplicate).toBe(false);
+
+    // 2) El usuario recarga la página: la vista pierde sus referencias en
+    //    memoria y recupera la MISMA clave desde sessionStorage.
+    //    Vuelve a pulsar → el servidor debe devolverle SU pedido, no otro.
+    const afterReload = await createOrderForCustomer({ prisma, customerUserId: customer.userId, input: baseInput(restaurant.id, product.id, { clientOrderKey: key }) });
+
+    expect(afterReload.isDuplicate).toBe(true);
+    expect(afterReload.order.id).toBe(lost.order.id);
+    expect(afterReload.order.orderReference).toBe(lost.order.orderReference);
+    expect(await prisma.order.count({ where: { clientOrderKey: key } })).toBe(1);
+    expect(await countActive(customer.id)).toBe(1);
+    const stock = await prisma.product.findUniqueOrThrow({ where: { id: product.id }, select: { stock: true } });
+    expect(stock.stock).toBe(8);
+
+    // 3) Compra legítima posterior con el mismo contenido: pedido independiente.
+    const next = await createOrderForCustomer({ prisma, customerUserId: customer.userId, input: baseInput(restaurant.id, product.id, { clientOrderKey: `idem-key-${TAG}-h2` }) });
+    expect(next.isDuplicate).toBe(false);
+    expect(next.order.id).not.toBe(lost.order.id);
+    expect(await countActive(customer.id)).toBe(2);
+  }, 30000);
+
+it('el re-chequeo en transacción devuelve el pedido original ANTES del límite de activos', async () => {
+    const { customer } = await createCustomer();
+    const { restaurant, category } = await createRestaurant();
+    const product = await createProduct(category.id, restaurant.id);
+
+    // El cliente ya tiene 1 pedido activo y no sabe si su POST anterior se
+    // creó: reintenta DOS veces en paralelo con la misma clave.
+    await createOrderForCustomer({ prisma, customerUserId: customer.userId, input: baseInput(restaurant.id, product.id, { clientOrderKey: `idem-key-${TAG}-g0` }) });
+    expect(await countActive(customer.id)).toBe(1);
+
+    const key = `idem-key-${TAG}-g1`;
+    const results = await Promise.allSettled([
+      createOrderForCustomer({ prisma, customerUserId: customer.userId, input: baseInput(restaurant.id, product.id, { clientOrderKey: key }) }),
+      createOrderForCustomer({ prisma, customerUserId: customer.userId, input: baseInput(restaurant.id, product.id, { clientOrderKey: key }) }),
+    ]);
+
+    // Ninguno puede recibir ACTIVE_ORDERS_LIMIT_EXCEEDED: el re-chequeo dentro
+    // de la transacción (bajo el lock) devuelve el pedido ya creado.
+    const rejected = results.filter((r) => r.status === 'rejected') as PromiseRejectedResult[];
+    expect(rejected.map((r) => (r.reason as { code?: string })?.code)).not.toContain('ACTIVE_ORDERS_LIMIT_EXCEEDED');
+    const fulfilled = results.filter((r) => r.status === 'fulfilled') as PromiseFulfilledResult<{ order: { id: string }; isDuplicate: boolean }>[];
+    expect(fulfilled).toHaveLength(2);
+    expect(new Set(fulfilled.map((r) => r.value.order.id)).size).toBe(1);
+    expect(fulfilled.filter((r) => r.value.isDuplicate)).toHaveLength(1);
+    expect(await prisma.order.count({ where: { clientOrderKey: key } })).toBe(1);
+    expect(await countActive(customer.id)).toBe(2);
   }, 30000);
 
   it('claves distintas concurrentes con 1 activo previo nunca superan 2 activos', async () => {
@@ -233,4 +306,4 @@ describe('creación de pedidos — concurrencia real', () => {
     expect(failed[0].reason).toMatchObject({ code: 'ORDER_IDEMPOTENCY_FORBIDDEN' });
     expect(await prisma.order.count({ where: { clientOrderKey: key } })).toBe(1);
   }, 30000);
-}, 120000);
+});

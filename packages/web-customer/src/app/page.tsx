@@ -33,7 +33,7 @@ import {
   onNativeNotificationTap,
 } from '../lib/native';
 import { useForegroundPolling } from '../hooks/useForegroundPolling';
-import { buildOrderIntentSignature, orderIntentFromRequestBody } from '../lib/orderIntent';
+import { completeOrderIntent, resolveOrderIntentKey } from '../lib/orderIntentKey';
 import { useCustomerSounds } from '../hooks/useCustomerSounds';
 import { useCartStore, type CartItem } from '../store/cartStore';
 import { useChatStore } from '../store/chatStore';
@@ -4098,16 +4098,26 @@ export default function Home() {
       paymentMethod: selectedOrder.paymentMethod,
       ...(selectedOrder.notes ? { notes: selectedOrder.notes } : {}),
     };
+    // Clave de idempotencia del intento lógico de reordenamiento: estable
+    // mientras el contenido sea el mismo (doble toque, timeout + reintento
+    // automático de requestJson con el mismo body, recarga de la página) y
+    // renovada solo ante éxito, para que dos compras legítimas sucesivas
+    // generen dos pedidos distintos.
     // La firma se deriva del body real para que identidad y solicitud no puedan divergir.
-    const reorderSignature = buildOrderIntentSignature(orderIntentFromRequestBody(reorderBody));
-    if (!reorderKeyRef.current || reorderSignatureRef.current !== reorderSignature) {
-      reorderKeyRef.current =
-        typeof crypto !== 'undefined' && 'randomUUID' in crypto
-          ? crypto.randomUUID()
-          : `ord-${Date.now()}-${Math.random().toString(36).slice(2, 12)}`;
-      reorderSignatureRef.current = reorderSignature;
-    }
-    reorderBody.clientOrderKey = reorderKeyRef.current;
+    // Ranura propia por pedido de origen: un reordenamiento pendiente no pisa el
+    // intento de otro pedido ni el checkout de otro restaurante.
+    const reorderScope = { kind: 'reorder' as const, id: selectedOrder.id };
+    const resolvedKey = resolveOrderIntentKey({
+      body: reorderBody,
+      userId: sessionUser.id,
+      scope: reorderScope,
+      current: reorderKeyRef.current
+        ? { key: reorderKeyRef.current, signatureHash: reorderSignatureRef.current }
+        : null,
+    });
+    reorderKeyRef.current = resolvedKey.key;
+    reorderSignatureRef.current = resolvedKey.signatureHash;
+    reorderBody.clientOrderKey = resolvedKey.key;
 
     try {
       const payload = await requestJson<{ success: true; data: { id: string; orderReference: string }; isDuplicate?: boolean }>({
@@ -4121,10 +4131,13 @@ export default function Home() {
         fallbackMessage: 'No se pudo repetir el pedido.',
       });
 
-      // Éxito: el intento lógico terminó; la próxima repetición legítima usa clave nueva.
-      // En fallo la clave se conserva para que un reintento se deduplique en el backend.
+      // Confirmación del servidor: el intento lógico terminó y la próxima
+      // repetición legítima usa clave nueva. En fallo o timeout la clave se
+      // conserva (memoria y sesión), porque el resultado sigue siendo ambiguo y
+      // un reintento debe deduplicarse en el backend, no crear otro pedido.
       reorderKeyRef.current = '';
       reorderSignatureRef.current = '';
+      completeOrderIntent(reorderScope);
 
       await loadDashboard();
       setSelectedOrderId(payload.data.id);

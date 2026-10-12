@@ -8,12 +8,7 @@ import { io } from 'socket.io-client';
 import { AuthModal } from '../../../components/AuthModal';
 import { CompactActiveOrderBanner, computeDelayState, formatEstimatedArrivalMinutes, formatOverdueMinutes } from '../../../components/CompactActiveOrderBanner';
 import { buildWeekSchedule, formatHour12, formatNextOpen, getCurrentShiftClose } from '../../../lib/operatingHours';
-import { hashOrderSignature, orderIntentFromRequestBody, buildOrderIntentSignature } from '../../../lib/orderIntent';
-import {
-  clearPendingOrderAttempt,
-  findReusableOrderKey,
-  writePendingOrderAttempt,
-} from '../../../lib/pendingOrderAttempt';
+import { completeOrderIntent, resolveOrderIntentKey } from '../../../lib/orderIntentKey';
 import { ensureGoogleMapsScript, getGoogleMaps } from '../../../lib/googleMaps';
 import RatingModal from '../../../components/RatingModal';
 import { useForegroundPolling } from '../../../hooks/useForegroundPolling';
@@ -908,38 +903,33 @@ export default function RestaurantPage({
   // Clave de idempotencia: estable entre reintentos del MISMO contenido de compra
   // (red caída, timeout, doble toque, recarga) y solo cambia cuando cambia el
   // contenido real o cuando el intento anterior terminó con éxito.
-  // Se deriva del body que realmente se envía (ver orderIntentFromRequestBody),
-  // de modo que la firma y la solicitud no pueden divergir. Se usa el hash de la
-  // firma (no la firma) para no guardar instrucciones ni datos personales.
-  // La firma NUNCA identifica compras de forma permanente: tras un éxito se
-  // limpia, así que dos compras intencionales sucesivas usan claves distintas.
-  const ensureClientOrderKey = useCallback((body: Record<string, any>, context: { userId: string; restaurantId: string }) => {
-    const sigHash = hashOrderSignature(buildOrderIntentSignature(orderIntentFromRequestBody(body)));
-    if (clientOrderKeyRef.current && cartSignatureRef.current === sigHash) {
-      return clientOrderKeyRef.current;
-    }
-    // Recupera el intento pendiente tras recarga/remount del mismo contenido,
-    // usuario y restaurante: evita mintear una clave nueva para el mismo intento.
-    const reusable = findReusableOrderKey({ ...context, sigHash });
-    if (reusable) {
-      clientOrderKeyRef.current = reusable;
-      cartSignatureRef.current = sigHash;
-      return reusable;
-    }
-    const freshKey =
-      typeof crypto !== 'undefined' && 'randomUUID' in crypto
-        ? crypto.randomUUID()
-        : `ord-${Date.now()}-${Math.random().toString(36).slice(2, 12)}`;
-    clientOrderKeyRef.current = freshKey;
-    cartSignatureRef.current = sigHash;
-    writePendingOrderAttempt({ userId: context.userId, restaurantId: context.restaurantId, sigHash, key: freshKey });
-    return freshKey;
-  }, []);
+  // Se deriva del body que realmente se envía, de modo que la firma y la
+  // solicitud no pueden divergir, y en storage solo queda el hash (nunca el
+  // contenido del carrito, la dirección ni datos de pago).
+  // Ranura propia por restaurante: un checkout pendiente en curso no se pisa al
+  // navegar a otro restaurante ni al usar "Volver a pedir".
+  const checkoutScope = useMemo(
+    () => ({ kind: 'checkout' as const, id: restaurant?.id || '' }),
+    [restaurant?.id]
+  );
+  const ensureClientOrderKey = useCallback((body: Record<string, any>, context: { userId: string }) => {
+    const resolved = resolveOrderIntentKey({
+      body,
+      userId: context.userId,
+      scope: checkoutScope,
+      current: clientOrderKeyRef.current
+        ? { key: clientOrderKeyRef.current, signatureHash: cartSignatureRef.current }
+        : null,
+    });
+    clientOrderKeyRef.current = resolved.key;
+    cartSignatureRef.current = resolved.signatureHash;
+    return resolved.key;
+  }, [checkoutScope]);
   const resetClientOrderKey = useCallback(() => {
     clientOrderKeyRef.current = '';
     cartSignatureRef.current = '';
-    clearPendingOrderAttempt();
-  }, []);
+    completeOrderIntent(checkoutScope);
+  }, [checkoutScope]);
 
   const [pickupReadyOrder, setPickupReadyOrder] = useState<CustomerOrderDetail | null>(null);
   const [scheduleProposalOrder, setScheduleProposalOrder] = useState<CustomerOrderDetail | null>(null);
@@ -3021,7 +3011,6 @@ function ProductImage({
       // dirección, pago, notas y cupón).
       body.clientOrderKey = ensureClientOrderKey(body, {
         userId: sessionUser?.id || '',
-        restaurantId: restaurant.id,
       });
 
       const payload = await requestJson<{ success: true; data: { id: string; orderReference: string }; isDuplicate?: boolean }>({
