@@ -589,7 +589,14 @@ export const ProfileView = memo(function ProfileView({
                   <ChevronRight className="w-4 h-4" />
                 </div>
               </div>
-              <div className="px-6 py-5 flex items-center justify-between hover:bg-rose-50/40 cursor-pointer transition-colors group" onClick={() => clearSession('Has cerrado sesión.')}>
+              <div className="px-6 py-5 flex items-center justify-between hover:bg-rose-50/40 cursor-pointer transition-colors group" onClick={() => {
+                  // Revoca primero los registros push de este dispositivo para
+                  // que el siguiente usuario no reciba avisos ajenos; el
+                  // logout continúa aunque la red falle.
+                  void unsubscribePush()
+                    .catch(() => undefined)
+                    .finally(() => clearSession('Has cerrado sesión.'));
+                }}>
                 <div className="flex items-center gap-4">
                   <div className="p-2.5 bg-rose-50 rounded-full text-rose-500 group-hover:bg-rose-100 group-hover:text-rose-600 transition-colors border border-rose-100 shadow-sm">
                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>

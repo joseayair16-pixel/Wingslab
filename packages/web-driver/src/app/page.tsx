@@ -32,6 +32,7 @@ import {
   vibrate,
   installWarmupListeners,
   installVisibilityResumeListener,
+  waitForNativeBridge,
 } from '@sadel/shared';
 
 import { AlertTriangle, Bike, Star, Briefcase, ArrowRight, CreditCard, Calendar, Moon, Settings, Menu, Hourglass, MapPin, Store, ClipboardList, BellOff, Map as MapIcon, CheckCircle2, Banknote, Package, Unlink, Phone, Wallet, Image as ImageIcon, Search, RadioTower, PartyPopper, Ban, Camera, Info } from 'lucide-react';
@@ -1416,27 +1417,35 @@ export default function Home() {
   useEffect(() => {
     if (!token || typeof window === 'undefined') return;
 
-    // En la app nativa el permiso se consulta vía plugin y el token FCM se
-    // re-sincroniza con el backend en cada arranque.
-    if (isNativePlatform()) {
-      let cancelled = false;
-      checkNativePushPermission().then((granted) => {
-        if (!cancelled && granted) void subscribeToPush(token);
-      });
-      return () => { cancelled = true; };
-    }
+    // El bridge de Capacitor puede inyectarse después del montaje. Sin esperar,
+    // la app decide "soy web" dentro del APK, se suscribe por web-push y nunca
+    // registra el token FCM: Android se queda sin notificaciones.
+    let cancelled = false;
+    void waitForNativeBridge({ isReady: () => isNativePlatform() }).then((bridgeReady) => {
+      if (cancelled) return;
 
-    // Solo se restablece la suscripción cuando el permiso YA fue concedido en una
-    // sesión anterior. El primer permiso (estado 'default') debe pedirse desde un
-    // gesto del usuario (banner "Activar notificaciones"); pedirlo al cargar la
-    // página es ignorado en silencio por iOS y Chrome.
-    if (
-      token && sessionUser && sessionUser.role === 'DRIVER' &&
-      typeof window !== 'undefined' && 'Notification' in window &&
-      Notification.permission === 'granted'
-    ) {
-      void subscribeToPush(token);
-    }
+      if (bridgeReady) {
+        // En la app nativa el permiso se consulta vía plugin y el token FCM se
+        // re-sincroniza con el backend en cada arranque.
+        checkNativePushPermission().then((granted) => {
+          if (!cancelled && granted) void subscribeToPush(token);
+        });
+        return;
+      }
+
+      // Solo se restablece la suscripción cuando el permiso YA fue concedido en
+      // una sesión anterior; el primer permiso se pide desde el banner.
+      if (
+        sessionUser &&
+        sessionUser.role === 'DRIVER' &&
+        'Notification' in window &&
+        Notification.permission === 'granted'
+      ) {
+        void subscribeToPush(token);
+      }
+    });
+
+    return () => { cancelled = true; };
   }, [token, sessionUser, subscribeToPush]);
 
   // Push nativo: al tocar la notificación FCM en la app del repartidor,

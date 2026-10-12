@@ -27,6 +27,7 @@ import {
   installVisibilityResumeListener,
   reset,
   getMenuThemeById,
+  waitForNativeBridge,
 } from '@sadel/shared';
 
 import { useForegroundPolling } from '../hooks/useForegroundPolling';
@@ -1828,19 +1829,28 @@ export default function Home() {
     // página es ignorado en silencio por iOS y Chrome.
     if (!token || typeof window === 'undefined') return;
 
-    if (isNativePlatform()) {
-      // En la app nativa el permiso se consulta vía plugin (sin diálogo) y el
-      // token FCM se re-sincroniza con el backend en cada arranque.
-      let cancelled = false;
-      checkNativePushPermission().then((granted) => {
-        if (!cancelled && granted) void subscribeToPush(token);
-      });
-      return () => { cancelled = true; };
-    }
+    // El bridge de Capacitor puede inyectarse después del montaje. Sin esperar,
+    // la app decide "soy web" dentro del APK, se suscribe por web-push y nunca
+    // registra el token FCM: Android se queda sin notificaciones.
+    let cancelled = false;
+    void waitForNativeBridge({ isReady: () => isNativePlatform() }).then((bridgeReady) => {
+      if (cancelled) return;
 
-    if ('Notification' in window && Notification.permission === 'granted') {
-      void subscribeToPush(token);
-    }
+      if (bridgeReady) {
+        // En la app nativa el permiso se consulta vía plugin (sin diálogo) y el
+        // token FCM se re-sincroniza con el backend en cada arranque.
+        checkNativePushPermission().then((granted) => {
+          if (!cancelled && granted) void subscribeToPush(token);
+        });
+        return;
+      }
+
+      if ('Notification' in window && Notification.permission === 'granted') {
+        void subscribeToPush(token);
+      }
+    });
+
+    return () => { cancelled = true; };
   }, [token]);
 
   // Leer orderId de la URL (cuando se da click a una notificación push)

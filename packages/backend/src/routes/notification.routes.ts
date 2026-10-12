@@ -18,6 +18,14 @@ const fcmTokenSchema = z.object({
   appVersion: z.number().int().nonnegative().max(1_000_000).optional(),
 });
 
+const fcmTokenRevokeSchema = z.object({
+  token: z.string().min(1).max(4096),
+});
+
+const subscriptionRevokeSchema = z.object({
+  endpoint: z.string().url().max(2048),
+});
+
 export async function registerNotificationRoutes(fastify: FastifyInstance): Promise<void> {
   fastify.post('/notifications/subscribe', async (request, reply) => {
     try {
@@ -132,6 +140,104 @@ export async function registerNotificationRoutes(fastify: FastifyInstance): Prom
         error: {
           code: 'SERVER_ERROR',
           message: 'No se pudo registrar el token FCM.',
+        },
+      });
+    }
+  });
+
+  /**
+   * Revoca el token FCM de este dispositivo. Se usa al cerrar sesión o al
+   * desactivar notificaciones, para que el dispositivo deje de recibir los
+   * avisos del usuario anterior aunque todavía estén encolados. La fila solo
+   * puede ser de quien llama (evita borrar tokens ajenos).
+   */
+  fastify.delete('/notifications/fcm-token', async (request, reply) => {
+    try {
+      await request.jwtVerify();
+    } catch {
+      return reply.status(401).send({
+        success: false,
+        error: {
+          code: 'UNAUTHORIZED',
+          message: 'Debes iniciar sesión para gestionar tus dispositivos.',
+        },
+      });
+    }
+
+    const parsed = fcmTokenRevokeSchema.safeParse(request.body);
+
+    if (!parsed.success) {
+      return reply.status(400).send({
+        success: false,
+        error: {
+          code: 'INVALID_PAYLOAD',
+          message: 'Token FCM inválido.',
+        },
+      });
+    }
+
+    const payload = request.user as { sub: string };
+
+    try {
+      const removed = await prisma.fcmToken.deleteMany({
+        where: { token: parsed.data.token, userId: payload.sub },
+      });
+
+      return reply.send({ success: true, removed: removed.count });
+    } catch (error) {
+      return reply.status(500).send({
+        success: false,
+        error: {
+          code: 'SERVER_ERROR',
+          message: 'No se pudo revocar el token FCM.',
+        },
+      });
+    }
+  });
+
+  /**
+   * Revoca una suscripción Web Push de este dispositivo (mismo propósito que
+   * el endpoint anterior, para el canal web/PWA).
+   */
+  fastify.delete('/notifications/subscription', async (request, reply) => {
+    try {
+      await request.jwtVerify();
+    } catch {
+      return reply.status(401).send({
+        success: false,
+        error: {
+          code: 'UNAUTHORIZED',
+          message: 'Debes iniciar sesión para gestionar tus dispositivos.',
+        },
+      });
+    }
+
+    const parsed = subscriptionRevokeSchema.safeParse(request.body);
+
+    if (!parsed.success) {
+      return reply.status(400).send({
+        success: false,
+        error: {
+          code: 'INVALID_PAYLOAD',
+          message: 'Datos de suscripción inválidos.',
+        },
+      });
+    }
+
+    const payload = request.user as { sub: string };
+
+    try {
+      const removed = await prisma.pushSubscription.deleteMany({
+        where: { endpoint: parsed.data.endpoint, userId: payload.sub },
+      });
+
+      return reply.send({ success: true, removed: removed.count });
+    } catch (error) {
+      return reply.status(500).send({
+        success: false,
+        error: {
+          code: 'SERVER_ERROR',
+          message: 'No se pudo revocar la suscripción.',
         },
       });
     }

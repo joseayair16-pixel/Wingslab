@@ -95,6 +95,7 @@ export function registerNativePush(
           },
           body: JSON.stringify({ token: value, platform: 'android' }),
         });
+        if (res.ok) persistNativeFcmToken(value);
         finish(res.ok, res.ok ? undefined : 'SERVER_REJECTED');
       } catch {
         finish(false, 'NETWORK');
@@ -111,6 +112,38 @@ export function registerNativePush(
       finish(false, 'REGISTER_CALL_FAILED');
     }
   });
+}
+
+/**
+ * Clave donde se guarda el último token FCM registrado en el backend.
+ * Sirve para revocarlo al cerrar sesión o desactivar notificaciones.
+ */
+export const NATIVE_FCM_TOKEN_KEY = 'sadel.fcm_device_token';
+
+/** Token FCM que este dispositivo tiene registrado (null si no hay). */
+export function readNativeFcmToken(): string | null {
+  try {
+    if (typeof window === 'undefined' || !window.localStorage) return null;
+    return window.localStorage.getItem(NATIVE_FCM_TOKEN_KEY);
+  } catch {
+    return null;
+  }
+}
+
+function persistNativeFcmToken(token: string): void {
+  try {
+    window.localStorage.setItem(NATIVE_FCM_TOKEN_KEY, token);
+  } catch {
+    /* almacenamiento no disponible: la revocación queda degradada */
+  }
+}
+
+export function clearNativeFcmToken(): void {
+  try {
+    window.localStorage.removeItem(NATIVE_FCM_TOKEN_KEY);
+  } catch {
+    /* noop */
+  }
 }
 
 /**

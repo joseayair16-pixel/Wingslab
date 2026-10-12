@@ -7,6 +7,13 @@ import type { NotificationPayload } from './notification.service';
 
 let fcmConfigured = false;
 let messagingInstance: ReturnType<typeof getMessaging> | null = null;
+/**
+ * project_id de la service account con la que se firmó (NO es secreto y sirve
+ * para verificar en producción que coincide con el proyecto de los
+ * google-services.json de las APKs — p. ej. `sadel-b9893`). Si difiere, FCM
+ * rechaza los envíos y ninguna APK recibe notificaciones.
+ */
+let fcmProjectId: string | null = null;
 
 type ServiceAccountInput = {
   projectId?: string;
@@ -30,8 +37,9 @@ function initFcm(): void {
       const parsed = JSON.parse(fs.readFileSync(serviceAccountPath, 'utf8'));
       initializeApp({ credential: cert(parsed as ServiceAccount) });
       fcmConfigured = true;
+      fcmProjectId = typeof parsed?.project_id === 'string' ? parsed.project_id : null;
       messagingInstance = getMessaging();
-      logger.info(`[FcmService] Configurado desde archivo: ${serviceAccountPath}`);
+      logger.info(`[FcmService] Configurado desde archivo: ${serviceAccountPath} (project_id=${fcmProjectId ?? 'desconocido'})`);
       return;
     }
 
@@ -50,8 +58,9 @@ function initFcm(): void {
         } as ServiceAccount),
       });
       fcmConfigured = true;
+      fcmProjectId = envInput.projectId;
       messagingInstance = getMessaging();
-      logger.info('[FcmService] Configurado desde variables de entorno');
+      logger.info(`[FcmService] Configurado desde variables de entorno (project_id=${fcmProjectId})`);
       return;
     }
 
@@ -251,14 +260,23 @@ export async function sendFcmNotification(
   userId: string,
   payload: NotificationPayload
 ): Promise<{ success: boolean; totalSent: number; totalAttempted: number }> {
-  if (!fcmConfigured) {
-    return { success: false, totalSent: 0, totalAttempted: 0 };
-  }
-
   const tokens = await prisma.fcmToken.findMany({
     where: { userId },
     select: { id: true, token: true, appVersion: true },
   });
+
+  if (!fcmConfigured) {
+    // Visibilidad del fallo silencioso: si hay dispositivos registrados pero
+    // FCM no está configurado, cada envío se pierde sin dejar rastro. Este
+    // aviso es la diferencia entre "no llegan" indiagnosticable y una causa
+    // concreta en los logs (credenciales ausentes o proyecto equivocado).
+    if (tokens.length > 0) {
+      logger.error(
+        `[FcmService] ${tokens.length} token(s) registrados para usuario ${userId} pero FCM no está configurado: el envío se omite.`
+      );
+    }
+    return { success: false, totalSent: 0, totalAttempted: 0 };
+  }
 
   if (tokens.length === 0) {
     return { success: false, totalSent: 0, totalAttempted: 0 };

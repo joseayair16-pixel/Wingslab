@@ -132,3 +132,38 @@ const STORE_STATUS_LABELS: Record<string, string> = {
 export function getOrderStatusLabel(status: string, businessType?: string): string {
   return isRestaurant(businessType) ? RESTAURANT_STATUS_LABELS[status] || status : STORE_STATUS_LABELS[status] || status;
 }
+
+/**
+ * Espera a que el bridge de Capacitor esté disponible antes de decidir si la
+ * app corre en nativo o en el navegador.
+ *
+ * Las APKs de SaDeL cargan una URL remota (`server.url`). En ese modo
+ * Capacitor inyecta `window.Capacitor` con
+ * `WebViewCompat.addDocumentStartJavaScript`, que NO está disponible en
+ * Android System WebView antiguas (<105). Cuando la inyección no ocurre, la
+ * app degrada silenciosamente al camino web (service worker + web push) y
+ * nunca registra el token FCM: el navegador recibe notificaciones y el APK no.
+ *
+ * `isReady` se inyecta para poder probar la espera sin un WebView real.
+ * Devuelve true si el bridge apareció dentro del tiempo; false al agotarlo
+ * (WebView antigua o entorno de navegador real, donde no debe existir).
+ */
+export async function waitForNativeBridge(options: {
+  isReady: () => boolean;
+  timeoutMs?: number;
+  intervalMs?: number;
+}): Promise<boolean> {
+  // El bridge, cuando existe, se inyecta al inicio del documento: si aparece,
+  // lo hace casi de inmediato. El límite solo protege contra WebViews que lo
+  // inyectan tarde; en un navegador real (sin bridge) este es todo el retraso
+  // antes de seguir por el camino web, así que se mantiene corto.
+  const { isReady, timeoutMs = 1200, intervalMs = 100 } = options;
+  if (isReady()) return true;
+
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    await new Promise((resolve) => setTimeout(resolve, intervalMs));
+    if (isReady()) return true;
+  }
+  return false;
+}

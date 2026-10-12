@@ -1,7 +1,10 @@
 import { useState, useEffect, useCallback } from 'react';
+import { waitForNativeBridge } from '@sadel/shared';
 import {
   checkNativePushPermission,
+  clearNativeFcmToken,
   isNativePlatform,
+  readNativeFcmToken,
   registerNativePush,
   requestNativePushPermission,
 } from '../lib/native';
@@ -9,6 +12,7 @@ import {
   saveSubscriptionSecrets,
   clearSubscriptionSecrets,
 } from '../lib/subscriptionSecrets';
+import { revokePushRegistrations, type RevokeTarget } from '../lib/revokePushRegistrations';
 
 const API_URL = '/api';
 
@@ -95,28 +99,58 @@ export const usePushNotifications = () => {
   const isNative = typeof window !== 'undefined' && isNativePlatform();
 
   useEffect(() => {
-    if (isNative) {
+    // El bridge de Capacitor se inyecta en el WebView y puede llegar DESPUÉS
+    // del montaje. Sin esperar, la app decide "soy web" y se suscribe por
+    // web-push dentro del APK: el token FCM nunca se registra y Android no
+    // recibe nada. Se espera al bridge (con límite) antes de decidir canal.
+    let cancelled = false;
+
+    const detectNative = () => {
       // Consultar el permiso nativo sin mostrar el diálogo (FCM).
       checkNativePushPermission().then((granted) => {
+        if (cancelled) return;
         setPermission(granted ? 'granted' : 'default');
         setIsSubscribed(granted);
       });
-      return;
-    }
-    setPushSupportIssue(getPushSupportIssue());
-    setNeedsIosInstall(needsIosPwaInstall());
-    if (typeof window !== 'undefined' && 'Notification' in window) {
-      setPermission(Notification.permission);
-      
-      if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.ready.then((registration) => {
-          registration.pushManager.getSubscription().then((sub) => {
-            setSubscription(sub);
-            setIsSubscribed(!!sub);
+    };
+
+    const detectWeb = () => {
+      setPushSupportIssue(getPushSupportIssue());
+      setNeedsIosInstall(needsIosPwaInstall());
+      if (typeof window !== 'undefined' && 'Notification' in window) {
+        setPermission(Notification.permission);
+
+        if ('serviceWorker' in navigator) {
+          navigator.serviceWorker.ready.then((registration) => {
+            registration.pushManager.getSubscription().then((sub) => {
+              if (cancelled) return;
+              setSubscription(sub);
+              setIsSubscribed(!!sub);
+            });
           });
-        });
+        }
       }
-    }
+    };
+
+    void waitForNativeBridge({ isReady: () => isNativePlatform() }).then((bridgeReady) => {
+      if (cancelled) return;
+      if (bridgeReady) detectNative();
+      else detectWeb();
+    });
+
+    // Si la app vuelve del segundo plano, el bridge pudo inyectarse más tarde:
+    // se corrige el canal antes de asumir que es una web normal.
+    const onVisible = () => {
+      if (!cancelled && document.visibilityState === 'visible' && isNativePlatform()) {
+        detectNative();
+      }
+    };
+    document.addEventListener('visibilitychange', onVisible);
+
+    return () => {
+      cancelled = true;
+      document.removeEventListener('visibilitychange', onVisible);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -254,9 +288,36 @@ export const usePushNotifications = () => {
     // Elimina el token/VAPID de IndexedDB para que el service worker tampoco
     // intente re-suscribirse en segundo plano tras el opt-out.
     await clearSubscriptionSecrets();
+
+    // Revoca las filas del backend para que este dispositivo deje de recibir
+    // los avisos del usuario actual (cierre de sesión / desactivación). Sin
+    // esto, el siguiente usuario del mismo dispositivo recibiría notificaciones
+    // ajenas hasta que se re-registrara. Best-effort: nunca bloquea el logout.
+    // Los identificadores se fijan a ESTA sesión antes de enviar: aunque la
+    // revocación llegara tarde, el backend solo borra filas del propio usuario.
+    const revokeOnServer = async () => {
+      let jwt: string | null = null;
+      try {
+        jwt = localStorage.getItem('sadel.customer.token');
+      } catch {
+        jwt = null;
+      }
+      let target: RevokeTarget | null = null;
+      if (isNative) {
+        const deviceToken = readNativeFcmToken();
+        if (deviceToken) target = { kind: 'fcm', token: deviceToken };
+      } else if (subscription) {
+        target = { kind: 'web', endpoint: (subscription as PushSubscription).endpoint };
+      }
+      await revokePushRegistrations({ apiBase: API_URL, jwt: jwt ?? '', target });
+    };
+
     if (isNative) {
       // La app nativa no puede "des-suscribir" el token FCM del dispositivo:
-      // basta con el opt-out local para que el re-sync no lo vuelva a registrar.
+      // el opt-out local evita el re-sync y la revocación borra la fila.
+      // OJO: revocar ANTES de olvidar el token local, que es lo que envía.
+      await revokeOnServer();
+      clearNativeFcmToken();
       setIsSubscribed(false);
       return;
     }
@@ -264,6 +325,7 @@ export const usePushNotifications = () => {
       await subscription.unsubscribe();
       setSubscription(null);
       setIsSubscribed(false);
+      await revokeOnServer();
     }
   };
 
