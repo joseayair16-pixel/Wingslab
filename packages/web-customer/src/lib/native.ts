@@ -385,28 +385,8 @@ export async function getNativeAppVersion(): Promise<NativeAppVersion | null> {
 /**
  * Consulta la versión publicada del APK del comensal.
  * Devuelve `null` si no hay release publicado o falla la petición.
+ * (Implementación compartida en @sadel/shared; aquí se re-exporta para no
+ * romper los importadores existentes).
  */
-export async function fetchPublishedAppVersion(apiBase: string): Promise<{
-  versionName: string;
-  versionCode: number;
-  url: string;
-  changelog?: string;
-  required?: boolean;
-} | null> {
-  try {
-    const res = await fetch(`${apiBase}/app/version`);
-    if (!res.ok) return null;
-    const json = (await res.json()) as { success: boolean; data: any };
-    const d = json?.data;
-    if (!d || !d.url || !Number.isFinite(d.versionCode)) return null;
-    return {
-      versionName: String(d.versionName ?? ''),
-      versionCode: d.versionCode,
-      url: String(d.url),
-      changelog: d.changelog ? String(d.changelog) : undefined,
-      required: typeof d.required === 'boolean' ? d.required : undefined,
-    };
-  } catch {
-    return null;
-  }
-}
+export { fetchPublishedAppVersion } from '@sadel/shared';
+export type { PublishedAppVersion } from '@sadel/shared';

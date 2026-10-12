@@ -1152,6 +1152,41 @@ export async function registerPublicRoutes(fastify: FastifyInstance): Promise<vo
     }
   });
 
+  fastify.get('/app/restaurant-version', async (request, reply) => {
+    try {
+      const setting = await prisma.systemSetting.findUnique({
+        where: { key: 'restaurantAppVersion' },
+      });
+
+      if (!setting) {
+        return reply.send({
+          success: true,
+          data: null,
+        });
+      }
+
+      let version: unknown = null;
+      try {
+        version = JSON.parse(setting.value);
+      } catch {
+        return reply.send({
+          success: true,
+          data: null,
+        });
+      }
+
+      return reply.send({
+        success: true,
+        data: version,
+      });
+    } catch (error) {
+      return reply.status(500).send({
+        success: false,
+        error: { message: 'Error al obtener la version de la app.' },
+      });
+    }
+  });
+
   fastify.get('/public/zonas-activas', async (request, reply) => {
     try {
       const restaurants = await prisma.restaurant.findMany({

@@ -3,6 +3,7 @@ import Script from 'next/script';
 import '../styles/globals.css';
 import ServiceWorkerRegister from './ServiceWorkerRegister';
 import InstallAppButton from '../components/InstallAppButton';
+import AppUpdateBanner from '../components/AppUpdateBanner';
 import SplashScreen from '../components/SplashScreen';
 
 export const metadata: Metadata = {
@@ -59,6 +60,7 @@ export default function RootLayout({
       <body>
         <ServiceWorkerRegister />
         <InstallAppButton />
+        <AppUpdateBanner />
         <SplashScreen />
         <Script 
           src={`https://maps.googleapis.com/maps/api/js?key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || ''}&libraries=places&loading=async`}

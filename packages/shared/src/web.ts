@@ -182,6 +182,41 @@ function notifySessionExpired(): void {
   }
 }
 
+export type PublishedAppVersion = {
+  versionName: string;
+  versionCode: number;
+  url: string;
+  changelog?: string;
+  required?: boolean;
+};
+
+/**
+ * Consulta la versión publicada del APK de una app (comensal, restaurante…).
+ * `path` es la ruta del endpoint que la sirve (`/app/version` por defecto).
+ * Devuelve `null` si no hay release publicado o falla la petición.
+ */
+export async function fetchPublishedAppVersion(
+  apiBase: string,
+  path = '/app/version',
+): Promise<PublishedAppVersion | null> {
+  try {
+    const res = await fetch(`${apiBase}${path}`);
+    if (!res.ok) return null;
+    const json = (await res.json()) as { success: boolean; data: any };
+    const d = json?.data;
+    if (!d || !d.url || !Number.isFinite(d.versionCode)) return null;
+    return {
+      versionName: String(d.versionName ?? ''),
+      versionCode: d.versionCode,
+      url: String(d.url),
+      changelog: d.changelog ? String(d.changelog) : undefined,
+      required: typeof d.required === 'boolean' ? d.required : undefined,
+    };
+  } catch {
+    return null;
+  }
+}
+
 export function getRequestErrorMessage(
   error: unknown,
   fallback = 'No se pudo completar la solicitud.'
