@@ -889,6 +889,30 @@ export default function RestaurantPage({
   const checkoutRef = useRef<HTMLDivElement | null>(null);
   const checkoutMapRef = useRef<any>(null);
   const checkoutMarkerRef = useRef<any>(null);
+  // Libera la instancia del mapa del checkout sin tocar el DOM (el div
+  // #map-checkout lo gestiona Google Maps y React no debe desmontarlo).
+  // Evita listeners duplicados (dragend) y fugas al mostrar/ocultar el mapa.
+  const teardownCheckoutMap = useCallback(() => {
+    try {
+      const mapsEvent = (window as any)?.google?.maps?.event;
+      if (mapsEvent) {
+        if (checkoutMarkerRef.current) mapsEvent.clearInstanceListeners(checkoutMarkerRef.current);
+        if (checkoutMapRef.current) mapsEvent.clearInstanceListeners(checkoutMapRef.current);
+      }
+      try {
+        checkoutMarkerRef.current?.setMap(null);
+      } catch {
+        // noop: el marcador puede pertenecer ya a una instancia descartada.
+      }
+    } catch {
+      // noop: sin API de Maps cargada no hay nada que limpiar.
+    }
+    checkoutMarkerRef.current = null;
+    checkoutMapRef.current = null;
+    const mapEl = document.getElementById('map-checkout');
+    // Descarta el DOM que quedó bajo el div (no existe destroy() oficial en Maps; limpiar el contenedor evita stacked al re-mostrar).
+    if (mapEl) mapEl.innerHTML = '';
+  }, []);
   const categorySectionRefs = useRef<Record<string, HTMLElement | null>>({});
   const transientNoticeTimeoutRef = useRef<number | null>(null);
   const recentNoticeKeysRef = useRef<string[]>([]);
@@ -1832,8 +1856,7 @@ export default function RestaurantPage({
 
   useEffect(() => {
     if (!isCheckoutOpen || (isAddingNewAddress && newAddressStep === 'search') || (!showMapForAddress && !isAddingNewAddress)) {
-      checkoutMapRef.current = null;
-      checkoutMarkerRef.current = null;
+      teardownCheckoutMap();
       return;
     }
 
@@ -1952,7 +1975,7 @@ export default function RestaurantPage({
     return () => {
       cancelled = true;
     };
-  }, [isCheckoutOpen, isAddingNewAddress, newAddressStep, showMapForAddress, checkoutForm.latitude, checkoutForm.longitude]);
+  }, [isCheckoutOpen, isAddingNewAddress, newAddressStep, showMapForAddress, checkoutForm.latitude, checkoutForm.longitude, teardownCheckoutMap]);
 
   useEffect(() => {
     if (!isCheckoutOpen || !token) return;
@@ -4564,11 +4587,15 @@ function ProductImage({
                       </div>
                     )}
 
-                    {/* Google Map (aparece al seleccionar dirección o al agregar una nueva) */}
-                    <div
-                      id="map-checkout"
-                      className={`relative h-48 w-full rounded-2xl border border-black/5 mt-4 overflow-hidden shadow-inner no-invert transition-opacity duration-300 ${(showMapForAddress || (isAddingNewAddress && newAddressStep !== 'search')) ? '' : 'hidden'}`}
-                    >
+                    {/* Google Map (aparece al seleccionar dirección o al agregar una nueva).
+                        El div #map-checkout lo gestiona Google Maps en exclusiva: React no
+                        debe reconciliar hijos dentro de él (provoca NotFoundError al
+                        ocultar). El botón flotante vive como hermano, no como hijo. */}
+                    <div className="relative mt-4">
+                      <div
+                        id="map-checkout"
+                        className={`relative h-48 w-full rounded-2xl border border-black/5 overflow-hidden shadow-inner no-invert transition-opacity duration-300 ${(showMapForAddress || (isAddingNewAddress && newAddressStep !== 'search')) ? '' : 'hidden'}`}
+                      />
                       {showMapForAddress && !isAddingNewAddress && (
                         <button
                           type="button"
