@@ -33,6 +33,7 @@ import {
   onNativeNotificationTap,
 } from '../lib/native';
 import { useForegroundPolling } from '../hooks/useForegroundPolling';
+import { buildOrderIntentSignature, orderIntentFromRequestBody } from '../lib/orderIntent';
 import { useCustomerSounds } from '../hooks/useCustomerSounds';
 import { useCartStore, type CartItem } from '../store/cartStore';
 import { useChatStore } from '../store/chatStore';
@@ -1130,6 +1131,15 @@ export default function Home() {
   const [platformCategories, setPlatformCategories] = useState<StoreCategoryItem[]>([]);
   const [activeCategories, setActiveCategories] = useState<Array<{ id: string; businessTypes: string[] }>>([]);
   const [reordering, setReordering] = useState(false);
+  // Guardia sincrónica contra doble envío: el estado React puede estar
+  // obsoleto si dos clics ocurren antes del siguiente renderizado; el ref no.
+  const reorderingRef = useRef(false);
+  // Clave de idempotencia del intento lógico de reordenamiento vigente.
+  // Se conserva entre reintentos (incluidos los automáticos de requestJson)
+  // y solo se rota cuando el pedido se crea con éxito: así dos compras
+  // legítimas y sucesivas del mismo contenido generan dos pedidos distintos.
+  const reorderKeyRef = useRef('');
+  const reorderSignatureRef = useRef('');
   const [socketStatus, setSocketStatus] = useState<'idle' | 'connecting' | 'connected' | 'reconnecting'>('idle');
   const [, setSocketAttempts] = useState(0);
   const [error, setError] = useState('');
@@ -4036,73 +4046,102 @@ export default function Home() {
   }, [orders]);
 
   async function reorderSelectedOrder(customAddress?: any) {
-    if (reordering) {
+    // Guardia sincrónica + estado: dos clics en el mismo tick ven el mismo
+    // estado obsoleto, pero el ref bloquea el segundo envío de inmediato.
+    if (reorderingRef.current || reordering) {
       return;
     }
+    reorderingRef.current = true;
 
     if (!token || !sessionUser || sessionUser.role !== 'CUSTOMER') {
       setError('Inicia sesión como cliente para repetir pedidos.');
+      reorderingRef.current = false;
       return;
     }
 
     if (!selectedOrder) {
+      reorderingRef.current = false;
       return;
     }
 
     setReordering(true);
     setError('');
 
+    // Clave de idempotencia del intento lógico de reordenamiento: estable
+    // mientras el contenido sea el mismo (doble toque, timeout + reintento
+    // automático de requestJson con el mismo body) y renovada solo ante éxito,
+    // para que dos compras legítimas sucesivas generen dos pedidos distintos.
+    const reorderBody: Record<string, any> = {
+      restaurantId: selectedOrder.restaurant.id,
+      items: selectedOrder.items.map((item) => ({
+        productId: item.product.id,
+        quantity: item.quantity,
+        ...(item.specialInstructions ? { specialInstructions: item.specialInstructions } : {}),
+      })),
+      fulfillmentType: selectedOrder.fulfillmentType || 'DELIVERY',
+      ...(selectedOrder.fulfillmentType === 'PICKUP' || !selectedOrder.address
+        ? {}
+        : {
+            deliveryAddress: customAddress || {
+              street: selectedOrder.address.street,
+              number: selectedOrder.address.number,
+              neighborhood: selectedOrder.address.neighborhood,
+              city: selectedOrder.address.city,
+              state: selectedOrder.address.state,
+              zipCode: selectedOrder.address.zipCode,
+              country: selectedOrder.address.country,
+              ...(selectedOrder.address.reference ? { reference: selectedOrder.address.reference } : {}),
+              latitude: selectedOrder.address.latitude,
+              longitude: selectedOrder.address.longitude,
+            },
+          }),
+      paymentMethod: selectedOrder.paymentMethod,
+      ...(selectedOrder.notes ? { notes: selectedOrder.notes } : {}),
+    };
+    // La firma se deriva del body real para que identidad y solicitud no puedan divergir.
+    const reorderSignature = buildOrderIntentSignature(orderIntentFromRequestBody(reorderBody));
+    if (!reorderKeyRef.current || reorderSignatureRef.current !== reorderSignature) {
+      reorderKeyRef.current =
+        typeof crypto !== 'undefined' && 'randomUUID' in crypto
+          ? crypto.randomUUID()
+          : `ord-${Date.now()}-${Math.random().toString(36).slice(2, 12)}`;
+      reorderSignatureRef.current = reorderSignature;
+    }
+    reorderBody.clientOrderKey = reorderKeyRef.current;
+
     try {
-      const payload = await requestJson<{ success: true; data: { id: string; orderReference: string } }>({
+      const payload = await requestJson<{ success: true; data: { id: string; orderReference: string }; isDuplicate?: boolean }>({
         apiBase,
         path: '/pedidos',
         token,
         options: {
           method: 'POST',
-          body: JSON.stringify({
-            restaurantId: selectedOrder.restaurant.id,
-            items: selectedOrder.items.map((item) => ({
-              productId: item.product.id,
-              quantity: item.quantity,
-              ...(item.specialInstructions ? { specialInstructions: item.specialInstructions } : {}),
-            })),
-            fulfillmentType: selectedOrder.fulfillmentType || 'DELIVERY',
-            ...(selectedOrder.fulfillmentType === 'PICKUP' || !selectedOrder.address
-              ? {}
-              : {
-                  deliveryAddress: customAddress || {
-                    street: selectedOrder.address.street,
-                    number: selectedOrder.address.number,
-                    neighborhood: selectedOrder.address.neighborhood,
-                    city: selectedOrder.address.city,
-                    state: selectedOrder.address.state,
-                    zipCode: selectedOrder.address.zipCode,
-                    country: selectedOrder.address.country,
-                    ...(selectedOrder.address.reference ? { reference: selectedOrder.address.reference } : {}),
-                    latitude: selectedOrder.address.latitude,
-                    longitude: selectedOrder.address.longitude,
-                  },
-                }),
-            paymentMethod: selectedOrder.paymentMethod,
-            ...(selectedOrder.notes ? { notes: selectedOrder.notes } : {}),
-          }),
+          body: JSON.stringify(reorderBody),
         },
         fallbackMessage: 'No se pudo repetir el pedido.',
       });
+
+      // Éxito: el intento lógico terminó; la próxima repetición legítima usa clave nueva.
+      // En fallo la clave se conserva para que un reintento se deduplique en el backend.
+      reorderKeyRef.current = '';
+      reorderSignatureRef.current = '';
 
       await loadDashboard();
       setSelectedOrderId(payload.data.id);
       await loadOrderDetail(payload.data.id);
       showTransientNotice({
         key: `order-repeated:${payload.data.id}`,
-        title: 'Pedido creado con éxito',
-        description: `Se generó de nuevo el pedido ${payload.data.orderReference}.`,
+        title: payload.isDuplicate ? 'Pedido ya recibido' : 'Pedido creado con éxito',
+        description: payload.isDuplicate
+          ? `Tu pedido ${payload.data.orderReference} ya había sido enviado al restaurante.`
+          : `Se generó de nuevo el pedido ${payload.data.orderReference}.`,
         tone: 'success',
       });
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : 'No se pudo repetir el pedido.');
     } finally {
       setReordering(false);
+      reorderingRef.current = false;
     }
   }
 

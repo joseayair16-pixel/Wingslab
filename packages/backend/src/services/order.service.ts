@@ -799,8 +799,42 @@ export async function createOrderForCustomer({
 
   try {
     return await prisma.$transaction(async (tx) => {
+      // Serialización por cliente: el conteo de activos y la inserción deben
+      // verse mutuamente entre creaciones concurrentes. Sin este bloqueo, dos
+      // transacciones simultáneas pueden contar <2 a la vez e insertar ambas.
+      // Es un lock ASESOR de alcance transacción (se libera solo al hacer
+      // commit/rollback): seguro con poolers en modo transacción, sin orden
+      // de adquisición que respetar (es el único lock explícito del flujo) y
+      // sin impacto en compras secuenciales (el lock vive solo durante el tx).
+      // Clave estable por cliente para que el mismo lock proteja reintentos.
+      await tx.$executeRawUnsafe(
+        'SELECT pg_advisory_xact_lock(hashtext($1))',
+        `order-create:${customer.id}`
+      );
+
+      // Re-chequeo idempotente bajo el bloqueo: si un request gemelo con la
+      // misma clave confirmó mientras esperábamos el lock, devolvemos su pedido
+      // sin consumir cupo del límite ni reinsertar (el catch P2002 exterior
+      // queda como red de seguridad para la ventana mínima restante).
+      if (input.clientOrderKey) {
+        const existingInTx = await tx.order.findUnique({
+          where: { clientOrderKey: input.clientOrderKey },
+          select: customerCreatedOrderSelect,
+        });
+        if (existingInTx) {
+          if (existingInTx.customerId !== customer.id) {
+            throw new AppError(
+              403,
+              'ORDER_IDEMPOTENCY_FORBIDDEN',
+              'La clave del pedido no pertenece a este cliente.'
+            );
+          }
+          return { order: existingInTx, isDuplicate: true };
+        }
+      }
+
       // Seguridad: Límite de Pedidos Activos (Máximo 2) — dentro de la transacción
-      // para evitar carreras entre dos creaciones concurrentes.
+      // y bajo el bloqueo anterior para evitar carreras entre dos creaciones concurrentes.
       const activeOrdersCount = await tx.order.count({
         where: {
           customerId: customer.id,
@@ -1082,6 +1116,16 @@ export async function createOrderForCustomer({
           clientOrderKey: input.clientOrderKey,
         });
         return { order: existingByKey, isDuplicate: true };
+      }
+
+      // La clave ya la usó otro cliente: se rechaza con 403 en lugar de
+      // propagar el P2002 como error interno.
+      if (existingByKey) {
+        throw new AppError(
+          403,
+          'ORDER_IDEMPOTENCY_FORBIDDEN',
+          'La clave del pedido no pertenece a este cliente.'
+        );
       }
     }
 

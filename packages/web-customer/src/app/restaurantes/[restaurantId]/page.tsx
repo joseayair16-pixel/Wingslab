@@ -8,6 +8,12 @@ import { io } from 'socket.io-client';
 import { AuthModal } from '../../../components/AuthModal';
 import { CompactActiveOrderBanner, computeDelayState, formatEstimatedArrivalMinutes, formatOverdueMinutes } from '../../../components/CompactActiveOrderBanner';
 import { buildWeekSchedule, formatHour12, formatNextOpen, getCurrentShiftClose } from '../../../lib/operatingHours';
+import { hashOrderSignature, orderIntentFromRequestBody, buildOrderIntentSignature } from '../../../lib/orderIntent';
+import {
+  clearPendingOrderAttempt,
+  findReusableOrderKey,
+  writePendingOrderAttempt,
+} from '../../../lib/pendingOrderAttempt';
 import { ensureGoogleMapsScript, getGoogleMaps } from '../../../lib/googleMaps';
 import RatingModal from '../../../components/RatingModal';
 import { useForegroundPolling } from '../../../hooks/useForegroundPolling';
@@ -899,38 +905,40 @@ export default function RestaurantPage({
   const cartSignatureRef = useRef('');
   const socketRef = useRef<any>(null);
 
-  // Clave de idempotencia: estable entre reintentos del MISMO contenido de carrito
-  // (red caída, timeout, doble toque) y solo cambia cuando cambia el contenido real.
-  // Se calcula por firma de items (no por identidad de array) para que un refresh
-  // de precios o una re-renderización NO la invaliden y dupliquen el pedido.
-  const computeCartSignature = useCallback((items: typeof cart) =>
-    items
-      .map((i) =>
-        [
-          i.productId,
-          i.quantity,
-          i.weightG ?? '',
-          (i.selectedOptions || []).map((o) => o.id).sort().join('.'),
-          (i.specialInstructions || '').trim(),
-        ].join('|')
-      )
-      .sort()
-      .join(';;'),
-  []);
-  const ensureClientOrderKey = useCallback((items: typeof cart) => {
-    const signature = computeCartSignature(items);
-    if (!clientOrderKeyRef.current || cartSignatureRef.current !== signature) {
-      clientOrderKeyRef.current =
-        typeof crypto !== 'undefined' && 'randomUUID' in crypto
-          ? crypto.randomUUID()
-          : `ord-${Date.now()}-${Math.random().toString(36).slice(2, 12)}`;
-      cartSignatureRef.current = signature;
+  // Clave de idempotencia: estable entre reintentos del MISMO contenido de compra
+  // (red caída, timeout, doble toque, recarga) y solo cambia cuando cambia el
+  // contenido real o cuando el intento anterior terminó con éxito.
+  // Se deriva del body que realmente se envía (ver orderIntentFromRequestBody),
+  // de modo que la firma y la solicitud no pueden divergir. Se usa el hash de la
+  // firma (no la firma) para no guardar instrucciones ni datos personales.
+  // La firma NUNCA identifica compras de forma permanente: tras un éxito se
+  // limpia, así que dos compras intencionales sucesivas usan claves distintas.
+  const ensureClientOrderKey = useCallback((body: Record<string, any>, context: { userId: string; restaurantId: string }) => {
+    const sigHash = hashOrderSignature(buildOrderIntentSignature(orderIntentFromRequestBody(body)));
+    if (clientOrderKeyRef.current && cartSignatureRef.current === sigHash) {
+      return clientOrderKeyRef.current;
     }
-    return clientOrderKeyRef.current;
-  }, [computeCartSignature]);
+    // Recupera el intento pendiente tras recarga/remount del mismo contenido,
+    // usuario y restaurante: evita mintear una clave nueva para el mismo intento.
+    const reusable = findReusableOrderKey({ ...context, sigHash });
+    if (reusable) {
+      clientOrderKeyRef.current = reusable;
+      cartSignatureRef.current = sigHash;
+      return reusable;
+    }
+    const freshKey =
+      typeof crypto !== 'undefined' && 'randomUUID' in crypto
+        ? crypto.randomUUID()
+        : `ord-${Date.now()}-${Math.random().toString(36).slice(2, 12)}`;
+    clientOrderKeyRef.current = freshKey;
+    cartSignatureRef.current = sigHash;
+    writePendingOrderAttempt({ userId: context.userId, restaurantId: context.restaurantId, sigHash, key: freshKey });
+    return freshKey;
+  }, []);
   const resetClientOrderKey = useCallback(() => {
     clientOrderKeyRef.current = '';
     cartSignatureRef.current = '';
+    clearPendingOrderAttempt();
   }, []);
 
   const [pickupReadyOrder, setPickupReadyOrder] = useState<CustomerOrderDetail | null>(null);
@@ -2829,6 +2837,9 @@ function ProductImage({
     creatingOrderRef.current = true;
     if (checkoutValidationMessage) {
       setError(checkoutValidationMessage);
+      // La guardia se libera: no se envió nada y no hay operación en curso.
+      // El siguiente clic vuelve a intentarlo con normalidad.
+      creatingOrderRef.current = false;
       return;
     }
 
@@ -2963,7 +2974,6 @@ function ProductImage({
 
       const body: Record<string, any> = {
         restaurantId: restaurant.id,
-        clientOrderKey: ensureClientOrderKey(cart),
         items: cart.map((item) => ({
           productId: item.productId,
           quantity: item.quantity,
@@ -3006,7 +3016,15 @@ function ProductImage({
         body.currentLocation = currentLocation;
       }
 
-      const payload = await requestJson<{ success: true; data: { id: string; orderReference: string } }>({
+      // La clave se calcula con el body ya completo para que la identidad del
+      // intento refleje exactamente lo que se envía (items, tipo de entrega,
+      // dirección, pago, notas y cupón).
+      body.clientOrderKey = ensureClientOrderKey(body, {
+        userId: sessionUser?.id || '',
+        restaurantId: restaurant.id,
+      });
+
+      const payload = await requestJson<{ success: true; data: { id: string; orderReference: string }; isDuplicate?: boolean }>({
         apiBase,
         path: '/pedidos',
         token,
@@ -3089,8 +3107,10 @@ function ProductImage({
       };
       showTransientNotice({
         key: `restaurant-order-created:${payload.data.id}`,
-        title: 'Pedido creado con éxito',
-        description: 'Tu pedido fue enviado al restaurante. Espera mientras lo preparan.',
+        title: payload.isDuplicate ? 'Pedido ya recibido' : 'Pedido creado con éxito',
+        description: payload.isDuplicate
+          ? `Tu pedido ${payload.data.orderReference} ya había sido enviado al restaurante.`
+          : 'Tu pedido fue enviado al restaurante. Espera mientras lo preparan.',
         tone: 'success',
       });
       triggerHaptic([30, 50, 30]); // Double vibration
