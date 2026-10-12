@@ -1,5 +1,5 @@
 'use client';
-import { AlertTriangle, Check, ChevronUp, Clock, Info, Mail, MessageCircle, Minus, Package, Pencil, Plus, RefreshCw, Sparkles, Tag, Trash2, User, Wand2, X } from 'lucide-react';
+import { Activity, AlertTriangle, Check, ChefHat, ChevronUp, ClipboardList, Clock, Info, Loader2, Lock, Mail, MessageCircle, Minus, Package, Pencil, Phone, Plus, RefreshCw, Sparkles, Tag, Trash2, User, Wand2, X } from 'lucide-react';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { io } from 'socket.io-client';
@@ -889,16 +889,21 @@ export default function Home() {
   const addressSearchSourceRef = useRef<ReturnType<typeof createPlacesSource> | null>(null);
   const [addressSuggestions, setAddressSuggestions] = useState<any[]>([]);
   const [isSearchingAddress, setIsSearchingAddress] = useState(false);
-  const [welcomeImage, setWelcomeImage] = useState('https://images.unsplash.com/photo-1552566626-52f8b828add9?auto=format&fit=crop&w=1600&q=80');
   const [showPromoModal, setShowPromoModal] = useState(false);
   const [promoImageUrl, setPromoImageUrl] = useState('');
   const [sessionUser, setSessionUser] = useState<AuthUser | null>(null);
+  // Imagen de bienvenida configurable por administración; si no hay, se usa la foto local.
+  const [welcomeImage, setWelcomeImage] = useState('');
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
-  const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [verifyingCode, setVerifyingCode] = useState(false);
+  const telefonoValido = /^[0-9+\-\s()]{8,20}$/.test(phone.trim());
+  const contrasenaValida = password.trim().length >= 6;
+  const telefonoError = !phone.trim() ? '' : telefonoValido ? '' : 'Ingresa un teléfono válido.';
+  const contrasenaError = !password.trim() ? '' : contrasenaValida ? '' : 'La contraseña debe tener al menos 6 caracteres.';
+  const puedeEnviar = Boolean(phone.trim()) && Boolean(password.trim()) && telefonoValido && contrasenaValida;
   const [error, setError] = useState('');
   const [authMessage, setAuthMessage] = useState('');
   const [profile, setProfile] = useState<RestaurantProfile | null>(null);
@@ -2299,7 +2304,6 @@ export default function Home() {
     setRefreshToken('');
     setSessionUser(null);
     setPassword('');
-    setIsLoginModalOpen(false);
     setIsMobileNavOpen(false);
     setActiveSection('dashboard');
     setProfile(null);
@@ -2383,7 +2387,6 @@ export default function Home() {
 
   useEffect(() => {
     if (
-      !isLoginModalOpen &&
       !selectedOrderForTicket &&
       incomingOrderQueue.length === 0 &&
       !acceptancePromptOrderId &&
@@ -2408,7 +2411,6 @@ export default function Home() {
     isLogoModalOpen,
     incomingOrderQueue.length,
     isCategoryModalOpen,
-    isLoginModalOpen,
     isProductModalOpen,
     selectedOrderForTicket,
   ]);
@@ -2813,6 +2815,9 @@ export default function Home() {
   }
 
   async function loginWithPassword() {
+    if (verifyingCode) return;
+    if (telefonoError || contrasenaError) return;
+
     setVerifyingCode(true);
     setError('');
     setAuthMessage('');
@@ -2843,7 +2848,6 @@ export default function Home() {
 
       persistSession(payload.data.token, payload.data.user);
       setPassword('');
-      setIsLoginModalOpen(false);
       const firstName = (payload.data.user.name || '').split(' ')[0] || 'negocio';
       pushToast(
         'success',
@@ -5959,10 +5963,7 @@ export default function Home() {
   };
 
   return (
-    <main
-      className={`min-h-[100dvh] text-neutral-900 ${isRestaurantSession ? 'py-0' : 'px-4 py-5 md:px-6 lg:px-8'
-        }`}
-    >
+    <main className="min-h-[100dvh] text-neutral-900">
       <PushEnableBanner
         visible={Boolean(token)}
         onEnable={() => subscribeToPush(token || '')}
@@ -9274,124 +9275,169 @@ export default function Home() {
         </div>
       ) : null}
       {!isRestaurantSession ? (
-        <div className="relative mx-auto flex h-dvh flex-col">
-          <header className="sticky top-0 z-40 flex items-center justify-center border-b border-black/5 bg-white px-4 py-4">
-            <SaDelLogo className="h-9 w-auto object-contain md:h-10" />
-          </header>
-
-          <section className="relative flex flex-1 flex-col overflow-hidden md:grid md:grid-cols-2">
-            <div className="relative flex flex-1 flex-col justify-end">
+        <div className="min-h-dvh bg-white lg:grid lg:grid-cols-[minmax(0,1.04fr)_minmax(0,1fr)] lg:items-stretch lg:bg-slate-50">
+          {/* Identidad y bienvenida: fotografía del restaurante + mensaje de marca */}
+          <section className="relative isolate flex min-h-[clamp(7.5rem,24dvh,13rem)] flex-col justify-end overflow-hidden bg-slate-900 px-5 pb-6 pt-10 sm:px-8 lg:min-h-dvh lg:px-12 lg:pb-12 lg:pt-10 xl:px-16">
+            <picture>
+              {welcomeImage ? null : (
+                <source media="(max-width: 1023px)" srcSet="/login-restaurante-movil-900.jpg" />
+              )}
               <img
-                src={welcomeImage}
-                alt=""
-                className="absolute inset-0 h-full w-full object-cover"
+                src={welcomeImage || '/login-restaurante-1200.jpg'}
+                alt="Salón de un restaurante con mesas montadas, iluminación cálida y barra abierta"
+                width={825}
+                height={1100}
+                fetchPriority="high"
+                decoding="async"
+                className="absolute inset-0 -z-10 h-full w-full object-cover object-[center_60%] lg:object-[center_38%]"
               />
-              <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/30 to-black/10 md:bg-gradient-to-r md:from-black/70 md:via-black/40 md:to-transparent" />
-              <div className="relative z-10 px-5 pb-6 md:px-10 md:pb-10">
-                <span className="inline-flex rounded-full bg-sky-500 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.2em] text-white">
-                  SaDeL Business
-                </span>
-                <h1 className="mt-3 max-w-md text-xl font-bold leading-tight text-white md:text-3xl md:leading-tight">
-                  Panel de administración
-                </h1>
-                <p className="mt-1 max-w-sm text-sm text-white/80">
-                  Gestiona pedidos, menú y operación de tu negocio.
-                </p>
-              </div>
+            </picture>
+            <div aria-hidden="true" className="absolute inset-0 -z-10 bg-slate-950/40" />
+            <div
+              aria-hidden="true"
+              className="absolute inset-0 -z-10 bg-gradient-to-t from-slate-950 via-slate-950/75 to-slate-950/25 lg:bg-gradient-to-br lg:from-slate-950 lg:via-slate-950/70 lg:to-slate-950/30"
+            />
+
+            <div className="hidden lg:block">
+              <SaDelLogo className="on-dark h-9 w-auto object-contain xl:h-10" />
             </div>
 
-            <div className="flex flex-1 items-center justify-center bg-[#fafafa] px-6 py-6 md:py-12 md:px-10">
-              <div className="w-full max-w-sm text-center">
-                <div className="mx-auto mb-6 flex h-14 w-14 items-center justify-center rounded-2xl bg-sky-50 shadow-sm ring-1 ring-sky-200/50">
-                  <svg className="h-7 w-7 text-sky-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15m3 0l3-3m0 0l-3-3m3 3H9" />
-                  </svg>
-                </div>
-                <h2 className="text-2xl font-bold text-neutral-900 md:text-3xl">
-                  Inicia sesión
-                </h2>
-                <p className="mt-2 text-sm text-neutral-500">
-                  Accede con el teléfono y contraseña de tu restaurante.
-                </p>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setError('');
-                    setAuthMessage('');
-                    setIsLoginModalOpen(true);
-                  }}
-                  className="mt-8 w-full rounded-full bg-sky-500 px-6 py-3.5 text-sm font-semibold text-white shadow-lg shadow-sky-500/30 transition-all duration-300 hover:bg-sky-600 hover:shadow-xl hover:shadow-sky-500/40 active:scale-[0.98]"
-                >
-                  Iniciar sesión
-                </button>
-              </div>
+            <div className="mx-auto mt-auto w-full max-w-lg lg:mx-0">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-sky-300">
+                SaDeL para restaurantes
+              </p>
+              <h1 className="mt-3 text-[clamp(1.6rem,5.2vw,2.6rem)] font-bold leading-[1.1] tracking-tight text-white lg:mt-4 lg:text-[clamp(2.1rem,3.1vw,3.05rem)]">
+                Tu restaurante,{' '}
+                <span className="text-sky-400">en buenas manos</span>
+              </h1>
+              <p className="mt-3 max-w-md text-[15px] leading-relaxed text-slate-200/90 lg:mt-4 lg:text-base">
+                Gestiona tus pedidos, menú y operación desde un solo lugar.
+              </p>
+
+              <ul className="mt-8 hidden gap-y-4 lg:grid xl:gap-y-5">
+                <li className="flex items-center gap-3">
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white/10 text-sky-300 ring-1 ring-inset ring-white/15">
+                    <ClipboardList className="h-[18px] w-[18px]" aria-hidden="true" />
+                  </span>
+                  <span className="text-sm font-medium text-slate-100">Control de pedidos</span>
+                </li>
+                <li className="flex items-center gap-3">
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white/10 text-sky-300 ring-1 ring-inset ring-white/15">
+                    <Activity className="h-[18px] w-[18px]" aria-hidden="true" />
+                  </span>
+                  <span className="text-sm font-medium text-slate-100">Información en tiempo real</span>
+                </li>
+                <li className="flex items-center gap-3">
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white/10 text-sky-300 ring-1 ring-inset ring-white/15">
+                    <Sparkles className="h-[18px] w-[18px]" aria-hidden="true" />
+                  </span>
+                  <span className="text-sm font-medium text-slate-100">Gestión simplificada</span>
+                </li>
+              </ul>
             </div>
           </section>
 
-          {isLoginModalOpen ? (
-            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4 py-6 backdrop-blur-sm">
-              <div className="mx-auto w-full max-w-[400px] rounded-3xl bg-white p-6 shadow-2xl md:p-8">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h3 className="text-xl font-bold text-neutral-900">
-                      Iniciar sesión
-                    </h3>
-                    <p className="mt-1 text-sm text-neutral-500">
-                      Ingresa tus datos para continuar.
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setIsLoginModalOpen(false)}
-                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-neutral-400 transition hover:bg-neutral-100 hover:text-neutral-600"
-                  >
-                    <X className="h-5 w-5" />
-                  </button>
-                </div>
+          {/* Formulario de acceso */}
+          <section className="flex items-center justify-center bg-white px-5 pb-[max(2rem,env(safe-area-inset-bottom))] pt-8 sm:px-8 lg:bg-slate-50/60 lg:px-10 lg:py-14">
+            <div className="w-full max-w-[26rem]">
+              <header className="lg:hidden">
+                <SaDelLogo className="h-9 w-auto object-contain" />
+              </header>
 
-                <form
-                  className="mt-6 grid gap-4"
-                  onSubmit={(event) => {
-                    event.preventDefault();
-                    void loginWithPassword();
-                  }}
-                >
-                  <Field
-                    label="Teléfono"
-                    value={phone}
-                    onChange={setPhone}
-                    placeholder="5512345678"
-                  />
-                  <Field
-                    label="Contraseña"
-                    value={password}
-                    onChange={setPassword}
-                    placeholder="••••••••"
-                    type="password"
-                  />
-
-                  <button
-                    type="submit"
-                    disabled={verifyingCode || !phone.trim() || !password.trim()}
-                    className="mt-2 w-full rounded-full bg-sky-500 px-5 py-3.5 text-sm font-semibold text-white shadow-lg shadow-sky-500/30 transition-all duration-300 hover:bg-sky-600 hover:shadow-xl hover:shadow-sky-500/40 disabled:cursor-not-allowed disabled:bg-neutral-300 disabled:shadow-none"
-                  >
-                    {verifyingCode ? 'Ingresando...' : 'Iniciar sesión'}
-                  </button>
-
-                  {authMessage ? (
-                    <div className="rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
-                      {authMessage}
-                    </div>
-                  ) : null}
-                  {error ? (
-                    <div className="rounded-2xl border border-rose-100 bg-rose-50 px-4 py-3 text-sm text-rose-700">
-                      {error}
-                    </div>
-                  ) : null}
-                </form>
+              <div className="mt-6 lg:mt-0">
+                <p className="text-[11px] font-bold uppercase tracking-[0.24em] text-sky-600">
+                  Panel de administración
+                </p>
+                <span className="mt-5 hidden h-12 w-12 items-center justify-center rounded-2xl bg-sky-50 text-sky-600 ring-1 ring-inset ring-sky-100 lg:flex">
+                  <ChefHat className="h-6 w-6" aria-hidden="true" />
+                </span>
+                <h2 className="mt-4 text-[clamp(1.55rem,5vw,1.9rem)] font-bold tracking-tight text-slate-900 lg:mt-5 lg:text-[2rem]">
+                  ¡Bienvenido de nuevo!
+                </h2>
+                <p className="mt-2 text-[15px] leading-relaxed text-slate-500">
+                  Accede a tu restaurante y comienza a gestionar todo desde un solo lugar.
+                </p>
               </div>
+
+              <form
+                className="mt-7 grid gap-4 lg:mt-8"
+                noValidate
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  if (verifyingCode) return;
+                  void loginWithPassword();
+                }}
+              >
+                <Field
+                  id="login-telefono"
+                  label="Teléfono"
+                  value={phone}
+                  onChange={(value) => {
+                    setPhone(value);
+                    if (error) setError('');
+                  }}
+                  placeholder="5512345678"
+                  autoComplete="tel"
+                  inputMode="tel"
+                  icon={<Phone className="h-[18px] w-[18px]" />}
+                  disabled={verifyingCode}
+                  error={telefonoError || undefined}
+                />
+                <Field
+                  id="login-contrasena"
+                  label="Contraseña"
+                  value={password}
+                  onChange={(value) => {
+                    setPassword(value);
+                    if (error) setError('');
+                  }}
+                  placeholder="••••••••"
+                  type="password"
+                  autoComplete="current-password"
+                  disabled={verifyingCode}
+                  error={contrasenaError || undefined}
+                />
+
+                <button
+                  type="submit"
+                  disabled={verifyingCode || !puedeEnviar}
+                  aria-busy={verifyingCode}
+                  className="mt-1 inline-flex min-h-[52px] w-full items-center justify-center gap-2 rounded-2xl bg-sky-600 px-5 text-[15px] font-semibold text-white shadow-lg shadow-sky-600/25 transition duration-200 hover:bg-sky-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-600 active:scale-[0.99] disabled:cursor-not-allowed disabled:bg-sky-300 disabled:shadow-none"
+                >
+                  {verifyingCode ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                      Iniciando sesión…
+                    </>
+                  ) : (
+                    'Iniciar sesión'
+                  )}
+                </button>
+
+                {authMessage ? (
+                  <p
+                    role="status"
+                    className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700"
+                  >
+                    {authMessage}
+                  </p>
+                ) : null}
+                {error ? (
+                  <p
+                    role="alert"
+                    className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700"
+                  >
+                    {error}
+                  </p>
+                ) : null}
+
+                <p className="flex items-start gap-2 pt-1 text-[13px] leading-relaxed text-slate-400">
+                  <Lock className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                  <span>Acceso exclusivo para restaurantes registrados en SaDeL. Nunca compartas tu contraseña.</span>
+                </p>
+              </form>
             </div>
-          ) : null}
+          </section>
         </div>
       ) : (
         <div className="min-h-[100dvh] bg-[#f7f4ec]">
@@ -14181,6 +14227,14 @@ function Field({
   type = 'text',
   inputRef,
   onKeyDown,
+  id,
+  autoComplete,
+  inputMode,
+  error,
+  hint,
+  disabled = false,
+  required = false,
+  icon,
 }: {
   label: string;
   value: string;
@@ -14189,35 +14243,73 @@ function Field({
   type?: string;
   inputRef?: React.Ref<HTMLInputElement>;
   onKeyDown?: (event: React.KeyboardEvent<HTMLInputElement>) => void;
+  id?: string;
+  autoComplete?: string;
+  inputMode?: 'text' | 'tel' | 'email' | 'numeric' | 'decimal' | 'search' | 'url' | 'none';
+  error?: string;
+  hint?: string;
+  disabled?: boolean;
+  required?: boolean;
+  icon?: React.ReactNode;
 }) {
   const [showPassword, setShowPassword] = useState(false);
   const isPassword = type === 'password';
+  const errorId = error && id ? `${id}-error` : undefined;
+  const hintId = hint && id ? `${id}-hint` : undefined;
 
   return (
-    <label className="group grid min-w-0 gap-2 text-sm text-neutral-600">
-      <span className="text-[12px] font-bold uppercase tracking-[0.1em] text-neutral-600 transition-colors group-focus-within:text-sky-500">{label}</span>
+    <label className="group grid min-w-0 gap-2 text-sm text-neutral-600" htmlFor={id}>
+      <span className="text-[12px] font-bold uppercase tracking-[0.1em] text-neutral-600 transition-colors group-focus-within:text-sky-500">
+        {label}
+      </span>
       <div className="relative">
+        {icon ? (
+          <span className="pointer-events-none absolute inset-y-0 left-0 my-auto flex h-5 w-5 items-center justify-center text-neutral-400 transition-colors group-focus-within:text-sky-500" aria-hidden="true">
+            {icon}
+          </span>
+        ) : null}
         <input
+          id={id}
           ref={inputRef}
           type={isPassword && showPassword ? 'text' : type}
           value={value}
           onChange={(event) => onChange(event.target.value)}
           onKeyDown={onKeyDown}
           placeholder={placeholder}
-          className={`block w-full min-w-0 rounded-[18px] border border-black/5 bg-neutral-100/50 py-3.5 text-base font-medium text-neutral-950 shadow-inner outline-none transition-all duration-300 placeholder:text-neutral-400 hover:bg-neutral-100/80 focus:border-sky-400 focus:bg-white focus:ring-4 focus:ring-sky-400/20 focus:shadow-md sm:text-[15px] ${isPassword ? 'px-5 pr-14' : 'px-5'}`}
+          autoComplete={autoComplete}
+          inputMode={inputMode}
+          required={required}
+          disabled={disabled}
+          aria-invalid={error ? true : undefined}
+          aria-describedby={[errorId, hintId].filter(Boolean).join(' ') || undefined}
+          className={`block w-full min-w-0 rounded-[18px] border bg-neutral-100/50 py-3.5 text-base font-medium text-neutral-950 shadow-inner outline-none transition-all duration-300 placeholder:text-neutral-400 hover:bg-neutral-100/80 focus:bg-white focus:ring-4 disabled:cursor-not-allowed disabled:opacity-60 sm:text-[15px] ${
+            error
+              ? 'border-rose-300 bg-rose-50/40 focus:border-rose-400 focus:ring-rose-400/20'
+              : 'border-black/5 focus:border-sky-400 focus:ring-sky-400/20 focus:shadow-md'
+          } ${isPassword ? 'pr-14' : 'pr-5'} ${icon ? 'pl-12' : 'pl-5'}`}
         />
         {isPassword && (
           <button
             type="button"
             onClick={() => setShowPassword((current) => !current)}
             aria-label={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
-            tabIndex={-1}
+            disabled={disabled}
             className="absolute right-2 inset-y-0 my-auto flex h-8 w-8 items-center justify-center rounded-full text-neutral-400 transition-colors duration-200 hover:bg-sky-500/10 hover:text-sky-600 active:scale-95 focus-visible:text-sky-600"
           >
             {showPassword ? <EyeSlashIcon /> : <EyeIcon />}
           </button>
         )}
       </div>
+      {error ? (
+        <span id={errorId} role="alert" className="text-[13px] font-medium text-rose-600">
+          {error}
+        </span>
+      ) : null}
+      {!error && hint ? (
+        <span id={hintId} className="text-[13px] text-neutral-500">
+          {hint}
+        </span>
+      ) : null}
     </label>
   );
 }

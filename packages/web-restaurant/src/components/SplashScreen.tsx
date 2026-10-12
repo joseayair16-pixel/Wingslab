@@ -59,7 +59,7 @@ export default function SplashScreen() {
       }`}
     >
       <SaDelLogo
-        className="sadel-loader-logo animate-sadel-breathe select-none pointer-events-none h-[68px] w-auto"
+        className="sadel-loader-logo animate-sadel-breathe select-none pointer-events-none h-auto max-h-[68px] w-auto max-w-[72vw]"
       />
       <p className="sadel-splash-title mt-4 text-lg font-bold tracking-[-0.02em] text-neutral-800">SaDeL</p>
       <div className="sadel-splash-track mt-4 h-1 w-16 overflow-hidden rounded-full bg-neutral-200">

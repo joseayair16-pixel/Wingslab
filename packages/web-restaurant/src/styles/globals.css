@@ -153,6 +153,14 @@ html.dark .sadel-logo-dark {
   filter: invert(1) hue-rotate(180deg) saturate(1.54) !important;
 }
 
+/* Logo sobre fondos oscuros (p. ej. la fotografía del login) sin activar el
+   modo oscuro global: aquí siempre se muestra la variante en blanco que ya
+   genera SaDelLogo, así que NO se aplica el filtro de inversión global.
+   La clase llega a la propia <img> (SaDelLogo la propaga a ambas variantes),
+   de ahí el selector compuesto y su especificidad. */
+html .sadel-logo-light.on-dark { display: none !important; }
+html body .sadel-logo-dark.on-dark { display: block !important; }
+
 /* Splash a pantalla completa: modo oscuro autocontenido.
    El invert global del <html> no alcanza de forma fiable a los elementos
    position:fixed en Safari/iOS, así que el splash se oscurece por sí mismo
