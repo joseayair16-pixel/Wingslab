@@ -168,6 +168,7 @@ export function registerNativePush(
             ...(await nativeAppVersion()),
           }),
         });
+        if (res.ok) persistNativeFcmToken(value);
         finish(res.ok, res.ok ? undefined : 'SERVER_REJECTED');
       } catch {
         finish(false, 'NETWORK');
@@ -184,6 +185,49 @@ export function registerNativePush(
       finish(false, 'REGISTER_CALL_FAILED');
     }
   });
+}
+
+/**
+ * Clave local del token FCM para el restaurante.
+ */
+export const NATIVE_FCM_TOKEN_KEY = 'sadel.restaurant.fcm_device_token';
+
+export function readNativeFcmToken(): string | null {
+  try {
+    if (typeof window === 'undefined' || !window.localStorage) return null;
+    return window.localStorage.getItem(NATIVE_FCM_TOKEN_KEY);
+  } catch {
+    return null;
+  }
+}
+
+export function persistNativeFcmToken(token: string): void {
+  try {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      window.localStorage.setItem(NATIVE_FCM_TOKEN_KEY, token);
+    }
+  } catch {}
+}
+
+export function clearNativeFcmToken(): void {
+  try {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      window.localStorage.removeItem(NATIVE_FCM_TOKEN_KEY);
+    }
+  } catch {}
+}
+
+/**
+ * Cancela las notificaciones nativas entregadas en la bandeja del sistema Android.
+ */
+export function cancelDeliveredNativeNotifications(): void {
+  const PN = plugin('PushNotifications');
+  if (PN && typeof PN.removeAllDeliveredNotifications === 'function') {
+    try {
+      const p = PN.removeAllDeliveredNotifications();
+      if (p?.catch) p.catch(() => {});
+    } catch {}
+  }
 }
 
 /** `versionCode` del APK en ejecución (null si no se puede leer). */
@@ -242,6 +286,7 @@ export function onNativeNotificationTap(
 
   return () => cleanups.forEach((c) => c());
 }
+
 
 // ---------------------------------------------------------------------------
 // Alarma continua de pedidos

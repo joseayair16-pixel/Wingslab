@@ -1,5 +1,11 @@
 import { useState, useEffect, useCallback } from 'react';
-import { waitForNativeBridge } from '@sadel/shared';
+import {
+  waitForNativeBridge,
+  revokeDevicePush,
+  saveStoredPushEndpoint,
+  readStoredPushEndpoint,
+  clearStoredPushEndpoint,
+} from '@sadel/shared';
 import {
   clearNativeFcmToken,
   getNativePushPermissionState,
@@ -12,7 +18,7 @@ import {
   saveSubscriptionSecrets,
   clearSubscriptionSecrets,
 } from '../lib/subscriptionSecrets';
-import { revokePushRegistrations, type RevokeTarget } from '../lib/revokePushRegistrations';
+
 
 const API_URL = '/api';
 
@@ -315,53 +321,75 @@ export const usePushNotifications = () => {
     }
   }, []);
 
-  const unsubscribe = async () => {
-    // Marca el opt-out para que la auto-re-sincronización no lo vuelva a
-    // suscribir en segundo plano: solo se reactiva con un gesto explícito.
-    try { localStorage.setItem('sadel.push_optout', 'true'); } catch { /* noop */ }
-    // Elimina el token/VAPID de IndexedDB para que el service worker tampoco
-    // intente re-suscribirse en segundo plano tras el opt-out.
+  const unsubscribe = async (options?: { isLogout?: boolean }) => {
+    const isLogout = options?.isLogout ?? false;
+
+    // Solo si el usuario opta explícitamente por desactivar notificaciones
+    // (no en logout) se persiste el opt-out local: cerrar sesión no debe
+    // silenciar al próximo usuario de este dispositivo.
+    if (!isLogout) {
+      try { localStorage.setItem('sadel.push_optout', 'true'); } catch { /* noop */ }
+    }
+
+    // Capturar credencial e identificadores ANTES de cualquier await: en
+    // logout el llamador limpia el almacenamiento local en el mismo tick y la
+    // revocación debe seguir usando el JWT de ESTA sesión, para que el backend
+    // solo borre filas de este usuario (aunque la petición llegue tarde, no
+    // puede tocar las filas que registre el próximo usuario de este dispositivo).
+    let jwt: string | null = null;
+    try {
+      jwt = localStorage.getItem('sadel.customer.token');
+    } catch {
+      jwt = null;
+    }
+    const deviceToken = isNative ? readNativeFcmToken() : null;
+    const endpoint = !isNative
+      ? ((subscription as PushSubscription)?.endpoint || readStoredPushEndpoint('sadel.customer'))
+      : null;
+
+    // Los secretos (JWT + VAPID) se borran SIEMPRE, también en logout: si
+    // quedan en el IndexedDB del service worker, el SW puede re-suscribir y
+    // RE-REGISTRAR en el backend la sesión recién cerrada (pushsubscriptionchange
+    // con reintentos), reviviendo sus notificaciones, y deja un JWT aún válido
+    // guardado en el dispositivo. Borrarlos no desuscribe la suscripción del
+    // navegador: en el próximo login la auto-sincronización vuelve a guardarlos.
     await clearSubscriptionSecrets();
 
     // Revoca las filas del backend para que este dispositivo deje de recibir
-    // los avisos del usuario actual (cierre de sesión / desactivación). Sin
-    // esto, el siguiente usuario del mismo dispositivo recibiría notificaciones
-    // ajenas hasta que se re-registrara. Best-effort: nunca bloquea el logout.
-    // Los identificadores se fijan a ESTA sesión antes de enviar: aunque la
-    // revocación llegara tarde, el backend solo borra filas del propio usuario.
+    // los avisos del usuario actual al cerrar sesión o desactivar notificaciones.
     const revokeOnServer = async () => {
-      let jwt: string | null = null;
-      try {
-        jwt = localStorage.getItem('sadel.customer.token');
-      } catch {
-        jwt = null;
-      }
-      let target: RevokeTarget | null = null;
-      if (isNative) {
-        const deviceToken = readNativeFcmToken();
-        if (deviceToken) target = { kind: 'fcm', token: deviceToken };
-      } else if (subscription) {
-        target = { kind: 'web', endpoint: (subscription as PushSubscription).endpoint };
-      }
-      await revokePushRegistrations({ apiBase: API_URL, jwt: jwt ?? '', target });
+      await revokeDevicePush({
+        apiBase: API_URL,
+        jwt,
+        fcmToken: deviceToken,
+        endpoint,
+        timeoutMs: 3500,
+      });
     };
 
     if (isNative) {
-      // La app nativa no puede "des-suscribir" el token FCM del dispositivo:
-      // el opt-out local evita el re-sync y la revocación borra la fila.
-      // OJO: revocar ANTES de olvidar el token local, que es lo que envía.
       await revokeOnServer();
       clearNativeFcmToken();
       setIsSubscribed(false);
       return;
     }
+
     if (subscription) {
-      await subscription.unsubscribe();
+      if (!isLogout) {
+        try {
+          await subscription.unsubscribe();
+        } catch {}
+      }
       setSubscription(null);
       setIsSubscribed(false);
       await revokeOnServer();
+      clearStoredPushEndpoint('sadel.customer');
+    } else {
+      await revokeOnServer();
+      clearStoredPushEndpoint('sadel.customer');
     }
   };
+
 
   // Cuando el navegador rota la suscripción push (pushsubscriptionchange), el service
   // worker nos avisa para volver a suscribirnos con un endpoint nuevo. El permiso ya
@@ -417,7 +445,7 @@ export const usePushNotifications = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  return { isSubscribed, permission, pushSupportIssue, needsIosInstall, pushReady, subscribe, unsubscribe };
+  return { isSubscribed, subscription, permission, pushSupportIssue, needsIosInstall, pushReady, subscribe, unsubscribe };
 };
 
 function urlBase64ToUint8Array(base64String: string) {
@@ -455,6 +483,8 @@ async function sendSubscriptionToBackend(subscription: PushSubscription, tokenOv
   if (!response.ok) {
     throw new Error('Fallo al guardar la suscripción en el backend');
   }
+
+  saveStoredPushEndpoint('sadel.customer', subscription.endpoint);
 }
 
 // Guarda en IndexedDB el token y la VAPID public key para que el service worker

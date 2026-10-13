@@ -7,7 +7,7 @@ import { IncomingOrderModal } from '../components/IncomingOrderModal';
 import DriverNavigationMap from '../components/DriverNavigationMap';
 import DriverTurnByTurnOverlay from '../components/DriverTurnByTurnOverlay';
 import PushEnableBanner from '../components/PushEnableBanner';
-import { isNativePlatform, requestNativePushPermission, registerNativePush, checkNativePushPermission, onNativeNotificationTap, nativeKeepAwake, nativeAllowSleep, hasNativeOrderAlarm, stopNativeOrderAlarm, isNativeAppInBackground } from '../lib/native';
+import { isNativePlatform, requestNativePushPermission, registerNativePush, checkNativePushPermission, onNativeNotificationTap, nativeKeepAwake, nativeAllowSleep, hasNativeOrderAlarm, stopNativeOrderAlarm, isNativeAppInBackground, readNativeFcmToken, clearNativeFcmToken, cancelDeliveredNativeNotifications } from '../lib/native';
 import { playAlertSound } from '../lib/sound';
 import { SettlementStatusBadge } from '../components/ui/Badge';
 import { EmptyState } from '../components/ui/EmptyState';
@@ -33,6 +33,9 @@ import {
   installWarmupListeners,
   installVisibilityResumeListener,
   waitForNativeBridge,
+  revokeDevicePush,
+  closeActiveWebNotifications,
+  flushPendingDeviceUnpair,
 } from '@sadel/shared';
 
 import { AlertTriangle, Bike, Star, Briefcase, ArrowRight, CreditCard, Calendar, Moon, Settings, Menu, Hourglass, MapPin, Store, ClipboardList, BellOff, Map as MapIcon, CheckCircle2, Banknote, Package, Unlink, Phone, Wallet, Image as ImageIcon, Search, RadioTower, PartyPopper, Ban, Camera, Info } from 'lucide-react';
@@ -805,7 +808,64 @@ export default function Home() {
     });
   }
 
+  // Reintenta la desvinculación pendiente del dispositivo si el logout
+  // anterior falló por red (misma cola best-effort que panel/comensal).
+  useEffect(() => {
+    void flushPendingDeviceUnpair(apiBase);
+    const handleOnline = () => {
+      void flushPendingDeviceUnpair(apiBase);
+    };
+    window.addEventListener('online', handleOnline);
+    return () => window.removeEventListener('online', handleOnline);
+  }, [apiBase]);
+
   function clearSession(message?: string) {
+    // 1. Silenciar alarma nativa y audio web de inmediato: una sesión cerrada
+    //    no debe seguir sonando ni vibrando.
+    try {
+      stopNativeOrderAlarm();
+    } catch {}
+    try {
+      stopAll();
+    } catch {}
+
+    // 2. Cancelar avisos de esta app ya entregados en la bandeja del sistema.
+    try {
+      cancelDeliveredNativeNotifications();
+    } catch {}
+    try {
+      closeActiveWebNotifications();
+    } catch {}
+
+    // 3. Desvincular el push de ESTE dispositivo en el backend (best-effort:
+    //    nunca bloquea el logout). El JWT y el token FCM se capturan ANTES de
+    //    limpiar la sesión local; el endpoint web se lee ahora mismo del SW.
+    //    Solo se borran filas de este dispositivo: los demás dispositivos del
+    //    repartidor siguen recibiendo avisos.
+    const currentToken = token || readStoredSession(storageKey).token;
+    const currentFcm = readNativeFcmToken();
+    void (async () => {
+      let endpoint: string | null = null;
+      try {
+        if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
+          // getRegistration() (y no .ready): no cuelga si aún no hay SW activo.
+          const registration = await navigator.serviceWorker.getRegistration();
+          const sub = await registration?.pushManager.getSubscription();
+          endpoint = sub?.endpoint ?? null;
+        }
+      } catch {
+        endpoint = null;
+      }
+      await revokeDevicePush({
+        apiBase,
+        jwt: currentToken,
+        fcmToken: currentFcm,
+        endpoint,
+        timeoutMs: 3500,
+      }).catch(() => {});
+    })();
+    clearNativeFcmToken();
+
     setToken('');
     setSessionUser(null);
     setDriverProfile(null);

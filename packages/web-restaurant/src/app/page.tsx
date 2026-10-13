@@ -28,6 +28,12 @@ import {
   reset,
   getMenuThemeById,
   waitForNativeBridge,
+  revokeDevicePush,
+  closeActiveWebNotifications,
+  saveStoredPushEndpoint,
+  readStoredPushEndpoint,
+  clearStoredPushEndpoint,
+  flushPendingDeviceUnpair,
 } from '@sadel/shared';
 
 import { useForegroundPolling } from '../hooks/useForegroundPolling';
@@ -56,7 +62,11 @@ import {
   isNativeAppInBackground,
   setupAndroidBackButton,
   isNativeOrderAlarmRinging,
+  readNativeFcmToken,
+  clearNativeFcmToken,
+  cancelDeliveredNativeNotifications,
 } from '../lib/native';
+
 
 /**
  * ¿El sonido de "pedido nuevo" lo está poniendo AHORA la app nativa
@@ -1654,6 +1664,9 @@ export default function Home() {
     };
   }, [token, sessionUser, apiBase]);
   const navigateToOrder = useCallback((orderId: string) => {
+    if (!token || !sessionUser || sessionUser.role !== 'RESTAURANT') {
+      return;
+    }
     const currentOrders = ordersRef.current;
     const order = currentOrders?.find?.((o: any) => o.id === orderId);
     if (order) {
@@ -1667,7 +1680,7 @@ export default function Home() {
       pendingNotificationOrderIdRef.current = orderId;
       setActiveSection('orders');
     }
-  }, []);
+  }, [token, sessionUser]);
   const promptedIncomingOrderIdsRef = useRef<string[]>([]);
   const resolvedIncomingOrderIdsRef = useRef<string[]>([]);
   const autoRejectingOrderIdsRef = useRef<string[]>([]);
@@ -1967,7 +1980,7 @@ export default function Home() {
     const handleSWMessage = (event: MessageEvent) => {
       if (event.data?.type === 'NOTIFICATION_CLICK') {
         const orderId = event.data.orderId;
-        if (orderId) {
+        if (orderId && token && sessionUser && sessionUser.role === 'RESTAURANT') {
           if (event.data.action === 'extend-eta') {
             pendingEtaExtensionOrderIdRef.current = orderId;
           }
@@ -1989,26 +2002,26 @@ export default function Home() {
     return () => {
       navigator.serviceWorker.removeEventListener('message', handleSWMessage);
     };
-  }, [navigateToOrder]);
+  }, [navigateToOrder, token, sessionUser]);
 
   // En la app nativa, el toque de una notificación FCM llega por el plugin de
   // Capacitor (no hay service worker): navegar al pedido correspondiente.
   useEffect(() => {
-    if (typeof window === 'undefined' || !isNativePlatform() || !token) return;
+    if (typeof window === 'undefined' || !isNativePlatform() || !token || !sessionUser || sessionUser.role !== 'RESTAURANT') return;
 
     const off = onNativeNotificationTap(({ orderId, action }) => {
-      if (!orderId) return;
+      if (!orderId || !token || !sessionUser || sessionUser.role !== 'RESTAURANT') return;
       if (action === 'extend-eta') {
         pendingEtaExtensionOrderIdRef.current = orderId;
       }
       navigateToOrder(orderId);
     });
     return off;
-  }, [token, navigateToOrder]);
+  }, [token, sessionUser, navigateToOrder]);
 
   // Buscar en IndexedDB si postMessage se perdió (fallback para notificaciones)
   useEffect(() => {
-    if (typeof window === 'undefined' || !token) return;
+    if (typeof window === 'undefined' || !token || !sessionUser || sessionUser.role !== 'RESTAURANT') return;
 
     const checkIndexedDB = async () => {
       try {
@@ -2030,16 +2043,18 @@ export default function Home() {
           const cleanTx = db.transaction('pending', 'readwrite');
           cleanTx.objectStore('pending').delete('orderId');
           await new Promise(r => { cleanTx.oncomplete = r; });
-          if (data.action === 'extend-eta') {
-            pendingEtaExtensionOrderIdRef.current = data.value;
+          if (token && sessionUser && sessionUser.role === 'RESTAURANT') {
+            if (data.action === 'extend-eta') {
+              pendingEtaExtensionOrderIdRef.current = data.value;
+            }
+            navigateToOrder(data.value);
           }
-          navigateToOrder(data.value);
         }
       } catch {}
     };
 
     checkIndexedDB();
-  }, [token, navigateToOrder]);
+  }, [token, sessionUser, navigateToOrder]);
 
   // Cuando se carguen órdenes y tengamos un orderId pendiente de notificación, seleccionarla
   useEffect(() => {
@@ -2318,6 +2333,7 @@ export default function Home() {
             body: JSON.stringify(existingSub)
           });
           if (subResponse.ok) {
+            saveStoredPushEndpoint('sadel.restaurant', existingSub.endpoint);
             debugLog('Push subscription already active, re-synced to server');
             return { ok: true };
           }
@@ -2374,6 +2390,7 @@ export default function Home() {
         return { ok: false, reason: 'SUBSCRIBE_FAILED' };
       }
 
+      saveStoredPushEndpoint('sadel.restaurant', subscription.endpoint);
       debugLog('Subscribed to push notifications');
       return { ok: true };
     } catch (error) {
@@ -2385,7 +2402,67 @@ export default function Home() {
   // Exponer subscribeToPush al listener del Service Worker (rotación de subs).
   subscribeToPushRef.current = subscribeToPush;
 
+  useEffect(() => {
+    void flushPendingDeviceUnpair(apiBase);
+    const handleOnline = () => {
+      void flushPendingDeviceUnpair(apiBase);
+    };
+    window.addEventListener('online', handleOnline);
+    return () => window.removeEventListener('online', handleOnline);
+  }, [apiBase]);
+
   function clearSession(message?: string) {
+    // 1. Silenciar y detener de inmediato toda alarma nativa y de audio web
+    try {
+      stopNativeOrderAlarm();
+    } catch {}
+    try {
+      stopWebRepeatAlarm();
+    } catch {}
+    try {
+      stopAll();
+    } catch {}
+
+    // 2. Cancelar notificaciones activas de esta app en la bandeja del sistema
+    try {
+      cancelDeliveredNativeNotifications();
+      closeActiveWebNotifications();
+    } catch {}
+
+    // 3. Desconectar websocket de manera sincrónica y abandonar canales
+    if (socketRef.current) {
+      try {
+        socketRef.current.removeAllListeners();
+        socketRef.current.emit('leave-room', sessionUser?.id, 'RESTAURANT');
+        socketRef.current.disconnect();
+      } catch {}
+      socketRef.current = null;
+    }
+
+    // 4. Revocar registros push del dispositivo en el backend antes de limpiar credenciales
+    const currentToken = token || readStoredSession(storageKey).token;
+    const currentFcm = readNativeFcmToken();
+    const currentEndpoint = readStoredPushEndpoint('sadel.restaurant');
+
+    void revokeDevicePush({
+      apiBase,
+      jwt: currentToken,
+      fcmToken: currentFcm,
+      endpoint: currentEndpoint,
+      timeoutMs: 3500,
+    }).catch(() => {});
+
+    clearNativeFcmToken();
+    clearStoredPushEndpoint('sadel.restaurant');
+
+    // 5. Limpiar estados y referencias locales
+    promptedIncomingOrderIdsRef.current = [];
+    resolvedIncomingOrderIdsRef.current = [];
+    autoRejectingOrderIdsRef.current = [];
+    soundedIncomingOrderIdsRef.current = [];
+    pendingNotificationOrderIdRef.current = null;
+    pendingEtaExtensionOrderIdRef.current = null;
+
     setToken('');
     setRefreshToken('');
     setSessionUser(null);
@@ -2402,8 +2479,10 @@ export default function Home() {
     setToasts([]);
     setLastFailedAction(null);
     setSelectedOrderForTicket(null);
+    setSelectedOrderForEtaExtension(null);
     setIncomingOrderQueue([]);
     setAcceptancePromptOrderId(null);
+    setHandoverPromptOrderId(null);
     setSelectedPreparationTime(15);
     setStoreDraft({
       name: '',
@@ -2416,25 +2495,25 @@ export default function Home() {
       email: '',
       logo: '',
       coverImage: '',
-        hasOwnDelivery: false,
-        supportsNetworkDelivery: true,
-        pickupOnly: false,
-        accentColor: null,
-        menuTheme: null,
-        minDeliveryTime: '',
-        maxDeliveryTime: '',
-        deliveryFee: '',
-        deliveryRadius: '',
-        deliveryPricingModel: 'fixed',
-        deliveryBaseRate: '',
-        deliveryPerKmRate: '',
-        deliveryMinFee: '',
-        deliveryMaxFee: '',
-        maxCashOrder: '',
-        acceptsCash: true,
-        storeCategories: [],
-        enableTicketPrinting: true,
-    whatsappNotifications: false,
+      hasOwnDelivery: false,
+      supportsNetworkDelivery: true,
+      pickupOnly: false,
+      accentColor: null,
+      menuTheme: null,
+      minDeliveryTime: '',
+      maxDeliveryTime: '',
+      deliveryFee: '',
+      deliveryRadius: '',
+      deliveryPricingModel: 'fixed',
+      deliveryBaseRate: '',
+      deliveryPerKmRate: '',
+      deliveryMinFee: '',
+      deliveryMaxFee: '',
+      maxCashOrder: '',
+      acceptsCash: true,
+      storeCategories: [],
+      enableTicketPrinting: true,
+      whatsappNotifications: false,
       instagram: '',
       facebook: '',
       tiktok: '',
@@ -2461,10 +2540,7 @@ export default function Home() {
     setLogoDraft('');
     setLogoValidationError('');
     setLogoPreviewError(false);
-      setProductDraft(buildEmptyProductDraft(categories[0]?.id || ''));
-    promptedIncomingOrderIdsRef.current = [];
-    resolvedIncomingOrderIdsRef.current = [];
-    autoRejectingOrderIdsRef.current = [];
+    setProductDraft(buildEmptyProductDraft(categories[0]?.id || ''));
     clearStoredSession(storageKey);
     if (message) {
       setAuthMessage(message);

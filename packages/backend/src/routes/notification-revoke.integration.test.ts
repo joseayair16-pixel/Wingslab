@@ -125,4 +125,60 @@ describe('revocación de registros push', () => {
       });
     });
   });
+
+  describe('POST /notifications/unpair', () => {
+    it('rechaza payload sin token ni endpoint', async () => {
+      const response = await app.inject({
+        method: 'POST',
+        url: '/notifications/unpair',
+        payload: {},
+      });
+      expect(response.statusCode).toBe(400);
+    });
+
+    it('desvincula token y endpoint con usuario autenticado (scoped)', async () => {
+      const token = await signedToken('user-auth');
+      const deleteFcm = jest.spyOn(prisma.fcmToken, 'deleteMany').mockResolvedValue({ count: 1 } as never);
+      const deleteWeb = jest.spyOn(prisma.pushSubscription, 'deleteMany').mockResolvedValue({ count: 1 } as never);
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/notifications/unpair',
+        headers: { authorization: `Bearer ${token}` },
+        payload: {
+          fcmToken: 'fcm-device-123',
+          endpoint: 'https://push.example/dev-123',
+        },
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(JSON.parse(response.body)).toEqual({ success: true, removed: 2, fcm: 1, web: 1 });
+      expect(deleteFcm).toHaveBeenCalledWith({
+        where: { token: 'fcm-device-123', userId: 'user-auth' },
+      });
+      expect(deleteWeb).toHaveBeenCalledWith({
+        where: { endpoint: 'https://push.example/dev-123', userId: 'user-auth' },
+      });
+    });
+
+    it('desvincula por posesión de token/endpoint sin sesión activa (offline/diferido)', async () => {
+      const deleteFcm = jest.spyOn(prisma.fcmToken, 'deleteMany').mockResolvedValue({ count: 1 } as never);
+      const deleteWeb = jest.spyOn(prisma.pushSubscription, 'deleteMany').mockResolvedValue({ count: 0 } as never);
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/notifications/unpair',
+        payload: {
+          fcmToken: 'fcm-device-pending',
+        },
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(JSON.parse(response.body)).toEqual({ success: true, removed: 1, fcm: 1, web: 0 });
+      expect(deleteFcm).toHaveBeenCalledWith({
+        where: { token: 'fcm-device-pending' },
+      });
+    });
+  });
 });
+

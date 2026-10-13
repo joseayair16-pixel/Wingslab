@@ -243,6 +243,82 @@ export async function registerNotificationRoutes(fastify: FastifyInstance): Prom
     }
   });
 
+  const unpairDeviceSchema = z
+    .object({
+      fcmToken: z.string().min(1).max(4096).optional(),
+      endpoint: z.string().url().max(2048).optional(),
+    })
+    .refine((data) => Boolean(data.fcmToken || data.endpoint), {
+      message: 'Debes proporcionar al menos un token FCM o endpoint.',
+    });
+
+  /**
+   * Desvincula de forma segura este dispositivo del usuario anterior.
+   * Si incluye JWT, delimita el borrado al usuario autenticado.
+   * Si no incluye JWT (desvinculación diferida por cierre offline),
+   * revoca por posesión exclusiva del token o endpoint de este dispositivo.
+   */
+  fastify.post('/notifications/unpair', async (request, reply) => {
+    const parsed = unpairDeviceSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.status(400).send({
+        success: false,
+        error: {
+          code: 'INVALID_PAYLOAD',
+          message: 'Datos de dispositivo inválidos.',
+        },
+      });
+    }
+
+    let authenticatedUserId: string | null = null;
+    try {
+      await request.jwtVerify();
+      const payload = request.user as { sub?: string };
+      authenticatedUserId = payload?.sub || null;
+    } catch {
+      authenticatedUserId = null;
+    }
+
+    const { fcmToken, endpoint } = parsed.data;
+    let removedFcm = 0;
+    let removedWeb = 0;
+
+    try {
+      if (fcmToken) {
+        const res = await prisma.fcmToken.deleteMany({
+          where: authenticatedUserId
+            ? { token: fcmToken, userId: authenticatedUserId }
+            : { token: fcmToken },
+        });
+        removedFcm = res.count;
+      }
+
+      if (endpoint) {
+        const res = await prisma.pushSubscription.deleteMany({
+          where: authenticatedUserId
+            ? { endpoint, userId: authenticatedUserId }
+            : { endpoint },
+        });
+        removedWeb = res.count;
+      }
+
+      return reply.send({
+        success: true,
+        removed: removedFcm + removedWeb,
+        fcm: removedFcm,
+        web: removedWeb,
+      });
+    } catch (error) {
+      return reply.status(500).send({
+        success: false,
+        error: {
+          code: 'SERVER_ERROR',
+          message: 'No se pudo desvincular el dispositivo.',
+        },
+      });
+    }
+  });
+
   fastify.get('/notifications/vapid-key', async (request, reply) => {
     if (!isVapidConfigured()) {
       return reply.status(503).send({

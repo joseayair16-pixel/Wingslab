@@ -273,6 +273,20 @@ export function clearNativeFcmToken(): void {
 }
 
 /**
+ * Cancela las notificaciones nativas entregadas en la bandeja del sistema Android.
+ */
+export function cancelDeliveredNativeNotifications(): void {
+  const PN = plugin('PushNotifications');
+  if (PN && typeof PN.removeAllDeliveredNotifications === 'function') {
+    try {
+      const p = PN.removeAllDeliveredNotifications();
+      if (p?.catch) p.catch(() => {});
+    } catch {}
+  }
+}
+
+
+/**
  * Escucha el toque de una notificación nativa para navegar al pedido.
  * Devuelve una función de limpieza.
  */

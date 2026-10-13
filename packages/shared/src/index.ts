@@ -4,3 +4,4 @@ export * from './utils';
 export * from './web';
 export * from './menuThemes';
 export * from './audio';
+export * from './deviceNotifications';

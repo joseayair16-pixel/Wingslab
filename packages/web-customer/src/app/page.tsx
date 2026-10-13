@@ -20,6 +20,8 @@ import {
   uploadMediaAsset,
   getOrderStatusLabel,
   convertImageFileToDataUrl,
+  closeActiveWebNotifications,
+  flushPendingDeviceUnpair,
 } from '@sadel/shared';
 import { Icon } from '@iconify/react';
 import { usePushNotifications } from '../hooks/usePushNotifications';
@@ -34,6 +36,7 @@ import {
   nativeKeepAwake,
   onNativeNotificationTap,
   setupAndroidBackButton,
+  cancelDeliveredNativeNotifications,
 } from '../lib/native';
 import { useForegroundPolling } from '../hooks/useForegroundPolling';
 import { completeOrderIntent, resolveOrderIntentKey } from '../lib/orderIntentKey';
@@ -1896,7 +1899,27 @@ export default function Home() {
     [cart]
   );
 
+  // Reintenta la desvinculación pendiente del dispositivo si el logout anterior
+  // falló por red (misma cola best-effort que el panel del restaurante).
+  useEffect(() => {
+    void flushPendingDeviceUnpair('/api');
+    const handleOnline = () => {
+      void flushPendingDeviceUnpair('/api');
+    };
+    window.addEventListener('online', handleOnline);
+    return () => window.removeEventListener('online', handleOnline);
+  }, []);
+
   function clearSession(_message?: string) {
+    // Notificaciones: cancelar los avisos ya mostrados en este dispositivo y
+    // desvincular el push de la sesión que se cierra (best-effort: nunca
+    // bloquea el logout). Se lanza ANTES de limpiar la sesión local para que la
+    // revocación en backend pueda usar el JWT de ESTA sesión; el endpoint y el
+    // token FCM se leen dentro de forma síncrona antes de cualquier await.
+    try { void unsubscribePush({ isLogout: true }); } catch { /* noop */ }
+    try { cancelDeliveredNativeNotifications(); } catch { /* noop */ }
+    try { closeActiveWebNotifications(); } catch { /* noop */ }
+
     setToken('');
     setSessionUser(null);
     setActiveSection('home');
