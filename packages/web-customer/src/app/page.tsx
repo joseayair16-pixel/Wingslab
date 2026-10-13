@@ -24,6 +24,7 @@ import {
 import { Icon } from '@iconify/react';
 import { usePushNotifications } from '../hooks/usePushNotifications';
 import { buildOrderAcceptedNotice } from '../lib/orderStatusNotices';
+import { logWebBuildOnce } from '../lib/buildInfo';
 import {
   isNativePlatform,
   nativeAllowSleep,
@@ -1429,6 +1430,7 @@ export default function Home() {
 
   useEffect(() => {
     try {
+      logWebBuildOnce();
       const savedSession = readStoredSession(storageKey);
 
       if (typeof window !== 'undefined' && window.localStorage) {
