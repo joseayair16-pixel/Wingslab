@@ -1099,7 +1099,7 @@ export default function Home() {
   });
   const [whatsappNotificationsEnabled, setWhatsappNotificationsEnabled] = useState(false);
   const { playAlert, playLlegue, playChat, unlock } = useCustomerSounds();
-  const { isSubscribed, permission: pushPermission, pushSupportIssue, needsIosInstall, subscribe: subscribePush, unsubscribe: unsubscribePush } = usePushNotifications();
+  const { isSubscribed, permission: pushPermission, pushSupportIssue, needsIosInstall, pushReady, subscribe: subscribePush, unsubscribe: unsubscribePush } = usePushNotifications();
   const selectedOrderIdRef = useRef(selectedOrderId);
 
   useEffect(() => {
@@ -4549,6 +4549,7 @@ export default function Home() {
         permission={pushPermission}
         pushSupportIssue={pushSupportIssue}
         needsIosInstall={needsIosInstall}
+        pushReady={pushReady}
         onEnable={async () => {
           if (token) await subscribePush(token);
         }}

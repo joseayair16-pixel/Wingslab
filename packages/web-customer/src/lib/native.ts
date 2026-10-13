@@ -28,13 +28,29 @@ function plugin(name: string): any {
 
 /** Estado del permiso de notificaciones nativo (sin pedir el diálogo). */
 export async function checkNativePushPermission(): Promise<boolean> {
+  return (await getNativePushPermissionState()) === 'granted';
+}
+
+export type NativePushPermissionState = 'granted' | 'prompt' | 'denied' | 'unavailable';
+
+/**
+ * Estado crudo del permiso nativo. A diferencia del booleano, distingue
+ * «aún no preguntado» (prompt: el diálogo del sistema sí puede mostrarse) de
+ * «denegado permanente» (denied: solo queda guiar a ajustes). Sin esto, un
+ * denegado permanente recibiría una invitación que promete una activación
+ * imposible.
+ */
+export async function getNativePushPermissionState(): Promise<NativePushPermissionState> {
   const PN = plugin('PushNotifications');
-  if (!PN) return false;
+  if (!PN) return 'unavailable';
   try {
     const res = await PN.checkPermissions();
-    return res?.receive === 'granted';
+    const receive = res?.receive;
+    if (receive === 'granted') return 'granted';
+    if (receive === 'denied') return 'denied';
+    return 'prompt';
   } catch {
-    return false;
+    return 'unavailable';
   }
 }
 
