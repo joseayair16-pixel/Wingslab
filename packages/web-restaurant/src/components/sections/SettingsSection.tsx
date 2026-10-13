@@ -4,6 +4,7 @@ import { Check, Info, Tag } from 'lucide-react';
 import React, { useEffect, useState } from 'react';
 import { requestJson, MENU_THEMES, getMenuThemeById } from '@sadel/shared';
 import { getGoogleMaps } from '../../lib/googleMaps';
+import { hasNativeOrderAlarm, isNativePlatform } from '../../lib/native';
 import { CategoryIcon } from '../CategoryIcon';
 
 type SuccessResponse<T> = {
@@ -212,6 +213,9 @@ export const SettingsSection = React.memo(function SettingsSection({
   // banner superior (útil en Android PWA, donde el permiso live a nivel de SO).
   const [pushDiagPermission, setPushDiagPermission] = useState<NotificationPermission>('default');
   const [pushDiagSubscribed, setPushDiagSubscribed] = useState(false);
+  // ¿El WebView ve el plugin de alarma continua? Sin él, la app se comporta
+  // como web para los sonidos (Web Audio con bloqueo de autoplay).
+  const [nativeAlarmAvailable, setNativeAlarmAvailable] = useState<boolean | null>(null);
 
   useEffect(() => {
     if (typeof window === 'undefined' || !('Notification' in window)) return;
@@ -234,6 +238,28 @@ export const SettingsSection = React.memo(function SettingsSection({
     return () => {
       document.removeEventListener('visibilitychange', onVisibilityChange);
       window.removeEventListener('focus', onFocus);
+    };
+  }, []);
+  // Disponibilidad de la alarma nativa (solo APK): se re-evalúa al volver a
+  // primer plano porque el bridge puede inyectarse tarde.
+  useEffect(() => {
+    if (!isNativePlatform()) return;
+    const refreshAlarm = () => {
+      try {
+        setNativeAlarmAvailable(hasNativeOrderAlarm());
+      } catch {
+        setNativeAlarmAvailable(false);
+      }
+    };
+    refreshAlarm();
+    const onVisAlarm = () => {
+      if (document.visibilityState === 'visible') refreshAlarm();
+    };
+    document.addEventListener('visibilitychange', onVisAlarm);
+    window.addEventListener('focus', refreshAlarm);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisAlarm);
+      window.removeEventListener('focus', refreshAlarm);
     };
   }, []);
   // Ancho de papel térmico preferido (58mm/80mm). Se guarda en localStorage:
@@ -1657,6 +1683,22 @@ export const SettingsSection = React.memo(function SettingsSection({
                         {pushDiagSubscribed ? 'Sí' : 'No'}
                       </span>
                     </div>
+                    {isNativePlatform() && (
+                      <div className="flex items-center justify-between gap-3 mt-2">
+                        <span className="text-xs font-medium text-neutral-500">Alarma nativa</span>
+                        <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-bold ${
+                          nativeAlarmAvailable
+                            ? 'bg-emerald-50 text-emerald-700 border border-emerald-200/60'
+                            : 'bg-rose-50 text-rose-700 border border-rose-200/60'
+                        }`}>
+                          {nativeAlarmAvailable === null
+                            ? 'Verificando…'
+                            : nativeAlarmAvailable
+                              ? 'Disponible'
+                              : 'No detectada'}
+                        </span>
+                      </div>
+                    )}
                     {pushDiagSubscribed && pushDiagPermission === 'granted' ? (
                       <p className="mt-2.5 text-[11px] font-medium text-emerald-700 bg-emerald-50 border border-emerald-200/60 rounded-lg px-2.5 py-1.5">
                         ✓ Todo en orden. Este dispositivo recibirá pedidos con notificación push.

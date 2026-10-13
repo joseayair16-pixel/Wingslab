@@ -18,7 +18,56 @@ export function isNativePlatform(): boolean {
   return Boolean(cap?.isNativePlatform?.());
 }
 
+/**
+ * Plugins nativos que usa el panel. El runtime JS de Capacitor solo expone en
+ * `Capacitor.Plugins` los que se registran desde JS (normalmente lo hace cada
+ * paquete npm al importarse). Como el bundle web no importa los paquetes
+ * @capacitor/*, sin este registro el WebView no ve NINGÚN plugin nativo y todo
+ * (push, alarma continua, GPS, haptics, impresión, batería) se degrada a web
+ * en silencio. `registerPlugin(name)` crea el proxy cuyos métodos viajan al
+ * nativo por el bridge; la guarda de `existing` lo hace idempotente.
+ */
+const BRIDGE_PLUGIN_NAMES = [
+  'PushNotifications',
+  'App',
+  'Geolocation',
+  'Haptics',
+  'KeepAwake',
+  'Printer',
+  'OrderAlarm',
+  'BatteryHelper',
+];
+
+/** Proxies creados por ensureBridgePlugins (no prueban presencia nativa). */
+const bridgeRegisteredByUs = new Set<string>();
+
+function ensureBridgePlugins(): void {
+  try {
+    const cap = capacitor();
+    if (!cap || !isNativePlatform() || typeof cap.registerPlugin !== 'function') return;
+    const existing = cap.Plugins ?? {};
+    for (const name of BRIDGE_PLUGIN_NAMES) {
+      if (existing[name]) continue;
+      try {
+        cap.registerPlugin(name);
+        // Ojo: el proxy se crea aunque el nativo no traiga el plugin (las
+        // llamadas fallarían con "not implemented", ya contemplado en cada
+        // punto de uso con try/catch). Se marca para no confundirlo con un
+        // plugin realmente presente (ver hasNativeOrderAlarm).
+        bridgeRegisteredByUs.add(name);
+      } catch {
+        /* un nombre ausente en el nativo simplemente no se expone */
+      }
+    }
+  } catch {
+    /* noop */
+  }
+}
+
 function plugin(name: string): any {
+  // El bridge puede inyectarse después del montaje, así que el registro se
+  // intenta en cada acceso (barato tras el primero por la guarda `existing`).
+  ensureBridgePlugins();
   return capacitor()?.Plugins?.[name] ?? null;
 }
 
@@ -202,9 +251,30 @@ export function onNativeNotificationTap(
  * ¿El APK incluye el plugin de alarma continua (Foreground Service)? Los APKs
  * antiguos no lo tienen: en ese caso se conserva el bucle de audio web para no
  * perder el aviso.
+ *
+ * Se consulta primero `isPluginAvailable` (vía oficial, sin efectos
+ * secundarios: el nativo inyecta los headers de cada plugin registrado,
+ * incluidos los manuales como OrderAlarm) y luego el proxy del bridge.
  */
 export function hasNativeOrderAlarm(): boolean {
-  return Boolean(plugin('OrderAlarm'));
+  try {
+    const cap = capacitor();
+    if (cap && typeof cap.isPluginAvailable === 'function') {
+      try {
+        if (cap.isPluginAvailable('OrderAlarm')) return true;
+      } catch {
+        /* noop */
+      }
+    }
+    // Proxy preexistente (registrado por el runtime, no fabricado aquí):
+    // prueba presencia real y conserva el fallback de APKs antiguos.
+    if (cap?.Plugins?.['OrderAlarm'] && !bridgeRegisteredByUs.has('OrderAlarm')) {
+      return true;
+    }
+  } catch {
+    /* noop */
+  }
+  return false;
 }
 
 /**
