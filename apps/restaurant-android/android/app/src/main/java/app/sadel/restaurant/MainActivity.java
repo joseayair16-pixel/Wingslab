@@ -2,6 +2,7 @@ package app.sadel.restaurant;
 
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
+import android.content.SharedPreferences;
 import android.media.AudioAttributes;
 import android.net.Uri;
 import android.os.Build;
@@ -68,6 +69,8 @@ public class MainActivity extends BridgeActivity {
         NotificationManager manager = getSystemService(NotificationManager.class);
         if (manager == null) return;
 
+        maybeResetNotificationChannels(manager);
+
         AudioAttributes attrs = new AudioAttributes.Builder()
                 .setUsage(AudioAttributes.USAGE_NOTIFICATION_EVENT)
                 .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
@@ -78,6 +81,35 @@ public class MainActivity extends BridgeActivity {
         createChannel(manager, "rezagado", "Pedido rezagado", R.raw.rezagado, NotificationManager.IMPORTANCE_HIGH, attrs);
         createChannel(manager, "mensaje", "Mensaje de chat", R.raw.mensaje, NotificationManager.IMPORTANCE_DEFAULT, attrs);
         createChannel(manager, "default", "Notificaciones generales", R.raw.notifica, NotificationManager.IMPORTANCE_DEFAULT, attrs);
+    }
+
+    /**
+     * Versión del esquema de canales. Android NO actualiza el sonido ni la
+     * importancia de un canal ya creado (`createNotificationChannel` lo ignora
+     * en silencio): sin esto, un usuario que instaló una versión anterior
+     * conservaría el sonido viejo para siempre. Al subir este número los
+     * canales se borran y recrean con la configuración nueva. Instalaciones
+     * frescas no notan diferencia.
+     */
+    private static final int NOTIFICATION_CHANNEL_VERSION = 1;
+
+    private static final String[] NOTIFICATION_CHANNEL_IDS =
+            {"notifica", "llegue", "rezagado", "mensaje", "default"};
+
+    private void maybeResetNotificationChannels(NotificationManager manager) {
+        try {
+            SharedPreferences prefs = getSharedPreferences("sadel_notification_channels", MODE_PRIVATE);
+            int stored = prefs.getInt("channel_version", 0);
+            if (stored >= NOTIFICATION_CHANNEL_VERSION) return;
+            for (String id : NOTIFICATION_CHANNEL_IDS) {
+                try {
+                    manager.deleteNotificationChannel(id);
+                } catch (Exception ignored) {
+                }
+            }
+            prefs.edit().putInt("channel_version", NOTIFICATION_CHANNEL_VERSION).apply();
+        } catch (Exception ignored) {
+        }
     }
 
     private void createChannel(
