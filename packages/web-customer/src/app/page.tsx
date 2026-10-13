@@ -5,10 +5,10 @@ import React, { useCallback, useEffect, useMemo, useRef, useState, useDeferredVa
 import { useRouter } from 'next/navigation';
 import { io } from 'socket.io-client';
 import {
-  ApiRequestError,
   AuthUser,
   clearStoredSession,
-  isAuthRequestError,
+  isSessionInvalidError,
+  handleSocketUnauthorized,
   persistApiBase,
   persistStoredSession,
   readStoredSession,
@@ -24,6 +24,7 @@ import {
 import { Icon } from '@iconify/react';
 import { usePushNotifications } from '../hooks/usePushNotifications';
 import { buildOrderAcceptedNotice } from '../lib/orderStatusNotices';
+import { logWebBuildOnce } from '../lib/buildInfo';
 import {
   isNativePlatform,
   nativeAllowSleep,
@@ -32,6 +33,7 @@ import {
   nativeHaptic,
   nativeKeepAwake,
   onNativeNotificationTap,
+  setupAndroidBackButton,
 } from '../lib/native';
 import { useForegroundPolling } from '../hooks/useForegroundPolling';
 import { completeOrderIntent, resolveOrderIntentKey } from '../lib/orderIntentKey';
@@ -1099,7 +1101,7 @@ export default function Home() {
   });
   const [whatsappNotificationsEnabled, setWhatsappNotificationsEnabled] = useState(false);
   const { playAlert, playLlegue, playChat, unlock } = useCustomerSounds();
-  const { isSubscribed, permission: pushPermission, pushSupportIssue, needsIosInstall, subscribe: subscribePush, unsubscribe: unsubscribePush } = usePushNotifications();
+  const { isSubscribed, permission: pushPermission, pushSupportIssue, needsIosInstall, pushReady, subscribe: subscribePush, unsubscribe: unsubscribePush } = usePushNotifications();
   const selectedOrderIdRef = useRef(selectedOrderId);
 
   useEffect(() => {
@@ -1429,6 +1431,7 @@ export default function Home() {
 
   useEffect(() => {
     try {
+      logWebBuildOnce();
       const savedSession = readStoredSession(storageKey);
 
       if (typeof window !== 'undefined' && window.localStorage) {
@@ -1496,6 +1499,27 @@ export default function Home() {
           apiBase: apiBaseUrl,
           path: '/auth/perfil',
           token: savedSession.token,
+          // Config explícita (no depende del orden de efectos): si el access
+          // expiró, se renueva en silencio con el refresh almacenado en vez
+          // de cerrar sesión al abrir la app.
+          refreshConfig: {
+            refreshToken: () => readStoredSession(storageKey).refreshToken,
+            onRefreshed: (newToken, newRefreshToken) => {
+              setToken(newToken);
+              if (savedSession.user) {
+                persistStoredSession({
+                  storageKey,
+                  apiBase: apiBaseUrl,
+                  token: newToken,
+                  refreshToken: newRefreshToken,
+                  user: savedSession.user,
+                });
+              }
+            },
+            onRefreshFailed: () => {
+              clearSession('Tu cuenta ya no es válida. Inicia sesión nuevamente.');
+            },
+          },
         }).then((res) => {
           if (res.success && res.data.status !== 'ACTIVE') {
             showTransientNotice({
@@ -1508,11 +1532,10 @@ export default function Home() {
             });
           }
         }).catch((err) => {
-          // Si la sesión ya no es válida (usuario eliminado o token inválido),
-          // cerrar sesión para no dejar al usuario "dentro" de una cuenta inexistente.
-          const apiError = err as ApiRequestError;
-          const userDeleted = apiError?.status === 404 && apiError?.code === 'USER_NOT_FOUND';
-          if (isAuthRequestError(err) || userDeleted) {
+          // Solo cerrar sesión si es irrecuperable (token inválido, cuenta
+          // eliminada o deshabilitada). Un 403 de permisos/negocio o un fallo
+          // transitorio conserva la sesión.
+          if (isSessionInvalidError(err)) {
             clearSession('Tu cuenta ya no es válida. Inicia sesión nuevamente.');
           }
         });
@@ -2229,7 +2252,7 @@ export default function Home() {
         setCarouselIndex(0);
       }
 
-      if (isAuthRequestError(requestError)) {
+      if (isSessionInvalidError(requestError)) {
         clearSession('Tu sesión ha expirado. Por favor, inicia sesión de nuevo.');
       } else {
         const errorMessage = requestError instanceof Error ? requestError.message : '';
@@ -2486,9 +2509,9 @@ export default function Home() {
       }
     } catch (err) {
       console.error('Error loading profile:', err);
-      // Solo cerrar sesión ante un error de autenticación real (401/403);
-      // un fallo transitorio de red o del servidor no debe desloguear al usuario.
-      if (isAuthRequestError(err)) {
+      // Solo cerrar sesión ante una sesión irrecuperable; un 403 de permisos
+      // o un fallo transitorio de red/servidor no debe desloguear al usuario.
+      if (isSessionInvalidError(err)) {
         clearSession();
       }
     }
@@ -3432,6 +3455,32 @@ export default function Home() {
   const sessionUserIdRef = useRef(sessionUser?.id);
   useEffect(() => { sessionUserIdRef.current = sessionUser?.id; }, [sessionUser?.id]);
 
+  // Botón atrás de Android: doble toque para salir en la raíz (inicio sin
+  // restaurante). En pantallas internas conserva el retroceso normal.
+  const backRootRef = useRef({ home: false, restaurant: '' });
+  backRootRef.current = { home: activeSection === 'home', restaurant: selectedRestaurantId };
+  useEffect(() => {
+    const handle = setupAndroidBackButton({
+      isRoot: () => backRootRef.current.home && !backRootRef.current.restaurant,
+      onFirstBackPress: () => {
+        setToastMessage('Pulsa de nuevo para salir', 'info');
+        window.setTimeout(() => setToastMessage(''), 2000);
+      },
+    });
+    return () => handle?.remove();
+  }, [setToastMessage]);
+
+  // Sincronizar el token renovado por otros flujos (página restaurante,
+  // recuperación del socket) para no seguir usando un access ya rotado.
+  useEffect(() => {
+    const onTokenRefreshed = (event: Event) => {
+      const nextToken = (event as CustomEvent<string>).detail;
+      if (typeof nextToken === 'string' && nextToken) setToken(nextToken);
+    };
+    window.addEventListener('sadel:token-refreshed', onTokenRefreshed);
+    return () => window.removeEventListener('sadel:token-refreshed', onTokenRefreshed);
+  }, [setToken]);
+
   useEffect(() => {
     if (!token || !sessionUser || sessionUser.role !== 'CUSTOMER') {
       return;
@@ -3452,11 +3501,19 @@ export default function Home() {
     });
 
     socket.on('connect_error', (err) => {
-      // Token expirado/inválido: cortar el bucle de reconexión y forzar el
-      // flujo de sesión expirada en vez de reintentar indefinidamente.
+      // Token rechazado: intentar renovar y reconectar antes de sentenciar la
+      // sesión. Solo un refresh definitivamente inválido cierra sesión; un
+      // fallo transitorio deja el polling de respaldo sin formar bucles.
       if (String((err as Error)?.message || '').includes('UNAUTHORIZED')) {
         socket.disconnect();
-        forceSessionExpired();
+        void handleSocketUnauthorized({
+          apiBase,
+          storageKey,
+          socket,
+          isActive: () => socketRef.current === socket,
+          onStatus: (status) => setSocketStatus(status),
+          onLoggedOut: () => forceSessionExpired(),
+        });
         return;
       }
     });
@@ -3469,6 +3526,7 @@ export default function Home() {
           console.log('[Socket.io] App visible - Sincronizando datos...');
         }
         if (socket.disconnected) {
+          socket.auth = { token: getSocketToken() };
           socket.connect();
         } else {
           void loadDashboardRef.current(true);
@@ -4509,6 +4567,7 @@ export default function Home() {
         permission={pushPermission}
         pushSupportIssue={pushSupportIssue}
         needsIosInstall={needsIosInstall}
+        pushReady={pushReady}
         onEnable={async () => {
           if (token) await subscribePush(token);
         }}

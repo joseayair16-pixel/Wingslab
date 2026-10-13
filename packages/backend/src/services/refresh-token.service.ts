@@ -46,31 +46,30 @@ export async function validateAndRotateRefreshToken(
   const storedId = stored.id;
   const storedUserId = stored.userId;
 
-  try {
-    const newToken = await prisma.$transaction(async (tx) => {
-      await tx.refreshToken.update({
-        where: { id: storedId },
-        data: { revokedAt: new Date() },
-      });
-
-      const next = generateToken();
-      await tx.refreshToken.create({
-        data: {
-          token: hashToken(next),
-          userId: storedUserId,
-          expiresAt: new Date(Date.now() + REFRESH_TOKEN_EXPIRY_MS),
-        },
-      });
-
-      return next;
+  // Sin try/catch a propósito: si la transacción falla (caída de BD), el error
+  // se propaga y la ruta responde 5xx para que el cliente lo trate como
+  // transitorio. Devolver null aquí haría que respondiera 401 y el cliente
+  // cerraría la sesión injustificadamente (la transacción revierte la
+  // revocación, así que el token actual permanece válido para reintentarlo).
+  const newToken = await prisma.$transaction(async (tx) => {
+    await tx.refreshToken.update({
+      where: { id: storedId },
+      data: { revokedAt: new Date() },
     });
 
-    return { userId: storedUserId, refreshToken: newToken };
-  } catch {
-    // Si la rotación falla a medias, la transacción revierte la revocación:
-    // el token actual permanece válido para reintentarlo.
-    return null;
-  }
+    const next = generateToken();
+    await tx.refreshToken.create({
+      data: {
+        token: hashToken(next),
+        userId: storedUserId,
+        expiresAt: new Date(Date.now() + REFRESH_TOKEN_EXPIRY_MS),
+      },
+    });
+
+    return next;
+  });
+
+  return { userId: storedUserId, refreshToken: newToken };
 }
 
 export async function revokeRefreshToken(token: string): Promise<void> {

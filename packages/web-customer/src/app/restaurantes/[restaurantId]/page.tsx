@@ -3,7 +3,7 @@ import { AlertTriangle, ArrowLeft, Banknote, Bell, BellOff, Bike, Check, Chevron
 
 import { use, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { AuthUser, clearStoredSession, readStoredSession, requestJson, submitReview, uploadMediaAsset, convertImageFileToDataUrl, getOrderStatusLabel, isRestaurant, ApiRequestError, isAuthRequestError, setGlobalSessionExpiredHandler, forceSessionExpired, setDefaultRefreshConfig } from '@sadel/shared';
+import { AuthUser, clearStoredSession, readStoredSession, requestJson, submitReview, uploadMediaAsset, convertImageFileToDataUrl, getOrderStatusLabel, isRestaurant, ApiRequestError, isSessionInvalidError, handleSocketUnauthorized, setGlobalSessionExpiredHandler, forceSessionExpired, setDefaultRefreshConfig } from '@sadel/shared';
 import { io } from 'socket.io-client';
 import { AuthModal } from '../../../components/AuthModal';
 import { CompactActiveOrderBanner, computeDelayState, formatEstimatedArrivalMinutes, formatOverdueMinutes } from '../../../components/CompactActiveOrderBanner';
@@ -1186,9 +1186,9 @@ export default function RestaurantPage({
             });
           }
         }).catch((err) => {
-          const apiError = err as ApiRequestError;
-          const userDeleted = apiError?.status === 404 && apiError?.code === 'USER_NOT_FOUND';
-          if (isAuthRequestError(err) || userDeleted) {
+          // Solo ante sesión irrecuperable; un 403 de permisos/negocio o un
+          // fallo transitorio conserva la sesión.
+          if (isSessionInvalidError(err)) {
             clearStoredSession(storageKey);
             setToken('');
             setSessionUser(null);
@@ -1482,11 +1482,18 @@ export default function RestaurantPage({
     });
 
     socket.on('connect_error', (err) => {
-      // Token expirado/inválido: cortar el bucle de reconexión y forzar el
-      // flujo de sesión expirada en vez de reintentar indefinidamente.
+      // Token rechazado: intentar renovar y reconectar antes de sentenciar la
+      // sesión. Solo un refresh definitivamente inválido cierra sesión; un
+      // fallo transitorio deja el polling de respaldo sin formar bucles.
       if (String((err as Error)?.message || '').includes('UNAUTHORIZED')) {
         socket.disconnect();
-        forceSessionExpired();
+        void handleSocketUnauthorized({
+          apiBase,
+          storageKey,
+          socket,
+          isActive: () => socketRef.current === socket,
+          onLoggedOut: () => forceSessionExpired(),
+        });
         return;
       }
       // Fallo de conexión: el polling de respaldo recarga pedidos mientras

@@ -1,8 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import { waitForNativeBridge } from '@sadel/shared';
 import {
-  checkNativePushPermission,
   clearNativeFcmToken,
+  getNativePushPermissionState,
   isNativePlatform,
   readNativeFcmToken,
   registerNativePush,
@@ -91,6 +91,9 @@ export const usePushNotifications = () => {
   // iOS con Web Push soportado pero PWA sin instalar: suscribir fallaría en
   // silencio; la UI debe guiar a instalar en vez de intentar.
   const [needsIosInstall, setNeedsIosInstall] = useState(false);
+  // Detección asentada (permiso + suscripción consultados). Hasta entonces la
+  // UI no debe invitar: evita el parpadeo de aparecer y desaparecer.
+  const [pushReady, setPushReady] = useState(false);
 
   // Dentro del WebView de la app nativa NO existe web-push (service worker /
   // pushManager): las notificaciones van por FCM nativo. Este flag corta todo
@@ -106,29 +109,60 @@ export const usePushNotifications = () => {
     let cancelled = false;
 
     const detectNative = () => {
-      // Consultar el permiso nativo sin mostrar el diálogo (FCM).
-      checkNativePushPermission().then((granted) => {
-        if (cancelled) return;
-        setPermission(granted ? 'granted' : 'default');
-        setIsSubscribed(granted);
-      });
+      // Consultar el permiso nativo sin mostrar el diálogo (FCM). Se distingue
+      // denegado permanente (guiar a ajustes) de aún-no-preguntado (invitar):
+      // colapsarlo todo a "no concedido" prometía activaciones imposibles.
+      getNativePushPermissionState()
+        .then((state) => {
+          if (cancelled) return;
+          if (state === 'granted') {
+            setPermission('granted');
+            setIsSubscribed(true);
+          } else if (state === 'denied') {
+            setPermission('denied');
+            setIsSubscribed(false);
+          } else {
+            setPermission('default');
+            setIsSubscribed(false);
+          }
+        })
+        .catch(() => {
+          if (cancelled) return;
+          setPermission('default');
+          setIsSubscribed(false);
+        })
+        .finally(() => {
+          if (!cancelled) setPushReady(true);
+        });
     };
 
     const detectWeb = () => {
       setPushSupportIssue(getPushSupportIssue());
       setNeedsIosInstall(needsIosPwaInstall());
-      if (typeof window !== 'undefined' && 'Notification' in window) {
-        setPermission(Notification.permission);
+      if (typeof window === 'undefined' || !('Notification' in window)) {
+        // Sin API no hay permiso que evaluar (pushSupportIssue ya lo cubre).
+        setPushReady(true);
+        return;
+      }
 
-        if ('serviceWorker' in navigator) {
-          navigator.serviceWorker.ready.then((registration) => {
-            registration.pushManager.getSubscription().then((sub) => {
-              if (cancelled) return;
-              setSubscription(sub);
-              setIsSubscribed(!!sub);
-            });
+      setPermission(Notification.permission);
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.ready
+          .then((registration) => registration.pushManager.getSubscription())
+          .then((sub) => {
+            if (cancelled) return;
+            setSubscription(sub);
+            setIsSubscribed(!!sub);
+          })
+          .catch(() => {
+            if (cancelled) return;
+            setIsSubscribed(false);
+          })
+          .finally(() => {
+            if (!cancelled) setPushReady(true);
           });
-        }
+      } else {
+        setPushReady(true);
       }
     };
 
@@ -345,7 +379,45 @@ export const usePushNotifications = () => {
     return () => navigator.serviceWorker.removeEventListener('message', onMessage);
   }, [subscribe]);
 
-  return { isSubscribed, permission, pushSupportIssue, needsIosInstall, subscribe, unsubscribe };
+  // Si el usuario cambia el permiso desde los ajustes del navegador/sitio, la
+  // UI debe enterarse sin recargar: el modal desaparece y la re-sincronización
+  // (que observa `permission`) registra la suscripción sin pedir nada.
+  useEffect(() => {
+    if (isNative) return;
+    if (typeof window === 'undefined') return;
+    try {
+      const permissions = (navigator as any)?.permissions;
+      if (!permissions || typeof permissions.query !== 'function') return;
+      let status: any = null;
+      let cancelled = false;
+      permissions
+        .query({ name: 'notifications' })
+        .then((s: any) => {
+          if (cancelled) return;
+          status = s;
+          s.onchange = () => {
+            if (cancelled) return;
+            const next = (s.state ?? 'default') as NotificationPermission;
+            setPermission(next);
+          };
+        })
+        .catch(() => {});
+      return () => {
+        cancelled = true;
+        try {
+          if (status) status.onchange = null;
+        } catch {
+          /* noop */
+        }
+      };
+    } catch {
+      /* Permissions API no disponible */
+    }
+    return undefined;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  return { isSubscribed, permission, pushSupportIssue, needsIosInstall, pushReady, subscribe, unsubscribe };
 };
 
 function urlBase64ToUint8Array(base64String: string) {
