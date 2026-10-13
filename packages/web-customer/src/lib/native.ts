@@ -23,17 +23,23 @@ function plugin(name: string): any {
 }
 
 /**
- * Expone el plugin nativo `App` al WebView. El bundle no importa los paquetes
- * @capacitor/*, así que sin este registro `Capacitor.Plugins.App` no existe y
- * el botón atrás / exitApp quedan inertes. Solo `App`: el resto de plugins
- * sigue igual que antes (sin cambios de conducta).
+ * Devuelve el plugin nativo `App` (botón atrás del sistema y exitApp).
+ *
+ * El runtime nativo de Capacitor 8 ya publica los plugins del `capacitor.
+ * plugins.json` en `window.Capacitor.Plugins` (App incluido), pero eliminó
+ * `Capacitor.registerPlugin`: exigirlo aquí abortaba en silencio y el botón
+ * atrás quedaba inerte en el comensal (el restaurante, que solo lee
+ * `Plugins.App`, sí funcionaba). Por eso se lee `Plugins.App` primero y
+ * `registerPlugin` queda solo como respaldo para runtimes más antiguos.
  */
 function ensureAppPlugin(): any {
   try {
     const cap = capacitor();
-    if (!cap || !isNativePlatform() || typeof cap.registerPlugin !== 'function') return null;
-    if (cap.Plugins?.['App']) return cap.Plugins['App'];
-    return cap.registerPlugin('App') ?? null;
+    if (!cap || !isNativePlatform()) return null;
+    const existing = cap.Plugins?.['App'];
+    if (existing) return existing;
+    if (typeof cap.registerPlugin === 'function') return cap.registerPlugin('App') ?? null;
+    return null;
   } catch {
     return null;
   }
