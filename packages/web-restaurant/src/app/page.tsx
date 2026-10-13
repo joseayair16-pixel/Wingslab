@@ -3705,6 +3705,19 @@ export default function Home() {
     };
   }, [activeIncomingOrder, isOrderAlertSoundEnabled, playIncomingOrderAlert]);
 
+  // Detener la alarma nativa cuando el usuario navega a un pedido que ya no
+  // requiere atención (estado distinto de PENDING/CONFIRMED). Cubre el caso de
+  // pedidos resueltos desde otro dispositivo.
+  useEffect(() => {
+    const pendingId = pendingNotificationOrderIdRef.current;
+    if (!pendingId) return;
+    const order = orders.find((o) => o.id === pendingId);
+    if (order && order.status !== 'PENDING' && order.status !== 'CONFIRMED') {
+      stopNativeOrderAlarm(pendingId);
+      pendingNotificationOrderIdRef.current = null;
+    }
+  }, [orders, stopNativeOrderAlarm]);
+
   // Screen Wake Lock: keep display on while the app is open
   useEffect(() => {
     async function acquireWakeLock() {
