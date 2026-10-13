@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { io } from 'socket.io-client';
-import { requestJson, readStoredSession, forceSessionExpired } from '@sadel/shared';
+import { requestJson, readStoredSession, forceSessionExpired, handleSocketUnauthorized } from '@sadel/shared';
 import { useStore } from '../store';
 import { useCustomerSounds } from '../hooks/useCustomerSounds';
 
@@ -142,6 +142,8 @@ export default function DriverArrivalModal() {
   useEffect(() => {
     if (!token || !sessionUser || sessionUser.role !== 'CUSTOMER' || isDeliveryScreen) return;
 
+    let cancelled = false;
+
     const getSocketToken = () => readStoredSession('sadel.customer').token || '';
     const socket = io(process.env.NEXT_PUBLIC_SOCKET_URL || 'https://sadel-production.up.railway.app', {
       path: '/socket.io',
@@ -161,11 +163,18 @@ export default function DriverArrivalModal() {
     });
 
     socket.on('connect_error', (err) => {
-      // Token expirado/inválido: cortar el bucle de reconexión y forzar el
-      // flujo de sesión expirada.
+      // Token rechazado: intentar renovar y reconectar antes de sentenciar la
+      // sesión. Solo un refresh definitivamente inválido cierra sesión; un
+      // fallo transitorio deja el polling de respaldo sin formar bucles.
       if (String((err as Error)?.message || '').includes('UNAUTHORIZED')) {
         socket.disconnect();
-        forceSessionExpired();
+        void handleSocketUnauthorized({
+          apiBase,
+          storageKey: 'sadel.customer',
+          socket,
+          isActive: () => !cancelled,
+          onLoggedOut: () => forceSessionExpired(),
+        });
         return;
       }
       // Fallo de conexión: el polling de respaldo sigue cubriendo la llegada del
@@ -200,6 +209,7 @@ export default function DriverArrivalModal() {
     }
 
     return () => {
+      cancelled = true;
       socket.disconnect();
     };
   }, [apiBase, token, sessionUser]);

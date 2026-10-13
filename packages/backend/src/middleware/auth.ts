@@ -118,9 +118,12 @@ export async function authenticate(request: FastifyRequest, reply: FastifyReply)
       });
     }
   } catch (error) {
+    // La BD falló al verificar el estado (no son credenciales inválidas):
+    // 503 para que el cliente lo trate como transitorio y reintente en vez
+    // de cerrar la sesión. Un 401 aquí mentiría sobre la validez del token.
     const requestContext = getOrCreateRequestContext(request);
-    recordErrorMetric('UNAUTHORIZED');
-    return reply.status(401).send({
+    recordErrorMetric('AUTH_VALIDATION_ERROR');
+    return reply.status(503).send({
       success: false,
       meta: { requestId: requestContext.requestId },
       error: {

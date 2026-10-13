@@ -160,6 +160,24 @@ export function isAuthRequestError(error: unknown): error is ApiRequestError {
   return error instanceof ApiRequestError && (error.kind === 'auth' || error.kind === 'forbidden');
 }
 
+/**
+ * ¿Este error justifica cerrar la sesión? Solo cuando es irrecuperable:
+ * - 401: token inválido/expirado sin refresh posible, usuario eliminado.
+ * - 404 + USER_NOT_FOUND: la cuenta ya no existe.
+ * - 403 + ACCOUNT_DISABLED: baja lógica de la cuenta.
+ *
+ * Los demás 403 (permisos insuficientes, validaciones de negocio como el
+ * código de cambio de teléfono) NO cierran sesión: la credencial sigue
+ * siendo válida y el usuario debe ver el mensaje, no el login.
+ */
+export function isSessionInvalidError(error: unknown): error is ApiRequestError {
+  if (!(error instanceof ApiRequestError)) return false;
+  if (error.status === 401) return true;
+  if (error.status === 404 && error.code === 'USER_NOT_FOUND') return true;
+  if (error.status === 403 && error.code === 'ACCOUNT_DISABLED') return true;
+  return false;
+}
+
 // Global hook so any authenticated request can force the app to log out when
 // the server rejects the session (e.g. the user was deleted from the DB).
 let sessionExpiredHandler: (() => void) | null = null;
@@ -413,6 +431,125 @@ export async function refreshAccessToken(
   }
 }
 
+/** Socket mínimo necesario para la recuperación de autenticación. */
+export type ReconnectableSocket = {
+  disconnect: () => void;
+  connect: () => void;
+  auth: unknown;
+};
+
+export type SocketSessionOutcome =
+  | { ok: true; token: string }
+  | { ok: false; definitive: boolean };
+
+/**
+ * Renueva la sesión guardada para reautenticar un socket rechazado
+ * (UNAUTHORIZED), reutilizando el pipeline HTTP existente
+ * (`refreshAccessToken`: single-flight, reintentos transitorios, distinción
+ * definitivo/transitorio). Persiste el par rotado y avisa con el evento
+ * `sadel:token-refreshed` para que las vistas montadas sincronicen su estado.
+ * Nunca lanza: el resultado indica si se puede reconectar, si la sesión murió
+ * (definitivo) o si hay que esperar y reintentar de forma controlada.
+ */
+export async function refreshStoredSessionForSocket(params: {
+  apiBase: string;
+  storageKey: string;
+  timeoutMs?: number;
+}): Promise<SocketSessionOutcome> {
+  try {
+    if (typeof window === 'undefined' || !window.localStorage) {
+      return { ok: false, definitive: true };
+    }
+    const stored = readStoredSession(params.storageKey);
+    if (!stored.refreshToken) return { ok: false, definitive: true };
+    const outcome = await refreshAccessToken(
+      params.apiBase,
+      stored.refreshToken,
+      Math.max(0, params.timeoutMs ?? 15_000),
+    );
+    if (!outcome.ok) return { ok: false, definitive: outcome.definitive };
+    try {
+      window.localStorage.setItem(`${params.storageKey}.token`, outcome.token);
+      window.localStorage.setItem(`${params.storageKey}.refreshToken`, outcome.refreshToken);
+    } catch {
+      /* almacenamiento bloqueado: se sigue con el token en memoria */
+    }
+    try {
+      if (typeof CustomEvent !== 'undefined') {
+        window.dispatchEvent(new CustomEvent<string>('sadel:token-refreshed', { detail: outcome.token }));
+      }
+    } catch {
+      /* noop */
+    }
+    return { ok: true, token: outcome.token };
+  } catch {
+    return { ok: false, definitive: false };
+  }
+}
+
+/**
+ * Maneja un rechazo de autenticación del socket (UNAUTHORIZED) sin duplicar
+ * lógica en cada componente:
+ * 1. Corta los reintentos con el token muerto (evita el bucle).
+ * 2. Intenta renovar con el refresh almacenado.
+ * 3. Si renueva, reconecta con las credenciales actualizadas.
+ * 4. Si el refresh es definitivamente inválido, delega el logout.
+ * 5. Si el fallo es transitorio, NO toca la sesión: el polling cubre y el
+ *    reintento queda para la próxima vez que la app vuelva a primer plano.
+ * No forma bucles por construcción: cada rama termina en reconexión con
+ * token fresco, logout o espera pasiva.
+ */
+export async function handleSocketUnauthorized(params: {
+  apiBase: string;
+  storageKey: string;
+  socket: ReconnectableSocket;
+  timeoutMs?: number;
+  isActive?: () => boolean;
+  onStatus?: (status: 'reconnecting' | 'idle') => void;
+  onLoggedOut?: () => void;
+}): Promise<'reconnected' | 'logged-out' | 'deferred'> {
+  try {
+    params.socket.disconnect();
+  } catch {
+    /* noop */
+  }
+  const outcome = await refreshStoredSessionForSocket({
+    apiBase: params.apiBase,
+    storageKey: params.storageKey,
+    timeoutMs: params.timeoutMs,
+  });
+  const active = params.isActive ? params.isActive() : true;
+  if (!active) return 'deferred';
+  if (outcome.ok) {
+    try {
+      (params.socket as { auth: unknown }).auth = { token: outcome.token };
+      params.socket.connect();
+      return 'reconnected';
+    } catch {
+      try {
+        params.onStatus?.('idle');
+      } catch {
+        /* noop */
+      }
+      return 'deferred';
+    }
+  }
+  if (outcome.definitive) {
+    try {
+      params.onLoggedOut?.();
+    } catch {
+      /* noop */
+    }
+    return 'logged-out';
+  }
+  try {
+    params.onStatus?.('reconnecting');
+  } catch {
+    /* noop */
+  }
+  return 'deferred';
+}
+
 export async function requestJson<T>(params: {
   apiBase: string;
   path: string;
@@ -479,6 +616,19 @@ export async function requestJson<T>(params: {
             continue;
           }
           if (outcome.definitive) {
+            // Otra pestaña o contexto pudo rotar mientras tanto (la rotación
+            // es single-use y el vuelo compartido solo cubre un contexto JS):
+            // si lo almacenado cambió, reintentar UNA vez con el vigente antes
+            // de sentenciar la sesión. Acotado: un solo reintento extra.
+            const current = resolveRefreshToken(refreshConfig);
+            if (current && current !== storedRefreshToken) {
+              const retry = await refreshAccessToken(params.apiBase, current, timeoutMs);
+              if (retry.ok) {
+                refreshConfig.onRefreshed(retry.token, retry.refreshToken);
+                currentToken = retry.token;
+                continue;
+              }
+            }
             refreshConfig.onRefreshFailed();
           } else {
             refreshTransientFailure = true;

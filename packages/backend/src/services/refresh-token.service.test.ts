@@ -115,4 +115,16 @@ describe('refresh-token.service', () => {
       expect.objectContaining({ where: { token: 'raw-token', revokedAt: null } }),
     );
   });
+
+  it('lanza ante un fallo transitorio de la transacción en vez de devolver null', async () => {
+    // Si la rotación falla por la BD, el token sigue válido: devolver null
+    // haría que la ruta respondiera 401 y el cliente cerrara sesión
+    // injustificadamente. Al lanzar, la ruta responde 5xx (transitorio).
+    mockFindUnique.mockResolvedValue(
+      storedRow({ token: 'hash', expiresAt: new Date(Date.now() + 999_999) }) as never,
+    );
+    mockTransaction.mockRejectedValue(new Error('db down'));
+
+    await expect(validateAndRotateRefreshToken('raw-token')).rejects.toThrow('db down');
+  });
 });
