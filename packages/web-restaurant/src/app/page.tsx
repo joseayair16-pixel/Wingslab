@@ -52,24 +52,24 @@ import {
   nativeKeepAwake,
   nativeAllowSleep,
   nativeHaptic,
-  hasNativeOrderAlarm,
   stopNativeOrderAlarm,
   isNativeAppInBackground,
   setupAndroidBackButton,
+  isNativeOrderAlarmRinging,
 } from '../lib/native';
 
 /**
- * ¿El sonido de "pedido nuevo" lo pone la app nativa (Foreground Service) en
- * lugar de esta página?
+ * ¿El sonido de "pedido nuevo" lo está poniendo AHORA la app nativa
+ * (Foreground Service) en lugar de esta página?
  *
- * Cuando el APK incluye el plugin `OrderAlarm` la alarma suena aunque el panel
- * esté en segundo plano y se detiene sola al vencer la ventana de decisión, así
- * que aquí el audio web se desactiva para no duplicarlo. En navegador, PWA y
- * APKs antiguos (sin el plugin) se mantiene el bucle web de siempre.
+ * No se decide por plataforma ni por la mera presencia del plugin: se pregunta
+ * al nativo si la alarma está realmente sonando. Solo entonces se desactiva el
+ * audio web para no duplicarlo. Si el plugin no está (APK antigua), falla la
+ * consulta, o el push no llegó y el servicio no arrancó, la respuesta es
+ * `false` y la web sigue sonando como alternativa, de modo que ningún pedido
+ * nuevo se queda sin aviso. En navegador y PWA devuelve `false` al instante.
  */
-function nativeAlarmHandlesSound(): boolean {
-  return isNativePlatform() && hasNativeOrderAlarm();
-}
+const nativeAlarmHandlesSound = isNativeOrderAlarmRinging;
 
 type OrderStatus =
   | 'PENDING'
@@ -656,6 +656,61 @@ const orderStatusOptions: Array<{ label: string; value: 'ACTIVE' | 'REJECTED' | 
   { label: 'Rechazados', value: 'REJECTED' },
   { label: 'Cancelados', value: 'CANCELLED' },
 ];
+
+/**
+ * Worker que reenvía un tick cada 3 s para el bucle de alarma web.
+ *
+ * Va en un Worker (y no en un `setInterval`) porque los navegadores recortan los
+ * temporizadores de las pestañas en segundo plano; así el aviso de "pedido
+ * nuevo" sigue sonando aunque el panel esté en otra pestaña o minimizado.
+ * En la APK este bucle solo se monta cuando la alarma nativa NO está sonando.
+ */
+const ORDER_ALERT_REPEAT_WORKER = `
+  let interval;
+  self.onmessage = function(e) {
+    if (e.data === 'start') {
+      interval = setInterval(() => self.postMessage('tick'), 3000);
+    } else if (e.data === 'stop') {
+      clearInterval(interval);
+    }
+  };
+`;
+
+let orderAlertRepeatWorker: Worker | null = null;
+let orderAlertRepeatUrl: string | null = null;
+
+/** Arranca (o rearranca) el bucle de repetición del aviso de pedido nuevo. */
+function startWebRepeatAlarm(tick: () => void): void {
+  stopWebRepeatAlarm();
+  if (typeof window === 'undefined' || typeof Worker === 'undefined') return;
+  try {
+    orderAlertRepeatUrl = URL.createObjectURL(
+      new Blob([ORDER_ALERT_REPEAT_WORKER], { type: 'application/javascript' }),
+    );
+    const worker = new Worker(orderAlertRepeatUrl);
+    worker.onmessage = () => tick();
+    worker.postMessage('start');
+    orderAlertRepeatWorker = worker;
+  } catch {
+    // Sin Worker (entorno restringido): el aviso suena una vez y listo.
+    stopWebRepeatAlarm();
+  }
+}
+
+/** Detiene el bucle y libera su Blob URL. Seguro de llamar aunque no exista. */
+function stopWebRepeatAlarm(): void {
+  try {
+    orderAlertRepeatWorker?.postMessage('stop');
+    orderAlertRepeatWorker?.terminate();
+  } catch {
+    /* noop */
+  }
+  orderAlertRepeatWorker = null;
+  if (orderAlertRepeatUrl) {
+    URL.revokeObjectURL(orderAlertRepeatUrl);
+    orderAlertRepeatUrl = null;
+  }
+}
 
 const liveEvents = [
   'order:created',
@@ -2569,11 +2624,13 @@ export default function Home() {
   const playIncomingOrderAlert = useCallback(async (force = false) => {
     if (!isOrderAlertSoundEnabled) return false;
 
-    // Con el plugin de alarma nativa el sonido lo pone el Foreground Service
-    // (funciona en segundo plano y se corta al aceptar). Si lo dejamos aquí se
-    // oiría dos veces a la vez. `force` lo omite para el botón "Probar sonido"
-    // de ajustes, que debe sonar aunque la alarma nativa esté disponible.
-    if (!force && nativeAlarmHandlesSound()) return false;
+    // En la APK el sonido lo pone el Foreground Service (funciona en segundo
+    // plano y se corta al aceptar). La consulta al nativo confirma si está
+    // sonando de verdad: solo entonces se calla la web. Si la alarma nativa no
+    // está disponible ni ha iniciado, la web suena como alternativa para que
+    // el pedido no pase inadvertido. `force` lo omite para el botón "Probar
+    // sonido" de ajustes, que debe sonar aunque la alarma nativa esté activa.
+    if (!force && (await nativeAlarmHandlesSound())) return false;
 
     // Cross-tab dedup: skip if another tab just played (within 1s)
     if (typeof window !== 'undefined' && (window as any).__sadelLastAlertFromOtherTab) {
@@ -3691,38 +3748,23 @@ export default function Home() {
       return;
     }
 
-    // En la app nativa la alarma continua ya está sonando por push: este bucle
-    // solo aplica a navegador/PWA (y a APKs antiguos sin el plugin).
-    if (nativeAlarmHandlesSound()) {
-      return;
-    }
+    // La alarma continua nativa se confirma con una consulta al plugin: este
+    // bucle web solo se monta si el nativo NO está sonando. En navegador/PWA la
+    // respuesta es false y el bucle queda igual que hasta ahora; en la APK es
+    // la alternativa cuando el nativo no está disponible o no ha iniciado.
+    let cancelled = false;
 
-    void playIncomingOrderAlert();
-
-    const workerCode = `
-      let interval;
-      self.onmessage = function(e) {
-        if (e.data === 'start') {
-          interval = setInterval(() => self.postMessage('tick'), 3000);
-        } else if (e.data === 'stop') {
-          clearInterval(interval);
-        }
-      };
-    `;
-    const blob = new Blob([workerCode], { type: 'application/javascript' });
-    const workerUrl = URL.createObjectURL(blob);
-    const worker = new Worker(workerUrl);
-
-    worker.onmessage = () => {
+    void nativeAlarmHandlesSound().then((nativeRinging) => {
+      if (cancelled || nativeRinging) return;
+      startWebRepeatAlarm(() => {
+        void playIncomingOrderAlert();
+      });
       void playIncomingOrderAlert();
-    };
-
-    worker.postMessage('start');
+    });
 
     return () => {
-      worker.postMessage('stop');
-      worker.terminate();
-      URL.revokeObjectURL(workerUrl);
+      cancelled = true;
+      stopWebRepeatAlarm();
     };
   }, [activeIncomingOrder, isOrderAlertSoundEnabled, playIncomingOrderAlert]);
 

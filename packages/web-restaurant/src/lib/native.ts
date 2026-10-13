@@ -258,6 +258,10 @@ export function onNativeNotificationTap(
  */
 export function hasNativeOrderAlarm(): boolean {
   try {
+    // Plataforma primero: en navegador/PWA no hay bridge nativo, y exigirlo aquí
+    // evita que una detección futura por "presencia de plugin" sin contexto
+    // nativo dé un falso positivo.
+    if (!isNativePlatform()) return false;
     const cap = capacitor();
     if (cap && typeof cap.isPluginAvailable === 'function') {
       try {
@@ -275,6 +279,50 @@ export function hasNativeOrderAlarm(): boolean {
     /* noop */
   }
   return false;
+}
+
+/**
+ * Margen de gracia antes de recurrir al sonido web, en milisegundos.
+ *
+ * El socket `order:created` suele llegar antes que el push FCM que arranca la
+ * alarma nativa. Sin este margen, esa primera consulta respondería "no está
+ * sonando" y se oiría el pitido web justo antes de que arrancara la nativa.
+ */
+export const NATIVE_ALARM_GRACE_MS = 1200;
+
+/**
+ * ¿Está sonando AHORA la alarma continua nativa?
+ *
+ * No se deduce de la plataforma: se pregunta al propio plugin `OrderAlarm`
+ * (`isRinging`, que lee el estado del Foreground Service). Así la web solo se
+ * calla cuando la alarma nativa está confirmada, y en cualquier otro caso
+ * —APK antigua sin plugin, plugin que falla, o push que nunca llegó y el
+ * servicio no arrancó— devuelve `false` y la web sigue sonando como
+ * alternativa, de modo que ningún pedido nuevo se queda sin aviso.
+ *
+ * En navegador y PWA devuelve `false` de inmediato, sin esperas ni cambios.
+ */
+export async function isNativeOrderAlarmRinging(options?: { graceMs?: number }): Promise<boolean> {
+  if (!isNativePlatform()) return false;
+
+  const probe = async (): Promise<boolean> => {
+    try {
+      const Alarm = plugin('OrderAlarm');
+      if (!Alarm || typeof Alarm.isRinging !== 'function') return false;
+      const result = await Alarm.isRinging();
+      return Boolean(result?.ringing);
+    } catch {
+      // Sin plugin o con error: la web asume que nadie más va a avisar.
+      return false;
+    }
+  };
+
+  if (await probe()) return true;
+
+  const graceMs = Math.max(0, options?.graceMs ?? NATIVE_ALARM_GRACE_MS);
+  if (graceMs <= 0) return false;
+  await new Promise((resolve) => setTimeout(resolve, graceMs));
+  return probe();
 }
 
 /**

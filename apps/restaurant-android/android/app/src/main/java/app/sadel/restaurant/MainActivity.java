@@ -17,9 +17,16 @@ public class MainActivity extends BridgeActivity {
     @Override
     public void onCreate(Bundle savedInstanceState) {
         registerNotificationChannels();
-        super.onCreate(savedInstanceState);
+        // Los plugins propios deben registrarse ANTES de super.onCreate():
+        // BridgeActivity.registerPlugin() solo los añade al builder, y ese
+        // builder se consume en load() (dentro de super.onCreate()), que es lo
+        // único que los instancia y los publica en window.Capacitor.Plugins.
+        // Registrarlos después los dejaba muertos: la web veía
+        // isPluginAvailable('OrderAlarm') === false, así que la alarma nativa
+        // sonaba junto al audio web y stopNativeOrderAlarm() no podía cortarla.
         registerPlugin(BatteryHelperPlugin.class);
         registerPlugin(OrderAlarmPlugin.class);
+        super.onCreate(savedInstanceState);
         configureWebViewForNativeLook();
     }
 
