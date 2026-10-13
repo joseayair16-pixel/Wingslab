@@ -28,13 +28,29 @@ function plugin(name: string): any {
 
 /** Estado del permiso de notificaciones nativo (sin pedir el diálogo). */
 export async function checkNativePushPermission(): Promise<boolean> {
+  return (await getNativePushPermissionState()) === 'granted';
+}
+
+export type NativePushPermissionState = 'granted' | 'prompt' | 'denied' | 'unavailable';
+
+/**
+ * Estado crudo del permiso de notificaciones nativo.
+ * A diferencia de `checkNativePushPermission` (booleano), distingue entre
+ * "Android aún no preguntó" (`prompt`, incluye `prompt-with-rationale`) y
+ * "denegado permanente" (`denied`): solo en el primer caso el diálogo del
+ * sistema puede mostrarse con `requestNativePushPermission()`.
+ */
+export async function getNativePushPermissionState(): Promise<NativePushPermissionState> {
   const PN = plugin('PushNotifications');
-  if (!PN) return false;
+  if (!PN) return 'unavailable';
   try {
     const res = await PN.checkPermissions();
-    return res?.receive === 'granted';
+    const receive = res?.receive;
+    if (receive === 'granted') return 'granted';
+    if (receive === 'denied') return 'denied';
+    return 'prompt';
   } catch {
-    return false;
+    return 'unavailable';
   }
 }
 

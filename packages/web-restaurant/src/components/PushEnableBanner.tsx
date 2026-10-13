@@ -3,7 +3,7 @@ import { X } from 'lucide-react';
 
 import { useEffect, useState } from 'react';
 
-import { checkNativePushPermission, isNativePlatform, nativeOpenBatterySettings } from '../lib/native';
+import { getNativePushPermissionState, isNativePlatform, nativeOpenBatterySettings } from '../lib/native';
 
 type EnableStatus = 'DENIED' | 'BLOCKED' | 'INSECURE' | 'NOT_SUPPORTED' | 'VAPID_NOT_CONFIGURED' | 'SUBSCRIBE_FAILED' | 'UNKNOWN';
 
@@ -59,11 +59,22 @@ export default function PushEnableBanner({ visible, onEnable }: Props) {
       // App nativa (Capacitor): el push es FCM, no hay suscripción web. Si el
       // permiso nativo ya está concedido, la app ya está activa: se oculta el
       // banner en vez de volver a pedir activación en cada entrada.
+      // Se distingue "aún no preguntado" (prompt → botón Activar con el diálogo
+      // del sistema) de "denegado permanente" (denied → instrucciones de Ajustes,
+      // porque Android ya no vuelve a mostrar el diálogo).
       if (isNativePlatform()) {
-        void checkNativePushPermission()
-          .then((granted) => {
-            setPermission(granted ? 'granted' : 'denied');
-            setSubscribed(granted);
+        void getNativePushPermissionState()
+          .then((state) => {
+            if (state === 'granted') {
+              setPermission('granted');
+              setSubscribed(true);
+            } else if (state === 'prompt') {
+              setPermission('default');
+              setSubscribed(false);
+            } else {
+              setPermission('denied');
+              setSubscribed(false);
+            }
           })
           .catch(() => {
             setPermission('denied');
@@ -138,9 +149,24 @@ export default function PushEnableBanner({ visible, onEnable }: Props) {
   if (permission === 'denied') {
     return (
       <div className="fixed inset-x-0 top-0 z-[9991] bg-amber-50 px-4 py-2.5 text-center text-xs font-medium text-amber-800 shadow-sm border-b border-amber-100">
-        {isNativePlatform()
-          ? 'Notificaciones bloqueadas en la app. Actívalas en: Ajustes → Aplicaciones → SaDeL → Notificaciones.'
-          : 'Notificaciones bloqueadas. Para activarlas: toca el ícono 🔒 (o ℹ️) junto a la URL y habilita «Notificaciones» en Chrome / «Permisos → Notificaciones» en Safari.'}
+        <div className="mx-auto flex max-w-5xl items-center justify-center gap-2">
+          <p className="flex-1">
+            {isNativePlatform()
+              ? 'Notificaciones bloqueadas en la app. Actívalas en: Ajustes → Aplicaciones → SaDeL → Notificaciones.'
+              : 'Notificaciones bloqueadas. Para activarlas: toca el ícono 🔒 (o ℹ️) junto a la URL y habilita «Notificaciones» en Chrome / «Permisos → Notificaciones» en Safari.'}
+          </p>
+          <button
+            type="button"
+            onClick={() => {
+              window.localStorage.setItem(STORAGE_KEY, String(Date.now()));
+              setDismissed(true);
+            }}
+            aria-label="Descartar"
+            className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-amber-400 transition hover:bg-amber-100 hover:text-amber-600"
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+        </div>
       </div>
     );
   }
@@ -184,6 +210,10 @@ export default function PushEnableBanner({ visible, onEnable }: Props) {
                     const result = await onEnable();
                     if (result.ok) {
                       setSubscribed(true);
+                    } else if (isNativePlatform() && result.reason === 'DENIED') {
+                      // En la APK el diálogo del sistema ya no apareció (denegado
+                      // permanente): la única vía es Ajustes del sistema.
+                      setErrorMessage('El permiso quedó bloqueado. Actívalo en: Ajustes → Aplicaciones → SaDeL → Notificaciones, y vuelve a entrar.');
                     } else {
                       setErrorMessage(REASON_MESSAGES[result.reason]);
                     }
