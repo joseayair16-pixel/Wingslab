@@ -7026,7 +7026,16 @@ export default function Home() {
             role="dialog"
             aria-modal="true"
           >
-            <div className="w-full max-w-md overflow-hidden rounded-[28px] border border-black/10 bg-white p-6 shadow-[0_32px_120px_rgba(0,0,0,0.4)] text-center">
+            <div className="relative w-full max-w-md overflow-hidden rounded-[28px] border border-black/10 bg-white p-6 shadow-[0_32px_120px_rgba(0,0,0,0.4)] text-center">
+              <button
+                type="button"
+                onClick={() => setActiveQrCodeData(null)}
+                aria-label="Cerrar"
+                title="Cerrar"
+                className="absolute right-4 top-4 z-10 flex h-9 w-9 items-center justify-center rounded-full bg-neutral-950 text-white shadow-lg shadow-black/20 transition-all duration-200 hover:rotate-90 hover:bg-neutral-800 active:scale-90"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M18 6L6 18M6 6l12 12" /></svg>
+              </button>
               <div className="flex flex-col items-center">
                 <span className="inline-flex h-12 w-12 items-center justify-center rounded-full bg-amber-50 text-2xl">
                   🛵
@@ -7063,19 +7072,15 @@ export default function Home() {
                   <button
                     type="button"
                     onClick={() => {
-                      navigator.clipboard.writeText(deliveryUrl);
-                      pushToast('success', 'Enlace copiado', 'El enlace se copió al portapapeles.');
+                      window.open(deliveryUrl, '_blank', 'noopener,noreferrer');
                     }}
-                    className="w-full rounded-xl bg-neutral-100 py-3 text-sm font-semibold text-neutral-700 hover:bg-neutral-200 transition"
+                    title="Abrir la ruta de entrega en el navegador de este teléfono"
+                    className="w-full rounded-xl bg-sky-600 py-3 text-sm font-semibold text-white shadow-md shadow-sky-600/20 hover:bg-sky-700 transition active:scale-[0.98]"
                   >
-                    📋 Copiar Enlace Directo
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setActiveQrCodeData(null)}
-                    className="w-full rounded-xl bg-neutral-950 py-3.5 text-sm font-semibold text-white shadow-lg hover:bg-neutral-900 transition"
-                  >
-                    Entendido, Cerrar
+                    <span className="inline-flex items-center gap-2">
+                      <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="3 11 22 2 13 21 11 13 3 11" /></svg>
+                      Entregar con este teléfono
+                    </span>
                   </button>
                 </div>
               </div>
