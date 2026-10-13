@@ -33,6 +33,7 @@ import {
   nativeHaptic,
   nativeKeepAwake,
   onNativeNotificationTap,
+  setupAndroidBackButton,
 } from '../lib/native';
 import { useForegroundPolling } from '../hooks/useForegroundPolling';
 import { completeOrderIntent, resolveOrderIntentKey } from '../lib/orderIntentKey';
@@ -3453,6 +3454,21 @@ export default function Home() {
 
   const sessionUserIdRef = useRef(sessionUser?.id);
   useEffect(() => { sessionUserIdRef.current = sessionUser?.id; }, [sessionUser?.id]);
+
+  // Botón atrás de Android: doble toque para salir en la raíz (inicio sin
+  // restaurante). En pantallas internas conserva el retroceso normal.
+  const backRootRef = useRef({ home: false, restaurant: '' });
+  backRootRef.current = { home: activeSection === 'home', restaurant: selectedRestaurantId };
+  useEffect(() => {
+    const handle = setupAndroidBackButton({
+      isRoot: () => backRootRef.current.home && !backRootRef.current.restaurant,
+      onFirstBackPress: () => {
+        setToastMessage('Pulsa de nuevo para salir', 'info');
+        window.setTimeout(() => setToastMessage(''), 2000);
+      },
+    });
+    return () => handle?.remove();
+  }, [setToastMessage]);
 
   // Sincronizar el token renovado por otros flujos (página restaurante,
   // recuperación del socket) para no seguir usando un access ya rotado.

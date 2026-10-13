@@ -55,6 +55,7 @@ import {
   hasNativeOrderAlarm,
   stopNativeOrderAlarm,
   isNativeAppInBackground,
+  setupAndroidBackButton,
 } from '../lib/native';
 
 /**
@@ -977,6 +978,26 @@ export default function Home() {
       setRescheduleTime('');
     }
   }, [selectedOrderForEtaExtension]);
+
+  // Botón atrás de Android: doble toque para salir en el panel principal. En
+  // el resto conserva el retroceso normal del historial.
+  const backRootRef = useRef({ section: activeSection, ticket: false, eta: false });
+  backRootRef.current = {
+    section: activeSection,
+    ticket: selectedOrderForTicket !== null,
+    eta: selectedOrderForEtaExtension !== null,
+  };
+  useEffect(() => {
+    const handle = setupAndroidBackButton({
+      isRoot: () =>
+        backRootRef.current.section === 'dashboard' &&
+        !backRootRef.current.ticket &&
+        !backRootRef.current.eta,
+      onFirstBackPress: () => pushToast('info', 'Salir de SaDeL', 'Pulsa de nuevo para salir'),
+    });
+    return () => handle?.remove();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   
   const [showHelpModal, setShowHelpModal] = useState(false);
   const [showClosePromptModal, setShowClosePromptModal] = useState(false);

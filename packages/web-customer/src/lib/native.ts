@@ -22,6 +22,115 @@ function plugin(name: string): any {
   return capacitor()?.Plugins?.[name] ?? null;
 }
 
+/**
+ * Expone el plugin nativo `App` al WebView. El bundle no importa los paquetes
+ * @capacitor/*, así que sin este registro `Capacitor.Plugins.App` no existe y
+ * el botón atrás / exitApp quedan inertes. Solo `App`: el resto de plugins
+ * sigue igual que antes (sin cambios de conducta).
+ */
+function ensureAppPlugin(): any {
+  try {
+    const cap = capacitor();
+    if (!cap || !isNativePlatform() || typeof cap.registerPlugin !== 'function') return null;
+    if (cap.Plugins?.['App']) return cap.Plugins['App'];
+    return cap.registerPlugin('App') ?? null;
+  } catch {
+    return null;
+  }
+}
+
+export type AndroidBackButtonHandle = {
+  remove: () => void;
+};
+
+/**
+ * Botón atrás de Android estilo resto de apps: en pantallas internas
+ * retrocede; en la raíz, el primer toque avisa (onFirstBackPress) y el
+ * segundo dentro de 2 s cierra vía `App.exitApp()`.
+ *
+ * Sin listener JS, Capacitor solo recorre el historial del WebView (y con
+ * historial vacío ni eso): la app nunca se cierra con el botón del sistema.
+ * Devuelve null fuera del WebView o sin plugin App (se conserva lo anterior).
+ */
+export function setupAndroidBackButton(options: {
+  isRoot: () => boolean;
+  onFirstBackPress: () => void;
+  doublePressMs?: number;
+}): AndroidBackButtonHandle | null {
+  let handle: { remove: () => void } | null = null;
+  let removed = false;
+  let lastPress = 0;
+  try {
+    const AppPlugin = ensureAppPlugin();
+    if (!AppPlugin || typeof AppPlugin.addListener !== 'function') return null;
+    const windowMs = Math.max(500, options.doublePressMs ?? 2000);
+    const onBack = (event: { canGoBack?: boolean }) => {
+      if (removed) return;
+      let root = true;
+      try {
+        root = options.isRoot();
+      } catch {
+        root = true;
+      }
+      if (!root && event?.canGoBack) {
+        try {
+          window.history.back();
+        } catch {
+          /* noop */
+        }
+        return;
+      }
+      const now = Date.now();
+      if (now - lastPress < windowMs) {
+        lastPress = 0;
+        try {
+          const done = AppPlugin.exitApp();
+          if (done && typeof (done as Promise<void>).catch === 'function') {
+            (done as Promise<void>).catch(() => {});
+          }
+        } catch {
+          /* noop */
+        }
+        return;
+      }
+      lastPress = now;
+      try {
+        options.onFirstBackPress();
+      } catch {
+        /* noop */
+      }
+    };
+    const registered: unknown = AppPlugin.addListener('backButton', onBack);
+    if (
+      registered &&
+      typeof (registered as Promise<{ remove?: () => void }>).then === 'function'
+    ) {
+      (registered as Promise<{ remove?: () => void }>).then(
+        (h) => {
+          const removeFn =
+            h && typeof h.remove === 'function' ? h.remove.bind(h) : null;
+          handle = removeFn ? { remove: () => removeFn() } : null;
+        },
+        () => {},
+      );
+    } else if (registered && typeof (registered as { remove?: unknown }).remove === 'function') {
+      handle = registered as { remove: () => void };
+    }
+  } catch {
+    return null;
+  }
+  return {
+    remove: () => {
+      removed = true;
+      try {
+        handle?.remove();
+      } catch {
+        /* noop */
+      }
+    },
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Push / FCM
 // ---------------------------------------------------------------------------
