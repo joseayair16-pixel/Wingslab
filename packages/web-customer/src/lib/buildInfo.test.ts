@@ -5,6 +5,11 @@
 import { WEB_BUILD_ID, logWebBuildOnce } from './buildInfo';
 
 describe('buildInfo', () => {
+  const realConsole = (globalThis as any).console;
+  afterEach(() => {
+    (globalThis as any).console = realConsole;
+    delete (globalThis as any).window;
+  });
   it('expone un identificador de bundle', () => {
     expect(typeof WEB_BUILD_ID).toBe('string');
     expect(WEB_BUILD_ID.length).toBeGreaterThan(0);
