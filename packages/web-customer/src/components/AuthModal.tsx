@@ -110,15 +110,11 @@ export const AuthModal = memo(function AuthModal({ isOpen, onClose, onSuccess, a
   const handleDobChange = useCallback((next: { day?: number; month?: number; year?: number }) => {
     const latestAllowed = getLatestAllowedBirthDate();
     const year = clamp(next.year ?? dobYear, 1950, latestAllowed.year);
-    const maxMonth = year === latestAllowed.year ? latestAllowed.month : 12;
-    const month = clamp(next.month ?? dobMonth, 1, maxMonth);
-    const maxDay = year === latestAllowed.year && month === latestAllowed.month
-      ? latestAllowed.day
-      : daysInMonth(year, month);
-    setDobDay(clamp(next.day ?? dobDay, 1, maxDay));
-    setDobMonth(month);
-    setDobYear(year);
-  }, [dobDay, dobMonth, dobYear]);
+    const month = clamp(next.month ?? dobMonth, 1, 12);
+    if (next.month !== undefined) setDobMonth(month);
+    if (next.year !== undefined) setDobYear(year);
+    setDobDay((currentDay) => Math.min(clamp(next.day ?? currentDay, 1, 31), daysInMonth(year, month)));
+  }, [dobMonth, dobYear]);
 
   function handlePhoneChange(value: string) {
     const nextPhone = value.replace(/\D/g, '').slice(-10);
@@ -799,7 +795,7 @@ export const AuthModal = memo(function AuthModal({ isOpen, onClose, onSuccess, a
                               setAuthStep('contact');
                               setError('');
                             }}
-                            disabled={!name.trim() || !lastName.trim()}
+                            disabled={!name.trim() || !lastName.trim() || !isEligibleBirthDate(dobDay, dobMonth, dobYear)}
                             className="mt-3 w-full rounded-2xl bg-[#0a0a0a] py-3.5 text-sm font-semibold text-[#ffffff] transition-all duration-200 hover:bg-[#262626] hover:shadow-[0_8px_24px_rgba(10,10,10,0.12)] disabled:cursor-not-allowed disabled:bg-neutral-100 disabled:text-neutral-400 disabled:shadow-none active:scale-[0.98]"
                           >
                             Continuar
@@ -1407,6 +1403,7 @@ function clamp(value: number, min: number, max: number): number {
 }
 
 function isEligibleBirthDate(day: number, month: number, year: number): boolean {
+  if (month < 1 || month > 12 || day < 1 || day > daysInMonth(year, month)) return false;
   const latest = getLatestAllowedBirthDate();
   return year < latest.year || (year === latest.year && (
     month < latest.month || (month === latest.month && day <= latest.day)
@@ -1426,21 +1423,16 @@ function WheelDatePicker({
 }) {
   const latestAllowed = getLatestAllowedBirthDate();
   const safeYear = clamp(year, 1950, latestAllowed.year);
-  const latestMonth = safeYear === latestAllowed.year ? latestAllowed.month : 12;
-  const safeMonth = clamp(month, 1, latestMonth);
-  const latestDay = safeYear === latestAllowed.year && safeMonth === latestAllowed.month
-    ? latestAllowed.day
-    : daysInMonth(safeYear, safeMonth);
-  const safeDay = clamp(day, 1, latestDay);
+  const safeMonth = clamp(month, 1, 12);
+  const latestDayOfMonth = daysInMonth(safeYear, safeMonth);
+  const safeDay = clamp(day, 1, latestDayOfMonth);
+  const isEligibleDate = isEligibleBirthDate(safeDay, safeMonth, safeYear);
   const years = useMemo(
     () => Array.from({ length: latestAllowed.year - 1950 + 1 }, (_, i) => 1950 + i),
     [latestAllowed.year],
   );
-  const months = useMemo(
-    () => Array.from({ length: latestMonth }, (_, i) => i + 1),
-    [latestMonth],
-  );
-  const days = useMemo(() => Array.from({ length: latestDay }, (_, i) => i + 1), [latestDay]);
+  const months = useMemo(() => Array.from({ length: 12 }, (_, i) => i + 1), []);
+  const days = useMemo(() => Array.from({ length: latestDayOfMonth }, (_, i) => i + 1), [latestDayOfMonth]);
 
   const columns: { label: string; items: number[]; value: number; onPick: (v: number) => void }[] = [
     { label: 'Día', items: days, value: safeDay, onPick: (v) => onChange({ day: v }) },
@@ -1474,6 +1466,11 @@ function WheelDatePicker({
           </div>
         ))}
       </div>
+      {!isEligibleDate && (
+        <p aria-live="polite" className="px-1 text-xs leading-relaxed text-rose-600">
+          {`Debes tener al menos 12 años. Fecha límite: ${String(latestAllowed.day).padStart(2, '0')}/${String(latestAllowed.month).padStart(2, '0')}/${latestAllowed.year}.`}
+        </p>
+      )}
       <style>{`
         .wheel-scroll::-webkit-scrollbar { display: none; width: 0; height: 0; }
         .wheel-scroll { scrollbar-width: none; -ms-overflow-style: none; -webkit-overflow-scrolling: touch; }
