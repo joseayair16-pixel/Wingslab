@@ -7837,45 +7837,50 @@ export default function Home() {
       ) : null}
       {isProductModalOpen ? (
         <div
-          className="fixed inset-0 z-[80] flex items-end justify-center bg-sky-950/40 backdrop-blur-md transition-all duration-500 sm:items-center sm:px-4 sm:py-5"
+          className="fixed inset-0 z-[80] flex items-end justify-center bg-neutral-950/45 backdrop-blur-sm sm:items-center sm:px-4 sm:py-5"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="product-modal-title"
           onKeyDown={(event) => {
+            if (event.key === 'Escape') {
+              event.preventDefault();
+              setIsProductModalOpen(false);
+              setProductImageValidationError('');
+              setProductConfigInherited(false);
+              return;
+            }
             if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
               event.preventDefault();
               submitProductNow();
             }
           }}
         >
-          <div className="relative flex h-[94dvh] w-full max-w-[760px] flex-col overflow-hidden rounded-t-[28px] bg-white shadow-[0_32px_120px_rgba(14,165,233,0.25)] ring-1 ring-sky-100 sm:h-auto sm:max-h-[92vh] sm:rounded-[36px]">
-            <div className="flex shrink-0 justify-center bg-white/80 pt-2.5 backdrop-blur-xl sm:hidden" aria-hidden="true">
-              <span className="h-1.5 w-12 rounded-full bg-neutral-300" />
+          <div className="relative flex h-[96dvh] w-full max-w-4xl flex-col overflow-hidden rounded-t-[24px] bg-white shadow-[0_24px_80px_rgba(15,23,42,0.22)] ring-1 ring-black/10 sm:h-auto sm:max-h-[90dvh] sm:rounded-[24px]">
+            <div className="flex shrink-0 justify-center bg-white pt-2.5 sm:hidden" aria-hidden="true">
+              <span className="h-1 w-10 rounded-full bg-neutral-300" />
             </div>
-            
-            {/* Ambient Background Glows */}
-            <div className="pointer-events-none absolute -left-20 -top-20 h-64 w-64 rounded-full bg-sky-300/20 blur-[80px]" />
-            <div className="pointer-events-none absolute -right-20 top-1/2 h-64 w-64 rounded-full bg-blue-300/10 blur-[80px]" />
 
-            {/* Premium Header */}
-            <div className="relative shrink-0 border-b border-sky-100/50 bg-white/80 px-5 py-4 backdrop-blur-xl sm:px-10 sm:py-6">
+            <div className="relative shrink-0 border-b border-neutral-200/80 bg-white px-4 py-3.5 min-[420px]:px-5 sm:px-7 sm:py-5">
               <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3 sm:gap-4">
-                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-sky-100 to-sky-50 text-sky-600 shadow-inner ring-1 ring-sky-200/50 sm:h-14 sm:w-14">
-                    <svg className="h-6 w-6 sm:h-7 sm:w-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /></svg>
+                <div className="flex min-w-0 items-center gap-3">
+                  <div className="hidden h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-sky-50 text-sky-700 ring-1 ring-sky-100 min-[420px]:flex">
+                    <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /></svg>
                   </div>
                   <div className="min-w-0">
-                    <h3 className="text-lg font-bold tracking-tight text-neutral-900 sm:text-2xl">
+                    <h3 id="product-modal-title" className="truncate text-lg font-bold tracking-tight text-neutral-950 sm:text-xl">
                       {productDraft.id ? 'Editar producto' : 'Nuevo producto'}
                     </h3>
-                    <p className="mt-0.5 text-[13px] font-medium text-sky-700/70 sm:mt-1 sm:text-sm">
+                    <p className="mt-0.5 text-xs leading-4 text-neutral-500 sm:text-sm sm:leading-5">
                       {profile?.businessType === 'RESTAURANT' ? 'Información, precios y extras de tu platillo.' : 'Información, precios y variantes de tu producto.'}
                     </p>
                     {productConfigInherited && !productDraft.id ? (
-                      <div className="mt-2.5 inline-flex flex-wrap items-center gap-x-2 gap-y-1 rounded-full bg-sky-50 px-3 py-1.5 text-[12px] font-semibold text-sky-700 ring-1 ring-sky-200/60">
+                      <div className="mt-2 inline-flex flex-wrap items-center gap-x-2 gap-y-1 rounded-xl bg-sky-50 px-3 py-1.5 text-[12px] font-medium text-sky-800 ring-1 ring-sky-100">
                         <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg>
                         <span>Configuración heredada del último producto</span>
                         <button
                           type="button"
                           onClick={resetInheritedProductConfig}
-                          className="rounded-full border border-sky-200 bg-white px-2.5 py-0.5 text-[11px] font-bold text-sky-700 transition hover:bg-sky-100"
+                          className="min-h-8 rounded-lg border border-sky-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-sky-800 transition hover:bg-sky-100"
                         >
                           Restablecer
                         </button>
@@ -7891,26 +7896,26 @@ export default function Home() {
                     setProductConfigInherited(false);
                     setProductDraft(buildEmptyProductDraft(categories[0]?.id || ''));
                   }}
-                  className="group inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-sky-50 text-sky-600 transition-all active:scale-90 hover:bg-sky-100 hover:text-sky-900 sm:h-12 sm:w-12"
+                  className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-neutral-500 transition hover:bg-neutral-100 hover:text-neutral-900 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-sky-500/20 sm:h-11 sm:w-11"
                   aria-label="Cerrar"
                 >
-                  <X className="h-5 w-5 transition-transform duration-300 group-hover:rotate-90" strokeWidth={2.5} />
+                  <X className="h-5 w-5" strokeWidth={2} />
                 </button>
               </div>
             </div>
 
             {/* Scrollable Content */}
-            <div ref={productModalScrollRef} className="relative flex-1 overflow-y-auto overscroll-contain bg-gradient-to-b from-sky-50/30 to-white px-4 py-6 min-[420px]:px-5 sm:px-10 sm:py-8" style={{ WebkitOverflowScrolling: 'touch' }}>
-              <div className="space-y-8 sm:space-y-10">
+            <div ref={productModalScrollRef} className="relative min-h-0 flex-1 overflow-y-auto overscroll-contain bg-neutral-50/70 px-4 py-5 min-[420px]:px-5 sm:px-7 sm:py-6" style={{ WebkitOverflowScrolling: 'touch' }}>
+              <div className="space-y-6 sm:space-y-7">
                 
                 {/* 1. Información Básica */}
                 <section>
-                  <div className="mb-5 flex items-center gap-3">
-                    <span className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-sky-400 to-sky-600 text-sm font-black text-white shadow-lg shadow-sky-500/30">1</span>
-                    <h4 className="text-[13px] font-bold uppercase tracking-[0.15em] text-sky-900">Información Básica</h4>
+                  <div className="mb-3 flex items-center gap-2.5">
+                    <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-white text-xs font-bold text-neutral-500 ring-1 ring-neutral-200">1</span>
+                    <h4 className="text-sm font-bold tracking-tight text-neutral-900">Información básica</h4>
                   </div>
-                  <div className="rounded-[28px] border border-white bg-white/80 p-5 shadow-[0_8px_30px_rgba(14,165,233,0.06)] backdrop-blur-md ring-1 ring-sky-100/50 sm:p-8">
-                    <div className="grid gap-5 sm:grid-cols-2">
+                  <div className="rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm min-[420px]:p-5 sm:p-6">
+                    <div className="grid gap-4 sm:grid-cols-2 sm:gap-5">
                       <label className="grid gap-2 text-sm text-neutral-600 sm:col-span-2">
                         <span className="text-[12px] font-bold uppercase tracking-[0.1em] text-neutral-600">Categoría</span>
                         <select
@@ -7957,22 +7962,23 @@ export default function Home() {
 
                 {/* 2. Precios e Imagen */}
                 <section>
-                  <div className="mb-5 flex items-center gap-3">
-                    <span className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-sky-400 to-sky-600 text-sm font-black text-white shadow-lg shadow-sky-500/30">2</span>
-                    <h4 className="text-[13px] font-bold uppercase tracking-[0.15em] text-sky-900">Precios y Fotografía</h4>
+                  <div className="mb-3 flex items-center gap-2.5">
+                    <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-white text-xs font-bold text-neutral-500 ring-1 ring-neutral-200">2</span>
+                    <h4 className="text-sm font-bold tracking-tight text-neutral-900">Precio e imágenes</h4>
                   </div>
-                  <div className="rounded-[28px] border border-white bg-white/80 p-5 shadow-[0_8px_30px_rgba(14,165,233,0.06)] backdrop-blur-md ring-1 ring-sky-100/50 sm:p-8">
-                    <div className="grid gap-5 sm:grid-cols-2">
+                  <div className="rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm min-[420px]:p-5 sm:p-6">
+                    <div className="grid gap-4 sm:grid-cols-2 sm:gap-5">
                       {/* Tipo de venta */}
                       <div className="sm:col-span-2">
                         <label className="text-[12px] font-bold uppercase tracking-[0.1em] text-neutral-600">Tipo de venta</label>
-                        <div className="mt-2 flex gap-2 rounded-[18px] border border-black/5 bg-neutral-100/50 p-1.5">
+                        <div className="mt-2 flex gap-1 rounded-xl border border-neutral-200 bg-neutral-100 p-1">
                           <button
                             type="button"
                             onClick={() => setProductDraft((current) => ({ ...current, sellBy: 'UNIT' }))}
+                            aria-pressed={productDraft.sellBy === 'UNIT'}
                             className={`flex-1 rounded-xl py-3 text-[13px] font-bold transition-all sm:py-2.5 sm:text-xs ${
                               productDraft.sellBy === 'UNIT'
-                                ? 'bg-white text-sky-700 shadow-sm'
+                                ? 'bg-white text-neutral-950 shadow-sm ring-1 ring-black/5'
                                 : 'text-neutral-500 hover:text-neutral-700'
                             }`}
                           >
@@ -7981,9 +7987,10 @@ export default function Home() {
                           <button
                             type="button"
                             onClick={() => setProductDraft((current) => ({ ...current, sellBy: 'WEIGHT' }))}
+                            aria-pressed={productDraft.sellBy === 'WEIGHT'}
                             className={`flex-1 rounded-xl py-3 text-[13px] font-bold transition-all sm:py-2.5 sm:text-xs ${
                               productDraft.sellBy === 'WEIGHT'
-                                ? 'bg-white text-sky-700 shadow-sm'
+                                ? 'bg-white text-neutral-950 shadow-sm ring-1 ring-black/5'
                                 : 'text-neutral-500 hover:text-neutral-700'
                             }`}
                           >
@@ -8021,12 +8028,15 @@ export default function Home() {
                           }}
                         />
                       )}
-                      <Field
-                        label="Precio Especial (Opcional)"
-                        value={productDraft.discountPrice || ''}
-                        onChange={(value) => setProductDraft((current) => ({ ...current, discountPrice: value }))}
-                        placeholder="0.00"
-                      />
+                      <div>
+                        <Field
+                          label={productDraft.sellBy === 'UNIT' ? 'Precio de oferta ($)' : 'Precio de oferta por kg ($)'}
+                          value={productDraft.discountPrice || ''}
+                          onChange={(value) => setProductDraft((current) => ({ ...current, discountPrice: value }))}
+                          placeholder="Opcional"
+                        />
+                        <p className="mt-1.5 text-xs leading-4 text-neutral-500">Se mostrará como precio rebajado junto al precio normal.</p>
+                      </div>
 
                       {productDraft.sellBy === 'UNIT' && (
                         <div className="sm:col-span-2 rounded-2xl border border-emerald-200/60 bg-emerald-50/40 p-4">
@@ -8344,11 +8354,11 @@ export default function Home() {
                                 {productImageValidationError}
                               </p>
                             ) : null}
-                            <div className="flex items-center gap-3 rounded-2xl border border-dashed border-neutral-300 bg-neutral-50 p-4 transition-colors hover:bg-neutral-100">
+                            <div className="flex flex-wrap items-center gap-3 rounded-xl border border-neutral-200 bg-neutral-50 p-3.5 transition-colors hover:bg-neutral-100">
                               <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white text-neutral-500 shadow-sm">
                                 <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
                               </div>
-                              <div className="flex-1">
+                              <div className="min-w-[140px] flex-1">
                                 <p className="text-sm font-bold text-neutral-900">Subir imagen desde equipo</p>
                                 <p className="text-xs text-neutral-500">PNG o JPG. Recomendado 1:1.</p>
                               </div>
@@ -8363,20 +8373,20 @@ export default function Home() {
                                 type="button"
                                 onClick={() => productImageInputRef.current?.click()}
                                 disabled={processingProductImage}
-                                className="shrink-0 rounded-full bg-neutral-900 px-4 py-2 text-xs font-bold text-white transition hover:bg-neutral-800 disabled:opacity-50"
+                                className="min-h-11 w-full shrink-0 rounded-xl bg-neutral-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-neutral-800 disabled:opacity-50 sm:w-auto"
                               >
                                 {processingProductImage ? 'Cargando...' : 'Examinar'}
                               </button>
                             </div>
 
-                            <div className="flex items-center gap-3 rounded-2xl border border-dashed border-sky-200 bg-sky-50 p-4 transition-colors">
+                            <div className="flex flex-wrap items-center gap-3 rounded-xl border border-sky-100 bg-sky-50/70 p-3.5 transition-colors">
                               <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-sky-100 text-sky-600 shadow-sm">
                                 <Wand2 className="h-5 w-5" />
                               </div>
-                              <div className="flex-1">
+                              <div className="min-w-[140px] flex-1">
                                 <p className="text-sm font-bold text-sky-900">Generar con IA</p>
-                                <p className="text-xs text-sky-700/70">
-                                  Se crea con el nombre y la descripcion del producto.
+                                <p className="text-xs leading-4 text-sky-800/75">
+                                  Usa el nombre y la descripción. Completa ambos campos para habilitarla.
                                 </p>
                               </div>
                               <button
@@ -8387,7 +8397,7 @@ export default function Home() {
                                   productDraft.name.trim().length < 2 ||
                                   productDraft.description.trim().length < 4
                                 }
-                                className="shrink-0 rounded-full bg-sky-600 px-4 py-2 text-xs font-bold text-white transition hover:bg-sky-500 disabled:cursor-not-allowed disabled:bg-sky-300"
+                                className="min-h-11 w-full shrink-0 rounded-xl bg-sky-700 px-4 py-2 text-sm font-semibold text-white transition hover:bg-sky-800 disabled:cursor-not-allowed disabled:bg-sky-300 sm:w-auto"
                                 title={
                                   productDraft.name.trim().length < 2
                                     ? 'Escribe el nombre del producto para poder generar la imagen.'
@@ -8406,7 +8416,7 @@ export default function Home() {
                             <div className="mt-4 flex flex-col items-center gap-1 sm:mt-0">
                               <div
                                 ref={cropContainerRef}
-                                className="group relative w-full select-none overflow-hidden rounded-2xl border border-neutral-200 bg-neutral-100 shadow-sm aspect-[4/3] sm:w-44 sm:aspect-square"
+                                className="group relative w-full select-none touch-none overflow-hidden rounded-2xl border border-neutral-200 bg-neutral-100 shadow-sm aspect-[4/3] sm:w-44 sm:aspect-square"
                                 onMouseDown={(e) => {
                                   const div = cropContainerRef.current;
                                   if (!div) return;
@@ -8504,29 +8514,32 @@ export default function Home() {
                                   <button
                                     type="button"
                                     onClick={() => setProductDraft((curr) => ({ ...curr, imageZoom: Math.max(30, (curr.imageZoom || 100) - 10) }))}
-                                    className="pointer-events-auto flex h-6 w-6 items-center justify-center rounded-md bg-black/50 text-xs font-bold text-white backdrop-blur transition hover:bg-black/70"
+                                    className="pointer-events-auto flex h-11 w-11 items-center justify-center rounded-lg bg-black/60 text-base font-semibold text-white shadow-sm backdrop-blur transition hover:bg-black/75 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
                                     title="Reducir zoom"
+                                    aria-label="Reducir zoom"
                                   >
                                     −
                                   </button>
                                   <button
                                     type="button"
                                     onClick={() => setProductDraft((curr) => ({ ...curr, imageZoom: Math.min(300, (curr.imageZoom || 100) + 10) }))}
-                                    className="pointer-events-auto flex h-6 w-6 items-center justify-center rounded-md bg-black/50 text-xs font-bold text-white backdrop-blur transition hover:bg-black/70"
+                                    className="pointer-events-auto flex h-11 w-11 items-center justify-center rounded-lg bg-black/60 text-base font-semibold text-white shadow-sm backdrop-blur transition hover:bg-black/75 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
                                     title="Aumentar zoom"
+                                    aria-label="Aumentar zoom"
                                   >
                                     +
                                   </button>
                                   <button
                                     type="button"
                                     onClick={() => setProductDraft((curr) => ({ ...curr, imageZoom: 100 }))}
-                                    className="pointer-events-auto flex h-6 w-6 items-center justify-center rounded-md bg-black/50 text-[10px] font-bold text-white backdrop-blur transition hover:bg-black/70"
+                                    className="pointer-events-auto flex h-11 w-11 items-center justify-center rounded-lg bg-black/60 text-sm font-semibold text-white shadow-sm backdrop-blur transition hover:bg-black/75 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
                                     title="Restablecer zoom"
+                                    aria-label="Restablecer encuadre"
                                   >
                                     ↺
                                   </button>
                                 </div>
-                                <div className="absolute inset-x-0 bottom-0 flex items-center justify-center bg-gradient-to-t from-black/50 to-transparent pb-2 pt-6 opacity-0 transition-opacity group-hover:opacity-100">
+                                <div className="absolute inset-x-0 bottom-0 flex items-center justify-center bg-gradient-to-t from-black/60 to-transparent pb-2 pt-7 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100">
                                   <span className="rounded-full bg-white/90 px-3 py-1 text-[11px] font-semibold text-neutral-800 shadow-sm backdrop-blur">
                                     Arrastra para encuadrar y haz zoom
                                   </span>
@@ -8598,15 +8611,16 @@ export default function Home() {
                         <button
                           type="button"
                           onClick={() => setProductDraft((curr) => ({ ...curr, isAdultOnly: !curr.isAdultOnly }))}
-                          className={`relative inline-flex h-7 w-12 shrink-0 cursor-pointer items-center rounded-full transition-colors duration-200 ease-in-out focus:outline-none shadow-inner ${
+                          className={`relative inline-flex h-11 w-16 shrink-0 cursor-pointer items-center rounded-full p-1 transition-colors duration-200 ease-in-out focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-rose-500/20 ${
                             productDraft.isAdultOnly ? 'bg-rose-500' : 'bg-neutral-300'
                           }`}
                           role="switch"
                           aria-checked={productDraft.isAdultOnly}
+                          aria-label="Activar restricción de edad"
                         >
                           <span
-                            className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-sm ring-0 transition duration-200 ease-in-out ${
-                              productDraft.isAdultOnly ? 'translate-x-6' : 'translate-x-1'
+                            className={`pointer-events-none inline-block h-7 w-7 transform rounded-full bg-white shadow-sm ring-0 transition duration-200 ease-in-out ${
+                              productDraft.isAdultOnly ? 'translate-x-7' : 'translate-x-0'
                             }`}
                           />
                         </button>
@@ -8628,15 +8642,16 @@ export default function Home() {
                           <button
                             type="button"
                             onClick={() => setProductDraft((curr) => ({ ...curr, trackStock: !curr.trackStock }))}
-                            className={`relative inline-flex h-7 w-12 shrink-0 cursor-pointer items-center rounded-full transition-colors duration-200 ease-in-out focus:outline-none shadow-inner ${
+                            className={`relative inline-flex h-11 w-16 shrink-0 cursor-pointer items-center rounded-full p-1 transition-colors duration-200 ease-in-out focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-500/20 ${
                               productDraft.trackStock ? 'bg-amber-500' : 'bg-neutral-300'
                             }`}
                             role="switch"
                             aria-checked={productDraft.trackStock}
+                            aria-label="Activar control de inventario"
                           >
                             <span
-                              className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-sm ring-0 transition duration-200 ease-in-out ${
-                                productDraft.trackStock ? 'translate-x-6' : 'translate-x-1'
+                              className={`pointer-events-none inline-block h-7 w-7 transform rounded-full bg-white shadow-sm ring-0 transition duration-200 ease-in-out ${
+                                productDraft.trackStock ? 'translate-x-7' : 'translate-x-0'
                               }`}
                             />
                           </button>
@@ -8674,10 +8689,13 @@ export default function Home() {
 
                 {/* 3. Personalizaciones */}
                 <section>
-                  <div className="mb-5 flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <span className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-sky-400 to-sky-600 text-sm font-black text-white shadow-lg shadow-sky-500/30">3</span>
-                      <h4 className="text-[13px] font-bold uppercase tracking-[0.15em] text-sky-900">{profile?.businessType === 'RESTAURANT' ? 'Extras y Modificadores' : 'Variantes del Producto'}</h4>
+                  <div className="mb-3 flex flex-col gap-3 min-[420px]:flex-row min-[420px]:items-center min-[420px]:justify-between">
+                    <div className="flex min-w-0 items-center gap-2.5">
+                      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-white text-xs font-bold text-neutral-500 ring-1 ring-neutral-200">3</span>
+                      <div className="min-w-0">
+                        <h4 className="text-sm font-bold tracking-tight text-neutral-900">{profile?.businessType === 'RESTAURANT' ? 'Extras y modificadores' : 'Variantes del producto'}</h4>
+                        <p className="mt-0.5 text-xs leading-4 text-neutral-500">Añade opciones para que tus clientes personalicen su pedido.</p>
+                      </div>
                     </div>
                     <button
                       type="button"
@@ -8695,29 +8713,29 @@ export default function Home() {
                           ]
                         }));
                       }}
-                      className="group flex items-center gap-1.5 rounded-full bg-gradient-to-r from-sky-50 to-white px-3 py-1.5 text-xs font-bold text-sky-600 border border-sky-100/60 shadow-[0_2px_8px_rgba(14,165,233,0.08)] transition hover:bg-sky-50 hover:text-sky-700"
+                      className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-sky-200 bg-white px-4 py-2.5 text-sm font-semibold text-sky-800 shadow-sm transition hover:bg-sky-50 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-sky-500/20 min-[420px]:w-auto"
                     >
                       <Plus className="h-4 w-4" strokeWidth={2.5} />
-                      Añadir Grupo
+                      Añadir grupo
                     </button>
                   </div>
 
                   {(!productDraft.optionGroups || productDraft.optionGroups.length === 0) ? (
-                    <div className="flex flex-col items-center justify-center rounded-[28px] border border-dashed border-sky-200/50 bg-sky-50/30 py-10 text-center">
-                      <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-sky-100 to-sky-50 text-sky-400">
-                        <svg className="h-7 w-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" /></svg>
+                    <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-neutral-300 bg-white px-5 py-8 text-center">
+                      <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-neutral-100 text-neutral-500">
+                        <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" /></svg>
                       </div>
-                      <h5 className="mt-4 text-sm font-bold text-sky-900">Sin opciones adicionales</h5>
-                      <p className="mt-1.5 max-w-sm text-[13px] font-medium text-sky-700/60">
+                      <h5 className="mt-3 text-sm font-semibold text-neutral-900">Sin opciones adicionales</h5>
+                      <p className="mt-1.5 max-w-sm text-[13px] leading-5 text-neutral-500">
                         {profile?.businessType === 'RESTAURANT' ? 'Añade tamaños, sabores o ingredientes extra.' : 'Añade talla, color o material.'}
                       </p>
                     </div>
                   ) : (
                     <div className="space-y-4">
                       {productDraft.optionGroups.map((group, groupIdx) => (
-                        <div key={groupIdx} className="relative overflow-hidden rounded-[24px] border border-sky-100/60 bg-white/80 backdrop-blur-sm shadow-sm transition-all hover:border-sky-200">
-                          <div className="flex items-center justify-between border-b border-sky-100/50 bg-gradient-to-r from-sky-50/50 to-white px-5 py-3.5">
-                            <h5 className="text-[11px] font-bold uppercase tracking-widest text-sky-700">Grupo de Opciones {groupIdx + 1}</h5>
+                        <div key={groupIdx} className="relative overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-sm">
+                          <div className="flex items-center justify-between border-b border-neutral-200 bg-neutral-50 px-4 py-3.5">
+                            <h5 className="text-sm font-semibold text-neutral-800">Grupo de opciones {groupIdx + 1}</h5>
                             <button
                               type="button"
                               onClick={() => {
@@ -8727,7 +8745,8 @@ export default function Home() {
                                   return { ...current, optionGroups: nextGroups };
                                 });
                               }}
-                              className="rounded-full bg-white p-1.5 text-neutral-400 shadow-sm ring-1 ring-black/5 transition hover:bg-rose-50 hover:text-rose-600"
+                              className="inline-flex h-11 w-11 items-center justify-center rounded-xl bg-white text-neutral-500 shadow-sm ring-1 ring-black/5 transition hover:bg-rose-50 hover:text-rose-600"
+                              aria-label={`Eliminar grupo ${groupIdx + 1}`}
                               title="Eliminar grupo"
                             >
                               <Trash2 className="h-4 w-4" />
@@ -8878,7 +8897,8 @@ export default function Home() {
                                             return { ...current, optionGroups: nextGroups };
                                           });
                                         }}
-                                        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white text-neutral-400 shadow-sm ring-1 ring-black/5 transition active:scale-90 hover:bg-rose-50 hover:text-rose-600 sm:opacity-0 sm:group-hover/opt:opacity-100"
+                                        className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white text-neutral-500 shadow-sm ring-1 ring-black/5 transition active:scale-90 hover:bg-rose-50 hover:text-rose-600 sm:opacity-0 sm:group-hover/opt:opacity-100"
+                                        aria-label={`Eliminar opción ${opt.name || optIdx + 1}`}
                                       >
                                         <X className="h-4 w-4" />
                                       </button>
@@ -8897,15 +8917,15 @@ export default function Home() {
             </div>
 
             {/* Sticky Footer */}
-            <div className="relative shrink-0 border-t border-sky-100/50 bg-white/70 px-4 py-4 backdrop-blur-xl min-[420px]:px-5 sm:px-10 sm:py-5" style={{ paddingBottom: 'max(1rem, env(safe-area-inset-bottom))' }}>
+            <div className="relative shrink-0 border-t border-neutral-200 bg-white px-4 py-3.5 min-[420px]:px-5 sm:px-7 sm:py-4" style={{ paddingBottom: 'max(0.875rem, env(safe-area-inset-bottom))' }}>
               {!productDraft.id ? (
                 <div className="mb-3 flex items-center justify-between gap-3">
-                  <label className="flex cursor-pointer select-none items-center gap-2.5 rounded-full border border-sky-100 bg-sky-50/60 px-4 py-2.5 text-[13px] font-semibold text-sky-800 transition hover:bg-sky-50">
+                  <label className="flex min-h-11 cursor-pointer select-none items-center gap-2.5 rounded-xl border border-neutral-200 bg-neutral-50 px-3.5 py-2 text-[13px] font-medium text-neutral-700 transition hover:bg-neutral-100">
                     <input
                       type="checkbox"
                       checked={continueAfterSave}
                       onChange={(event) => setContinueAfterSave(event.target.checked)}
-                      className="h-5 w-5 shrink-0 accent-sky-500"
+                      className="h-5 w-5 shrink-0 accent-sky-700"
                     />
                     Añadir otro al publicar
                   </label>
@@ -8918,7 +8938,7 @@ export default function Home() {
                 <button
                   type="button"
                   onClick={() => setIsProductModalOpen(false)}
-                  className="min-h-[48px] flex-1 rounded-full border border-black/10 px-5 py-3.5 text-sm font-bold text-neutral-600 transition active:scale-[0.98] hover:bg-neutral-100 hover:text-neutral-900 sm:flex-none"
+                  className="min-h-12 flex-1 rounded-xl border border-neutral-300 bg-white px-5 py-3 text-sm font-semibold text-neutral-700 transition hover:bg-neutral-50 hover:text-neutral-950 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-neutral-500/15 sm:flex-none"
                 >
                   Cancelar
                 </button>
@@ -8926,17 +8946,16 @@ export default function Home() {
                   type="button"
                   onClick={() => void submitProductNow()}
                   disabled={creatingProduct || savingProductChanges || processingProductImage || !canSubmitProduct}
-                  className="group relative min-h-[48px] flex-1 overflow-hidden rounded-full bg-gradient-to-r from-sky-500 to-sky-400 px-6 py-3.5 text-sm font-bold text-white shadow-[0_4px_16px_rgba(14,165,233,0.35)] ring-1 ring-sky-400/50 transition-all active:scale-[0.98] disabled:pointer-events-none disabled:opacity-60 disabled:shadow-none disabled:grayscale sm:flex-none"
+                  className="min-h-12 flex-[1.2] rounded-xl bg-sky-700 px-6 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-sky-800 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-sky-500/25 disabled:pointer-events-none disabled:opacity-50 disabled:shadow-none sm:flex-none"
                 >
-                  <div className="absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/30 to-transparent transition-transform duration-1000 group-hover:translate-x-full" />
-                  <span className="relative z-10">
+                  <span>
                     {productDraft.id
                       ? savingProductChanges
                         ? 'Guardando...'
-                        : 'Guardar Cambios'
+                        : 'Guardar cambios'
                       : creatingProduct
                         ? 'Creando...'
-                      : 'Publicar Producto'}
+                      : 'Publicar producto'}
                   </span>
                 </button>
               </div>
@@ -10896,10 +10915,10 @@ export default function Home() {
                             <img
                               src={storeDraft.coverImage}
                               alt={`Portada de ${storeDraft.name || 'tu tienda'}`}
-                              className="h-52 w-full bg-neutral-200 object-cover min-[420px]:h-64 md:h-80 lg:h-96"
+                              className="h-48 w-full bg-neutral-200 object-cover min-[420px]:h-56 md:h-72 lg:h-80"
                             />
                           ) : (
-                            <div className="h-52 w-full bg-gradient-to-br from-sky-400 via-sky-600 to-sky-900 min-[420px]:h-64 md:h-80 lg:h-96" />
+                            <div className="h-48 w-full bg-gradient-to-br from-sky-400 via-sky-600 to-sky-900 min-[420px]:h-56 md:h-72 lg:h-80" />
                           )}
                           <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
                           <div className="absolute inset-x-0 top-0 flex items-start justify-end gap-2 p-3 min-[420px]:p-4 md:p-6 lg:p-8">
@@ -10949,8 +10968,8 @@ export default function Home() {
                         </div>
 
                         <div className="relative px-4 pb-5 pt-0 text-sm text-neutral-600 md:px-6 md:pb-6 lg:px-7 lg:pt-5">
-                          <div className="-mt-12 flex flex-col items-center text-center lg:hidden relative z-10">
-                            <div className="relative flex h-20 w-20 items-center justify-center overflow-hidden rounded-[24px] border-4 border-white bg-white shadow-[0_12px_32px_rgba(0,0,0,0.12)] min-[420px]:h-24 min-[420px]:w-24 min-[420px]:rounded-[32px]">
+                          <div className="relative z-10 -mt-10 flex flex-col items-center text-center lg:hidden">
+                            <div className="relative flex h-[76px] w-[76px] items-center justify-center overflow-hidden rounded-[24px] border-4 border-white bg-white shadow-[0_8px_24px_rgba(15,23,42,0.16)] min-[420px]:h-[88px] min-[420px]:w-[88px] min-[420px]:rounded-[28px]">
                               {storeDraft.logo.trim() ? (
                                 <img
                                   src={storeDraft.logo}
@@ -10965,67 +10984,75 @@ export default function Home() {
                               <button
                                 type="button"
                                 onClick={openLogoModal}
-                                className="absolute bottom-1 right-1 inline-flex h-9 w-9 items-center justify-center rounded-full bg-white/95 text-sky-600 shadow-md transition active:scale-90 hover:bg-white hover:text-sky-800"
+                                className="absolute bottom-0.5 right-0.5 inline-flex h-8 w-8 items-center justify-center rounded-full bg-white text-sky-700 shadow-md ring-1 ring-black/5 transition active:scale-90 hover:bg-sky-50"
                                 aria-label="Editar logo"
                               >
                                 <Pencil className="h-4 w-4" />
                               </button>
                             </div>
-                            <p className="mt-4 text-2xl font-bold tracking-tight text-neutral-950 break-words min-[420px]:text-3xl">
+                            <p className="mt-3 max-w-full break-words px-2 text-[23px] font-bold leading-tight tracking-tight text-neutral-950 min-[420px]:text-[27px]">
                               {storeDraft.name || 'Nombre de tu tienda'}
                             </p>
-                            <p className="mt-2 max-w-sm text-[15px] font-medium leading-relaxed text-neutral-500 break-words">
+                            <p className="mt-1.5 max-w-sm break-words px-2 text-[14px] leading-5 text-neutral-500">
                               {storeDraft.description || 'Agrega una descripcion atractiva para tus clientes.'}
                             </p>
                           </div>
 
-                          <div className="mt-5 flex flex-wrap justify-center gap-2.5 min-[420px]:gap-3 lg:mt-6 lg:justify-start">
-                            <div className="group flex w-full min-w-0 items-center gap-2 rounded-2xl bg-white/80 backdrop-blur-md px-4 py-3 text-[13px] font-medium text-neutral-700 shadow-sm ring-1 ring-black/5 transition active:scale-[0.99] min-[480px]:w-auto min-[480px]:rounded-full hover:bg-white hover:shadow-md">
-                              <svg className="h-4 w-4 shrink-0 text-sky-500 transition-transform group-hover:scale-110" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.243-4.243a8 8 0 1111.314 0z" />
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                              </svg>
-                              <span className="min-w-0 break-words">
-                                <span className="font-bold text-neutral-900">Direccion:</span>{' '}
-                                {storeDraft.address || 'Agrega tu direccion principal'}
+                          <div className="mt-5 grid grid-cols-2 gap-2.5 lg:flex lg:gap-3">
+                            <div className="col-span-2 flex min-w-0 items-start gap-3 rounded-2xl border border-neutral-200/80 bg-neutral-50 px-3.5 py-3 lg:flex-1 lg:items-center lg:rounded-xl">
+                              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white text-sky-700 shadow-sm ring-1 ring-black/5">
+                                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.243-4.243a8 8 0 1111.314 0z" />
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                                </svg>
+                              </span>
+                              <span className="min-w-0 flex-1">
+                                <span className="block text-[10px] font-bold uppercase tracking-[0.12em] text-neutral-500">Dirección</span>
+                                <span className="mt-0.5 block break-words text-[13px] font-medium leading-5 text-neutral-800">{storeDraft.address || 'Agrega tu dirección principal'}</span>
                               </span>
                             </div>
 
-                            <div className="group flex max-w-full min-w-0 items-center gap-2 rounded-full bg-white/80 backdrop-blur-md px-4 py-2.5 text-[13px] font-medium text-neutral-700 shadow-sm ring-1 ring-black/5 transition hover:bg-white hover:shadow-md">
-                              <svg className="h-4 w-4 shrink-0 text-sky-500 transition-transform group-hover:scale-110" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                              </svg>
-                              <span className="min-w-0 break-words">
-                                <span className="font-bold text-neutral-900">Entrega:</span>{' '}
-                                {storeDraft.hasOwnDelivery && storeDraft.deliveryPricingModel === 'distance'
-                                  ? 'Por distancia'
-                                  : storeDraft.deliveryFee.trim()
-                                    ? formatCurrency(Number(storeDraft.deliveryFee))
-                                    : 'Sin costo'}
+                            <div className="flex min-w-0 items-start gap-2 rounded-2xl border border-neutral-200/80 bg-neutral-50 px-3 py-3 lg:flex-1 lg:items-center lg:gap-2.5 lg:rounded-xl">
+                              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white text-sky-700 shadow-sm ring-1 ring-black/5">
+                                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                </svg>
+                              </span>
+                              <span className="min-w-0">
+                                <span className="block text-[10px] font-bold uppercase tracking-[0.1em] text-neutral-500">Entrega</span>
+                                <span className="mt-0.5 block break-words text-[13px] font-semibold leading-4 text-neutral-900">
+                                  {storeDraft.hasOwnDelivery && storeDraft.deliveryPricingModel === 'distance'
+                                    ? 'Por distancia'
+                                    : storeDraft.deliveryFee.trim()
+                                      ? formatCurrency(Number(storeDraft.deliveryFee))
+                                      : 'Sin costo'}
+                                </span>
                               </span>
                             </div>
 
                             <div
-                              className={`group flex max-w-full min-w-0 items-center gap-2 rounded-full px-4 py-2.5 text-[13px] font-bold shadow-sm ring-1 transition hover:shadow-md ${profile.status === 'ACTIVE' && profile.isAcceptingOrders
-                                ? 'bg-emerald-50/80 text-emerald-700 ring-emerald-200/60 hover:bg-emerald-100'
+                              className={`flex min-w-0 items-start gap-2 rounded-2xl border px-3 py-3 lg:flex-1 lg:items-center lg:gap-2.5 lg:rounded-xl ${profile.status === 'ACTIVE' && profile.isAcceptingOrders
+                                ? 'border-emerald-200 bg-emerald-50/70 text-emerald-800'
                                 : profile.status === 'SUSPENDED'
-                                  ? 'bg-sky-50/80 text-sky-700 ring-sky-200/60 hover:bg-sky-100'
-                                  : 'bg-neutral-100/80 text-neutral-500 ring-black/5 hover:bg-neutral-200'
+                                  ? 'border-sky-200 bg-sky-50/70 text-sky-800'
+                                  : 'border-neutral-200 bg-neutral-50 text-neutral-700'
                                 }`}
                             >
-                              <Clock />
-                              <span className="min-w-0 break-words">
-                                {getRestaurantOperationalStatusLabel(
-                                  profile.status,
-                                  profile.isAcceptingOrders
-                                )}
+                              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white/80 shadow-sm ring-1 ring-black/5">
+                                <Clock className="h-4 w-4" />
+                              </span>
+                              <span className="min-w-0">
+                                <span className="block text-[10px] font-bold uppercase tracking-[0.1em] opacity-70">Estado</span>
+                                <span className="mt-0.5 block break-words text-[13px] font-semibold leading-4">
+                                  {getRestaurantOperationalStatusLabel(profile.status, profile.isAcceptingOrders)}
+                                </span>
                               </span>
                             </div>
                           </div>
                           <button
                             type="button"
                             onClick={() => setShowMenuPreview(true)}
-                            className="mt-5 inline-flex min-h-[52px] w-full items-center justify-center gap-2.5 rounded-2xl bg-sky-600 px-5 py-3.5 text-sm font-bold text-white shadow-[0_8px_20px_rgba(2,132,199,0.35)] transition active:scale-[0.98] hover:bg-sky-500 lg:mt-6 lg:w-auto"
+                            className="mt-4 inline-flex min-h-12 w-full items-center justify-center gap-2.5 rounded-xl bg-neutral-950 px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-neutral-800 active:scale-[0.99] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-neutral-900/15 lg:mt-5 lg:w-auto"
                           >
                             <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" /></svg>
                             Ver mi menú como cliente
@@ -11033,7 +11060,7 @@ export default function Home() {
                         </div>
                       </section>
 
-                      <div className="flex flex-col gap-3 -mx-3 min-[420px]:-mx-4 rounded-none border-x-0 border-y border-black/5 bg-white p-3 shadow-[0_10px_30px_rgba(15,15,15,0.04)] sm:mx-0 sm:flex-row sm:items-center sm:justify-between sm:rounded-[20px] sm:border">
+                      <div className="flex flex-col gap-2.5 -mx-3 min-[420px]:-mx-4 border-y border-black/5 bg-white p-3 shadow-sm sm:mx-0 sm:flex-row sm:items-center sm:justify-between sm:rounded-2xl sm:border sm:p-4">
                         <div className="relative min-w-0 flex-1 sm:max-w-md">
                           <svg className="pointer-events-none absolute left-4 top-1/2 h-[18px] w-[18px] -translate-y-1/2 text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M17 10a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
                           <input
@@ -11043,7 +11070,7 @@ export default function Home() {
                             value={storeSearchQuery}
                             onChange={(event) => setStoreSearchQuery(event.target.value)}
                             placeholder="Buscar en tu menú..."
-                            className="h-12 w-full rounded-2xl border border-black/10 bg-neutral-100/80 pl-11 pr-10 text-[16px] font-medium text-neutral-900 outline-none transition placeholder:text-neutral-400 focus:border-sky-500 focus:bg-white focus:ring-4 focus:ring-sky-500/15 sm:text-sm"
+                            className="h-12 w-full rounded-xl border border-neutral-200 bg-neutral-50 pl-11 pr-10 text-base font-medium text-neutral-900 outline-none transition placeholder:text-neutral-400 focus:border-sky-500 focus:bg-white focus:ring-4 focus:ring-sky-500/15 sm:text-sm"
                           />
                           {storeSearchQuery ? (
                             <button
@@ -11056,12 +11083,12 @@ export default function Home() {
                             </button>
                           ) : null}
                         </div>
-                                  <div className="flex max-w-full min-w-0 flex-wrap items-center gap-2 sm:justify-end">
+                        <div className="flex max-w-full min-w-0 sm:justify-end">
                           {isSelectionMode ? (
                             <button
                               type="button"
                               onClick={exitSelectionMode}
-                              className="min-h-[44px] rounded-full border border-sky-200 bg-sky-50 px-4 py-2.5 text-[13px] font-bold text-sky-800 transition active:scale-95 hover:bg-sky-100"
+                              className="min-h-11 w-full rounded-xl border border-neutral-200 bg-neutral-50 px-4 py-2.5 text-sm font-semibold text-neutral-700 transition hover:bg-neutral-100 sm:w-auto"
                             >
                               Salir de selección
                             </button>
@@ -11069,7 +11096,7 @@ export default function Home() {
                             <button
                               type="button"
                               onClick={enterSelectionMode}
-                              className="inline-flex min-h-[44px] items-center gap-2 rounded-full border border-black/10 bg-white px-4 py-2.5 text-[13px] font-bold text-neutral-700 transition active:scale-95 hover:bg-neutral-50 hover:text-neutral-900"
+                              className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-neutral-200 bg-white px-4 py-2.5 text-sm font-semibold text-neutral-700 transition hover:bg-neutral-50 hover:text-neutral-900 sm:w-auto"
                             >
                               <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" /></svg>
                               Seleccionar varios
@@ -11078,12 +11105,17 @@ export default function Home() {
                         </div>
                       </div>
 
-                      <div className="overflow-x-auto overscroll-x-contain pb-4 pt-2 scrollbar-none sticky top-0 z-20 bg-gradient-to-b from-[#f8f8f8] via-[#f8f8f8]/95 to-transparent backdrop-blur-md" style={{ WebkitOverflowScrolling: 'touch' }}>
-                        <div className="flex min-w-max gap-3 px-2">
+                      <section aria-label="Categorías del menú" className="min-w-0 rounded-2xl border border-neutral-200 bg-white p-3 shadow-sm sm:p-4">
+                        <div className="mb-2.5 flex items-center justify-between gap-3 px-1">
+                          <h2 className="text-sm font-semibold text-neutral-900">Categorías del menú</h2>
+                          <span className="text-xs text-neutral-500">Desliza para ver todas</span>
+                        </div>
+                      <div className="overflow-x-auto overscroll-x-contain pb-1 scrollbar-none" style={{ WebkitOverflowScrolling: 'touch' }}>
+                        <div className="flex min-w-max items-center gap-2 px-1">
                           {storeCategories.map((category) => (
                             <div
                               key={category.id}
-                              className="group/cat flex items-center gap-2 rounded-full bg-white/80 backdrop-blur-md px-5 py-2.5 text-[13px] font-bold text-sky-900 shadow-sm border border-sky-100/60 ring-1 ring-black/5 transition-all hover:bg-white hover:shadow-md hover:scale-105"
+                              className="group/cat flex min-h-11 items-center gap-2 rounded-xl border border-neutral-200 bg-neutral-50 px-3.5 py-2 text-[13px] font-semibold text-neutral-800 transition hover:border-neutral-300 hover:bg-white"
                             >
                               <span>{category.name}</span>
                               <button
@@ -11098,11 +11130,11 @@ export default function Home() {
                                 disabled={
                                   Boolean(activeActionKey) || category.products.length > 0
                                 }
-                                className={`inline-flex h-7 w-7 items-center justify-center rounded-full border text-xs font-bold transition ${category.products.length > 0
-                                  ? 'cursor-not-allowed border-black/5 bg-neutral-100 text-neutral-300'
-                                  : 'border-black/10 bg-neutral-50 text-neutral-500 hover:border-rose-200 hover:bg-rose-50 hover:text-rose-600'
+                                className={`inline-flex h-9 w-9 items-center justify-center rounded-lg border text-sm font-medium transition ${category.products.length > 0
+                                  ? 'cursor-not-allowed border-neutral-200 bg-neutral-100 text-neutral-300'
+                                  : 'border-neutral-200 bg-white text-neutral-500 hover:border-rose-200 hover:bg-rose-50 hover:text-rose-600'
                                   } disabled:cursor-not-allowed`}
-                                aria-label={`Eliminar categoria ${category.name}`}
+                                aria-label={category.products.length > 0 ? `No se puede eliminar ${category.name} porque tiene productos` : `Eliminar categoría ${category.name}`}
                                 title={
                                   category.products.length > 0
                                     ? 'No puedes borrarla mientras tenga productos.'
@@ -11116,14 +11148,19 @@ export default function Home() {
                           <button
                             type="button"
                             onClick={() => setIsCategoryModalOpen(true)}
-                            className="rounded-full border border-dashed border-sky-300 bg-sky-50/50 px-5 py-2.5 text-[13px] font-bold text-sky-700 shadow-sm transition hover:bg-sky-100 hover:border-sky-400"
+                            className="inline-flex min-h-11 items-center rounded-xl border border-dashed border-sky-300 bg-sky-50/60 px-4 py-2 text-[13px] font-semibold text-sky-800 transition hover:bg-sky-50"
                           >
-                            + Agregar categoria
+                            + Agregar categoría
                           </button>
-<button
+                        </div>
+                      </div>
+                      </section>
+
+                      <div className="grid grid-cols-1 gap-2 min-[420px]:grid-cols-2" aria-label="Acciones del menú">
+                        <button
                               type="button"
                               onClick={openImportModal}
-                              className="inline-flex items-center gap-2 rounded-full border border-sky-200 bg-white px-5 py-2.5 text-[13px] font-bold text-sky-800 shadow-sm transition hover:bg-sky-50 hover:border-sky-400"
+                              className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-neutral-200 bg-white px-4 py-2.5 text-[13px] font-semibold text-neutral-700 shadow-sm transition hover:bg-neutral-50"
                               title="Importa todo tu menú pegando una tabla de Excel o Sheets"
                             >
                               <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -11135,13 +11172,12 @@ export default function Home() {
                               type="button"
                               onClick={() => void handleBulkGenerateMissingImages()}
                               disabled={bulkActionLoading}
-                              className="inline-flex items-center gap-2 rounded-full border border-sky-200 bg-white px-5 py-2.5 text-[13px] font-bold text-sky-800 shadow-sm transition hover:bg-sky-50 hover:border-sky-400 disabled:cursor-not-allowed disabled:opacity-50"
+                              className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-neutral-200 bg-white px-4 py-2.5 text-[13px] font-semibold text-neutral-700 shadow-sm transition hover:bg-neutral-50 disabled:cursor-not-allowed disabled:opacity-50"
                               title="Genera con IA una imagen para cada producto del menú que todavía no tiene foto"
                             >
                               <Sparkles className="h-4 w-4" />
                               {bulkActionLoading ? 'Generando...' : 'Generar imágenes'}
                             </button>
-                        </div>
                       </div>
 
                         <div className="w-full space-y-4 sm:space-y-6">
@@ -11151,11 +11187,11 @@ export default function Home() {
                             </div>
                           ) : (
                             filteredStoreCategories.map((category) => (
-                              <section key={category.id} className="overflow-hidden rounded-[24px] border border-sky-100 bg-white shadow-[0_10px_30px_rgba(15,15,15,0.05)] sm:rounded-[28px]">
-                                <div className="flex flex-col gap-3 border-b border-sky-100/70 bg-sky-50/50 px-4 py-3.5 sm:flex-row sm:items-center sm:justify-between sm:px-5">
+                                <section key={category.id} className="overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-sm sm:rounded-[20px]">
+                                <div className="flex flex-col gap-3 border-b border-neutral-200 bg-neutral-50 px-4 py-3.5 sm:flex-row sm:items-center sm:justify-between sm:px-5">
                                   <div className="flex min-w-0 items-center gap-2.5">
                                     <h3 className="min-w-0 flex-1 truncate text-base font-extrabold tracking-tight text-neutral-950">{category.name}</h3>
-                                    <span className="inline-flex shrink-0 items-center rounded-full bg-sky-600 px-2.5 py-0.5 text-[11px] font-bold text-white">
+                                    <span className="inline-flex shrink-0 items-center rounded-lg bg-white px-2.5 py-1 text-xs font-medium text-neutral-600 ring-1 ring-neutral-200">
                                       {category.products.length} producto{category.products.length === 1 ? '' : 's'}
                                     </span>
                                   </div>
@@ -11204,58 +11240,54 @@ export default function Home() {
                                     category.products.map((product) => (
                                       <div
                                         key={product.id}
-                                        className={`flex flex-col gap-3 px-4 py-3.5 transition active:bg-sky-50/60 hover:bg-sky-50/40 sm:flex-row sm:items-center sm:gap-4 ${selectedProductIds.has(product.id) ? 'bg-sky-50/60' : ''}`}
+                                        className={`flex flex-col gap-3 px-4 py-3.5 transition hover:bg-neutral-50 ${selectedProductIds.has(product.id) ? 'bg-sky-50/60' : ''} sm:flex-row sm:items-center sm:gap-4`}
                                       >
+                                        <div className="flex min-w-0 flex-1 items-start gap-3">
                                         {isSelectionMode ? (
                                           <button
                                             type="button"
                                             onClick={() => toggleProductSelection(product.id)}
-                                            className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-md border-2 transition ${selectedProductIds.has(product.id) ? 'border-sky-500 bg-sky-500 text-white' : 'border-neutral-300 bg-white text-transparent hover:border-sky-300'}`}
+                                            className={`mt-1 flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border transition ${selectedProductIds.has(product.id) ? 'border-sky-700 bg-sky-700 text-white' : 'border-neutral-300 bg-white text-transparent hover:border-sky-500'}`}
                                             aria-label={selectedProductIds.has(product.id) ? `Quitar ${product.name} de la selección` : `Seleccionar ${product.name}`}
                                           >
                                             <Check className="h-4 w-4" strokeWidth={3} />
                                           </button>
                                         ) : null}
-                                        <div className="h-14 w-14 shrink-0 overflow-hidden rounded-2xl border border-black/5 bg-neutral-100">
+                                        <div className="h-16 w-16 shrink-0 overflow-hidden rounded-xl border border-neutral-200 bg-neutral-100">
                                           {product.image ? (
                                             <img src={product.image} alt={product.name} className="h-full w-full object-cover" loading="lazy" />
                                           ) : (
                                             <div className="flex h-full w-full items-center justify-center text-lg font-bold text-neutral-300">{product.name.charAt(0).toUpperCase()}</div>
                                           )}
                                         </div>
-                                        <div className="min-w-0 flex-1">
+                                        <div className="min-w-0 flex-1 py-0.5">
                                           <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                                            <p className="truncate text-[15px] font-bold text-neutral-900">{product.name}</p>
-                                            <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-sky-50 px-2.5 py-0.5 text-[11px] font-bold text-sky-700 ring-1 ring-sky-200/70">
-                                              {category.name}
-                                            </span>
+                                            <p className="min-w-0 truncate text-[15px] font-semibold leading-5 text-neutral-950">{product.name}</p>
                                             {product.promoType === 'MULTI_BUY' && product.promoBuyQuantity != null && product.promoPayQuantity != null && product.promoBuyQuantity > 0 && product.promoPayQuantity > 0 ? (
                                               <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-0.5 text-[11px] font-bold text-emerald-700">
                                                 {product.promoBuyQuantity} x {product.promoPayQuantity}
                                               </span>
                                             ) : null}
-                                            {!product.isAvailable ? (
-                                              <span className="rounded-full bg-neutral-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-neutral-500">Agotado</span>
-                                            ) : null}
                                           </div>
                                           {product.description ? (
-                                            <p className="mt-1 truncate text-[13px] text-neutral-500">{product.description}</p>
+                                            <p className="mt-1 line-clamp-2 text-[13px] leading-5 text-neutral-500">{product.description}</p>
                                           ) : null}
                                         </div>
-                                        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3 sm:w-auto sm:flex-nowrap sm:justify-start sm:gap-4">
-                                          <div className="flex items-center gap-3">
-                                            <span className="text-[15px] font-bold text-neutral-900">{product.discountPrice ? formatCurrency(product.discountPrice) : formatCurrency(product.price)}</span>
+                                        </div>
+                                        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-neutral-100 pt-3 min-[420px]:flex-nowrap sm:w-auto sm:border-0 sm:pt-0 sm:justify-start sm:gap-4">
+                                          <div className="flex min-w-0 items-center gap-2.5">
+                                            <span className="shrink-0 text-[15px] font-bold text-neutral-950">{product.discountPrice ? formatCurrency(product.discountPrice) : formatCurrency(product.price)}</span>
+                                            <span className={`text-xs font-medium ${product.isAvailable ? 'text-emerald-700' : 'text-neutral-500'}`}>{product.isAvailable ? 'Disponible' : 'Agotado'}</span>
                                             <button
                                               type="button"
                                               role="switch"
                                               aria-checked={product.isAvailable}
+                                              aria-label={`${product.isAvailable ? 'Marcar agotado' : 'Marcar disponible'}: ${product.name}`}
                                               onClick={() => void toggleProductAvailability(product)}
                                               disabled={activeAvailabilityProductId === product.id}
-                                              className={`relative inline-flex h-11 w-[68px] shrink-0 items-center rounded-full border px-1 transition active:scale-95 ${product.isAvailable ? 'border-emerald-300 bg-emerald-500' : 'border-neutral-300 bg-neutral-300'} disabled:cursor-not-allowed disabled:opacity-60`}
+                                              className={`relative inline-flex h-11 w-16 shrink-0 items-center rounded-full border p-1 transition focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-emerald-500/20 ${product.isAvailable ? 'border-emerald-600 bg-emerald-600' : 'border-neutral-300 bg-neutral-300'} disabled:cursor-not-allowed disabled:opacity-60`}
                                             >
-                                              <span className={`inline-flex h-8 w-8 items-center justify-center rounded-full bg-white text-[10px] font-bold uppercase tracking-[0.08em] text-neutral-700 shadow-sm transition ${product.isAvailable ? 'translate-x-[26px]' : 'translate-x-0'}`}>
-                                                {product.isAvailable ? 'On' : 'Off'}
-                                              </span>
+                                              <span className={`inline-flex h-7 w-7 items-center justify-center rounded-full bg-white shadow-sm transition-transform ${product.isAvailable ? 'translate-x-7' : 'translate-x-0'}`} />
                                             </button>
                                           </div>
                                           <div className="flex items-center gap-1.5">
