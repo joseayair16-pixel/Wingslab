@@ -1161,7 +1161,7 @@ export default function Home() {
   const [fallbackSuggestions, setFallbackSuggestions] = useState<any[]>([]);
   const [isSearchingFallback, setIsSearchingFallback] = useState(false);
   const fallbackSearchSourceRef = useRef<ReturnType<typeof createPlacesSource> | null>(null);
-  const sideMenuRef = useRef<HTMLDivElement | null>(null);
+  const sideMenuRef = useRef<HTMLElement | null>(null);
   const transientNoticeTimeoutRef = useRef<number | null>(null);
   const recentNoticeKeysRef = useRef<string[]>([]);
   const orderStatusSnapshotRef = useRef<Record<string, string>>({});
@@ -1592,15 +1592,54 @@ export default function Home() {
       return;
     }
 
-    function handlePointerDown(event: MouseEvent) {
-      if (!sideMenuRef.current?.contains(event.target as Node)) {
+    const menu = sideMenuRef.current;
+    const previouslyFocusedElement = document.activeElement instanceof HTMLElement
+      ? document.activeElement
+      : null;
+
+    const getFocusableElements = () => Array.from(
+      menu?.querySelectorAll<HTMLElement>(
+        'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+      ) ?? [],
+    ).filter((element) => element.getClientRects().length > 0);
+
+    menu?.focus();
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') {
+        event.preventDefault();
         setIsSideMenuOpen(false);
+        return;
+      }
+
+      if (event.key !== 'Tab' || !menu) return;
+
+      const focusableElements = getFocusableElements();
+      if (focusableElements.length === 0) {
+        event.preventDefault();
+        menu.focus();
+        return;
+      }
+
+      const firstElement = focusableElements[0];
+      const lastElement = focusableElements[focusableElements.length - 1];
+      const activeElement = document.activeElement;
+
+      if (event.shiftKey && (activeElement === firstElement || activeElement === menu)) {
+        event.preventDefault();
+        lastElement.focus();
+      } else if (!event.shiftKey && (activeElement === lastElement || !menu.contains(activeElement))) {
+        event.preventDefault();
+        firstElement.focus();
       }
     }
 
-    document.addEventListener('mousedown', handlePointerDown);
+    document.addEventListener('keydown', handleKeyDown);
     return () => {
-      document.removeEventListener('mousedown', handlePointerDown);
+      document.removeEventListener('keydown', handleKeyDown);
+      if (previouslyFocusedElement?.isConnected) {
+        previouslyFocusedElement.focus();
+      }
     };
   }, [isSideMenuOpen]);
 
@@ -4673,8 +4712,10 @@ export default function Home() {
                 <button
                   type="button"
                   onClick={() => setIsSideMenuOpen((current) => !current)}
-                  className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-black/10 bg-white text-neutral-800 shadow-sm transition hover:bg-neutral-50"
-                  aria-label="Abrir menu principal"
+                  className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-black/10 bg-white text-neutral-800 shadow-sm transition hover:bg-neutral-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-offset-2"
+                  aria-label={isSideMenuOpen ? 'Cerrar menú principal' : 'Abrir menú principal'}
+                  aria-expanded={isSideMenuOpen}
+                  aria-controls="customer-side-menu"
                 >
                   <Menu className="h-5 w-5" strokeWidth={1.8} />
                 </button>
@@ -4817,26 +4858,42 @@ export default function Home() {
         </div>
       ) : null}
 
-      <div className={`fixed inset-0 z-50 transition-all duration-300 ${isSideMenuOpen ? 'visible opacity-100' : 'invisible opacity-0'}`}>
-        <div className="absolute inset-0 bg-black/40 backdrop-blur-[1px]" onClick={() => setIsSideMenuOpen(false)} />
+      <div
+        className={`fixed inset-0 z-50 transition-all duration-300 ${isSideMenuOpen ? 'visible opacity-100' : 'invisible opacity-0'}`}
+        aria-hidden={!isSideMenuOpen}
+      >
+        <button
+          type="button"
+          tabIndex={-1}
+          aria-label="Cerrar menú"
+          className="absolute inset-0 cursor-default bg-neutral-950/40 backdrop-blur-[2px] transition-colors"
+          onClick={() => setIsSideMenuOpen(false)}
+        />
         <aside
           ref={sideMenuRef}
-          className={`absolute left-0 top-0 flex h-full w-[300px] max-w-[85vw] flex-col bg-white shadow-[0_24px_90px_rgba(15,15,15,0.18)] transition-transform duration-300 ease-out ${isSideMenuOpen ? 'translate-x-0' : '-translate-x-full'}`}
+          id="customer-side-menu"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="customer-side-menu-title"
+          tabIndex={-1}
+          className={`absolute left-0 top-0 flex h-full w-[300px] max-w-[88vw] flex-col bg-white pt-[env(safe-area-inset-top)] shadow-[0_24px_90px_rgba(15,15,15,0.2)] outline-none transition-transform duration-300 ease-out ${isSideMenuOpen ? 'translate-x-0' : '-translate-x-full'}`}
         >
-          <div className="flex items-center justify-between px-5 py-4 border-b border-black/[0.04]">
-            <p className="text-base font-bold tracking-tight text-neutral-900">Tu cuenta</p>
+          <div className="flex shrink-0 items-center justify-between border-b border-black/[0.06] px-5 py-3.5">
+            <h2 id="customer-side-menu-title" className="text-base font-bold tracking-tight text-neutral-900">
+              {isAuthenticated ? 'Tu cuenta' : 'Menú'}
+            </h2>
             <button
               type="button"
               onClick={() => setIsSideMenuOpen(false)}
-              className="inline-flex h-8 w-8 items-center justify-center rounded-xl border border-black/8 bg-white text-neutral-500 transition hover:bg-neutral-50"
-              aria-label="Cerrar"
+              className="inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-black/[0.08] bg-white text-neutral-500 transition hover:bg-neutral-50 hover:text-neutral-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-offset-2"
+              aria-label="Cerrar menú"
             >
               <X className="h-4 w-4" />
             </button>
           </div>
 
           {isAuthenticated && (
-            <div className="mx-4 mt-4 flex items-center gap-3 rounded-2xl bg-sky-50/70 p-3.5 border border-sky-100/50">
+            <div className="mx-4 mt-4 flex shrink-0 items-center gap-3 rounded-2xl border border-sky-100/70 bg-sky-50/70 p-3.5">
               {sessionUser?.profilePhoto ? (
                 <img src={sessionUser.profilePhoto} alt="" loading="lazy" decoding="async" className="h-10 w-10 rounded-full object-cover" />
               ) : (
@@ -4863,92 +4920,133 @@ export default function Home() {
               <button
                 type="button"
                 onClick={() => { setShowAuthModal(true); setIsSideMenuOpen(false); }}
-                className="group relative w-full overflow-hidden rounded-2xl bg-white dark:bg-[#1c1c1f] p-[1px] text-left shadow-[0_8px_24px_rgba(2,132,199,0.12)] ring-1 ring-sky-500/40 dark:ring-sky-400/30 transition-all duration-200 hover:shadow-[0_12px_32px_rgba(2,132,199,0.22)] hover:ring-sky-500/60 dark:hover:ring-sky-400/50 active:scale-[0.98]"
+                className="group relative w-full overflow-hidden rounded-2xl bg-white p-[1px] text-left shadow-[0_8px_24px_rgba(2,132,199,0.12)] ring-1 ring-sky-500/35 transition-all duration-200 hover:shadow-[0_12px_32px_rgba(2,132,199,0.2)] hover:ring-sky-500/55 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-offset-2 active:scale-[0.99]"
               >
                 <div className="relative flex items-center gap-3 rounded-2xl p-4">
-                  <div className="absolute inset-0 rounded-2xl bg-gradient-to-r from-sky-500/[0.06] via-transparent to-sky-500/[0.06] dark:from-sky-400/[0.08] dark:to-sky-400/[0.08]" />
+                  <div className="absolute inset-0 rounded-2xl bg-gradient-to-r from-sky-500/[0.06] via-transparent to-sky-500/[0.06]" />
                   <div className="relative z-10 flex-1">
                     <div className="flex items-center gap-2">
-                      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-sky-500/10 ring-1 ring-sky-500/25 dark:bg-sky-400/10 dark:ring-sky-400/25">
-                        <User className="h-4 w-4 text-sky-600 dark:text-sky-400" />
+                      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-sky-500/10 ring-1 ring-sky-500/25">
+                        <User className="h-4 w-4 text-sky-600" />
                       </div>
-                      <p className="text-sm font-semibold text-neutral-900 dark:text-white">Iniciar sesión</p>
+                      <p className="text-sm font-semibold text-neutral-900">Iniciar sesión</p>
                     </div>
-                    <p className="mt-1.5 text-[11px] font-medium leading-relaxed text-neutral-500 dark:text-neutral-400">
-                      Accede para ver tus pedidos y guardar tus favoritos.
+                    <p className="mt-1.5 text-xs font-medium leading-relaxed text-neutral-600">
+                      Consulta tus pedidos y guarda tus favoritos.
                     </p>
                   </div>
-                  <div className="relative z-10 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-sky-500/10 ring-1 ring-sky-500/25 dark:bg-sky-400/10 dark:ring-sky-400/25 transition-transform duration-200 group-hover:translate-x-0.5 group-active:translate-x-1">
-                    <ChevronRight className="h-4 w-4 text-sky-600 dark:text-sky-400" />
+                  <div className="relative z-10 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-sky-500/10 ring-1 ring-sky-500/20 transition-transform duration-200 group-hover:translate-x-0.5 group-active:translate-x-1">
+                    <ChevronRight className="h-4 w-4 text-sky-700" />
                   </div>
                 </div>
               </button>
             </div>
           )}
 
-          <div className="flex-1 px-3 py-4 space-y-0.5">
-            <button
-              type="button"
-              onClick={() => { openDashboardSection('home'); setIsSideMenuOpen(false); }}
-              className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all active-scale ${
-                activeSection === 'home' ? 'bg-sky-50 text-sky-700' : 'text-neutral-600 hover:bg-neutral-50 hover:text-neutral-900'
-              }`}
-            >
-              <HomeIcon className={`h-5 w-5 ${activeSection === 'home' ? 'text-sky-500' : 'text-neutral-400'}`} strokeWidth={1.8} />
-              <span>Ver tiendas</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => { openDashboardSection('profile'); setIsSideMenuOpen(false); }}
-              className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all active-scale ${
-                activeSection === 'profile' ? 'bg-sky-50 text-sky-700' : 'text-neutral-600 hover:bg-neutral-50 hover:text-neutral-900'
-              }`}
-            >
-              <User className={`h-5 w-5 ${activeSection === 'profile' ? 'text-sky-500' : 'text-neutral-400'}`} strokeWidth={1.8} />
-              <span>Mi perfil</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => { openDashboardSection('history'); setIsSideMenuOpen(false); }}
-              className={`flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-sm font-medium transition-all active-scale ${
-                activeSection === 'history' ? 'bg-sky-50 text-sky-700' : 'text-neutral-600 hover:bg-neutral-50 hover:text-neutral-900'
-              }`}
-            >
-              <div className="flex items-center gap-3">
-                <Clock className={`h-5 w-5 ${activeSection === 'history' ? 'text-sky-500' : 'text-neutral-400'}`} strokeWidth={1.8} />
-                <span>Historial</span>
-              </div>
-              <span className={`text-[11px] font-medium ${activeSection === 'history' ? 'text-sky-500' : 'text-neutral-400'}`}>{orderStats.total}</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => { setIsZonesModalOpen(true); setIsSideMenuOpen(false); }}
-              className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all active-scale ${
-                exploringZone ? 'bg-sky-50 text-sky-700' : 'text-neutral-600 hover:bg-neutral-50 hover:text-neutral-900'
-              }`}
-            >
-              <MapPin className={`h-5 w-5 ${exploringZone ? 'text-sky-500' : 'text-neutral-400'}`} strokeWidth={1.8} />
-              <span>Explorar</span>
-              {exploringZone && selectedZoneName && (
-                <span className="ml-auto inline-flex max-w-[110px] items-center rounded-full bg-sky-500 px-2 py-0.5 text-[10px] font-bold text-white">
-                  <span className="truncate">{selectedZoneName}</span>
-                </span>
-              )}
-            </button>
-            <button
-              type="button"
-              onClick={() => { openDashboardSection('support'); setIsSideMenuOpen(false); }}
-              className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all active-scale ${
-                activeSection === 'support' ? 'bg-sky-50 text-sky-700' : 'text-neutral-600 hover:bg-neutral-50 hover:text-neutral-900'
-              }`}
-            >
-              <LifeBuoy className={`h-5 w-5 ${activeSection === 'support' ? 'text-sky-500' : 'text-neutral-400'}`} strokeWidth={1.8} />
-              <span>Soporte</span>
-            </button>
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 py-4">
+            <nav aria-label="Navegación principal" className="space-y-5">
+              <section aria-labelledby="customer-menu-discover">
+                <h3 id="customer-menu-discover" className="mb-1.5 px-3 text-[10px] font-bold uppercase tracking-[0.14em] text-neutral-400">
+                  Descubre
+                </h3>
+                <div className="space-y-1">
+                  <button
+                    type="button"
+                    onClick={() => { openDashboardSection('home'); setIsSideMenuOpen(false); }}
+                    aria-current={activeSection === 'home' ? 'page' : undefined}
+                    className={`relative flex min-h-11 w-full items-center gap-3 rounded-xl border border-transparent px-3 text-sm font-semibold transition-colors active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-offset-2 ${
+                      activeSection === 'home'
+                        ? 'bg-sky-50 text-sky-800 before:absolute before:bottom-2.5 before:left-0 before:top-2.5 before:w-[3px] before:rounded-full before:bg-sky-600'
+                        : 'text-neutral-600 hover:bg-neutral-50 hover:text-neutral-950'
+                    }`}
+                  >
+                    <HomeIcon className={`h-5 w-5 shrink-0 ${activeSection === 'home' ? 'text-sky-600' : 'text-neutral-400'}`} strokeWidth={1.8} />
+                    <span>Ver tiendas</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setIsZonesModalOpen(true); setIsSideMenuOpen(false); }}
+                    aria-haspopup="dialog"
+                    aria-label={selectedZoneName ? `Cambiar zona. Zona actual: ${selectedZoneName}` : 'Cambiar zona de entrega'}
+                    className={`relative flex min-h-11 w-full items-center gap-3 rounded-xl border border-transparent px-3 text-left text-sm font-semibold transition-colors active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-offset-2 ${
+                      exploringZone
+                        ? 'bg-sky-50 text-sky-800 before:absolute before:bottom-2.5 before:left-0 before:top-2.5 before:w-[3px] before:rounded-full before:bg-sky-600'
+                        : 'text-neutral-600 hover:bg-neutral-50 hover:text-neutral-950'
+                    }`}
+                  >
+                    <MapPin className={`h-5 w-5 shrink-0 ${exploringZone ? 'text-sky-600' : 'text-neutral-400'}`} strokeWidth={1.8} />
+                    <span className="min-w-0 flex-1 truncate">Cambiar zona</span>
+                    {exploringZone && selectedZoneName && (
+                      <span className="inline-flex max-w-[104px] shrink-0 items-center rounded-full bg-sky-100 px-2.5 py-1 text-[10px] font-bold text-sky-800">
+                        <span className="truncate">{selectedZoneName}</span>
+                      </span>
+                    )}
+                  </button>
+                </div>
+              </section>
+
+              <section aria-labelledby="customer-menu-account">
+                <h3 id="customer-menu-account" className="mb-1.5 px-3 text-[10px] font-bold uppercase tracking-[0.14em] text-neutral-400">
+                  Cuenta y ayuda
+                </h3>
+                <div className="space-y-1">
+                  <button
+                    type="button"
+                    onClick={() => { openDashboardSection('profile'); setIsSideMenuOpen(false); }}
+                    aria-current={activeSection === 'profile' ? 'page' : undefined}
+                    className={`relative flex min-h-11 w-full items-center gap-3 rounded-xl border border-transparent px-3 text-sm font-semibold transition-colors active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-offset-2 ${
+                      activeSection === 'profile'
+                        ? 'bg-sky-50 text-sky-800 before:absolute before:bottom-2.5 before:left-0 before:top-2.5 before:w-[3px] before:rounded-full before:bg-sky-600'
+                        : 'text-neutral-600 hover:bg-neutral-50 hover:text-neutral-950'
+                    }`}
+                  >
+                    <User className={`h-5 w-5 shrink-0 ${activeSection === 'profile' ? 'text-sky-600' : 'text-neutral-400'}`} strokeWidth={1.8} />
+                    <span>Mi perfil</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { openDashboardSection('history'); setIsSideMenuOpen(false); }}
+                    aria-current={activeSection === 'history' ? 'page' : undefined}
+                    className={`relative flex min-h-11 w-full items-center justify-between rounded-xl border border-transparent px-3 text-sm font-semibold transition-colors active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-offset-2 ${
+                      activeSection === 'history'
+                        ? 'bg-sky-50 text-sky-800 before:absolute before:bottom-2.5 before:left-0 before:top-2.5 before:w-[3px] before:rounded-full before:bg-sky-600'
+                        : 'text-neutral-600 hover:bg-neutral-50 hover:text-neutral-950'
+                    }`}
+                  >
+                    <span className="flex items-center gap-3">
+                      <Clock className={`h-5 w-5 shrink-0 ${activeSection === 'history' ? 'text-sky-600' : 'text-neutral-400'}`} strokeWidth={1.8} />
+                      <span>Mis pedidos</span>
+                    </span>
+                    {orderStats.total > 0 && (
+                      <span
+                        className={`inline-flex h-6 min-w-6 items-center justify-center rounded-full px-2 text-[11px] font-bold ${
+                          activeSection === 'history' ? 'bg-sky-100 text-sky-800' : 'bg-neutral-100 text-neutral-500'
+                        }`}
+                      >
+                        {orderStats.total}
+                      </span>
+                    )}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { openDashboardSection('support'); setIsSideMenuOpen(false); }}
+                    aria-current={activeSection === 'support' ? 'page' : undefined}
+                    className={`relative flex min-h-11 w-full items-center gap-3 rounded-xl border border-transparent px-3 text-sm font-semibold transition-colors active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-offset-2 ${
+                      activeSection === 'support'
+                        ? 'bg-sky-50 text-sky-800 before:absolute before:bottom-2.5 before:left-0 before:top-2.5 before:w-[3px] before:rounded-full before:bg-sky-600'
+                        : 'text-neutral-600 hover:bg-neutral-50 hover:text-neutral-950'
+                    }`}
+                  >
+                    <LifeBuoy className={`h-5 w-5 shrink-0 ${activeSection === 'support' ? 'text-sky-600' : 'text-neutral-400'}`} strokeWidth={1.8} />
+                    <span>Soporte</span>
+                  </button>
+                </div>
+              </section>
+            </nav>
           </div>
 
-          <div className="border-t border-black/[0.04] px-4 py-4 space-y-1.5">
-            <div className="flex items-center justify-between rounded-2xl border border-black/5 bg-white px-4 py-3 text-sm font-semibold text-neutral-700">
+          <div className="shrink-0 space-y-2 border-t border-black/[0.06] px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3.5">
+            <div className="flex min-h-14 items-center justify-between rounded-2xl border border-black/[0.06] bg-neutral-50/80 px-3.5 py-2.5 text-sm font-semibold text-neutral-700">
               <div className="flex items-center gap-3">
                 <Moon className="h-5 w-5 text-neutral-400" strokeWidth={1.8} />
                 <span>Modo Oscuro</span>
@@ -4957,21 +5055,22 @@ export default function Home() {
                 type="button"
                 role="switch"
                 aria-checked={isDarkMode}
+                aria-label={isDarkMode ? 'Desactivar modo oscuro' : 'Activar modo oscuro'}
                 onClick={() => {
                   const isDark = document.documentElement.classList.toggle('dark');
                   setIsDarkMode(isDark);
                   triggerHaptic(10);
                 }}
-                className={`relative inline-flex h-5 w-9 items-center rounded-full transition ${isDarkMode ? 'bg-sky-500' : 'bg-neutral-300'}`}
+                className={`relative inline-flex h-11 w-12 shrink-0 items-center rounded-full p-1 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-offset-2 ${isDarkMode ? 'bg-sky-600' : 'bg-neutral-300'}`}
               >
-                <span className={`inline-block h-3 w-3 rounded-full bg-white shadow-sm transition ${isDarkMode ? 'translate-x-4' : 'translate-x-1'}`} />
+                <span className={`inline-block h-5 w-5 rounded-full bg-white shadow-sm transition-transform ${isDarkMode ? 'translate-x-5' : 'translate-x-0'}`} />
               </button>
             </div>
             {isAuthenticated && (
               <button
                 type="button"
                 onClick={() => clearSession('Sesión cerrada.')}
-                className="flex w-full items-center justify-between rounded-2xl border border-black/5 bg-white px-4 py-3 text-sm font-semibold text-neutral-700 hover:bg-neutral-50 transition"
+                className="flex min-h-11 w-full items-center justify-between rounded-2xl border border-black/[0.06] bg-white px-3.5 py-2.5 text-sm font-semibold text-neutral-700 transition hover:bg-neutral-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-offset-2"
               >
                 <div className="flex items-center gap-3">
                   <LogOut className="h-5 w-5 text-neutral-400" strokeWidth={1.8} />
