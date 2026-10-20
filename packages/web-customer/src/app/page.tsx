@@ -5061,9 +5061,9 @@ export default function Home() {
                   setIsDarkMode(isDark);
                   triggerHaptic(10);
                 }}
-                className={`relative inline-flex h-11 w-12 shrink-0 items-center rounded-full p-1 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-offset-2 ${isDarkMode ? 'bg-sky-600' : 'bg-neutral-300'}`}
+                className={`relative inline-flex h-11 w-11 shrink-0 items-center rounded-full before:absolute before:inset-x-0 before:top-1/2 before:h-6 before:-translate-y-1/2 before:rounded-full before:transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-offset-2 ${isDarkMode ? 'before:bg-sky-600' : 'before:bg-neutral-300'}`}
               >
-                <span className={`inline-block h-5 w-5 rounded-full bg-white shadow-sm transition-transform ${isDarkMode ? 'translate-x-5' : 'translate-x-0'}`} />
+                <span className={`pointer-events-none absolute left-1 top-1/2 h-4 w-4 -translate-y-1/2 rounded-full bg-white shadow-sm ring-1 ring-black/5 transition-transform ${isDarkMode ? 'translate-x-5' : 'translate-x-0'}`} />
               </button>
             </div>
             {isAuthenticated && (
