@@ -764,6 +764,16 @@ export default function RestaurantPage({
   const [preConfirmCountdown, setPreConfirmCountdown] = useState(3);
   const preConfirmTimerRef = useRef<number | null>(null);
   const preConfirmCommitTimerRef = useRef<number | null>(null);
+  useEffect(() => () => {
+    if (preConfirmTimerRef.current !== null) {
+      window.clearInterval(preConfirmTimerRef.current);
+      preConfirmTimerRef.current = null;
+    }
+    if (preConfirmCommitTimerRef.current !== null) {
+      window.clearTimeout(preConfirmCommitTimerRef.current);
+      preConfirmCommitTimerRef.current = null;
+    }
+  }, []);
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(() => urlSearchParams?.checkout === 'true');
   const [cartJustUpdated, setCartJustUpdated] = useState(false);
@@ -2893,11 +2903,10 @@ function ProductImage({
         if (next <= 0) {
           window.clearInterval(preConfirmTimerRef.current!);
           preConfirmTimerRef.current = null;
-          // Al llegar a 0 se mantiene visible 1 s más (muestra "0") antes de
-          // crear el pedido, dando margen para cancelar en el último instante.
+          // El pedido se envía al terminar los tres segundos de cuenta regresiva.
           preConfirmCommitTimerRef.current = window.setTimeout(() => {
             commitPreOrder();
-          }, 1000);
+          }, 0);
           return 0;
         }
         return next;
@@ -5067,7 +5076,7 @@ function ProductImage({
                           // falta comprobante → sacudir + scroll al upload.
                           if (checkoutValidationMessage) {
                             setAttemptedCheckout(true);
-                            if (checkoutForm.paymentMethod === 'TRANSFER' && !transferProofSource) {
+                            if (checkoutValidationMessage === 'Carga la imagen del comprobante de transferencia para continuar.') {
                               const el = document.getElementById('transfer-proof-upload');
                               if (el) {
                                 el.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -5075,8 +5084,8 @@ function ProductImage({
                                 void (el as HTMLElement).offsetWidth; // reinicia la animación
                                 el.classList.add('animate-nudge');
                               }
-                              return;
                             }
+                            return;
                           }
                           // El modal de confirmación (cuenta regresiva) NO depende del
                           // permiso de notificaciones: debe aparecer SIEMPRE al confirmar,
@@ -5109,130 +5118,172 @@ function ProductImage({
       {/* Pre-confirm Order Modal (estilo SaDeL) */}
       {isPreConfirmOpen && (
         <div className="fixed inset-0 z-[70] flex items-end justify-center sm:items-center">
-          <div className="absolute inset-0 bg-black/60 backdrop-blur-md" onClick={clearPreConfirm} />
-          <div className="relative flex max-h-[92vh] w-full max-w-sm flex-col overflow-hidden rounded-t-[32px] bg-white dark:bg-neutral-950 shadow-[0_-24px_80px_rgba(15,15,15,0.35)] sm:rounded-[36px] animate-in slide-in-from-bottom-4 fade-in duration-300">
-            {/* Drag handle */}
-            <div className="flex justify-center pt-3">
-              <div className="h-1.5 w-10 rounded-full bg-neutral-300 dark:bg-zinc-700" />
-            </div>
-
-            {/* Cabecera */}
-            <div className="px-6 pb-4 pt-3 text-center">
-              <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-[var(--accent-soft-strong)] text-[var(--accent-strong)]">
-                <Loader2 className="h-7 w-7 animate-spin" strokeWidth={2.2} />
+          <button
+            type="button"
+            aria-label="Volver a revisar el pedido"
+            className="absolute inset-0 bg-neutral-950/55 backdrop-blur-sm"
+            onClick={clearPreConfirm}
+          />
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="pre-confirm-title"
+            aria-describedby="pre-confirm-description"
+            tabIndex={-1}
+            className="relative flex max-h-[90dvh] w-full max-w-md flex-col overflow-hidden rounded-t-[28px] border border-black/[0.06] bg-white shadow-[0_-24px_80px_rgba(15,15,15,0.28)] dark:border-white/10 dark:bg-neutral-950 sm:max-h-[min(88dvh,760px)] sm:rounded-[28px] animate-in slide-in-from-bottom-4 fade-in duration-300"
+          >
+            <div className="flex shrink-0 items-start gap-3.5 border-b border-black/[0.06] px-5 pb-4 pt-5 dark:border-white/10 sm:px-6">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-[var(--accent-soft)] text-[var(--accent-strong)] ring-1 ring-[var(--accent-soft-strong)]">
+                <ShoppingBag className="h-5 w-5" strokeWidth={1.9} />
               </div>
-              <h2 className="mt-3 text-xl font-extrabold tracking-tight text-neutral-950 dark:text-neutral-50">Confirma tu pedido</h2>
-              <p className="mt-1 text-[13px] font-medium text-neutral-500">Revisa la dirección y el monto antes de enviar</p>
+              <div className="min-w-0 flex-1">
+                <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--accent-strong)]">Último paso</p>
+                <h2 id="pre-confirm-title" className="mt-0.5 text-lg font-extrabold tracking-tight text-neutral-950 dark:text-neutral-50">Confirma tu pedido</h2>
+                <p id="pre-confirm-description" className="mt-1 text-[12px] leading-relaxed text-neutral-500 dark:text-zinc-400">
+                  Revisa los productos, la entrega y el total antes de enviarlo.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={clearPreConfirm}
+                aria-label="Volver a revisar el pedido"
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-neutral-100 text-neutral-500 transition hover:bg-neutral-200 hover:text-neutral-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"
+              >
+                <X className="h-4 w-4" strokeWidth={2.2} />
+              </button>
             </div>
 
-            {/* Cuenta regresiva */}
-            <div className="px-6">
-              <div className="flex items-center justify-center gap-3 rounded-2xl border border-black/[0.06] bg-neutral-50 py-3 dark:border-white/10 dark:bg-zinc-900">
-                <div className="relative h-14 w-14">
-                  <svg className="h-14 w-14 -rotate-90" viewBox="0 0 56 56">
-                    <circle cx="28" cy="28" r="24" fill="none" stroke="rgba(0,0,0,0.08)" strokeWidth="5" />
+            <div className="shrink-0 px-4 pt-4 sm:px-6">
+              <div className="flex items-center gap-3.5 rounded-2xl border border-[var(--accent-soft-strong)] bg-[var(--accent-soft)] px-3.5 py-3 dark:bg-sky-500/10">
+                <div className="relative h-14 w-14 shrink-0" aria-hidden="true">
+                  <svg className="h-14 w-14 -rotate-90 text-black/10 dark:text-white/15" viewBox="0 0 56 56">
+                    <circle cx="28" cy="28" r="24" fill="none" stroke="currentColor" strokeWidth="4" />
                     <circle
                       cx="28" cy="28" r="24" fill="none"
-                      stroke="var(--accent)" strokeWidth="5" strokeLinecap="round"
+                      stroke="var(--accent)" strokeWidth="4" strokeLinecap="round"
                       strokeDasharray={`${2 * Math.PI * 24}`}
                       strokeDashoffset={`${2 * Math.PI * 24 * (1 - preConfirmCountdown / 3)}`}
                       className="transition-[stroke-dashoffset] duration-1000 ease-linear"
                     />
                   </svg>
-                  <div className="absolute inset-0 flex items-center justify-center">
-                    <span className="text-2xl font-black tabular-nums text-neutral-900 dark:text-neutral-50">{preConfirmCountdown}</span>
-                  </div>
+                  <span className="absolute inset-0 flex items-center justify-center text-[23px] font-extrabold tabular-nums text-neutral-950 dark:text-white">
+                    {preConfirmCountdown}
+                  </span>
                 </div>
-                <div className="text-left">
-                  <p className="text-sm font-bold text-neutral-900 dark:text-neutral-100">El pedido se enviará automáticamente</p>
-                  <p className="text-xs font-medium text-neutral-500">Toca «Todo bien» para enviarlo ahora</p>
+                <div className="min-w-0">
+                  <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--accent-strong)]">
+                    {preConfirmCountdown > 0 ? 'Envío automático en' : 'Preparando el envío'}
+                  </p>
+                  <p aria-live="polite" aria-atomic="true" className="mt-0.5 text-[15px] font-bold leading-snug text-neutral-950 dark:text-neutral-50">
+                    {preConfirmCountdown > 0
+                      ? `${preConfirmCountdown} ${preConfirmCountdown === 1 ? 'segundo' : 'segundos'}`
+                      : 'Tu pedido se está enviando'}
+                  </p>
+                  <p className="mt-1 text-[11px] leading-snug text-neutral-600 dark:text-zinc-400">
+                    También puedes enviarlo ahora o volver a revisar.
+                  </p>
                 </div>
               </div>
             </div>
 
-            {/* Cuerpo scrolleable */}
-            <div className="mt-4 min-h-0 flex-1 overflow-y-auto px-6 pb-2">
-              {/* Dirección o recogida */}
-              <div className="rounded-2xl border border-black/[0.06] bg-neutral-50 p-4 dark:border-white/10 dark:bg-zinc-900">
-                {fulfillmentType === 'PICKUP' ? (
-                  <div className="flex items-start gap-3">
-                    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-emerald-100 text-emerald-700">
-                      <Store className="h-5 w-5" strokeWidth={2} />
-                    </div>
-                    <div className="min-w-0">
-                      <p className="text-[10px] font-bold uppercase tracking-widest text-neutral-400">Recoger en tienda</p>
-                      <p className="mt-0.5 text-base font-bold leading-tight text-neutral-900 dark:text-neutral-100">{restaurant?.name}</p>
-                      {restaurant?.address && (
-                        <p className="mt-0.5 text-sm leading-snug text-neutral-600 dark:text-zinc-400">{restaurant.address}</p>
-                      )}
-                    </div>
+            <div className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain px-4 py-4 sm:px-6">
+              <section className="rounded-2xl border border-black/[0.07] bg-white p-3.5 dark:border-white/10 dark:bg-zinc-900">
+                <div className="flex items-start gap-3">
+                  <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${fulfillmentType === 'PICKUP' ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300' : 'bg-[var(--accent-soft)] text-[var(--accent-strong)]'}`}>
+                    {fulfillmentType === 'PICKUP'
+                      ? <Store className="h-[18px] w-[18px]" strokeWidth={1.9} />
+                      : <MapPin className="h-[18px] w-[18px]" strokeWidth={1.9} />}
                   </div>
-                ) : (
-                  <div className="flex items-start gap-3">
-                    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-sky-100 text-sky-600">
-                      <MapPin className="h-5 w-5" strokeWidth={2} />
-                    </div>
-                    <div className="min-w-0">
-                      <p className="text-[10px] font-bold uppercase tracking-widest text-neutral-400">Dirección de entrega</p>
-                      <p className="mt-0.5 text-base font-bold leading-tight text-neutral-900 dark:text-neutral-100">
-                        {checkoutForm.street} {checkoutForm.number}
-                      </p>
-                      <p className="mt-0.5 text-[13px] font-medium leading-snug text-neutral-600 dark:text-zinc-400">
-                        {[checkoutForm.neighborhood, checkoutForm.city].filter(Boolean).join(', ') || 'Sin dirección'}
-                      </p>
-                      {checkoutForm.reference?.trim() ? (
-                        <p className="mt-1 text-xs leading-snug text-neutral-500">
-                          <span className="font-semibold text-neutral-600 dark:text-zinc-300">Ref:</span> {checkoutForm.reference.trim()}
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-neutral-500 dark:text-zinc-400">
+                      {fulfillmentType === 'PICKUP' ? 'Recoger en tienda' : 'Dirección de entrega'}
+                    </p>
+                    <p className="mt-1 text-[14px] font-bold leading-snug text-neutral-950 dark:text-neutral-50">
+                      {fulfillmentType === 'PICKUP' ? restaurant?.name : `${checkoutForm.street} ${checkoutForm.number}`.trim() || 'Sin dirección'}
+                    </p>
+                    {fulfillmentType === 'PICKUP' ? (
+                      restaurant?.address && <p className="mt-0.5 text-[12px] leading-relaxed text-neutral-600 dark:text-zinc-400">{restaurant.address}</p>
+                    ) : (
+                      <>
+                        <p className="mt-0.5 text-[12px] leading-relaxed text-neutral-600 dark:text-zinc-400">
+                          {[checkoutForm.neighborhood, checkoutForm.city, checkoutForm.state, checkoutForm.zipCode].filter(Boolean).join(', ')}
                         </p>
-                      ) : null}
-                    </div>
+                        {checkoutForm.reference?.trim() && (
+                          <p className="mt-1 text-[11px] leading-relaxed text-neutral-500 dark:text-zinc-400">
+                            <span className="font-semibold text-neutral-700 dark:text-zinc-300">Referencia:</span> {checkoutForm.reference.trim()}
+                          </p>
+                        )}
+                      </>
+                    )}
                   </div>
-                )}
-              </div>
+                </div>
+              </section>
 
-              {/* Total */}
-              <div className="mt-3 rounded-2xl bg-neutral-950 p-5 text-white">
-                <div className="flex items-center justify-between">
-                  <span className="text-[13px] font-medium text-neutral-300">
+              <section className="rounded-2xl border border-black/[0.07] bg-white p-3.5 dark:border-white/10 dark:bg-zinc-900">
+                <div className="mb-2.5 flex items-center justify-between gap-3">
+                  <h3 className="text-[12px] font-bold text-neutral-900 dark:text-neutral-100">Productos</h3>
+                  <span className="rounded-full bg-neutral-100 px-2.5 py-1 text-[10px] font-semibold tabular-nums text-neutral-600 dark:bg-white/10 dark:text-zinc-300">
                     {totalProducts} {totalProducts === 1 ? 'artículo' : 'artículos'}
                   </span>
-                  <span className="rounded-full bg-white/10 px-2.5 py-1 text-[10px] font-bold uppercase tracking-widest text-neutral-300">
-                    {checkoutForm.paymentMethod === 'CASH' ? 'Total a pagar' : 'Total pagado'}
+                </div>
+                <div className="space-y-2">
+                  {cart.map((item) => (
+                    <div key={item.cartItemId} className="flex min-w-0 items-start gap-2.5 text-[12px] leading-snug">
+                      <span className="min-w-8 rounded-md bg-neutral-100 px-1.5 py-1 text-center text-[10px] font-bold tabular-nums text-neutral-700 dark:bg-white/10 dark:text-zinc-200">
+                        {item.sellBy === 'WEIGHT' && item.weightG
+                          ? `${(item.weightG / 1000).toFixed(2)} kg`
+                          : `${item.quantity} ×`}
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <p className="font-semibold text-neutral-800 dark:text-zinc-200">{item.name}</p>
+                        {item.selectedOptions?.length ? (
+                          <p className="mt-0.5 line-clamp-1 text-[10px] text-neutral-500 dark:text-zinc-400">
+                            {item.selectedOptions.map((option) => option.name).join(' · ')}
+                          </p>
+                        ) : null}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </section>
+
+              <section aria-label="Total y forma de pago" className="rounded-2xl bg-neutral-950 px-4 py-3.5 text-white shadow-[0_8px_24px_rgba(15,15,15,0.14)]">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-[11px] font-semibold text-neutral-300">Total del pedido</p>
+                    <p className="mt-1 text-[28px] font-extrabold leading-none tracking-tight tabular-nums">{formatCurrency(orderTotal)}</p>
+                  </div>
+                  <span className="inline-flex max-w-[48%] items-center gap-1.5 rounded-full bg-white/10 px-2.5 py-1.5 text-right text-[10px] font-semibold leading-snug text-neutral-100">
+                    {checkoutForm.paymentMethod === 'CASH' ? <Banknote className="h-3.5 w-3.5 shrink-0" /> : <Landmark className="h-3.5 w-3.5 shrink-0" />}
+                    {checkoutForm.paymentMethod === 'CASH'
+                      ? fulfillmentType === 'PICKUP' ? 'Efectivo al recoger' : 'Efectivo al recibir'
+                      : 'Transferencia'}
                   </span>
                 </div>
-                <p className="mt-2 text-3xl font-extrabold leading-none tracking-tight">
-                  {formatCurrency(orderTotal)}
-                </p>
-                <p className="mt-2 text-[11px] font-medium text-neutral-400">
-                  {checkoutForm.paymentMethod === 'CASH'
-                    ? fulfillmentType === 'PICKUP' ? 'Pagas al recoger en tienda' : 'Pagas al recibir'
-                    : 'Pago por transferencia confirmado'}
-                </p>
-              </div>
+              </section>
             </div>
 
-            {/* Acciones */}
-            <div className="border-t border-black/[0.06] px-6 pb-[calc(1.25rem+env(safe-area-inset-bottom))] pt-4">
-              <div className="flex flex-col gap-2.5">
+            <div className="shrink-0 border-t border-black/[0.06] bg-white/95 px-4 pb-[calc(1rem+env(safe-area-inset-bottom))] pt-3 backdrop-blur-xl dark:border-white/10 dark:bg-neutral-950/95 sm:px-6">
+              <div className="flex flex-col gap-2 sm:flex-row-reverse">
                 <button
                   type="button"
                   onClick={commitPreOrder}
-                  className="group relative flex w-full items-center justify-center gap-2 overflow-hidden rounded-2xl bg-[var(--accent)] px-5 py-3.5 text-[15px] font-bold text-white shadow-[0_10px_24px_-8px_rgba(14,165,233,0.55)] transition-all hover:bg-[var(--accent-strong)] active:scale-[0.98]"
+                  className="flex min-h-[50px] w-full items-center justify-center gap-2 rounded-2xl bg-[var(--accent)] px-5 py-3 text-[14px] font-bold text-white shadow-[0_8px_20px_-6px_rgba(14,165,233,0.42)] transition-colors hover:bg-[var(--accent-strong)] active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 dark:focus-visible:ring-offset-neutral-950 sm:flex-1"
                 >
-                  <div className="absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/20 to-transparent transition-transform duration-1000 group-hover:translate-x-full" />
-                  <Check className="h-4 w-4" strokeWidth={2.5} />
-                  Todo bien
+                  <Check className="h-4 w-4" strokeWidth={2.6} />
+                  Enviar pedido ahora
                 </button>
                 <button
                   type="button"
                   onClick={clearPreConfirm}
-                  className="flex w-full items-center justify-center gap-2 rounded-2xl border border-neutral-200 bg-white px-5 py-3.5 text-[15px] font-semibold text-neutral-700 transition-all hover:bg-neutral-50 hover:border-neutral-300 active:scale-[0.98] dark:border-white/15 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"
+                  className="flex min-h-[46px] w-full items-center justify-center gap-2 rounded-2xl border border-neutral-200 bg-white px-5 py-3 text-[13px] font-semibold text-neutral-700 transition-colors hover:bg-neutral-50 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-400 focus-visible:ring-offset-2 dark:border-white/15 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800 dark:focus-visible:ring-offset-neutral-950 sm:flex-1"
                 >
-                  Cancelar
+                  <ChevronLeft className="h-4 w-4" />
+                  Volver a revisar
                 </button>
               </div>
             </div>
-          </div>
+          </section>
         </div>
       )}
 
