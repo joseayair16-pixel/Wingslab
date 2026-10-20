@@ -1,5 +1,5 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { X } from 'lucide-react';
+import { CalendarDays, X } from 'lucide-react';
 import {
   ApiResponse,
   AuthResponse,
@@ -1198,38 +1198,53 @@ function WheelDatePicker({
   // El día solo se limita por los días reales del mes/año, nunca por el día de hoy.
   const safeDay = Math.min(day, maxDay);
 
-  const columns: { label: string; items: number[]; value: number; onPick: (v: number) => void; flex: string }[] = [
-    { label: 'Día', items: days, value: safeDay, onPick: (v) => onChange({ day: v }), flex: 'flex-[0.7]' },
-    { label: 'Mes', items: months, value: month, onPick: (v) => onChange({ month: v }), flex: 'flex-[0.8]' },
-    { label: 'Año', items: years, value: year, onPick: (v) => onChange({ year: v }), flex: 'flex-1' },
+  const columns: { label: string; items: number[]; value: number; onPick: (v: number) => void }[] = [
+    { label: 'Día', items: days, value: safeDay, onPick: (v) => onChange({ day: v }) },
+    { label: 'Mes', items: months, value: month, onPick: (v) => onChange({ month: v }) },
+    { label: 'Año', items: years, value: year, onPick: (v) => onChange({ year: v }) },
   ];
 
   return (
-    <div className="grid gap-1.5">
-      <span className="text-xs text-neutral-600 font-medium">Fecha de nacimiento</span>
-      <div className="flex gap-1.5">
+    <div className="grid gap-2">
+      <div className="flex items-center justify-between gap-3 px-0.5">
+        <div className="flex min-w-0 items-center gap-2.5">
+          <span className="grid size-8 shrink-0 place-items-center rounded-xl bg-neutral-100 text-neutral-500 ring-1 ring-inset ring-black/[0.035]">
+            <CalendarDays size={15} strokeWidth={1.8} aria-hidden="true" />
+          </span>
+          <div className="min-w-0">
+            <span className="block text-xs font-semibold text-neutral-700">Fecha de nacimiento</span>
+            <span className="mt-0.5 block text-[10px] leading-none text-neutral-400">Desliza para elegir</span>
+          </div>
+        </div>
+        <span className="shrink-0 rounded-full bg-neutral-100 px-2 py-1 text-[10px] font-medium tabular-nums text-neutral-500">
+          {String(safeDay).padStart(2, '0')}/{String(month).padStart(2, '0')}/{year}
+        </span>
+      </div>
+      <div className="grid grid-cols-[0.8fr_0.9fr_1.3fr] gap-1.5 rounded-[22px] border border-black/[0.045] bg-neutral-50/80 p-2 shadow-[inset_0_1px_2px_rgba(15,23,42,0.025)]">
         {columns.map((col) => (
-          <div key={col.label} className={`${col.flex} min-w-0`}>
-            <p className="mb-1 text-center text-[10px] font-bold uppercase tracking-[0.14em] text-neutral-400">
+          <div key={col.label} className="min-w-0">
+            <p className="mb-1.5 text-center text-[9px] font-bold uppercase tracking-[0.16em] text-neutral-400">
               {col.label}
             </p>
-            <WheelColumn items={col.items} value={col.value} onPick={col.onPick} />
+            <WheelColumn label={col.label} items={col.items} value={col.value} onPick={col.onPick} />
           </div>
         ))}
       </div>
       <style>{`
-        .wheel-scroll::-webkit-scrollbar { display: none; }
-        .wheel-scroll { scrollbar-width: none; -ms-overflow-style: none; }
+        .wheel-scroll::-webkit-scrollbar { display: none; width: 0; height: 0; }
+        .wheel-scroll { scrollbar-width: none; -ms-overflow-style: none; -webkit-overflow-scrolling: touch; }
       `}</style>
     </div>
   );
 }
 
 function WheelColumn({
+  label,
   items,
   value,
   onPick,
 }: {
+  label: string;
   items: number[];
   value: number;
   onPick: (v: number) => void;
@@ -1238,40 +1253,142 @@ function WheelColumn({
   const HEIGHT = ITEM * 3;
   const ref = useRef<HTMLDivElement | null>(null);
   const index = Math.max(0, items.indexOf(value));
+  const isInteracting = useRef(false);
+  const [activeIndex, setActiveIndex] = useState(index);
+  const visibleActiveIndex = isInteracting.current
+    ? Math.max(0, Math.min(items.length - 1, activeIndex))
+    : index;
+  const settleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const settleScrollHandler = useRef<() => void>(() => {});
+
+  const setScrollRef = useCallback((el: HTMLDivElement | null) => {
+    ref.current = el;
+    if (el && !isInteracting.current) {
+      el.scrollTop = index * ITEM;
+    }
+  }, [ITEM, index]);
+
+  const clearSettleTimer = useCallback(() => {
+    if (settleTimer.current) {
+      clearTimeout(settleTimer.current);
+      settleTimer.current = null;
+    }
+  }, []);
+
+  const settleScroll = useCallback(() => {
+    const el = ref.current;
+    if (!el) return;
+
+    const nextIndex = Math.max(0, Math.min(items.length - 1, Math.round(el.scrollTop / ITEM)));
+    const targetScrollTop = nextIndex * ITEM;
+
+    // Snap the final sub-pixel/partial-row offset before committing to the form.
+    if (Math.abs(el.scrollTop - targetScrollTop) > 0.75) {
+      el.scrollTop = targetScrollTop;
+    }
+
+    clearSettleTimer();
+    isInteracting.current = false;
+    setActiveIndex(nextIndex);
+    if (items[nextIndex] !== value) onPick(items[nextIndex]);
+  }, [ITEM, clearSettleTimer, items, onPick, value]);
+  settleScrollHandler.current = settleScroll;
+
+  function scheduleSettle() {
+    clearSettleTimer();
+    settleTimer.current = setTimeout(settleScroll, 140);
+  }
 
   useEffect(() => {
-    if (ref.current) ref.current.scrollTop = index * ITEM;
-  }, [index]);
+    const el = ref.current;
+    if (!el || isInteracting.current) return;
+
+    setActiveIndex(index);
+    if (Math.abs(el.scrollTop - index * ITEM) > 0.75) {
+      el.scrollTop = index * ITEM;
+    }
+  }, [ITEM, index, items.length]);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const handleScrollEnd = () => settleScrollHandler.current();
+    el.addEventListener('scrollend', handleScrollEnd);
+    return () => {
+      el.removeEventListener('scrollend', handleScrollEnd);
+      clearSettleTimer();
+    };
+  }, [clearSettleTimer]);
+
+  function selectIndex(nextIndex: number) {
+    const clampedIndex = Math.max(0, Math.min(items.length - 1, nextIndex));
+    const el = ref.current;
+    isInteracting.current = true;
+    setActiveIndex(clampedIndex);
+    if (el) el.scrollTo({ top: clampedIndex * ITEM, behavior: 'smooth' });
+    if (items[clampedIndex] !== value) onPick(items[clampedIndex]);
+    scheduleSettle();
+  }
 
   function handleScroll(event: React.UIEvent<HTMLDivElement>) {
     const el = event.currentTarget;
-    const idx = Math.round(el.scrollTop / ITEM);
-    const clamped = Math.max(0, Math.min(items.length - 1, idx));
-    const picked = items[clamped];
-    if (picked !== value) onPick(picked);
+    isInteracting.current = true;
+    const nextIndex = Math.max(0, Math.min(items.length - 1, Math.round(el.scrollTop / ITEM)));
+    setActiveIndex(nextIndex);
+    scheduleSettle();
+  }
+
+  function handleKeyDown(event: React.KeyboardEvent<HTMLDivElement>) {
+    let nextIndex: number | undefined;
+    switch (event.key) {
+      case 'ArrowUp': nextIndex = activeIndex - 1; break;
+      case 'ArrowDown': nextIndex = activeIndex + 1; break;
+      case 'PageUp': nextIndex = activeIndex - 5; break;
+      case 'PageDown': nextIndex = activeIndex + 5; break;
+      case 'Home': nextIndex = 0; break;
+      case 'End': nextIndex = items.length - 1; break;
+      default: return;
+    }
+    event.preventDefault();
+    selectIndex(nextIndex);
   }
 
   return (
-    <div className="relative overflow-hidden rounded-2xl" style={{ height: HEIGHT }}>
-      <div className="pointer-events-none absolute inset-x-0 top-1/2 -translate-y-1/2 border-y border-black/[0.06] bg-black/[0.03]" style={{ height: ITEM }} />
+    <div className="relative overflow-hidden rounded-[18px] bg-neutral-100/75" style={{ height: HEIGHT }}>
       <div
-        ref={ref}
+        className="pointer-events-none absolute inset-x-1 top-1/2 z-0 -translate-y-1/2 rounded-xl bg-white shadow-[0_2px_8px_rgba(15,23,42,0.06)] ring-1 ring-black/[0.035]"
+        style={{ height: ITEM - 2 }}
+      />
+      <div
+        ref={setScrollRef}
         onScroll={handleScroll}
-        className="wheel-scroll h-full snap-y snap-mandatory overflow-y-scroll overscroll-contain"
-        style={{ scrollSnapType: 'y mandatory' }}
+        onKeyDown={handleKeyDown}
+        role="spinbutton"
+        aria-label={`${label} de la fecha de nacimiento`}
+        aria-valuemin={items[0]}
+        aria-valuemax={items[items.length - 1]}
+        aria-valuenow={items[visibleActiveIndex]}
+        aria-valuetext={`${label} ${String(items[visibleActiveIndex]).padStart(2, '0')}`}
+        tabIndex={0}
+        className="wheel-scroll relative z-10 h-full snap-y snap-mandatory overflow-y-scroll overscroll-contain rounded-[18px] outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-neutral-900/30"
+        style={{ scrollSnapType: 'y mandatory', touchAction: 'pan-y' }}
       >
-        <div style={{ height: ITEM }} />
-        {items.map((it) => (
+        <div aria-hidden="true" style={{ height: ITEM }} />
+        {items.map((it, itemIndex) => (
           <div
             key={it}
-            className={`flex items-center justify-center text-[17px] font-semibold tabular-nums transition-colors duration-150 ${it === value ? 'text-neutral-900' : 'text-neutral-300'}`}
-            style={{ height: ITEM }}
+            aria-hidden="true"
+            onClick={() => selectIndex(itemIndex)}
+            className={`flex cursor-pointer select-none items-center justify-center font-semibold tabular-nums transition-[color,transform] duration-150 ${itemIndex === visibleActiveIndex ? 'scale-100 text-[17px] text-neutral-900' : 'scale-[0.96] text-[16px] text-neutral-400'}`}
+            style={{ height: ITEM, scrollSnapAlign: 'center' }}
           >
             {String(it).padStart(2, '0')}
           </div>
         ))}
-        <div style={{ height: ITEM }} />
+        <div aria-hidden="true" style={{ height: ITEM }} />
       </div>
+      <div aria-hidden="true" className="pointer-events-none absolute inset-x-0 top-0 z-20 h-8 bg-gradient-to-b from-neutral-100/90 to-transparent" />
+      <div aria-hidden="true" className="pointer-events-none absolute inset-x-0 bottom-0 z-20 h-8 bg-gradient-to-t from-neutral-100/90 to-transparent" />
     </div>
   );
 }
