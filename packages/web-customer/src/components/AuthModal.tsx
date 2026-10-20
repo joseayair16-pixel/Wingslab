@@ -4,7 +4,6 @@ import {
   ApiResponse,
   AuthResponse,
   AuthUser,
-  SendCodeResponse,
   persistStoredSession,
   requestJson,
 } from '@sadel/shared';
@@ -12,8 +11,6 @@ import { SaDelLogo } from './SaDelLogo';
 
 type AuthMode = 'login' | 'register' | 'recovery';
 type AuthStep = 'welcome' | 'details' | 'contact' | 'request' | 'verify' | 'create-password' | 'new-password';
-type OtpChannel = 'email' | 'sms';
-
 interface AuthModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -33,22 +30,19 @@ export const AuthModal = memo(function AuthModal({ isOpen, onClose, onSuccess, a
   const [dobYear, setDobYear] = useState(new Date().getFullYear());
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [otpCode, setOtpCode] = useState('');
-  const [channel, setChannel] = useState<OtpChannel>('email');
-  const [phoneExists, setPhoneExists] = useState<boolean | null>(null);
   const [resetToken, setResetToken] = useState('');
   const [registerToken, setRegisterToken] = useState('');
-  const [countdown, setCountdown] = useState(60);
+  const [challengeId, setChallengeId] = useState('');
+  const [whatsappUrl, setWhatsappUrl] = useState('');
+  const [countdown, setCountdown] = useState(0);
   
-  const [sendingCode, setSendingCode] = useState(false);
+  const [startingWhatsApp, setStartingWhatsApp] = useState(false);
   const [verifyingCode, setVerifyingCode] = useState(false);
   const [error, setError] = useState('');
   const [authMessage, setAuthMessage] = useState('');
-  const [mockCode, setMockCode] = useState('');
-
-  // Countdown timer for OTP resend
+  // Countdown for the short-lived WhatsApp challenge.
   useEffect(() => {
-    let timer: any;
+    let timer: ReturnType<typeof setTimeout> | undefined;
     if (authStep === 'verify' && countdown > 0) {
       timer = setTimeout(() => setCountdown(prev => prev - 1), 1000);
     }
@@ -79,15 +73,13 @@ export const AuthModal = memo(function AuthModal({ isOpen, onClose, onSuccess, a
       setDobYear(new Date().getFullYear());
       setPassword('');
       setConfirmPassword('');
-      setOtpCode('');
-      setChannel('email');
       setResetToken('');
       setRegisterToken('');
-      setCountdown(60);
-      setPhoneExists(null);
+      setChallengeId('');
+      setWhatsappUrl('');
+      setCountdown(0);
       setError('');
       setAuthMessage('');
-      setMockCode('');
     }
   }, [isOpen]);
 
@@ -103,14 +95,14 @@ export const AuthModal = memo(function AuthModal({ isOpen, onClose, onSuccess, a
   function handlePhoneChange(value: string) {
     const nextPhone = value.replace(/\D/g, '').slice(-10);
     setPhone(nextPhone);
-    setPhoneExists(null);
     setError('');
     setAuthMessage('');
 
-    if (authMode === 'register' && authStep === 'verify') {
-      setAuthStep('contact');
-      setOtpCode('');
-      setMockCode('');
+    if (authStep === 'verify') {
+      setChallengeId('');
+      setWhatsappUrl('');
+      setCountdown(0);
+      setAuthStep(authMode === 'register' ? 'contact' : 'request');
     }
   }
 
@@ -118,39 +110,9 @@ export const AuthModal = memo(function AuthModal({ isOpen, onClose, onSuccess, a
     setEmail(value.trim());
     setError('');
     setAuthMessage('');
-    setPhoneExists(null);
   }
 
   const emailIsValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
-
-  async function checkEmailExists(target: string): Promise<boolean> {
-    const payload = await requestJson<ApiResponse<{ exists: boolean }>>({
-      apiBase,
-      path: '/auth/check-email',
-      options: {
-        method: 'POST',
-        body: JSON.stringify({ email: target.trim(), role: 'CUSTOMER' }),
-      },
-      fallbackMessage: 'No se pudo validar el correo.',
-    });
-    return Boolean(payload.data?.exists);
-  }
-
-  async function checkPhoneExists(nextPhone: string): Promise<boolean> {
-    const payload = await requestJson<ApiResponse<{ exists: boolean; phone: string }>>({
-      apiBase,
-      path: '/auth/check-phone',
-      options: {
-        method: 'POST',
-        body: JSON.stringify({ phone: nextPhone, role: 'CUSTOMER' }),
-      },
-      fallbackMessage: 'No se pudo validar el teléfono.',
-    });
-
-    const exists = Boolean(payload.data?.exists);
-    setPhoneExists(exists);
-    return exists;
-  }
 
   async function loginWithPassword() {
     setVerifyingCode(true);
@@ -191,149 +153,162 @@ export const AuthModal = memo(function AuthModal({ isOpen, onClose, onSuccess, a
     }
   }
 
-  async function sendCode(selectedChannel: OtpChannel) {
-    setSendingCode(true);
+  async function startWhatsAppVerification() {
+    setStartingWhatsApp(true);
     setError('');
     setAuthMessage('');
-    setMockCode('');
 
     try {
+      if (phone.length !== 10) {
+        throw new Error('Ingresa un teléfono de 10 dígitos.');
+      }
       if (authMode === 'register') {
-        const exists = emailIsValid && (await checkEmailExists(email));
-        if (exists) {
-          setError('Este correo ya tiene una cuenta registrada.');
-          setSendingCode(false);
-          return;
+        if (!emailIsValid) {
+          throw new Error('Ingresa un correo electrónico válido.');
         }
-        const phoneTaken = await checkPhoneExists(phone.trim());
-        if (phoneTaken) {
-          setError('Este teléfono ya tiene una cuenta registrada.');
-          setSendingCode(false);
-          return;
-        }
-      } else if (authMode === 'recovery') {
-        const exists = await checkPhoneExists(phone.trim());
-        if (!exists) {
-          setError('Este número no tiene ninguna cuenta registrada.');
-          setSendingCode(false);
-          return;
+        const dateOfBirth = new Date(dobYear, dobMonth - 1, dobDay);
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        dateOfBirth.setHours(0, 0, 0, 0);
+        if (dateOfBirth > today) {
+          throw new Error('La fecha de nacimiento no puede estar en el futuro.');
         }
       }
 
-      const payload = await requestJson<SendCodeResponse>({
+      const payload = await requestJson<ApiResponse<{
+        challengeId: string;
+        whatsappUrl: string;
+        expiresInSeconds: number;
+      }>>({
         apiBase,
-        path: '/auth/enviar-codigo',
+        path: '/auth/whatsapp/iniciar',
         options: {
           method: 'POST',
           body: JSON.stringify({
             phone: phone.trim(),
-            email: authMode === 'register' ? email.trim() || undefined : undefined,
             intent: authMode === 'recovery' ? 'recovery' : 'register',
-            role: 'CUSTOMER',
-            channel: selectedChannel,
+            ...(authMode === 'register'
+              ? {
+                  email: email.trim(),
+                  name: name.trim(),
+                  lastName: lastName.trim(),
+                  dateOfBirth: String(dobYear) + '-' + String(dobMonth).padStart(2, '0') + '-' + String(dobDay).padStart(2, '0'),
+                }
+              : {}),
           }),
         },
-        fallbackMessage: 'No se pudo enviar el código.',
+        fallbackMessage: 'No se pudo iniciar la verificación por WhatsApp.',
       });
+      if (!payload.data) throw new Error('No se pudo iniciar la verificación por WhatsApp.');
 
-      setChannel(selectedChannel);
-      setMockCode(payload.data.mockCode || '');
-      setAuthMessage(
-        selectedChannel === 'email'
-          ? `Enviamos un código a ${email.trim()}.`
-          : `Enviamos un código por SMS a ${formatPhoneNumber(phone)}.`,
-      );
-      setCountdown(authMode === 'register' ? (payload.data.expiresInSeconds ?? 300) : 60);
+      setChallengeId(payload.data.challengeId);
+      setWhatsappUrl(payload.data.whatsappUrl);
+      setCountdown(payload.data.expiresInSeconds);
+      setAuthMessage('Abre WhatsApp y envía el mensaje preparado. Confirmaremos tu número automáticamente.');
       setAuthStep('verify');
     } catch (requestError) {
-      const message = requestError instanceof Error ? requestError.message : '';
-      const awaitingCooldown = /espera 60 segundos/.test(message);
-      if (awaitingCooldown) {
-        setChannel(selectedChannel);
-        setCountdown(authMode === 'register' ? 300 : 60);
-        setAuthMessage(
-          selectedChannel === 'email'
-            ? `Ya se envió un código a ${email.trim()} hace unos segundos. Usa el que recibiste.`
-            : 'Ya se envió un código por SMS hace unos segundos. Usa el que recibiste.',
-        );
-        setAuthStep('verify');
-      } else {
-        setError(message || 'No se pudo enviar el código.');
-      }
+      setError(requestError instanceof Error ? requestError.message : 'No se pudo iniciar la verificación.');
     } finally {
-      setSendingCode(false);
+      setStartingWhatsApp(false);
     }
   }
 
-  async function verifyCode() {
-    setVerifyingCode(true);
-    setError('');
-    setAuthMessage('');
+  useEffect(() => {
+    if (!isOpen || authStep !== 'verify' || !challengeId) return;
 
-    try {
-      const dobDate = new Date(dobYear, dobMonth - 1, dobDay);
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      dobDate.setHours(0, 0, 0, 0);
-      if (dobDate > today) {
-        setError('La fecha de nacimiento no puede estar en el futuro. Elige una fecha válida e intenta de nuevo.');
-        setVerifyingCode(false);
-        return;
-      }
+    let stopped = false;
+    let checking = false;
+    let timeout: ReturnType<typeof setTimeout> | undefined;
 
-      const payload = await requestJson<any>({
-        apiBase,
-        path: '/auth/verificar-codigo',
-        options: {
-          method: 'POST',
-          body: JSON.stringify({
-            phone: phone.trim(),
-            code: otpCode,
-            email: email.trim(),
-            name: name.trim(),
-            lastName: lastName.trim() || undefined,
-            dateOfBirth: `${dobYear}-${String(dobMonth).padStart(2, '0')}-${String(dobDay).padStart(2, '0')}`,
-            intent: authMode === 'recovery' ? 'recovery' : 'register',
-            role: 'CUSTOMER',
-          }),
-        },
-        fallbackMessage: 'No se pudo verificar el código.',
-      });
+    const checkStatus = async () => {
+      if (stopped || checking) return;
+      checking = true;
 
-      if (authMode === 'recovery') {
-        setResetToken(payload.data.resetToken);
-        setAuthMessage(payload.data.message || 'Código verificado.');
-        setAuthStep('new-password');
-        return;
-      }
-
-      if (payload.data.registerToken) {
-        setRegisterToken(payload.data.registerToken);
-        setAuthMessage(payload.data.message || 'Código verificado. Ahora crea tu contraseña.');
-        setAuthStep('create-password');
-        return;
-      }
-
-      if (payload.data.user?.role === 'CUSTOMER') {
-        persistStoredSession({
-          storageKey: 'sadel.customer',
+      try {
+        const status = await requestJson<ApiResponse<{ status: 'pending' | 'verified' }>>({
           apiBase,
-          token: payload.data.token,
-          refreshToken: payload.data.refreshToken,
-          user: payload.data.user,
+          path: '/auth/whatsapp/estado',
+          options: {
+            method: 'POST',
+            body: JSON.stringify({ challengeId }),
+          },
+          fallbackMessage: 'No se pudo consultar la verificación.',
         });
 
-        onSuccess(payload.data.token, payload.data.user);
-        return;
+        if (status.data?.status === 'verified') {
+          setVerifyingCode(true);
+          setAuthMessage('Número confirmado. Continuando…');
+          const confirmed = await requestJson<ApiResponse<{ registerToken?: string; resetToken?: string }>>({
+            apiBase,
+            path: '/auth/whatsapp/confirmar',
+            options: {
+              method: 'POST',
+              body: JSON.stringify({ challengeId }),
+            },
+            fallbackMessage: 'No se pudo confirmar el número.',
+          });
+
+          if (stopped) return;
+          if (!confirmed.data) throw new Error('No se pudo completar la verificación.');
+          if (authMode === 'recovery' && confirmed.data.resetToken) {
+            setResetToken(confirmed.data.resetToken);
+            setAuthMessage('Número verificado. Crea una contraseña nueva.');
+            setAuthStep('new-password');
+            return;
+          }
+          if (confirmed.data.registerToken) {
+            setRegisterToken(confirmed.data.registerToken);
+            setAuthMessage('Número verificado. Ahora crea tu contraseña.');
+            setAuthStep('create-password');
+            return;
+          }
+          throw new Error('No se pudo completar la verificación.');
+        }
+
+        setAuthMessage('Esperando que WhatsApp confirme el mensaje…');
+      } catch (requestError) {
+        if (stopped) return;
+        const message = requestError instanceof Error ? requestError.message : '';
+        if (/venci|expir|no existe una cuenta|ya tiene una cuenta/i.test(message)) {
+          setChallengeId('');
+          setWhatsappUrl('');
+          setCountdown(0);
+          if (/ya tiene una cuenta/i.test(message) && authMode === 'register') {
+            setAuthMode('recovery');
+            setAuthStep('request');
+            setError('Este número ya tiene una cuenta. Verifícalo para recuperar tu contraseña.');
+          } else if (/no existe una cuenta/i.test(message)) {
+            setAuthStep('request');
+            setError(message);
+          } else {
+            setError(message || 'La verificación venció. Solicita una nueva.');
+          }
+          return;
+        }
+        setAuthMessage('Esperando que WhatsApp confirme el mensaje…');
+      } finally {
+        checking = false;
+        if (!stopped) setVerifyingCode(false);
       }
 
-      throw new Error('No se pudo completar el registro.');
-    } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : 'No se pudo verificar el código.');
-    } finally {
-      setVerifyingCode(false);
-    }
-  }
+      if (!stopped) timeout = setTimeout(checkStatus, 2500);
+    };
+
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === 'visible') {
+        if (timeout) clearTimeout(timeout);
+        void checkStatus();
+      }
+    };
+
+    void checkStatus();
+    document.addEventListener('visibilitychange', refreshWhenVisible);
+    return () => {
+      stopped = true;
+      if (timeout) clearTimeout(timeout);
+      document.removeEventListener('visibilitychange', refreshWhenVisible);
+    };
+  }, [isOpen, authStep, challengeId, authMode, apiBase]);
 
   async function completeRegistration() {
     setVerifyingCode(true);
@@ -393,8 +368,6 @@ export const AuthModal = memo(function AuthModal({ isOpen, onClose, onSuccess, a
 
       setAuthMessage('Contraseña actualizada correctamente. Inicia sesión.');
       setAuthMode('login');
-      setOtpCode('');
-      setMockCode('');
       setPassword('');
       setConfirmPassword('');
       setResetToken('');
@@ -416,24 +389,24 @@ export const AuthModal = memo(function AuthModal({ isOpen, onClose, onSuccess, a
           : authStep === 'contact'
           ? 'Datos de contacto'
           : authStep === 'verify'
-          ? 'Verificar tu identidad'
+          ? 'Confirma tu número por WhatsApp'
           : 'Crea tu contraseña',
       subtitle:
         authStep === 'details'
           ? 'Cuéntanos quién eres para empezar.'
           : authStep === 'contact'
-            ? 'Recibe tu código de verificación.'
+            ? 'Verifica tu teléfono para continuar.'
             : authStep === 'verify'
-              ? 'Ingresa el código que te enviamos.'
+              ? 'Envía el mensaje preparado desde el mismo teléfono.'
               : 'Elige una contraseña para tu cuenta.',
-      cta: sendingCode ? 'Enviando código...' : 'Enviar código',
+      cta: startingWhatsApp ? 'Preparando WhatsApp...' : 'Continuar a WhatsApp',
       submit: verifyingCode ? 'Creando cuenta...' : 'Crear cuenta',
     }
     : authMode === 'recovery'
     ? {
-      title: 'Recuperar contraseña',
-      subtitle: authStep === 'request' ? 'Ingresa tu celular para recibir un código.' : authStep === 'verify' ? 'Ingresa el código OTP.' : 'Crea tu nueva contraseña.',
-      cta: sendingCode ? 'Enviando código...' : 'Enviar código',
+      title: authStep === 'verify' ? 'Confirma tu número por WhatsApp' : 'Recuperar contraseña',
+      subtitle: authStep === 'request' ? 'Ingresa el teléfono asociado a tu cuenta.' : authStep === 'verify' ? 'Envía el mensaje preparado desde ese mismo teléfono.' : 'Crea tu nueva contraseña.',
+      cta: startingWhatsApp ? 'Preparando WhatsApp...' : 'Continuar a WhatsApp',
       submit: verifyingCode ? 'Verificando...' : 'Confirmar contraseña',
     }
     : {
@@ -575,51 +548,21 @@ export const AuthModal = memo(function AuthModal({ isOpen, onClose, onSuccess, a
                           <PhoneHint phone={phone} />
                           <button
                             type="button"
-                            onClick={() => sendCode('sms')}
-                            disabled={sendingCode || phone.length !== 10}
+                            onClick={startWhatsAppVerification}
+                            disabled={startingWhatsApp || phone.length !== 10}
                             className="mt-3 w-full rounded-2xl bg-[#0a0a0a] py-3.5 text-sm font-semibold text-[#ffffff] transition-all duration-200 hover:bg-[#262626] hover:shadow-[0_8px_24px_rgba(10,10,10,0.12)] disabled:cursor-not-allowed disabled:bg-neutral-100 disabled:text-neutral-400 disabled:shadow-none active:scale-[0.98]"
                           >
-                            {sendingCode ? 'Enviando código...' : 'Enviar código'}
+                            {startingWhatsApp ? 'Preparando WhatsApp...' : 'Continuar a WhatsApp'}
                           </button>
                         </>
                       ) : authStep === 'verify' ? (
-                        <div className="space-y-5">
-                          <div className="rounded-2xl bg-neutral-50/80 p-4 border border-black/[0.04]">
-                            <p className="text-sm text-neutral-600 leading-relaxed">
-                              Enviamos tu código a{' '}
-                              <strong className="text-neutral-900">{formatPhoneNumber(phone)}</strong>
-                            </p>
-                            <p className="text-xs text-neutral-400 mt-1">El código vence en 5 minutos.</p>
-                          </div>
-                          <OtpInput value={otpCode} onChange={setOtpCode} disabled={verifyingCode} />
-
-                          <div className="flex items-center justify-center text-xs text-neutral-500">
-                            {countdown > 0 ? (
-                              <span>
-                                ¿No te llegó? Reenviar en{' '}
-                                <span className="tabular-nums font-bold text-neutral-700">{formatCountdown(countdown)}</span>
-                              </span>
-                            ) : (
-                              <button
-                                type="button"
-                                onClick={() => sendCode('sms')}
-                                disabled={sendingCode}
-                                className="font-semibold text-sky-600 hover:text-sky-700 transition-colors"
-                              >
-                                Volver a enviar código
-                              </button>
-                            )}
-                          </div>
-
-                          <button
-                            type="button"
-                            onClick={verifyCode}
-                            disabled={verifyingCode || otpCode.trim().length !== 6}
-                            className="w-full rounded-2xl bg-[#0a0a0a] py-3.5 text-sm font-semibold text-[#ffffff] transition-all duration-200 hover:bg-[#262626] hover:shadow-[0_8px_24px_rgba(10,10,10,0.12)] disabled:cursor-not-allowed disabled:bg-neutral-100 disabled:text-neutral-400 disabled:shadow-none active:scale-[0.98]"
-                          >
-                            {verifyingCode ? 'Verificando...' : 'Confirmar código'}
-                          </button>
-                        </div>
+                        <WhatsAppChallengePanel
+                          phone={phone}
+                          whatsappUrl={whatsappUrl}
+                          countdown={countdown}
+                          starting={startingWhatsApp}
+                          onRetry={startWhatsAppVerification}
+                        />
                       ) : (
                         <div className="space-y-4">
                           <Field
@@ -695,6 +638,9 @@ export const AuthModal = memo(function AuthModal({ isOpen, onClose, onSuccess, a
                             placeholder="tucorreo@ejemplo.com"
                             type="email"
                           />
+                          <p className="-mt-2 px-1 text-[11px] leading-relaxed text-neutral-500">
+                            Es un dato de contacto. Confirmaremos tu teléfono por WhatsApp.
+                          </p>
                           <Field
                             label="Teléfono (10 dígitos)"
                             value={phone}
@@ -703,27 +649,14 @@ export const AuthModal = memo(function AuthModal({ isOpen, onClose, onSuccess, a
                             mask={formatPhoneNumber}
                           />
                           <PhoneHint phone={phone} />
-                          {phoneExists === true && (
-                            <Callout tone="danger">Este teléfono ya tiene una cuenta registrada.</Callout>
-                          )}
-                          <div className="grid gap-3 pt-1">
-                            <button
-                              type="button"
-                              onClick={() => sendCode('email')}
-                              disabled={sendingCode || !emailIsValid || phone.length !== 10}
-                              className="w-full rounded-2xl bg-[#0a0a0a] py-3.5 text-sm font-semibold text-[#ffffff] transition-all duration-200 hover:bg-[#262626] hover:shadow-[0_8px_24px_rgba(10,10,10,0.12)] disabled:cursor-not-allowed disabled:bg-neutral-100 disabled:text-neutral-400 disabled:shadow-none active:scale-[0.98]"
-                            >
-                              {sendingCode ? 'Enviando código...' : 'Recibir código a mi correo'}
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => sendCode('sms')}
-                              disabled
-                              className="w-full rounded-2xl border border-black/[0.08] bg-white py-3.5 text-sm font-semibold text-[#171717] transition-all duration-200 hover:bg-neutral-50 hover:shadow-[0_8px_24px_rgba(0,0,0,0.06)] active:scale-[0.98] disabled:cursor-not-allowed disabled:bg-neutral-100 disabled:text-neutral-400 disabled:border-transparent disabled:shadow-none"
-                            >
-                              Recibir código vía SMS · disponible mañana después de las 12 pm
-                            </button>
-                          </div>
+                          <button
+                            type="button"
+                            onClick={startWhatsAppVerification}
+                            disabled={startingWhatsApp || !emailIsValid || phone.length !== 10}
+                            className="mt-3 w-full rounded-2xl bg-[#0a0a0a] py-3.5 text-sm font-semibold text-[#ffffff] transition-all duration-200 hover:bg-[#262626] hover:shadow-[0_8px_24px_rgba(10,10,10,0.12)] disabled:cursor-not-allowed disabled:bg-neutral-100 disabled:text-neutral-400 disabled:shadow-none active:scale-[0.98]"
+                          >
+                            {startingWhatsApp ? 'Preparando WhatsApp...' : 'Verificar por WhatsApp'}
+                          </button>
                         </div>
                       ) : authStep === 'create-password' ? (
                         <div className="space-y-4">
@@ -756,45 +689,13 @@ export const AuthModal = memo(function AuthModal({ isOpen, onClose, onSuccess, a
                           </button>
                         </div>
                       ) : (
-                        <div className="space-y-5">
-                          <div className="rounded-2xl bg-neutral-50/80 p-4 border border-black/[0.04]">
-                            <p className="text-sm text-neutral-600 leading-relaxed">
-                              Enviamos tu código a{' '}
-                              <strong className="text-neutral-900">
-                                {channel === 'email' ? email : formatPhoneNumber(phone)}
-                              </strong>
-                            </p>
-                            <p className="text-xs text-neutral-400 mt-1">El código vence en 5 minutos.</p>
-                          </div>
-                          <OtpInput value={otpCode} onChange={setOtpCode} disabled={verifyingCode} />
-
-                          <div className="flex items-center justify-center text-xs text-neutral-500">
-                            {countdown > 0 ? (
-                              <span>
-                                ¿No te llegó? Reenviar en{' '}
-                                <span className="tabular-nums font-bold text-neutral-700">{formatCountdown(countdown)}</span>
-                              </span>
-                            ) : (
-                              <button
-                                type="button"
-                                onClick={() => sendCode(channel)}
-                                disabled={sendingCode}
-                                className="font-semibold text-sky-600 hover:text-sky-700 transition-colors"
-                              >
-                                Volver a enviar código
-                              </button>
-                            )}
-                          </div>
-
-                          <button
-                            type="button"
-                            onClick={verifyCode}
-                            disabled={verifyingCode || otpCode.trim().length !== 6}
-                            className="w-full rounded-2xl bg-[#0a0a0a] py-3.5 text-sm font-semibold text-[#ffffff] transition-all duration-200 hover:bg-[#262626] hover:shadow-[0_8px_24px_rgba(10,10,10,0.12)] disabled:cursor-not-allowed disabled:bg-neutral-100 disabled:text-neutral-400 disabled:shadow-none active:scale-[0.98]"
-                          >
-                            {verifyingCode ? 'Verificando...' : 'Verificar código'}
-                          </button>
-                        </div>
+                        <WhatsAppChallengePanel
+                          phone={phone}
+                          whatsappUrl={whatsappUrl}
+                          countdown={countdown}
+                          starting={startingWhatsApp}
+                          onRetry={startWhatsAppVerification}
+                        />
                       )}
                     </>
                   )}
@@ -807,9 +708,6 @@ export const AuthModal = memo(function AuthModal({ isOpen, onClose, onSuccess, a
                     ← Atrás
                   </button>
 
-                  {mockCode && (
-                    <Callout tone="info">Código de prueba detectado: {mockCode}</Callout>
-                  )}
                   {error && <Callout tone="danger">{error}</Callout>}
                   {authMessage && !error && <Callout tone="success">{authMessage}</Callout>}
                 </div>
@@ -841,6 +739,65 @@ function formatPhoneNumber(value: string) {
   if (digits.length <= 2) return digits;
   if (digits.length <= 6) return `(${digits.slice(0, 2)}) ${digits.slice(2)}`;
   return `(${digits.slice(0, 2)}) ${digits.slice(2, 6)}-${digits.slice(6, 10)}`;
+}
+
+function WhatsAppChallengePanel({
+  phone,
+  whatsappUrl,
+  countdown,
+  starting,
+  onRetry,
+}: {
+  phone: string;
+  whatsappUrl: string;
+  countdown: number;
+  starting: boolean;
+  onRetry: () => void;
+}) {
+  const expired = countdown <= 0 || !whatsappUrl;
+
+  return (
+    <div className="space-y-4" aria-live="polite">
+      <div className="rounded-2xl border border-black/[0.04] bg-neutral-50/80 p-4">
+        <p className="text-sm leading-relaxed text-neutral-700">
+          Confirma que tienes acceso al WhatsApp de{' '}
+          <strong className="text-neutral-950">{formatPhoneNumber(phone)}</strong>.
+        </p>
+        <p className="mt-1.5 text-xs leading-relaxed text-neutral-500">
+          Envía el mensaje que preparamos. Al volver aquí, continuaremos automáticamente.
+        </p>
+        {!expired && (
+          <p className="mt-3 text-xs font-semibold text-neutral-600">
+            El enlace vence en <span className="tabular-nums">{formatCountdown(countdown)}</span>.
+          </p>
+        )}
+      </div>
+
+      {!expired ? (
+        <a
+          href={whatsappUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex w-full items-center justify-center rounded-2xl bg-[#128C7E] py-3.5 text-sm font-semibold text-white transition hover:bg-[#0f7c70] active:scale-[0.98]"
+        >
+          Abrir WhatsApp
+        </a>
+      ) : (
+        <button
+          type="button"
+          onClick={onRetry}
+          disabled={starting}
+          className="w-full rounded-2xl bg-[#0a0a0a] py-3.5 text-sm font-semibold text-white transition hover:bg-[#262626] disabled:cursor-not-allowed disabled:bg-neutral-100 disabled:text-neutral-400"
+        >
+          {starting ? 'Preparando WhatsApp…' : 'Generar un nuevo enlace'}
+        </button>
+      )}
+
+      <p className="text-center text-xs text-neutral-500">
+        {expired ? 'El enlace anterior ya no está activo.' : 'Esperando la confirmación de WhatsApp…'}
+      </p>
+    </div>
+  );
 }
 
 function PhoneHint({ phone }: { phone: string }) {
@@ -1050,79 +1007,6 @@ function WheelColumn({
         ))}
         <div style={{ height: ITEM }} />
       </div>
-    </div>
-  );
-}
-
-function OtpInput({
-  value,
-  onChange,
-  disabled,
-}: {
-  value: string;
-  onChange: (value: string) => void;
-  disabled?: boolean;
-}) {
-  const refs = useRef<(HTMLInputElement | null)[]>([]);
-  const digits = value.split('').slice(0, 6);
-
-  function handleChange(index: number, char: string) {
-    const clean = char.replace(/\D/g, '').slice(0, 1);
-    const arr = Array.from({ length: 6 }, (_, i) => digits[i] || '');
-    arr[index] = clean;
-    onChange(arr.join(''));
-    if (clean && index < 5) refs.current[index + 1]?.focus();
-  }
-
-  function handleKeyDown(index: number, event: React.KeyboardEvent<HTMLInputElement>) {
-    const arr = Array.from({ length: 6 }, (_, i) => digits[i] || '');
-    if (event.key === 'Backspace') {
-      event.preventDefault();
-      if (arr[index]) {
-        arr[index] = '';
-        onChange(arr.join(''));
-      } else if (index > 0) {
-        arr[index - 1] = '';
-        onChange(arr.join(''));
-        refs.current[index - 1]?.focus();
-      }
-    } else if (event.key === 'ArrowLeft' && index > 0) {
-      refs.current[index - 1]?.focus();
-    } else if (event.key === 'ArrowRight' && index < 5) {
-      refs.current[index + 1]?.focus();
-    }
-  }
-
-  return (
-    <div
-      className="flex justify-between gap-2"
-      onPaste={(event) => {
-        const text = event.clipboardData.getData('text').replace(/\D/g, '').slice(0, 6);
-        if (text) {
-          event.preventDefault();
-          onChange(text);
-          refs.current[Math.min(text.length, 5)]?.focus();
-        }
-      }}
-    >
-      {Array.from({ length: 6 }).map((_, index) => (
-        <input
-          key={index}
-          ref={(el) => {
-            refs.current[index] = el;
-          }}
-          value={digits[index] || ''}
-          inputMode="numeric"
-          autoComplete="one-time-code"
-          maxLength={1}
-          placeholder="•"
-          aria-label={`Digito ${index + 1}`}
-          disabled={disabled}
-          onChange={(event) => handleChange(index, event.target.value)}
-          onKeyDown={(event) => handleKeyDown(index, event)}
-          className="h-14 w-full max-w-[52px] rounded-2xl border border-black/[0.08] bg-white text-center text-xl font-bold tabular-nums text-neutral-950 outline-none transition-all duration-200 placeholder:text-neutral-300 focus:border-sky-400 focus:ring-2 focus:ring-sky-500/20 disabled:opacity-60"
-        />
-      ))}
     </div>
   );
 }

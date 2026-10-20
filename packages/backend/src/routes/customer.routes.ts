@@ -10,6 +10,7 @@ import { deliverOtp } from '../services/otp-delivery.service';
 import { authenticate, authorize, getAuthenticatedUser } from '../middleware/auth';
 import { buildApartmentWhere, normalizeOptionalAddressText } from '../utils/address';
 import { urlToKey, deleteImages } from '../services/storage.service';
+import { isMexicanLocalPhone } from '../utils/mexican-phone';
 
 const updatePreferencesSchema = z.object({
   deliveryPreference: z
@@ -515,7 +516,7 @@ export async function registerCustomerRoutes(fastify: FastifyInstance): Promise<
       { config: { rateLimit: { max: 5, timeWindow: '1 hour' } } },
       async (request, reply) => {
         const parsed = z
-          .object({ phone: z.string().min(10), currentPassword: z.string().min(1) })
+          .object({ phone: z.string().refine(isMexicanLocalPhone), currentPassword: z.string().min(1) })
           .safeParse(request.body);
 
         if (!parsed.success) {
@@ -561,17 +562,7 @@ export async function registerCustomerRoutes(fastify: FastifyInstance): Promise<
           });
         }
 
-        const normalized = parsed.data.phone.replace(/\D/g, '').slice(-10);
-
-        if (normalized.length !== 10) {
-          return reply.status(400).send({
-            success: false,
-            error: {
-              code: 'INVALID_PHONE',
-              message: 'Ingresa un teléfono de 10 dígitos.',
-            },
-          });
-        }
+        const normalized = parsed.data.phone;
 
         // Tope de reenvíos por hora por usuario (control de costo/abuso)
         const redis = getRedis();
@@ -589,9 +580,10 @@ export async function registerCustomerRoutes(fastify: FastifyInstance): Promise<
 
         const existingUser = await prisma.user.findFirst({
           where: {
-            phone: {
-              in: [parsed.data.phone.trim(), normalized, `+52${normalized}`, `+521${normalized}`],
-            },
+            OR: [
+              { phoneNormalized: normalized },
+              { phone: { in: [parsed.data.phone.trim(), normalized, `+52${normalized}`, `+521${normalized}`] } },
+            ],
             role: UserRole.CUSTOMER,
             id: { not: user.sub },
           },
@@ -642,7 +634,7 @@ export async function registerCustomerRoutes(fastify: FastifyInstance): Promise<
       const profileSchema = z.object({
         name: z.string().min(1).optional(),
         lastName: z.string().min(2).nullable().optional(),
-        phone: z.string().min(10).optional(),
+        phone: z.string().refine(isMexicanLocalPhone, 'Ingresa un teléfono de 10 dígitos.').optional(),
         phoneChangeCode: z.string().optional(),
         profilePhoto: z.string().nullable().optional(),
       });
@@ -670,12 +662,13 @@ export async function registerCustomerRoutes(fastify: FastifyInstance): Promise<
           : null;
 
       if (parsed.data.phone) {
-        const normalized = parsed.data.phone.replace(/\D/g, '').slice(-10);
+        const normalized = parsed.data.phone;
         const existingUser = await prisma.user.findFirst({
           where: {
-            phone: {
-              in: [parsed.data.phone.trim(), normalized, `+52${normalized}`, `+521${normalized}`],
-            },
+            OR: [
+              { phoneNormalized: normalized },
+              { phone: { in: [parsed.data.phone.trim(), normalized, `+52${normalized}`, `+521${normalized}`] } },
+            ],
             role: UserRole.CUSTOMER,
             id: { not: user.sub },
           },
@@ -719,15 +712,29 @@ export async function registerCustomerRoutes(fastify: FastifyInstance): Promise<
         }
       }
 
-      const updatedUser = await prisma.user.update({
-        where: { id: user.sub },
-        data: {
-          ...(parsed.data.name ? { name: parsed.data.name } : {}),
-          ...(parsed.data.lastName !== undefined ? { lastName: parsed.data.lastName } : {}),
-          ...(parsed.data.phone ? { phone: parsed.data.phone } : {}),
-          ...('profilePhoto' in parsed.data ? { profilePhoto: parsed.data.profilePhoto } : {}),
-        },
-      });
+      let updatedUser;
+      try {
+        updatedUser = await prisma.user.update({
+          where: { id: user.sub },
+          data: {
+            ...(parsed.data.name ? { name: parsed.data.name } : {}),
+            ...(parsed.data.lastName !== undefined ? { lastName: parsed.data.lastName } : {}),
+            ...(parsed.data.phone ? { phone: parsed.data.phone, phoneNormalized: parsed.data.phone } : {}),
+            ...('profilePhoto' in parsed.data ? { profilePhoto: parsed.data.profilePhoto } : {}),
+          },
+        });
+      } catch (error) {
+        if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+          return reply.status(409).send({
+            success: false,
+            error: {
+              code: 'PHONE_IN_USE',
+              message: 'El teléfono ya está registrado por otro usuario.',
+            },
+          });
+        }
+        throw error;
+      }
 
       if (currentUser?.profilePhoto && parsed.data.profilePhoto !== currentUser.profilePhoto) {
         await deleteImages([urlToKey(currentUser.profilePhoto)]);

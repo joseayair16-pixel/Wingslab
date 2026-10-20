@@ -47,7 +47,7 @@ flowchart TB
 
   subgraph data[Datos]
     PG[(PostgreSQL 16\nPrisma 5.7)]
-    RD[(Redis 7\ncache · OTP · ring · queues · pub/sub)]
+    RD[(Redis 7\ncache · WhatsApp challenges · ring · queues · pub/sub)]
   end
 
   subgraph ext[Servicios externos]
@@ -141,7 +141,7 @@ sequenceDiagram
 | @fastify/helmet | ^13.1.1 | Headers de seguridad + CSP |
 | @fastify/cors | ^11.3.0 | CORS dinámico por `CORS_ORIGIN` |
 | Prisma / @prisma/client | ^5.7.1 | ORM + migraciones |
-| ioredis | ^5.3.2 | Caché, OTP, colas, pub/sub, locks lógicos |
+| ioredis | ^5.3.2 | Caché, retos de WhatsApp, colas, pub/sub, locks lógicos |
 | socket.io | ^4.8.3 | Tiempo real |
 | zod | ^3.22.4 | Validación de entrada |
 | bcryptjs | ^2.4.3 | Hash de contraseñas (coste 10) |
@@ -151,7 +151,7 @@ sequenceDiagram
 | @aws-sdk/client-s3 | ^3.1094.0 | Cloudflare R2 |
 | node-cron | ^4.2.1 | 23 jobs in-process |
 | axios | ^1.6.5 | HTTP a APIs externas |
-| nodemailer | ^9.0.4 | Email / OTP |
+| nodemailer | ^9.0.4 | Email de cuenta y servicio |
 | jest + ts-jest | dev | Tests unitarios e integración con `fastify.inject()` |
 
 ### 3.2 Frontend
@@ -194,25 +194,25 @@ Prefijos por scope extraídos del código: los endpoints cuelgan de la raíz del
 | # | Método | Ruta | Archivo | Auth |
 |---|---|---|---|---|
 
-**auth** (10)
+**auth** (15 rutas, incluidas las retiradas)
 
-| Método | Ruta | Archivo:línea | Auth (roles) |
+| Método | Ruta | Archivo | Auth (roles) |
 |---|---|---|---|
-
-**auth** — 10 endpoints
-
-| Método | Ruta | Archivo:línea | Auth (roles) |
-|---|---|---|---|
-| GET | `/auth/perfil` | auth.routes.ts:582 | publico |
-| POST | `/auth/check-phone` | auth.routes.ts:629 | publico |
-| POST | `/auth/check-email` | auth.routes.ts:661 | publico |
-| POST | `/auth/login` | auth.routes.ts:692 | publico |
-| POST | `/auth/restaurant-login` | auth.routes.ts:751 | publico |
-| POST | `/auth/admin-login` | auth.routes.ts:811 | publico |
-| POST | `/auth/driver-login` | auth.routes.ts:870 | publico |
-| POST | `/auth/reset-password` | auth.routes.ts:967 | publico |
-| POST | `/auth/complete-register` | auth.routes.ts:1016 | publico |
-| POST | `/auth/refresh` | auth.routes.ts:1157 | publico |
+| POST | `/auth/whatsapp/iniciar` | auth.routes.ts | público |
+| POST | `/auth/whatsapp/estado` | auth.routes.ts | público |
+| POST | `/auth/whatsapp/confirmar` | auth.routes.ts | público |
+| POST | `/auth/enviar-codigo` | auth.routes.ts | retirado (410) |
+| POST | `/auth/verificar-codigo` | auth.routes.ts | retirado (410) |
+| GET | `/auth/perfil` | auth.routes.ts | público |
+| POST | `/auth/check-phone` | auth.routes.ts | retirado (410) |
+| POST | `/auth/check-email` | auth.routes.ts | retirado (410) |
+| POST | `/auth/login` | auth.routes.ts | público |
+| POST | `/auth/restaurant-login` | auth.routes.ts | público |
+| POST | `/auth/admin-login` | auth.routes.ts | público |
+| POST | `/auth/driver-login` | auth.routes.ts | público |
+| POST | `/auth/reset-password` | auth.routes.ts | público |
+| POST | `/auth/complete-register` | auth.routes.ts | público |
+| POST | `/auth/refresh` | auth.routes.ts | público |
 
 **public** — 11 endpoints
 
@@ -499,9 +499,9 @@ Prefijos por scope extraídos del código: los endpoints cuelgan de la raíz del
 - **Refresh tokens:** modelo `RefreshToken` (tokens opacos, no JWT) con rotación atómica en `services/refresh-token.service.ts:50` dentro de un `prisma.$transaction`: revoca el actual (`revokedAt`) y crea el nuevo en la misma transacción. Se almacena **hash SHA-256**, nunca el token en claro (`hashToken` en `utils/crypto.ts`). 30 días de vigencia. Si la rotación falla, la transacción no se confirma → el token viejo sigue vivo (evita perder la sesión por un fallo puntual).
 - **Compatibilidad legacy:** la validación intenta también el token en claro para sesiones emitidas antes del hash.
 - **Roles:** enum `UserRole` (ADMIN, RESTAURANT, CUSTOMER, DRIVER). `authorize([...])` en `middleware/auth.ts:134-164` devuelve 401 sin token y 403 con rol no autorizado. `authenticate()` además valida el estado de la cuenta (`ACTIVE` / `SUSPENDED` / `INACTIVE` → 403 `ACCOUNT_DISABLED`).
-- **OTP:** TTL 300 s, máximo 5 intentos (al agotarse el código se invalida), máximo 30 reenvíos por hora y teléfono. Se genera con `crypto.randomInt(100000, 999999)` y se compara con `crypto.timingSafeEqual` (evita fuga por tiempo). Se guarda en Redis como `otp:${phone}` = `{ code, intent, email }`. Entrega por email o SMS, con mock solo en desarrollo.
+- **Verificación de comensales:** el registro y la recuperación usan un reto de WhatsApp iniciado por el usuario, con TTL de 300 s y máximo 5 inicios por hora y teléfono. Redis vincula el mensaje con un identificador aleatorio, el teléfono de 10 dígitos ingresado y la intención. El webhook exige firma HMAC de Meta y compara el remitente antes de confirmar.
 - **Passwords:** bcryptjs coste 10. Hay un camino de migración: si el hash no tiene forma `$2[aby]$\d{2}$`, se compara en plano y **se re-hashea a bcrypt en el siguiente login exitoso**.
-- **Rate limiting:** global 300 req / 60 s por IP con backing en Redis (`app.ts:149-160`), más límites por ruta (login, envío/verificación de OTP, check-phone). Clave por IP resuelta con `trustProxy` de un solo salto.
+- **Rate limiting:** global 300 req / 60 s por IP con backing en Redis (`app.ts:149-160`), más límites por ruta para login e inicio, consulta y confirmación del reto de WhatsApp. Clave por IP resuelta con `trustProxy` de un solo salto.
 - **Validación:** Zod en todos los endpoints mutantes; `safeParse` con errores 400 y código `INVALID_PAYLOAD`.
 - **Errores:** `AppError` centralizado (`errors/app-error.ts`) + `errorHandler` global (`middleware/error.handler.ts`), con `requestId` en la respuesta para correlación.
 - **CORS:** origen validado contra `CORS_ORIGIN` (soporta `*` o lista separada por comas), `credentials: true`. Helmet con CSP explícita.
@@ -721,7 +721,8 @@ Restricciones únicas que sostienen reglas de negocio:
 |---|---|---|
 | Caché | `cache:${prefix}:${id}` | TTL por defecto 60 s; restaurantes 30 s; menús 120 s (`cache.service.ts:9-11`) |
 | Invalidación | `SCAN MATCH cache:<patrón> COUNT 50` | Borra por patrón sin `KEYS` (`cache.service.ts:66`) |
-| OTP | `otp:${phone}` | 300 s TTL, con contadores de intentos y de reenvíos |
+| Reto de WhatsApp | `whatsapp_auth:challenge:${sha256(challengeId)}` | 300 s TTL; vinculado a remitente e intención |
+| Mensaje de WhatsApp | `whatsapp_auth:message:${sha256(messageCode)}` | 300 s TTL; permite encontrar el reto al recibir el mensaje |
 | Cola de pedidos | `restaurant:queue:<id>` (ZSET) | FIFO del restaurante, con marcador de activo y TTL |
 | Alarma de pedido | clave de ring por pedido | Ventana de alarma y expiración; la reconcilia el job de 3 s |
 | Reintentos de notificación | cola en `NotificationRetry` | Dedupe por `dedupeKey`, reintento con backoff |
@@ -788,7 +789,7 @@ REST. Los clientes son 5 (4 paneles + 3 apps nativas) y cada uno consume un subc
 Con `Order.clientOrderKey` como `@unique` en PostgreSQL, no en Redis. El cliente genera la clave al abrir el carrito y la reutiliza en los reintentos; la base de datos es el árbitro final, así que la garantía sobrevive a reinicios y a múltiples instancias. Redis lo usaría solo para deduplicar rápido, no como fuente de verdad.
 
 **4. ¿Por qué Redis además de Postgres?**
-Redis entra donde Postgres es lento o donde el dato es efímero: caché de lecturas calientes (restaurantes 30 s, menús 120 s), OTP con TTL, colas FIFO de pedidos por restaurante (ZSET), pub/sub de Socket.IO, rate limiting y la ventana de alarma. La regla es: Postgres es la fuente de verdad; Redis es caché, efímero o coordinación.
+Redis entra donde Postgres es lento o donde el dato es efímero: caché de lecturas calientes (restaurantes 30 s, menús 120 s), retos de WhatsApp con TTL, colas FIFO de pedidos por restaurante (ZSET), pub/sub de Socket.IO, rate limiting y la ventana de alarma. La regla es: Postgres es la fuente de verdad; Redis es caché, efímero o coordinación.
 
 **5. ¿Cómo escalas Socket.IO horizontalmente?**
 Con el adapter de Redis (`@socket.io/redis-adapter`): duplico el cliente, uno para pub y otro para sub, y lo monto en `io.adapter(...)`. Cada instancia publica en Redis y todas reciben. Si no hay `REDIS_URL` o falla el mount, degrado a memoria en vez de tumbar el servicio. Las salas son por identidad (`${role}:${userId}`), no por lo que pida el cliente, así que un usuario no puede suscribirse a eventos ajenos.
@@ -811,8 +812,8 @@ No, y es decisión deliberada: diseño ORM-first. Todas las reglas viven en la c
 **11. ¿Cómo manejas la seguridad de contraseñas y tokens?**
 bcrypt con coste 10, con una ruta de migración que re-hashea a bcrypt los passwords legacy en el siguiente login exitoso. Los refresh tokens son opacos, no JWT: se guarda el SHA-256 en base de datos y se rotan atómicamente (revocar + crear en la misma transacción), de modo que un token robado solo sirve hasta el siguiente refresh. JWT de acceso de 7 días con el `role` en el claim; el estado de la cuenta se verifica en `authenticate`, no solo en el token.
 
-**12. ¿Cómo evitas el abuso de los endpoints públicos y del OTP?**
-Tres capas: rate limit global por IP con backing en Redis (300 req / 60 s), límites por ruta más estrictos en login y OTP (5 intentos de verificación por ventana, 30 reenvíos por hora y teléfono), y comparación del OTP con `timingSafeEqual` para no filtrar el código por diferencia de tiempo. Además los códigos expiran a los 5 minutos y se invalidan al quinto intento fallido.
+**12. ¿Cómo evitas el abuso de los endpoints públicos y la verificación?**
+Tres capas: rate limit global por IP con backing en Redis (300 req / 60 s), límites por ruta para login y verificación por WhatsApp, y firma HMAC obligatoria en el webhook de Meta. Los retos duran 5 minutos, tienen un máximo de 5 inicios por hora y teléfono, y solo se confirman cuando el remitente coincide con el teléfono local de 10 dígitos ingresado.
 
 **13. ¿Las notificaciones push son fiables?**
 No confío en el push como canal único: cada evento crítico va por Socket.IO *y* por push, y si el push falla entra en `NotificationRetry` con clave de dedupe y backoff exponencial. Las suscripciones caducadas (404/410 de VAPID) se limpian solas, y hay un job semanal que borra tokens FCM inactivos hace más de 30 días. Para el caso más delicado —una alarma de pedido nuevo para el repartidor— el mensaje es data-only de alta prioridad porque Android colapsa las notificaciones normales en modo Doze.

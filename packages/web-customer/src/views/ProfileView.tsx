@@ -288,7 +288,7 @@ export const ProfileView = memo(function ProfileView({
                 onClick={() => {
                   setEditName(sessionUser?.name || '');
                   setEditLastName(sessionUser?.lastName || '');
-                  setEditPhone(sessionUser?.phone || '');
+                  setEditPhone((sessionUser?.phone || '').replace(/\D/g, '').slice(-10));
                   setIsEditingProfile(true);
                 }}
               >

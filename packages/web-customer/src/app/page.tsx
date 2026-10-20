@@ -2582,8 +2582,9 @@ export default function Home() {
       return;
     }
 
-    if (sessionUser?.phone && editPhone !== sessionUser.phone) {
-      if (editPhone.length < 10) {
+    const currentPhoneDigits = (sessionUser?.phone || '').replace(/\D/g, '').slice(-10);
+    if (sessionUser?.phone && editPhone !== currentPhoneDigits) {
+      if (editPhone.length !== 10) {
         setToastMessage('Ingresa un número válido (10 dígitos)');
         setTimeout(() => setToastMessage(''), 2000);
         return;
@@ -5917,7 +5918,9 @@ export default function Home() {
                       <input
                         type="tel"
                         value={editPhone}
-                        onChange={(e) => setEditPhone(e.target.value)}
+                        maxLength={10}
+                        inputMode="numeric"
+                        onChange={(e) => setEditPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
                         className="mt-1.5 w-full rounded-2xl border border-black/10 bg-neutral-50 px-4 py-3 text-sm focus:border-accent focus:ring-1 focus:ring-accent focus:outline-none"
                         placeholder="Tu teléfono"
                       />
