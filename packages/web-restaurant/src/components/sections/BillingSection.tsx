@@ -1,6 +1,18 @@
 'use client';
 
 import React from 'react';
+import {
+  AlertTriangle,
+  CalendarDays,
+  CheckCircle2,
+  Clock3,
+  FileText,
+  Image as ImageIcon,
+  MessageCircle,
+  Receipt,
+  Search,
+  TrendingUp,
+} from 'lucide-react';
 
 interface BillingSectionProps {
   billingSummary: any;
@@ -20,14 +32,14 @@ interface BillingSectionProps {
   getDaysOverdue: (dueDateStr?: string | Date) => number;
 }
 
-const money = (value: number | undefined) => `$${(value ?? 0).toFixed(2)}`;
+const money = (value: number | undefined) => `$${new Intl.NumberFormat('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value ?? 0)}`;
 
 const platformRateLabel = (platformFeeRate: number, platformFeePerOrder: number) => {
   if (platformFeeRate > 0) {
     const pct = platformFeeRate * 100;
     return `${pct.toFixed(pct % 1 === 0 ? 0 : 1)}% del subtotal`;
   }
-  return `${money(platformFeePerOrder)} c/u`;
+  return `${money(platformFeePerOrder)} por pedido`;
 };
 
 export const BillingSection = React.memo(function BillingSection({
@@ -53,12 +65,26 @@ export const BillingSection = React.memo(function BillingSection({
 
   const statusBadge =
     overdueCount > 0 || (profile?.status === 'SUSPENDED' && profile?.statusReason?.includes('Suspensión automática por pago vencido'))
-      ? { label: 'SUSPENDIDO POR IMPAGO', icon: '🔴', desc: 'Cuenta suspendida por corte vencido.', cls: 'bg-rose-500/10 text-rose-700 border-rose-500/20 animate-pulse' }
+      ? { label: 'Suspendido por impago', tone: 'rose', desc: 'La cuenta está suspendida por un corte vencido.' }
       : pendingCount > 0
-        ? { label: 'CORTE PENDIENTE', icon: '⏳', desc: 'Tienes un corte de caja pendiente de pago.', cls: 'bg-amber-500/10 text-amber-700 border-amber-500/20 animate-pulse' }
+        ? { label: 'Pago pendiente', tone: 'amber', desc: 'Tienes un corte de caja pendiente de pago.' }
         : inReviewCount > 0
-          ? { label: 'EN REVISIÓN', icon: '🔍', desc: 'Comprobante enviado, en verificación.', cls: 'bg-sky-500/10 text-sky-700 border-sky-500/20' }
-          : { label: 'AL DÍA', icon: '✅', desc: 'Sin deudas pendientes de pago.', cls: 'bg-emerald-500/10 text-emerald-700 border-emerald-500/20' };
+          ? { label: 'En revisión', tone: 'sky', desc: 'Recibimos tu comprobante y está en verificación.' }
+          : { label: 'Al día', tone: 'emerald', desc: 'No tienes pagos pendientes.' };
+
+  const statusToneClass = {
+    rose: 'border-rose-200 bg-rose-50 text-rose-800',
+    amber: 'border-amber-200 bg-amber-50 text-amber-800',
+    sky: 'border-sky-200 bg-sky-50 text-sky-800',
+    emerald: 'border-emerald-200 bg-emerald-50 text-emerald-800',
+  }[statusBadge.tone];
+  const StatusIcon = statusBadge.tone === 'rose'
+    ? AlertTriangle
+    : statusBadge.tone === 'amber'
+      ? Clock3
+      : statusBadge.tone === 'sky'
+        ? Search
+        : CheckCircle2;
 
   const hasPendingOrOverdue = pendingCount > 0 || overdueCount > 0;
   const periodTotal = (billingSummary?.serviceFeeRevenue ?? 0) + (billingSummary?.platformFeeRevenue ?? 0) + (billingSummary?.whatsappFeeRevenue ?? 0);
@@ -66,6 +92,7 @@ export const BillingSection = React.memo(function BillingSection({
   const platformFeePerOrder = billingSummary?.platformFeePerOrder ?? 0;
   const platformFeeRevenue = billingSummary?.platformFeeRevenue ?? 0;
   const showFeeConfig = platformFeeRate > 0 || platformFeePerOrder > 0;
+  const cycleProgress = Math.min(100, Math.max(0, getCycleProgress()));
 
   const totalsPerStatus = (s: any) => {
     const parts = [];
@@ -79,66 +106,52 @@ export const BillingSection = React.memo(function BillingSection({
   const totalDeliveredInPeriod = billingSummary?.deliveredOrders ?? 0;
 
   return (
-    <div className="space-y-5">
-      {/* ═══════ HERO ═══════ */}
-      <section className="relative overflow-hidden rounded-[32px] border border-black/5 bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.98),rgba(249,247,243,0.95)_48%,rgba(243,238,229,0.93)_100%)] p-6 shadow-[0_20px_70px_rgba(15,15,15,0.06)] md:p-8">
-        <div className="pointer-events-none absolute inset-0">
-          <div className="absolute -left-10 -top-16 h-56 w-56 rounded-full bg-sky-200/25 blur-3xl" />
-          <div className="absolute -right-8 top-12 h-56 w-56 rounded-full bg-emerald-200/20 blur-3xl" />
-        </div>
-
-        <div className="relative flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
-          <div className="max-w-xl">
-            <p className="text-[10px] font-black uppercase tracking-[0.28em] text-sky-700/70">Facturación & Control</p>
-            <h1 className="mt-2 text-2xl font-extrabold tracking-[-0.04em] text-neutral-950 md:text-[32px]">Balance de Cuenta</h1>
-
-            <div className="mt-3 flex flex-wrap items-center gap-2">
-              <span className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-bold ${statusBadge.cls}`}>
-                <span className="text-sm leading-none">{statusBadge.icon}</span>
+    <div className="mx-auto min-w-0 max-w-[1400px] space-y-4 sm:space-y-5">
+      <section className="relative overflow-hidden rounded-[24px] border border-neutral-200/80 bg-gradient-to-br from-white via-white to-sky-50/70 p-4 shadow-[0_12px_40px_-28px_rgba(15,23,42,0.3)] sm:rounded-[28px] sm:p-6 md:p-7">
+        <div aria-hidden="true" className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-sky-500 via-blue-500 to-emerald-400" />
+        <div className="relative flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+          <div className="min-w-0 flex-1">
+            <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-sky-700">Facturación y pagos</p>
+            <h1 className="mt-1.5 text-[26px] font-extrabold leading-tight tracking-[-0.04em] text-neutral-950 sm:text-3xl">Balance de cuenta</h1>
+            <div className="mt-3 flex flex-col items-start gap-2 sm:flex-row sm:items-center sm:gap-3">
+              <span role="status" className={`inline-flex min-h-9 items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-bold ${statusToneClass}`}>
+                <StatusIcon aria-hidden="true" className="h-4 w-4 shrink-0" strokeWidth={2.2} />
                 {statusBadge.label}
               </span>
-              <span className="text-xs font-medium text-neutral-500">{statusBadge.desc}</span>
+              <span className="text-sm leading-5 text-neutral-600">{statusBadge.desc}</span>
             </div>
           </div>
 
-          <div className="flex items-center gap-5 rounded-[24px] border border-black/5 bg-white/70 p-4 pr-6 shadow-sm backdrop-blur">
-            <div className="relative flex items-center justify-center">
-              {(() => {
-                const progress = getCycleProgress();
-                const radius = 30;
-                const circ = 2 * Math.PI * radius;
-                const strokeOffset = circ - (progress / 100) * circ;
-                return (
-                  <>
-                    <svg className="h-20 w-20 -rotate-90">
-                      <circle cx="40" cy="40" r={radius} className="text-neutral-100" strokeWidth="6" stroke="currentColor" fill="transparent" />
-                      <circle
-                        cx="40" cy="40" r={radius}
-                        className="text-sky-500 transition-all duration-500 ease-out"
-                        strokeWidth="6"
-                        strokeDasharray={circ}
-                        strokeDashoffset={strokeOffset}
-                        strokeLinecap="round"
-                        stroke="currentColor"
-                        fill="transparent"
-                      />
-                    </svg>
-                    <span className="absolute text-sm font-black text-neutral-900">{progress}%</span>
-                  </>
-                );
-              })()}
+          <div className="flex min-w-0 items-center gap-3.5 rounded-[20px] border border-neutral-200/80 bg-white/85 p-3.5 shadow-sm sm:gap-4 sm:p-4 lg:w-[350px] lg:shrink-0">
+            <div className="relative flex h-[68px] w-[68px] shrink-0 items-center justify-center">
+              <svg role="img" aria-label={`Ciclo semanal: ${cycleProgress}%`} viewBox="0 0 80 80" className="h-full w-full -rotate-90">
+                <circle cx="40" cy="40" r="31" className="text-neutral-100" strokeWidth="6" stroke="currentColor" fill="transparent" />
+                <circle
+                  cx="40" cy="40" r="31"
+                  className="text-sky-600 transition-all duration-500 ease-out"
+                  strokeWidth="6"
+                  strokeDasharray={2 * Math.PI * 31}
+                  strokeDashoffset={2 * Math.PI * 31 * (1 - cycleProgress / 100)}
+                  strokeLinecap="round"
+                  stroke="currentColor"
+                  fill="transparent"
+                />
+              </svg>
+              <span aria-hidden="true" className="absolute text-sm font-bold tabular-nums text-neutral-900">{cycleProgress}%</span>
             </div>
 
-            <div>
-              <p className="text-[10px] font-bold uppercase tracking-wider text-neutral-400">Ciclo Semanal</p>
-              <p className="mt-0.5 text-sm font-bold text-neutral-900">Progreso de Periodo</p>
-              <div className="mt-2 inline-flex items-center gap-1.5 rounded-xl bg-sky-50/70 px-2.5 py-1.5 text-xs font-bold text-sky-700 ring-1 ring-inset ring-sky-100">
-                <span className="animate-pulse">⏱️</span>
-                <span>
-                  {hasPendingOrOverdue
-                    ? `Pagar antes de: ${formatTimeLeft(getSecondsUntilNextSuspension())}`
-                    : `Siguiente corte: ${formatTimeLeft(getSecondsUntilNextCutoff())}`}
-                </span>
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2">
+                <p className="text-xs font-semibold text-neutral-700">Ciclo semanal</p>
+              </div>
+              <div className="mt-2 flex items-start gap-2 text-xs">
+                <Clock3 aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0 text-sky-700" />
+                <div className="min-w-0">
+                  <p className="font-medium text-neutral-500">{hasPendingOrOverdue ? 'Plazo para pagar' : 'Próximo corte'}</p>
+                  <p className="mt-0.5 font-bold leading-4 text-neutral-900">
+                    {formatTimeLeft(hasPendingOrOverdue ? getSecondsUntilNextSuspension() : getSecondsUntilNextCutoff())}
+                  </p>
+                </div>
               </div>
             </div>
           </div>
@@ -146,69 +159,65 @@ export const BillingSection = React.memo(function BillingSection({
       </section>
 
       {/* ═══════ RESUMEN + CÓMO LIQUIDAR ═══════ */}
-      <section className="grid gap-5 md:grid-cols-2">
+      <section className="grid min-w-0 gap-4 lg:grid-cols-2 lg:gap-5">
         {/* Periodo en Curso */}
-        <article className="relative overflow-hidden rounded-[28px] border border-black/5 bg-white p-6 shadow-[0_4px_24px_rgba(0,0,0,0.02)] transition hover:shadow-md md:p-7">
-          <div className="flex items-start justify-between">
-            <div>
-              <h2 className="text-lg font-extrabold tracking-tight text-neutral-950">Periodo en Curso</h2>
-              <p className="mt-1 text-xs text-neutral-500">Comisiones acumuladas de la semana</p>
+        <article className="min-w-0 rounded-[24px] border border-neutral-200/80 bg-white p-4 shadow-[0_8px_30px_-24px_rgba(15,23,42,0.3)] sm:rounded-[28px] sm:p-6 md:p-7">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <h2 className="text-lg font-bold tracking-tight text-neutral-950">Periodo en curso</h2>
+              <p className="mt-1 text-sm leading-5 text-neutral-600">Cargos acumulados de esta semana</p>
             </div>
-            <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-sky-50 text-xl ring-1 ring-inset ring-sky-100/70">💸</span>
+            <span aria-hidden="true" className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-sky-50 text-sky-700 ring-1 ring-inset ring-sky-100">
+              <Receipt className="h-5 w-5" strokeWidth={1.9} />
+            </span>
           </div>
 
-          <div className="mt-6 flex items-baseline gap-2">
-            <span className="text-5xl font-black tracking-tight text-neutral-950 tabular-nums">{money(periodTotal)}</span>
-            <span className="text-xs font-bold text-neutral-400 uppercase">MXN</span>
+          <div className="mt-5 flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+            <span className="text-[38px] font-extrabold leading-none tracking-[-0.045em] text-neutral-950 tabular-nums sm:text-5xl">{money(periodTotal)}</span>
+            <span className="text-xs font-bold tracking-wide text-neutral-500">MXN</span>
           </div>
 
           {showFeeConfig && platformFeeRevenue > 0 && (
-            <p className="mt-3 inline-flex items-center gap-1.5 rounded-xl bg-sky-50 px-2.5 py-1.5 text-xs font-semibold text-sky-700 ring-1 ring-inset ring-sky-100">
-              <span>📈</span>
-              Tasa de uso: {platformRateLabel(platformFeeRate, platformFeePerOrder)}
-              <span className="font-bold text-sky-500/80">· {money(platformFeeRevenue)} acumulados</span>
-            </p>
+            <div className="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1 rounded-xl bg-sky-50 px-3 py-2 text-xs text-sky-800 ring-1 ring-inset ring-sky-100">
+              <TrendingUp aria-hidden="true" className="h-4 w-4 shrink-0 text-sky-700" />
+              <span className="font-semibold">Tarifa de plataforma:</span>
+              <span>{platformRateLabel(platformFeeRate, platformFeePerOrder)}</span>
+              <span className="font-bold">{money(platformFeeRevenue)} acumulados</span>
+            </div>
           )}
 
-          <dl className="mt-6 space-y-3 border-t border-black/5 pt-5">
-            <div className="flex items-center justify-between gap-3">
-              <dt className="flex min-w-0 items-center gap-2 text-sm text-neutral-500">
-                <span className="text-base">🧾</span>
-                <span className="truncate font-medium">Tarifa de Servicio</span>
+          <dl className="mt-5 divide-y divide-neutral-100 border-y border-neutral-100">
+            <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 py-3">
+              <dt className="min-w-0">
+                <span className="block truncate text-sm font-semibold text-neutral-800">Tarifa de servicio</span>
+                <span className="mt-0.5 block text-xs text-neutral-500">{money(billingSummary?.serviceFee)} por pedido</span>
               </dt>
-              <dd className="flex items-center gap-2">
-                <span className="rounded-lg bg-neutral-100/80 px-2 py-0.5 text-[11px] font-bold text-neutral-500">{money(billingSummary?.serviceFee)} c/u</span>
-                <span className="font-bold text-neutral-950 tabular-nums">{money(billingSummary?.serviceFeeRevenue)}</span>
-              </dd>
+              <dd className="text-right text-sm font-bold tabular-nums text-neutral-950">{money(billingSummary?.serviceFeeRevenue)}</dd>
             </div>
-            <div className="flex items-center justify-between gap-3">
-              <dt className="flex min-w-0 items-center gap-2 text-sm text-neutral-500">
-                <span className="text-base">📊</span>
-                <span className="truncate font-medium">Uso de la Plataforma</span>
+            <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 py-3">
+              <dt className="min-w-0">
+                <span className="block truncate text-sm font-semibold text-neutral-800">Uso de la plataforma</span>
+                <span className="mt-0.5 block text-xs text-neutral-500">{platformRateLabel(platformFeeRate, platformFeePerOrder)}</span>
               </dt>
-              <dd className="flex items-center gap-2">
-                <span className="rounded-lg bg-neutral-100/80 px-2 py-0.5 text-[11px] font-bold text-neutral-500">{platformRateLabel(platformFeeRate, platformFeePerOrder)}</span>
-                <span className="font-bold text-neutral-950 tabular-nums">{money(platformFeeRevenue)}</span>
-              </dd>
+              <dd className="text-right text-sm font-bold tabular-nums text-neutral-950">{money(platformFeeRevenue)}</dd>
             </div>
             {(billingSummary?.whatsappFeeRevenue ?? 0) > 0 && (
-              <div className="flex items-center justify-between gap-3">
-                <dt className="flex min-w-0 items-center gap-2 text-sm text-neutral-500">
-                  <span className="text-base">💬</span>
-                  <span className="truncate font-medium">WhatsApp</span>
+              <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 py-3">
+                <dt className="flex min-w-0 items-center gap-2">
+                  <MessageCircle aria-hidden="true" className="h-4 w-4 shrink-0 text-neutral-500" />
+                  <span className="truncate text-sm font-semibold text-neutral-800">Mensajes de WhatsApp</span>
                 </dt>
-                <dd className="flex items-center gap-2">
-                  <span className="rounded-lg bg-neutral-100/80 px-2 py-0.5 text-[11px] font-bold text-neutral-500">{money(billingSummary?.whatsappFeeRevenue)}</span>
-                </dd>
+                <dd className="text-right text-sm font-bold tabular-nums text-neutral-950">{money(billingSummary?.whatsappFeeRevenue)}</dd>
               </div>
             )}
           </dl>
 
-          <div className="mt-5 flex flex-wrap items-center justify-between gap-2 border-t border-black/5 pt-4">
-            <span className="text-xs font-medium text-neutral-500">
+          <div className="flex flex-wrap items-center justify-between gap-2.5 py-4">
+            <span className="text-sm text-neutral-600">
               {totalDeliveredInPeriod} pedido{totalDeliveredInPeriod !== 1 ? 's' : ''} en el período
             </span>
-            <span className="rounded-xl bg-sky-50/80 px-2.5 py-1 text-xs font-bold text-sky-700 ring-1 ring-inset ring-sky-100/70">
+            <span className="inline-flex min-h-8 items-center gap-1.5 rounded-full bg-neutral-100 px-3 py-1 text-xs font-semibold text-neutral-700">
+              <CalendarDays aria-hidden="true" className="h-3.5 w-3.5 text-neutral-500" />
               Corte: {billingSummary?.nextChargeDate
                 ? new Date(billingSummary.nextChargeDate).toLocaleDateString('es-MX', { day: 'numeric', month: 'short' })
                 : '--'}
@@ -221,47 +230,55 @@ export const BillingSection = React.memo(function BillingSection({
               setIsCurrentPeriodDetailsOpen(true);
               fetchCurrentPeriodOrders();
             }}
-            className="mt-4 flex w-full items-center justify-center gap-2 rounded-2xl border border-sky-100 bg-gradient-to-r from-sky-50 to-sky-100/40 px-4 py-3 text-xs font-bold text-sky-700 shadow-sm transition hover:from-sky-100 hover:to-sky-100 active:scale-[0.98]"
+            className="flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm font-semibold text-sky-800 transition-colors hover:bg-sky-100 active:bg-sky-100"
           >
-            <svg className="h-4 w-4 text-sky-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
-            </svg>
+            <FileText aria-hidden="true" className="h-4 w-4" />
             Ver desglose del acumulado
           </button>
         </article>
 
         {/* Cómo liquidar */}
-        <article className="flex flex-col justify-between rounded-[28px] border border-black/5 bg-gradient-to-br from-neutral-50 to-neutral-100/50 p-6 shadow-[0_4px_24px_rgba(0,0,0,0.02)] md:p-7">
+        <article className="flex min-w-0 flex-col justify-between rounded-[24px] border border-neutral-200/80 bg-neutral-50/80 p-4 sm:rounded-[28px] sm:p-6 md:p-7">
           <div>
-            <h2 className="text-lg font-extrabold tracking-tight text-neutral-950">Cómo liquidar tu saldo</h2>
-            <ol className="mt-5 space-y-4">
-              <li className="flex gap-3">
-                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-sky-600/10 text-xs font-black text-sky-700 ring-1 ring-inset ring-sky-600/10">1</span>
-                <p className="text-sm leading-relaxed text-neutral-600">
-                  El corte se genera automáticamente los <span className="font-semibold text-neutral-800">domingos a las 23:59</span>.
+            <div className="flex items-center gap-2.5">
+              <span aria-hidden="true" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-white text-sky-700 ring-1 ring-inset ring-neutral-200/80">
+                <CalendarDays className="h-5 w-5" strokeWidth={1.9} />
+              </span>
+              <div>
+                <h2 className="text-lg font-bold tracking-tight text-neutral-950">Cómo liquidar tu saldo</h2>
+                <p className="mt-0.5 text-sm text-neutral-600">Tres pasos sencillos</p>
+              </div>
+            </div>
+            <ol className="mt-5 space-y-0">
+              <li className="relative flex gap-3 pb-5">
+                <span aria-hidden="true" className="relative z-10 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white text-xs font-bold text-sky-800 ring-1 ring-inset ring-sky-200">1</span>
+                <p className="pt-1 text-sm leading-5 text-neutral-700">
+                  El corte se genera cada <span className="font-semibold text-neutral-950">domingo a las 23:59</span>.
                 </p>
+                <span aria-hidden="true" className="absolute bottom-0 left-[15px] top-8 w-px bg-sky-200" />
+              </li>
+              <li className="relative flex gap-3 pb-5">
+                <span aria-hidden="true" className="relative z-10 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white text-xs font-bold text-sky-800 ring-1 ring-inset ring-sky-200">2</span>
+                <p className="pt-1 text-sm leading-5 text-neutral-700">
+                  Puedes pagar hasta el <span className="font-semibold text-neutral-950">miércoles a las 23:59</span>.
+                </p>
+                <span aria-hidden="true" className="absolute bottom-0 left-[15px] top-8 w-px bg-sky-200" />
               </li>
               <li className="flex gap-3">
-                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-sky-600/10 text-xs font-black text-sky-700 ring-1 ring-inset ring-sky-600/10">2</span>
-                <p className="text-sm leading-relaxed text-neutral-600">
-                  Tienes hasta el <span className="font-semibold text-neutral-800">miércoles a las 23:59</span> para pagar.
-                </p>
-              </li>
-              <li className="flex gap-3">
-                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-sky-600/10 text-xs font-black text-sky-700 ring-1 ring-inset ring-sky-600/10">3</span>
-                <p className="text-sm leading-relaxed text-neutral-600">
-                  Haz la <span className="font-semibold text-neutral-800">transferencia</span>, sube tu comprobante y espera la aprobación.
+                <span aria-hidden="true" className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white text-xs font-bold text-sky-800 ring-1 ring-inset ring-sky-200">3</span>
+                <p className="pt-1 text-sm leading-5 text-neutral-700">
+                  Haz la <span className="font-semibold text-neutral-950">transferencia</span>, sube el comprobante y espera la aprobación.
                 </p>
               </li>
             </ol>
           </div>
 
-          <div className="mt-6 flex items-start gap-3 rounded-2xl border border-amber-200/70 bg-amber-50/70 p-4">
-            <span className="text-lg">⚠️</span>
-            <div>
-              <p className="text-xs font-bold text-amber-900">Suspensión automática</p>
-              <p className="mt-0.5 text-xs leading-relaxed text-amber-800/90">
-                Sin pago confirmado antes del límite, tu restaurante se desactiva automáticamente.
+          <div className="mt-5 flex items-start gap-2.5 rounded-2xl border border-amber-200 bg-amber-50/80 p-3.5">
+            <AlertTriangle aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0 text-amber-700" />
+            <div className="min-w-0">
+              <p className="text-xs font-bold text-amber-950">Evita interrupciones</p>
+              <p className="mt-0.5 text-xs leading-5 text-amber-900/90">
+                Si el pago no se confirma antes del vencimiento, el restaurante se suspende automáticamente.
               </p>
             </div>
           </div>
@@ -269,13 +286,15 @@ export const BillingSection = React.memo(function BillingSection({
       </section>
 
       {/* ═══════ HISTORIAL ═══════ */}
-      <section className="rounded-[28px] border border-black/5 bg-white p-6 shadow-[0_4px_24px_rgba(0,0,0,0.01)] md:p-7">
+      <section className="min-w-0 rounded-[24px] border border-neutral-200/80 bg-white p-4 shadow-[0_8px_30px_-24px_rgba(15,23,42,0.3)] sm:rounded-[28px] sm:p-6 md:p-7">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <h2 className="text-lg font-extrabold tracking-tight text-neutral-950">Historial de Cortes</h2>
-            <p className="mt-0.5 text-xs text-neutral-500">Cortes anteriores, pagos reportados y comprobantes</p>
+          <div className="min-w-0">
+            <h2 className="text-lg font-bold tracking-tight text-neutral-950">Historial de cortes</h2>
+            <p className="mt-1 text-sm leading-5 text-neutral-600">Pagos anteriores, reportes y comprobantes</p>
           </div>
-          <span className="rounded-full bg-neutral-100 px-3 py-1 text-xs font-bold text-neutral-600">{settlements.length} registros</span>
+          <span className="inline-flex min-h-8 items-center rounded-full bg-neutral-100 px-3 text-xs font-semibold text-neutral-700">
+            {settlements.length} {settlements.length === 1 ? 'corte' : 'cortes'}
+          </span>
         </div>
 
         <div className="mt-5 space-y-3">
@@ -287,65 +306,69 @@ export const BillingSection = React.memo(function BillingSection({
               return (
                 <div
                   key={settlement.id}
-                  className={`rounded-2xl border p-5 transition duration-200 shadow-sm hover:shadow-md ${
+                  className={`min-w-0 rounded-[20px] border p-4 shadow-sm sm:p-5 ${
                     isOverdue
-                      ? 'border-rose-200 bg-gradient-to-r from-rose-50/50 to-white'
+                      ? 'border-rose-200 bg-rose-50/40'
                       : isPending
-                        ? 'border-sky-200 bg-gradient-to-r from-sky-50/50 to-white'
+                        ? 'border-sky-200 bg-sky-50/40'
                         : isReview
-                          ? 'border-blue-200 bg-gradient-to-r from-blue-50/50 to-white'
-                          : 'border-black/5 bg-white hover:border-neutral-200'
+                          ? 'border-blue-200 bg-blue-50/40'
+                          : 'border-neutral-200 bg-white'
                   }`}
                 >
-                  <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3">
-                    <div className="min-w-0">
+                  <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                    <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-2">
-                        <p className="font-extrabold tracking-tight text-neutral-950">{formatSettlementReference(settlement.reference)}</p>
+                        <p className="break-all text-sm font-bold tracking-tight text-neutral-950">{formatSettlementReference(settlement.reference)}</p>
                         <span
-                          className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-[11px] font-bold ${
+                          className={`inline-flex min-h-7 items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-semibold ${
                             isOverdue
-                              ? 'border-rose-200 bg-rose-100 text-rose-700 animate-pulse'
+                              ? 'border-rose-200 bg-rose-100 text-rose-800'
                               : isPending
-                                ? 'border-sky-200 bg-sky-100 text-sky-800 animate-pulse'
+                                ? 'border-sky-200 bg-sky-100 text-sky-800'
                                 : isReview
                                   ? 'border-blue-200 bg-blue-100 text-blue-700'
                                   : 'border-emerald-200 bg-emerald-100 text-emerald-700'
                           }`}
                         >
-                          {isOverdue ? '🚨 Vencido' : isPending ? '⏱️ Pendiente' : isReview ? '🔍 En revisión' : '✅ Pagado'}
+                          {isOverdue ? <AlertTriangle aria-hidden="true" className="h-3.5 w-3.5" /> : null}
+                          {isPending ? <Clock3 aria-hidden="true" className="h-3.5 w-3.5" /> : null}
+                          {isReview ? <Search aria-hidden="true" className="h-3.5 w-3.5" /> : null}
+                          {!isOverdue && !isPending && !isReview ? <CheckCircle2 aria-hidden="true" className="h-3.5 w-3.5" /> : null}
+                          {isOverdue ? 'Vencido' : isPending ? 'Pendiente' : isReview ? 'En revisión' : 'Pagado'}
                         </span>
                       </div>
-                      <p className="mt-1 text-xs font-medium text-neutral-500">
-                        {new Date(settlement.periodStart).toLocaleDateString('es-MX', { day: 'numeric', month: 'short' })} - {new Date(settlement.periodEnd).toLocaleDateString('es-MX', { day: 'numeric', month: 'short', year: 'numeric' })}
-                        <span className="mx-1.5 text-neutral-300">·</span>
-                        <span className="text-neutral-400">{totalsPerStatus(settlement)}</span>
+                      <p className="mt-2 text-xs leading-5 text-neutral-600">
+                        Período: {new Date(settlement.periodStart).toLocaleDateString('es-MX', { day: 'numeric', month: 'short' })} – {new Date(settlement.periodEnd).toLocaleDateString('es-MX', { day: 'numeric', month: 'short', year: 'numeric' })}
                       </p>
+                      <p className="mt-0.5 break-words text-xs leading-5 text-neutral-500">{totalsPerStatus(settlement)}</p>
                     </div>
 
-                    <div className="flex items-center gap-4">
-                      <p className="text-xl font-black tracking-tight text-neutral-950 tabular-nums">{money(settlement.amount)} <span className="text-xs font-bold text-neutral-400">MXN</span></p>
+                    <div className="flex items-baseline gap-1.5 sm:shrink-0 sm:justify-end">
+                      <p className="text-2xl font-bold tracking-tight text-neutral-950 tabular-nums">{money(settlement.amount)}</p>
+                      <span className="text-[11px] font-semibold text-neutral-500">MXN</span>
                     </div>
                   </div>
 
                   {(isPending || isOverdue || isReview) && settlement.dueDate && (
                     <div
-                      className={`mt-3 inline-flex flex-wrap items-center gap-1.5 rounded-xl border px-3 py-1.5 text-[11px] font-bold ${
+                      className={`mt-3 inline-flex min-h-9 max-w-full flex-wrap items-center gap-1.5 rounded-xl border px-3 py-2 text-xs font-semibold leading-5 ${
                         isOverdue
-                          ? 'border-rose-200/60 bg-rose-50/60 text-rose-700'
+                          ? 'border-rose-200 bg-rose-50 text-rose-800'
                           : isPending
-                            ? 'border-sky-200/60 bg-sky-50/60 text-sky-700'
-                            : 'border-blue-200/60 bg-blue-50/60 text-blue-700'
+                            ? 'border-sky-200 bg-sky-50 text-sky-800'
+                            : 'border-blue-200 bg-blue-50 text-blue-800'
                       }`}
                     >
                       {isOverdue
-                        ? `🚨 Atraso: ${getDaysOverdue(settlement.dueDate)} días · Venció el ${new Date(settlement.dueDate).toLocaleDateString('es-MX', { day: 'numeric', month: 'short' })}`
+                        ? `Atraso de ${getDaysOverdue(settlement.dueDate)} días · Venció el ${new Date(settlement.dueDate).toLocaleDateString('es-MX', { day: 'numeric', month: 'short' })}`
                         : isPending
-                          ? `📅 Límite: ${new Date(settlement.dueDate).toLocaleDateString('es-MX', { day: 'numeric', month: 'long', year: 'numeric' })}`
-                          : `📤 Reportado el ${new Date(settlement.updatedAt).toLocaleDateString('es-MX', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}`}
+                          ? `Fecha límite: ${new Date(settlement.dueDate).toLocaleDateString('es-MX', { day: 'numeric', month: 'long', year: 'numeric' })}`
+                          : `Comprobante reportado el ${new Date(settlement.updatedAt).toLocaleDateString('es-MX', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}`}
                     </div>
                   )}
 
-                  <div className="mt-4 flex flex-wrap justify-end gap-2 border-t border-black/5 pt-3.5">
+                  <div className="mt-4 grid grid-cols-2 gap-2 border-t border-neutral-200/70 pt-3.5 sm:flex sm:justify-end">
                     <button
                       type="button"
                       onClick={() => {
@@ -353,7 +376,7 @@ export const BillingSection = React.memo(function BillingSection({
                         setIsDetailsModalOpen(true);
                         fetchSettlementOrders(settlement.id);
                       }}
-                      className="rounded-xl border border-black/10 bg-white px-3.5 py-2 text-xs font-bold text-neutral-700 shadow-sm transition hover:bg-neutral-50 active:scale-95"
+                      className={`order-2 inline-flex min-h-11 items-center justify-center rounded-xl border border-neutral-200 bg-white px-3 py-2.5 text-xs font-semibold text-neutral-700 transition-colors hover:bg-neutral-50 active:bg-neutral-100 sm:order-none sm:px-3.5 ${!settlement.paymentProofUrl ? 'col-span-2' : ''}`}
                     >
                       Ver detalles
                     </button>
@@ -363,9 +386,10 @@ export const BillingSection = React.memo(function BillingSection({
                         href={settlement.paymentProofUrl}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1.5 rounded-xl border border-black/10 bg-white px-3.5 py-2 text-xs font-bold text-neutral-700 shadow-sm transition hover:bg-neutral-50 active:scale-95"
+                        className="order-3 inline-flex min-h-11 items-center justify-center gap-1.5 rounded-xl border border-neutral-200 bg-white px-3 py-2.5 text-xs font-semibold text-neutral-700 transition-colors hover:bg-neutral-50 active:bg-neutral-100 sm:order-none sm:px-3.5"
                       >
-                        🖼️ Comprobante
+                        <ImageIcon aria-hidden="true" className="h-4 w-4" />
+                        Comprobante
                       </a>
                     )}
 
@@ -376,9 +400,9 @@ export const BillingSection = React.memo(function BillingSection({
                           setSelectedSettlementForPay(settlement);
                           setIsPayModalOpen(true);
                         }}
-                        className="rounded-xl bg-neutral-950 px-4 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-neutral-800 active:scale-95"
+                        className="order-1 col-span-2 inline-flex min-h-12 items-center justify-center rounded-xl bg-neutral-950 px-4 py-3 text-sm font-semibold text-white transition-colors hover:bg-neutral-800 active:bg-neutral-800 sm:order-none sm:col-span-1 sm:min-h-11 sm:px-4 sm:py-2.5 sm:text-xs"
                       >
-                        Pagar Corte
+                        Pagar corte
                       </button>
                     ) : null}
                   </div>
@@ -386,10 +410,12 @@ export const BillingSection = React.memo(function BillingSection({
               );
             })
           ) : (
-            <div className="rounded-[24px] border border-dashed border-black/10 bg-neutral-50/50 py-12 text-center text-neutral-500">
-              <span className="mb-2 block text-3xl">📊</span>
-              <p className="font-bold text-neutral-700">Sin cortes aún</p>
-              <p className="mt-1 text-xs">Al finalizar tu primer ciclo aparecerá aquí tu corte de caja.</p>
+            <div className="rounded-[20px] border border-dashed border-neutral-300 bg-neutral-50/70 px-4 py-10 text-center">
+              <span aria-hidden="true" className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-white text-neutral-500 ring-1 ring-inset ring-neutral-200">
+                <Receipt className="h-5 w-5" />
+              </span>
+              <p className="font-semibold text-neutral-800">Aún no hay cortes</p>
+              <p className="mx-auto mt-1 max-w-sm text-sm leading-5 text-neutral-600">Cuando termine tu primer ciclo, aquí encontrarás el detalle del corte y sus comprobantes.</p>
             </div>
           )}
         </div>

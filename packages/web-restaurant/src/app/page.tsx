@@ -6091,12 +6091,12 @@ export default function Home() {
     const minutes = Math.floor((totalSeconds % 3600) / 60);
 
     if (days > 0) {
-      return `${days}d ${hours}h ${minutes}m`;
+      return `${days} ${days === 1 ? 'día' : 'días'}${hours > 0 ? `, ${hours} h` : ''}`;
     }
     if (hours > 0) {
-      return `${hours}h ${minutes}m`;
+      return `${hours} h${minutes > 0 ? `, ${minutes} min` : ''}`;
     }
-    return `${minutes}m`;
+    return `${minutes} min`;
   };
 
   const getDaysOverdue = (dueDateStr?: string | Date) => {
