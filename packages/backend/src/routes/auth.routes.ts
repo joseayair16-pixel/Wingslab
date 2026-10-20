@@ -25,6 +25,10 @@ function isRealEmail(email?: string | null): boolean {
   return Boolean(email && email.includes('@') && !email.endsWith('@sadel.local'));
 }
 
+function normalizeEmail(email: string): string {
+  return email.trim().toLowerCase();
+}
+
 function normalizePhone(phone: string): string {
   const digits = phone.replace(/\D/g, '');
   return digits.length >= 10 ? digits.slice(-10) : digits;
@@ -210,7 +214,7 @@ export async function registerAuthRoutes(fastify: FastifyInstance): Promise<void
         });
       }
 
-      let email = parsed.data.email?.trim().toLowerCase() || '';
+      let email = parsed.data.email ? normalizeEmail(parsed.data.email) : '';
       let userId: string | undefined;
 
       if (parsed.data.intent === 'register') {
@@ -270,7 +274,7 @@ export async function registerAuthRoutes(fastify: FastifyInstance): Promise<void
             error: { code: 'EMAIL_NOT_AVAILABLE', message: 'Esta cuenta no tiene un correo de recuperación. Usa WhatsApp para verificar tu número.' },
           });
         }
-        email = existingUser.email.trim().toLowerCase();
+        email = normalizeEmail(existingUser.email);
         userId = existingUser.id;
       }
 
@@ -540,7 +544,7 @@ export async function registerAuthRoutes(fastify: FastifyInstance): Promise<void
               name: parsed.data.name?.trim(),
               lastName: parsed.data.lastName?.trim(),
               dateOfBirth: parsed.data.dateOfBirth,
-              email: parsed.data.email?.trim().toLowerCase(),
+              email: parsed.data.email ? normalizeEmail(parsed.data.email) : undefined,
             }
           : {}),
       };
@@ -1179,7 +1183,7 @@ export async function registerAuthRoutes(fastify: FastifyInstance): Promise<void
       const hashedPassword = await bcryptjs.hash(parsed.data.password, 10);
 
       const email = isRealEmail(decoded.email)
-        ? decoded.email!
+        ? normalizeEmail(decoded.email!)
         : `${decoded.phone}@sadel.local`;
 
       if (isRealEmail(email)) {

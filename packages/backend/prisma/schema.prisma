@@ -13,6 +13,8 @@ datasource db {
 // ============== Users ==============
 model User {
   id           String     @id @default(cuid())
+  // Case-insensitive email uniqueness is enforced by the expression index
+  // User_email_ci_key (Prisma cannot model it).
   email        String     @unique
   password     String
   phone        String
