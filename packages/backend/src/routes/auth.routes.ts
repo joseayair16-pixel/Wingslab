@@ -19,6 +19,55 @@ const EMAIL_OTP_TTL_SECONDS = 300;
 const EMAIL_OTP_MAX_ATTEMPTS = 5;
 const EMAIL_OTP_STARTS_PER_HOUR = 5;
 const EMAIL_OTP_HMAC_SECRET = process.env.JWT_SECRET || crypto.randomBytes(32).toString('hex');
+const CUSTOMER_MINIMUM_AGE = 12;
+
+type CalendarDateParts = { year: number; month: number; day: number };
+
+function getMexicoCalendarDate(date = new Date()): CalendarDateParts {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/Mexico_City',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(date);
+  const getPart = (type: Intl.DateTimeFormatPartTypes) => Number(parts.find((part) => part.type === type)?.value);
+
+  return { year: getPart('year'), month: getPart('month'), day: getPart('day') };
+}
+
+function parseCalendarDate(value?: string): CalendarDateParts | null {
+  if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
+  const parsed = new Date(`${value}T00:00:00.000Z`);
+  if (Number.isNaN(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== value) return null;
+
+  return {
+    year: Number(value.slice(0, 4)),
+    month: Number(value.slice(5, 7)),
+    day: Number(value.slice(8, 10)),
+  };
+}
+
+function isEligibleCustomerBirthDate(value?: string): boolean {
+  const birthDate = parseCalendarDate(value);
+  if (!birthDate) return false;
+
+  const today = getMexicoCalendarDate();
+  const latestYear = today.year - CUSTOMER_MINIMUM_AGE;
+  const latestDay = Math.min(today.day, new Date(Date.UTC(latestYear, today.month, 0)).getUTCDate());
+  return birthDate.year < latestYear || (birthDate.year === latestYear && (
+    birthDate.month < today.month || (birthDate.month === today.month && birthDate.day <= latestDay)
+  ));
+}
+
+function invalidBirthDate(reply: FastifyReply) {
+  return reply.status(400).send({
+    success: false,
+    error: {
+      code: 'INVALID_DATE_OF_BIRTH',
+      message: 'Para crear una cuenta necesitas tener al menos 12 años.',
+    },
+  });
+}
 
 // Los dominios sintéticos no representan un correo de contacto utilizable.
 function isRealEmail(email?: string | null): boolean {
@@ -199,7 +248,7 @@ export async function registerAuthRoutes(fastify: FastifyInstance): Promise<void
     email: z.string().email('Correo inválido.').optional(),
     name: z.string().min(2, 'El nombre debe tener al menos 2 caracteres.').optional(),
     lastName: z.string().min(2, 'Los apellidos deben tener al menos 2 caracteres.').optional(),
-    dateOfBirth: z.string().refine((value) => !Number.isNaN(Date.parse(value)), 'Fecha de nacimiento inválida.').optional(),
+    dateOfBirth: z.string().refine((value) => parseCalendarDate(value) !== null, 'Fecha de nacimiento inválida.').optional(),
   });
 
   fastify.post(
@@ -225,16 +274,7 @@ export async function registerAuthRoutes(fastify: FastifyInstance): Promise<void
           });
         }
 
-        const dateOfBirth = new Date(parsed.data.dateOfBirth);
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        dateOfBirth.setHours(0, 0, 0, 0);
-        if (dateOfBirth > today) {
-          return reply.status(400).send({
-            success: false,
-            error: { code: 'INVALID_DATE_OF_BIRTH', message: 'La fecha de nacimiento no puede estar en el futuro.' },
-          });
-        }
+        if (!isEligibleCustomerBirthDate(parsed.data.dateOfBirth)) return invalidBirthDate(reply);
 
         const existingPhone = await prisma.user.findFirst({
           where: { phoneNormalized: parsed.data.phone, role: UserRole.CUSTOMER },
@@ -479,7 +519,7 @@ export async function registerAuthRoutes(fastify: FastifyInstance): Promise<void
     email: z.string().email('Correo inválido.').optional(),
     name: z.string().min(2, 'El nombre debe tener al menos 2 caracteres.').optional(),
     lastName: z.string().min(2, 'Los apellidos deben tener al menos 2 caracteres.').optional(),
-    dateOfBirth: z.string().refine((value) => !Number.isNaN(Date.parse(value)), 'Fecha de nacimiento inválida.').optional(),
+    dateOfBirth: z.string().refine((value) => parseCalendarDate(value) !== null, 'Fecha de nacimiento inválida.').optional(),
   });
 
   const whatsappChallengeIdSchema = z.object({
@@ -498,17 +538,8 @@ export async function registerAuthRoutes(fastify: FastifyInstance): Promise<void
         });
       }
 
-      if (parsed.data.intent === 'register' && parsed.data.dateOfBirth) {
-        const dateOfBirth = new Date(parsed.data.dateOfBirth);
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        dateOfBirth.setHours(0, 0, 0, 0);
-        if (dateOfBirth > today) {
-          return reply.status(400).send({
-            success: false,
-            error: { code: 'INVALID_DATE_OF_BIRTH', message: 'La fecha de nacimiento no puede estar en el futuro.' },
-          });
-        }
+      if (parsed.data.intent === 'register' && !isEligibleCustomerBirthDate(parsed.data.dateOfBirth)) {
+        return invalidBirthDate(reply);
       }
 
       const whatsappNumber = toWhatsAppLinkNumber(process.env.WHATSAPP_AUTH_PHONE || '');
@@ -1162,6 +1193,8 @@ export async function registerAuthRoutes(fastify: FastifyInstance): Promise<void
       ) {
         throw new Error('Invalid intent');
       }
+
+      if (!isEligibleCustomerBirthDate(decoded.dateOfBirth)) return invalidBirthDate(reply);
 
       const existingUser = await prisma.user.findFirst({
         where: { phoneNormalized: decoded.phone, role: UserRole.CUSTOMER },

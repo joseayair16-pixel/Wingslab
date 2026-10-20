@@ -26,9 +26,9 @@ export const AuthModal = memo(function AuthModal({ isOpen, onClose, onSuccess, a
   const [email, setEmail] = useState('');
   const [name, setName] = useState('');
   const [lastName, setLastName] = useState('');
-  const [dobDay, setDobDay] = useState(new Date().getDate());
-  const [dobMonth, setDobMonth] = useState(new Date().getMonth() + 1);
-  const [dobYear, setDobYear] = useState(new Date().getFullYear());
+  const [dobDay, setDobDay] = useState(() => getLatestAllowedBirthDate().day);
+  const [dobMonth, setDobMonth] = useState(() => getLatestAllowedBirthDate().month);
+  const [dobYear, setDobYear] = useState(() => getLatestAllowedBirthDate().year);
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [resetToken, setResetToken] = useState('');
@@ -74,9 +74,10 @@ export const AuthModal = memo(function AuthModal({ isOpen, onClose, onSuccess, a
       setEmail('');
       setName('');
       setLastName('');
-      setDobDay(new Date().getDate());
-      setDobMonth(new Date().getMonth() + 1);
-      setDobYear(new Date().getFullYear());
+      const latestAllowedBirthDate = getLatestAllowedBirthDate();
+      setDobDay(latestAllowedBirthDate.day);
+      setDobMonth(latestAllowedBirthDate.month);
+      setDobYear(latestAllowedBirthDate.year);
       setPassword('');
       setConfirmPassword('');
       setResetToken('');
@@ -95,10 +96,14 @@ export const AuthModal = memo(function AuthModal({ isOpen, onClose, onSuccess, a
   }, [isOpen]);
 
   const handleDobChange = useCallback((next: { day?: number; month?: number; year?: number }) => {
-    const month = next.month ?? dobMonth;
-    const year = next.year ?? dobYear;
-    const maxDay = daysInMonth(year, month);
-    setDobDay(Math.min(next.day ?? dobDay, maxDay));
+    const latestAllowed = getLatestAllowedBirthDate();
+    const year = clamp(next.year ?? dobYear, 1950, latestAllowed.year);
+    const maxMonth = year === latestAllowed.year ? latestAllowed.month : 12;
+    const month = clamp(next.month ?? dobMonth, 1, maxMonth);
+    const maxDay = year === latestAllowed.year && month === latestAllowed.month
+      ? latestAllowed.day
+      : daysInMonth(year, month);
+    setDobDay(clamp(next.day ?? dobDay, 1, maxDay));
     setDobMonth(month);
     setDobYear(year);
   }, [dobDay, dobMonth, dobYear]);
@@ -187,12 +192,8 @@ export const AuthModal = memo(function AuthModal({ isOpen, onClose, onSuccess, a
         if (!emailIsValid) {
           throw new Error('Ingresa un correo electrónico válido.');
         }
-        const dateOfBirth = new Date(dobYear, dobMonth - 1, dobDay);
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        dateOfBirth.setHours(0, 0, 0, 0);
-        if (dateOfBirth > today) {
-          throw new Error('La fecha de nacimiento no puede estar en el futuro.');
+        if (!isEligibleBirthDate(dobDay, dobMonth, dobYear)) {
+          throw new Error('Para crear una cuenta necesitas tener al menos 12 años.');
         }
       }
 
@@ -256,12 +257,8 @@ export const AuthModal = memo(function AuthModal({ isOpen, onClose, onSuccess, a
         if (!name.trim() || !lastName.trim()) {
           throw new Error('Completa tu nombre y apellidos.');
         }
-        const dateOfBirth = new Date(dobYear, dobMonth - 1, dobDay);
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        dateOfBirth.setHours(0, 0, 0, 0);
-        if (dateOfBirth > today) {
-          throw new Error('La fecha de nacimiento no puede estar en el futuro.');
+        if (!isEligibleBirthDate(dobDay, dobMonth, dobYear)) {
+          throw new Error('Para crear una cuenta necesitas tener al menos 12 años.');
         }
       }
 
@@ -1175,6 +1172,41 @@ function daysInMonth(year: number, month: number): number {
   return new Date(year, month, 0).getDate();
 }
 
+type BirthDateParts = { year: number; month: number; day: number };
+
+function getMexicoCalendarDate(date = new Date()): BirthDateParts {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/Mexico_City',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(date);
+  const getPart = (type: Intl.DateTimeFormatPartTypes) => Number(parts.find((part) => part.type === type)?.value);
+
+  return { year: getPart('year'), month: getPart('month'), day: getPart('day') };
+}
+
+function getLatestAllowedBirthDate(): BirthDateParts {
+  const today = getMexicoCalendarDate();
+  const year = today.year - 12;
+  return {
+    year,
+    month: today.month,
+    day: Math.min(today.day, daysInMonth(year, today.month)),
+  };
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, value));
+}
+
+function isEligibleBirthDate(day: number, month: number, year: number): boolean {
+  const latest = getLatestAllowedBirthDate();
+  return year < latest.year || (year === latest.year && (
+    month < latest.month || (month === latest.month && day <= latest.day)
+  ));
+}
+
 function WheelDatePicker({
   day,
   month,
@@ -1186,22 +1218,28 @@ function WheelDatePicker({
   year: number;
   onChange: (next: { day?: number; month?: number; year?: number }) => void;
 }) {
-  const now = new Date();
-  const currentYear = now.getFullYear();
+  const latestAllowed = getLatestAllowedBirthDate();
+  const safeYear = clamp(year, 1950, latestAllowed.year);
+  const latestMonth = safeYear === latestAllowed.year ? latestAllowed.month : 12;
+  const safeMonth = clamp(month, 1, latestMonth);
+  const latestDay = safeYear === latestAllowed.year && safeMonth === latestAllowed.month
+    ? latestAllowed.day
+    : daysInMonth(safeYear, safeMonth);
+  const safeDay = clamp(day, 1, latestDay);
   const years = useMemo(
-    () => Array.from({ length: currentYear - 1950 + 1 }, (_, i) => 1950 + i),
-    [currentYear],
+    () => Array.from({ length: latestAllowed.year - 1950 + 1 }, (_, i) => 1950 + i),
+    [latestAllowed.year],
   );
-  const months = useMemo(() => Array.from({ length: 12 }, (_, i) => i + 1), []);
-  const maxDay = daysInMonth(year, month);
-  const days = useMemo(() => Array.from({ length: maxDay }, (_, i) => i + 1), [maxDay]);
-  // El día solo se limita por los días reales del mes/año, nunca por el día de hoy.
-  const safeDay = Math.min(day, maxDay);
+  const months = useMemo(
+    () => Array.from({ length: latestMonth }, (_, i) => i + 1),
+    [latestMonth],
+  );
+  const days = useMemo(() => Array.from({ length: latestDay }, (_, i) => i + 1), [latestDay]);
 
   const columns: { label: string; items: number[]; value: number; onPick: (v: number) => void }[] = [
     { label: 'Día', items: days, value: safeDay, onPick: (v) => onChange({ day: v }) },
-    { label: 'Mes', items: months, value: month, onPick: (v) => onChange({ month: v }) },
-    { label: 'Año', items: years, value: year, onPick: (v) => onChange({ year: v }) },
+    { label: 'Mes', items: months, value: safeMonth, onPick: (v) => onChange({ month: v }) },
+    { label: 'Año', items: years, value: safeYear, onPick: (v) => onChange({ year: v }) },
   ];
 
   return (
@@ -1213,11 +1251,11 @@ function WheelDatePicker({
           </span>
           <div className="min-w-0">
             <span className="block text-xs font-semibold text-neutral-700">Fecha de nacimiento</span>
-            <span className="mt-0.5 block text-[10px] leading-none text-neutral-400">Desliza para elegir</span>
+            <span className="mt-0.5 block text-[10px] leading-none text-neutral-400">Edad mínima: 12 años</span>
           </div>
         </div>
         <span className="shrink-0 rounded-full bg-neutral-100 px-2 py-1 text-[10px] font-medium tabular-nums text-neutral-500">
-          {String(safeDay).padStart(2, '0')}/{String(month).padStart(2, '0')}/{year}
+          {String(safeDay).padStart(2, '0')}/{String(safeMonth).padStart(2, '0')}/{safeYear}
         </span>
       </div>
       <div className="grid grid-cols-[0.8fr_0.9fr_1.3fr] gap-1.5 rounded-[22px] border border-black/[0.045] bg-neutral-50/80 p-2 shadow-[inset_0_1px_2px_rgba(15,23,42,0.025)]">

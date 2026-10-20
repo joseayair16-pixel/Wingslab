@@ -10,6 +10,21 @@ function parseJson<T>(payload: string): T {
   return JSON.parse(payload) as T;
 }
 
+function dateOfBirthForAge(age: number): string {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/Mexico_City',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(new Date());
+  const value = (type: Intl.DateTimeFormatPartTypes) => Number(parts.find((part) => part.type === type)?.value);
+  const year = value('year') - age;
+  const month = value('month');
+  const day = Math.min(value('day'), new Date(Date.UTC(year, month, 0)).getUTCDate());
+
+  return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+}
+
 describe('app integration', () => {
   let app: FastifyInstance;
 
@@ -108,6 +123,88 @@ describe('app integration', () => {
     expect(body.data.maskedEmail).toBe('cl•••••@example.com');
     expect(body.data.expiresInSeconds).toBe(300);
     expect(body.data.mockCode).toMatch(/^\d{6}$/);
+  });
+
+  it('rechaza iniciar el registro por correo si la persona tiene menos de 12 años', async () => {
+    const response = await app.inject({
+      method: 'POST',
+      url: '/auth/email-otp/iniciar',
+      payload: {
+        phone: '5512345678',
+        intent: 'register',
+        email: 'cliente@example.com',
+        name: 'Cliente',
+        lastName: 'Prueba',
+        dateOfBirth: dateOfBirthForAge(11),
+      },
+    });
+    const body = parseJson<{ success: boolean; error: { code: string; message: string } }>(response.body);
+
+    expect(response.statusCode).toBe(400);
+    expect(body.success).toBe(false);
+    expect(body.error.code).toBe('INVALID_DATE_OF_BIRTH');
+  });
+
+  it('permite iniciar el registro por correo al cumplir exactamente 12 años', async () => {
+    jest.spyOn(prisma.user, 'findFirst').mockResolvedValue(null);
+    const response = await app.inject({
+      method: 'POST',
+      url: '/auth/email-otp/iniciar',
+      payload: {
+        phone: '5512345678',
+        intent: 'register',
+        email: 'cliente@example.com',
+        name: 'Cliente',
+        lastName: 'Prueba',
+        dateOfBirth: dateOfBirthForAge(12),
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+  });
+
+  it('rechaza iniciar el registro por WhatsApp si la persona tiene menos de 12 años', async () => {
+    const response = await app.inject({
+      method: 'POST',
+      url: '/auth/whatsapp/iniciar',
+      payload: {
+        phone: '5512345678',
+        intent: 'register',
+        email: 'cliente@example.com',
+        name: 'Cliente',
+        lastName: 'Prueba',
+        dateOfBirth: dateOfBirthForAge(11),
+      },
+    });
+    const body = parseJson<{ success: boolean; error: { code: string } }>(response.body);
+
+    expect(response.statusCode).toBe(400);
+    expect(body.success).toBe(false);
+    expect(body.error.code).toBe('INVALID_DATE_OF_BIRTH');
+  });
+
+  it('vuelve a validar la edad al completar el registro', async () => {
+    const registerToken = app.jwt.sign({
+      phone: '5512345678',
+      email: 'cliente@example.com',
+      name: 'Cliente',
+      lastName: 'Prueba',
+      dateOfBirth: dateOfBirthForAge(11),
+      verification: 'email',
+      intent: 'register_confirm',
+    }, { expiresIn: '15m' });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/auth/complete-register',
+      headers: { authorization: `Bearer ${registerToken}` },
+      payload: { password: 'secreto123' },
+    });
+    const body = parseJson<{ success: boolean; error: { code: string } }>(response.body);
+
+    expect(response.statusCode).toBe(400);
+    expect(body.success).toBe(false);
+    expect(body.error.code).toBe('INVALID_DATE_OF_BIRTH');
   });
 
   it('verifica OTP por correo y crea la cuenta del cliente', async () => {
@@ -245,6 +342,7 @@ describe('app integration', () => {
       email: 'Cliente@Example.com',
       name: 'Cliente',
       lastName: 'Prueba',
+      dateOfBirth: '1990-01-01',
       verification: 'email',
       intent: 'register_confirm',
     }, { expiresIn: '15m' });
