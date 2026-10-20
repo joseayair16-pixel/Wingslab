@@ -1,5 +1,5 @@
 'use client';
-import { Check, Info, Tag } from 'lucide-react';
+import { Check, ChevronDown, Info, Tag } from 'lucide-react';
 
 import React, { useEffect, useState } from 'react';
 import { requestJson, MENU_THEMES, getMenuThemeById } from '@sadel/shared';
@@ -43,10 +43,10 @@ const weekDayOptions = [
   { dayOfWeek: 0, label: 'Domingo' },
   { dayOfWeek: 1, label: 'Lunes' },
   { dayOfWeek: 2, label: 'Martes' },
-  { dayOfWeek: 3, label: 'Miercoles' },
+  { dayOfWeek: 3, label: 'Miércoles' },
   { dayOfWeek: 4, label: 'Jueves' },
   { dayOfWeek: 5, label: 'Viernes' },
-  { dayOfWeek: 6, label: 'Sabado' },
+  { dayOfWeek: 6, label: 'Sábado' },
 ] as const;
 
 const MAX_SHIFTS_PER_DAY = 2;
@@ -69,7 +69,7 @@ function formatTime12h(time24h?: string): string {
   if (!time24h) return '';
   const [hStr, mStr] = time24h.split(':');
   let h = parseInt(hStr, 10);
-  const ampm = h >= 12 ? 'pm' : 'am';
+  const ampm = h >= 12 ? 'p. m.' : 'a. m.';
   h = h % 12;
   if (h === 0) h = 12;
   return `${h}:${mStr} ${ampm}`;
@@ -530,7 +530,7 @@ export const SettingsSection = React.memo(function SettingsSection({
       const kept = current.filter((b) => b.dayOfWeek === copySourceDay);
       return [...kept, ...clones].sort((a, b) => a.dayOfWeek - b.dayOfWeek || a.shiftIndex - b.shiftIndex);
     });
-    pushToast('info', 'Horario copiado', 'El horario seleccionado se aplico a todos los dias.');
+    pushToast('info', 'Horario copiado', 'El horario seleccionado se aplicó a todos los días.');
   };
 
   const isProfileTab = activeSettingsTab === 'perfil' || activeSettingsTab === 'ubicacion' || activeSettingsTab === 'entrega' || activeSettingsTab === 'pagos';
@@ -649,7 +649,7 @@ export const SettingsSection = React.memo(function SettingsSection({
     !normalizedCategorySearch || normalizeSearchText(cat.name).includes(normalizedCategorySearch)
   );
 
-  // Affordance de scroll en las tabs: fades laterales + auto-centrado de la activa.
+  // Mantén la pestaña activa visible en pantallas donde se usa la navegación horizontal.
   useEffect(() => {
     const el = tabsScrollRef.current;
     if (!el) return;
@@ -667,6 +667,7 @@ export const SettingsSection = React.memo(function SettingsSection({
   }, []);
 
   useEffect(() => {
+    if (!window.matchMedia('(min-width: 768px)').matches) return;
     tabsScrollRef.current
       ?.querySelector('[data-active="true"]')
       ?.scrollIntoView({ inline: 'center', block: 'nearest', behavior: 'smooth' });
@@ -674,26 +675,36 @@ export const SettingsSection = React.memo(function SettingsSection({
 
   return (
     <div className="flex flex-col gap-4 sm:gap-6 w-full max-w-[1400px] mx-auto min-w-0">
-        {/* Cabecera Premium */}
-        <div className="relative overflow-hidden -mx-3 -mt-3 min-[420px]:-mx-4 min-[420px]:-mt-4 rounded-b-[24px] rounded-t-none border-x-0 border-b border-t-0 border-white/60 bg-gradient-to-b from-white/95 to-white/70 px-4 py-5 shadow-[0_20px_60px_-15px_rgba(0,0,0,0.05)] backdrop-blur-xl sm:mx-0 sm:mt-0 sm:rounded-[32px] sm:border sm:px-6 md:px-8 md:py-8">
-          <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-sky-500 via-blue-500 to-purple-500 opacity-20"></div>
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-5 relative z-10">
-            <div className="w-full min-w-0 sm:w-auto">
-              <div className="inline-flex items-center gap-2 rounded-full bg-sky-100/50 px-3 py-1 mb-3">
-                <span className="h-1.5 w-1.5 rounded-full bg-sky-600 animate-pulse"></span>
-                <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-sky-700">Centro de Control</p>
-              </div>
-              <h2 className="text-2xl font-black tracking-[-0.04em] text-neutral-950 md:text-3xl">Configuración de {businessTypeLabel(profile?.businessType)}</h2>
-              <p className="mt-1.5 text-sm font-medium text-neutral-500">Gestiona tu perfil, horarios, repartidores y preferencias.</p>
-            </div>
+        <header className="relative overflow-hidden rounded-[24px] border border-white/80 bg-gradient-to-br from-white via-white to-sky-50/70 p-4 shadow-[0_10px_35px_-24px_rgba(15,23,42,0.28)] sm:rounded-[28px] sm:p-6 md:p-7">
+          <div aria-hidden="true" className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-sky-500 via-blue-500 to-violet-500 opacity-70" />
+          <div className="relative">
+            <p className="mb-2 text-[11px] font-bold uppercase tracking-[0.16em] text-sky-700">{businessTypeLabel(profile?.businessType)}</p>
+            <h2 className="text-[25px] font-extrabold leading-tight tracking-[-0.04em] text-neutral-950 sm:text-3xl">Configuración</h2>
+            <p className="mt-1.5 max-w-2xl text-sm leading-5 text-neutral-600">Administra la información, operación y apariencia de tu negocio.</p>
           </div>
-        </div>
+        </header>
 
         {/* Contenedor Principal */}
         <div className="flex flex-col gap-4 sm:gap-6 min-w-0">
-          {/* Navegación Horizontal */}
-          <nav className="relative w-full shrink-0 z-10 -mx-3 min-[420px]:-mx-4 sm:mx-0">
-            <div ref={tabsScrollRef} className="flex gap-2 overflow-x-auto overscroll-x-contain px-3 min-[420px]:px-4 sm:px-1 pb-4 scrollbar-none flex-nowrap snap-x snap-proximity" style={{ WebkitOverflowScrolling: 'touch', scrollPaddingLeft: '0.25rem', scrollPaddingRight: '0.25rem' }}>
+          <div className="rounded-[22px] border border-white/80 bg-white/90 p-3 shadow-sm md:hidden">
+            <label htmlFor="sadel-settings-section" className="mb-1.5 block text-[11px] font-bold uppercase tracking-[0.12em] text-neutral-500">Sección de configuración</label>
+            <div className="relative">
+              <select
+                id="sadel-settings-section"
+                value={activeSettingsTab}
+                onChange={(event) => setActiveSettingsTab(event.target.value)}
+                className="h-12 w-full appearance-none rounded-[14px] border border-neutral-200 bg-neutral-50 pl-3.5 pr-11 text-base font-semibold text-neutral-900 outline-none transition focus:border-sky-500 focus:bg-white focus:ring-4 focus:ring-sky-500/15"
+              >
+                {settingsTabs.map((tab: any) => <option key={tab.key} value={tab.key}>{tab.label}</option>)}
+              </select>
+              <ChevronDown aria-hidden="true" className="pointer-events-none absolute right-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-500" />
+            </div>
+            <p className="mt-2 text-xs leading-5 text-neutral-500">{currentSettingsTab.desc}</p>
+          </div>
+
+          {/* En tablet y escritorio, las secciones quedan a la vista y conservan el desplazamiento horizontal. */}
+          <nav aria-label="Secciones de configuración" className="relative z-10 hidden w-full shrink-0 md:block">
+            <div ref={tabsScrollRef} className="scrollbar-none flex gap-2 overflow-x-auto overscroll-x-contain pb-2 snap-x snap-proximity" style={{ WebkitOverflowScrolling: 'touch', scrollPaddingLeft: '0.25rem', scrollPaddingRight: '0.25rem' }}>
               {settingsTabs.map((tab: any) => {
                 const isActive = activeSettingsTab === tab.key;
                 return (
@@ -702,7 +713,7 @@ export const SettingsSection = React.memo(function SettingsSection({
                     type="button"
                     data-active={isActive}
                     onClick={() => setActiveSettingsTab(tab.key)}
-                    className={`group relative flex items-center gap-2.5 rounded-[18px] px-3 py-2.5 text-left transition-all duration-300 shrink-0 whitespace-nowrap snap-start touch-manipulation active:scale-[0.98] sm:gap-3 sm:rounded-[20px] sm:px-4 sm:py-3 ${
+                    className={`group relative flex min-h-14 items-center gap-2.5 rounded-[18px] px-3.5 py-2.5 text-left transition-all duration-200 shrink-0 whitespace-nowrap snap-start touch-manipulation active:scale-[0.98] ${
                       isActive
                         ? 'bg-gradient-to-br from-sky-600 to-blue-600 text-white shadow-[0_12px_30px_-10px_rgba(2,132,199,0.4)]'
                         : 'bg-white/50 text-neutral-600 hover:bg-white hover:shadow-sm hover:text-neutral-950 border border-transparent hover:border-black/5'
@@ -711,27 +722,27 @@ export const SettingsSection = React.memo(function SettingsSection({
                     {isActive && (
                       <div className="absolute inset-0 rounded-[18px] ring-1 ring-inset ring-white/20 sm:rounded-[20px]"></div>
                     )}
-                    <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl transition-colors duration-300 sm:h-10 sm:w-10 ${isActive ? 'bg-white/20 text-white' : 'bg-neutral-100 text-neutral-500 group-hover:bg-sky-50 group-hover:text-sky-600'}`}>
+                    <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl transition-colors duration-200 ${isActive ? 'bg-white/20 text-white' : 'bg-neutral-100 text-neutral-500 group-hover:bg-sky-50 group-hover:text-sky-600'}`}>
                       {tab.icon}
                     </div>
                     <div className="min-w-0 flex-1 pr-1">
                       <span className={`block text-[13px] font-bold ${isActive ? 'text-white' : 'text-neutral-800'}`}>{tab.label}</span>
-                      <span className={`hidden sm:block text-[11px] font-medium leading-tight mt-0.5 ${isActive ? 'text-white/80' : 'text-neutral-400'}`}>{tab.desc}</span>
+                      <span className={`mt-0.5 block text-[11px] font-medium leading-tight ${isActive ? 'text-white/80' : 'text-neutral-400'}`}>{tab.desc}</span>
                     </div>
                   </button>
                 );
               })}
             </div>
-            <div aria-hidden="true" className={`pointer-events-none absolute inset-y-0 bottom-4 left-0 w-10 bg-gradient-to-r from-[#f8f7f4] to-transparent transition-opacity duration-300 ${canScrollTabsLeft ? 'opacity-100' : 'opacity-0'}`} />
-            <div aria-hidden="true" className={`pointer-events-none absolute inset-y-0 bottom-4 right-0 w-10 bg-gradient-to-l from-[#f8f7f4] to-transparent transition-opacity duration-300 ${canScrollTabsRight ? 'opacity-100' : 'opacity-0'}`} />
+            <div aria-hidden="true" className={`pointer-events-none absolute inset-y-0 bottom-2 left-0 w-8 bg-gradient-to-r from-[#f8f7f4] to-transparent transition-opacity duration-300 ${canScrollTabsLeft ? 'opacity-100' : 'opacity-0'}`} />
+            <div aria-hidden="true" className={`pointer-events-none absolute inset-y-0 bottom-2 right-0 w-8 bg-gradient-to-l from-[#f8f7f4] to-transparent transition-opacity duration-300 ${canScrollTabsRight ? 'opacity-100' : 'opacity-0'}`} />
           </nav>
 
           {/* Área de Contenido Glassmórfica */}
           <div className="min-w-0 flex-1 animate-fade-in">
-            <div className="relative -mx-3 min-[420px]:-mx-4 rounded-none border-x-0 border-y border-white/60 bg-white/70 p-3 shadow-[0_8px_40px_-12px_rgba(0,0,0,0.08)] backdrop-blur-2xl min-[420px]:p-4 sm:mx-0 sm:rounded-[32px] sm:border sm:p-6 md:p-10 min-h-[500px] overflow-hidden">
+            <div className="relative min-h-[420px] min-w-0 overflow-visible rounded-[24px] border border-white/80 bg-white/90 p-4 shadow-[0_12px_40px_-28px_rgba(15,23,42,0.3)] sm:rounded-[28px] sm:p-6 md:p-8">
               
               {/* Encabezado de sección dinámico */}
-              <div className="mb-5 sm:mb-8 flex items-start sm:items-center gap-3 sm:gap-4 border-b border-black/5 pb-4 sm:pb-6">
+              <div className="mb-5 hidden items-center gap-4 border-b border-black/5 pb-5 md:flex md:mb-7 md:pb-6">
                 <div className="flex h-12 w-12 sm:h-14 sm:w-14 shrink-0 items-center justify-center rounded-[18px] sm:rounded-[20px] bg-gradient-to-br from-sky-100 to-blue-50 text-sky-600 border border-sky-200/50 shadow-inner">
                   <span className="scale-110 sm:scale-125">{currentSettingsTab.icon}</span>
                 </div>
@@ -743,8 +754,8 @@ export const SettingsSection = React.memo(function SettingsSection({
 
             {/* ─── PERFIL ─── */}
             {activeSettingsTab === 'perfil' && (
-              <div className="grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-2">
-                <div className="sm:col-span-2">
+              <div className="grid min-w-0 grid-cols-1 gap-4 md:grid-cols-2">
+                <div className="md:col-span-2">
                   <Field
                     label="Nombre del restaurante"
                     value={storeDraft.name}
@@ -764,7 +775,7 @@ export const SettingsSection = React.memo(function SettingsSection({
                   onChange={(value: string) => setStoreDraft((c: any) => ({ ...c, contactPhone: value }))}
                   placeholder="5512345678"
                 />
-                <div className="sm:col-span-2">
+                <div className="md:col-span-2">
                   <div className="border-t border-black/5 pt-4 mt-2 mb-3">
                     <p className="text-[13px] font-bold text-neutral-900">Redes Sociales</p>
                     <p className="text-xs text-neutral-500 mt-0.5">Opcional. Se mostrarán en la página de tu restaurante para clientes.</p>
@@ -782,7 +793,7 @@ export const SettingsSection = React.memo(function SettingsSection({
                   onChange={(value: string) => setStoreDraft((c: any) => ({ ...c, facebook: value }))}
                   placeholder="https://facebook.com/tu-pagina"
                 />
-                <div className="sm:col-span-2">
+                <div className="md:col-span-2">
                   <Field
                     label="TikTok"
                     value={storeDraft.tiktok}
@@ -798,7 +809,7 @@ export const SettingsSection = React.memo(function SettingsSection({
                     </span>
                   </div>
                 )}
-                <div className="sm:col-span-2">
+                <div className="md:col-span-2">
                   <TextAreaField
                     label="Descripción"
                     value={storeDraft.description}
@@ -806,7 +817,7 @@ export const SettingsSection = React.memo(function SettingsSection({
                     placeholder="Describe tu restaurante, tu cocina y la experiencia que ofreces a tus clientes."
                   />
                 </div>
-                <div className="sm:col-span-2 min-w-0">
+                <div className="md:col-span-2 min-w-0">
                   <div className="border-t border-black/5 pt-4 mt-2 mb-3">
                     <p className="text-[13px] font-bold text-neutral-900">Color de tu marca</p>
                     <p className="text-xs text-neutral-500 mt-0.5">
@@ -814,8 +825,8 @@ export const SettingsSection = React.memo(function SettingsSection({
                     </p>
                   </div>
                   <div className="flex items-center justify-between mb-2">
-                    <span className="text-[11px] font-bold uppercase tracking-wider text-neutral-400">Colores disponibles</span>
-                    <span className="inline-flex items-center gap-1 text-[11px] font-medium text-neutral-400">
+                    <span className="text-[11px] font-bold uppercase tracking-wider text-neutral-500">Colores disponibles</span>
+                    <span className="inline-flex items-center gap-1 text-[11px] font-medium text-neutral-500">
                       Desliza
                       <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" /></svg>
                     </span>
@@ -823,8 +834,9 @@ export const SettingsSection = React.memo(function SettingsSection({
                   <div className="scrollbar-none flex items-center gap-2.5 overflow-x-auto pb-3 -mx-1 px-1 snap-x snap-mandatory">
                     <button
                       type="button"
+                      aria-pressed={!storeDraft.accentColor}
                       onClick={() => setStoreDraft((c: any) => ({ ...c, accentColor: null }))}
-                      className={`inline-flex shrink-0 snap-start items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-bold transition-all active:scale-95 ${
+                      className={`inline-flex min-h-11 shrink-0 snap-start items-center gap-2 rounded-full border px-4 text-xs font-bold transition-all active:scale-95 ${
                         !storeDraft.accentColor
                           ? 'border-sky-500 bg-sky-50 text-sky-700 ring-2 ring-sky-500/20'
                           : 'border-black/10 bg-white text-neutral-600 hover:border-black/20'
@@ -846,8 +858,9 @@ export const SettingsSection = React.memo(function SettingsSection({
                           key={color}
                           type="button"
                           aria-label={`Color ${color}`}
+                          aria-pressed={isSelected}
                           onClick={() => setStoreDraft((c: any) => ({ ...c, accentColor: color }))}
-                          className={`flex h-9 w-9 shrink-0 snap-start items-center justify-center rounded-full transition-all active:scale-95 ${
+                          className={`flex h-11 w-11 shrink-0 snap-start items-center justify-center rounded-full transition-all active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900 focus-visible:ring-offset-2 ${
                             isSelected ? 'ring-2 ring-offset-2 ring-neutral-900' : 'hover:scale-105'
                           }`}
                           style={{ backgroundColor: color }}
@@ -867,10 +880,10 @@ export const SettingsSection = React.memo(function SettingsSection({
                     >
                       Pedir ahora
                     </span>
-                    <span className="text-[11px] text-neutral-400">Así se verá tu botón de pedir.</span>
+                    <span className="text-[11px] text-neutral-500">Así se verá el botón para pedir.</span>
                   </div>
                 </div>
-                <div className="sm:col-span-2 min-w-0">
+                <div className="md:col-span-2 min-w-0">
                   <div className="border-t border-black/5 pt-4 mt-2 mb-3">
                     <p className="text-[13px] font-bold text-neutral-900">Fondo de tu menú</p>
                     <p className="text-xs text-neutral-500 mt-0.5">
@@ -878,8 +891,8 @@ export const SettingsSection = React.memo(function SettingsSection({
                     </p>
                   </div>
                   <div className="flex items-center justify-between mb-2">
-                    <span className="text-[11px] font-bold uppercase tracking-wider text-neutral-400">Temas de fondo</span>
-                    <span className="inline-flex items-center gap-1 text-[11px] font-medium text-neutral-400">
+                    <span className="text-[11px] font-bold uppercase tracking-wider text-neutral-500">Temas de fondo</span>
+                    <span className="inline-flex items-center gap-1 text-[11px] font-medium text-neutral-500">
                       Desliza
                       <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" /></svg>
                     </span>
@@ -887,6 +900,7 @@ export const SettingsSection = React.memo(function SettingsSection({
                   <div className="scrollbar-none flex gap-3 overflow-x-auto pb-3 -mx-1 px-1 snap-x snap-mandatory">
                     <button
                       type="button"
+                      aria-pressed={!storeDraft.menuTheme}
                       onClick={() => setStoreDraft((c: any) => ({ ...c, menuTheme: null }))}
                       className={`flex w-36 shrink-0 snap-start flex-col items-start gap-2 rounded-2xl border p-3 text-left transition-all active:scale-95 ${
                         !storeDraft.menuTheme
@@ -911,6 +925,7 @@ export const SettingsSection = React.memo(function SettingsSection({
                         <button
                           key={theme.id}
                           type="button"
+                          aria-pressed={isSelected}
                           onClick={() => setStoreDraft((c: any) => ({ ...c, menuTheme: theme.id }))}
                           className={`flex w-36 shrink-0 snap-start flex-col items-start gap-2 rounded-2xl border p-3 text-left transition-all active:scale-95 ${
                             isSelected ? 'border-neutral-900 ring-2 ring-neutral-900/15' : 'border-black/10 hover:border-black/25'
@@ -935,10 +950,10 @@ export const SettingsSection = React.memo(function SettingsSection({
                     >
                       Fondo de tu menú
                     </span>
-                    <span className="text-[11px] text-neutral-400">Así se verá el fondo de tu portal.</span>
+                    <span className="text-[11px] text-neutral-500">Así se verá el fondo del menú.</span>
                   </div>
                 </div>
-                <div className="sm:col-span-2 min-w-0">
+                <div className="md:col-span-2 min-w-0">
                   <div className="flex items-center justify-between gap-3 mb-3">
                     <div className="min-w-0 flex-1">
                       <label htmlFor="sadel-category-search" className="block text-[13px] font-semibold text-neutral-900">Categorías</label>
@@ -984,6 +999,7 @@ export const SettingsSection = React.memo(function SettingsSection({
                           <button
                             key={cat.id}
                             type="button"
+                            aria-pressed={isSelected}
                             disabled={atLimit}
                             onClick={() => toggleStoreCategory(cat.id)}
                             className={`flex w-[150px] shrink-0 snap-start items-center gap-2 rounded-xl border p-3 text-left transition touch-manipulation active:scale-[0.98] ${
@@ -1002,7 +1018,8 @@ export const SettingsSection = React.memo(function SettingsSection({
                       <button
                         type="button"
                         onClick={() => setShowAllCategories(true)}
-                        className="flex w-[150px] shrink-0 snap-start flex-col items-center justify-center gap-1 rounded-xl border-2 border-dashed border-sky-300/70 bg-sky-50/40 p-3 text-center transition touch-manipulation active:scale-[0.98] hover:bg-sky-50"
+                        aria-haspopup="dialog"
+                        className="flex min-h-[68px] w-[150px] shrink-0 snap-start flex-col items-center justify-center gap-1 rounded-xl border-2 border-dashed border-sky-300/70 bg-sky-50/40 p-3 text-center transition touch-manipulation active:scale-[0.98] hover:bg-sky-50"
                       >
                         <span className="text-[13px] font-bold text-sky-700">Ver todas</span>
                         <span className="text-[11px] font-medium text-sky-600/70">{platformCategories.length} categorías</span>
@@ -1011,7 +1028,7 @@ export const SettingsSection = React.memo(function SettingsSection({
                   )}
                 </div>
 
-                <div className="sm:col-span-2 rounded-[20px] border border-black/5 bg-neutral-50 p-4 text-sm text-neutral-600">
+                <div className="md:col-span-2 rounded-[20px] border border-black/5 bg-neutral-50 p-4 text-sm text-neutral-600">
                   <span className="font-semibold text-neutral-900">Estado actual: </span>
                   {(profile as RestaurantProfile | null)?.status === 'ACTIVE'
                     ? (profile as RestaurantProfile | null)?.isAcceptingOrders ? '🟢 Abierto y aceptando pedidos' : '🟡 Cerrado temporalmente'
@@ -1022,8 +1039,8 @@ export const SettingsSection = React.memo(function SettingsSection({
 
 
             {/* ─── UBICACIÓN ─── */}
-            <div className={`grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-2 ${activeSettingsTab === 'ubicacion' ? '' : 'hidden'}`}>
-                <div className="sm:col-span-2 relative z-[9999]">
+            <div className={`grid min-w-0 grid-cols-1 gap-4 md:grid-cols-2 ${activeSettingsTab === 'ubicacion' ? '' : 'hidden'}`}>
+                <div className="md:col-span-2 relative z-[9999]">
                   <Field
                     label="Dirección"
                     value={storeDraft.address}
@@ -1087,7 +1104,7 @@ export const SettingsSection = React.memo(function SettingsSection({
                     </div>
                   )}
                 </div>
-                <div className="sm:col-span-2">
+                <div className="md:col-span-2">
                   <Field
                     label="Número exterior"
                     value={storeDraft.houseNumber}
@@ -1095,15 +1112,15 @@ export const SettingsSection = React.memo(function SettingsSection({
                     placeholder="123"
                   />
                 </div>
-                <div className="sm:col-span-2 rounded-[16px] border border-black/5 bg-neutral-50 p-3 text-xs text-neutral-500 flex items-center gap-2">
+                <div className="md:col-span-2 rounded-[16px] border border-black/5 bg-neutral-50 p-3 text-xs text-neutral-500 flex items-center gap-2">
                   <Info className="w-4 h-4 text-neutral-400 shrink-0" strokeWidth={1.8} />
                   Mueve el marcador en el mapa para ajustar la ubicación exacta. Las coordenadas se actualizan solas.
                 </div>
-                <div className="sm:col-span-2">
+                <div className="md:col-span-2">
                   <label className="block text-sm font-semibold text-neutral-900 mb-2">Ubicación en el mapa</label>
                   <div id="settings-map" className="h-[280px] w-full rounded-[24px] border border-black/5 overflow-hidden shadow-[0_8px_30px_rgba(0,0,0,0.03)]" />
                 </div>
-                <div className="sm:col-span-2 grid grid-cols-1 min-[420px]:grid-cols-2 gap-4 rounded-[20px] border border-black/5 bg-[#f8f7f4]/60 p-4 shadow-[inset_0_1px_1px_rgba(0,0,0,0.01)]">
+                <div className="md:col-span-2 grid grid-cols-1 min-[420px]:grid-cols-2 gap-4 rounded-[20px] border border-black/5 bg-[#f8f7f4]/60 p-4 shadow-[inset_0_1px_1px_rgba(0,0,0,0.01)]">
                   <div className="min-w-0 space-y-1">
                     <span className="text-[11px] font-semibold uppercase tracking-wider text-neutral-400">Latitud</span>
                     <code className="block text-sm font-mono font-bold text-neutral-800 break-all">{storeDraft.latitude || 'Sin configurar'}</code>
@@ -1117,8 +1134,8 @@ export const SettingsSection = React.memo(function SettingsSection({
 
             {/* ─── ENTREGA ─── */}
             {activeSettingsTab === 'entrega' && (
-              <div className="grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-2">
-                <div className="sm:col-span-2">
+              <div className="grid min-w-0 grid-cols-1 gap-4 md:grid-cols-2">
+                <div className="md:col-span-2">
                   <ToggleField
                     label="Solo recoger en tienda"
                     description="Actívalo si tu negocio no entrega a domicilio. Solo recogida en el local; se desactiva el reparto propio, la tarifa de envío y el apoyo a la red."
@@ -1136,7 +1153,7 @@ export const SettingsSection = React.memo(function SettingsSection({
                 </div>
 
                 {storeDraft.pickupOnly ? (
-                  <div className="sm:col-span-2 rounded-[18px] border border-sky-200/70 bg-sky-50/60 p-4 text-sm text-neutral-700 leading-6">
+                  <div className="md:col-span-2 rounded-[18px] border border-sky-200/70 bg-sky-50/60 p-4 text-sm text-neutral-700 leading-6">
                     <p className="font-semibold text-neutral-900 flex items-center gap-2">
                       <span>🛍️</span> Solo recoger en tienda
                     </p>
@@ -1147,7 +1164,7 @@ export const SettingsSection = React.memo(function SettingsSection({
                   </div>
                 ) : (
                   <>
-                    <div className="sm:col-span-2">
+                    <div className="md:col-span-2">
                       <ToggleField
                         label="Servicio a domicilio propio"
                         description="Actívalo si tu restaurante gestiona su propia flota de repartidores. Si no, los repartidores de SaDeL gestionarán las entregas."
@@ -1164,7 +1181,7 @@ export const SettingsSection = React.memo(function SettingsSection({
 
                     {storeDraft.hasOwnDelivery ? (
                       <>
-                        <div className="sm:col-span-2">
+                        <div className="md:col-span-2">
                           <ToggleField
                             label="Prestar apoyo a la red"
                             description="Ayuda a otros restaurantes a entregar pedidos cuando te lo pidan; ganas la tarifa de envío. Desactívalo si prefieres solo tus propias entregas."
@@ -1175,9 +1192,9 @@ export const SettingsSection = React.memo(function SettingsSection({
                           />
                         </div>
 
-                        <div className="sm:col-span-2">
+                        <div className="md:col-span-2">
                           <span className="text-[12px] font-bold uppercase tracking-[0.1em] text-neutral-600">Tipo de tarifa</span>
-                          <div className="mt-2 grid gap-3 sm:grid-cols-2">
+                          <div className="mt-2 grid gap-3 md:grid-cols-2">
                             <button
                               type="button"
                               onClick={() => setStoreDraft((c: any) => ({ ...c, deliveryPricingModel: 'fixed' }))}
@@ -1258,7 +1275,7 @@ export const SettingsSection = React.memo(function SettingsSection({
                         Lo define SaDeL según la región configurada en el panel de administración.
                       </div>
                     )}
-                    <div className="sm:col-span-2 rounded-[18px] border border-black/5 bg-neutral-50 p-4 text-sm text-neutral-600 leading-6">
+                    <div className="md:col-span-2 rounded-[18px] border border-black/5 bg-neutral-50 p-4 text-sm text-neutral-600 leading-6">
                       <div className="flex items-center gap-2 mb-1">
                         <div className={`h-2 w-2 rounded-full ${(profile as RestaurantProfile | null)?.isAcceptingOrders ? 'bg-emerald-500' : 'bg-amber-400'}`} />
                         <span className="font-semibold text-neutral-900">
@@ -1286,8 +1303,8 @@ export const SettingsSection = React.memo(function SettingsSection({
                     <div className="min-w-0">
                       <p className="mb-0.5 font-semibold">Horario operativo</p>
                       <p className="text-sky-700/80">
-                        Configura hasta 2 turnos por dia. Si un turno cruza la medianoche (ej. 7:00 pm a 1:00 am),
-                        lo detectamos y lo mostramos como que cierra al dia siguiente.
+                        Configura hasta 2 turnos por día. Si uno cruza la medianoche (por ejemplo, de 7:00 p. m. a 1:00 a. m.),
+                        indicaremos que cierra al día siguiente.
                       </p>
                     </div>
                     <span className="inline-flex items-center gap-1.5 rounded-full bg-white/80 px-3 py-1 text-[11px] font-bold text-sky-700 ring-1 ring-sky-200">
@@ -1315,7 +1332,7 @@ export const SettingsSection = React.memo(function SettingsSection({
                       onClick={applyToAllDays}
                       className="w-full sm:w-auto rounded-full bg-neutral-950 px-5 py-3 text-sm font-semibold text-white transition hover:bg-neutral-800"
                     >
-                      Aplicar a todos los dias
+                      Aplicar a todos los días
                     </button>
                   </div>
                 </div>
@@ -1338,10 +1355,10 @@ export const SettingsSection = React.memo(function SettingsSection({
                       aria-checked={profile?.autoOpenEnabled ?? false}
                       aria-label="Apertura automática"
                       onClick={() => toggleAutoOpen(!(profile?.autoOpenEnabled ?? false))}
-                      className={`relative inline-flex h-[30px] w-[50px] shrink-0 items-center rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-sky-400 focus:ring-offset-1 ${profile?.autoOpenEnabled ? 'bg-sky-500' : 'bg-neutral-300'}`}
+                      className={`relative inline-flex h-11 w-[68px] shrink-0 items-center rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-sky-400 focus:ring-offset-2 ${profile?.autoOpenEnabled ? 'bg-sky-500' : 'bg-neutral-300'}`}
                     >
                       <span
-                        className={`inline-block h-[24px] w-[24px] rounded-full bg-white shadow-sm ring-0 transition-transform duration-200 ${profile?.autoOpenEnabled ? 'translate-x-[22px]' : 'translate-x-[0px]'}`}
+                        className={`inline-block h-9 w-9 rounded-full bg-white shadow-sm ring-0 transition-transform duration-200 ${profile?.autoOpenEnabled ? 'translate-x-7' : 'translate-x-0'}`}
                       />
                     </button>
                   </div>
@@ -1375,10 +1392,10 @@ export const SettingsSection = React.memo(function SettingsSection({
                               aria-checked={open}
                               aria-label={open ? `Cerrar ${day.label}` : `Abrir ${day.label}`}
                               onClick={() => toggleDay(day.dayOfWeek)}
-                              className={`relative inline-flex h-[30px] w-[50px] shrink-0 items-center rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-sky-400 focus:ring-offset-1 ${open ? 'bg-sky-500' : 'bg-neutral-300'}`}
+                              className={`relative inline-flex h-11 w-[68px] shrink-0 items-center rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-sky-400 focus:ring-offset-2 ${open ? 'bg-sky-500' : 'bg-neutral-300'}`}
                             >
                               <span
-                                className={`inline-block h-[24px] w-[24px] rounded-full bg-white shadow-sm ring-0 transition-transform duration-200 ${open ? 'translate-x-[22px]' : 'translate-x-[0px]'}`}
+                                className={`inline-block h-9 w-9 rounded-full bg-white shadow-sm ring-0 transition-transform duration-200 ${open ? 'translate-x-7' : 'translate-x-0'}`}
                               />
                             </button>
                           </div>
@@ -1400,7 +1417,7 @@ export const SettingsSection = React.memo(function SettingsSection({
                                         </span>
                                         {isOvernightShift(block) && (
                                           <span className="rounded-full bg-indigo-50 px-2 py-0.5 text-[10px] font-semibold text-indigo-600">
-                                            Cierra a las {formatTime12h(block.closeTime)} del dia siguiente
+                                            Cierra a las {formatTime12h(block.closeTime)} del día siguiente
                                           </span>
                                         )}
                                       </div>
@@ -1414,7 +1431,7 @@ export const SettingsSection = React.memo(function SettingsSection({
                                         </button>
                                       )}
                                     </div>
-                                    <div className="mt-2.5 grid grid-cols-1 min-[420px]:grid-cols-2 gap-3">
+                                    <div className="mt-2.5 grid grid-cols-2 gap-2.5 sm:gap-3">
                                       <div className="min-w-0">
                                         <label className="mb-0.5 block text-[10px] font-bold uppercase tracking-wider text-neutral-400">Apertura</label>
                                         <input
@@ -1464,12 +1481,12 @@ export const SettingsSection = React.memo(function SettingsSection({
 
             {/* ─── PAGOS ─── */}
             {activeSettingsTab === 'pagos' && (
-              <div className="grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-2">
-                <div className="sm:col-span-2 rounded-[18px] border border-sky-100 bg-sky-50 p-4 text-sm text-sky-700">
+              <div className="grid min-w-0 grid-cols-1 gap-4 md:grid-cols-2">
+                <div className="md:col-span-2 rounded-[18px] border border-sky-100 bg-sky-50 p-4 text-sm text-sky-700">
                   <p className="font-semibold mb-0.5">Pago en efectivo</p>
                   <p className="text-sky-700/80">Define el monto máximo que tus clientes pueden pagar en efectivo. Por encima de este monto deberán pagar con transferencia.</p>
                 </div>
-                <div className="sm:col-span-2">
+                <div className="md:col-span-2">
                   <ToggleField
                     label="Aceptar pagos en efectivo"
                     checked={storeDraft.acceptsCash}
@@ -1477,7 +1494,7 @@ export const SettingsSection = React.memo(function SettingsSection({
                     description="Desactiva si prefieres cobrar solo con transferencia."
                   />
                 </div>
-                <div className="sm:col-span-2">
+                <div className="md:col-span-2">
                   <Field
                     label="Monto máximo para pago en efectivo ($)"
                     value={storeDraft.maxCashOrder}
@@ -1486,7 +1503,7 @@ export const SettingsSection = React.memo(function SettingsSection({
                     type="number"
                   />
                 </div>
-                <div className="sm:col-span-2 rounded-[18px] border border-emerald-100 bg-emerald-50 p-4 text-sm text-emerald-800">
+                <div className="md:col-span-2 rounded-[18px] border border-emerald-100 bg-emerald-50 p-4 text-sm text-emerald-800">
                   <p className="font-semibold mb-0.5">Cuenta para recibir transferencias</p>
                   <p className="text-emerald-700/80">Estos datos se mostrarán al cliente cuando elija pagar con transferencia bancaria en tu restaurante.</p>
                 </div>
@@ -1502,7 +1519,7 @@ export const SettingsSection = React.memo(function SettingsSection({
                   onChange={setTransferAccountNumber}
                   placeholder="1234 5678 9012 3456"
                 />
-                <div className="sm:col-span-2">
+                <div className="md:col-span-2">
                   <Field
                     label="Nombre del beneficiario"
                     value={transferBeneficiaryName}
@@ -1784,7 +1801,7 @@ export const SettingsSection = React.memo(function SettingsSection({
                     </div>
                   </div>
 
-                  <div className="mt-5 grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                  <div className="mt-5 grid min-w-0 grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
                     <div className="min-w-0 rounded-[20px] border border-black/5 bg-neutral-50/60 p-4 transition-colors hover:bg-neutral-50">
                       <div className="mb-2 flex items-center gap-2">
                         <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-br from-sky-100 to-blue-50 text-base">🛵</span>
@@ -1819,7 +1836,7 @@ export const SettingsSection = React.memo(function SettingsSection({
                       </p>
                     </div>
 
-                    <div className="min-w-0 rounded-[20px] border border-black/5 bg-neutral-50/60 p-4 transition-colors hover:bg-neutral-50 sm:col-span-2 lg:col-span-1">
+                    <div className="min-w-0 rounded-[20px] border border-black/5 bg-neutral-50/60 p-4 transition-colors hover:bg-neutral-50 md:col-span-2 lg:col-span-1">
                       <div className="mb-2 flex items-center gap-2">
                         <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-100 to-teal-50 text-base">🎉</span>
                         <span className="text-[12px] font-bold uppercase tracking-[0.08em] text-neutral-600">% de descuento</span>
@@ -1970,11 +1987,11 @@ export const SettingsSection = React.memo(function SettingsSection({
 
           </div>
         </div>
-        {showSaveBar && <div className="h-20 shrink-0" aria-hidden="true" />}
+        {showSaveBar && <div className="h-24 shrink-0 md:h-20" aria-hidden="true" />}
       </div>
       {showSaveBar && (
-        <div className="pointer-events-none fixed inset-x-0 bottom-0 z-[60] px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
-          <div className="pointer-events-auto mx-auto flex max-w-2xl items-center gap-3 rounded-[24px] border border-black/10 bg-white/95 p-3 pl-5 shadow-[0_20px_50px_rgba(15,15,15,0.25)] backdrop-blur-xl">
+        <div className="pointer-events-none fixed inset-x-0 bottom-0 z-[60] px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-4">
+          <div className="pointer-events-auto mx-auto flex max-w-2xl items-center gap-2.5 rounded-[20px] border border-black/10 bg-white/95 p-2.5 pl-3.5 shadow-[0_12px_36px_rgba(15,15,15,0.18)] backdrop-blur-xl sm:gap-3 sm:rounded-[24px] sm:p-3 sm:pl-5">
             <div className="min-w-0 flex-1">
               <p className="truncate text-[13px] font-bold text-neutral-900">{activeSaveBarCopy.title}</p>
               <p className="truncate text-[11px] text-neutral-500">{activeSaveBarCopy.subtitle}</p>
@@ -1984,9 +2001,10 @@ export const SettingsSection = React.memo(function SettingsSection({
                 type="submit"
                 form="sadel-security-form"
                 disabled={globalSaving}
-                className="shrink-0 rounded-full bg-neutral-950 px-6 py-3.5 text-sm font-bold text-white transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-50"
+                className="min-h-12 shrink-0 rounded-full bg-neutral-950 px-4 text-sm font-bold text-white transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 sm:px-5 md:px-6 md:py-3.5"
               >
-                {globalLabel}
+                <span className="md:hidden">{globalSaving ? 'Actualizando' : 'Actualizar'}</span>
+                <span className="hidden md:inline">{globalLabel}</span>
               </button>
             ) : (
               <button
@@ -1994,9 +2012,10 @@ export const SettingsSection = React.memo(function SettingsSection({
                 onClick={handleGlobalSave}
                 disabled={globalSaving || (activeSettingsTab === 'horarios' && hasInvalidHours)}
                 title={activeSettingsTab === 'horarios' && hasInvalidHours ? 'Revisa los horarios marcados en rojo antes de guardar.' : undefined}
-                className="shrink-0 rounded-full bg-neutral-950 px-6 py-3.5 text-sm font-bold text-white transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-50"
+                className="min-h-12 shrink-0 rounded-full bg-neutral-950 px-4 text-sm font-bold text-white transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 sm:px-5 md:px-6 md:py-3.5"
               >
-                {globalLabel}
+                <span className="md:hidden">{globalSaving ? 'Guardando' : 'Guardar'}</span>
+                <span className="hidden md:inline">{globalLabel}</span>
               </button>
             )}
           </div>
@@ -2035,7 +2054,7 @@ export const SettingsSection = React.memo(function SettingsSection({
                   <div className="mb-3 flex items-center gap-2">
                     <h4 className="text-[11px] font-bold uppercase tracking-[0.12em] text-neutral-400">Descuento</h4>
                   </div>
-                  <div className="grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-2">
+                  <div className="grid min-w-0 grid-cols-1 gap-4 md:grid-cols-2">
                     <label className="grid min-w-0 gap-1.5 text-sm text-neutral-600">
                       <span className="text-[11px] font-bold uppercase tracking-[0.1em] text-neutral-500">Tipo de descuento</span>
                       <select
@@ -2095,7 +2114,7 @@ export const SettingsSection = React.memo(function SettingsSection({
                   <div className="mb-3">
                     <h4 className="text-[11px] font-bold uppercase tracking-[0.12em] text-neutral-400">Condiciones</h4>
                   </div>
-                  <div className="grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-2">
+                  <div className="grid min-w-0 grid-cols-1 gap-4 md:grid-cols-2">
                     <label className="grid min-w-0 gap-1.5 text-sm text-neutral-600">
                       <span className="text-[11px] font-bold uppercase tracking-[0.1em] text-neutral-500">Mínimo de compra ($)</span>
                       <input
@@ -2117,7 +2136,7 @@ export const SettingsSection = React.memo(function SettingsSection({
                       />
                     </label>
                   </div>
-                  <div className="mt-4 grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-2">
+                  <div className="mt-4 grid min-w-0 grid-cols-1 gap-4 md:grid-cols-2">
                     <label className="grid min-w-0 gap-1.5 text-sm text-neutral-600">
                       <span className="text-[11px] font-bold uppercase tracking-[0.1em] text-neutral-500">Válido desde</span>
                       <input
