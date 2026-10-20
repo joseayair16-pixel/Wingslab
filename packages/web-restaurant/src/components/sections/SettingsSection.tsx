@@ -1,5 +1,5 @@
 'use client';
-import { Check, ChevronDown, Info, Tag } from 'lucide-react';
+import { Check, Info, Tag } from 'lucide-react';
 
 import React, { useEffect, useState } from 'react';
 import { requestJson, MENU_THEMES, getMenuThemeById } from '@sadel/shared';
@@ -667,7 +667,6 @@ export const SettingsSection = React.memo(function SettingsSection({
   }, []);
 
   useEffect(() => {
-    if (!window.matchMedia('(min-width: 768px)').matches) return;
     tabsScrollRef.current
       ?.querySelector('[data-active="true"]')
       ?.scrollIntoView({ inline: 'center', block: 'nearest', behavior: 'smooth' });
@@ -686,25 +685,9 @@ export const SettingsSection = React.memo(function SettingsSection({
 
         {/* Contenedor Principal */}
         <div className="flex flex-col gap-4 sm:gap-6 min-w-0">
-          <div className="rounded-[22px] border border-white/80 bg-white/90 p-3 shadow-sm md:hidden">
-            <label htmlFor="sadel-settings-section" className="mb-1.5 block text-[11px] font-bold uppercase tracking-[0.12em] text-neutral-500">Sección de configuración</label>
-            <div className="relative">
-              <select
-                id="sadel-settings-section"
-                value={activeSettingsTab}
-                onChange={(event) => setActiveSettingsTab(event.target.value)}
-                className="h-12 w-full appearance-none rounded-[14px] border border-neutral-200 bg-neutral-50 pl-3.5 pr-11 text-base font-semibold text-neutral-900 outline-none transition focus:border-sky-500 focus:bg-white focus:ring-4 focus:ring-sky-500/15"
-              >
-                {settingsTabs.map((tab: any) => <option key={tab.key} value={tab.key}>{tab.label}</option>)}
-              </select>
-              <ChevronDown aria-hidden="true" className="pointer-events-none absolute right-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-500" />
-            </div>
-            <p className="mt-2 text-xs leading-5 text-neutral-500">{currentSettingsTab.desc}</p>
-          </div>
-
-          {/* En tablet y escritorio, las secciones quedan a la vista y conservan el desplazamiento horizontal. */}
-          <nav aria-label="Secciones de configuración" className="relative z-10 hidden w-full shrink-0 md:block">
-            <div ref={tabsScrollRef} className="scrollbar-none flex gap-2 overflow-x-auto overscroll-x-contain pb-2 snap-x snap-proximity" style={{ WebkitOverflowScrolling: 'touch', scrollPaddingLeft: '0.25rem', scrollPaddingRight: '0.25rem' }}>
+          {/* Navegación horizontal táctil en celular, tablet y escritorio. */}
+          <nav aria-label="Secciones de configuración" className="relative z-10 -mx-3 w-full shrink-0 sm:mx-0">
+            <div ref={tabsScrollRef} className="scrollbar-none flex snap-x snap-proximity gap-2 overflow-x-auto overscroll-x-contain px-3 py-1 pb-3 sm:px-1" style={{ WebkitOverflowScrolling: 'touch', scrollPaddingLeft: '0.75rem', scrollPaddingRight: '0.75rem' }}>
               {settingsTabs.map((tab: any) => {
                 const isActive = activeSettingsTab === tab.key;
                 return (
@@ -712,29 +695,27 @@ export const SettingsSection = React.memo(function SettingsSection({
                     key={tab.key}
                     type="button"
                     data-active={isActive}
+                    aria-pressed={isActive}
                     onClick={() => setActiveSettingsTab(tab.key)}
-                    className={`group relative flex min-h-14 items-center gap-2.5 rounded-[18px] px-3.5 py-2.5 text-left transition-all duration-200 shrink-0 whitespace-nowrap snap-start touch-manipulation active:scale-[0.98] ${
+                    className={`group relative flex min-h-12 shrink-0 snap-start touch-manipulation items-center gap-2.5 whitespace-nowrap rounded-2xl border px-3 py-2 text-left transition-[background-color,border-color,color,box-shadow,transform] duration-200 active:scale-[0.98] sm:min-h-14 sm:gap-3 sm:px-4 sm:py-2.5 ${
                       isActive
-                        ? 'bg-gradient-to-br from-sky-600 to-blue-600 text-white shadow-[0_12px_30px_-10px_rgba(2,132,199,0.4)]'
-                        : 'bg-white/50 text-neutral-600 hover:bg-white hover:shadow-sm hover:text-neutral-950 border border-transparent hover:border-black/5'
+                        ? 'border-sky-700 bg-sky-700 text-white shadow-[0_4px_12px_-4px_rgba(3,105,161,0.45)]'
+                        : 'border-neutral-200/80 bg-white text-neutral-700 shadow-[0_1px_2px_rgba(15,23,42,0.04)] hover:border-neutral-300 hover:bg-neutral-50 hover:text-neutral-950'
                     }`}
                   >
-                    {isActive && (
-                      <div className="absolute inset-0 rounded-[18px] ring-1 ring-inset ring-white/20 sm:rounded-[20px]"></div>
-                    )}
-                    <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl transition-colors duration-200 ${isActive ? 'bg-white/20 text-white' : 'bg-neutral-100 text-neutral-500 group-hover:bg-sky-50 group-hover:text-sky-600'}`}>
+                    <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-xl transition-colors duration-200 sm:h-9 sm:w-9 ${isActive ? 'bg-white/15 text-white' : 'bg-neutral-100 text-neutral-500 group-hover:bg-sky-50 group-hover:text-sky-700'}`}>
                       {tab.icon}
-                    </div>
+                    </span>
                     <div className="min-w-0 flex-1 pr-1">
-                      <span className={`block text-[13px] font-bold ${isActive ? 'text-white' : 'text-neutral-800'}`}>{tab.label}</span>
-                      <span className={`mt-0.5 block text-[11px] font-medium leading-tight ${isActive ? 'text-white/80' : 'text-neutral-400'}`}>{tab.desc}</span>
+                      <span className={`block text-[13px] font-semibold ${isActive ? 'text-white' : 'text-neutral-800'}`}>{tab.label}</span>
+                      <span className={`mt-0.5 hidden text-[11px] font-medium leading-tight sm:block ${isActive ? 'text-white/75' : 'text-neutral-500'}`}>{tab.desc}</span>
                     </div>
                   </button>
                 );
               })}
             </div>
-            <div aria-hidden="true" className={`pointer-events-none absolute inset-y-0 bottom-2 left-0 w-8 bg-gradient-to-r from-[#f8f7f4] to-transparent transition-opacity duration-300 ${canScrollTabsLeft ? 'opacity-100' : 'opacity-0'}`} />
-            <div aria-hidden="true" className={`pointer-events-none absolute inset-y-0 bottom-2 right-0 w-8 bg-gradient-to-l from-[#f8f7f4] to-transparent transition-opacity duration-300 ${canScrollTabsRight ? 'opacity-100' : 'opacity-0'}`} />
+            <div aria-hidden="true" className={`pointer-events-none absolute inset-y-0 bottom-3 left-0 w-5 bg-gradient-to-r from-[#f8f8f8] to-transparent transition-opacity duration-200 ${canScrollTabsLeft ? 'opacity-100' : 'opacity-0'}`} />
+            <div aria-hidden="true" className={`pointer-events-none absolute inset-y-0 bottom-3 right-0 w-5 bg-gradient-to-l from-[#f8f8f8] to-transparent transition-opacity duration-200 ${canScrollTabsRight ? 'opacity-100' : 'opacity-0'}`} />
           </nav>
 
           {/* Área de Contenido Glassmórfica */}
