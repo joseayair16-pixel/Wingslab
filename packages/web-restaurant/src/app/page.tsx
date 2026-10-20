@@ -11108,76 +11108,92 @@ export default function Home() {
                       <section aria-label="Categorías del menú" className="min-w-0 rounded-2xl border border-neutral-200 bg-white p-3 shadow-sm sm:p-4">
                         <div className="mb-2.5 flex items-center justify-between gap-3 px-1">
                           <h2 className="text-sm font-semibold text-neutral-900">Categorías del menú</h2>
-                          <span className="text-xs text-neutral-500">Desliza para ver todas</span>
+                          <span className="shrink-0 text-xs text-neutral-500">Desliza para ver todas</span>
                         </div>
-                      <div className="overflow-x-auto overscroll-x-contain pb-1 scrollbar-none" style={{ WebkitOverflowScrolling: 'touch' }}>
-                        <div className="flex min-w-max items-center gap-2 px-1">
-                          {storeCategories.map((category) => (
-                            <div
-                              key={category.id}
-                              className="group/cat flex min-h-11 items-center gap-2 rounded-xl border border-neutral-200 bg-neutral-50 px-3.5 py-2 text-[13px] font-semibold text-neutral-800 transition hover:border-neutral-300 hover:bg-white"
-                            >
-                              <span>{category.name}</span>
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  void deleteCategory(
-                                    category.id,
-                                    category.name,
-                                    category.products.length
-                                  )
-                                }
-                                disabled={
-                                  Boolean(activeActionKey) || category.products.length > 0
-                                }
-                                className={`inline-flex h-9 w-9 items-center justify-center rounded-lg border text-sm font-medium transition ${category.products.length > 0
-                                  ? 'cursor-not-allowed border-neutral-200 bg-neutral-100 text-neutral-300'
-                                  : 'border-neutral-200 bg-white text-neutral-500 hover:border-rose-200 hover:bg-rose-50 hover:text-rose-600'
-                                  } disabled:cursor-not-allowed`}
-                                aria-label={category.products.length > 0 ? `No se puede eliminar ${category.name} porque tiene productos` : `Eliminar categoría ${category.name}`}
-                                title={
-                                  category.products.length > 0
-                                    ? 'No puedes borrarla mientras tenga productos.'
-                                    : `Eliminar categoria ${category.name}`
-                                }
-                              >
-                                ×
-                              </button>
-                            </div>
-                          ))}
-                          <button
-                            type="button"
-                            onClick={() => setIsCategoryModalOpen(true)}
-                            className="inline-flex min-h-11 items-center rounded-xl border border-dashed border-sky-300 bg-sky-50/60 px-4 py-2 text-[13px] font-semibold text-sky-800 transition hover:bg-sky-50"
-                          >
-                            + Agregar categoría
-                          </button>
-                        </div>
-                      </div>
-                      </section>
+                        <div className="overflow-x-auto overscroll-x-contain pb-1 scrollbar-none" style={{ WebkitOverflowScrolling: 'touch' }}>
+                          <div className="flex min-w-max items-center gap-2 px-1">
+                            {storeCategories.map((category) => {
+                              const productCount = category.products.length;
+                              const cannotDelete = productCount > 0;
 
-                      <div className="grid grid-cols-1 gap-2 min-[420px]:grid-cols-2" aria-label="Acciones del menú">
-                        <button
-                              type="button"
-                              onClick={openImportModal}
-                              className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-neutral-200 bg-white px-4 py-2.5 text-[13px] font-semibold text-neutral-700 shadow-sm transition hover:bg-neutral-50"
-                              title="Importa todo tu menú pegando una tabla de Excel o Sheets"
-                            >
-                              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                              </svg>
-                              Importar menú
-                            </button>
+                              return (
+                                <div
+                                  key={category.id}
+                                  className="group/cat inline-flex min-h-12 items-center gap-2 rounded-xl border border-neutral-200 bg-white py-1.5 pl-3.5 pr-1.5 text-[13px] font-semibold text-neutral-800 shadow-sm transition hover:border-sky-200 hover:bg-sky-50/40 hover:shadow-md"
+                                >
+                                  <span className="max-w-[180px] truncate">{category.name}</span>
+                                  <span
+                                    className="inline-flex h-6 min-w-6 items-center justify-center rounded-lg bg-neutral-100 px-1.5 text-[11px] font-bold tabular-nums text-neutral-600"
+                                    title={`${productCount} productos`}
+                                  >
+                                    {productCount}
+                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      void deleteCategory(category.id, category.name, productCount)
+                                    }
+                                    disabled={Boolean(activeActionKey) || cannotDelete}
+                                    className={`inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-offset-1 ${cannotDelete
+                                      ? 'cursor-not-allowed bg-neutral-100 text-neutral-300'
+                                      : 'text-neutral-400 hover:bg-rose-50 hover:text-rose-600 active:scale-95'
+                                      } disabled:cursor-not-allowed`}
+                                    aria-label={cannotDelete ? `No se puede eliminar ${category.name}: tiene ${productCount} productos` : `Eliminar categoría ${category.name}`}
+                                    title={cannotDelete
+                                      ? `Mueve o elimina sus ${productCount} productos para borrar esta categoría.`
+                                      : `Eliminar categoría ${category.name}`}
+                                  >
+                                    <Trash2 className="h-4 w-4" strokeWidth={1.9} aria-hidden="true" />
+                                  </button>
+                                </div>
+                              );
+                            })}
                             <button
                               type="button"
-                              onClick={() => void handleBulkGenerateMissingImages()}
-                              disabled={bulkActionLoading}
-                              className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-neutral-200 bg-white px-4 py-2.5 text-[13px] font-semibold text-neutral-700 shadow-sm transition hover:bg-neutral-50 disabled:cursor-not-allowed disabled:opacity-50"
-                              title="Genera con IA una imagen para cada producto del menú que todavía no tiene foto"
+                              onClick={() => setIsCategoryModalOpen(true)}
+                              className="inline-flex min-h-12 items-center gap-2 rounded-xl border border-sky-200 bg-sky-50 px-4 py-2 text-[13px] font-bold text-sky-800 shadow-sm transition hover:border-sky-300 hover:bg-sky-100 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-offset-2"
                             >
-                              <Sparkles className="h-4 w-4" />
-                              {bulkActionLoading ? 'Generando...' : 'Generar imágenes'}
+                              <span className="inline-flex h-6 w-6 items-center justify-center rounded-lg bg-white text-sky-700 shadow-sm">
+                                <Plus className="h-4 w-4" strokeWidth={2.5} aria-hidden="true" />
+                              </span>
+                              Agregar categoría
                             </button>
+                          </div>
+                        </div>
+                      </section>
+
+                      <div className="grid grid-cols-1 gap-2.5 min-[540px]:grid-cols-2" role="group" aria-label="Acciones del menú">
+                        <button
+                          type="button"
+                          onClick={openImportModal}
+                          className="group inline-flex min-h-[68px] w-full items-center gap-3 rounded-2xl border border-neutral-200 bg-white px-3.5 py-3 text-left shadow-sm transition hover:border-sky-200 hover:bg-sky-50/30 hover:shadow-md active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-offset-2 sm:px-4"
+                          title="Importa todo tu menú pegando una tabla de Excel o Sheets"
+                        >
+                          <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-sky-50 text-sky-700 ring-1 ring-sky-100 transition group-hover:bg-sky-100">
+                            <svg className="h-[18px] w-[18px]" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                            </svg>
+                          </span>
+                          <span className="min-w-0">
+                            <span className="block text-[13px] font-bold leading-5 text-neutral-900">Importar menú</span>
+                            <span className="block truncate text-[11px] leading-4 text-neutral-500">Desde Excel o Google Sheets</span>
+                          </span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => void handleBulkGenerateMissingImages()}
+                          disabled={bulkActionLoading}
+                          className="group inline-flex min-h-[68px] w-full items-center gap-3 rounded-2xl border border-sky-700 bg-sky-700 px-3.5 py-3 text-left text-white shadow-[0_5px_14px_rgba(3,105,161,0.2)] transition hover:border-sky-600 hover:bg-sky-600 hover:shadow-md active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-offset-2 disabled:cursor-wait disabled:opacity-60 disabled:shadow-none sm:px-4"
+                          title="Genera con IA una imagen para cada producto del menú que todavía no tiene foto"
+                        >
+                          <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white/15 text-white ring-1 ring-inset ring-white/15 transition group-hover:bg-white/20">
+                            <Sparkles className="h-[18px] w-[18px]" aria-hidden="true" />
+                          </span>
+                          <span className="min-w-0">
+                            <span className="block text-[13px] font-bold leading-5">{bulkActionLoading ? 'Generando imágenes…' : 'Generar imágenes'}</span>
+                            <span className="block truncate text-[11px] leading-4 text-white/75">Completa fotos pendientes con IA</span>
+                          </span>
+                        </button>
                       </div>
 
                         <div className="w-full space-y-4 sm:space-y-6">
