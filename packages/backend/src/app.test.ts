@@ -82,29 +82,35 @@ describe('app integration', () => {
     expect(response.body).toBe('');
   });
 
-  it('envia codigo OTP simulado', async () => {
+  it('envía código OTP por correo en modo de prueba', async () => {
     jest.spyOn(prisma.user, 'findFirst').mockResolvedValue(null);
     const response = await app.inject({
       method: 'POST',
-      url: '/auth/enviar-codigo',
+      url: '/auth/email-otp/iniciar',
       payload: {
-        phone: '+5215512345678',
+        phone: '5512345678',
         intent: 'register',
+        email: 'cliente@example.com',
+        name: 'Cliente',
+        lastName: 'Prueba',
+        dateOfBirth: '1990-01-01',
       },
     });
 
     const body = parseJson<{
       success: boolean;
-      data: { phone: string; expiresInSeconds: number };
+      data: { challengeId: string; maskedEmail: string; expiresInSeconds: number; mockCode?: string };
     }>(response.body);
 
     expect(response.statusCode).toBe(200);
     expect(body.success).toBe(true);
-    expect(body.data.phone).toBe('5512345678');
+    expect(body.data.challengeId).toMatch(/^[A-Za-z0-9_-]{43}$/);
+    expect(body.data.maskedEmail).toBe('cl•••••@example.com');
     expect(body.data.expiresInSeconds).toBe(300);
+    expect(body.data.mockCode).toMatch(/^\d{6}$/);
   });
 
-  it('verifica OTP y devuelve token para cliente nuevo', async () => {
+  it('verifica OTP por correo y crea la cuenta del cliente', async () => {
     jest.spyOn(prisma.user, 'findFirst').mockResolvedValue(null);
     jest.spyOn(prisma.admin, 'count').mockResolvedValue(1);
     jest.spyOn(prisma.user, 'create').mockResolvedValue({
@@ -158,26 +164,35 @@ describe('app integration', () => {
 
     const sendResponse = await app.inject({
       method: 'POST',
-      url: '/auth/enviar-codigo',
+      url: '/auth/email-otp/iniciar',
       payload: {
-        phone: '+5215512345678',
+        phone: '5512345678',
         intent: 'register',
+        email: 'cliente@example.com',
+        name: 'Cliente',
+        lastName: 'Prueba',
+        dateOfBirth: '1990-01-01',
       },
     });
-    const sendBody = parseJson<{ success: boolean; data: { mockCode?: string } }>(
+    const sendBody = parseJson<{ success: boolean; data: { challengeId: string; mockCode?: string } }>(
       sendResponse.body
     );
 
+    const verifyResponse = await app.inject({
+      method: 'POST',
+      url: '/auth/email-otp/confirmar',
+      payload: {
+        challengeId: sendBody.data.challengeId,
+        code: sendBody.data.mockCode ?? '000000',
+      },
+    });
+    const verifyBody = parseJson<{ success: boolean; data: { registerToken: string } }>(verifyResponse.body);
+
     const response = await app.inject({
       method: 'POST',
-      url: '/auth/verificar-codigo',
-      payload: {
-        phone: '+5215512345678',
-        code: sendBody.data.mockCode ?? '000000',
-        name: 'Cliente Prueba',
-        password: 'secreto123',
-        intent: 'register',
-      },
+      url: '/auth/complete-register',
+      headers: { authorization: `Bearer ${verifyBody.data.registerToken}` },
+      payload: { password: 'secreto123' },
     });
 
     const body = parseJson<{
@@ -192,6 +207,48 @@ describe('app integration', () => {
     expect(body.data.user.role).toBe('CUSTOMER');
   });
 
+  it('permite recuperar la contraseña con un código enviado al correo', async () => {
+    const user = {
+      id: 'customer-user-email-recovery',
+      phone: '5512345678',
+      phoneNormalized: '5512345678',
+      email: 'cliente@example.com',
+      role: 'CUSTOMER',
+    };
+    jest.spyOn(prisma.user, 'findFirst').mockResolvedValue(user as never);
+    jest.spyOn(prisma.user, 'findUnique').mockResolvedValue(user as never);
+    const updateUser = jest.spyOn(prisma.user, 'update').mockResolvedValue(user as never);
+
+    const sendResponse = await app.inject({
+      method: 'POST',
+      url: '/auth/email-otp/iniciar',
+      payload: { phone: user.phone, intent: 'recovery' },
+    });
+    const sendBody = parseJson<{ data: { challengeId: string; mockCode?: string } }>(sendResponse.body);
+
+    const verifyResponse = await app.inject({
+      method: 'POST',
+      url: '/auth/email-otp/confirmar',
+      payload: { challengeId: sendBody.data.challengeId, code: sendBody.data.mockCode },
+    });
+    const verifyBody = parseJson<{ data: { resetToken: string } }>(verifyResponse.body);
+
+    const resetResponse = await app.inject({
+      method: 'POST',
+      url: '/auth/reset-password',
+      headers: { authorization: `Bearer ${verifyBody.data.resetToken}` },
+      payload: { newPassword: 'nueva-clave-123' },
+    });
+
+    expect(sendResponse.statusCode).toBe(200);
+    expect(verifyResponse.statusCode).toBe(200);
+    expect(resetResponse.statusCode).toBe(200);
+    expect(updateUser).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: user.id },
+      data: { password: expect.any(String) },
+    }));
+  });
+
   it('rechaza registrar un telefono ya existente', async () => {
     jest.spyOn(prisma.user, 'findFirst').mockResolvedValue({
       id: 'existing-user',
@@ -200,10 +257,14 @@ describe('app integration', () => {
 
     const response = await app.inject({
       method: 'POST',
-      url: '/auth/enviar-codigo',
+      url: '/auth/email-otp/iniciar',
       payload: {
-        phone: '+5215512345678',
+        phone: '5512345678',
         intent: 'register',
+        email: 'cliente@example.com',
+        name: 'Cliente',
+        lastName: 'Prueba',
+        dateOfBirth: '1990-01-01',
       },
     });
 
@@ -247,7 +308,7 @@ describe('app integration', () => {
       method: 'POST',
       url: '/auth/login',
       payload: {
-        phone: '+5215512345678',
+        phone: '5512345678',
         password: 'secreto123',
       },
     });

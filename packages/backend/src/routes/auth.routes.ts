@@ -6,6 +6,7 @@ import bcryptjs from 'bcryptjs';
 import crypto from 'node:crypto';
 import { prisma } from '../config/database';
 import { getRedis } from '../config/redis';
+import { isEmailConfigured, sendOtpEmail } from '../services/email.service';
 import {
   createRefreshToken,
   validateAndRotateRefreshToken,
@@ -14,6 +15,10 @@ import { isMexicanLocalPhone, toWhatsAppLinkNumber } from '../utils/mexican-phon
 
 const WHATSAPP_AUTH_TTL_SECONDS = 300;
 const WHATSAPP_AUTH_STARTS_PER_HOUR = 5;
+const EMAIL_OTP_TTL_SECONDS = 300;
+const EMAIL_OTP_MAX_ATTEMPTS = 5;
+const EMAIL_OTP_STARTS_PER_HOUR = 5;
+const EMAIL_OTP_HMAC_SECRET = process.env.JWT_SECRET || crypto.randomBytes(32).toString('hex');
 
 // Los dominios sintéticos no representan un correo de contacto utilizable.
 function isRealEmail(email?: string | null): boolean {
@@ -47,6 +52,55 @@ function getWhatsAppMessageKey(messageCode: string): string {
   const hash = crypto.createHash('sha256').update(messageCode).digest('hex');
   return `whatsapp_auth:message:${hash}`;
 }
+
+function hashEmailOtpChallengeId(challengeId: string): string {
+  return crypto.createHash('sha256').update(challengeId).digest('hex');
+}
+
+function getEmailOtpChallengeKey(challengeId: string): string {
+  return `email_otp:challenge:${hashEmailOtpChallengeId(challengeId)}`;
+}
+
+function getEmailOtpActiveKey(phone: string, intent: 'register' | 'recovery'): string {
+  const hash = crypto.createHash('sha256').update(`${intent}:${phone}`).digest('hex');
+  return `email_otp:active:${hash}`;
+}
+
+function getEmailOtpStartsKey(phone: string): string {
+  const hash = crypto.createHash('sha256').update(phone).digest('hex');
+  return `email_otp:starts:${hash}`;
+}
+
+function hashEmailOtp(challengeId: string, code: string): string {
+  return crypto.createHmac('sha256', EMAIL_OTP_HMAC_SECRET).update(`${challengeId}:${code}`).digest('hex');
+}
+
+function emailOtpCodesMatch(challengeId: string, code: string, expectedHash: string): boolean {
+  const actual = Buffer.from(hashEmailOtp(challengeId, code), 'hex');
+  const expected = Buffer.from(expectedHash, 'hex');
+  return actual.length === expected.length && crypto.timingSafeEqual(actual, expected);
+}
+
+function maskEmail(email: string): string {
+  const [localPart, domain] = email.split('@');
+  if (!localPart || !domain) return email;
+  const visible = localPart.length > 2 ? localPart.slice(0, 2) : localPart.slice(0, 1);
+  return `${visible}${'•'.repeat(Math.max(2, localPart.length - visible.length))}@${domain}`;
+}
+
+type EmailOtpChallenge = {
+  status: 'pending' | 'exchanged';
+  intent: 'register' | 'recovery';
+  phone: string;
+  email: string;
+  codeHash: string;
+  attempts: number;
+  name?: string;
+  lastName?: string;
+  dateOfBirth?: string;
+  userId?: string;
+  grantToken?: string;
+};
 
 type WhatsAppAuthChallenge = {
   status: 'pending' | 'verified' | 'exchanged';
@@ -135,6 +189,286 @@ async function createRelatedProfile(userId: string, role: UserRole): Promise<Adm
 }
 
 export async function registerAuthRoutes(fastify: FastifyInstance): Promise<void> {
+  const emailOtpStartSchema = z.object({
+    phone: z.string().refine(isMexicanLocalPhone, 'Ingresa un teléfono de 10 dígitos.'),
+    intent: z.enum(['register', 'recovery']),
+    email: z.string().email('Correo inválido.').optional(),
+    name: z.string().min(2, 'El nombre debe tener al menos 2 caracteres.').optional(),
+    lastName: z.string().min(2, 'Los apellidos deben tener al menos 2 caracteres.').optional(),
+    dateOfBirth: z.string().refine((value) => !Number.isNaN(Date.parse(value)), 'Fecha de nacimiento inválida.').optional(),
+  });
+
+  fastify.post(
+    '/auth/email-otp/iniciar',
+    { config: { rateLimit: { max: 5, timeWindow: '15 minutes' } } },
+    async (request, reply) => {
+      const parsed = emailOtpStartSchema.safeParse(request.body);
+      if (!parsed.success) {
+        return reply.status(400).send({
+          success: false,
+          error: { code: 'INVALID_PAYLOAD', message: parsed.error.issues[0]?.message || 'Datos inválidos.' },
+        });
+      }
+
+      let email = parsed.data.email?.trim().toLowerCase() || '';
+      let userId: string | undefined;
+
+      if (parsed.data.intent === 'register') {
+        if (!email || !parsed.data.name?.trim() || !parsed.data.lastName?.trim() || !parsed.data.dateOfBirth) {
+          return reply.status(400).send({
+            success: false,
+            error: { code: 'INVALID_PAYLOAD', message: 'Completa tus datos de registro para verificar tu correo.' },
+          });
+        }
+
+        const dateOfBirth = new Date(parsed.data.dateOfBirth);
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        dateOfBirth.setHours(0, 0, 0, 0);
+        if (dateOfBirth > today) {
+          return reply.status(400).send({
+            success: false,
+            error: { code: 'INVALID_DATE_OF_BIRTH', message: 'La fecha de nacimiento no puede estar en el futuro.' },
+          });
+        }
+
+        const existingPhone = await prisma.user.findFirst({
+          where: { phoneNormalized: parsed.data.phone, role: UserRole.CUSTOMER },
+          select: { id: true },
+        });
+        if (existingPhone) {
+          return reply.status(409).send({
+            success: false,
+            error: { code: 'PHONE_ALREADY_REGISTERED', message: 'Este teléfono ya tiene una cuenta. Inicia sesión o recupera tu contraseña.' },
+          });
+        }
+
+        const existingEmail = await prisma.user.findFirst({
+          where: { email: { equals: email, mode: 'insensitive' } },
+          select: { id: true },
+        });
+        if (existingEmail) {
+          return reply.status(409).send({
+            success: false,
+            error: { code: 'EMAIL_ALREADY_REGISTERED', message: 'Este correo ya tiene una cuenta registrada.' },
+          });
+        }
+      } else {
+        const existingUser = await prisma.user.findFirst({
+          where: { phoneNormalized: parsed.data.phone, role: UserRole.CUSTOMER },
+          select: { id: true, phone: true, phoneNormalized: true, email: true },
+        });
+        if (!existingUser) {
+          return reply.status(404).send({
+            success: false,
+            error: { code: 'USER_NOT_FOUND', message: 'No existe una cuenta con ese teléfono.' },
+          });
+        }
+        if (!isRealEmail(existingUser.email)) {
+          return reply.status(409).send({
+            success: false,
+            error: { code: 'EMAIL_NOT_AVAILABLE', message: 'Esta cuenta no tiene un correo de recuperación. Usa WhatsApp para verificar tu número.' },
+          });
+        }
+        email = existingUser.email.trim().toLowerCase();
+        userId = existingUser.id;
+      }
+
+      const redis = getRedis();
+      const startsKey = getEmailOtpStartsKey(parsed.data.phone);
+      const starts = await redis.incr(startsKey);
+      if (starts === 1) await redis.expire(startsKey, 60 * 60);
+      if (starts > EMAIL_OTP_STARTS_PER_HOUR) {
+        await redis.decr(startsKey);
+        return reply.status(429).send({
+          success: false,
+          error: { code: 'EMAIL_OTP_LIMIT', message: 'Alcanzaste el límite de códigos. Intenta de nuevo más tarde.' },
+        });
+      }
+
+      const challengeId = crypto.randomBytes(32).toString('base64url');
+      const code = crypto.randomInt(100000, 1000000).toString();
+      const challengeKey = getEmailOtpChallengeKey(challengeId);
+      const activeKey = getEmailOtpActiveKey(parsed.data.phone, parsed.data.intent);
+      const challenge: EmailOtpChallenge = {
+        status: 'pending',
+        intent: parsed.data.intent,
+        phone: parsed.data.phone,
+        email,
+        codeHash: hashEmailOtp(challengeId, code),
+        attempts: 0,
+        ...(parsed.data.intent === 'register'
+          ? {
+              name: parsed.data.name?.trim(),
+              lastName: parsed.data.lastName?.trim(),
+              dateOfBirth: parsed.data.dateOfBirth,
+            }
+          : { userId }),
+      };
+
+      await redis.set(challengeKey, JSON.stringify(challenge), 'EX', EMAIL_OTP_TTL_SECONDS);
+      await redis.set(activeKey, hashEmailOtpChallengeId(challengeId), 'EX', EMAIL_OTP_TTL_SECONDS);
+
+      let delivered = false;
+      let mockCode: string | undefined;
+      if (isEmailConfigured()) {
+        delivered = (await sendOtpEmail(email, code)).ok;
+      } else if (process.env.NODE_ENV !== 'production' || process.env.ALLOW_MOCK_OTP_IN_PROD === 'true') {
+        delivered = true;
+        mockCode = code;
+        console.log(`[OTP SIMULATOR] Email OTP generado (${parsed.data.intent}).`);
+      }
+
+      if (!delivered) {
+        await redis.del(challengeKey, activeKey);
+        return reply.status(503).send({
+          success: false,
+          error: { code: 'EMAIL_DELIVERY_UNAVAILABLE', message: 'No se pudo enviar el código por correo. Intenta por WhatsApp.' },
+        });
+      }
+
+      return reply.send({
+        success: true,
+        data: {
+          challengeId,
+          channel: 'email',
+          maskedEmail: maskEmail(email),
+          expiresInSeconds: EMAIL_OTP_TTL_SECONDS,
+          ...(mockCode ? { mockCode } : {}),
+        },
+      });
+    },
+  );
+
+  fastify.post(
+    '/auth/email-otp/confirmar',
+    { config: { rateLimit: { max: 10, timeWindow: '15 minutes' } } },
+    async (request, reply) => {
+      const parsed = z.object({
+        challengeId: z.string().regex(/^[A-Za-z0-9_-]{43}$/, 'La verificación venció. Iníciala de nuevo.'),
+        code: z.string().regex(/^\d{6}$/, 'Ingresa el código de 6 dígitos.'),
+      }).safeParse(request.body);
+      if (!parsed.success) {
+        return reply.status(400).send({
+          success: false,
+          error: { code: 'INVALID_PAYLOAD', message: parsed.error.issues[0]?.message || 'Solicitud inválida.' },
+        });
+      }
+
+      const redis = getRedis();
+      const challengeKey = getEmailOtpChallengeKey(parsed.data.challengeId);
+      const raw = await redis.get(challengeKey);
+      if (!raw) {
+        return reply.status(410).send({
+          success: false,
+          error: { code: 'EMAIL_OTP_EXPIRED', message: 'El código venció. Solicita uno nuevo.' },
+        });
+      }
+
+      let challenge: EmailOtpChallenge;
+      try {
+        challenge = JSON.parse(raw);
+      } catch {
+        await redis.del(challengeKey);
+        return reply.status(410).send({
+          success: false,
+          error: { code: 'EMAIL_OTP_EXPIRED', message: 'El código venció. Solicita uno nuevo.' },
+        });
+      }
+
+      const activeKey = getEmailOtpActiveKey(challenge.phone, challenge.intent);
+      const challengeIdHash = hashEmailOtpChallengeId(parsed.data.challengeId);
+      if (await redis.get(activeKey) !== challengeIdHash) {
+        return reply.status(410).send({
+          success: false,
+          error: { code: 'EMAIL_OTP_EXPIRED', message: 'Solicitaste un código más reciente. Usa el último que recibiste.' },
+        });
+      }
+
+      if (challenge.status === 'exchanged' && challenge.grantToken) {
+        return reply.send({
+          success: true,
+          data: challenge.intent === 'register'
+            ? { registerToken: challenge.grantToken }
+            : { resetToken: challenge.grantToken },
+        });
+      }
+
+      if (!emailOtpCodesMatch(parsed.data.challengeId, parsed.data.code, challenge.codeHash)) {
+        challenge.attempts += 1;
+        const remainingTtl = Math.max(await redis.ttl(challengeKey), 1);
+        if (challenge.attempts >= EMAIL_OTP_MAX_ATTEMPTS) {
+          await redis.del(challengeKey, activeKey);
+          return reply.status(429).send({
+            success: false,
+            error: { code: 'EMAIL_OTP_TOO_MANY_ATTEMPTS', message: 'Demasiados intentos. Solicita un código nuevo.' },
+          });
+        }
+        await redis.set(challengeKey, JSON.stringify(challenge), 'EX', remainingTtl);
+        return reply.status(400).send({
+          success: false,
+          error: { code: 'INVALID_EMAIL_OTP', message: 'El código es incorrecto o venció.' },
+        });
+      }
+
+      let grantToken: string;
+      if (challenge.intent === 'register') {
+        grantToken = await reply.jwtSign({
+          phone: challenge.phone,
+          email: challenge.email,
+          name: challenge.name,
+          lastName: challenge.lastName,
+          dateOfBirth: challenge.dateOfBirth,
+          verification: 'email',
+          intent: 'register_confirm',
+        }, { expiresIn: '15m' });
+      } else {
+        const currentUser = challenge.userId
+          ? await prisma.user.findUnique({
+              where: { id: challenge.userId },
+              select: { id: true, phone: true, phoneNormalized: true, email: true, role: true },
+            })
+          : null;
+        if (
+          !currentUser ||
+          currentUser.role !== UserRole.CUSTOMER ||
+          currentUser.phoneNormalized !== challenge.phone ||
+          currentUser.email?.trim().toLowerCase() !== challenge.email
+        ) {
+          return reply.status(410).send({
+            success: false,
+            error: { code: 'EMAIL_OTP_EXPIRED', message: 'Los datos de la cuenta cambiaron. Inicia de nuevo la recuperación.' },
+          });
+        }
+        grantToken = await reply.jwtSign({
+          sub: currentUser.id,
+          phone: currentUser.phone,
+          verification: 'email',
+          intent: 'password_reset',
+        }, { expiresIn: '15m' });
+      }
+
+      const remainingTtl = await redis.ttl(challengeKey);
+      if (remainingTtl <= 0) {
+        return reply.status(410).send({
+          success: false,
+          error: { code: 'EMAIL_OTP_EXPIRED', message: 'El código venció. Solicita uno nuevo.' },
+        });
+      }
+      await redis.set(
+        challengeKey,
+        JSON.stringify({ ...challenge, status: 'exchanged', grantToken }),
+        'EX',
+        remainingTtl,
+      );
+
+      return reply.send({
+        success: true,
+        data: challenge.intent === 'register' ? { registerToken: grantToken } : { resetToken: grantToken },
+      });
+    },
+  );
+
   const whatsappStartSchema = z.object({
     phone: z.string().refine(isMexicanLocalPhone, 'Ingresa un teléfono de 10 dígitos.'),
     intent: z.enum(['register', 'recovery']),
@@ -399,14 +733,14 @@ export async function registerAuthRoutes(fastify: FastifyInstance): Promise<void
     },
   );
 
-  // Retired OTP routes remain as explicit 410 responses so older clients cannot
-  // fall back to email/SMS verification and bypass WhatsApp phone ownership.
+  // Legacy OTP routes remain retired; the email option uses the challenge-based
+  // endpoints above so its proof can be exchanged once for a scoped JWT.
   const retiredOtpResponse = async (_request: FastifyRequest, reply: FastifyReply) =>
     reply.status(410).send({
       success: false,
       error: {
-        code: 'WHATSAPP_VERIFICATION_REQUIRED',
-        message: 'Actualiza la aplicación para verificar tu teléfono por WhatsApp.',
+        code: 'AUTH_VERIFICATION_UPDATE_REQUIRED',
+        message: 'Actualiza la aplicación para elegir la verificación por correo o WhatsApp.',
       },
     });
   fastify.post('/auth/enviar-codigo', retiredOtpResponse);
@@ -459,8 +793,8 @@ export async function registerAuthRoutes(fastify: FastifyInstance): Promise<void
     });
   });
 
-  // Availability endpoints are no longer needed; phone/email ownership is
-  // checked only after the user completes the WhatsApp challenge.
+  // Availability checks are retired; registration validates both values when
+  // starting the selected email or WhatsApp verification flow.
   fastify.post('/auth/check-phone', retiredOtpResponse);
   fastify.post('/auth/check-email', retiredOtpResponse);
 
@@ -756,7 +1090,10 @@ export async function registerAuthRoutes(fastify: FastifyInstance): Promise<void
       await request.jwtVerify();
       const decoded = request.user as { sub: string, intent?: string; verification?: string };
 
-      if (decoded.intent !== 'password_reset' || decoded.verification !== 'whatsapp') {
+      if (
+        decoded.intent !== 'password_reset' ||
+        (decoded.verification !== 'whatsapp' && decoded.verification !== 'email')
+      ) {
         throw new Error('Invalid intent');
       }
 
@@ -813,7 +1150,12 @@ export async function registerAuthRoutes(fastify: FastifyInstance): Promise<void
         verification?: string;
       };
 
-      if (decoded.intent !== 'register_confirm' || decoded.verification !== 'whatsapp' || !isMexicanLocalPhone(decoded.phone)) {
+      if (
+        decoded.intent !== 'register_confirm' ||
+        (decoded.verification !== 'whatsapp' && decoded.verification !== 'email') ||
+        !isMexicanLocalPhone(decoded.phone) ||
+        (decoded.verification === 'email' && !isRealEmail(decoded.email))
+      ) {
         throw new Error('Invalid intent');
       }
 
@@ -841,8 +1183,8 @@ export async function registerAuthRoutes(fastify: FastifyInstance): Promise<void
         : `${decoded.phone}@sadel.local`;
 
       if (isRealEmail(email)) {
-        const emailExists = await prisma.user.findUnique({
-          where: { email },
+        const emailExists = await prisma.user.findFirst({
+          where: { email: { equals: email, mode: 'insensitive' } },
           select: { id: true },
         });
         if (emailExists) {

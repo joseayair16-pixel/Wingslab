@@ -11,6 +11,7 @@ import { SaDelLogo } from './SaDelLogo';
 
 type AuthMode = 'login' | 'register' | 'recovery';
 type AuthStep = 'welcome' | 'details' | 'contact' | 'request' | 'verify' | 'create-password' | 'new-password';
+type AuthChannel = 'email' | 'whatsapp';
 interface AuthModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -33,7 +34,12 @@ export const AuthModal = memo(function AuthModal({ isOpen, onClose, onSuccess, a
   const [resetToken, setResetToken] = useState('');
   const [registerToken, setRegisterToken] = useState('');
   const [challengeId, setChallengeId] = useState('');
+  const [emailChallengeId, setEmailChallengeId] = useState('');
   const [whatsappUrl, setWhatsappUrl] = useState('');
+  const [authChannel, setAuthChannel] = useState<AuthChannel>('whatsapp');
+  const [otpCode, setOtpCode] = useState('');
+  const [maskedOtpEmail, setMaskedOtpEmail] = useState('');
+  const [mockOtpCode, setMockOtpCode] = useState('');
   const [countdown, setCountdown] = useState(0);
   
   const [startingWhatsApp, setStartingWhatsApp] = useState(false);
@@ -76,7 +82,12 @@ export const AuthModal = memo(function AuthModal({ isOpen, onClose, onSuccess, a
       setResetToken('');
       setRegisterToken('');
       setChallengeId('');
+      setEmailChallengeId('');
       setWhatsappUrl('');
+      setAuthChannel('whatsapp');
+      setOtpCode('');
+      setMaskedOtpEmail('');
+      setMockOtpCode('');
       setCountdown(0);
       setError('');
       setAuthMessage('');
@@ -100,7 +111,10 @@ export const AuthModal = memo(function AuthModal({ isOpen, onClose, onSuccess, a
 
     if (authStep === 'verify') {
       setChallengeId('');
+      setEmailChallengeId('');
       setWhatsappUrl('');
+      setOtpCode('');
+      setMockOtpCode('');
       setCountdown(0);
       setAuthStep(authMode === 'register' ? 'contact' : 'request');
     }
@@ -157,6 +171,13 @@ export const AuthModal = memo(function AuthModal({ isOpen, onClose, onSuccess, a
     setStartingWhatsApp(true);
     setError('');
     setAuthMessage('');
+    setAuthChannel('whatsapp');
+    setChallengeId('');
+    setWhatsappUrl('');
+    setEmailChallengeId('');
+    setOtpCode('');
+    setMockOtpCode('');
+    setCountdown(0);
 
     try {
       if (phone.length !== 10) {
@@ -210,6 +231,116 @@ export const AuthModal = memo(function AuthModal({ isOpen, onClose, onSuccess, a
       setError(requestError instanceof Error ? requestError.message : 'No se pudo iniciar la verificación.');
     } finally {
       setStartingWhatsApp(false);
+    }
+  }
+
+  async function startEmailVerification() {
+    setStartingWhatsApp(true);
+    setError('');
+    setAuthMessage('');
+    setAuthChannel('email');
+    setChallengeId('');
+    setEmailChallengeId('');
+    setWhatsappUrl('');
+    setOtpCode('');
+    setMockOtpCode('');
+
+    try {
+      if (phone.length !== 10) {
+        throw new Error('Ingresa un teléfono de 10 dígitos.');
+      }
+      if (authMode === 'register') {
+        if (!emailIsValid) {
+          throw new Error('Ingresa un correo electrónico válido.');
+        }
+        if (!name.trim() || !lastName.trim()) {
+          throw new Error('Completa tu nombre y apellidos.');
+        }
+        const dateOfBirth = new Date(dobYear, dobMonth - 1, dobDay);
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        dateOfBirth.setHours(0, 0, 0, 0);
+        if (dateOfBirth > today) {
+          throw new Error('La fecha de nacimiento no puede estar en el futuro.');
+        }
+      }
+
+      const payload = await requestJson<ApiResponse<{
+        challengeId: string;
+        channel: 'email';
+        maskedEmail: string;
+        expiresInSeconds: number;
+        mockCode?: string;
+      }>>({
+        apiBase,
+        path: '/auth/email-otp/iniciar',
+        options: {
+          method: 'POST',
+          body: JSON.stringify({
+            phone: phone.trim(),
+            intent: authMode === 'recovery' ? 'recovery' : 'register',
+            ...(authMode === 'register'
+              ? {
+                  email: email.trim(),
+                  name: name.trim(),
+                  lastName: lastName.trim(),
+                  dateOfBirth: `${dobYear}-${String(dobMonth).padStart(2, '0')}-${String(dobDay).padStart(2, '0')}`,
+                }
+              : {}),
+          }),
+        },
+        fallbackMessage: 'No se pudo enviar el código por correo.',
+      });
+      if (!payload.data) throw new Error('No se pudo enviar el código por correo.');
+
+      setEmailChallengeId(payload.data.challengeId);
+      setMaskedOtpEmail(payload.data.maskedEmail);
+      setMockOtpCode(payload.data.mockCode || '');
+      setCountdown(payload.data.expiresInSeconds);
+      setAuthMessage(`Enviamos un código a ${payload.data.maskedEmail}.`);
+      setAuthStep('verify');
+    } catch (requestError) {
+      setAuthStep(authMode === 'register' ? 'contact' : 'request');
+      setError(requestError instanceof Error ? requestError.message : 'No se pudo iniciar la verificación por correo.');
+    } finally {
+      setStartingWhatsApp(false);
+    }
+  }
+
+  async function verifyEmailCode() {
+    setVerifyingCode(true);
+    setError('');
+    setAuthMessage('');
+
+    try {
+      const payload = await requestJson<ApiResponse<{ registerToken?: string; resetToken?: string }>>({
+        apiBase,
+        path: '/auth/email-otp/confirmar',
+        options: {
+          method: 'POST',
+          body: JSON.stringify({ challengeId: emailChallengeId, code: otpCode.trim() }),
+        },
+        fallbackMessage: 'No se pudo verificar el código.',
+      });
+      if (!payload.data) throw new Error('No se pudo completar la verificación.');
+
+      if (authMode === 'recovery' && payload.data.resetToken) {
+        setResetToken(payload.data.resetToken);
+        setAuthMessage('Correo verificado. Crea una contraseña nueva.');
+        setAuthStep('new-password');
+        return;
+      }
+      if (payload.data.registerToken) {
+        setRegisterToken(payload.data.registerToken);
+        setAuthMessage('Correo verificado. Ahora crea tu contraseña.');
+        setAuthStep('create-password');
+        return;
+      }
+      throw new Error('No se pudo completar la verificación.');
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : 'No se pudo verificar el código.');
+    } finally {
+      setVerifyingCode(false);
     }
   }
 
@@ -389,24 +520,28 @@ export const AuthModal = memo(function AuthModal({ isOpen, onClose, onSuccess, a
           : authStep === 'contact'
           ? 'Datos de contacto'
           : authStep === 'verify'
-          ? 'Confirma tu número por WhatsApp'
+          ? authChannel === 'email' ? 'Verifica tu correo' : 'Confirma tu número por WhatsApp'
           : 'Crea tu contraseña',
       subtitle:
         authStep === 'details'
           ? 'Cuéntanos quién eres para empezar.'
           : authStep === 'contact'
-            ? 'Verifica tu teléfono para continuar.'
+            ? 'Elige dónde recibir tu código de verificación.'
             : authStep === 'verify'
-              ? 'Envía el mensaje preparado desde el mismo teléfono.'
+              ? authChannel === 'email' ? `Ingresa el código enviado a ${maskedOtpEmail}.` : 'Envía el mensaje preparado desde el mismo teléfono.'
               : 'Elige una contraseña para tu cuenta.',
-      cta: startingWhatsApp ? 'Preparando WhatsApp...' : 'Continuar a WhatsApp',
+      cta: startingWhatsApp ? 'Preparando verificación...' : 'Continuar',
       submit: verifyingCode ? 'Creando cuenta...' : 'Crear cuenta',
     }
     : authMode === 'recovery'
     ? {
-      title: authStep === 'verify' ? 'Confirma tu número por WhatsApp' : 'Recuperar contraseña',
-      subtitle: authStep === 'request' ? 'Ingresa el teléfono asociado a tu cuenta.' : authStep === 'verify' ? 'Envía el mensaje preparado desde ese mismo teléfono.' : 'Crea tu nueva contraseña.',
-      cta: startingWhatsApp ? 'Preparando WhatsApp...' : 'Continuar a WhatsApp',
+      title: authStep === 'verify' ? authChannel === 'email' ? 'Verifica tu correo' : 'Confirma tu número por WhatsApp' : 'Recuperar contraseña',
+      subtitle: authStep === 'request'
+        ? 'Elige dónde recibir tu código para recuperar la cuenta.'
+        : authStep === 'verify'
+          ? authChannel === 'email' ? `Ingresa el código enviado a ${maskedOtpEmail}.` : 'Envía el mensaje preparado desde ese mismo teléfono.'
+          : 'Crea tu nueva contraseña.',
+      cta: startingWhatsApp ? 'Preparando verificación...' : 'Continuar',
       submit: verifyingCode ? 'Verificando...' : 'Confirmar contraseña',
     }
     : {
@@ -546,23 +681,47 @@ export const AuthModal = memo(function AuthModal({ isOpen, onClose, onSuccess, a
                             mask={formatPhoneNumber}
                           />
                           <PhoneHint phone={phone} />
-                          <button
-                            type="button"
-                            onClick={startWhatsAppVerification}
-                            disabled={startingWhatsApp || phone.length !== 10}
-                            className="mt-3 w-full rounded-2xl bg-[#0a0a0a] py-3.5 text-sm font-semibold text-[#ffffff] transition-all duration-200 hover:bg-[#262626] hover:shadow-[0_8px_24px_rgba(10,10,10,0.12)] disabled:cursor-not-allowed disabled:bg-neutral-100 disabled:text-neutral-400 disabled:shadow-none active:scale-[0.98]"
-                          >
-                            {startingWhatsApp ? 'Preparando WhatsApp...' : 'Continuar a WhatsApp'}
-                          </button>
+                          <div className="grid gap-3 pt-1">
+                            <button
+                              type="button"
+                              onClick={startEmailVerification}
+                              disabled={startingWhatsApp || phone.length !== 10}
+                              className="w-full rounded-2xl bg-[#0a0a0a] py-3.5 text-sm font-semibold text-white transition-all duration-200 hover:bg-[#262626] disabled:cursor-not-allowed disabled:bg-neutral-100 disabled:text-neutral-400 active:scale-[0.98]"
+                            >
+                              {startingWhatsApp ? 'Preparando verificación...' : 'Enviar código por correo'}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={startWhatsAppVerification}
+                              disabled={startingWhatsApp || phone.length !== 10}
+                              className="w-full rounded-2xl bg-[#128C7E] py-3.5 text-sm font-semibold text-white transition-all duration-200 hover:bg-[#0f7c70] disabled:cursor-not-allowed disabled:bg-neutral-100 disabled:text-neutral-400 active:scale-[0.98]"
+                            >
+                              {startingWhatsApp ? 'Preparando verificación...' : 'Verificar por WhatsApp'}
+                            </button>
+                          </div>
                         </>
                       ) : authStep === 'verify' ? (
-                        <WhatsAppChallengePanel
-                          phone={phone}
-                          whatsappUrl={whatsappUrl}
-                          countdown={countdown}
-                          starting={startingWhatsApp}
-                          onRetry={startWhatsAppVerification}
-                        />
+                        authChannel === 'email' ? (
+                          <EmailOtpPanel
+                            email={maskedOtpEmail}
+                            code={otpCode}
+                            mockCode={mockOtpCode}
+                            countdown={countdown}
+                            starting={startingWhatsApp}
+                            verifying={verifyingCode}
+                            onCodeChange={(value) => setOtpCode(value.replace(/\D/g, '').slice(0, 6))}
+                            onRetry={startEmailVerification}
+                            onVerify={verifyEmailCode}
+                          />
+                        ) : (
+                          <WhatsAppChallengePanel
+                            phone={phone}
+                            whatsappUrl={whatsappUrl}
+                            countdown={countdown}
+                            starting={startingWhatsApp}
+                            onRetry={startWhatsAppVerification}
+                          />
+                        )
                       ) : (
                         <div className="space-y-4">
                           <Field
@@ -639,7 +798,7 @@ export const AuthModal = memo(function AuthModal({ isOpen, onClose, onSuccess, a
                             type="email"
                           />
                           <p className="-mt-2 px-1 text-[11px] leading-relaxed text-neutral-500">
-                            Es un dato de contacto. Confirmaremos tu teléfono por WhatsApp.
+                            Elige dónde recibir tu código de verificación.
                           </p>
                           <Field
                             label="Teléfono (10 dígitos)"
@@ -649,14 +808,24 @@ export const AuthModal = memo(function AuthModal({ isOpen, onClose, onSuccess, a
                             mask={formatPhoneNumber}
                           />
                           <PhoneHint phone={phone} />
-                          <button
-                            type="button"
-                            onClick={startWhatsAppVerification}
-                            disabled={startingWhatsApp || !emailIsValid || phone.length !== 10}
-                            className="mt-3 w-full rounded-2xl bg-[#0a0a0a] py-3.5 text-sm font-semibold text-[#ffffff] transition-all duration-200 hover:bg-[#262626] hover:shadow-[0_8px_24px_rgba(10,10,10,0.12)] disabled:cursor-not-allowed disabled:bg-neutral-100 disabled:text-neutral-400 disabled:shadow-none active:scale-[0.98]"
-                          >
-                            {startingWhatsApp ? 'Preparando WhatsApp...' : 'Verificar por WhatsApp'}
-                          </button>
+                          <div className="grid gap-3 pt-1">
+                            <button
+                              type="button"
+                              onClick={startEmailVerification}
+                              disabled={startingWhatsApp || !emailIsValid || phone.length !== 10}
+                              className="w-full rounded-2xl bg-[#0a0a0a] py-3.5 text-sm font-semibold text-white transition-all duration-200 hover:bg-[#262626] disabled:cursor-not-allowed disabled:bg-neutral-100 disabled:text-neutral-400 active:scale-[0.98]"
+                            >
+                              {startingWhatsApp ? 'Preparando verificación...' : 'Enviar código por correo'}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={startWhatsAppVerification}
+                              disabled={startingWhatsApp || !emailIsValid || phone.length !== 10}
+                              className="w-full rounded-2xl bg-[#128C7E] py-3.5 text-sm font-semibold text-white transition-all duration-200 hover:bg-[#0f7c70] disabled:cursor-not-allowed disabled:bg-neutral-100 disabled:text-neutral-400 active:scale-[0.98]"
+                            >
+                              {startingWhatsApp ? 'Preparando verificación...' : 'Verificar por WhatsApp'}
+                            </button>
+                          </div>
                         </div>
                       ) : authStep === 'create-password' ? (
                         <div className="space-y-4">
@@ -689,13 +858,27 @@ export const AuthModal = memo(function AuthModal({ isOpen, onClose, onSuccess, a
                           </button>
                         </div>
                       ) : (
-                        <WhatsAppChallengePanel
-                          phone={phone}
-                          whatsappUrl={whatsappUrl}
-                          countdown={countdown}
-                          starting={startingWhatsApp}
-                          onRetry={startWhatsAppVerification}
-                        />
+                        authChannel === 'email' ? (
+                          <EmailOtpPanel
+                            email={maskedOtpEmail}
+                            code={otpCode}
+                            mockCode={mockOtpCode}
+                            countdown={countdown}
+                            starting={startingWhatsApp}
+                            verifying={verifyingCode}
+                            onCodeChange={(value) => setOtpCode(value.replace(/\D/g, '').slice(0, 6))}
+                            onRetry={startEmailVerification}
+                            onVerify={verifyEmailCode}
+                          />
+                        ) : (
+                          <WhatsAppChallengePanel
+                            phone={phone}
+                            whatsappUrl={whatsappUrl}
+                            countdown={countdown}
+                            starting={startingWhatsApp}
+                            onRetry={startWhatsAppVerification}
+                          />
+                        )
                       )}
                     </>
                   )}
@@ -739,6 +922,88 @@ function formatPhoneNumber(value: string) {
   if (digits.length <= 2) return digits;
   if (digits.length <= 6) return `(${digits.slice(0, 2)}) ${digits.slice(2)}`;
   return `(${digits.slice(0, 2)}) ${digits.slice(2, 6)}-${digits.slice(6, 10)}`;
+}
+
+function EmailOtpPanel({
+  email,
+  code,
+  mockCode,
+  countdown,
+  starting,
+  verifying,
+  onCodeChange,
+  onRetry,
+  onVerify,
+}: {
+  email: string;
+  code: string;
+  mockCode: string;
+  countdown: number;
+  starting: boolean;
+  verifying: boolean;
+  onCodeChange: (value: string) => void;
+  onRetry: () => void;
+  onVerify: () => void;
+}) {
+  return (
+    <div className="space-y-4" aria-live="polite">
+      <div className="rounded-2xl border border-black/[0.04] bg-neutral-50/80 p-4">
+        <p className="text-sm leading-relaxed text-neutral-700">
+          Enviamos un código de 6 dígitos a <strong className="text-neutral-950">{email}</strong>.
+        </p>
+        <p className="mt-1.5 text-xs leading-relaxed text-neutral-500">El código vence en 5 minutos.</p>
+      </div>
+
+      <label className="grid gap-1.5 text-xs font-medium text-neutral-600">
+        <span>Código de verificación</span>
+        <input
+          type="text"
+          inputMode="numeric"
+          autoComplete="one-time-code"
+          pattern="[0-9]*"
+          maxLength={6}
+          value={code}
+          onChange={(event) => onCodeChange(event.target.value)}
+          disabled={verifying}
+          placeholder="123456"
+          aria-label="Código de verificación de seis dígitos"
+          className="h-12 w-full rounded-2xl border border-black/[0.08] bg-white px-4 text-center font-mono text-lg tracking-[0.35em] text-neutral-950 outline-none transition focus:border-black/20 focus:ring-2 focus:ring-black/[0.04] disabled:bg-neutral-50"
+        />
+      </label>
+
+      {mockCode && (
+        <p className="rounded-xl bg-amber-50 px-3 py-2 text-center text-xs text-amber-800">
+          Código de prueba: <strong className="font-mono tracking-widest">{mockCode}</strong>
+        </p>
+      )}
+
+      <div className="flex items-center justify-center text-xs text-neutral-500">
+        {countdown > 0 ? (
+          <span>
+            ¿No te llegó? Reenviar en <strong className="tabular-nums text-neutral-700">{formatCountdown(countdown)}</strong>
+          </span>
+        ) : (
+          <button
+            type="button"
+            onClick={onRetry}
+            disabled={starting}
+            className="font-semibold text-sky-600 transition-colors hover:text-sky-700 disabled:text-neutral-400"
+          >
+            {starting ? 'Enviando...' : 'Volver a enviar código'}
+          </button>
+        )}
+      </div>
+
+      <button
+        type="button"
+        onClick={onVerify}
+        disabled={verifying || code.length !== 6}
+        className="w-full rounded-2xl bg-[#0a0a0a] py-3.5 text-sm font-semibold text-white transition hover:bg-[#262626] disabled:cursor-not-allowed disabled:bg-neutral-100 disabled:text-neutral-400"
+      >
+        {verifying ? 'Verificando...' : 'Confirmar código'}
+      </button>
+    </div>
+  );
 }
 
 function WhatsAppChallengePanel({
