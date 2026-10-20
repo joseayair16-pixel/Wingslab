@@ -4285,15 +4285,23 @@ function ProductImage({
 
                     {/* Modo: Mostrando Direcciones Guardadas */}
                     {addresses.length > 0 && !isAddingNewAddress && (
-                      <div className="space-y-3.5">
-                        {/* Selector Horizontal Premium */}
-                        <div className="flex gap-3 overflow-x-auto pb-2 -mx-4 px-4 scrollbar-none">
+                      <div className="space-y-3">
+                        {addresses.length > 1 && (
+                          <p className="text-[12px] font-medium leading-relaxed text-neutral-500 dark:text-zinc-400">
+                            Selecciona la dirección donde quieres recibir este pedido.
+                          </p>
+                        )}
+                        <div className="grid gap-2.5" role="group" aria-label="Direcciones guardadas">
                           {addresses.map((addr) => {
                             const isSelected = selectedAddressId === addr.id;
+                            const addressLine = [addr.neighborhood, addr.city, addr.state, addr.zipCode]
+                              .filter(Boolean)
+                              .join(', ');
                             return (
                               <button
                                 key={addr.id}
                                 type="button"
+                                aria-pressed={isSelected}
                                 onClick={() => {
                                   setSelectedAddressId(addr.id);
                                   const target = addr;
@@ -4309,33 +4317,38 @@ function ProductImage({
                                     longitude: String(target.longitude),
                                   }));
                                 }}
-                                className={`relative flex w-64 shrink-0 flex-col rounded-2xl border p-3.5 text-left transition-all ${
+                                className={`relative flex w-full min-w-0 flex-col rounded-2xl border-2 p-3.5 text-left transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 dark:focus-visible:ring-offset-neutral-900 ${
                                   isSelected
-                                    ? 'border-[var(--accent)] bg-[color-mix(in_srgb,var(--menu-accent)_7%,white)] ring-2 ring-[var(--accent)]/35'
-                                    : 'border-black/[0.08] bg-white opacity-95 hover:border-black/20 hover:opacity-100 dark:border-white/15 dark:bg-zinc-800 dark:hover:border-white/25'
+                                    ? 'border-[var(--accent)] bg-[var(--menu-accent-soft)] shadow-[0_0_0_2px_var(--accent-soft-strong),0_8px_22px_rgba(15,23,42,0.08)]'
+                                    : 'border-black/[0.08] bg-white hover:border-black/20 hover:bg-neutral-50 dark:border-white/15 dark:bg-zinc-800 dark:hover:border-white/25 dark:hover:bg-zinc-800/80'
                                 }`}
                               >
-                                <div className="flex items-center justify-between gap-2">
-                                  <span className="text-[10px] font-bold uppercase tracking-wider text-neutral-400">
-                                    {addr.isDefault ? <><Home className="h-3 w-3 inline-block align-text-bottom" strokeWidth={1.5} /> Casa (Principal)</> : <><MapPin className="h-3 w-3 inline-block align-text-bottom" strokeWidth={1.5} /> Dirección</>}
+                                <div className="flex w-full items-center justify-between gap-3">
+                                  <span className="flex min-w-0 items-center gap-1.5 text-[12px] font-semibold text-neutral-600 dark:text-zinc-300">
+                                    {addr.isDefault
+                                      ? <><Home className="h-4 w-4 shrink-0 text-neutral-400" strokeWidth={1.8} /><span>Casa</span><span className="rounded-full bg-neutral-100 px-2 py-0.5 text-[10px] font-semibold text-neutral-500 dark:bg-white/10 dark:text-zinc-300">Principal</span></>
+                                      : <><MapPin className="h-4 w-4 shrink-0 text-neutral-400" strokeWidth={1.8} /><span>Dirección</span></>}
                                   </span>
-                                  {isSelected && (
-                                    <span className="flex h-[18px] w-[18px] items-center justify-center rounded-full bg-[var(--accent)] text-white">
-                                      <Check className="h-3 w-3" strokeWidth={3} />
+                                  {isSelected ? (
+                                    <span className="inline-flex min-h-7 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full bg-[var(--accent)] px-2.5 text-[11px] font-bold text-white shadow-sm">
+                                      <Check className="h-3.5 w-3.5" strokeWidth={3} />
+                                      Se entregará aquí
                                     </span>
+                                  ) : (
+                                    <span aria-hidden="true" className="h-5 w-5 shrink-0 rounded-full border-2 border-neutral-300 bg-white dark:border-zinc-500 dark:bg-zinc-800" />
                                   )}
                                 </div>
-                                <p className="mt-2 text-sm font-bold text-neutral-900 truncate">
+                                <p className="mt-2.5 w-full text-[15px] font-bold leading-snug text-neutral-950 dark:text-white">
                                   {addr.street} {addr.number}
                                 </p>
-                                <p className="text-xs text-neutral-500 truncate mt-0.5">
-                                  {addr.neighborhood || 'Sin colonia'}, {addr.city || 'Sin ciudad'}
+                                <p className="mt-1 w-full text-[12px] leading-relaxed text-neutral-500 dark:text-zinc-400">
+                                  {addressLine || 'Agrega los detalles de esta dirección'}
                                 </p>
                               </button>
                             );
                           })}
 
-                          {/* Botón rápido para agregar otra dirección */}
+                          {/* Acción para agregar otro domicilio */}
                           <button
                             type="button"
                             onClick={() => {
@@ -4356,10 +4369,15 @@ function ProductImage({
                                 longitude: '-99.1332',
                               }));
                             }}
-                            className="flex w-32 shrink-0 flex-col items-center justify-center rounded-2xl border border-dashed border-sky-200 bg-sky-50/20 p-3.5 text-center transition-all hover:bg-sky-50/50 dark:border-sky-500/30 dark:bg-sky-500/10"
+                            className="flex min-h-[58px] w-full items-center gap-3 rounded-2xl border border-dashed border-[var(--accent-soft-strong)] bg-[var(--accent-soft)] px-4 py-3 text-left transition-colors hover:bg-[var(--accent-soft-strong)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 dark:focus-visible:ring-offset-neutral-900"
                           >
-                            <span className="text-xl text-[var(--accent)] font-bold">+</span>
-                            <span className="text-xs font-bold text-[var(--accent)] mt-0.5">Nueva</span>
+                            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white text-[var(--accent-strong)] shadow-sm ring-1 ring-black/[0.04] dark:bg-neutral-800 dark:ring-white/10">
+                              <Plus className="h-4 w-4" strokeWidth={2.2} />
+                            </span>
+                            <span className="min-w-0">
+                              <span className="block text-[13px] font-bold text-[var(--accent-strong)]">Agregar otra dirección</span>
+                              <span className="mt-0.5 block text-[11px] text-neutral-500 dark:text-zinc-400">Para recibir este pedido en otro domicilio</span>
+                            </span>
                           </button>
                         </div>
                       </div>
