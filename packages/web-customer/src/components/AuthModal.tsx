@@ -40,7 +40,7 @@ export const AuthModal = memo(function AuthModal({ isOpen, onClose, onSuccess, a
   const [maskedOtpEmail, setMaskedOtpEmail] = useState('');
   const [mockOtpCode, setMockOtpCode] = useState('');
   const [countdown, setCountdown] = useState(0);
-  const [emailVerifiedNextStep, setEmailVerifiedNextStep] = useState<'create-password' | 'new-password' | null>(null);
+  const [verificationSuccessNextStep, setVerificationSuccessNextStep] = useState<'create-password' | 'new-password' | null>(null);
   
   const [startingWhatsApp, setStartingWhatsApp] = useState(false);
   const [verifyingCode, setVerifyingCode] = useState(false);
@@ -89,23 +89,23 @@ export const AuthModal = memo(function AuthModal({ isOpen, onClose, onSuccess, a
       setMaskedOtpEmail('');
       setMockOtpCode('');
       setCountdown(0);
-      setEmailVerifiedNextStep(null);
+      setVerificationSuccessNextStep(null);
       setError('');
       setAuthMessage('');
     }
   }, [isOpen]);
 
   useEffect(() => {
-    if (!isOpen || !emailVerifiedNextStep) return;
+    if (!isOpen || !verificationSuccessNextStep) return;
 
-    const nextStep = emailVerifiedNextStep;
+    const nextStep = verificationSuccessNextStep;
     const timer = setTimeout(() => {
       setAuthStep(nextStep);
-      setEmailVerifiedNextStep(null);
+      setVerificationSuccessNextStep(null);
     }, 1000);
 
     return () => clearTimeout(timer);
-  }, [emailVerifiedNextStep, isOpen]);
+  }, [verificationSuccessNextStep, isOpen]);
 
   const handleDobChange = useCallback((next: { day?: number; month?: number; year?: number }) => {
     const latestAllowed = getLatestAllowedBirthDate();
@@ -335,12 +335,16 @@ export const AuthModal = memo(function AuthModal({ isOpen, onClose, onSuccess, a
 
       if (authMode === 'recovery' && payload.data.resetToken) {
         setResetToken(payload.data.resetToken);
-        setEmailVerifiedNextStep('new-password');
+        setCountdown(0);
+        setEmailChallengeId('');
+        setVerificationSuccessNextStep('new-password');
         return;
       }
       if (payload.data.registerToken) {
         setRegisterToken(payload.data.registerToken);
-        setEmailVerifiedNextStep('create-password');
+        setCountdown(0);
+        setEmailChallengeId('');
+        setVerificationSuccessNextStep('create-password');
         return;
       }
       throw new Error('No se pudo completar la verificación.');
@@ -375,7 +379,7 @@ export const AuthModal = memo(function AuthModal({ isOpen, onClose, onSuccess, a
 
         if (status.data?.status === 'verified') {
           setVerifyingCode(true);
-          setAuthMessage('Número confirmado. Continuando…');
+          setAuthMessage('Confirmando tu número…');
           const confirmed = await requestJson<ApiResponse<{ registerToken?: string; resetToken?: string }>>({
             apiBase,
             path: '/auth/whatsapp/confirmar',
@@ -390,14 +394,20 @@ export const AuthModal = memo(function AuthModal({ isOpen, onClose, onSuccess, a
           if (!confirmed.data) throw new Error('No se pudo completar la verificación.');
           if (authMode === 'recovery' && confirmed.data.resetToken) {
             setResetToken(confirmed.data.resetToken);
-            setAuthMessage('Número verificado. Crea una contraseña nueva.');
-            setAuthStep('new-password');
+            setAuthMessage('');
+            setChallengeId('');
+            setWhatsappUrl('');
+            setCountdown(0);
+            setVerificationSuccessNextStep('new-password');
             return;
           }
           if (confirmed.data.registerToken) {
             setRegisterToken(confirmed.data.registerToken);
-            setAuthMessage('Número verificado. Ahora crea tu contraseña.');
-            setAuthStep('create-password');
+            setAuthMessage('');
+            setChallengeId('');
+            setWhatsappUrl('');
+            setCountdown(0);
+            setVerificationSuccessNextStep('create-password');
             return;
           }
           throw new Error('No se pudo completar la verificación.');
@@ -518,10 +528,10 @@ export const AuthModal = memo(function AuthModal({ isOpen, onClose, onSuccess, a
 
   if (!isOpen) return null;
 
-  const modeCopy = emailVerifiedNextStep
+  const modeCopy = verificationSuccessNextStep
     ? {
-      title: 'Correo verificado',
-      subtitle: emailVerifiedNextStep === 'new-password'
+      title: authChannel === 'email' ? 'Correo verificado' : 'Número verificado',
+      subtitle: verificationSuccessNextStep === 'new-password'
         ? 'Ahora puedes crear una contraseña nueva.'
         : 'Ahora crea una contraseña para tu cuenta.',
       cta: 'Continuar',
@@ -648,9 +658,10 @@ export const AuthModal = memo(function AuthModal({ isOpen, onClose, onSuccess, a
                 </div>
 
                 <div className="grid gap-4">
-                  {emailVerifiedNextStep ? (
-                    <EmailVerificationSuccess
-                      nextStep={emailVerifiedNextStep}
+                  {verificationSuccessNextStep ? (
+                    <VerificationSuccess
+                      channel={authChannel}
+                      nextStep={verificationSuccessNextStep}
                     />
                   ) : authMode === 'login' ? (
                     <>
@@ -874,7 +885,7 @@ export const AuthModal = memo(function AuthModal({ isOpen, onClose, onSuccess, a
                     </>
                   )}
 
-                  {!emailVerifiedNextStep && (
+                  {!verificationSuccessNextStep && (
                     <button
                       type="button"
                       onClick={goBack}
@@ -917,10 +928,10 @@ export const AuthModal = memo(function AuthModal({ isOpen, onClose, onSuccess, a
         @keyframes verificationCheckDraw {
           to { stroke-dashoffset: 0; }
         }
-        .email-verification-success-badge {
+        .verification-success-badge {
           animation: verificationPop 520ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
         }
-        .email-verification-success-badge::before {
+        .verification-success-badge::before {
           content: '';
           position: absolute;
           inset: -7px;
@@ -928,18 +939,18 @@ export const AuthModal = memo(function AuthModal({ isOpen, onClose, onSuccess, a
           border-radius: 9999px;
           animation: verificationRipple 850ms 80ms ease-out both;
         }
-        .email-verification-success-check path {
+        .verification-success-check path {
           stroke-dasharray: 32;
           stroke-dashoffset: 32;
           animation: verificationCheckDraw 380ms 150ms ease-out forwards;
         }
         @media (prefers-reduced-motion: reduce) {
-          .email-verification-success-badge,
-          .email-verification-success-badge::before,
-          .email-verification-success-check path {
+          .verification-success-badge,
+          .verification-success-badge::before,
+          .verification-success-check path {
             animation: none;
           }
-          .email-verification-success-check path {
+          .verification-success-check path {
             stroke-dashoffset: 0;
           }
         }
@@ -1016,9 +1027,11 @@ function PasswordSetupForm({
   );
 }
 
-function EmailVerificationSuccess({
+function VerificationSuccess({
+  channel,
   nextStep,
 }: {
+  channel: AuthChannel;
   nextStep: 'create-password' | 'new-password';
 }) {
   const nextAction = nextStep === 'new-password'
@@ -1031,11 +1044,11 @@ function EmailVerificationSuccess({
       aria-live="polite"
       className="flex min-h-[148px] flex-col items-center justify-center gap-3 rounded-[22px] border border-emerald-100 bg-emerald-50/70 px-5 py-6 text-center"
     >
-      <span className="email-verification-success-badge relative flex h-16 w-16 items-center justify-center rounded-full bg-emerald-500 text-white shadow-[0_8px_20px_rgba(16,185,129,0.24)]">
-        <Check className="email-verification-success-check h-8 w-8" strokeWidth={2.7} aria-hidden="true" />
+      <span className="verification-success-badge relative flex h-16 w-16 items-center justify-center rounded-full bg-emerald-500 text-white shadow-[0_8px_20px_rgba(16,185,129,0.24)]">
+        <Check className="verification-success-check h-8 w-8" strokeWidth={2.7} aria-hidden="true" />
       </span>
       <span className="text-[13px] font-semibold text-emerald-800">Continuando…</span>
-      <span className="sr-only">Correo verificado. {nextAction}</span>
+      <span className="sr-only">{channel === 'email' ? 'Correo' : 'Número'} verificado. {nextAction}</span>
     </div>
   );
 }
