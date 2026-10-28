@@ -293,7 +293,7 @@ type ProductItem = {
   minWeightG?: number | null;
   maxWeightG?: number | null;
   stepWeightG?: number | null;
-  weightPresets?: number[] | null;
+  weightPresets?: number[] | string | null;
   image?: string | null;
   images?: string[];
   imagePosition?: string | null;
@@ -458,6 +458,24 @@ function cloneOptionGroups(groups: ProductOptionGroup[]): ProductOptionGroup[] {
   }));
 }
 
+const DEFAULT_WEIGHT_PRESETS = [250, 500, 1000];
+
+function readWeightPresets(value: number[] | string | null | undefined, min: number, max: number): number[] {
+  let parsed: unknown = value;
+  if (typeof value === 'string') {
+    try {
+      parsed = JSON.parse(value);
+    } catch {
+      parsed = null;
+    }
+  }
+  if (Array.isArray(parsed)) {
+    const valid = parsed.filter((item): item is number => typeof item === 'number' && Number.isInteger(item) && item > 0);
+    if (valid.length) return [...new Set(valid)].sort((a, b) => a - b);
+  }
+  return DEFAULT_WEIGHT_PRESETS.filter((weight) => weight >= min && weight <= max);
+}
+
 function buildEmptyProductDraft(
   categoryId: string,
   template?: {
@@ -488,7 +506,7 @@ function buildEmptyProductDraft(
     minWeightG: template?.minWeightG || '100',
     maxWeightG: template?.maxWeightG || '5000',
     stepWeightG: template?.stepWeightG || '100',
-    weightPresets: template?.weightPresets?.length ? [...template.weightPresets] : [100, 200, 300, 500, 1000],
+    weightPresets: template?.weightPresets?.length ? [...template.weightPresets] : [...DEFAULT_WEIGHT_PRESETS],
     image: '',
     images: [],
     imagePosition: template?.imagePosition || '50% 50%',
@@ -502,6 +520,8 @@ function buildEmptyProductDraft(
 }
 
 function validateProductConsistency(draft: ProductDraft): string | null {
+  if (draft.name.trim().length < 2) return 'El nombre debe tener al menos 2 caracteres.';
+  if (draft.description.trim().length < 5) return 'La descripción debe tener al menos 5 caracteres.';
   const price = Number(draft.price);
   const discountPrice = draft.discountPrice ? Number(draft.discountPrice) : null;
   const buy = draft.promoBuyQuantity ? Number(draft.promoBuyQuantity) : 0;
@@ -522,8 +542,8 @@ function validateProductConsistency(draft: ProductDraft): string | null {
   }
 
   if (hasPromo) {
-    if (!Number.isFinite(buy) || !Number.isFinite(pay) || buy <= 0 || pay <= 0) {
-      return 'Indica cantidades válidas para la promoción por cantidad (comprar y pagar mayores a cero).';
+    if (!Number.isInteger(buy) || !Number.isInteger(pay) || buy <= 0 || pay <= 0) {
+      return 'Indica cantidades enteras mayores a cero para la promoción.';
     }
     if (pay >= buy) {
       return 'La promoción no es válida: la cantidad a pagar debe ser menor a la cantidad a comprar (ej. comprar 2, pagar 1).';
@@ -558,12 +578,22 @@ function validateProductConsistency(draft: ProductDraft): string | null {
 
   if (draft.trackStock) {
     const stock = draft.stock ? Number(draft.stock) : 0;
-    if (!Number.isFinite(stock) || stock < 0) {
-      return 'El stock debe ser un número mayor o igual a cero.';
+    if (!Number.isInteger(stock) || stock < 0) {
+      return 'El stock debe ser un número entero mayor o igual a cero.';
     }
     const threshold = draft.lowStockThreshold ? Number(draft.lowStockThreshold) : 5;
-    if (!Number.isFinite(threshold) || threshold < 0) {
-      return 'La alerta de pocas unidades debe ser un número mayor o igual a cero.';
+    if (!Number.isInteger(threshold) || threshold < 0) {
+      return 'La alerta de pocas unidades debe ser un número entero mayor o igual a cero.';
+    }
+  }
+
+  for (const group of draft.optionGroups || []) {
+    if (!group.name.trim()) return 'Escribe el nombre de cada grupo de opciones.';
+    if (!Number.isInteger(group.minSelection) || !Number.isInteger(group.maxSelection) || group.minSelection < 0 || group.maxSelection < 1 || group.minSelection > group.maxSelection) {
+      return 'Revisa el mínimo y máximo de selección de cada grupo.';
+    }
+    if (!group.options.length || group.options.some((option) => !option.name.trim() || !Number.isFinite(option.price) || option.price < 0)) {
+      return 'Cada grupo necesita opciones con nombre y precio válido.';
     }
   }
 
@@ -1359,7 +1389,7 @@ export default function Home() {
     minWeightG: '100',
     maxWeightG: '5000',
     stepWeightG: '100',
-    weightPresets: [100, 200, 300, 500, 1000],
+    weightPresets: [...DEFAULT_WEIGHT_PRESETS],
     image: '',
     images: [],
     imagePosition: '50% 50%',
@@ -4617,7 +4647,7 @@ export default function Home() {
       minWeightG: product.minWeightG ? String(product.minWeightG) : '100',
       maxWeightG: product.maxWeightG ? String(product.maxWeightG) : '5000',
       stepWeightG: product.stepWeightG ? String(product.stepWeightG) : '100',
-      weightPresets: product.weightPresets || [100, 200, 300, 500, 1000],
+      weightPresets: readWeightPresets(product.weightPresets, product.minWeightG || 100, product.maxWeightG || 5000),
       image: product.image || '',
       images: product.images?.length ? product.images : (product.image ? [product.image] : []),
       imagePosition: product.imagePosition || '50% 50%',
@@ -4969,7 +4999,7 @@ export default function Home() {
             imageZoom: productDraft.imageZoom || null,
             isAdultOnly: productDraft.isAdultOnly,
             trackStock: productDraft.trackStock,
-            stock: productDraft.trackStock ? (productDraft.stock ? Number(productDraft.stock) : 0) : 0,
+            stock: productDraft.stock ? Number(productDraft.stock) : 0,
             lowStockThreshold: productDraft.lowStockThreshold ? Number(productDraft.lowStockThreshold) : 5,
             isAvailable: true,
             allergens: [],
@@ -5082,6 +5112,9 @@ export default function Home() {
             imagePosition: productDraft.imagePosition || null,
             imageZoom: productDraft.imageZoom || null,
             isAdultOnly: productDraft.isAdultOnly,
+            trackStock: productDraft.trackStock,
+            stock: productDraft.trackStock ? (productDraft.stock ? Number(productDraft.stock) : 0) : 0,
+            lowStockThreshold: productDraft.lowStockThreshold ? Number(productDraft.lowStockThreshold) : 5,
             optionGroups: productDraft.optionGroups || [],
           }),
         },
@@ -5579,7 +5612,7 @@ export default function Home() {
       minWeightG: '100',
       maxWeightG: '5000',
       stepWeightG: '100',
-      weightPresets: [100, 200, 300, 500, 1000],
+      weightPresets: [...DEFAULT_WEIGHT_PRESETS],
       imagePosition: '50% 50%',
       imageZoom: 100,
       isAdultOnly: false,
@@ -5804,7 +5837,7 @@ export default function Home() {
           minWeightG: row.sellBy === 'WEIGHT' ? 100 : null,
           maxWeightG: row.sellBy === 'WEIGHT' ? 5000 : null,
           stepWeightG: row.sellBy === 'WEIGHT' ? 100 : null,
-          weightPresets: row.sellBy === 'WEIGHT' ? [100, 200, 300, 500, 1000] : null,
+          weightPresets: row.sellBy === 'WEIGHT' ? [...DEFAULT_WEIGHT_PRESETS] : null,
           image: row.image || null,
           imagePosition: null,
           imageZoom: null,
@@ -7855,7 +7888,7 @@ export default function Home() {
             }
           }}
         >
-          <div className="relative flex h-[96dvh] w-full max-w-4xl flex-col overflow-hidden rounded-t-[24px] bg-white shadow-[0_24px_80px_rgba(15,23,42,0.22)] ring-1 ring-black/10 sm:h-auto sm:max-h-[90dvh] sm:rounded-[24px]">
+          <div className="relative flex h-[96dvh] w-full max-w-4xl flex-col overflow-hidden rounded-t-[28px] bg-white shadow-[0_24px_80px_rgba(15,23,42,0.22)] ring-1 ring-black/10 sm:h-auto sm:max-h-[90dvh] sm:rounded-[24px]">
             <div className="flex shrink-0 justify-center bg-white pt-2.5 sm:hidden" aria-hidden="true">
               <span className="h-1 w-10 rounded-full bg-neutral-300" />
             </div>
@@ -7896,7 +7929,7 @@ export default function Home() {
                     setProductConfigInherited(false);
                     setProductDraft(buildEmptyProductDraft(categories[0]?.id || ''));
                   }}
-                  className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-neutral-500 transition hover:bg-neutral-100 hover:text-neutral-900 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-sky-500/20 sm:h-11 sm:w-11"
+                  className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-neutral-100 text-neutral-600 transition hover:bg-neutral-200 hover:text-neutral-900 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-sky-500/20"
                   aria-label="Cerrar"
                 >
                   <X className="h-5 w-5" strokeWidth={2} />
@@ -7923,7 +7956,7 @@ export default function Home() {
                           onChange={(event) =>
                             setProductDraft((current) => ({ ...current, categoryId: event.target.value }))
                           }
-                          className="w-full rounded-[18px] border border-black/5 bg-neutral-100/50 px-5 py-3.5 text-[15px] font-medium text-neutral-950 shadow-inner outline-none transition-all hover:bg-neutral-100/80 focus:border-sky-300 focus:bg-white focus:ring-4 focus:ring-sky-500/20 focus:shadow-md"
+                          className="min-h-12 w-full rounded-[18px] border border-black/5 bg-neutral-100/50 px-5 py-3.5 text-base font-medium text-neutral-950 shadow-inner outline-none transition-all hover:bg-neutral-100/80 focus:border-sky-300 focus:bg-white focus:ring-4 focus:ring-sky-500/20 focus:shadow-md sm:text-[15px]"
                         >
                           <option value="">Selecciona una categoría...</option>
                           {categories.map((category) => (
@@ -7970,15 +8003,15 @@ export default function Home() {
                     <div className="grid gap-4 sm:grid-cols-2 sm:gap-5">
                       {/* Tipo de venta */}
                       <div className="sm:col-span-2">
-                        <label className="text-[12px] font-bold uppercase tracking-[0.1em] text-neutral-600">Tipo de venta</label>
+                        <p className="text-[12px] font-bold uppercase tracking-[0.1em] text-neutral-600">¿Cómo vendes este producto?</p>
                         <div className="mt-2 flex gap-1 rounded-xl border border-neutral-200 bg-neutral-100 p-1">
                           <button
                             type="button"
                             onClick={() => setProductDraft((current) => ({ ...current, sellBy: 'UNIT' }))}
                             aria-pressed={productDraft.sellBy === 'UNIT'}
-                            className={`flex-1 rounded-xl py-3 text-[13px] font-bold transition-all sm:py-2.5 sm:text-xs ${
+                            className={`min-h-12 flex-1 rounded-xl px-2 py-3 text-sm font-bold transition-all focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-sky-500/20 ${
                               productDraft.sellBy === 'UNIT'
-                                ? 'bg-white text-neutral-950 shadow-sm ring-1 ring-black/5'
+                                ? 'bg-white text-sky-800 shadow-sm ring-1 ring-sky-200'
                                 : 'text-neutral-500 hover:text-neutral-700'
                             }`}
                           >
@@ -7988,9 +8021,9 @@ export default function Home() {
                             type="button"
                             onClick={() => setProductDraft((current) => ({ ...current, sellBy: 'WEIGHT' }))}
                             aria-pressed={productDraft.sellBy === 'WEIGHT'}
-                            className={`flex-1 rounded-xl py-3 text-[13px] font-bold transition-all sm:py-2.5 sm:text-xs ${
+                            className={`min-h-12 flex-1 rounded-xl px-2 py-3 text-sm font-bold transition-all focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-sky-500/20 ${
                               productDraft.sellBy === 'WEIGHT'
-                                ? 'bg-white text-neutral-950 shadow-sm ring-1 ring-black/5'
+                                ? 'bg-white text-sky-800 shadow-sm ring-1 ring-sky-200'
                                 : 'text-neutral-500 hover:text-neutral-700'
                             }`}
                           >
@@ -8003,8 +8036,9 @@ export default function Home() {
                         <Field
                           label="Precio ($)"
                           value={productDraft.price}
-                          onChange={(value) => setProductDraft((current) => ({ ...current, price: value }))}
+                          onChange={(value) => { const next = decimalInput(value); if (next !== null) setProductDraft((current) => ({ ...current, price: next })); }}
                           placeholder="0.00"
+                          inputMode="decimal"
                           inputRef={productPriceInputRef}
                           onKeyDown={(event) => {
                             if (event.key === 'Enter' && !event.shiftKey) {
@@ -8017,8 +8051,9 @@ export default function Home() {
                         <Field
                           label="Precio por kg ($)"
                           value={productDraft.unitPrice}
-                          onChange={(value) => setProductDraft((current) => ({ ...current, unitPrice: value, price: value || '0' }))}
+                          onChange={(value) => { const next = decimalInput(value); if (next !== null) setProductDraft((current) => ({ ...current, unitPrice: next, price: next })); }}
                           placeholder="0.00"
+                          inputMode="decimal"
                           inputRef={productPriceInputRef}
                           onKeyDown={(event) => {
                             if (event.key === 'Enter' && !event.shiftKey) {
@@ -8032,8 +8067,9 @@ export default function Home() {
                         <Field
                           label={productDraft.sellBy === 'UNIT' ? 'Precio de oferta ($)' : 'Precio de oferta por kg ($)'}
                           value={productDraft.discountPrice || ''}
-                          onChange={(value) => setProductDraft((current) => ({ ...current, discountPrice: value }))}
+                          onChange={(value) => { const next = decimalInput(value); if (next !== null) setProductDraft((current) => ({ ...current, discountPrice: next })); }}
                           placeholder="Opcional"
+                          inputMode="decimal"
                         />
                         <p className="mt-1.5 text-xs leading-4 text-neutral-500">Se mostrará como precio rebajado junto al precio normal.</p>
                       </div>
@@ -8062,16 +8098,16 @@ export default function Home() {
                               <Field
                                 label="Comprar (cantidad)"
                                 value={productDraft.promoBuyQuantity || ''}
-                                onChange={(value) => setProductDraft((current) => ({ ...current, promoBuyQuantity: value }))}
+                                onChange={(value) => { if (/^\d*$/.test(value)) setProductDraft((current) => ({ ...current, promoBuyQuantity: value })); }}
                                 placeholder="ej. 3"
-                                type="number"
+                                inputMode="numeric"
                               />
                               <Field
                                 label="Pagar (cantidad)"
                                 value={productDraft.promoPayQuantity || ''}
-                                onChange={(value) => setProductDraft((current) => ({ ...current, promoPayQuantity: value }))}
+                                onChange={(value) => { if (/^\d*$/.test(value)) setProductDraft((current) => ({ ...current, promoPayQuantity: value })); }}
                                 placeholder="ej. 2"
-                                type="number"
+                                inputMode="numeric"
                               />
                             </div>
                           )}
@@ -8121,24 +8157,12 @@ export default function Home() {
 
                         const handleMinChange = (v: string) => {
                           const grams = unitToGrams(v, weightUnit);
-                          setProductDraft((c) => {
-                            const newMin = grams !== null && grams > 0 ? String(grams) : '';
-                            const filteredPresets = (c.weightPresets || []).filter(
-                              (p) => (newMin ? p >= Number(newMin) : true),
-                            );
-                            return { ...c, minWeightG: newMin, weightPresets: filteredPresets };
-                          });
+                          setProductDraft((c) => ({ ...c, minWeightG: grams !== null && grams > 0 ? String(grams) : '' }));
                         };
 
                         const handleMaxChange = (v: string) => {
                           const grams = unitToGrams(v, weightUnit);
-                          setProductDraft((c) => {
-                            const newMax = grams !== null && grams > 0 ? String(grams) : '';
-                            const filteredPresets = (c.weightPresets || []).filter(
-                              (p) => (newMax ? p <= Number(newMax) : true),
-                            );
-                            return { ...c, maxWeightG: newMax, weightPresets: filteredPresets };
-                          });
+                          setProductDraft((c) => ({ ...c, maxWeightG: grams !== null && grams > 0 ? String(grams) : '' }));
                         };
 
                         return (
@@ -8157,7 +8181,9 @@ export default function Home() {
                                     key={unit}
                                     type="button"
                                     onClick={() => setWeightUnit(unit)}
-                                    className={`rounded-full px-4 py-1.5 text-[12px] font-bold transition-all ${
+                                    aria-pressed={weightUnit === unit}
+                                    aria-label={unit === 'g' ? 'Configurar en gramos' : 'Configurar en kilogramos'}
+                                    className={`min-h-11 min-w-11 rounded-full px-4 py-1.5 text-sm font-bold transition-all focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-sky-500/20 ${
                                       weightUnit === unit
                                         ? 'bg-sky-600 text-white shadow-md shadow-sky-600/30'
                                         : 'text-neutral-500 hover:text-sky-700'
@@ -8171,26 +8197,26 @@ export default function Home() {
 
                             {/* Vista previa de precios en vivo */}
                             {pricePerKg > 0 && exampleWeights.length > 0 && (
-                              <div className="mb-5 rounded-2xl border border-sky-100 bg-white/80 p-4">
-                                <p className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.1em] text-neutral-500">
-                                  <span className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-400" />
-                                  Tus clientes verán costos así
+                              <div className="mb-5 rounded-2xl border border-sky-100 bg-white p-4 shadow-sm">
+                                <p className="text-sm font-bold text-neutral-900">Ejemplos de precio</p>
+                                <p className="mt-1 text-xs leading-5 text-neutral-600">
+                                  Según el peso que elija tu cliente, pagará aproximadamente:
                                 </p>
-                                <div className="mt-2.5 flex flex-wrap gap-2">
+                                <div className="mt-3 divide-y divide-neutral-100 rounded-xl border border-neutral-100 bg-neutral-50/70 px-3">
                                   {exampleWeights.map((w) => (
                                     <div
                                       key={w}
-                                      className="flex items-baseline gap-1.5 rounded-xl border border-neutral-200/80 bg-white px-3 py-1.5 shadow-sm"
+                                      className="flex items-center justify-between gap-4 py-2.5"
                                     >
-                                      <span className="text-[13px] font-bold text-neutral-800">{formatWeight(w)}</span>
-                                      <span className="text-[13px] font-black text-emerald-600">
+                                      <span className="text-sm font-medium text-neutral-700">{formatWeight(w)}</span>
+                                      <span className="text-sm font-bold tabular-nums text-neutral-950">
                                         {formatCurrency((pricePerKg * w) / 1000)}
                                       </span>
                                     </div>
                                   ))}
                                 </div>
-                                <p className="mt-2 text-[11px] text-neutral-400">
-                                  Se calcula con tu precio de {formatCurrency(pricePerKg)} por kilo.
+                                <p className="mt-3 text-xs leading-5 text-neutral-500">
+                                  Calculado con el precio normal de {formatCurrency(pricePerKg)} por kg.
                                 </p>
                               </div>
                             )}
@@ -8198,25 +8224,30 @@ export default function Home() {
                             {/* Rango de peso */}
                             <div className="grid gap-4 sm:grid-cols-3">
                               <div className="space-y-1">
-                                <Field
+                                <WeightInputField
+                                  key={`min-${weightUnit}`}
                                   label={`Mínimo (${weightUnit})`}
                                   value={weightToUnit(productDraft.minWeightG, weightUnit)}
                                   onChange={handleMinChange}
                                   placeholder={weightUnit === 'kg' ? '0.1' : '100'}
+                                  inputMode="decimal"
                                 />
                                 <p className="text-[11px] leading-snug text-neutral-400">Lo menos que puede pedir.</p>
                               </div>
                               <div className="space-y-1">
-                                <Field
+                                <WeightInputField
+                                  key={`max-${weightUnit}`}
                                   label={`Máximo (${weightUnit})`}
                                   value={weightToUnit(productDraft.maxWeightG, weightUnit)}
                                   onChange={handleMaxChange}
                                   placeholder={weightUnit === 'kg' ? '5' : '5000'}
+                                  inputMode="decimal"
                                 />
                                 <p className="text-[11px] leading-snug text-neutral-400">El tope por pedido.</p>
                               </div>
                               <div className="space-y-1">
-                                <Field
+                                <WeightInputField
+                                  key={`step-${weightUnit}`}
                                   label={`Incremento (${weightUnit})`}
                                   value={weightToUnit(productDraft.stepWeightG, weightUnit)}
                                   onChange={(v) => {
@@ -8227,8 +8258,9 @@ export default function Home() {
                                     }));
                                   }}
                                   placeholder={weightUnit === 'kg' ? '0.05' : '50'}
+                                  inputMode="decimal"
                                 />
-                                <p className="text-[11px] leading-snug text-neutral-400">De cuánto en cuánto sube.</p>
+                                <p className="text-[11px] leading-snug text-neutral-500">De cuánto en cuánto sube. Precisión mínima: 1 g.</p>
                               </div>
                             </div>
 
@@ -8243,7 +8275,7 @@ export default function Home() {
                                     Botones que tus clientes tocan para pedir rápido.
                                   </p>
                                 </div>
-                                {presets.length > 0 && (
+                                {(
                                   <button
                                     type="button"
                                     onClick={() =>
@@ -8252,13 +8284,13 @@ export default function Home() {
                                         const max = Number(c.maxWeightG) || 0;
                                         return {
                                           ...c,
-                                          weightPresets: [100, 250, 500, 1000, 2000].filter(
+                                          weightPresets: DEFAULT_WEIGHT_PRESETS.filter(
                                             (p) => (min ? p >= min : true) && (max ? p <= max : true),
                                           ),
                                         };
                                       })
                                     }
-                                    className="rounded-full px-3 py-1.5 text-[11px] font-bold text-sky-600 transition hover:bg-sky-50"
+                                    className="min-h-11 rounded-xl px-3 py-2 text-xs font-bold text-sky-700 transition hover:bg-sky-50 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-sky-500/20"
                                   >
                                     Restablecer
                                   </button>
@@ -8266,23 +8298,24 @@ export default function Home() {
                               </div>
 
                               {presets.length > 0 ? (
-                                <div className="mt-3 flex flex-wrap gap-2">
+                                <div className="mt-3 flex max-h-48 flex-wrap gap-2 overflow-y-auto overscroll-contain" aria-label="Cantidades de acceso rápido">
                                   {presets.map((p) => (
                                     <span
                                       key={p}
-                                      className="group flex items-center gap-1.5 rounded-full border border-sky-200 bg-sky-50 py-1 pl-3 pr-1 text-[13px] font-bold text-sky-800"
+                                      className="group flex items-center gap-1 rounded-full border border-sky-200 bg-sky-50 pl-3 text-sm font-bold text-sky-800"
                                     >
                                       {formatWeight(p)}
                                       <button
                                         type="button"
                                         title={`Quitar ${formatWeight(p)}`}
+                                        aria-label={`Quitar ${formatWeight(p)}`}
                                         onClick={() =>
                                           setProductDraft((c) => ({
                                             ...c,
                                             weightPresets: (c.weightPresets || []).filter((x) => x !== p),
                                           }))
                                         }
-                                        className="flex h-5 w-5 items-center justify-center rounded-full text-sky-500 transition hover:bg-sky-100 hover:text-sky-700"
+                                        className="flex h-11 w-11 items-center justify-center rounded-full text-sky-700 transition hover:bg-sky-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500"
                                       >
                                         <X className="h-3 w-3" />
                                       </button>
@@ -8299,7 +8332,9 @@ export default function Home() {
                                 <input
                                   value={presetInput}
                                   onChange={(e) => {
-                                    setPresetInput(e.target.value);
+                                    const next = decimalInput(e.target.value);
+                                    if (next === null) return;
+                                    setPresetInput(next);
                                     if (presetInputError) setPresetInputError('');
                                   }}
                                   onKeyDown={(e) => {
@@ -8311,7 +8346,7 @@ export default function Home() {
                                   aria-label={`Agregar acceso rápido en ${weightUnit}`}
                                   placeholder={weightUnit === 'kg' ? 'Ej. 0.75 kg' : 'Ej. 750'}
                                   inputMode="decimal"
-                                  className="block w-full min-w-0 rounded-[18px] border border-black/5 bg-neutral-100/50 px-5 py-3 text-[15px] font-medium text-neutral-950 shadow-inner outline-none transition-all duration-300 placeholder:text-neutral-400 hover:bg-neutral-100/80 focus:border-sky-400 focus:bg-white focus:ring-4 focus:ring-sky-400/20 sm:min-w-0"
+                                  className="block w-full min-w-0 rounded-[18px] border border-black/5 bg-neutral-100/50 px-5 py-3 text-base font-medium text-neutral-950 shadow-inner outline-none transition-all duration-300 placeholder:text-neutral-400 hover:bg-neutral-100/80 focus:border-sky-400 focus:bg-white focus:ring-4 focus:ring-sky-400/20 sm:min-w-0 sm:text-[15px]"
                                 />
                                 <button
                                   type="button"
@@ -8348,6 +8383,7 @@ export default function Home() {
                                 }));
                               }}
                               placeholder="https://ejemplo.com/imagen.jpg"
+                              inputMode="url"
                             />
                             {productImageValidationError ? (
                               <p className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-2.5 text-sm text-rose-700">
@@ -8359,7 +8395,7 @@ export default function Home() {
                                 <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
                               </div>
                               <div className="min-w-[140px] flex-1">
-                                <p className="text-sm font-bold text-neutral-900">Subir imagen desde equipo</p>
+                                <p className="text-sm font-bold text-neutral-900">Subir foto</p>
                                 <p className="text-xs text-neutral-500">PNG o JPG. Recomendado 1:1.</p>
                               </div>
                               <input
@@ -8375,7 +8411,7 @@ export default function Home() {
                                 disabled={processingProductImage}
                                 className="min-h-11 w-full shrink-0 rounded-xl bg-neutral-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-neutral-800 disabled:opacity-50 sm:w-auto"
                               >
-                                {processingProductImage ? 'Cargando...' : 'Examinar'}
+                                {processingProductImage ? 'Cargando...' : 'Elegir foto'}
                               </button>
                             </div>
 
@@ -8553,7 +8589,7 @@ export default function Home() {
                             <div className="mt-4 space-y-3 sm:col-span-2">
                               <div className="flex items-center gap-2">
                                 <span className="text-sm font-bold text-neutral-800">Imágenes adicionales</span>
-                                <span className="rounded-full bg-neutral-100 px-2 py-0.5 text-[10px] font-semibold text-neutral-500">{productDraft.images.length - 1} extra</span>
+                                <span className="rounded-full bg-neutral-100 px-2 py-0.5 text-[10px] font-semibold text-neutral-500">{Math.max(0, productDraft.images.length - 1)} extra</span>
                               </div>
                               <div className="flex flex-wrap gap-3">
                                 {productDraft.images.slice(1).map((url, idx) => (
@@ -8567,7 +8603,8 @@ export default function Home() {
                                           images: curr.images.filter((_, i) => i !== idx + 1),
                                         }))
                                       }
-                                      className="absolute right-0.5 top-0.5 flex h-5 w-5 items-center justify-center rounded-full bg-black/60 text-[11px] text-white opacity-0 transition group-hover:opacity-100"
+                                      aria-label={`Eliminar imagen adicional ${idx + 1}`}
+                                      className="absolute right-0 top-0 flex h-11 w-11 items-center justify-center rounded-bl-xl bg-black/65 text-xl text-white transition hover:bg-black/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
                                     >
                                       ×
                                     </button>
@@ -8578,6 +8615,7 @@ export default function Home() {
                                   onClick={() => productImageExtraInputRef.current?.click()}
                                   className="flex h-16 w-16 items-center justify-center rounded-xl border-2 border-dashed border-neutral-300 bg-neutral-50 text-lg text-neutral-400 transition hover:border-sky-400 hover:text-sky-600"
                                   title="Agregar otra imagen"
+                                  aria-label="Agregar otra imagen"
                                 >
                                   +
                                 </button>
@@ -8659,24 +8697,26 @@ export default function Home() {
                         {productDraft.trackStock && (
                           <div className="mt-4 grid grid-cols-2 gap-3">
                             <div>
-                              <label className="text-xs font-bold text-neutral-700">Unidades en stock</label>
+                              <label htmlFor="product-stock" className="text-xs font-bold text-neutral-700">Unidades en stock</label>
                               <input
-                                type="number"
-                                min={0}
+                                id="product-stock"
+                                type="text"
+                                inputMode="numeric"
                                 value={productDraft.stock}
-                                onChange={(e) => setProductDraft((curr) => ({ ...curr, stock: e.target.value }))}
-                                className="mt-1 w-full rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm text-neutral-900 outline-none transition focus:border-amber-400 focus:ring-2 focus:ring-amber-100 dark:border-neutral-700 dark:bg-neutral-900 dark:text-white"
+                                onChange={(e) => { if (/^\d*$/.test(e.target.value)) setProductDraft((curr) => ({ ...curr, stock: e.target.value })); }}
+                                className="mt-1 min-h-12 w-full rounded-xl border border-neutral-200 bg-white px-3 py-2 text-base text-neutral-900 outline-none transition focus:border-amber-400 focus:ring-2 focus:ring-amber-100"
                                 placeholder="0"
                               />
                             </div>
                             <div>
-                              <label className="text-xs font-bold text-neutral-700">Alerta de pocas unidades</label>
+                              <label htmlFor="product-stock-alert" className="text-xs font-bold text-neutral-700">Alerta de pocas unidades</label>
                               <input
-                                type="number"
-                                min={0}
+                                id="product-stock-alert"
+                                type="text"
+                                inputMode="numeric"
                                 value={productDraft.lowStockThreshold}
-                                onChange={(e) => setProductDraft((curr) => ({ ...curr, lowStockThreshold: e.target.value }))}
-                                className="mt-1 w-full rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm text-neutral-900 outline-none transition focus:border-amber-400 focus:ring-2 focus:ring-amber-100 dark:border-neutral-700 dark:bg-neutral-900 dark:text-white"
+                                onChange={(e) => { if (/^\d*$/.test(e.target.value)) setProductDraft((curr) => ({ ...curr, lowStockThreshold: e.target.value })); }}
+                                className="mt-1 min-h-12 w-full rounded-xl border border-neutral-200 bg-white px-3 py-2 text-base text-neutral-900 outline-none transition focus:border-amber-400 focus:ring-2 focus:ring-amber-100"
                                 placeholder="5"
                               />
                             </div>
@@ -8853,6 +8893,7 @@ export default function Home() {
                                     <input
                                       type="text"
                                       required
+                                      aria-label={`Nombre de la opción ${optIdx + 1}`}
                                       value={opt.name}
                                       onChange={(e) => {
                                         setProductDraft((current) => {
@@ -8869,6 +8910,7 @@ export default function Home() {
                                     <div className="relative w-28 shrink-0">
                                       <span className="absolute left-3 top-2.5 text-xs font-bold text-sky-400">$</span>
                                       <EditableNumberInput
+                                        ariaLabel={`Precio adicional de la opción ${optIdx + 1}`}
                                         min={0}
                                         step="any"
                                         value={opt.price}
@@ -8917,7 +8959,7 @@ export default function Home() {
             </div>
 
             {/* Sticky Footer */}
-            <div className="relative shrink-0 border-t border-neutral-200 bg-white px-4 py-3.5 min-[420px]:px-5 sm:px-7 sm:py-4" style={{ paddingBottom: 'max(0.875rem, env(safe-area-inset-bottom))' }}>
+            <div className="relative shrink-0 border-t border-neutral-200 bg-white px-4 py-3.5 shadow-[0_-8px_24px_rgba(15,23,42,0.06)] min-[420px]:px-5 sm:px-7 sm:py-4" style={{ paddingBottom: 'max(0.875rem, env(safe-area-inset-bottom))' }}>
               {!productDraft.id ? (
                 <div className="mb-3 flex items-center justify-between gap-3">
                   <label className="flex min-h-11 cursor-pointer select-none items-center gap-2.5 rounded-xl border border-neutral-200 bg-neutral-50 px-3.5 py-2 text-[13px] font-medium text-neutral-700 transition hover:bg-neutral-100">
@@ -8938,7 +8980,7 @@ export default function Home() {
                 <button
                   type="button"
                   onClick={() => setIsProductModalOpen(false)}
-                  className="min-h-12 flex-1 rounded-xl border border-neutral-300 bg-white px-5 py-3 text-sm font-semibold text-neutral-700 transition hover:bg-neutral-50 hover:text-neutral-950 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-neutral-500/15 sm:flex-none"
+                  className="min-h-12 flex-1 rounded-2xl border border-neutral-200 bg-neutral-50 px-3 py-3 text-sm font-bold text-neutral-700 transition hover:bg-neutral-100 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-neutral-500/15 sm:flex-none sm:px-5"
                 >
                   Cancelar
                 </button>
@@ -8946,7 +8988,7 @@ export default function Home() {
                   type="button"
                   onClick={() => void submitProductNow()}
                   disabled={creatingProduct || savingProductChanges || processingProductImage || !canSubmitProduct}
-                  className="min-h-12 flex-[1.2] rounded-xl bg-sky-700 px-6 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-sky-800 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-sky-500/25 disabled:pointer-events-none disabled:opacity-50 disabled:shadow-none sm:flex-none"
+                  className="min-h-12 flex-[1.5] rounded-2xl bg-sky-700 px-3 py-3 text-sm font-bold text-white shadow-lg shadow-sky-700/20 transition hover:bg-sky-800 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-sky-500/25 disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none sm:flex-none sm:px-6"
                 >
                   <span>
                     {productDraft.id
@@ -14439,6 +14481,38 @@ function OpenStorefrontIcon() {
 }
 
 
+function WeightInputField({ label, value, onChange, placeholder }: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  placeholder: string;
+  inputMode?: 'decimal';
+}) {
+  const [text, setText] = useState(value);
+  const focused = useRef(false);
+
+  useEffect(() => {
+    if (!focused.current) setText(value);
+  }, [value]);
+
+  return (
+    <Field
+      label={label}
+      value={text}
+      placeholder={placeholder}
+      inputMode="decimal"
+      onFocus={() => { focused.current = true; }}
+      onBlur={() => { focused.current = false; setText(value); }}
+      onChange={(next) => {
+        const normalized = decimalInput(next);
+        if (normalized === null) return;
+        setText(normalized);
+        onChange(normalized);
+      }}
+    />
+  );
+}
+
 function Field({
   label,
   value,
@@ -14447,6 +14521,8 @@ function Field({
   type = 'text',
   inputRef,
   onKeyDown,
+  onFocus,
+  onBlur,
   id,
   autoComplete,
   inputMode,
@@ -14465,6 +14541,8 @@ function Field({
   type?: string;
   inputRef?: React.Ref<HTMLInputElement>;
   onKeyDown?: (event: React.KeyboardEvent<HTMLInputElement>) => void;
+  onFocus?: React.FocusEventHandler<HTMLInputElement>;
+  onBlur?: React.FocusEventHandler<HTMLInputElement>;
   id?: string;
   autoComplete?: string;
   inputMode?: 'text' | 'tel' | 'email' | 'numeric' | 'decimal' | 'search' | 'url' | 'none';
@@ -14534,6 +14612,8 @@ function Field({
           value={value}
           onChange={(event) => onChange(event.target.value)}
           onKeyDown={onKeyDown}
+          onFocus={onFocus}
+          onBlur={onBlur}
           placeholder={placeholder}
           autoComplete={autoComplete}
           inputMode={inputMode}
@@ -14610,6 +14690,7 @@ function EditableNumberInput({
   step,
   placeholder,
   className,
+  ariaLabel,
 }: {
   value: number;
   onCommit: (value: number) => void;
@@ -14618,6 +14699,7 @@ function EditableNumberInput({
   step?: string;
   placeholder?: string;
   className?: string;
+  ariaLabel?: string;
 }) {
   const [text, setText] = useState<string>(String(value));
 
@@ -14626,8 +14708,9 @@ function EditableNumberInput({
   }, [value]);
 
   function commit() {
-    const parsed = integer ? parseInt(text, 10) : parseFloat(text);
-    let next = Number.isFinite(parsed) ? parsed : 0;
+    const parsed = text.trim() ? Number(text) : NaN;
+    let next = Number.isFinite(parsed) ? parsed : value;
+    if (integer) next = Math.trunc(next);
     if (min !== undefined && next < min) next = min;
     setText(String(next));
     onCommit(next);
@@ -14635,12 +14718,19 @@ function EditableNumberInput({
 
   return (
     <input
-      type="number"
-      min={min}
-      step={step}
-      inputMode="numeric"
+      type="text"
+      inputMode={integer ? 'numeric' : 'decimal'}
+      aria-label={ariaLabel}
       value={text}
-      onChange={(event) => setText(event.target.value)}
+      onChange={(event) => {
+        const next = integer
+          ? (/^\d*$/.test(event.target.value) ? event.target.value : null)
+          : decimalInput(event.target.value);
+        if (next === null) return;
+        setText(next);
+        const parsed = next.trim() ? Number(next) : NaN;
+        if (Number.isFinite(parsed) && (min === undefined || parsed >= min)) onCommit(parsed);
+      }}
       onBlur={commit}
       onKeyDown={(e) => {
         if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
@@ -15100,6 +15190,7 @@ function formatWeight(grams: number): string {
 }
 
 function weightToUnit(grams: string | number, unit: 'kg' | 'g'): string {
+  if (grams === '') return '';
   const num = typeof grams === 'number' ? grams : Number(grams);
   if (!Number.isFinite(num)) return '';
   if (unit === 'kg') {
@@ -15109,12 +15200,19 @@ function weightToUnit(grams: string | number, unit: 'kg' | 'g'): string {
   return String(Math.round(num));
 }
 
+function decimalInput(value: string): string | null {
+  const normalized = value.replace(',', '.');
+  return /^\d*(?:\.\d*)?$/.test(normalized) ? normalized : null;
+}
+
 function unitToGrams(value: string, unit: 'kg' | 'g'): number | null {
-  const cleaned = value.trim().replace(',', '.').replace(/[^0-9.]/g, '');
-  if (!cleaned) return null;
+  const cleaned = decimalInput(value.trim());
+  if (!cleaned || cleaned === '.') return null;
   const num = Number(cleaned);
   if (!Number.isFinite(num) || num <= 0) return null;
-  return unit === 'kg' ? Math.round(num * 1000) : Math.round(num);
+  const grams = unit === 'kg' ? num * 1000 : num;
+  const rounded = Math.round(grams);
+  return rounded > 0 && Math.abs(grams - rounded) < 1e-7 ? rounded : null;
 }
 
 function formatSettlementReference(ref: string): string {
