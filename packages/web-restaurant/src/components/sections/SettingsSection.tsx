@@ -272,6 +272,7 @@ export const SettingsSection = React.memo(function SettingsSection({
     }
   });
   const [copySourceDay, setCopySourceDay] = useState(1);
+  const [editingHoursDay, setEditingHoursDay] = useState<number | null>(null);
   const [categorySearch, setCategorySearch] = useState('');
   const [showAllCategories, setShowAllCategories] = useState(false);
   const [canScrollTabsLeft, setCanScrollTabsLeft] = useState(false);
@@ -1284,13 +1285,12 @@ export const SettingsSection = React.memo(function SettingsSection({
                     <div className="min-w-0">
                       <p className="mb-0.5 font-semibold">Horario operativo</p>
                       <p className="text-sky-700/80">
-                        Configura hasta 2 turnos por día. Si uno cruza la medianoche (por ejemplo, de 7:00 p. m. a 1:00 a. m.),
-                        indicaremos que cierra al día siguiente.
+                        Toca un día para editar su horario.
                       </p>
                     </div>
                     <span className="inline-flex items-center gap-1.5 rounded-full bg-white/80 px-3 py-1 text-[11px] font-bold text-sky-700 ring-1 ring-sky-200">
                       <span className="h-1.5 w-1.5 rounded-full bg-sky-500" />
-                      {openDaysCount} de {weekDayOptions.length} días al servicio
+                      {openDaysCount} de {weekDayOptions.length} días abiertos
                     </span>
                   </div>
                   <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">
@@ -1310,7 +1310,7 @@ export const SettingsSection = React.memo(function SettingsSection({
                     </label>
                     <button
                       type="button"
-                      onClick={applyToAllDays}
+                      onClick={() => { if (window.confirm('Esto reemplazará los horarios y días cerrados de toda la semana. ¿Deseas continuar?')) applyToAllDays(); }}
                       className="w-full sm:w-auto rounded-full bg-neutral-950 px-5 py-3 text-sm font-semibold text-white transition hover:bg-neutral-800"
                     >
                       Aplicar a todos los días
@@ -1324,10 +1324,7 @@ export const SettingsSection = React.memo(function SettingsSection({
                     <div className="min-w-0 flex-1">
                       <p className="font-semibold text-neutral-900">Apertura automática</p>
                       <p className="mt-1 text-[13px] leading-relaxed text-neutral-500">
-                        Tu negocio se abrirá solo a la hora de apertura para recibir pedidos, sin
-                        necesidad de entrar a la app. Si un día lo cierras manualmente (o el sistema
-                        lo pausa), ese día no se vuelve a abrir; reabrirá solo al siguiente día de
-                        servicio.
+                        Abre tu negocio automáticamente según el horario. Si lo cierras o se pausa, volverá a abrir el siguiente día de servicio.
                       </p>
                     </div>
                     <button
@@ -1346,15 +1343,15 @@ export const SettingsSection = React.memo(function SettingsSection({
                 </div>
 
                 <div className="overflow-hidden rounded-[20px] border border-black/5 bg-white shadow-sm">
-                  <div className="divide-y divide-black/5 md:grid md:grid-cols-2 md:divide-y-0 md:gap-3 md:p-3">
+                  <div className="divide-y divide-black/5">
                     {weekDayOptions.map((day) => {
                       const blocks = dayBlocks(day.dayOfWeek);
                       const open = isDayOpen(day.dayOfWeek);
                       const invalid = dayHasInvalid(day.dayOfWeek);
                       return (
-                        <div key={day.dayOfWeek} className={`px-4 py-3.5 transition-colors md:h-full md:rounded-[16px] md:border md:border-black/5 md:bg-neutral-50/50 md:px-5 md:py-4 md:hover:bg-neutral-50 ${open ? '' : 'opacity-60'}`}>
+                        <div key={day.dayOfWeek} className="px-4 py-3 transition-colors sm:px-5">
                           <div className="flex items-center justify-between gap-3">
-                            <div className="min-w-0">
+                            <button type="button" className="min-w-0 flex-1 text-left" aria-expanded={editingHoursDay === day.dayOfWeek} onClick={() => setEditingHoursDay(editingHoursDay === day.dayOfWeek ? null : day.dayOfWeek)}>
                               <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
                                 <p className="text-sm font-semibold text-neutral-900">{day.label}</p>
                                 <span className={`text-[11px] font-medium ${open ? 'text-emerald-600' : 'text-neutral-400'}`}>
@@ -1366,13 +1363,14 @@ export const SettingsSection = React.memo(function SettingsSection({
                                   La hora de apertura no puede ser igual a la de cierre.
                                 </p>
                               )}
-                            </div>
+                              <span className="text-xs font-semibold text-sky-600">{!open ? 'Activa para editar' : editingHoursDay === day.dayOfWeek ? 'Ocultar' : 'Editar'}</span>
+                            </button>
                             <button
                               type="button"
                               role="switch"
                               aria-checked={open}
                               aria-label={open ? `Cerrar ${day.label}` : `Abrir ${day.label}`}
-                              onClick={() => toggleDay(day.dayOfWeek)}
+                              onClick={() => { toggleDay(day.dayOfWeek); if (!open) setEditingHoursDay(day.dayOfWeek); }}
                               className={`relative inline-flex h-11 w-[68px] shrink-0 items-center rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-sky-400 focus:ring-offset-2 ${open ? 'bg-sky-500' : 'bg-neutral-300'}`}
                             >
                               <span
@@ -1381,7 +1379,7 @@ export const SettingsSection = React.memo(function SettingsSection({
                             </button>
                           </div>
 
-                          {open && (
+                          {open && editingHoursDay === day.dayOfWeek && (
                             <div className="mt-3 grid gap-2.5">
                               {blocks
                                 .slice()
@@ -1398,7 +1396,7 @@ export const SettingsSection = React.memo(function SettingsSection({
                                         </span>
                                         {isOvernightShift(block) && (
                                           <span className="rounded-full bg-indigo-50 px-2 py-0.5 text-[10px] font-semibold text-indigo-600">
-                                            Cierra a las {formatTime12h(block.closeTime)} del día siguiente
+                                            Cierra al día siguiente
                                           </span>
                                         )}
                                       </div>
@@ -1414,8 +1412,9 @@ export const SettingsSection = React.memo(function SettingsSection({
                                     </div>
                                     <div className="mt-2.5 grid grid-cols-2 gap-2.5 sm:gap-3">
                                       <div className="min-w-0">
-                                        <label className="mb-0.5 block text-[10px] font-bold uppercase tracking-wider text-neutral-400">Apertura</label>
-                                        <input
+                                          <label className="mb-0.5 block text-[10px] font-bold uppercase tracking-wider text-neutral-400" htmlFor={`open-${day.dayOfWeek}-${block.shiftIndex}`}>Apertura</label>
+                                          <input
+                                            id={`open-${day.dayOfWeek}-${block.shiftIndex}`}
                                           type="time"
                                           value={block.openTime}
                                           onChange={(e: any) => updateShift(day.dayOfWeek, block.shiftIndex, { openTime: e.target.value })}
@@ -1423,8 +1422,9 @@ export const SettingsSection = React.memo(function SettingsSection({
                                         />
                                       </div>
                                       <div className="min-w-0">
-                                        <label className="mb-0.5 block text-[10px] font-bold uppercase tracking-wider text-neutral-400">Cierre</label>
-                                        <input
+                                          <label className="mb-0.5 block text-[10px] font-bold uppercase tracking-wider text-neutral-400" htmlFor={`close-${day.dayOfWeek}-${block.shiftIndex}`}>Cierre</label>
+                                          <input
+                                            id={`close-${day.dayOfWeek}-${block.shiftIndex}`}
                                           type="time"
                                           value={block.closeTime}
                                           onChange={(e: any) => updateShift(day.dayOfWeek, block.shiftIndex, { closeTime: e.target.value })}
