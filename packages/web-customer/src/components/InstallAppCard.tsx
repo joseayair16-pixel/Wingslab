@@ -3,6 +3,7 @@ import { Download, Smartphone, X } from 'lucide-react';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 
 import { fetchPublishedAppVersion, isNativePlatform } from '../lib/native';
+import IOSInstallGuide from './IOSInstallGuide';
 
 type BeforeInstallPromptEvent = Event & {
   prompt: () => Promise<void>;
@@ -13,12 +14,6 @@ type Platform = 'ios' | 'android' | 'other';
 // Tipo de navegador de escritorio: determina qué herramienta de instalación
 // ofrece (Chromium: beforeinstallprompt; Safari: Añadir al Dock; Firefox: ninguna).
 type DesktopKind = 'chromium' | 'safari' | 'firefox' | 'unknown';
-
-function isIosSafari(): boolean {
-  if (typeof window === 'undefined') return false;
-  const ua = navigator.userAgent;
-  return /Safari/i.test(ua) && !/CriOS|OPiOS|FxiOS|EdgiOS/i.test(ua);
-}
 
 function detectDesktopKind(): DesktopKind {
   if (typeof window === 'undefined') return 'unknown';
@@ -167,18 +162,19 @@ export default function InstallAppCard() {
       window.location.href = apkUrl;
       return;
     }
-    if (!deferredPromptRef.current) {
-      return;
-    }
+    const prompt = deferredPromptRef.current;
+    if (!prompt) return;
+    deferredPromptRef.current = null;
+    setDeferredPrompt(null);
     try {
       setInstalling(true);
-      await deferredPromptRef.current.prompt();
-      const { outcome } = await deferredPromptRef.current.userChoice;
+      await prompt.prompt();
+      const { outcome } = await prompt.userChoice;
       if (outcome === 'accepted') {
-        setDeferredPrompt(null);
-        setIsStandalone(true);
         setOpen(false);
       }
+    } catch {
+      // El navegador puede retirar la invitación; la guía manual sigue disponible.
     } finally {
       setInstalling(false);
     }
@@ -204,7 +200,7 @@ export default function InstallAppCard() {
 
       {open && (
         <div className="fixed inset-0 z-[9995] flex items-end justify-center bg-black/45 px-4 pb-8 sm:items-center sm:pb-0" role="dialog" aria-modal="true" aria-label="Instalar la app de SaDeL">
-          <div className="w-full max-w-sm rounded-[28px] bg-white p-6 shadow-2xl">
+          <div className="max-h-[85dvh] w-full max-w-sm overflow-y-auto rounded-[28px] bg-white p-6 shadow-2xl">
             <div className="mb-4 flex items-start justify-between">
               <h3 className="text-lg font-bold text-neutral-900">
                 {platform === 'ios'
@@ -224,7 +220,7 @@ export default function InstallAppCard() {
             </div>
 
             {platform === 'ios' ? (
-              <IOSGuide />
+              <IOSInstallGuide />
             ) : platform === 'android' && apkUrl ? (
               <AndroidApkGuide apkUrl={apkUrl} installing={installing} onDownload={handleAndroidAction} />
             ) : platform === 'android' ? (
@@ -241,64 +237,6 @@ export default function InstallAppCard() {
         </div>
       )}
     </>
-  );
-}
-
-function IOSGuide() {
-  const inSafari = isIosSafari();
-  return (
-    <div>
-      {!inSafari ? (
-        <div className="mb-4 rounded-xl bg-sky-50 p-3 text-xs leading-relaxed text-sky-800">
-          En iPhone las apps web solo se instalan desde <span className="font-bold">Safari</span>. Abre
-          SaDeL en Safari siguiendo estos pasos:
-        </div>
-      ) : (
-        <p className="mb-4 text-sm leading-relaxed text-neutral-600">
-          Sigue estos pasos y tendrás SaDeL en tu pantalla de inicio:
-        </p>
-      )}
-      <ol className="space-y-3 text-sm">
-        <Step n={1} active={!inSafari}>
-          {inSafari ? (
-            <>
-              Toca el botón <Bold>Compartir</Bold>{' '}
-              <InlineIcon>⤴</InlineIcon> (abajo en Safari).
-            </>
-          ) : (
-            <>
-              Abre <Bold>Chrome</Bold> u otro navegador, copia la dirección de SaDeL y ábrela en{' '}
-              <Bold>Safari</Bold> (elige Safari en el menú «Compartir»).
-            </>
-          )}
-        </Step>
-        <Step n={2} active={!inSafari}>
-          {inSafari ? (
-            <>
-              Desplázate y toca <Bold>Añadir a pantalla de inicio</Bold>.
-            </>
-          ) : (
-            <>
-              Una vez en Safari, toca <Bold>Compartir</Bold> <InlineIcon>⤴</InlineIcon>.
-            </>
-          )}
-        </Step>
-        <Step n={3} active>
-          {inSafari ? (
-            <>
-              Toca <Bold>Añadir</Bold> arriba a la derecha. ¡Listo!
-            </>
-          ) : (
-            <>
-              Toca <Bold>Añadir a pantalla de inicio</Bold> y por último <Bold>Añadir</Bold>. ¡Listo!
-            </>
-          )}
-        </Step>
-      </ol>
-      <div className="mt-4 rounded-xl bg-amber-50 p-3 text-xs leading-relaxed text-amber-800">
-        Nota: desde la pantalla de inicio podrás pedir y recibir notificaciones como una app.
-      </div>
-    </div>
   );
 }
 

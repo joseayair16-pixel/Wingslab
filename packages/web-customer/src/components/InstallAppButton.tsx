@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 
 import { fetchPublishedAppVersion, isNativePlatform } from '../lib/native';
+import IOSInstallGuide from './IOSInstallGuide';
 
 type BeforeInstallPromptEvent = Event & {
   prompt: () => Promise<void>;
@@ -179,14 +180,16 @@ export default function InstallAppButton() {
   }, [isStandalone, dismissState, sessionViews, pathname]);
 
   const handleAndroidInstall = async () => {
-    if (!deferredPromptRef.current) return;
-    await deferredPromptRef.current.prompt();
-    const { outcome } = await deferredPromptRef.current.userChoice;
-    if (outcome === 'accepted') {
+    const prompt = deferredPromptRef.current;
+    if (!prompt) return;
+    deferredPromptRef.current = null;
+    setDeferredPrompt(null);
+    try {
+      await prompt.prompt();
+      const { outcome } = await prompt.userChoice;
+      if (outcome === 'dismissed') handleDismiss();
+    } catch {
       setDeferredPrompt(null);
-      setIsStandalone(true);
-    } else {
-      handleDismiss();
     }
   };
 
@@ -272,8 +275,8 @@ export default function InstallAppButton() {
       </div>
 
       {isIOS && showIOSHelp && (
-        <div className="fixed inset-0 z-[9995] flex items-end justify-center bg-black/45 px-4 pb-8 sm:items-center sm:pb-0">
-          <div className="w-full max-w-sm rounded-[28px] bg-white p-6 shadow-2xl">
+        <div className="fixed inset-0 z-[9995] flex items-end justify-center bg-black/45 px-4 pb-8 sm:items-center sm:pb-0" role="dialog" aria-modal="true" aria-label="Instalar SaDeL en iPhone o iPad">
+          <div className="max-h-[85dvh] w-full max-w-sm overflow-y-auto rounded-[28px] bg-white p-6 shadow-2xl">
             <div className="mb-4 flex items-center justify-between">
               <h3 className="text-lg font-bold text-neutral-900">Instalar SaDeL en tu iPhone</h3>
               <button
@@ -285,35 +288,7 @@ export default function InstallAppButton() {
                 <X className="h-4 w-4" />
               </button>
             </div>
-            <p className="mb-4 text-sm leading-relaxed text-neutral-600">
-              Apple no permite instalar apps desde el navegador automáticamente. Sigue estos pasos y la tendrás en tu pantalla de inicio en 10 segundos:
-            </p>
-            <ol className="space-y-3 text-sm">
-              <li className="flex items-start gap-3">
-                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-sky-100 text-xs font-bold text-sky-700">1</span>
-                <span className="leading-relaxed text-neutral-700">
-                  Toca el botón <span className="font-semibold text-neutral-900">Compartir</span>{' '}
-                  <span className="inline-flex h-5 w-5 items-center justify-center rounded-md bg-neutral-100 text-[10px] font-bold text-neutral-700">⤴</span>{' '}
-                  (abajo en Safari).
-                </span>
-              </li>
-              <li className="flex items-start gap-3">
-                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-sky-100 text-xs font-bold text-sky-700">2</span>
-                <span className="leading-relaxed text-neutral-700">
-                  Desplázate y toca <span className="font-semibold text-neutral-900">Añadir a pantalla de inicio</span>.
-                </span>
-              </li>
-              <li className="flex items-start gap-3">
-                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-sky-100 text-xs font-bold text-sky-700">3</span>
-                <span className="leading-relaxed text-neutral-700">
-                  Toca <span className="font-semibold text-neutral-900">Añadir</span> arriba a la derecha. ¡Listo!
-                </span>
-              </li>
-            </ol>
-            <div className="mt-4 rounded-xl bg-amber-50 p-3 text-xs leading-relaxed text-amber-800">
-              Nota: en iPhone las notificaciones no reproducen sonido. La app te
-              avisará visualmente; en la app Android de SaDeL sí hay sonido.
-            </div>
+            <IOSInstallGuide />
             <button
               type="button"
               onClick={() => setShowIOSHelp(false)}

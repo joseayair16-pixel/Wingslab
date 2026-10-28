@@ -505,7 +505,7 @@ function buildEmptyProductDraft(
     unitPrice: template?.unitPrice || '',
     minWeightG: template?.minWeightG || '100',
     maxWeightG: template?.maxWeightG || '5000',
-    stepWeightG: template?.stepWeightG || '100',
+    stepWeightG: template?.stepWeightG || '250',
     weightPresets: template?.weightPresets?.length ? [...template.weightPresets] : [...DEFAULT_WEIGHT_PRESETS],
     image: '',
     images: [],
@@ -1395,7 +1395,7 @@ export default function Home() {
     unitPrice: '',
     minWeightG: '100',
     maxWeightG: '5000',
-    stepWeightG: '100',
+    stepWeightG: '250',
     weightPresets: [...DEFAULT_WEIGHT_PRESETS],
     image: '',
     images: [],
@@ -4655,7 +4655,7 @@ export default function Home() {
       unitPrice: product.unitPrice ? String(product.unitPrice) : '',
       minWeightG: product.minWeightG ? String(product.minWeightG) : '100',
       maxWeightG: product.maxWeightG ? String(product.maxWeightG) : '5000',
-      stepWeightG: product.stepWeightG ? String(product.stepWeightG) : '100',
+      stepWeightG: product.stepWeightG ? String(product.stepWeightG) : '250',
       weightPresets: readWeightPresets(product.weightPresets, product.minWeightG || 100, product.maxWeightG || 5000),
       image: product.image || '',
       images: product.images?.length ? product.images : (product.image ? [product.image] : []),
@@ -5650,7 +5650,7 @@ export default function Home() {
       unitPrice: '',
       minWeightG: '100',
       maxWeightG: '5000',
-      stepWeightG: '100',
+      stepWeightG: '250',
       weightPresets: [...DEFAULT_WEIGHT_PRESETS],
       imagePosition: '50% 50%',
       imageZoom: 100,
@@ -5895,7 +5895,7 @@ export default function Home() {
           unitPrice: row.sellBy === 'WEIGHT' ? (row.price as number) : null,
           minWeightG: row.sellBy === 'WEIGHT' ? 100 : null,
           maxWeightG: row.sellBy === 'WEIGHT' ? 5000 : null,
-          stepWeightG: row.sellBy === 'WEIGHT' ? 100 : null,
+          stepWeightG: row.sellBy === 'WEIGHT' ? 250 : null,
           weightPresets: row.sellBy === 'WEIGHT' ? [...DEFAULT_WEIGHT_PRESETS] : null,
           image: row.image || null,
           optionGroups: row.optionGroups,
@@ -8184,7 +8184,7 @@ export default function Home() {
                         const presets = [...(productDraft.weightPresets || [])].sort((a, b) => a - b);
 
                         const exampleWeights = Array.from(
-                          new Set([minGrams, 500, 1000, maxGrams].filter((w) => w > 0 && w >= minGrams && w <= maxGrams)),
+                          new Set([250, 500, 1000].filter((w) => w >= minGrams && w <= maxGrams)),
                         ).sort((a, b) => a - b);
 
                         const handleAddPreset = () => {
@@ -8258,26 +8258,18 @@ export default function Home() {
                             {/* Vista previa de precios en vivo */}
                             {pricePerKg > 0 && exampleWeights.length > 0 && (
                               <div className="mb-5 rounded-2xl border border-sky-100 bg-white p-4 shadow-sm">
-                                <p className="text-sm font-bold text-neutral-900">Ejemplos de precio</p>
-                                <p className="mt-1 text-xs leading-5 text-neutral-600">
-                                  Según el peso que elija tu cliente, pagará aproximadamente:
-                                </p>
-                                <div className="mt-3 divide-y divide-neutral-100 rounded-xl border border-neutral-100 bg-neutral-50/70 px-3">
+                                <p className="text-xs font-bold text-neutral-700">Ejemplos · {formatCurrency(pricePerKg)} por kg</p>
+                                <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1">
                                   {exampleWeights.map((w) => (
                                     <div
                                       key={w}
-                                      className="flex items-center justify-between gap-4 py-2.5"
+                                      className="text-xs text-neutral-600"
                                     >
-                                      <span className="text-sm font-medium text-neutral-700">{formatWeight(w)}</span>
-                                      <span className="text-sm font-bold tabular-nums text-neutral-950">
-                                        {formatCurrency((pricePerKg * w) / 1000)}
-                                      </span>
+                                      <span>{formatWeight(w)}: </span>
+                                      <span className="font-bold tabular-nums text-neutral-950">{formatCurrency((pricePerKg * w) / 1000)}</span>
                                     </div>
                                   ))}
                                 </div>
-                                <p className="mt-3 text-xs leading-5 text-neutral-500">
-                                  Calculado con el precio normal de {formatCurrency(pricePerKg)} por kg.
-                                </p>
                               </div>
                             )}
 
@@ -8317,7 +8309,7 @@ export default function Home() {
                                       stepWeightG: grams !== null && grams > 0 ? String(grams) : '',
                                     }));
                                   }}
-                                  placeholder={weightUnit === 'kg' ? '0.05' : '50'}
+                                  placeholder={weightUnit === 'kg' ? '0.25' : '250'}
                                   inputMode="decimal"
                                 />
                                 <p className="text-[11px] leading-snug text-neutral-500">De cuánto en cuánto sube. Precisión mínima: 1 g.</p>
