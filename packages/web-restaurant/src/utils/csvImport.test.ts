@@ -1,4 +1,5 @@
 import {
+  parseImportModifiers,
   autoMapImportColumns,
   detectCsvHeaderRow,
   guessCsvDelimiter,
@@ -6,7 +7,42 @@ import {
   parseCsvRows,
   parseImportPrice,
   resolveSellBy,
+  isRecognizedSellBy,
 } from './csvImport';
+
+describe('modificadores importados', () => {
+  it('acepta grupos obligatorios y opcionales con precios', () => {
+    const result = parseImportModifiers('Salsa [1-1]: Verde ($0) | Roja ($0); Extras [0-2]: Queso ($15) | Tocino ($20.50)');
+    expect(result.errors).toEqual([]);
+    expect(result.groups).toHaveLength(2);
+    expect(result.groups[1].options[1].price).toBe(20.5);
+  });
+  it('detecta tabulaciones aunque haya varios grupos separados por punto y coma', () => {
+    const text = 'nombre\tprecio\ttipo\tmodificadores\nPollo\t120\tkg\tSalsa [1-1]: Roja ($0); Extra [0-1]: Queso ($15)';
+    const delimiter = guessCsvDelimiter(text);
+    const rows = parseCsvRows(text, delimiter);
+    const map = autoMapImportColumns(rows[0]);
+    expect(delimiter).toBe('\t');
+    expect(resolveSellBy(rows[1][map.sellBy!])).toBe('WEIGHT');
+    expect(parseImportModifiers(rows[1][map.modifiers!]).groups).toHaveLength(2);
+  });
+  it('reconoce unidades y evita confundir textos desconocidos con gramos', () => {
+    expect(isRecognizedSellBy('por kilogramo')).toBe(true);
+    expect(resolveSellBy('por kilogramo')).toBe('WEIGHT');
+    expect(isRecognizedSellBy('por pieza')).toBe(true);
+    expect(isRecognizedSellBy('grande')).toBe(false);
+  });
+  it('asigna todas las columnas predeterminadas sin encabezados', () => {
+    const map = autoMapImportColumns([]);
+    expect([map.category, map.sellBy, map.description, map.discountPrice, map.image]).toEqual([2, 3, 4, 5, 6]);
+  });
+  it('acepta una celda vacía y rechaza errores sin ignorarlos', () => {
+    expect(parseImportModifiers('').groups).toEqual([]);
+    expect(parseImportModifiers('Extras [0-2]: Queso ($15)').errors.length).toBeGreaterThan(0);
+    expect(parseImportModifiers('Salsa [1-1]: Verde').errors.length).toBeGreaterThan(0);
+    expect(parseImportModifiers('Salsa [1-1]: Verde ($0);').errors.length).toBeGreaterThan(0);
+  });
+});
 
 describe('normalizeHeader', () => {
   it('normaliza mayúsculas y minúsculas', () => {

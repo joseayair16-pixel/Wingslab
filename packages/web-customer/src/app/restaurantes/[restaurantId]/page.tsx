@@ -19,6 +19,19 @@ import CartDrawer from '../../../components/CartDrawer';
 import ImageZoomLightbox from '../../../components/ImageZoomLightbox';
 import { SectionHeader } from '../../../components/SectionHeader';
 import { createPlacesSource } from '../../../lib/places';
+
+function weightInputGrams(input: string, unit: 'g' | 'kg'): number | null {
+  const normalized = input.replace(',', '.');
+  if (!(unit === 'g' ? /^\d+$/ : /^\d+(?:\.\d{1,3})?$/).test(normalized)) return null;
+  const grams = Math.round(Number(normalized) * (unit === 'kg' ? 1000 : 1));
+  return Number.isSafeInteger(grams) ? grams : null;
+}
+
+function isValidWeightInput(input: string, unit: 'g' | 'kg', min: number, max: number): boolean {
+  const grams = weightInputGrams(input, unit);
+  return grams !== null && grams >= min && grams <= max;
+}
+
 type PaymentMethod = 'CASH' | 'TRANSFER';
 type OrderStatus =
   | 'PENDING'
@@ -994,6 +1007,7 @@ export default function RestaurantPage({
   const [customizingQuantity, setCustomizingQuantity] = useState(1);
   const [customizingWeight, setCustomizingWeight] = useState(0);
   const [weightInput, setWeightInput] = useState('');
+  const [weightUnit, setWeightUnit] = useState<'g' | 'kg'>('g');
   const [customizingInstructions, setCustomizingInstructions] = useState('');
   const [weightLimitWarning, setWeightLimitWarning] = useState(false);
   const [weightLimitPendingValue, setWeightLimitPendingValue] = useState(0);
@@ -2407,6 +2421,7 @@ function ProductImage({
       setCustomizingQuantity(1);
       setCustomizingWeight(isWeightProduct ? (product.minWeightG || 100) : 0);
       setWeightInput(isWeightProduct ? String(product.minWeightG || 100) : '');
+      setWeightUnit('g');
       setCustomizingInstructions('');
       setWeightLimitWarning(false);
       setWeightLimitPendingValue(0);
@@ -2446,7 +2461,7 @@ function ProductImage({
 
   function addCustomizedItemToCart() {
     if (!customizingProduct) return;
-    if (customizingProduct.sellBy === 'WEIGHT' && (!/^\d+$/.test(weightInput) || Number(weightInput) < (customizingProduct.minWeightG || 100) || Number(weightInput) > (customizingProduct.maxWeightG || 5000))) return;
+    if (customizingProduct.sellBy === 'WEIGHT' && (!isValidWeightInput(weightInput, weightUnit, customizingProduct.minWeightG || 100, customizingProduct.maxWeightG || 5000))) return;
 
     for (const group of customizingProduct.optionGroups || []) {
       const selected = selectedOptionsForProduct[group.id] || [];
@@ -3703,35 +3718,41 @@ function ProductImage({
                     if (presets.length === 0) presets = [100, 200, 300, 500, 1000].filter((p) => p >= minG && p <= maxG);
                     const formatGrams = (grams: number) => (grams >= 1000 ? `${grams / 1000}kg` : `${grams}g`);
 
-                    const validWeight = /^\d+$/.test(weightInput) && Number(weightInput) >= minG && Number(weightInput) <= maxG;
+                    const validWeight = isValidWeightInput(weightInput, weightUnit, minG, maxG);
                     const updateWeight = (value: number) => {
                       setCustomizingWeight(value);
-                      setWeightInput(String(value));
+                      setWeightInput(String(weightUnit === 'kg' ? value / 1000 : value));
+                    };
+                    const changeUnit = (unit: 'g' | 'kg') => {
+                      if (unit === weightUnit) return;
+                      const grams = weightInputGrams(weightInput, weightUnit);
+                      setWeightUnit(unit);
+                      if (grams !== null) setWeightInput(String(unit === 'kg' ? grams / 1000 : grams));
                     };
 
                     return (
                       <div className="px-5 py-5 sm:p-6">
                         <div className="flex items-center justify-between gap-3">
                           <label htmlFor="custom-weight" className="text-base font-bold text-neutral-950 dark:text-white">Elige el peso</label>
-                          <div className="flex items-baseline gap-1.5 rounded-full bg-neutral-950 dark:bg-white text-white dark:text-neutral-950 px-3.5 py-1 shadow-sm">
+                          {validWeight && <div className="flex items-baseline gap-1.5 rounded-full bg-neutral-950 dark:bg-white text-white dark:text-neutral-950 px-3.5 py-1 shadow-sm">
                             <span className="text-[13px] font-bold">≈ {formatGrams(customizingWeight)}</span>
                             <span className="h-3.5 w-px bg-white/20 dark:bg-black/20" />
                             <span className="text-[13px] font-black">{formatCurrency(weightEstimate)}</span>
-                          </div>
+                          </div>}
                         </div>
 
                         {presets.length > 0 && (
-                          <div className="flex flex-wrap gap-2 mb-4 mt-3">
+                          <div className="mb-5 mt-3 grid grid-cols-3 gap-2 sm:grid-cols-4" aria-label="Cantidades sugeridas">
                             {presets.map((p) => (
                               <button
                                 key={p}
                                 type="button"
                                 onClick={() => updateWeight(p)}
                                 aria-pressed={validWeight && customizingWeight === p}
-                                className={`min-h-11 rounded-xl border px-4 py-2 text-sm font-semibold transition-all ${
+                                className={`min-h-12 rounded-2xl border px-2 py-2 text-sm font-bold transition-all active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 ${
                                   validWeight && customizingWeight === p
-                                    ? 'border-sky-400 bg-sky-50 text-sky-600 dark:border-sky-500/40 dark:bg-sky-500/10 dark:text-sky-300'
-                                    : 'border-black/5 bg-white text-neutral-600 hover:bg-neutral-50 dark:border-white/10 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700'
+                                    ? 'border-sky-500 bg-sky-50 text-sky-700 shadow-sm dark:border-sky-500/60 dark:bg-sky-500/15 dark:text-sky-300'
+                                    : 'border-neutral-200 bg-neutral-50 text-neutral-700 hover:bg-neutral-100 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-700'
                                 }`}
                               >
                                 {formatGrams(p)}
@@ -3740,7 +3761,17 @@ function ProductImage({
                           </div>
                         )}
 
-                        <div className="flex items-center gap-3">
+                        <div className="mb-2 flex items-center justify-between gap-3">
+                          <span className="text-sm font-semibold text-neutral-700 dark:text-neutral-300">Cantidad personalizada</span>
+                          <div role="group" aria-label="Unidad de peso" className="flex rounded-xl bg-neutral-100 p-1 dark:bg-zinc-800">
+                            {(['g', 'kg'] as const).map((unit) => (
+                              <button key={unit} type="button" onClick={() => changeUnit(unit)} aria-pressed={weightUnit === unit} className={`min-h-9 min-w-12 rounded-lg px-3 text-xs font-bold transition ${weightUnit === unit ? 'bg-white text-neutral-950 shadow-sm dark:bg-zinc-600 dark:text-white' : 'text-neutral-500 dark:text-zinc-400'}`}>
+                                {unit}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
                           <button
                             type="button"
                             disabled={customizingWeight <= minG}
@@ -3756,23 +3787,21 @@ function ProductImage({
                           </button>
                           <div className="flex-1 relative">
                             <input
-                              type="number"
-                              min={minG}
-                              max={maxG}
+                              type="text"
                               id="custom-weight"
-                              step="1"
-                              inputMode="numeric"
+                              inputMode={weightUnit === 'kg' ? 'decimal' : 'numeric'}
                               value={weightInput}
                               onChange={(e) => {
                                 const raw = e.target.value;
                                 setWeightInput(raw);
-                                if (/^\d+$/.test(raw) && Number(raw) >= minG && Number(raw) <= maxG) setCustomizingWeight(Number(raw));
+                                const grams = weightInputGrams(raw, weightUnit);
+                                if (grams !== null && grams >= minG && grams <= maxG) setCustomizingWeight(grams);
                               }}
                               aria-invalid={!validWeight}
                               aria-describedby="weight-help"
                               className="w-full rounded-xl border border-black/10 bg-neutral-50 py-3 pl-3 pr-16 text-center text-lg font-bold text-neutral-950 outline-none focus:border-sky-500 focus:ring-4 focus:ring-sky-500/10 dark:border-white/15 dark:bg-zinc-800 dark:text-neutral-100"
                             />
-                            <span className="absolute right-4 top-1/2 -translate-y-1/2 text-sm font-semibold text-neutral-400">gramos</span>
+                            <span className="absolute right-4 top-1/2 -translate-y-1/2 text-sm font-semibold text-neutral-400">{weightUnit}</span>
                           </div>
                           <button
                             type="button"
@@ -3790,7 +3819,7 @@ function ProductImage({
                         </div>
 
                         <p id="weight-help" className={`mt-3 text-center text-xs font-medium ${validWeight ? 'text-neutral-500 dark:text-neutral-400' : 'text-rose-600 dark:text-rose-400'}`}>
-                          {validWeight ? `Escribe la cantidad que prefieras · ${formatGrams(minG)} a ${formatGrams(maxG)}` : `Ingresa un peso entre ${formatGrams(minG)} y ${formatGrams(maxG)}`}
+                          {validWeight ? `Escribe la cantidad que prefieras · ${formatGrams(minG)} a ${formatGrams(maxG)}` : `Ingresa un peso entre ${formatGrams(minG)} y ${formatGrams(maxG)}${weightUnit === 'kg' ? ' (hasta 3 decimales)' : ' en gramos enteros'}`}
                         </p>
                       </div>
                     );
@@ -3840,7 +3869,7 @@ function ProductImage({
                 {/* Botón de Confirmación */}
                 {(() => {
                   const isWeightProduct = customizingProduct.sellBy === 'WEIGHT';
-                  const invalidWeight = isWeightProduct && (!/^\d+$/.test(weightInput) || Number(weightInput) < (customizingProduct.minWeightG || 100) || Number(weightInput) > (customizingProduct.maxWeightG || 5000));
+                  const invalidWeight = isWeightProduct && !isValidWeightInput(weightInput, weightUnit, customizingProduct.minWeightG || 100, customizingProduct.maxWeightG || 5000);
                   const basePrice = isWeightProduct
                     ? (customizingProduct.unitPrice || 0) * customizingWeight / 1000
                     : (customizingProduct.discountPrice ? toMoney(customizingProduct.discountPrice) : toMoney(customizingProduct.price));
@@ -3916,7 +3945,7 @@ function ProductImage({
                       autoFocus
                       onClick={() => {
                          setCustomizingWeight(clampedWeight);
-                         setWeightInput(String(clampedWeight));
+                         setWeightInput(String(weightUnit === 'kg' ? clampedWeight / 1000 : clampedWeight));
                         setWeightLimitWarning(false);
                       }}
                       className="w-full rounded-full bg-neutral-950 dark:bg-white px-5 py-3 text-sm font-bold text-white dark:text-neutral-950 transition active:scale-[0.98]"
@@ -5728,7 +5757,7 @@ function ProductImage({
                     </div>
                   </div>
 
-                  <div className="mt-3 flex min-w-0 flex-col gap-1.5 rounded-[22px] border border-black/[0.06] bg-[var(--menu-surface)] p-1.5 shadow-[0_6px_24px_rgba(15,23,42,0.06)] lg:flex-row lg:items-stretch lg:gap-0 lg:divide-x lg:divide-black/[0.06] lg:rounded-2xl dark:divide-zinc-700 dark:border-zinc-700/70 dark:bg-[var(--menu-surface-dark)]">
+                  <div className="-mx-4 mt-3 flex min-w-0 flex-col gap-1.5 bg-[var(--menu-surface)] p-1.5 md:-mx-6 lg:mx-0 lg:flex-row lg:items-stretch lg:gap-0 lg:divide-x lg:divide-black/[0.06] lg:rounded-2xl lg:border lg:border-black/[0.06] lg:shadow-[0_6px_24px_rgba(15,23,42,0.06)] dark:divide-zinc-700 lg:dark:border-zinc-700/70 dark:bg-[var(--menu-surface-dark)]">
                     {/* Address */}
                     <div className="flex w-full min-w-0 flex-1 items-center gap-3 rounded-2xl bg-neutral-50 px-3 py-3 text-neutral-700 lg:bg-transparent lg:px-4 dark:bg-zinc-800/70 dark:text-zinc-200 lg:dark:bg-transparent">
                       <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-black/[0.04] bg-white text-neutral-500 shadow-sm dark:border-zinc-600 dark:bg-zinc-700 dark:text-zinc-300">

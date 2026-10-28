@@ -610,9 +610,14 @@ import {
   detectCsvHeaderRow,
   autoMapImportColumns,
   parseImportPrice,
+  parseImportModifiers,
+  type ImportedOptionGroup,
   isValidHttpUrl,
   resolveSellBy,
+  isRecognizedSellBy,
 } from '../utils/csvImport';
+
+const IMPORT_AI_PROMPT = `Analiza el menú proporcionado y genera una tabla para importar en SaDeL. Devuelve solo texto sin bloques de código, con columnas separadas por tabulaciones: nombre, precio, categoría, tipo, descripción, modificadores. Una fila por producto. Usa pieza o kg para tipo; el precio de kg es por kilogramo. La columna modificadores es opcional y queda vacía si el producto no tiene opciones. Formato de cada grupo: Nombre [mínimo-máximo]: Opción ($0) | Otra opción ($15). Separa grupos con punto y coma. Ejemplo: Salsa [1-1]: Verde ($0) | Roja ($0); Extras [0-2]: Queso ($15) | Tocino ($20). Usa punto decimal y precio adicional explícito en cada opción. El máximo no debe superar el número de opciones. No uses los caracteres ; | [ ] : en nombres de grupos ni ; | ( ) [ ] en nombres de opciones. No inventes productos, precios, opciones ni reglas; si falta información, solicita aclaración antes de generar la tabla.`;
 
 // Logs de depuración: solo con ?debug en la URL para mantener la consola limpia en producción.
 function isDebugEnabled(): boolean {
@@ -1416,7 +1421,9 @@ export default function Home() {
     description: 4,
     discountPrice: 5,
     image: 6,
+    modifiers: undefined,
   });
+  const [importPromptCopied, setImportPromptCopied] = useState(false);
   const [importDefaultCategoryId, setImportDefaultCategoryId] = useState('');
   const [importCreateMissingCategories, setImportCreateMissingCategories] = useState(true);
   const [importingProducts, setImportingProducts] = useState(false);
@@ -5710,6 +5717,7 @@ export default function Home() {
     description: string;
     sellBy: 'UNIT' | 'WEIGHT';
     image: string;
+    optionGroups: ImportedOptionGroup[];
     categoryTargetId: string;
     willCreateCategory: boolean;
     categoryLabel: string;
@@ -5734,6 +5742,15 @@ export default function Home() {
       const discountPrice = parseImportPrice(cell('discountPrice'), importDelimiter);
       const sellBy = resolveSellBy(cell('sellBy'));
       const image = cell('image');
+      const modifiers = parseImportModifiers(cell('modifiers'));
+      errors.push(...modifiers.errors);
+      if (importHasHeader && row.length > importHeaderRow.length) {
+        errors.push('Hay columnas adicionales: usa tabulaciones o encierra entre comillas las celdas que contienen el separador');
+      }
+      if (!importHasHeader && row.length > 7 && importColumnMap.modifiers === undefined) {
+        errors.push('Hay columnas adicionales; usa encabezados o asigna la columna de modificadores');
+      }
+      if (!isRecognizedSellBy(cell('sellBy'))) errors.push('Tipo de venta desconocido: usa pieza o kg');
 
       if (!name.trim()) {
         errors.push('Falta el nombre');
@@ -5747,8 +5764,11 @@ export default function Home() {
       }
       // La descripción es opcional: solo se valida su longitud cuando el usuario
       // suministró explícitamente una columna de descripción y un valor no vacío.
-      if (hasDescriptionColumn && rawDescription && rawDescription.trim().length < 5) {
+      if ((hasDescriptionColumn && rawDescription && rawDescription.trim().length < 5) || (!rawDescription && description.trim().length < 5)) {
         errors.push('Descripción muy corta');
+      }
+      if (cell('discountPrice') && (discountPrice === null || discountPrice <= 0 || (price !== null && discountPrice >= price))) {
+        errors.push('El precio especial debe ser mayor a 0 y menor al precio normal');
       }
       if (image && !isValidHttpUrl(image)) {
         errors.push('URL de imagen inválida');
@@ -5758,6 +5778,7 @@ export default function Home() {
       let willCreateCategory = false;
       let categoryLabel = '';
       if (categoryName) {
+        if (categoryName.trim().length < 2) errors.push('Nombre de categoría muy corto');
         const existingId = importCategoryIdByName.get(categoryName.trim().toLowerCase());
         if (existingId) {
           categoryTargetId = existingId;
@@ -5785,6 +5806,7 @@ export default function Home() {
         description: description.trim(),
         sellBy,
         image,
+        optionGroups: modifiers.groups,
         categoryTargetId,
         willCreateCategory,
         categoryLabel,
@@ -5796,7 +5818,7 @@ export default function Home() {
         isValid: errors.length === 0 && (Boolean(categoryTargetId) || willCreateCategory),
       };
     });
-  }, [importDataRows, importColumnMap, importDelimiter, importCreateMissingCategories, importDefaultCategoryId, importCategoryIdByName]);
+  }, [importDataRows, importColumnMap, importDelimiter, importCreateMissingCategories, importDefaultCategoryId, importCategoryIdByName, importHasHeader, importHeaderRow.length]);
 
   const importValidCount = importPreview.filter((row) => row.isValid).length;
   const importErrorCount = importPreview.length - importValidCount;
@@ -5812,6 +5834,7 @@ export default function Home() {
       description: 4,
       discountPrice: 5,
       image: 6,
+      modifiers: undefined,
     });
     setImportDefaultCategoryId(categories[0]?.id || '');
     setImportCreateMissingCategories(true);
@@ -5828,14 +5851,18 @@ export default function Home() {
     if (rowsToImport.length === 0) {
       return;
     }
+    if (rowsToImport.length > 200) {
+      pushToast('error', 'Lista demasiado grande', 'Importa hasta 200 productos a la vez.');
+      return;
+    }
 
     setImportingProducts(true);
     setError('');
 
     try {
-      const missingCategoryNames = [...new Set(
-        importPreview.filter((row) => row.willCreateCategory).map((row) => row.categoryLabel),
-      )].filter((name) => name !== '');
+      const missingCategoryNames = [...new Map(
+        rowsToImport.filter((row) => row.willCreateCategory && row.categoryLabel).map((row) => [row.categoryLabel.toLowerCase(), row.categoryLabel]),
+      ).values()];
 
       const createdCategoryIds = new Map<string, string>();
       for (const name of missingCategoryNames) {
@@ -5871,6 +5898,7 @@ export default function Home() {
           stepWeightG: row.sellBy === 'WEIGHT' ? 100 : null,
           weightPresets: row.sellBy === 'WEIGHT' ? [...DEFAULT_WEIGHT_PRESETS] : null,
           image: row.image || null,
+          optionGroups: row.optionGroups,
           imagePosition: null,
           imageZoom: null,
           isAvailable: true,
@@ -9131,6 +9159,17 @@ export default function Home() {
               ) : (
                 <>
                   <div>
+                    <details className="mb-4 rounded-2xl border border-sky-100 bg-sky-50/70 p-4 text-sm text-neutral-700">
+                      <summary className="cursor-pointer font-bold text-sky-900">¿Tu menú tiene opciones? Usa estas instrucciones para IA</summary>
+                      <p className="mt-2 leading-5">Incluye salsas, extras o variantes solo en los productos que correspondan. Usa tabulaciones y deja vacía la columna cuando no haya opciones.</p>
+                      <p className="mt-2 break-words rounded-xl bg-white p-3 font-mono text-xs leading-5">Salsa [1-1]: Verde ($0) | Roja ($0); Extras [0-2]: Queso ($15) | Tocino ($20)</p>
+                      <button type="button" onClick={async () => {
+                        try { await navigator.clipboard.writeText(IMPORT_AI_PROMPT); setImportPromptCopied(true); }
+                        catch { setImportPromptCopied(false); }
+                      }} className="mt-3 min-h-11 rounded-xl bg-sky-700 px-4 text-sm font-bold text-white hover:bg-sky-800">{importPromptCopied ? 'Instrucciones copiadas' : 'Copiar instrucciones para IA'}</button>
+                      <p className="mt-2 text-xs text-neutral-500">Si no puedes copiar automáticamente, selecciona el texto de abajo.</p>
+                      <p className="mt-2 select-all text-xs leading-5 text-neutral-600">{IMPORT_AI_PROMPT}</p>
+                    </details>
                     <label className="grid gap-2">
                       <span className="text-[12px] font-bold uppercase tracking-[0.1em] text-neutral-600">Pega aquí tus filas</span>
                       <textarea
@@ -9214,6 +9253,7 @@ export default function Home() {
                           <p className="text-sm font-bold text-neutral-900">Vista previa</p>
                           <p className="text-[13px] font-semibold">
                             <span className="text-emerald-600">{importValidCount} listo{importValidCount === 1 ? '' : 's'}</span>
+                            <span className="text-neutral-500"> · {importPreview.filter((row) => row.optionGroups.length > 0).length} con opciones · {importPreview.reduce((total, row) => total + row.optionGroups.length, 0)} grupos</span>
                             {importErrorCount > 0 ? (
                               <>
                                 <span className="text-neutral-300"> · </span>
@@ -9222,12 +9262,15 @@ export default function Home() {
                             ) : null}
                           </p>
                         </div>
-                        <div className="max-h-72 overflow-y-auto rounded-2xl border border-black/5">
+                        {importErrorCount > 0 && <p className="mb-3 text-xs leading-5 text-amber-700">Las filas con errores no se importarán. Corrígelas antes de continuar si quieres incluirlas.</p>}
+                        {importValidCount > 200 && <p className="mb-3 text-xs font-semibold text-rose-700">El máximo es de 200 productos por importación. Divide la lista antes de continuar.</p>}
+                        <div className="max-h-72 overflow-auto rounded-2xl border border-black/5">
                           <table className="w-full text-left text-sm">
                             <thead className="sticky top-0 bg-neutral-50 text-[11px] font-bold uppercase tracking-wide text-neutral-500">
                               <tr>
                                 <th className="px-3 py-2">Nombre</th>
-                                <th className="px-3 py-2">Precio</th>
+                                 <th className="px-3 py-2">Precio</th>
+                                 <th className="px-3 py-2">Venta</th>
                                 <th className="px-3 py-2">Categoría</th>
                                 <th className="px-3 py-2">Estado</th>
                               </tr>
@@ -9235,8 +9278,14 @@ export default function Home() {
                             <tbody className="divide-y divide-black/5 bg-white">
                               {importPreview.map((row) => (
                                 <tr key={row.rowIndex} className="align-top">
-                                  <td className="px-3 py-2 font-medium text-neutral-900">{row.name || '—'}</td>
+                                  <td className="px-3 py-2 font-medium text-neutral-900">
+                                    {row.name || '—'}
+                                    {row.optionGroups.length > 0 && <details className="mt-1 text-xs font-normal text-neutral-600"><summary className="cursor-pointer font-semibold text-sky-700">Ver {row.optionGroups.length} grupo{row.optionGroups.length === 1 ? '' : 's'}</summary>
+                                      {row.optionGroups.map((group, index) => <div key={index} className="mt-2 min-w-40"><p className="font-bold">{group.name} · {group.minSelection ? `Mín. ${group.minSelection}` : 'Opcional'} · Máx. {group.maxSelection}</p><p className="mt-1 leading-5">{group.options.map((option) => `${option.name} (${formatCurrency(option.price)})`).join(' · ')}</p></div>)}
+                                    </details>}
+                                  </td>
                                   <td className="px-3 py-2 text-neutral-700">{row.price !== null ? formatCurrency(row.price) : '—'}</td>
+                                  <td className="px-3 py-2 text-neutral-700">{row.sellBy === 'WEIGHT' ? 'Por kg' : 'Por pieza'}</td>
                                   <td className="px-3 py-2 text-neutral-700">
                                     {row.willCreateCategory ? (
                                       <span className="font-semibold text-amber-600">{row.categoryLabel} (nueva)</span>
@@ -9248,7 +9297,7 @@ export default function Home() {
                                     {row.isValid ? (
                                       <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-bold text-emerald-700">Listo</span>
                                     ) : (
-                                      <span className="inline-flex items-center gap-1 rounded-full bg-rose-50 px-2 py-0.5 text-[11px] font-bold text-rose-700">{row.errors[0]}</span>
+                                      <span className="inline-flex items-center gap-1 rounded-xl bg-rose-50 px-2 py-1 text-[11px] font-bold text-rose-700">Fila {row.rowIndex + (importHasHeader ? 2 : 1)}: {row.errors.join(' · ')}</span>
                                     )}
                                   </td>
                                 </tr>
@@ -9280,7 +9329,7 @@ export default function Home() {
                   <button
                     type="button"
                     onClick={() => void handleImportSubmit()}
-                    disabled={importingProducts || importValidCount === 0}
+                    disabled={importingProducts || importValidCount === 0 || importValidCount > 200}
                     className="group relative flex-1 overflow-hidden rounded-full bg-gradient-to-r from-sky-500 to-sky-400 px-6 py-3 text-sm font-bold text-white shadow-[0_4px_16px_rgba(14,165,233,0.35)] ring-1 ring-sky-400/50 transition-all hover:scale-105 disabled:pointer-events-none disabled:opacity-60 disabled:shadow-none disabled:grayscale sm:flex-none"
                   >
                     <div className="absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/30 to-transparent transition-transform duration-1000 group-hover:translate-x-full" />

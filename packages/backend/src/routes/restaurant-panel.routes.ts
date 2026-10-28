@@ -1411,8 +1411,15 @@ export async function registerRestaurantPanelRoutes(fastify: FastifyInstance): P
     });
 
     restaurant.post('/restaurant-panel/productos/batch', async (request, reply) => {
+      const batchProductSchema = productSchema.superRefine((product, ctx) => {
+        product.optionGroups?.forEach((group, index) => {
+          if (group.minSelection > group.maxSelection || group.maxSelection > group.options.length) {
+            ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['optionGroups', index], message: `Revisa los límites y opciones del grupo ${group.name}.` });
+          }
+        });
+      });
       const batchSchema = z.object({
-        products: z.array(productSchema).min(1, 'Debes incluir al menos un producto.').max(200, 'Maximo 200 productos por importacion.'),
+        products: z.array(batchProductSchema).min(1, 'Debes incluir al menos un producto.').max(200, 'Maximo 200 productos por importacion.'),
       });
       const parsed = parseBody(batchSchema.safeParse(request.body));
 

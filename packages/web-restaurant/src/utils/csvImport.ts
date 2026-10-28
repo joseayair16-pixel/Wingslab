@@ -5,7 +5,8 @@ export type ImportFieldKey =
   | 'sellBy'
   | 'description'
   | 'discountPrice'
-  | 'image';
+  | 'image'
+  | 'modifiers';
 
 export type CsvDelimiter = ',' | ';' | '\t';
 
@@ -17,6 +18,7 @@ export const IMPORT_FIELD_LABELS: Record<ImportFieldKey, string> = {
   description: 'Descripción',
   discountPrice: 'Precio especial',
   image: 'Imagen (URL)',
+  modifiers: 'Modificadores (opcional)',
 };
 
 export const IMPORT_FIELD_ORDER: ImportFieldKey[] = [
@@ -27,6 +29,7 @@ export const IMPORT_FIELD_ORDER: ImportFieldKey[] = [
   'description',
   'discountPrice',
   'image',
+  'modifiers',
 ];
 
 /**
@@ -116,6 +119,7 @@ export const IMPORT_COLUMN_KEYWORDS: Record<ImportFieldKey, string[]> = {
     'url',
     'imagen del producto',
   ],
+  modifiers: ['modificadores', 'variantes', 'grupos de opciones', 'modifier groups'],
 };
 
 /**
@@ -154,6 +158,7 @@ const NORMALIZED_KEYWORDS: Record<ImportFieldKey, string[]> = (() => {
     description: [],
     discountPrice: [],
     image: [],
+    modifiers: [],
   };
   (Object.keys(IMPORT_COLUMN_KEYWORDS) as ImportFieldKey[]).forEach((field) => {
     result[field] = IMPORT_COLUMN_KEYWORDS[field].map(normalizeKeyword);
@@ -216,11 +221,17 @@ export function autoMapImportColumns(headerRow: string[]): Record<ImportFieldKey
     description: undefined,
     discountPrice: undefined,
     image: undefined,
+    modifiers: undefined,
   };
 
   if (headerRow.length === 0) {
     map.name = 0;
     map.price = 1;
+    map.category = 2;
+    map.sellBy = 3;
+    map.description = 4;
+    map.discountPrice = 5;
+    map.image = 6;
     return map;
   }
 
@@ -229,6 +240,11 @@ export function autoMapImportColumns(headerRow: string[]): Record<ImportFieldKey
 
   const fields = Object.keys(NORMALIZED_KEYWORDS) as ImportFieldKey[];
   fields.forEach((field) => {
+    const index = normalizedCells.findIndex((cell, i) => !usedIndices.has(i) && NORMALIZED_KEYWORDS[field].includes(cell));
+    if (index >= 0) { map[field] = index; usedIndices.add(index); }
+  });
+  fields.forEach((field) => {
+    if (map[field] !== undefined) return;
     const index = findBestIndexForField(normalizedCells, NORMALIZED_KEYWORDS[field], usedIndices);
     if (index !== undefined) {
       map[field] = index;
@@ -248,13 +264,46 @@ export function autoMapImportColumns(headerRow: string[]): Record<ImportFieldKey
  * Prioriza el separador más abundante; por defecto la coma.
  */
 export function guessCsvDelimiter(text: string): CsvDelimiter {
-  const sample = text.slice(0, 4000);
+  const sample = text.split(/\r?\n/, 1)[0] || '';
   const commaCount = (sample.match(/,/g) || []).length;
   const semicolonCount = (sample.match(/;/g) || []).length;
   const tabCount = (sample.match(/\t/g) || []).length;
+  if (tabCount > 0) return '\t';
   if (semicolonCount > commaCount && semicolonCount > 0) return ';';
-  if (tabCount > commaCount && tabCount > 0) return '\t';
   return ',';
+}
+
+export type ImportedOptionGroup = {
+  name: string;
+  minSelection: number;
+  maxSelection: number;
+  options: { name: string; price: number; isAvailable: boolean }[];
+};
+
+export function parseImportModifiers(cell: string): { groups: ImportedOptionGroup[]; errors: string[] } {
+  if (!cell.trim()) return { groups: [], errors: [] };
+  const groups: ImportedOptionGroup[] = [];
+  const errors: string[] = [];
+  for (const part of cell.split(';')) {
+    const match = part.trim().match(/^([^\[\]:;|]+?)\s*\[(\d+)\s*-\s*(\d+)\]\s*:\s*(.+)$/);
+    if (!match) { errors.push('Formato de grupo inválido. Usa Grupo [mín-máx]: Opción ($0)'); continue; }
+    const name = match[1].trim();
+    const minSelection = Number(match[2]);
+    const maxSelection = Number(match[3]);
+    const options: ImportedOptionGroup['options'] = [];
+    for (const rawOption of match[4].split('|')) {
+      const option = rawOption.trim().match(/^([^;|()[\]]+?)\s*\(\$\s*(\d+(?:[.,]\d{1,2})?)\)$/);
+      if (!option || !option[1].trim()) { errors.push(`${name}: opción inválida; usa Nombre ($0)`); continue; }
+      const price = Number(option[2].replace(',', '.'));
+      if (!Number.isFinite(price)) { errors.push(`${name}: precio inválido`); continue; }
+      options.push({ name: option[1].trim(), price, isAvailable: true });
+    }
+    if (!name || !options.length || !Number.isSafeInteger(minSelection) || !Number.isSafeInteger(maxSelection) || maxSelection < 1 || minSelection > maxSelection || maxSelection > options.length) {
+      errors.push(`${name || 'Grupo'}: revisa el mínimo, máximo y número de opciones`);
+    }
+    groups.push({ name, minSelection, maxSelection, options });
+  }
+  return { groups, errors };
 }
 
 /**
@@ -342,11 +391,12 @@ export function isValidHttpUrl(text: string): boolean {
 export function resolveSellBy(cell: string): 'UNIT' | 'WEIGHT' {
   const value = normalizeHeader(cell);
   if (!value) return 'UNIT';
-  return value.includes('peso') ||
-    value.includes('weight') ||
-    value.includes('kg') ||
-    value.includes('gramo') ||
-    value.includes('gr')
+  return /(?:^|_)(?:peso|weight|kg|kilo|kilos|kilogramo|kilogramos|gramo|gramos|gr)(?:_|$)/.test(value)
     ? 'WEIGHT'
     : 'UNIT';
+}
+
+export function isRecognizedSellBy(cell: string): boolean {
+  const value = normalizeHeader(cell);
+  return !value || /(?:^|_)(?:peso|weight|kg|kilo|kilos|kilogramo|kilogramos|gramo|gramos|gr|pieza|piezas|unidad|unidades|unit|units|pza|pzas)(?:_|$)/.test(value);
 }
