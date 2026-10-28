@@ -148,7 +148,7 @@ interface SettingsSectionProps {
   businessTypeLabel: (type?: string | null) => string;
   Field: React.ComponentType<{ label: string; value: string; onChange: (value: string) => void; placeholder: string; type?: string }>;
   TextAreaField: React.ComponentType<{ label: string; value: string; onChange: (value: string) => void; placeholder: string }>;
-  ToggleField: React.ComponentType<{ label: string; checked: boolean; onChange: (checked: boolean) => void; description?: string; disabled?: boolean; compact?: boolean }>;
+  ToggleField: React.ComponentType<{ label: string; checked: boolean; onChange: (checked: boolean) => void; description?: string; disabled?: boolean; compact?: boolean; mobileCompact?: boolean }>;
 }
 
 export const SettingsSection = React.memo(function SettingsSection({
@@ -1119,8 +1119,9 @@ export const SettingsSection = React.memo(function SettingsSection({
               <div className="grid min-w-0 grid-cols-1 gap-4 md:grid-cols-2">
                 <div className="md:col-span-2">
                   <ToggleField
+                    mobileCompact
                     label="Solo recoger en tienda"
-                    description="Actívalo si tu negocio no entrega a domicilio. Solo recogida en el local; se desactiva el reparto propio, la tarifa de envío y el apoyo a la red."
+                    description="Desactiva la entrega, su tarifa y el apoyo a la red."
                     checked={storeDraft.pickupOnly === true}
                     onChange={(checked: boolean) =>
                       setStoreDraft((c: any) => ({
@@ -1137,19 +1138,19 @@ export const SettingsSection = React.memo(function SettingsSection({
                 {storeDraft.pickupOnly ? (
                   <div className="md:col-span-2 rounded-[18px] border border-sky-200/70 bg-sky-50/60 p-4 text-sm text-neutral-700 leading-6">
                     <p className="font-semibold text-neutral-900 flex items-center gap-2">
-                      <span>🛍️</span> Solo recoger en tienda
+                      Solo recoger en tienda
                     </p>
                     <p className="mt-1">
-                      Tus clientes podrán recoger sus pedidos en el local. No se ofrece entrega a domicilio ni apoyo a la red.
-                      Para volver a entregar, desactiva esta opción y configura la entrega.
+                      Los clientes recogen sus pedidos en el local.
                     </p>
                   </div>
                 ) : (
                   <>
                     <div className="md:col-span-2">
                       <ToggleField
+                        mobileCompact
                         label="Servicio a domicilio propio"
-                        description="Actívalo si tu restaurante gestiona su propia flota de repartidores. Si no, los repartidores de SaDeL gestionarán las entregas."
+                        description="Usa tus repartidores; si lo desactivas, entrega SaDeL."
                         checked={storeDraft.hasOwnDelivery}
                         onChange={(checked: boolean) =>
                           setStoreDraft((c: any) => ({
@@ -1165,8 +1166,9 @@ export const SettingsSection = React.memo(function SettingsSection({
                       <>
                         <div className="md:col-span-2">
                           <ToggleField
+                            mobileCompact
                             label="Prestar apoyo a la red"
-                            description="Ayuda a otros restaurantes a entregar pedidos cuando te lo pidan; ganas la tarifa de envío. Desactívalo si prefieres solo tus propias entregas."
+                            description="Entrega pedidos de otros negocios y gana la tarifa de envío."
                             checked={storeDraft.supportsNetworkDelivery !== false}
                             onChange={(checked: boolean) =>
                               setStoreDraft((c: any) => ({ ...c, supportsNetworkDelivery: checked }))
@@ -1183,7 +1185,7 @@ export const SettingsSection = React.memo(function SettingsSection({
                               className={`group flex flex-col gap-1 rounded-[18px] border px-5 py-4 text-left transition-all duration-200 ${storeDraft.deliveryPricingModel !== 'distance' ? 'border-sky-400 bg-sky-50/70 ring-4 ring-sky-400/15' : 'border-black/5 bg-white hover:border-black/15'}`}
                             >
                               <span className={`text-sm font-bold ${storeDraft.deliveryPricingModel !== 'distance' ? 'text-sky-700' : 'text-neutral-900'}`}>Tarifa fija</span>
-                              <span className="text-xs font-medium leading-relaxed text-neutral-500">El mismo costo para todos tus clientes, sin importar la distancia.</span>
+                              <span className="text-xs font-medium text-neutral-500">Mismo costo sin importar la distancia.</span>
                             </button>
                             <button
                               type="button"
@@ -1191,7 +1193,7 @@ export const SettingsSection = React.memo(function SettingsSection({
                               className={`group flex flex-col gap-1 rounded-[18px] border px-5 py-4 text-left transition-all duration-200 ${storeDraft.deliveryPricingModel === 'distance' ? 'border-sky-400 bg-sky-50/70 ring-4 ring-sky-400/15' : 'border-black/5 bg-white hover:border-black/15'}`}
                             >
                               <span className={`text-sm font-bold ${storeDraft.deliveryPricingModel === 'distance' ? 'text-sky-700' : 'text-neutral-900'}`}>Tarifa dinámica por distancia</span>
-                              <span className="text-xs font-medium leading-relaxed text-neutral-500">El costo sube según los kilómetros que recorra tu repartidor.</span>
+                              <span className="text-xs font-medium text-neutral-500">El costo depende de la distancia.</span>
                             </button>
                           </div>
                         </div>
@@ -1552,15 +1554,17 @@ export const SettingsSection = React.memo(function SettingsSection({
             {activeSettingsTab === 'preferencias' && (
               <div className="grid gap-4">
                 <ToggleField
+                  mobileCompact
                   label="Alertas de sonido para pedidos nuevos"
-                  description="Actívalo en caja o cocina para detectar pedidos nuevos sin depender de mirar el panel."
+                  description="Suena al recibir un pedido."
                   checked={isOrderAlertSoundEnabled}
                   onChange={handleOrderAlertSoundToggle}
                   disabled={orderAlertAudioState === 'unsupported'}
                 />
                 <ToggleField
+                  mobileCompact
                   label="Impresión de comandas térmicas"
-                  description="Activa esta opción para mostrar los botones de impresión en el tablero de pedidos."
+                  description="Muestra los botones de impresión en pedidos."
                   checked={storeDraft.enableTicketPrinting}
                   onChange={async (checked: boolean) => {
                     setStoreDraft((c: any) => ({ ...c, enableTicketPrinting: checked }));
@@ -1612,8 +1616,9 @@ export const SettingsSection = React.memo(function SettingsSection({
                   </div>
                 )}
                 <ToggleField
+                  mobileCompact
                   label="Notificaciones por WhatsApp"
-                  description="Recibe un mensaje en WhatsApp cuando llegue un pedido nuevo (costo $0.50 MXN por pedido). Configura tu número en el perfil."
+                  description="Avisos de pedidos: $0.50 MXN por pedido. Configura tu número en el perfil."
                   checked={!!storeDraft.whatsappNotifications}
                   onChange={async (checked: boolean) => {
                     if (checked) {
@@ -1771,74 +1776,49 @@ export const SettingsSection = React.memo(function SettingsSection({
                         <div>
                           <h4 className="text-[15px] font-black tracking-[-0.02em] text-neutral-950">Promociones del negocio</h4>
                           <p className="mt-0.5 text-xs font-medium text-neutral-500">
-                            Descuentos automáticos que se aplican a cada pedido, sin código.
+                            Se aplican automáticamente, sin código.
                           </p>
                         </div>
                       </div>
                       <p className="mt-3 max-w-xl text-[12px] leading-relaxed text-neutral-500">
-                        Se combinan en orden con los cupones: <span className="font-semibold text-neutral-700">promo por cantidad → cupón → % por monto → envío gratis</span>.
-                        Deja un campo vacío para desactivar esa promo.
+                        Deja vacío para desactivar. Orden: cantidad → cupón → descuento por monto → envío gratis.
                       </p>
                     </div>
                   </div>
 
-                  <div className="mt-5 grid min-w-0 grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-                    <div className="min-w-0 rounded-[20px] border border-black/5 bg-neutral-50/60 p-4 transition-colors hover:bg-neutral-50">
-                      <div className="mb-2 flex items-center gap-2">
-                        <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-br from-sky-100 to-blue-50 text-base">🛵</span>
-                        <span className="text-[12px] font-bold uppercase tracking-[0.08em] text-neutral-600">Envío gratis desde</span>
-                      </div>
+                  <div className="mt-4 grid min-w-0 grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
+                    <div className="min-w-0">
                       <Field
-                        label="Monto en pesos ($)"
+                        label="Envío gratis desde ($)"
                         value={storeDraft.promoFreeDeliveryThreshold}
                         onChange={(value: string) => setStoreDraft((c: any) => ({ ...c, promoFreeDeliveryThreshold: value }))}
                         placeholder="550"
                         type="number"
                       />
-                      <p className="mt-2 text-[11px] leading-relaxed text-neutral-400">
-                        Si el pedido llega o supera este monto, el envío se cobra en $0.
-                      </p>
                     </div>
 
-                    <div className="rounded-[20px] border border-black/5 bg-neutral-50/60 p-4 transition-colors hover:bg-neutral-50">
-                      <div className="mb-2 flex items-center gap-2">
-                        <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-br from-violet-100 to-fuchsia-50 text-base">🎯</span>
-                        <span className="text-[12px] font-bold uppercase tracking-[0.08em] text-neutral-600">Monto mínimo para descuento</span>
-                      </div>
+                    <div className="min-w-0">
                       <Field
-                        label="Monto en pesos ($)"
+                        label="Monto mínimo para descuento ($)"
                         value={storeDraft.promoMinOrderAmount}
                         onChange={(value: string) => setStoreDraft((c: any) => ({ ...c, promoMinOrderAmount: value }))}
                         placeholder="500"
                         type="number"
                       />
-                      <p className="mt-2 text-[11px] leading-relaxed text-neutral-400">
-                        El % se activa solo cuando el pedido alcanza este monto.
-                      </p>
                     </div>
 
-                    <div className="min-w-0 rounded-[20px] border border-black/5 bg-neutral-50/60 p-4 transition-colors hover:bg-neutral-50 md:col-span-2 lg:col-span-1">
-                      <div className="mb-2 flex items-center gap-2">
-                        <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-100 to-teal-50 text-base">🎉</span>
-                        <span className="text-[12px] font-bold uppercase tracking-[0.08em] text-neutral-600">% de descuento</span>
-                      </div>
+                    <div className="min-w-0 md:col-span-2 lg:col-span-1">
                       <Field
-                        label="Porcentaje (%)"
+                        label="Descuento sobre subtotal (%)"
                         value={storeDraft.promoMinOrderPercent}
                         onChange={(value: string) => setStoreDraft((c: any) => ({ ...c, promoMinOrderPercent: value }))}
                         placeholder="15"
                         type="number"
                       />
-                      <p className="mt-2 text-[11px] leading-relaxed text-neutral-400">
-                        Se aplica al subtotal cuando se alcanza el monto mínimo.
-                      </p>
                     </div>
                   </div>
 
-                  <div className="mt-5 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 rounded-2xl border border-black/5 bg-neutral-50/80 px-4 py-3">
-                    <p className="text-[11px] font-medium text-neutral-500">
-                      Estas promociones son automáticas: tus clientes las ven sin necesidad de escribir ningún código.
-                    </p>
+                  <div className="mt-4 flex flex-col sm:items-end">
                     <button
                       type="button"
                       onClick={() => void saveStoreProfile('entrega')}
@@ -1880,12 +1860,11 @@ export const SettingsSection = React.memo(function SettingsSection({
                     Cargando cupones...
                   </div>
                 ) : promoCodes.length === 0 ? (
-                  <div className="rounded-[20px] border border-dashed border-black/10 bg-neutral-50 p-10 text-center">
+                  <div className="rounded-[20px] border border-dashed border-black/10 bg-neutral-50 p-5 text-center">
                     <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-white text-neutral-400 shadow-sm">
                       <Tag className="w-5 h-5" strokeWidth={1.8} />
                     </div>
                     <p className="text-sm font-semibold text-neutral-700">Aún no tienes cupones</p>
-                    <p className="mt-1 text-xs text-neutral-500">Crea tu primer código de descuento para ofrecer promociones a tus clientes.</p>
                   </div>
                 ) : (
                   <div className="grid gap-3">

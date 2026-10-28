@@ -14839,6 +14839,7 @@ function ToggleField({
   onChange,
   description,
   compact = false,
+  mobileCompact = false,
   disabled = false,
 }: {
   label: string;
@@ -14846,13 +14847,14 @@ function ToggleField({
   onChange: (checked: boolean) => void;
   description?: string;
   compact?: boolean;
+  mobileCompact?: boolean;
   disabled?: boolean;
 }) {
   return (
     <div
       className={`min-w-0 rounded-[24px] border border-white/40 bg-white/40 backdrop-blur-sm shadow-[0_4px_20px_-10px_rgba(0,0,0,0.05)] transition-all hover:bg-white/60 ${compact
         ? 'flex flex-col gap-2 border-0 bg-transparent px-0 py-0 sm:flex-row sm:items-center sm:justify-between'
-        : 'flex flex-col gap-4 px-5 py-5 sm:flex-row sm:items-center sm:justify-between'
+        : mobileCompact ? 'flex items-center justify-between gap-3 px-4 py-4' : 'flex flex-col gap-4 px-5 py-5 sm:flex-row sm:items-center sm:justify-between'
         }`}
     >
       <div className="min-w-0">
@@ -14862,6 +14864,7 @@ function ToggleField({
       <button
         type="button"
         role="switch"
+        aria-label={label}
         aria-checked={checked}
         aria-disabled={disabled}
         disabled={disabled}
