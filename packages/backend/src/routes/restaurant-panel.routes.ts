@@ -934,6 +934,32 @@ export async function registerRestaurantPanelRoutes(fastify: FastifyInstance): P
       });
     });
 
+    restaurant.post('/restaurant-panel/categorias/reordenar', async (request, reply) => {
+      const parsed = z.object({ categoryIds: z.array(z.string().min(1)).min(1).max(500) }).safeParse(request.body);
+      if (!parsed.success || new Set(parsed.success ? parsed.data.categoryIds : []).size !== (parsed.success ? parsed.data.categoryIds.length : 0)) {
+        return reply.status(400).send({ success: false, error: { code: 'INVALID_ORDER', message: 'La lista de categorías no es válida.' } });
+      }
+      const user = getAuthenticatedUser(request);
+      const ownedRestaurant = await getOwnedRestaurant(user.sub);
+      if (!ownedRestaurant) {
+        return reply.status(404).send({ success: false, error: { code: 'RESTAURANT_NOT_FOUND', message: 'No se encontro el restaurante asociado a este usuario.' } });
+      }
+      const ids = parsed.data.categoryIds;
+      const updated = await prisma.$transaction(async (tx) => {
+        const current = await tx.menuCategory.findMany({ where: { restaurantId: ownedRestaurant.id }, select: { id: true } });
+        const currentIds = new Set(current.map((category) => category.id));
+        if (current.length !== ids.length || ids.some((id) => !currentIds.has(id))) return false;
+        for (const [order, id] of ids.entries()) {
+          await tx.menuCategory.updateMany({ where: { id, restaurantId: ownedRestaurant.id }, data: { order } });
+        }
+        return true;
+      });
+      if (!updated) {
+        return reply.status(409).send({ success: false, error: { code: 'CATEGORIES_CHANGED', message: 'Las categorías cambiaron. Actualiza la página e intenta de nuevo.' } });
+      }
+      return reply.send({ success: true });
+    });
+
     restaurant.post('/restaurant-panel/categorias', async (request, reply) => {
       const parsed = parseBody(categorySchema.safeParse(request.body));
 

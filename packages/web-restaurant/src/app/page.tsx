@@ -1026,6 +1026,8 @@ export default function Home() {
   const supportAlertLoopRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [products, setProducts] = useState<ProductItem[]>([]);
   const [categories, setCategories] = useState<CategoryItem[]>([]);
+  const [categoryOrderDraft, setCategoryOrderDraft] = useState<CategoryItem[] | null>(null);
+  const [savingCategoryOrder, setSavingCategoryOrder] = useState(false);
   const [drivers, setDrivers] = useState<DriverItem[]>([]);
   const [driverArrivedOrders, setDriverArrivedOrders] = useState<Record<string, boolean>>({});
   const [driverContactOpen, setDriverContactOpen] = useState<Record<string, boolean>>({});
@@ -5579,6 +5581,36 @@ export default function Home() {
     }));
   }, [categories, products]);
 
+  function moveCategoryInDraft(index: number, direction: -1 | 1) {
+    setCategoryOrderDraft((current) => {
+      if (!current || index + direction < 0 || index + direction >= current.length) return current;
+      const next = [...current];
+      [next[index], next[index + direction]] = [next[index + direction], next[index]];
+      return next;
+    });
+  }
+
+  async function saveCategoryOrder() {
+    if (!token || !categoryOrderDraft || savingCategoryOrder) return;
+    setSavingCategoryOrder(true);
+    try {
+      await requestJson<SuccessResponse<unknown>>({
+        apiBase,
+        path: '/restaurant-panel/categorias/reordenar',
+        token,
+        options: { method: 'POST', body: JSON.stringify({ categoryIds: categoryOrderDraft.map((category) => category.id) }) },
+        fallbackMessage: 'No se pudo guardar el orden de las categorías.',
+      });
+      setCategories(categoryOrderDraft.map((category, order) => ({ ...category, order })));
+      setCategoryOrderDraft(null);
+      pushToast('success', 'Orden actualizado', 'El menú mostrará las categorías en el nuevo orden.');
+    } catch (requestError) {
+      pushToast('error', 'No se pudo guardar', getRequestErrorMessage(requestError, 'Intenta de nuevo.'));
+    } finally {
+      setSavingCategoryOrder(false);
+    }
+  }
+
   const canSubmitProduct = Boolean(
     productDraft.categoryId &&
       productDraft.name.trim() &&
@@ -8298,11 +8330,11 @@ export default function Home() {
                               </div>
 
                               {presets.length > 0 ? (
-                                <div className="mt-3 flex max-h-48 flex-wrap gap-2 overflow-y-auto overscroll-contain" aria-label="Cantidades de acceso rápido">
+                                <div className="mt-3 grid max-h-52 grid-cols-2 gap-2 overflow-y-auto overscroll-contain min-[420px]:grid-cols-3" aria-label="Cantidades de acceso rápido">
                                   {presets.map((p) => (
                                     <span
                                       key={p}
-                                      className="group flex items-center gap-1 rounded-full border border-sky-200 bg-sky-50 pl-3 text-sm font-bold text-sky-800"
+                                      className="flex min-w-0 items-center justify-between overflow-hidden rounded-xl border border-neutral-200 bg-white pl-3.5 text-sm font-semibold tabular-nums text-neutral-800 shadow-sm transition hover:border-sky-200"
                                     >
                                       {formatWeight(p)}
                                       <button
@@ -8315,9 +8347,9 @@ export default function Home() {
                                             weightPresets: (c.weightPresets || []).filter((x) => x !== p),
                                           }))
                                         }
-                                        className="flex h-11 w-11 items-center justify-center rounded-full text-sky-700 transition hover:bg-sky-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500"
+                                        className="flex h-11 w-11 shrink-0 items-center justify-center text-neutral-400 transition hover:bg-rose-50 hover:text-rose-600 active:bg-rose-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-sky-500"
                                       >
-                                        <X className="h-3 w-3" />
+                                        <X className="h-4 w-4" strokeWidth={2} />
                                       </button>
                                     </span>
                                   ))}
@@ -11040,28 +11072,29 @@ export default function Home() {
                             </p>
                           </div>
 
-                          <div className="mt-5 grid grid-cols-2 gap-2.5 lg:flex lg:gap-3">
-                            <div className="col-span-2 flex min-w-0 items-start gap-3 rounded-2xl border border-neutral-200/80 bg-neutral-50 px-3.5 py-3 lg:flex-1 lg:items-center lg:rounded-xl">
-                              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white text-sky-700 shadow-sm ring-1 ring-black/5">
+                          <div className="mt-5 rounded-2xl border border-neutral-200/80 bg-white p-1.5 shadow-[0_2px_12px_rgba(0,0,0,0.04)] lg:flex lg:items-stretch lg:rounded-[20px]">
+                            <div className="flex min-w-0 items-center gap-3 rounded-xl bg-neutral-50 px-3 py-3 lg:flex-1 lg:bg-transparent lg:px-4">
+                              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-neutral-100 bg-white text-neutral-500 shadow-sm">
                                 <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.243-4.243a8 8 0 1111.314 0z" />
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
                                 </svg>
                               </span>
                               <span className="min-w-0 flex-1">
-                                <span className="block text-[10px] font-bold uppercase tracking-[0.12em] text-neutral-500">Dirección</span>
-                                <span className="mt-0.5 block break-words text-[13px] font-medium leading-5 text-neutral-800">{storeDraft.address || 'Agrega tu dirección principal'}</span>
+                                <span className="block text-[10px] font-bold uppercase tracking-[0.1em] text-neutral-400">Dirección</span>
+                                <span className="mt-0.5 block break-words text-[13px] font-medium leading-5 text-neutral-700">{storeDraft.address || 'Agrega tu dirección principal'}</span>
                               </span>
                             </div>
 
-                            <div className="flex min-w-0 items-start gap-2 rounded-2xl border border-neutral-200/80 bg-neutral-50 px-3 py-3 lg:flex-1 lg:items-center lg:gap-2.5 lg:rounded-xl">
-                              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white text-sky-700 shadow-sm ring-1 ring-black/5">
+                            <div className="mt-1.5 grid grid-cols-2 gap-1.5 lg:mt-0 lg:flex lg:gap-0 lg:divide-x lg:divide-neutral-100 lg:border-l lg:border-neutral-100">
+                            <div className="flex min-w-0 items-center gap-2.5 rounded-xl bg-neutral-50 px-3 py-3 lg:min-w-36 lg:bg-transparent lg:px-4">
+                              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-neutral-100 bg-white text-neutral-500 shadow-sm">
                                 <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                                 </svg>
                               </span>
                               <span className="min-w-0">
-                                <span className="block text-[10px] font-bold uppercase tracking-[0.1em] text-neutral-500">Entrega</span>
+                                <span className="block text-[10px] font-bold uppercase tracking-[0.1em] text-neutral-400">Entrega</span>
                                 <span className="mt-0.5 block break-words text-[13px] font-semibold leading-4 text-neutral-900">
                                   {storeDraft.hasOwnDelivery && storeDraft.deliveryPricingModel === 'distance'
                                     ? 'Por distancia'
@@ -11073,22 +11106,21 @@ export default function Home() {
                             </div>
 
                             <div
-                              className={`flex min-w-0 items-start gap-2 rounded-2xl border px-3 py-3 lg:flex-1 lg:items-center lg:gap-2.5 lg:rounded-xl ${profile.status === 'ACTIVE' && profile.isAcceptingOrders
-                                ? 'border-emerald-200 bg-emerald-50/70 text-emerald-800'
+                              className={`flex min-w-0 items-center gap-2.5 rounded-xl bg-neutral-50 px-3 py-3 lg:min-w-40 lg:bg-transparent lg:px-4 ${profile.status === 'ACTIVE' && profile.isAcceptingOrders
+                                ? 'text-emerald-700'
                                 : profile.status === 'SUSPENDED'
-                                  ? 'border-sky-200 bg-sky-50/70 text-sky-800'
-                                  : 'border-neutral-200 bg-neutral-50 text-neutral-700'
+                                  ? 'text-sky-700'
+                                  : 'text-neutral-700'
                                 }`}
                             >
-                              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white/80 shadow-sm ring-1 ring-black/5">
-                                <Clock className="h-4 w-4" />
-                              </span>
+                              <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${profile.status === 'ACTIVE' && profile.isAcceptingOrders ? 'bg-emerald-500' : profile.status === 'SUSPENDED' ? 'bg-sky-500' : 'bg-neutral-400'}`} aria-hidden="true" />
                               <span className="min-w-0">
-                                <span className="block text-[10px] font-bold uppercase tracking-[0.1em] opacity-70">Estado</span>
+                                <span className="block text-[10px] font-bold uppercase tracking-[0.1em] text-neutral-400">Estado</span>
                                 <span className="mt-0.5 block break-words text-[13px] font-semibold leading-4">
                                   {getRestaurantOperationalStatusLabel(profile.status, profile.isAcceptingOrders)}
                                 </span>
                               </span>
+                            </div>
                             </div>
                           </div>
                           <button
@@ -11147,13 +11179,41 @@ export default function Home() {
                         </div>
                       </div>
 
-                      <section aria-label="Categorías del menú" className="min-w-0 rounded-2xl border border-neutral-200 bg-white p-3 shadow-sm sm:p-4">
-                        <div className="mb-2.5 flex items-center justify-between gap-3 px-1">
-                          <h2 className="text-sm font-semibold text-neutral-900">Categorías del menú</h2>
-                          <span className="shrink-0 text-xs text-neutral-500">Desliza para ver todas</span>
+                      <section aria-label="Categorías del menú" className="min-w-0 rounded-[22px] border border-neutral-200/80 bg-white py-4 shadow-[0_4px_20px_rgba(15,23,42,0.04)] sm:py-5">
+                        <div className="mb-3 flex items-center justify-between gap-3 px-4 sm:px-5">
+                          <div>
+                            <h2 className="text-sm font-bold text-neutral-950">Categorías del menú</h2>
+                            <p className="mt-1 text-xs leading-4 text-neutral-500">Solo puedes eliminar categorías sin productos.</p>
+                          </div>
+                          {!categoryOrderDraft && categories.length > 1 && (
+                            <button type="button" onClick={() => setCategoryOrderDraft([...categories])} className="min-h-11 shrink-0 rounded-xl bg-neutral-100 px-3 text-xs font-bold text-neutral-800 transition hover:bg-neutral-200 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-sky-500/20">
+                              Ordenar
+                            </button>
+                          )}
                         </div>
+                        {categoryOrderDraft ? (
+                          <div className="px-4 sm:px-5">
+                            <p className="mb-3 text-sm leading-5 text-neutral-600">Usa las flechas para elegir el orden en que tus clientes verán las categorías.</p>
+                            <ol className="max-h-[50dvh] space-y-2 overflow-y-auto overscroll-contain" aria-label="Orden de categorías">
+                              {categoryOrderDraft.map((category, index) => (
+                                <li key={category.id} className="flex min-w-0 items-center gap-3 rounded-2xl border border-neutral-200 bg-neutral-50 p-2">
+                                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white text-xs font-bold tabular-nums text-neutral-500 ring-1 ring-neutral-200">{index + 1}</span>
+                                  <span className="min-w-0 flex-1 break-words text-sm font-semibold text-neutral-900">{category.name}</span>
+                                  <div className="flex shrink-0 gap-1">
+                                    <button type="button" disabled={index === 0 || savingCategoryOrder} onClick={() => moveCategoryInDraft(index, -1)} aria-label={`Subir ${category.name}`} className="flex h-11 w-11 items-center justify-center rounded-xl bg-white text-lg font-bold text-neutral-700 ring-1 ring-neutral-200 transition hover:bg-sky-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 disabled:opacity-30">↑</button>
+                                    <button type="button" disabled={index === categoryOrderDraft.length - 1 || savingCategoryOrder} onClick={() => moveCategoryInDraft(index, 1)} aria-label={`Bajar ${category.name}`} className="flex h-11 w-11 items-center justify-center rounded-xl bg-white text-lg font-bold text-neutral-700 ring-1 ring-neutral-200 transition hover:bg-sky-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 disabled:opacity-30">↓</button>
+                                  </div>
+                                </li>
+                              ))}
+                            </ol>
+                            <div className="mt-4 flex gap-2">
+                              <button type="button" disabled={savingCategoryOrder} onClick={() => setCategoryOrderDraft(null)} className="min-h-12 flex-1 rounded-xl border border-neutral-200 bg-white px-4 text-sm font-bold text-neutral-700 disabled:opacity-50">Cancelar</button>
+                              <button type="button" disabled={savingCategoryOrder} onClick={() => void saveCategoryOrder()} className="min-h-12 flex-[1.4] rounded-xl bg-sky-700 px-4 text-sm font-bold text-white shadow-sm transition hover:bg-sky-800 disabled:opacity-50">{savingCategoryOrder ? 'Guardando…' : 'Guardar orden'}</button>
+                            </div>
+                          </div>
+                        ) : (
                         <div className="overflow-x-auto overscroll-x-contain pb-1 scrollbar-none" style={{ WebkitOverflowScrolling: 'touch' }}>
-                          <div className="flex min-w-max items-center gap-2 px-1">
+                          <div className="flex min-w-max items-center gap-2 px-4 sm:px-5">
                             {storeCategories.map((category) => {
                               const productCount = category.products.length;
                               const cannotDelete = productCount > 0;
@@ -11161,50 +11221,47 @@ export default function Home() {
                               return (
                                 <div
                                   key={category.id}
-                                  className="group/cat inline-flex min-h-12 items-center gap-2 rounded-xl border border-neutral-200 bg-white py-1.5 pl-3.5 pr-1.5 text-[13px] font-semibold text-neutral-800 shadow-sm transition hover:border-sky-200 hover:bg-sky-50/40 hover:shadow-md"
+                                  className={`inline-flex min-h-12 items-center gap-2.5 rounded-2xl border border-neutral-200/80 bg-neutral-50 pl-4 text-sm font-semibold text-neutral-800 ${cannotDelete ? 'pr-3' : 'pr-1'}`}
                                 >
                                   <span className="max-w-[180px] truncate">{category.name}</span>
                                   <span
-                                    className="inline-flex h-6 min-w-6 items-center justify-center rounded-lg bg-neutral-100 px-1.5 text-[11px] font-bold tabular-nums text-neutral-600"
+                                    className="inline-flex h-6 min-w-6 items-center justify-center rounded-full bg-white px-2 text-xs font-bold tabular-nums text-neutral-500 ring-1 ring-neutral-200/70"
                                     title={`${productCount} productos`}
+                                    aria-label={`${productCount} ${productCount === 1 ? 'producto' : 'productos'}`}
                                   >
                                     {productCount}
                                   </span>
-                                  <button
+                                  {!cannotDelete && <button
                                     type="button"
                                     onClick={() =>
                                       void deleteCategory(category.id, category.name, productCount)
                                     }
-                                    disabled={Boolean(activeActionKey) || cannotDelete}
-                                    className={`inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-offset-1 ${cannotDelete
-                                      ? 'cursor-not-allowed bg-neutral-100 text-neutral-300'
-                                      : 'text-neutral-400 hover:bg-rose-50 hover:text-rose-600 active:scale-95'
-                                      } disabled:cursor-not-allowed`}
-                                    aria-label={cannotDelete ? `No se puede eliminar ${category.name}: tiene ${productCount} productos` : `Eliminar categoría ${category.name}`}
-                                    title={cannotDelete
-                                      ? `Mueve o elimina sus ${productCount} productos para borrar esta categoría.`
-                                      : `Eliminar categoría ${category.name}`}
+                                    disabled={Boolean(activeActionKey)}
+                                    className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-neutral-500 transition hover:bg-rose-50 hover:text-rose-600 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-50"
+                                    aria-label={`Eliminar categoría ${category.name}`}
+                                    title={`Eliminar categoría ${category.name}`}
                                   >
                                     <Trash2 className="h-4 w-4" strokeWidth={1.9} aria-hidden="true" />
-                                  </button>
+                                  </button>}
                                 </div>
                               );
                             })}
                             <button
                               type="button"
                               onClick={() => setIsCategoryModalOpen(true)}
-                              className="inline-flex min-h-12 items-center gap-2 rounded-xl border border-sky-200 bg-sky-50 px-4 py-2 text-[13px] font-bold text-sky-800 shadow-sm transition hover:border-sky-300 hover:bg-sky-100 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-offset-2"
+                              className="inline-flex min-h-12 items-center gap-2 rounded-2xl bg-sky-700 px-4 py-2 text-sm font-bold text-white shadow-[0_4px_12px_rgba(3,105,161,0.2)] transition hover:bg-sky-800 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-offset-2"
                             >
-                              <span className="inline-flex h-6 w-6 items-center justify-center rounded-lg bg-white text-sky-700 shadow-sm">
+                              <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-white/15 text-white">
                                 <Plus className="h-4 w-4" strokeWidth={2.5} aria-hidden="true" />
                               </span>
                               Agregar categoría
                             </button>
                           </div>
                         </div>
+                        )}
                       </section>
 
-                      <div className="grid grid-cols-1 gap-2.5 min-[540px]:grid-cols-2" role="group" aria-label="Acciones del menú">
+                      <div role="group" aria-label="Acciones del menú">
                         <button
                           type="button"
                           onClick={openImportModal}
@@ -11219,21 +11276,6 @@ export default function Home() {
                           <span className="min-w-0">
                             <span className="block text-[13px] font-bold leading-5 text-neutral-900">Importar menú</span>
                             <span className="block truncate text-[11px] leading-4 text-neutral-500">Desde Excel o Google Sheets</span>
-                          </span>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => void handleBulkGenerateMissingImages()}
-                          disabled={bulkActionLoading}
-                          className="group inline-flex min-h-[68px] w-full items-center gap-3 rounded-2xl border border-sky-700 bg-sky-700 px-3.5 py-3 text-left text-white shadow-[0_5px_14px_rgba(3,105,161,0.2)] transition hover:border-sky-600 hover:bg-sky-600 hover:shadow-md active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-offset-2 disabled:cursor-wait disabled:opacity-60 disabled:shadow-none sm:px-4"
-                          title="Genera con IA una imagen para cada producto del menú que todavía no tiene foto"
-                        >
-                          <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white/15 text-white ring-1 ring-inset ring-white/15 transition group-hover:bg-white/20">
-                            <Sparkles className="h-[18px] w-[18px]" aria-hidden="true" />
-                          </span>
-                          <span className="min-w-0">
-                            <span className="block text-[13px] font-bold leading-5">{bulkActionLoading ? 'Generando imágenes…' : 'Generar imágenes'}</span>
-                            <span className="block truncate text-[11px] leading-4 text-white/75">Completa fotos pendientes con IA</span>
                           </span>
                         </button>
                       </div>
