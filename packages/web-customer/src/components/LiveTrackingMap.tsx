@@ -3,7 +3,7 @@ import { getOrderStatusLabel } from '@sadel/shared';
 import { ensureGoogleMapsScript, getGoogleMaps } from '../lib/googleMaps';
 import { buildTimelineSteps } from './trackingSteps';
 
-type Point = { lat: number; lng: number };
+type Point = { lat: number; lng: number; updatedAt?: string | null };
 
 type LiveTrackingOrder = {
   id: string;
@@ -408,6 +408,14 @@ export default memo(function LiveTrackingMap({
       ? getOrderStatusLabel(order.status, order.restaurant?.businessType)
       : activeTimelineStep?.label ?? lastTimelineStep?.label ?? null;
 
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 15000);
+    return () => clearInterval(timer);
+  }, []);
+  const updatedAt = driverLocation?.updatedAt ? Date.parse(driverLocation.updatedAt) : NaN;
+  const ageMinutes = Number.isFinite(updatedAt) ? Math.max(0, Math.floor((now - updatedAt) / 60000)) : null;
+
   return (
     <div className="relative">
       <div
@@ -420,6 +428,12 @@ export default memo(function LiveTrackingMap({
           <span className="text-[11px] font-bold text-neutral-900 dark:text-zinc-100">
             {statusLabel}
           </span>
+        </div>
+      )}
+      {driverLocation && (
+        <div role="status" className="absolute bottom-2.5 left-2.5 right-2.5 z-[5] rounded-xl bg-white/95 px-3 py-2 text-xs font-semibold text-neutral-700 shadow-sm dark:bg-zinc-900/95 dark:text-zinc-100">
+          {ageMinutes === null ? 'Hora de ubicación no disponible' : ageMinutes < 1 ? 'Ubicación actualizada hace menos de 1 minuto' : `Última ubicación: hace ${ageMinutes} min`}
+          {ageMinutes !== null && ageMinutes >= 2 && ' · Puede estar desactualizada'}
         </div>
       )}
     </div>

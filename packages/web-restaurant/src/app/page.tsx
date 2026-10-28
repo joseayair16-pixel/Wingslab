@@ -2,6 +2,7 @@
 import { Activity, AlertTriangle, Check, ChefHat, ChevronUp, ClipboardList, Clock, Info, Loader2, Lock, Mail, MessageCircle, Minus, Package, Pencil, Phone, Plus, RefreshCw, Sparkles, Tag, Trash2, User, Wand2, X } from 'lucide-react';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type { ReactNode } from 'react';
 import { io } from 'socket.io-client';
 import { QRCodeSVG } from 'qrcode.react';
 import {
@@ -1513,6 +1514,7 @@ export default function Home() {
     let lastErrorLogAt = 0;
     let lastPosition: { lat: number; lng: number } | null = null;
     let lastPostAt = 0;
+    let locationPostPending = false;
 
     const readPausedUntil = () => {
       const raw = window.sessionStorage.getItem(GEO_PAUSE_KEY);
@@ -1544,6 +1546,7 @@ export default function Home() {
 
     const shouldSend = (lat: number, lng: number) => {
       if (!lastPosition) return true;
+      if (Date.now() - lastPostAt >= 60000) return true;
       const deltaLat = Math.abs(lat - lastPosition.lat);
       const deltaLng = Math.abs(lng - lastPosition.lng);
       return !(deltaLat < 0.00006 && deltaLng < 0.00006);
@@ -1551,9 +1554,10 @@ export default function Home() {
 
     const postLocation = async (lat: number, lng: number) => {
       const now = Date.now();
-      // Cadencia densa: el rastreo solo corre mientras se entrega.
-      if (now - lastPostAt < 6000) return;
+      // Limitar tráfico sin perder la siguiente posición que deba enviarse.
+      if (locationPostPending || now - lastPostAt < 10000) return;
       lastPostAt = now;
+      locationPostPending = true;
 
       try {
         await requestJson({
@@ -1566,8 +1570,11 @@ export default function Home() {
           },
           fallbackMessage: 'No se pudo actualizar la ubicación.',
         });
+        lastPosition = { lat, lng };
       } catch {
         // Error de red/backend: no es un fallo de GPS.
+      } finally {
+        locationPostPending = false;
       }
     };
 
@@ -1610,7 +1617,6 @@ export default function Home() {
       if (document.visibilityState === 'hidden') return;
       if (!shouldSend(lat, lng)) return;
 
-      lastPosition = { lat, lng };
       void postLocation(lat, lng);
     };
 
@@ -8228,14 +8234,16 @@ export default function Home() {
                         return (
                           <div className="sm:col-span-2 rounded-[24px] border border-sky-200/60 bg-sky-50/50 p-5 sm:p-6">
                             {/* Encabezado + selector de unidad */}
-                            <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+                            <div className="mb-5 flex flex-col gap-4">
                               <div>
                                 <p className="text-[12px] font-bold uppercase tracking-[0.1em] text-sky-700">Venta por peso</p>
                                 <p className="mt-0.5 text-[13px] font-medium text-neutral-500">
-                                  Tus clientes eligen cuántos gramos quieren pedir.
+                                  Tus clientes eligen la cantidad que quieren pedir.
                                 </p>
                               </div>
-                              <div className="flex gap-1.5 rounded-full border border-sky-200 bg-white/70 p-1">
+                              <div>
+                                <p className="mb-2 text-sm font-semibold text-neutral-800" id="weight-unit-label">Configurar cantidades en</p>
+                              <div role="group" aria-labelledby="weight-unit-label" className="grid grid-cols-2 gap-1 rounded-xl border border-sky-200 bg-white p-1 sm:w-fit">
                                 {(['g', 'kg'] as const).map((unit) => (
                                   <button
                                     key={unit}
@@ -8243,30 +8251,32 @@ export default function Home() {
                                     onClick={() => setWeightUnit(unit)}
                                     aria-pressed={weightUnit === unit}
                                     aria-label={unit === 'g' ? 'Configurar en gramos' : 'Configurar en kilogramos'}
-                                    className={`min-h-11 min-w-11 rounded-full px-4 py-1.5 text-sm font-bold transition-all focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-sky-500/20 ${
+                                    className={`min-h-11 rounded-lg px-4 py-2 text-sm font-semibold transition-all focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-sky-500/20 ${
                                       weightUnit === unit
                                         ? 'bg-sky-600 text-white shadow-md shadow-sky-600/30'
                                         : 'text-neutral-500 hover:text-sky-700'
                                     }`}
                                   >
-                                    {unit}
+                                      {unit === 'g' ? 'Gramos (g)' : 'Kilogramos (kg)'}
                                   </button>
                                 ))}
+                              </div>
                               </div>
                             </div>
 
                             {/* Vista previa de precios en vivo */}
                             {pricePerKg > 0 && exampleWeights.length > 0 && (
-                              <div className="mb-5 rounded-2xl border border-sky-100 bg-white p-4 shadow-sm">
-                                <p className="text-xs font-bold text-neutral-700">Ejemplos · {formatCurrency(pricePerKg)} por kg</p>
-                                <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1">
+                              <div className="mb-5 rounded-2xl border border-sky-100 bg-white p-4">
+                                <p className="text-sm font-semibold text-neutral-900">Así se calcula el precio</p>
+                                <p className="mt-1 text-xs text-neutral-500">Precio por kilogramo: {formatCurrency(pricePerKg)}</p>
+                                <div className="mt-3 grid grid-cols-3 gap-2">
                                   {exampleWeights.map((w) => (
                                     <div
                                       key={w}
-                                      className="text-xs text-neutral-600"
+                                      className="min-w-0 rounded-xl bg-slate-50 px-2 py-2.5 text-center"
                                     >
-                                      <span>{formatWeight(w)}: </span>
-                                      <span className="font-bold tabular-nums text-neutral-950">{formatCurrency((pricePerKg * w) / 1000)}</span>
+                                      <span className="block text-xs text-neutral-500">{formatWeight(w)}</span>
+                                      <span className="mt-1 block text-sm font-bold tabular-nums text-neutral-950">{formatCurrency((pricePerKg * w) / 1000)}</span>
                                     </div>
                                   ))}
                                 </div>
@@ -11113,7 +11123,7 @@ export default function Home() {
                             </p>
                           </div>
 
-                          <div className="mt-5 rounded-2xl border border-neutral-200/80 bg-white p-1.5 shadow-[0_2px_12px_rgba(0,0,0,0.04)] lg:flex lg:items-stretch lg:rounded-[20px]">
+                          <div className="-mx-4 mt-5 min-w-0 border-y border-neutral-200/80 bg-white p-1.5 shadow-[0_2px_12px_rgba(0,0,0,0.04)] md:-mx-6 lg:mx-0 lg:flex lg:items-stretch lg:rounded-[20px] lg:border">
                             <div className="flex min-w-0 items-center gap-3 rounded-xl bg-neutral-50 px-3 py-3 lg:flex-1 lg:bg-transparent lg:px-4">
                               <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-neutral-100 bg-white text-neutral-500 shadow-sm">
                                 <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
@@ -11253,7 +11263,7 @@ export default function Home() {
                             </div>
                           </div>
                         ) : (
-                        <div className="overflow-x-auto overscroll-x-contain pb-1 scrollbar-none" style={{ WebkitOverflowScrolling: 'touch' }}>
+                        <CategoryScroller>
                           <div className="flex min-w-max items-center gap-2 px-4 sm:px-5">
                             {storeCategories.map((category) => {
                               const productCount = category.products.length;
@@ -11298,7 +11308,7 @@ export default function Home() {
                               Agregar categoría
                             </button>
                           </div>
-                        </div>
+                        </CategoryScroller>
                         )}
                       </section>
 
@@ -14831,6 +14841,39 @@ const BUSINESS_TYPE_LABELS: Record<string, string> = {
 
 function businessTypeLabel(type?: string | null): string {
   return (type && BUSINESS_TYPE_LABELS[type]) || 'Restaurante';
+}
+
+function CategoryScroller({ children }: { children: ReactNode }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [edges, setEdges] = useState({ left: false, right: false });
+
+  useEffect(() => {
+    const element = ref.current;
+    if (!element) return;
+    const update = () => setEdges({
+      left: element.scrollLeft > 1,
+      right: element.scrollLeft + element.clientWidth < element.scrollWidth - 1,
+    });
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(element);
+    if (element.firstElementChild) observer.observe(element.firstElementChild);
+    element.addEventListener('scroll', update, { passive: true });
+    return () => { observer.disconnect(); element.removeEventListener('scroll', update); };
+  }, []);
+
+  return (
+    <div>
+      <div className="relative">
+        {edges.left && <div aria-hidden="true" className="pointer-events-none absolute inset-y-0 left-0 z-10 w-8 bg-gradient-to-r from-white to-transparent" />}
+        <div ref={ref} tabIndex={0} role="region" aria-label="Lista desplazable de categorías" className="overflow-x-auto overscroll-x-contain pb-1 scrollbar-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-sky-500" style={{ WebkitOverflowScrolling: 'touch' }}>
+          {children}
+        </div>
+        {edges.right && <div aria-hidden="true" className="pointer-events-none absolute inset-y-0 right-0 z-10 w-10 bg-gradient-to-l from-white to-transparent" />}
+      </div>
+      {(edges.left || edges.right) && <p className="mt-2 px-4 text-xs font-medium text-neutral-500 sm:px-5">Desliza para ver más categorías <span aria-hidden="true">↔</span></p>}
+    </div>
+  );
 }
 
 function ToggleField({

@@ -274,7 +274,7 @@ export const CompactActiveOrderBanner = memo(function CompactActiveOrderBanner({
   unreadCount?: number;
   isTrackingEnabled?: boolean;
   setIsTrackingEnabled?: (val: boolean) => void;
-  driverLocation?: { lat: number; lng: number } | null;
+  driverLocation?: { lat: number; lng: number; updatedAt?: string | null } | null;
   setDriverLocation?: (val: { lat: number; lng: number } | null) => void;
 }) {
   const [currentTimestamp, setCurrentTimestamp] = useState(Date.now());

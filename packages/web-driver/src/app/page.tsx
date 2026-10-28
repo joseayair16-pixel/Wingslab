@@ -1554,6 +1554,7 @@ export default function Home() {
     let lastErrorLogAt = 0;
     let lastPosition: { lat: number; lng: number } | null = null;
     let lastPostAt = 0;
+    let locationPostPending = false;
 
     const readPausedUntil = () => {
       const raw = window.sessionStorage.getItem(GEO_PAUSE_KEY);
@@ -1580,6 +1581,7 @@ export default function Home() {
 
     const shouldSend = (lat: number, lng: number) => {
       if (!lastPosition) return true;
+      if (Date.now() - lastPostAt >= 60000) return true;
       const deltaLat = Math.abs(lat - lastPosition.lat);
       const deltaLng = Math.abs(lng - lastPosition.lng);
       // Durante entregas activas toleramos menos desplazamiento para capturar
@@ -1593,11 +1595,11 @@ export default function Home() {
     const postLocation = async (lat: number, lng: number) => {
       const now = Date.now();
       const { hasActiveDeliveries } = getTrackingMode();
-      // Cadencia adaptativa: durante entregas activas enviamos más seguido
-      // (rastro fluido para el cliente); en reposo reducimos a ~1/minuto.
-      const minInterval = hasActiveDeliveries ? 6000 : 60000;
-      if (now - lastPostAt < minInterval) return;
+      // Limitar tráfico en reparto y confirmar periódicamente una posición detenida.
+      const minInterval = hasActiveDeliveries ? 10000 : 60000;
+      if (locationPostPending || now - lastPostAt < minInterval) return;
       lastPostAt = now;
+      locationPostPending = true;
 
       try {
         await requestJson({
@@ -1610,8 +1612,11 @@ export default function Home() {
           },
           fallbackMessage: 'No se pudo actualizar la ubicación.',
         });
+        lastPosition = { lat, lng };
       } catch {
         // Error de red/backend: no es un fallo de GPS.
+      } finally {
+        locationPostPending = false;
       }
     };
 
@@ -1650,7 +1655,6 @@ export default function Home() {
       if (document.visibilityState === 'hidden') return;
       if (!shouldSend(lat, lng)) return;
 
-      lastPosition = { lat, lng };
       void postLocation(lat, lng);
     };
 

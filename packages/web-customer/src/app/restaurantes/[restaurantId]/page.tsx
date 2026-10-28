@@ -579,7 +579,7 @@ export default function RestaurantPage({
   const [toastMsg, setToastMsg] = useState('');
   const [toastType, setToastType] = useState<'success' | 'error'>('success');
   const [isTrackingEnabled, setIsTrackingEnabled] = useState(false);
-  const [driverLocation, setDriverLocation] = useState<{ lat: number; lng: number } | null>(null);
+  const [driverLocation, setDriverLocation] = useState<{ lat: number; lng: number; updatedAt?: string | null } | null>(null);
   const [showAuthModal, setShowAuthModal] = useState(false);
   const handleLoginSuccess = useCallback((newToken: string, newUser: AuthUser) => {
     setToken(newToken);
@@ -706,7 +706,7 @@ export default function RestaurantPage({
     if (lat == null || lng == null) return;
     const routeStatuses = ['PICKED_UP', 'IN_TRANSIT', 'DRIVER_ARRIVED'];
     if (!routeStatuses.includes(activeOrder.status)) return;
-    setDriverLocation({ lat, lng });
+    setDriverLocation({ lat, lng, updatedAt: activeOrder.lastDriverLocationAt });
   }, [activeOrder, driverLocation, isTrackingEnabled]);
 
   const cartRestaurantId = useCartStore(state => state.restaurantId);
@@ -1563,7 +1563,7 @@ export default function RestaurantPage({
 
         if (eventName === 'order:driver-location') {
           if (recentCreatedOrderRef.current?.id === payload.orderId || activeOrderListItems.some((o) => o.id === payload.orderId)) {
-            setDriverLocation({ lat: payload.latitude, lng: payload.longitude });
+            setDriverLocation({ lat: payload.latitude, lng: payload.longitude, updatedAt: new Date().toISOString() });
           }
         }
         
@@ -3763,9 +3763,9 @@ function ProductImage({
 
                         <div className="mb-2 flex items-center justify-between gap-3">
                           <span className="text-sm font-semibold text-neutral-700 dark:text-neutral-300">Cantidad personalizada</span>
-                          <div role="group" aria-label="Unidad de peso" className="flex rounded-xl bg-neutral-100 p-1 dark:bg-zinc-800">
+                          <div role="group" aria-label="Unidad de peso" className="flex gap-1 rounded-xl border border-neutral-200 bg-neutral-100 p-1 dark:border-zinc-700 dark:bg-zinc-800">
                             {(['g', 'kg'] as const).map((unit) => (
-                              <button key={unit} type="button" onClick={() => changeUnit(unit)} aria-pressed={weightUnit === unit} className={`min-h-9 min-w-12 rounded-lg px-3 text-xs font-bold transition ${weightUnit === unit ? 'bg-white text-neutral-950 shadow-sm dark:bg-zinc-600 dark:text-white' : 'text-neutral-500 dark:text-zinc-400'}`}>
+                              <button key={unit} type="button" onClick={() => changeUnit(unit)} aria-pressed={weightUnit === unit} aria-label={unit === 'g' ? 'Gramos' : 'Kilogramos'} className={`min-h-11 min-w-12 rounded-lg px-3 text-sm font-bold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 ${weightUnit === unit ? 'bg-sky-600 text-white shadow-sm dark:bg-sky-500 dark:text-white' : 'text-neutral-600 hover:bg-white dark:text-zinc-300 dark:hover:bg-zinc-700'}`}>
                                 {unit}
                               </button>
                             ))}

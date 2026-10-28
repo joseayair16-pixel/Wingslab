@@ -1345,7 +1345,7 @@ export default function Home() {
 
   // Estados para rastreo geográfico opcional (Ahorro de datos móviles)
   const [isTrackingEnabled, setIsTrackingEnabled] = useState(false);
-  const [driverLocation, setDriverLocation] = useState<{ lat: number; lng: number } | null>(null);
+  const [driverLocation, setDriverLocation] = useState<{ lat: number; lng: number; updatedAt?: string | null } | null>(null);
   const socketRef = useRef<any>(null);
 
   const handlePullToRefresh = useCallback(() => {
@@ -3324,14 +3324,14 @@ export default function Home() {
 
     // Snapshot inicial: mostrar la última posición persistida de inmediato.
     if (pinnedOrder.lastDriverLatitude != null && pinnedOrder.lastDriverLongitude != null) {
-      setDriverLocation({ lat: pinnedOrder.lastDriverLatitude, lng: pinnedOrder.lastDriverLongitude });
+      setDriverLocation({ lat: pinnedOrder.lastDriverLatitude, lng: pinnedOrder.lastDriverLongitude, updatedAt: pinnedOrder.lastDriverLocationAt });
     }
 
     const socket = socketRef.current;
 
     const handleDriverLocation = (payload: { orderId: string; latitude: number; longitude: number }) => {
       if (payload.orderId === pinnedOrder.id) {
-        setDriverLocation({ lat: payload.latitude, lng: payload.longitude });
+        setDriverLocation({ lat: payload.latitude, lng: payload.longitude, updatedAt: new Date().toISOString() });
       }
     };
 
@@ -3359,6 +3359,7 @@ export default function Home() {
               setDriverLocation({
                 lat: detailRes.data.lastDriverLatitude,
                 lng: detailRes.data.lastDriverLongitude,
+                updatedAt: detailRes.data.lastDriverLocationAt,
               });
             }
           })
@@ -8199,4 +8200,3 @@ function PasswordToggleButton({ show, onToggle }: { show: boolean; onToggle: () 
     </button>
   );
 }
-

@@ -8,6 +8,7 @@
 /* eslint-disable react-hooks/exhaustive-deps */
 
 import { useEffect, useRef, useState, use } from 'react';
+import { Banknote, Check, CreditCard, MapPin, Route, Store } from 'lucide-react';
 import DeliveryRouteMap from '../../../../components/DeliveryRouteMap';
 import DriverTurnByTurnOverlay from '../../../../components/DriverTurnByTurnOverlay';
 import { Html5Qrcode } from 'html5-qrcode';
@@ -622,14 +623,20 @@ export default function DeliveryTicketPage({ params }: PageProps) {
 
     const tokens = activeTrackingTokens.split(',');
     let watchId: number | null = null;
-    let lastSent: { lat: number; lng: number; at: number } | null = null;
+    const lastSent = new Map<string, { lat: number; lng: number; at: number }>();
+    const lastAttempt = new Map<string, number>();
+    const pending = new Set<string>();
 
     const postLocation = (tokenToPost: string, lat: number, lng: number) => {
+      pending.add(tokenToPost);
+      lastAttempt.set(tokenToPost, Date.now());
       fetch(`${apiBase}/public/delivery-ticket/${tokenToPost}/ubicacion`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ coords: [lat, lng] }),
-      }).catch(() => {});
+      }).then((response) => {
+        if (response.ok) lastSent.set(tokenToPost, { lat, lng, at: Date.now() });
+      }).catch(() => {}).finally(() => pending.delete(tokenToPost));
     };
 
     const onPositionSuccess = (position: GeolocationPosition) => {
@@ -638,15 +645,12 @@ export default function DeliveryTicketPage({ params }: PageProps) {
       const lng = parseFloat(position.coords.longitude.toFixed(6));
       const now = Date.now();
       setDriverPos({ lat, lng });
-      // Cadencia ~8s y desplazamiento >~20m antes de reportar.
-      if (lastSent && now - lastSent.at < 8000) return;
-      const movedEnough =
-        !lastSent ||
-        Math.abs(lat - lastSent.lat) > 0.0002 ||
-        Math.abs(lng - lastSent.lng) > 0.0002;
-      if (!movedEnough) return;
-      lastSent = { lat, lng, at: now };
-      for (const t of tokens) postLocation(t, lat, lng);
+      for (const t of tokens) {
+        const sent = lastSent.get(t);
+        if (pending.has(t) || now - (lastAttempt.get(t) || 0) < 10000) continue;
+        const moved = !sent || Math.abs(lat - sent.lat) > 0.0002 || Math.abs(lng - sent.lng) > 0.0002;
+        if (moved || (sent && now - sent.at >= 60000)) postLocation(t, lat, lng);
+      }
     };
 
     const start = () => {
@@ -1403,7 +1407,7 @@ export default function DeliveryTicketPage({ params }: PageProps) {
               <button
                 type="button"
                 onClick={openAddModal}
-                className={`flex items-center gap-1.5 rounded-full px-3.5 py-2 text-[11px] font-bold transition active:scale-95 active-scale shadow-sm bg-sky-600 text-white hover:bg-sky-500 shadow-[0_2px_10px_rgba(14,165,233,0.35)]`}
+                className="flex min-h-11 items-center gap-1.5 rounded-xl bg-sky-700 px-3.5 text-xs font-bold text-white transition hover:bg-sky-800 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-offset-2"
               >
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="3" stroke="currentColor" className="w-3.5 h-3.5">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
@@ -1424,8 +1428,8 @@ export default function DeliveryTicketPage({ params }: PageProps) {
           }`}>
             <div className="flex items-start justify-between">
               <div>
-                <p className={`text-[10px] font-semibold uppercase tracking-[0.18em] ${textTertiary}`}>
-                  Mi Jornada
+                <p className={`text-xs font-medium ${textSecondary}`}>
+                  Mi jornada
                 </p>
                 <h2 className={`text-lg font-semibold tracking-tight mt-1 ${textPrimary}`}>
                   Resumen de ruta
@@ -1437,25 +1441,25 @@ export default function DeliveryTicketPage({ params }: PageProps) {
                   : 'border-emerald-200/60 bg-emerald-50 text-emerald-700'
               }`}>
                 <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-                En curso
+                {activeList.length > 0 ? 'En curso' : 'Sin pendientes'}
               </span>
             </div>
 
-            <div className="mt-5 grid grid-cols-4 divide-x divide-neutral-100 dark:divide-zinc-800">
-              <div className="pr-2">
-                <p className={`text-[10px] font-medium uppercase tracking-wider ${textTertiary}`}>Turno</p>
+            <div className="mt-5 grid grid-cols-2 gap-x-4 gap-y-4 border-t border-neutral-100 pt-4 dark:border-zinc-800 sm:grid-cols-4">
+              <div>
+                <p className={`text-xs ${textSecondary}`}>Turno</p>
                 <p className={`text-sm font-semibold tracking-tight mt-1 tabular-nums ${textPrimary}`}>{shiftTimeLabel}</p>
               </div>
-              <div className="px-2">
-                <p className={`text-[10px] font-medium uppercase tracking-wider ${textTertiary}`}>Km</p>
+              <div>
+                <p className={`text-xs ${textSecondary}`}>Km</p>
                 <p className={`text-sm font-semibold tracking-tight mt-1 tabular-nums ${textPrimary}`}>{kmDriven.toFixed(1)}</p>
               </div>
-              <div className="px-2">
-                <p className={`text-[10px] font-medium uppercase tracking-wider ${textTertiary}`}>Pendientes</p>
+              <div>
+                <p className={`text-xs ${textSecondary}`}>Pendientes</p>
                 <p className={`text-sm font-semibold tracking-tight mt-1 tabular-nums ${textPrimary}`}>{activeList.length}</p>
               </div>
-              <div className="pl-2">
-                <p className={`text-[10px] font-medium uppercase tracking-wider ${textTertiary}`}>Entregados</p>
+              <div>
+                <p className={`text-xs ${textSecondary}`}>Entregados</p>
                 <p className={`text-sm font-semibold tracking-tight mt-1 tabular-nums ${textPrimary}`}>{completedList.length}</p>
               </div>
             </div>
@@ -1464,7 +1468,7 @@ export default function DeliveryTicketPage({ params }: PageProps) {
             {totalDeliveredAmount > 0 && (
               <div className="mt-5 flex items-center justify-between border-t border-neutral-100 pt-4 dark:border-zinc-800">
                 <span className={`text-[10px] font-medium uppercase tracking-wider ${textTertiary}`}>
-                  Total generado de envíos
+                  Total de pedidos entregados
                 </span>
                 <span className={`text-base font-semibold tabular-nums ${darkMode ? 'text-emerald-400' : 'text-emerald-600'}`}>
                   ${totalDeliveredAmount.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
@@ -1525,7 +1529,7 @@ export default function DeliveryTicketPage({ params }: PageProps) {
                 ? 'bg-amber-950/20 border-amber-900/30' 
                 : 'bg-amber-50 border-amber-200/50'
             }`}>
-              <span className="text-2xl">💵</span>
+              <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${darkMode ? 'bg-amber-400/10 text-amber-300' : 'bg-amber-100 text-amber-700'}`}><Banknote className="h-5 w-5" aria-hidden="true" /></span>
               <div className="flex-1 min-w-0">
                 <p className={`text-[10px] font-bold uppercase tracking-wider ${darkMode ? 'text-amber-400' : 'text-amber-700'}`}>
                   {totalCashAmount > 0 ? 'Efectivo por cobrar' : 'Efectivo cobrado'}
@@ -1556,13 +1560,13 @@ export default function DeliveryTicketPage({ params }: PageProps) {
                   <div className="flex items-center gap-3 min-w-0">
                     <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-xl text-base ${
                       darkMode ? 'bg-emerald-400/10 text-emerald-300' : 'bg-emerald-100 text-emerald-700'
-                    }`}>✨</span>
+                    }`}><Route className="h-4 w-4" aria-hidden="true" /></span>
                     <div className="min-w-0">
                       <p className={`text-xs font-black uppercase tracking-wider ${darkMode ? 'text-emerald-300' : 'text-emerald-700'}`}>
                         Ruta inteligente
                       </p>
                       <p className={`text-[11px] mt-0.5 truncate ${textSecondary}`}>
-                        {activeList.length} paradas en orden óptimo
+                        {activeList.length} paradas ordenadas
                       </p>
                     </div>
                   </div>
@@ -1585,10 +1589,10 @@ export default function DeliveryTicketPage({ params }: PageProps) {
                   <div className="flex items-center gap-3 min-w-0">
                     <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-xl text-base ${
                       darkMode ? 'bg-sky-400/10 text-sky-300' : 'bg-sky-50 text-sky-500'
-                    }`}>🧭</span>
+                    }`}><Route className="h-4 w-4" aria-hidden="true" /></span>
                     <div className="min-w-0">
                       <p className={`text-xs font-black uppercase tracking-wider ${textPrimary}`}>
-                        Hacer tu ruta inteligente
+                        Ordenar mi ruta
                       </p>
                       <p className={`text-[11px] mt-0.5 truncate ${textSecondary}`}>
                         Ordena las {activeList.length} entregas por cercanía y tiempo
@@ -1613,8 +1617,8 @@ export default function DeliveryTicketPage({ params }: PageProps) {
               <div className={`rounded-[28px] border-2 border-dashed p-10 text-center transition-all ${
                 darkMode ? 'border-zinc-800 bg-zinc-900/20' : 'border-neutral-200 bg-white'
               } shadow-[0_8px_30px_rgb(0,0,0,0.01)]`}>
-                <div className="inline-flex h-14 w-14 items-center justify-center rounded-full bg-emerald-500/10 text-emerald-500 text-3xl mb-3">
-                  🎉
+                <div className="inline-flex h-14 w-14 items-center justify-center rounded-full bg-emerald-500/10 text-emerald-600 mb-3">
+                  <Check className="h-6 w-6" aria-hidden="true" />
                 </div>
                 <h3 className={`text-sm font-bold tracking-tight ${textPrimary}`}>¡Ruta completada!</h3>
                 <p className={`text-xs mt-1.5 max-w-[220px] mx-auto leading-relaxed ${textSecondary}`}>
@@ -1643,18 +1647,19 @@ export default function DeliveryTicketPage({ params }: PageProps) {
                   return (
                     <div
                       key={deliv.token}
-                      className={`group relative rounded-[28px] border p-5 transition-all shadow-[0_4px_24px_rgba(0,0,0,0.015)] hover:shadow-[0_8px_32px_rgba(0,0,0,0.03)] hover:-translate-y-0.5 ${cardBg} ${cardBorder}`}
+                      className={`group relative rounded-2xl border p-4 sm:p-5 shadow-sm ${cardBg} ${cardBorder}`}
                     >
                       {/* Botón Quitar de Ruta (Trash) */}
                       <button
                         type="button"
                         onClick={(e) => handleRemoveDelivery(deliv.token, e)}
-                        className={`absolute top-4 right-4 flex h-7 w-7 items-center justify-center rounded-full transition-all border ${
+                        className={`absolute top-3 right-3 flex h-11 w-11 items-center justify-center rounded-xl transition-all border ${
                           darkMode 
                             ? 'bg-zinc-900 border-zinc-800 text-zinc-500 hover:text-red-400 hover:bg-zinc-800' 
                             : 'bg-neutral-50 border-neutral-100 text-neutral-400 hover:text-red-500 hover:bg-neutral-100'
                         }`}
                         title="Quitar de ruta"
+                        aria-label={`Quitar de ruta la entrega de ${fullCustomerName(deliv.data.customer)}`}
                       >
                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="2.5" stroke="currentColor" className="w-3.5 h-3.5">
                           <path strokeLinecap="round" strokeLinejoin="round" d="m14.74 9-.34 9a4.847 4.847 0 0 1-3.637-3.637L10 9m0 9v-6M4 6h16M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
@@ -1664,10 +1669,14 @@ export default function DeliveryTicketPage({ params }: PageProps) {
                       {/* AREA PRINCIPAL CLICKABLE (Abre Detalles + elige como siguiente) */}
                       <div 
                         onClick={() => handleChooseAsNext(deliv.token)}
-                        className="cursor-pointer"
+                        onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); handleChooseAsNext(deliv.token); } }}
+                        role="button"
+                        tabIndex={0}
+                        aria-label={`Ver entrega de ${fullCustomerName(deliv.data.customer)}`}
+                        className="cursor-pointer rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500"
                       >
                         {/* Fila superior: Índice y Pago */}
-                        <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-3 pr-12">
                           <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-black shadow-sm ${
                             index === 0
                               ? (darkMode ? 'bg-emerald-400/20 text-emerald-300' : 'bg-emerald-500 text-white')
@@ -1675,7 +1684,7 @@ export default function DeliveryTicketPage({ params }: PageProps) {
                           }`}>
                             {index + 1}
                           </span>
-                          <span className={`text-xs font-bold px-2.5 py-1 rounded-full shadow-sm border ${
+                          <span className={`text-xs font-bold px-2.5 py-1 rounded-full border ${
                             isCash 
                               ? darkMode 
                                 ? 'bg-amber-950/20 text-amber-400 border-amber-900/30' 
@@ -1684,7 +1693,7 @@ export default function DeliveryTicketPage({ params }: PageProps) {
                                 ? 'bg-emerald-950/20 text-emerald-400 border-emerald-900/30' 
                                 : 'bg-emerald-50 text-emerald-700 border-emerald-200/50'
                           }`}>
-                            {isCash ? `💵 Cobrar: $${deliv.data.totalAmount.toFixed(0)}` : deliv.data.paymentMethod === 'TRANSFER' ? '🏦 Pagado con transferencia' : '💳 Pagado en línea'}
+                            {isCash ? `Cobrar: $${deliv.data.totalAmount.toFixed(2)}` : deliv.data.paymentMethod === 'TRANSFER' ? 'Pagado por transferencia' : 'Pagado en línea'}
                           </span>
                         </div>
 
@@ -1723,15 +1732,15 @@ export default function DeliveryTicketPage({ params }: PageProps) {
                               ? 'bg-zinc-900/40 border-zinc-800 text-zinc-300' 
                               : 'bg-neutral-50 border-black/[0.03] text-neutral-600'
                           }`}>
-                            <span className="text-xs shrink-0">📍</span>
-                            <span className="italic truncate">{addressObj.reference}</span>
+                            <MapPin className="h-4 w-4 shrink-0" aria-hidden="true" />
+                            <span className="break-words">{addressObj.reference}</span>
                           </div>
                         )}
 
                         {/* Fila de detalles: Restaurante y Estado */}
                         <div className={`flex items-center justify-between mt-3.5 pt-3 border-t ${darkMode ? 'border-white/[0.04]' : 'border-black/[0.03]'}`}>
                           <span className={`text-[10px] font-bold tracking-wide truncate ${textTertiary}`}>
-                            {deliv.data.isSupportDelivery ? `🛒 Recoger en: ${deliv.data.restaurant.name}` : `🏪 ${deliv.data.restaurant.name}`}
+                            {deliv.data.isSupportDelivery ? `Recoger en: ${deliv.data.restaurant.name}` : deliv.data.restaurant.name}
                           </span>
                           
                           <span className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full ${
@@ -1748,7 +1757,7 @@ export default function DeliveryTicketPage({ params }: PageProps) {
                       </div>
 
                       {/* ACCIONES RÁPIDAS (Fila inferior de botones) */}
-                      <div className={`flex items-center gap-2 mt-4 pt-3.5 border-t ${darkMode ? 'border-white/[0.05]' : 'border-black/[0.04]'}`}>
+                      <div className={`flex flex-wrap items-center gap-2 mt-4 pt-3.5 border-t ${darkMode ? 'border-white/[0.05]' : 'border-black/[0.04]'}`}>
                         
                         {/* Navegar - Google Maps */}
                         <a
@@ -1756,12 +1765,13 @@ export default function DeliveryTicketPage({ params }: PageProps) {
                           target="_blank"
                           rel="noopener noreferrer"
                           onClick={(e) => { e.stopPropagation(); triggerHaptic([30]); }}
-                          className={`flex h-10 w-10 items-center justify-center rounded-xl transition-all active:scale-90 border shadow-sm ${
+                          className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl transition-all active:scale-90 border ${
                             darkMode 
                               ? 'bg-zinc-900 border-zinc-800 text-zinc-300 hover:bg-zinc-800' 
                               : 'bg-white border-black/[0.06] text-neutral-700 hover:bg-neutral-50'
                           }`}
                           title="Google Maps"
+                          aria-label="Abrir dirección en Google Maps"
                         >
                           <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="2.2" stroke="currentColor" className="w-5 h-5">
                             <path strokeLinecap="round" strokeLinejoin="round" d="m2.25 12 8.954-8.955c.44-.439 1.152-.439 1.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75M8.25 21h8.25" />
@@ -1775,12 +1785,13 @@ export default function DeliveryTicketPage({ params }: PageProps) {
                             target="_blank"
                             rel="noopener noreferrer"
                             onClick={(e) => { e.stopPropagation(); triggerHaptic([30]); }}
-                            className={`flex h-10 w-10 items-center justify-center rounded-xl transition-all active:scale-90 border shadow-sm ${
+                            className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl transition-all active:scale-90 border ${
                               darkMode 
                                 ? 'bg-zinc-900 border-zinc-800 text-zinc-300 hover:bg-zinc-800' 
                                 : 'bg-white border-black/[0.06] text-neutral-700 hover:bg-neutral-50'
                             }`}
                             title="Navegar con Waze"
+                            aria-label="Navegar con Waze"
                           >
                             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="2.2" stroke="currentColor" className="w-5 h-5">
                               <path strokeLinecap="round" strokeLinejoin="round" d="M6 12 3.269 3.125A59.769 59.769 0 0 1 21.485 12 59.768 59.768 0 0 1 3.27 20.875L5.999 12Zm0 0h7.5" />
@@ -1794,8 +1805,9 @@ export default function DeliveryTicketPage({ params }: PageProps) {
                           target="_blank"
                           rel="noopener noreferrer"
                           onClick={(e) => { e.stopPropagation(); triggerHaptic([30]); }}
-                          className="flex h-10 w-10 items-center justify-center rounded-xl transition-all active:scale-90 border border-[#25D366]/20 bg-[#25D366]/10 text-[#25D366] hover:bg-[#25D366]/20 shadow-sm"
+                          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl transition-all active:scale-90 border border-[#25D366]/20 bg-[#25D366]/10 text-[#168b44] hover:bg-[#25D366]/20 dark:text-[#4ade80]"
                           title="Enviar WhatsApp"
+                          aria-label="Enviar WhatsApp al cliente"
                         >
                           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5">
                             <path fillRule="evenodd" d="M12 2.25c-5.385 0-9.75 4.365-9.75 9.75 0 1.71.442 3.321 1.226 4.733L2.25 21.75l5.163-1.189A9.704 9.704 0 0012 21.75c5.385 0 9.75-4.365 9.75-9.75S17.385 2.25 12 2.25zM9.475 7.15c-.19-.425-.39-.434-.575-.441-.157-.006-.337-.006-.516-.006-.18 0-.472.067-.718.334-.247.268-.944.922-.944 2.247 0 1.325.966 2.607 1.1 2.785.135.178 1.9 2.9 4.6 4.066 2.245.968 2.705.776 3.199.73.493-.045 1.595-.651 1.82-1.28.224-.63.224-1.168.156-1.28-.067-.113-.247-.18-.517-.315-.27-.135-1.595-.788-1.843-.878-.246-.09-.426-.135-.606.135-.18.27-.697.878-.854 1.058-.157.18-.314.203-.584.068-.27-.135-1.138-.419-2.167-1.336-.799-.714-1.338-1.598-1.495-1.868-.157-.27-.017-.417.118-.551.121-.12.27-.315.405-.473.134-.157.179-.27.269-.45.09-.18.045-.337-.023-.472-.067-.135-.606-1.463-.83-2.003z" clipRule="evenodd" />
@@ -1806,12 +1818,13 @@ export default function DeliveryTicketPage({ params }: PageProps) {
                         <a
                           href={`tel:${deliv.data.customer.phone}`}
                           onClick={(e) => { e.stopPropagation(); triggerHaptic([30]); }}
-                          className={`flex h-10 w-10 items-center justify-center rounded-xl transition-all active:scale-90 border shadow-sm ${
+                          className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl transition-all active:scale-90 border ${
                             darkMode 
                               ? 'bg-zinc-900 border-zinc-800 text-zinc-300 hover:bg-zinc-800' 
                               : 'bg-white border-black/[0.06] text-neutral-700 hover:bg-neutral-50'
                           }`}
                           title="Llamar"
+                          aria-label="Llamar al cliente"
                         >
                           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5">
                             <path fillRule="evenodd" d="M1.5 4.5a3 3 0 0 1 3-3h1.372c.86 0 1.61.586 1.819 1.42l1.105 4.423a1.875 1.875 0 0 1-.694 1.955l-1.293.97a15.216 15.216 0 0 0 5.58 5.58l.97-1.293a1.875 1.875 0 0 1 1.955-.694l4.423 1.105c.834.209 1.42.959 1.42 1.82V19.5a3 3 0 0 1-3 3h-2.25C8.552 22.5 1.5 15.448 1.5 6.75V4.5Z" clipRule="evenodd" />
@@ -1849,7 +1862,7 @@ export default function DeliveryTicketPage({ params }: PageProps) {
                             {notifying ? (
                               <div className={`h-3.5 w-3.5 animate-spin rounded-full border-2 ${darkMode ? 'border-sky-300/40 border-t-sky-300' : 'border-sky-400/30 border-t-sky-500'}`} />
                             ) : (
-                              <span className="text-sm">🛒</span>
+                              <Store className="h-4 w-4" aria-hidden="true" />
                             )}
                             <span>¡Llegué al restaurante!</span>
                           </button>
@@ -1868,7 +1881,7 @@ export default function DeliveryTicketPage({ params }: PageProps) {
                             {notifying ? (
                               <div className={`h-3.5 w-3.5 animate-spin rounded-full border-2 ${darkMode ? 'border-emerald-300/40 border-t-emerald-300' : 'border-emerald-500/30 border-t-emerald-600'}`} />
                             ) : (
-                              <span className="text-sm">🚀</span>
+                              <Route className="h-4 w-4" aria-hidden="true" />
                             )}
                             <span>Iniciar entrega</span>
                           </button>
@@ -2373,7 +2386,7 @@ export default function DeliveryTicketPage({ params }: PageProps) {
             <p className="text-[10px] font-bold uppercase tracking-wider opacity-80">Recogida</p>
             <h1 className="text-2xl font-black tracking-tight mt-1">Dirígete al restaurante</h1>
             <p className="text-sm font-semibold mt-3 flex items-center gap-2">
-              <span className="text-lg">🏪</span> {pickupName}
+              <Store className="h-5 w-5 shrink-0" aria-hidden="true" /> {pickupName}
             </p>
             <p className="text-xs mt-1 opacity-90">{pickupAddress}</p>
           </div>
@@ -2590,7 +2603,7 @@ export default function DeliveryTicketPage({ params }: PageProps) {
                 <span className={`mt-2 inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-extrabold tracking-wide uppercase ${
                   darkMode ? 'bg-sky-500/10 text-sky-400' : 'bg-sky-50 text-sky-600'
                 }`}>
-                  🛵 ≈ {deliveryDistanceKm < 1 ? `${Math.round(deliveryDistanceKm * 1000)} m` : `${deliveryDistanceKm.toFixed(1)} km`}
+                  Aprox. {deliveryDistanceKm < 1 ? `${Math.round(deliveryDistanceKm * 1000)} m` : `${deliveryDistanceKm.toFixed(1)} km`} en línea recta
                 </span>
               )}
             </div>
@@ -2602,8 +2615,8 @@ export default function DeliveryTicketPage({ params }: PageProps) {
                 ? 'bg-zinc-900/40 border-zinc-800 text-zinc-300' 
                 : 'bg-neutral-50 border-black/[0.03] text-neutral-600'
             }`}>
-              <span className="text-sm shrink-0">📍</span>
-              <span className="italic">{addressObj.reference}</span>
+              <MapPin className="h-4 w-4 shrink-0" aria-hidden="true" />
+              <span className="break-words">{addressObj.reference}</span>
             </div>
           )}
 
@@ -2743,7 +2756,9 @@ export default function DeliveryTicketPage({ params }: PageProps) {
                 ${currentTicket.totalAmount.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
               </p>
             </div>
-            <span className="text-3xl">{isCash ? '💵' : isTransfer ? '🏦' : '💳'}</span>
+            <span className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${isCash ? (darkMode ? 'bg-amber-400/10 text-amber-300' : 'bg-amber-100 text-amber-700') : (darkMode ? 'bg-emerald-400/10 text-emerald-300' : 'bg-emerald-100 text-emerald-700')}`}>
+              {isCash ? <Banknote className="h-5 w-5" aria-hidden="true" /> : <CreditCard className="h-5 w-5" aria-hidden="true" />}
+            </span>
           </div>
         </div>
 
