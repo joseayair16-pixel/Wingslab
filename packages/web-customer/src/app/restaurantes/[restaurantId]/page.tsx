@@ -993,6 +993,7 @@ export default function RestaurantPage({
   const [selectedOptionsForProduct, setSelectedOptionsForProduct] = useState<Record<string, any[]>>({});
   const [customizingQuantity, setCustomizingQuantity] = useState(1);
   const [customizingWeight, setCustomizingWeight] = useState(0);
+  const [weightInput, setWeightInput] = useState('');
   const [customizingInstructions, setCustomizingInstructions] = useState('');
   const [weightLimitWarning, setWeightLimitWarning] = useState(false);
   const [weightLimitPendingValue, setWeightLimitPendingValue] = useState(0);
@@ -2405,6 +2406,7 @@ function ProductImage({
       setCustomizingProduct(product);
       setCustomizingQuantity(1);
       setCustomizingWeight(isWeightProduct ? (product.minWeightG || 100) : 0);
+      setWeightInput(isWeightProduct ? String(product.minWeightG || 100) : '');
       setCustomizingInstructions('');
       setWeightLimitWarning(false);
       setWeightLimitPendingValue(0);
@@ -2444,6 +2446,7 @@ function ProductImage({
 
   function addCustomizedItemToCart() {
     if (!customizingProduct) return;
+    if (customizingProduct.sellBy === 'WEIGHT' && (!/^\d+$/.test(weightInput) || Number(weightInput) < (customizingProduct.minWeightG || 100) || Number(weightInput) > (customizingProduct.maxWeightG || 5000))) return;
 
     for (const group of customizingProduct.optionGroups || []) {
       const selected = selectedOptionsForProduct[group.id] || [];
@@ -3538,7 +3541,7 @@ function ProductImage({
               {/* Imagen y Detalles del Producto */}
               <div className="overflow-y-auto flex-1">
                 {customizingProduct.image ? (
-                  <div className="relative h-64 w-full overflow-hidden bg-gradient-to-br from-neutral-100 to-neutral-200 sm:h-72 dark:from-neutral-900 dark:to-neutral-950">
+                  <div className="relative h-48 w-full overflow-hidden bg-gradient-to-br from-neutral-100 to-neutral-200 min-[420px]:h-56 sm:h-72 dark:from-neutral-900 dark:to-neutral-950">
                     <img
                       src={customizingProduct.image}
                       className="h-full w-full cursor-zoom-in object-contain"
@@ -3549,7 +3552,7 @@ function ProductImage({
                       draggable={false}
                       onClick={() => setCustomizingLightboxOpen(true)}
                     />
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/10 to-transparent"></div>
+                    <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/75 via-black/10 to-transparent"></div>
                     <div className="absolute bottom-6 left-6 right-6 text-white">
                       <h3 className="text-2xl font-bold tracking-[-0.03em] drop-shadow-sm">{customizingProduct.name}</h3>
                     </div>
@@ -3700,20 +3703,16 @@ function ProductImage({
                     if (presets.length === 0) presets = [100, 200, 300, 500, 1000].filter((p) => p >= minG && p <= maxG);
                     const formatGrams = (grams: number) => (grams >= 1000 ? `${grams / 1000}kg` : `${grams}g`);
 
-                    const handleWeightInput = (raw: string) => {
-                      const v = parseInt(raw) || 0;
-                      if (v > maxG) {
-                        setWeightLimitPendingValue(v);
-                        setWeightLimitWarning(true);
-                        return;
-                      }
-                      setCustomizingWeight(Math.max(minG, Math.min(maxG, v)));
+                    const validWeight = /^\d+$/.test(weightInput) && Number(weightInput) >= minG && Number(weightInput) <= maxG;
+                    const updateWeight = (value: number) => {
+                      setCustomizingWeight(value);
+                      setWeightInput(String(value));
                     };
 
                     return (
-                      <div className="p-6">
+                      <div className="px-5 py-5 sm:p-6">
                         <div className="flex items-center justify-between gap-3">
-                          <label className="text-sm text-neutral-600 dark:text-neutral-400 font-semibold">Peso</label>
+                          <label htmlFor="custom-weight" className="text-base font-bold text-neutral-950 dark:text-white">Elige el peso</label>
                           <div className="flex items-baseline gap-1.5 rounded-full bg-neutral-950 dark:bg-white text-white dark:text-neutral-950 px-3.5 py-1 shadow-sm">
                             <span className="text-[13px] font-bold">≈ {formatGrams(customizingWeight)}</span>
                             <span className="h-3.5 w-px bg-white/20 dark:bg-black/20" />
@@ -3727,9 +3726,10 @@ function ProductImage({
                               <button
                                 key={p}
                                 type="button"
-                                onClick={() => setCustomizingWeight(p)}
-                                className={`rounded-full border px-4 py-2 text-sm font-semibold transition-all ${
-                                  customizingWeight === p
+                                onClick={() => updateWeight(p)}
+                                aria-pressed={validWeight && customizingWeight === p}
+                                className={`min-h-11 rounded-xl border px-4 py-2 text-sm font-semibold transition-all ${
+                                  validWeight && customizingWeight === p
                                     ? 'border-sky-400 bg-sky-50 text-sky-600 dark:border-sky-500/40 dark:bg-sky-500/10 dark:text-sky-300'
                                     : 'border-black/5 bg-white text-neutral-600 hover:bg-neutral-50 dark:border-white/10 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700'
                                 }`}
@@ -3744,8 +3744,9 @@ function ProductImage({
                           <button
                             type="button"
                             disabled={customizingWeight <= minG}
-                            onClick={() => setCustomizingWeight(w => Math.max(minG, w - stepG))}
-                            className={`flex h-10 w-10 items-center justify-center rounded-full border text-lg text-neutral-600 transition ${
+                            onClick={() => updateWeight(Math.max(minG, customizingWeight - stepG))}
+                            aria-label="Disminuir peso"
+                            className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border text-xl text-neutral-600 dark:text-neutral-200 transition ${
                               customizingWeight <= minG
                                 ? 'border-black/5 opacity-30 cursor-not-allowed'
                                 : 'border-black/5 hover:bg-neutral-50 dark:border-white/10 dark:hover:bg-zinc-800'
@@ -3758,18 +3759,27 @@ function ProductImage({
                               type="number"
                               min={minG}
                               max={maxG}
-                              step={stepG}
-                              value={customizingWeight}
-                              onChange={(e) => handleWeightInput(e.target.value)}
-                              className="w-full rounded-2xl border border-black/10 bg-white px-4 py-3 text-center text-lg font-bold text-neutral-950 outline-none focus:border-sky-400 dark:border-white/15 dark:bg-zinc-800 dark:text-neutral-100"
+                              id="custom-weight"
+                              step="1"
+                              inputMode="numeric"
+                              value={weightInput}
+                              onChange={(e) => {
+                                const raw = e.target.value;
+                                setWeightInput(raw);
+                                if (/^\d+$/.test(raw) && Number(raw) >= minG && Number(raw) <= maxG) setCustomizingWeight(Number(raw));
+                              }}
+                              aria-invalid={!validWeight}
+                              aria-describedby="weight-help"
+                              className="w-full rounded-xl border border-black/10 bg-neutral-50 py-3 pl-3 pr-16 text-center text-lg font-bold text-neutral-950 outline-none focus:border-sky-500 focus:ring-4 focus:ring-sky-500/10 dark:border-white/15 dark:bg-zinc-800 dark:text-neutral-100"
                             />
                             <span className="absolute right-4 top-1/2 -translate-y-1/2 text-sm font-semibold text-neutral-400">gramos</span>
                           </div>
                           <button
                             type="button"
                             disabled={customizingWeight >= maxG}
-                            onClick={() => setCustomizingWeight(w => Math.min(maxG, w + stepG))}
-                            className={`flex h-10 w-10 items-center justify-center rounded-full border text-lg text-neutral-600 transition ${
+                            onClick={() => updateWeight(Math.min(maxG, customizingWeight + stepG))}
+                            aria-label="Aumentar peso"
+                            className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border text-xl text-neutral-600 dark:text-neutral-200 transition ${
                               customizingWeight >= maxG
                                 ? 'border-black/5 opacity-30 cursor-not-allowed'
                                 : 'border-black/5 hover:bg-neutral-50 dark:border-white/10 dark:hover:bg-zinc-800'
@@ -3779,15 +3789,15 @@ function ProductImage({
                           </button>
                         </div>
 
-                        <p className="mt-2.5 text-[11px] font-medium text-neutral-400 dark:text-neutral-500 text-center">
-                          Mínimo {formatGrams(minG)} · Máximo {formatGrams(maxG)} · Sube de {stepG} g en {stepG} g
+                        <p id="weight-help" className={`mt-3 text-center text-xs font-medium ${validWeight ? 'text-neutral-500 dark:text-neutral-400' : 'text-rose-600 dark:text-rose-400'}`}>
+                          {validWeight ? `Escribe la cantidad que prefieras · ${formatGrams(minG)} a ${formatGrams(maxG)}` : `Ingresa un peso entre ${formatGrams(minG)} y ${formatGrams(maxG)}`}
                         </p>
                       </div>
                     );
                   })()}
 
                   {/* Notas Especiales */}
-                  <div className="p-6">
+                  <div className="px-5 py-5 sm:p-6">
                     <label className="grid gap-2 text-sm text-neutral-600 dark:text-neutral-400 font-semibold">
                       <span>¿Alguna indicación especial?</span>
                       <input
@@ -3802,12 +3812,13 @@ function ProductImage({
               </div>
 
               {/* Footer con Sumatorias */}
-              <div className="border-t border-black/5 dark:border-zinc-800 bg-white/95 dark:bg-neutral-900/95 backdrop-blur px-6 py-4 flex flex-col sm:flex-row items-center justify-between gap-4 sticky bottom-0 z-10 pb-[calc(1rem+env(safe-area-inset-bottom))]">
+              <div className="border-t border-black/5 dark:border-zinc-800 bg-white/95 dark:bg-neutral-900/95 backdrop-blur px-4 py-3 sm:px-6 flex flex-row items-center gap-3 sticky bottom-0 z-10 pb-[calc(0.75rem+env(safe-area-inset-bottom))]">
                 {/* Selector de Cantidad */}
-                <div className="flex items-center gap-2 rounded-full border border-black/5 dark:border-zinc-800 bg-neutral-50 dark:bg-neutral-950 px-3 py-1.5 shadow-sm">
+                <div className="flex shrink-0 items-center rounded-2xl border border-black/5 dark:border-zinc-800 bg-neutral-50 dark:bg-neutral-950 px-1 py-1 shadow-sm">
                   <button
                     type="button"
                     onClick={() => setCustomizingQuantity(q => Math.max(1, q - 1))}
+                    aria-label="Disminuir cantidad"
                     className="flex h-9 w-9 items-center justify-center rounded-full text-lg text-neutral-700 dark:text-neutral-300 transition hover:bg-neutral-200 dark:hover:bg-neutral-800"
                   >
                     -
@@ -3818,6 +3829,7 @@ function ProductImage({
                   <button
                     type="button"
                     onClick={() => setCustomizingQuantity(q => Math.max(1, Math.min(q + 1, getProductAvailability(customizingProduct).tracked ? getProductAvailability(customizingProduct).maxQty : q + 1)))}
+                    aria-label="Aumentar cantidad"
                     disabled={getProductAvailability(customizingProduct).tracked && customizingQuantity >= getProductAvailability(customizingProduct).maxQty}
                     className="flex h-9 w-9 items-center justify-center rounded-full text-lg text-neutral-700 dark:text-neutral-300 transition hover:bg-neutral-200 dark:hover:bg-neutral-800 disabled:opacity-40 disabled:cursor-not-allowed"
                   >
@@ -3828,6 +3840,7 @@ function ProductImage({
                 {/* Botón de Confirmación */}
                 {(() => {
                   const isWeightProduct = customizingProduct.sellBy === 'WEIGHT';
+                  const invalidWeight = isWeightProduct && (!/^\d+$/.test(weightInput) || Number(weightInput) < (customizingProduct.minWeightG || 100) || Number(weightInput) > (customizingProduct.maxWeightG || 5000));
                   const basePrice = isWeightProduct
                     ? (customizingProduct.unitPrice || 0) * customizingWeight / 1000
                     : (customizingProduct.discountPrice ? toMoney(customizingProduct.discountPrice) : toMoney(customizingProduct.price));
@@ -3843,12 +3856,12 @@ function ProductImage({
                   return (
                     <button
                       type="button"
-                      disabled={isMissingRequired}
+                      disabled={isMissingRequired || invalidWeight}
                       onClick={addCustomizedItemToCart}
-                      className="flex-1 w-full rounded-full bg-neutral-950 dark:bg-white text-white dark:text-neutral-950 font-bold py-4 px-6 shadow-lg transition duration-200 flex items-center justify-between gap-4 disabled:bg-neutral-300 dark:disabled:bg-neutral-800 dark:disabled:text-neutral-500 disabled:cursor-not-allowed active:scale-98"
+                      className="min-w-0 flex-1 rounded-2xl bg-neutral-950 dark:bg-white text-white dark:text-neutral-950 text-sm font-bold min-h-12 py-3 px-4 shadow-lg transition duration-200 flex items-center justify-between gap-2 disabled:bg-neutral-300 dark:disabled:bg-neutral-800 dark:disabled:text-neutral-500 disabled:cursor-not-allowed active:scale-[0.98]"
                     >
-                      <span>{isMissingRequired ? 'Elige las opciones obligatorias' : 'Agregar al carrito'}</span>
-                      {!isMissingRequired && (
+                      <span>{invalidWeight ? 'Revisa el peso' : isMissingRequired ? 'Elige las opciones obligatorias' : 'Agregar al carrito'}</span>
+                      {!isMissingRequired && !invalidWeight && (
                         <span className="bg-white/10 dark:bg-black/10 px-3 py-1 rounded-lg text-sm font-semibold">
                           {formatCurrency(totalItemPrice)}
                         </span>
@@ -3902,7 +3915,8 @@ function ProductImage({
                       type="button"
                       autoFocus
                       onClick={() => {
-                        setCustomizingWeight(clampedWeight);
+                         setCustomizingWeight(clampedWeight);
+                         setWeightInput(String(clampedWeight));
                         setWeightLimitWarning(false);
                       }}
                       className="w-full rounded-full bg-neutral-950 dark:bg-white px-5 py-3 text-sm font-bold text-white dark:text-neutral-950 transition active:scale-[0.98]"
@@ -5714,36 +5728,36 @@ function ProductImage({
                     </div>
                   </div>
 
-                  <div className="mt-3 flex flex-col lg:flex-row items-stretch lg:items-center gap-1.5 lg:gap-0 lg:divide-x divide-black/[0.06] rounded-2xl lg:rounded-full border border-black/[0.04] bg-[var(--menu-surface)] p-1.5 shadow-[0_2px_12px_rgba(0,0,0,0.02)] lg:p-1 lg:pr-3 transition-all hover:shadow-[0_6px_20px_rgba(0,0,0,0.04)] dark:divide-zinc-800 dark:border-zinc-800/60 dark:bg-[var(--menu-surface-dark)]">
+                  <div className="mt-3 flex min-w-0 flex-col gap-1.5 rounded-[22px] border border-black/[0.06] bg-[var(--menu-surface)] p-1.5 shadow-[0_6px_24px_rgba(15,23,42,0.06)] lg:flex-row lg:items-stretch lg:gap-0 lg:divide-x lg:divide-black/[0.06] lg:rounded-2xl dark:divide-zinc-700 dark:border-zinc-700/70 dark:bg-[var(--menu-surface-dark)]">
                     {/* Address */}
-                    <div className="w-full flex-1 rounded-xl lg:rounded-full bg-neutral-50 lg:bg-transparent px-3 py-2.5 lg:py-1.5 text-[12px] text-neutral-600 flex items-center gap-2 dark:bg-zinc-800/60 dark:text-zinc-300 lg:dark:bg-transparent">
-                      <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-white shadow-sm border border-black/[0.03] lg:bg-neutral-100 lg:shadow-none lg:border-transparent dark:bg-zinc-700 dark:lg:bg-transparent">
-                        <svg className="h-3 w-3 text-neutral-500 dark:text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <div className="flex w-full min-w-0 flex-1 items-center gap-3 rounded-2xl bg-neutral-50 px-3 py-3 text-neutral-700 lg:bg-transparent lg:px-4 dark:bg-zinc-800/70 dark:text-zinc-200 lg:dark:bg-transparent">
+                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-black/[0.04] bg-white text-neutral-500 shadow-sm dark:border-zinc-600 dark:bg-zinc-700 dark:text-zinc-300">
+                        <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.828 0l-4.243-4.243a8 8 0 1111.314 0z" />
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
                         </svg>
                       </div>
-                      <span className="truncate font-medium">{restaurant.address}</span>
+                      <span className="min-w-0"><span className="block text-[10px] font-bold uppercase tracking-[0.1em] text-neutral-500 dark:text-zinc-400">Dirección</span><span className="mt-0.5 block break-words text-[13px] font-medium leading-5">{restaurant.address}</span></span>
                     </div>
 
                     {/* Stats Grid for Mobile / Flex for Desktop */}
-                    <div className="flex w-full lg:w-auto gap-1.5 lg:gap-0">
-                      <div className="flex flex-1 lg:flex-none flex-col items-center justify-center gap-0 rounded-xl lg:rounded-none bg-neutral-50 lg:bg-transparent px-2 py-1.5 lg:px-4 dark:bg-transparent">
-                        <span className="text-[9px] font-extrabold uppercase tracking-widest text-neutral-400 dark:text-zinc-500">Distancia</span>
-                        <div className="flex items-center gap-1 text-[12px] font-semibold text-neutral-700 dark:text-zinc-200">
+                    <div className="flex w-full min-w-0 gap-1 lg:w-auto lg:gap-0">
+                      <div className="flex min-h-14 min-w-0 flex-1 flex-col items-center justify-center gap-1 rounded-xl bg-neutral-50 px-1 py-2 text-center lg:flex-none lg:rounded-none lg:bg-transparent lg:px-4 dark:bg-zinc-800/70 lg:dark:bg-transparent">
+                        <span className="text-[10px] font-bold uppercase tracking-wide text-neutral-500 dark:text-zinc-400">Distancia</span>
+                        <div className="flex items-center justify-center gap-1 text-[12px] font-semibold leading-4 text-neutral-800 dark:text-zinc-100">
                           <svg className="h-3 w-3 text-neutral-400 dark:text-zinc-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
                           </svg>
                           <span>{distanceKm ? `${distanceKm.toFixed(1)} km` : '-- km'}</span>
                         </div>
                       </div>
-                      <div className="flex flex-1 lg:flex-none flex-col items-center justify-center gap-0 rounded-xl lg:rounded-none bg-neutral-50 lg:bg-transparent px-2 py-1.5 lg:px-4 dark:bg-transparent">
-                        <span className="text-[9px] font-extrabold uppercase tracking-widest text-neutral-400 dark:text-zinc-500">{isPickupOnly ? 'Servicio' : 'Envío'}</span>
-                        <div className="flex items-center gap-1 text-[12px] font-semibold text-neutral-700 dark:text-zinc-200">
+                      <div className="flex min-h-14 min-w-0 flex-1 flex-col items-center justify-center gap-1 rounded-xl bg-neutral-50 px-1 py-2 text-center lg:flex-none lg:rounded-none lg:bg-transparent lg:px-4 dark:bg-zinc-800/70 lg:dark:bg-transparent">
+                        <span className="text-[10px] font-bold uppercase tracking-wide text-neutral-500 dark:text-zinc-400">{isPickupOnly ? 'Servicio' : 'Envío'}</span>
+                        <div className="flex items-center justify-center gap-1 text-[12px] font-semibold leading-4 text-neutral-800 dark:text-zinc-100">
                           {isPickupOnly ? (
                             <>
                               <ShoppingBag className="h-3 w-3 shrink-0 text-emerald-600" strokeWidth={2.5} />
-                              <span className="text-emerald-700 font-bold whitespace-nowrap">Solo recoger en tienda</span>
+                              <span className="font-bold text-emerald-700 dark:text-emerald-400">Solo recoger en tienda</span>
                             </>
                           ) : (
                             <>
@@ -5759,15 +5773,14 @@ function ProductImage({
                         type="button"
                         onClick={() => setIsHoursModalOpen(true)}
                         title="Ver horarios del negocio"
-                        className="flex flex-1 lg:flex-none flex-col items-center justify-center gap-0 rounded-xl lg:rounded-none bg-neutral-50 lg:bg-transparent px-2 py-1.5 lg:px-4 dark:bg-transparent transition-colors hover:bg-neutral-100 lg:hover:bg-black/[0.03] active:scale-[0.97] cursor-pointer lg:cursor-pointer"
+                        className="flex min-h-14 min-w-0 flex-1 flex-col items-center justify-center gap-1 rounded-xl bg-neutral-50 px-1 py-2 text-center transition-colors hover:bg-neutral-100 active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-sky-500 lg:flex-none lg:rounded-none lg:bg-transparent lg:px-4 dark:bg-zinc-800/70 dark:hover:bg-zinc-700 lg:dark:bg-transparent"
                       >
-                        <span className="text-[9px] font-extrabold uppercase tracking-widest text-neutral-400 dark:text-zinc-500">Estado</span>
+                        <span className="text-[10px] font-bold uppercase tracking-wide text-neutral-500 dark:text-zinc-400">Estado</span>
                         <div className="flex items-center gap-1.5 text-[12px]">
                           <span className="relative flex h-2 w-2 shrink-0">
-                            <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${restaurant.isOpen ? 'bg-emerald-500' : 'bg-red-500'}`}></span>
                             <span className={`relative inline-flex rounded-full h-2 w-2 ${restaurant.isOpen ? 'bg-emerald-500' : 'bg-red-500'}`}></span>
                           </span>
-                          <span className={`font-bold ${restaurant.isOpen ? 'text-emerald-600' : 'text-red-600'}`}>{restaurant.isOpen ? 'Abierto' : 'Cerrado'}</span>
+                          <span className={`font-bold ${restaurant.isOpen ? 'text-emerald-700 dark:text-emerald-400' : 'text-red-700 dark:text-red-400'}`}>{restaurant.isOpen ? 'Abierto' : 'Cerrado'}</span>
                         </div>
                       </button>
                       {(() => {
@@ -5776,9 +5789,9 @@ function ProductImage({
                         const onlyTransfer = accepted.length === 1 && accepted[0] === 'TRANSFER';
                         if (!onlyCash && !onlyTransfer) return null;
                         return (
-                          <div className="flex flex-1 lg:flex-none flex-col items-center justify-center gap-0 rounded-xl lg:rounded-none bg-neutral-50 lg:bg-transparent px-2 py-1.5 lg:px-4 dark:bg-transparent">
-                            <span className="text-[9px] font-extrabold uppercase tracking-widest text-neutral-400 dark:text-zinc-500">Pago</span>
-                            <div className="flex items-center gap-1 text-[12px] font-semibold text-neutral-700 dark:text-zinc-200">
+                          <div className="flex min-h-14 min-w-0 flex-1 flex-col items-center justify-center gap-1 rounded-xl bg-neutral-50 px-1 py-2 text-center lg:flex-none lg:rounded-none lg:bg-transparent lg:px-4 dark:bg-zinc-800/70 lg:dark:bg-transparent">
+                            <span className="text-[10px] font-bold uppercase tracking-wide text-neutral-500 dark:text-zinc-400">Pago</span>
+                            <div className="flex min-w-0 items-center justify-center gap-1 break-words text-[12px] font-semibold leading-4 text-neutral-800 dark:text-zinc-100">
                               {onlyCash ? (
                                 <>
                                   <svg className="h-3 w-3 text-neutral-400 dark:text-zinc-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 6v12m-3-2.818l.879.659c1.171.879 3.07.879 4.242 0 1.172-.879 1.172-2.303 0-3.182C13.536 12.219 12.768 12 12 12c-.725 0-1.45-.22-2.003-.659-1.106-.879-1.106-2.303 0-3.182s2.9-.879 4.006 0l.415.33M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
