@@ -111,6 +111,33 @@ function readCaptureKey(): string | null {
 }
 
 /**
+ * Deriva material de clave para HMAC a partir de la clave de captura.
+ *
+ * La clave EN CRUDO nunca sale de este módulo: el llamador recibe solo bytes
+ * derivados y con separación de dominio, de modo que el material de AES-GCM
+ * nunca se reutiliza tal cual para firmar y viceversa.
+ *
+ * @param purpose etiqueta de dominio; distintas finalidades producen claves distintas.
+ * @returns null si la captura no está habilitada o la clave no es válida.
+ */
+export function deriveCaptureHmacKey(purpose: string): Buffer | null {
+  const secret = readCaptureKey();
+  if (!secret) return null;
+  return createHash('sha256').update(`${secret}:${purpose}`).digest();
+}
+
+/**
+ * ¿El `phone_number_id` del evento corresponde al número autorizado?
+ * Fuente única de verdad para el filtro por número.
+ */
+export function isAuthorizedCapturePhoneNumberId(phoneNumberId: string | null | undefined): boolean {
+  const allowed = (process.env.WHATSAPP_CAPTURE_PHONE_NUMBER_ID || '').trim();
+  if (!allowed) return false;
+  if (!phoneNumberId) return false;
+  return phoneNumberId === allowed;
+}
+
+/**
  * Resuelve el estado efectivo de la captura. Se lee en cada llamada (no al
  * cargar el módulo) para que el interruptor por variable de entorno sea
  * inmediato y verificable sin recompilar.
@@ -255,8 +282,7 @@ export async function captureIncomingTextMessage(params: {
     return { captured: false, reason: status.reason };
   }
 
-  const allowedPhoneNumberId = (process.env.WHATSAPP_CAPTURE_PHONE_NUMBER_ID || '').trim();
-  if (!allowedPhoneNumberId || params.phoneNumberId !== allowedPhoneNumberId) {
+  if (!isAuthorizedCapturePhoneNumberId(params.phoneNumberId)) {
     return { captured: false, reason: 'phone_number_not_allowed' };
   }
 
