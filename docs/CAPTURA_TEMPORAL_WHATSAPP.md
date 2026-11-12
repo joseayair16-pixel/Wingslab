@@ -25,6 +25,7 @@
 | PostgreSQL | **No se usa.** El esquema de la base de datos no cambia. |
 | Webhook de Meta | **No cambia.** Sigue la misma URL y la misma validación HMAC. |
 | Verificación SADEL | **No cambia.** El flujo de validación de teléfono sigue intacto. |
+| Observabilidad | Cada mensaje entrante genera una línea estructurada con su resultado y motivo (ver §6). |
 
 ### Lo que la captura NO hace
 
@@ -191,7 +192,109 @@ que quedaran en Redis son indescifrables y se limpian solos por TTL.
 
 ---
 
-## 6. Garantías de seguridad implementadas
+## 6. Observabilidad (Fase 1 — diagnóstico)
+
+Desde la auditoría del 12 de noviembre de 2026, el webhook emite **una línea
+estructurada por mensaje entrante** que permite distinguir un mensaje
+**capturado** de uno **descartado**, con el motivo exacto.
+
+### 6.1 Línea por mensaje
+
+```json
+{
+  "level": "INFO",
+  "message": "[WhatsApp Capture] Mensaje entrante",
+  "type": "button",
+  "result": "ignored",
+  "reason": "type_not_supported",
+  "phoneNumberIdMatch": true,
+  "redis": "not_attempted",
+  "messageIdHash": "68b741ef1d6c76f5",
+  "senderHash": "64b376cbebd2"
+}
+```
+
+| Campo | Significado |
+|---|---|
+| `type` | Tipo de mensaje declarado por Meta (`text`, `button`, `interactive`, `image`, `unsupported`, …). `n/a` en líneas a nivel de evento. |
+| `result` | `captured` \| `ignored` \| `error`. |
+| `reason` | Motivo exacto (vocabulario cerrado, ver 7.3). |
+| `phoneNumberIdMatch` | `true` si el `phone_number_id` del evento coincide con el autorizado; `false` si no coincide o no se recibió; `null` si se desconoce. |
+| `redis` | `ok` (guardado) \| `error` (fallo de Redis) \| `timeout` (se agotó el presupuesto de 1,5 s) \| `not_attempted` (no se intentó escribir). |
+| `messageIdHash` | Hash SHA-256 truncado (16 hex) del id de mensaje de Meta. **Coincide con el campo `id` del registro capturado**, así que permite correlacionar log ↔ consulta administrativa. |
+| `senderHash` | Pseudónimo HMAC-SHA256 (12 hex) del remitente (usa `from_user_id`/BSUID si Meta lo provee). Permite saber si dos mensajes vinieron del mismo remitente **sin exponer el número**. |
+
+### 6.2 Línea de resumen por evento
+
+```json
+{
+  "level": "INFO",
+  "message": "[WhatsApp Capture] Resumen de evento",
+  "total": 3,
+  "captured": 1,
+  "ignored": 2,
+  "error": 0,
+  "byReason": { "stored": 1, "type_not_supported": 2 },
+  "suppressed": 0,
+  "captureEnabled": true,
+  "phoneNumberIdMatch": true
+}
+```
+
+`suppressed` indica cuántas líneas de detalle se omitieron por el tope de
+volumen (25 por evento); los conteos del resumen **nunca** se truncan.
+
+### 6.3 Vocabulario de motivos
+
+| Motivo | Origen | Significado |
+|---|---|---|
+| `stored` | servicio | Mensaje capturado y cifrado en Redis. |
+| `type_not_supported` | ruta | El tipo de mensaje no es `text` (botón, interactiva, imagen, …). |
+| `empty_body` | ruta | El texto venía vacío o solo con espacios. |
+| `missing_metadata` | ruta | Meta no envió `metadata.phone_number_id`: no se puede validar el número destino. |
+| `phone_number_not_allowed` | servicio | El `phone_number_id` no es el autorizado. |
+| `duplicate` | servicio | Meta ya había entregado ese mensaje (mismo `wamid`). |
+| `disabled_by_flag` | servicio | `WHATSAPP_CAPTURE_ENABLED` no es `true`. |
+| `missing_phone_number_id` | servicio | Falta `WHATSAPP_CAPTURE_PHONE_NUMBER_ID`. |
+| `missing_encryption_key` | servicio | Falta `WHATSAPP_CAPTURE_ENCRYPTION_KEY`. |
+| `weak_encryption_key` | servicio | La clave dedicada es demasiado corta. |
+| `reused_credential` | servicio | La clave dedicada coincide con `JWT_SECRET` o `DATABASE_ENCRYPTION_KEY`. |
+| `storage_error` | servicio | Redis falló al escribir. |
+| `timeout` | servicio | Redis no respondió dentro del presupuesto de 1,5 s. |
+
+### 6.4 Privacidad y volumen
+
+- **Nunca** se registra: cuerpo del mensaje, código de verificación, teléfono en
+  claro, `phone_number_id` en claro, token, clave ni `wamid` original.
+- El remitente se registra como pseudónimo **HMAC** con la clave de captura
+  (o con una sal aleatoria por proceso si la captura está apagada): es
+  irreversible por enumeración incluso con el espacio reduced de números.
+- Volumen acotado: **1 línea por mensaje, máximo 25 por evento**, más 1 línea de
+  resumen. Un remitente que insista con cientos de adjuntos no inunda los logs y
+  el resumen conserva los conteos exactos.
+
+### 6.5 Cómo usar los logs para el caso BAIT
+
+```bash
+# 1. Ver el resultado y el motivo de cada mensaje entrante
+railway logs | grep '"\[WhatsApp Capture\] Mensaje entrante"'
+
+# 2. Confirmar si el número destino coincidía
+railway logs | grep '"phoneNumberIdMatch":false'
+
+# 3. Confirmar si dos mensajes vinieron del mismo remitente (comparar senderHash)
+railway logs | grep -o '"senderHash":"[a-f0-9]*"' | sort | uniq -c
+
+# 4. Correlacionar un log con el registro capturado (messageIdHash == id)
+```
+
+Si `result: "ignored"` y `reason: "type_not_supported"`, el mensaje llegó pero
+**no era de texto**: la captura no acepta ese tipo y el flujo SADEL tampoco
+(ambas rutas filtran por `type === 'text'`).
+
+---
+
+## 7. Garantías de seguridad implementadas
 
 - **Fail closed:** sin las tres variables obligatorias no se captura nada.
 - **Aislamiento por número:** solo se captura para el `phone_number_id` autorizado.
@@ -201,8 +304,10 @@ que quedaran en Redis son indescifrables y se limpian solos por TTL.
   se rechaza.
 - **Depósito mínimo:** no se guarda el payload de Meta, solo los campos listados
   en la sección 1.
-- **Logs limpios:** el backend solo registra conteos (`{"captured":1}`). Nunca el
-  texto, ni el código, ni el número completo, ni la clave.
+- **Logs limpios:** el backend registra solo conteos y metadatos de diagnóstico
+  (tipo, resultado, motivo, coincidencia de número, estado de Redis y
+  pseudónimos HMAC). Nunca el texto, ni el código, ni el número completo, ni la
+  clave. Ver §6.
 - **Acceso restringido:** la consulta exige `authenticate` + `authorize([ADMIN])`
   (el mismo middleware del resto de rutas administrativas) y tiene rate limit
   propio (30/min).
@@ -216,7 +321,7 @@ que quedaran en Redis son indescifrables y se limpian solos por TTL.
 
 ---
 
-## 7. Comportamiento con Meta
+## 8. Comportamiento con Meta
 
 - La **URL del webhook no cambia**. No hay que tocar nada en Meta.
 - La **firma HMAC** (`X-Hub-Signature-256`) se sigue validando igual. Un evento
@@ -229,7 +334,7 @@ que quedaran en Redis son indescifrables y se limpian solos por TTL.
 
 ---
 
-## 8. Reversión completa (eliminar la función)
+## 9. Reversión completa (eliminar la función)
 
 Si tras el incidente quieres quitar el código por completo:
 
@@ -247,8 +352,10 @@ Archivos que introduce la función:
 
 ```
 packages/backend/src/services/whatsapp-capture.service.ts
+packages/backend/src/services/whatsapp-capture-diagnostics.ts
 packages/backend/src/routes/admin-whatsapp-capture.routes.ts
 packages/backend/src/routes/whatsapp-capture.integration.test.ts
+packages/backend/src/routes/whatsapp-capture-diagnostics.integration.test.ts
 ```
 
 Archivos que modifica:
@@ -263,12 +370,22 @@ packages/backend/src/test-setup.ts                       (secretos de prueba del
 
 ---
 
-## 9. Diagnóstico rápido
+## 10. Diagnóstico rápido
+
+> Desde la Fase 1 (observabilidad) el diagnóstico ya no depende de inferir: cada
+> mensaje entrante deja una línea con su resultado y su motivo. Empieza por
+> `grep '"[WhatsApp Capture] Mensaje entrante"'` en los logs de Railway.
 
 | Síntoma | Causa probable | Qué revisar |
 |---|---|---|
-| `404 CAPTURE_DISABLED` | Flag apagado o variables faltantes | `WHATSAPP_CAPTURE_ENABLED` y las otras dos obligatorias en Railway |
-| `200` pero `total: 0` | El mensaje llegó antes de activar, expiró, o no es de tipo texto | Timeline de activación vs. envío; tipo del mensaje |
+| `404 CAPTURE_DISABLED` | Flag apagado o variables faltandas | `WHATSAPP_CAPTURE_ENABLED` y las otras dos obligatorias en Railway |
+| `200` pero `total: 0` | El mensaje no se capturó | Línea `[WhatsApp Capture] Mensaje entrante` del mismo instante: `reason` dice por qué |
 | `200` pero `total: 0` y hubo log `[WhatsApp Webhook] Captura temporal {"captured":1}` | Se capturó y expiró antes de consultar | TTL vs. tiempo transcurrido |
-| No aparece el log `[WhatsApp Webhook] Captura temporal` | El mensaje no era de texto, el `phone_number_id` no coincide o la captura está apagada | `WHATSAPP_CAPTURE_PHONE_NUMBER_ID` vs. el `phone_number_id` del evento |
+| `reason: "type_not_supported"` | El mensaje no era de texto (botón, interactiva, imagen, …) | Tipo declarado por Meta; ni la captura ni el flujo SADEL aceptan ese tipo |
+| `reason: "phone_number_not_allowed"` / `phoneNumberIdMatch: false` | Llegó a otro número de la WABA | `WHATSAPP_CAPTURE_PHONE_NUMBER_ID` vs. el `phone_number_id` del evento |
+| `reason: "missing_metadata"` | Meta no envió `metadata.phone_number_id` | Payload del evento |
+| `reason: "disabled_by_flag"` | La captura estaba apagada en ese instante | Reinicio/despliegue de Railway |
+| `reason: "storage_error"` / `redis: "error"` | Redis falló al escribir | Salud de Redis en Railway |
+| `reason: "timeout"` / `redis: "timeout"` | Redis no respondió en 1,5 s | Latencia de Redis |
+| `reason: "duplicate"` | Meta reentregó el mismo mensaje | Normal en reintentos de Meta |
 | El webhook devuelve `401` | Firma inválida | `WHATSAPP_WEBHOOK_APP_SECRET` sin cambios respecto a Meta |
