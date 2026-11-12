@@ -109,6 +109,8 @@ describe('observabilidad de la captura temporal de WhatsApp', () => {
     text?: string;
     buttonPayload?: string;
     interactiveTitle?: string;
+    errors?: unknown;
+    unsupported?: unknown;
   };
 
   function buildPayload(options: {
@@ -127,6 +129,8 @@ describe('observabilidad de la captura temporal de WhatsApp', () => {
           type: resolvedType,
         };
         if (message.fromUserId) base.from_user_id = message.fromUserId;
+        if (message.errors !== undefined) base.errors = message.errors;
+        if (message.unsupported !== undefined) base.unsupported = message.unsupported;
 
         if (resolvedType === 'text') {
           base.text = { body: message.text ?? '' };
@@ -180,6 +184,48 @@ describe('observabilidad de la captura temporal de WhatsApp', () => {
   }
 
   describe('motivos de descarte', () => {
+    it.each([[131051, 'hsm'], [131060, 'interactive']])(
+      'informa únicamente valores permitidos para unsupported', async (code, subtype) => {
+        enableCapture();
+        const secret = 'private-sensitive-value';
+        const response = await postWebhook(buildPayload({ messages: [{
+          type: 'unsupported', errors: [{ code, title: secret, message: secret, error_data: { details: secret } }],
+          unsupported: { type: subtype, extra: secret },
+        }] }));
+        expect(response.statusCode).toBe(200);
+        expect(response.body).toBe('OK');
+        expect(diagnostics()[0]).toMatchObject({ errorCode: code, unsupportedType: subtype, result: 'ignored', redis: 'not_attempted' });
+        expect(JSON.stringify(entries)).not.toContain(secret);
+        expect(consoleSink.join(' ')).not.toContain(secret);
+        expect(await listCapturedMessages()).toHaveLength(0);
+      }
+    );
+
+    it.each([
+      [undefined, undefined, 'missing', 'missing'],
+      [[], {}, 'missing', 'missing'],
+      [[{}], { type: null }, 'missing', 'missing'],
+      ['unexpected-secret', 'unexpected-secret', 'other', 'other'],
+      [[{ code: '131051' }], { type: 'unexpected-secret' }, 'other', 'other'],
+      [[{ code: 999999 }], { type: 42 }, 'other', 'other'],
+    ])('clasifica campos ausentes o inválidos sin exponer valores', async (errors, unsupported, code, subtype) => {
+      enableCapture();
+      await postWebhook(buildPayload({ messages: [{ type: 'unsupported', errors, unsupported }] }));
+      expect(diagnostics()[0]).toMatchObject({ errorCode: code, unsupportedType: subtype });
+      expect(JSON.stringify(entries)).not.toContain('unexpected-secret');
+      expect(consoleSink.join(' ')).not.toContain('unexpected-secret');
+    });
+
+    it('incluye el diagnóstico de unsupported sin metadatos y lo omite en otros tipos', async () => {
+      enableCapture();
+      await postWebhook(buildPayload({ omitMetadata: true, messages: [
+        { type: 'unsupported', errors: [{ code: 131051 }], unsupported: { type: 'image' } },
+        { type: 'button', errors: [{ code: 131060 }], unsupported: { type: 'hsm' } },
+      ] }));
+      expect(diagnostics()[0]).toMatchObject({ reason: 'missing_metadata', errorCode: 131051, unsupportedType: 'image' });
+      expect(diagnostics()[1]).not.toHaveProperty('errorCode');
+      expect(diagnostics()[1]).not.toHaveProperty('unsupportedType');
+    });
     it('informa type_not_supported para un mensaje que no es de texto', async () => {
       enableCapture();
 

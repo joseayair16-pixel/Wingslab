@@ -44,7 +44,34 @@ export type CaptureDiagnostic = {
   messageIdHash: string | null;
   /** Pseudónimo HMAC del remitente. */
   senderHash: string | null;
+  errorCode?: 131051 | 131060 | 'missing' | 'other';
+  unsupportedType?: string;
 };
+
+const UNSUPPORTED_TYPES = new Set([
+  'button', 'edit', 'errors', 'gif', 'group_invite', 'hsm', 'image',
+  'interactive', 'keep_in_chat', 'link_preview', 'list', 'location',
+  'media_placeholder', 'order', 'pin', 'poll_creation', 'poll_update',
+  'product', 'reaction',
+]);
+
+/** Solo valores de catálogo; nunca propagar texto libre del payload al log. */
+export function unsupportedDiagnostic(errors: unknown, unsupported: unknown): {
+  errorCode: 131051 | 131060 | 'missing' | 'other';
+  unsupportedType: string;
+} {
+  const first = Array.isArray(errors) ? errors[0] : undefined;
+  const code: unknown = first && typeof first === 'object' ? (first as { code?: unknown }).code : undefined;
+  const errorCode = code == null
+    ? (errors == null || (Array.isArray(errors) && errors.length === 0) || (first && typeof first === 'object') ? 'missing' : 'other')
+    : code === 131051 || code === 131060 ? code : 'other';
+  const subtype: unknown = unsupported && typeof unsupported === 'object'
+    ? (unsupported as { type?: unknown }).type : undefined;
+  const unsupportedType = subtype == null
+    ? (unsupported == null || typeof unsupported === 'object' ? 'missing' : 'other')
+    : typeof subtype === 'string' && UNSUPPORTED_TYPES.has(subtype) ? subtype : 'other';
+  return { errorCode, unsupportedType };
+}
 
 /**
  * Tope de líneas de diagnóstico por evento. Evita que un remitente que insista
