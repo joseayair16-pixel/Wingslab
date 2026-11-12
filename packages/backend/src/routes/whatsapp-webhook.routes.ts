@@ -1,6 +1,7 @@
 import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
 import { FastifyInstance } from 'fastify';
 import { getRedis } from '../config/redis';
+import { captureIncomingTextMessage } from '../services/whatsapp-capture.service';
 import { normalizeWhatsAppSenderPhone } from '../utils/mexican-phone';
 import { logger } from '../utils/logger';
 
@@ -9,6 +10,8 @@ const WEBHOOK_APP_SECRET = process.env.WHATSAPP_WEBHOOK_APP_SECRET || '';
 
 type WhatsAppMessage = {
   from?: string;
+  id?: string;
+  timestamp?: string;
   type?: string;
   text?: { body?: string };
 };
@@ -18,6 +21,10 @@ type WhatsAppWebhookChange = {
   value?: {
     messages?: WhatsAppMessage[];
     statuses?: unknown[];
+    metadata?: {
+      phone_number_id?: string;
+      display_phone_number?: string;
+    };
     [key: string]: unknown;
   };
 };
@@ -92,10 +99,55 @@ async function confirmChallengeFromMessage(message: WhatsAppMessage): Promise<vo
   logger.info('[WhatsApp Webhook] Verificación de teléfono completada', { intent: challenge.intent });
 }
 
+/**
+ * Captura temporal (opt-in) de los mensajes de TEXTO entrantes.
+ *
+ * No altera el flujo principal: si la captura está apagada —que es el estado por
+ * defecto— esta función no hace nada. Solo se guardan mensajes de texto
+ * dirigidos al `phone_number_id` autorizado y nunca se registra su contenido.
+ */
+async function captureMessagesFromChange(change: WhatsAppWebhookChange): Promise<void> {
+  const value = change.value ?? {};
+  const phoneNumberId = value.metadata?.phone_number_id;
+  // Sin metadata no se puede validar el número destino: se descarta (fail closed).
+  if (!phoneNumberId) return;
+
+  let captured = 0;
+  for (const message of value.messages ?? []) {
+    if (message.type !== 'text') continue;
+
+    const body = message.text?.body;
+    if (!body || typeof body !== 'string' || !body.trim()) continue;
+
+    const result = await captureIncomingTextMessage({
+      metaMessageId: message.id ?? null,
+      phoneNumberId,
+      from: message.from ?? '',
+      body,
+      timestamp: message.timestamp ?? null,
+    });
+
+    if (result.captured) captured += 1;
+  }
+
+  if (captured > 0) {
+    // Solo conteos: nunca contenido, códigos ni números.
+    logger.info('[WhatsApp Webhook] Captura temporal', { captured });
+  }
+}
+
 async function handleChange(change: WhatsAppWebhookChange): Promise<void> {
   const value = change.value ?? {};
 
   if (change.field === 'messages') {
+    // La captura nunca debe alterar el procesamiento principal ni la respuesta a
+    // Meta: si falla, se registra y se continúa con el flujo de códigos SADEL.
+    try {
+      await captureMessagesFromChange(change);
+    } catch {
+      logger.warn('[WhatsApp Webhook] Captura temporal fallida', { reason: 'capture_error' });
+    }
+
     for (const message of value.messages ?? []) {
       await confirmChallengeFromMessage(message);
     }
