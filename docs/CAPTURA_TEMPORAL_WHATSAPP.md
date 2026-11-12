@@ -200,6 +200,14 @@ estructurada por mensaje entrante** que permite distinguir un mensaje
 
 ### 6.1 Línea por mensaje
 
+Para mensajes cuyo tipo original sea `unsupported`, el diagnóstico añade
+`errorCode` (primer error: `131051`, `131060`, `missing` u `other`) y
+`unsupportedType` (categoría documentada permitida, `missing` u `other`). No
+se registran los campos de texto libre del error. Estos datos solo sirven para
+eventos nuevos; no recuperan eventos anteriores ni su contenido. Como en la
+instrumentación existente, si la captura está desactivada solo se emite el
+resumen y el límite de 25 detalles por evento sigue aplicando.
+
 ```json
 {
   "level": "INFO",

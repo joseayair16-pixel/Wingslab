@@ -13,6 +13,7 @@ import {
   normalizeMessageType,
   resultForReason,
   redisStatusForReason,
+  unsupportedDiagnostic,
 } from '../services/whatsapp-capture-diagnostics';
 import { normalizeWhatsAppSenderPhone } from '../utils/mexican-phone';
 import { logger } from '../utils/logger';
@@ -27,6 +28,8 @@ type WhatsAppMessage = {
   timestamp?: string;
   type?: string;
   text?: { body?: string };
+  errors?: unknown;
+  unsupported?: unknown;
 };
 
 type WhatsAppWebhookChange = {
@@ -163,6 +166,7 @@ async function captureMessagesFromChange(change: WhatsAppWebhookChange): Promise
         redis: 'not_attempted',
         messageIdHash: hashMetaMessageId(message.id),
         senderHash: hashSender(message.from_user_id ?? message.from),
+        ...(message.type === 'unsupported' ? unsupportedDiagnostic(message.errors, message.unsupported) : {}),
       });
     }
     recorder.summarize({ captureEnabled: true, phoneNumberIdMatch: false });
@@ -186,6 +190,7 @@ async function captureMessagesFromChange(change: WhatsAppWebhookChange): Promise
         redis: 'not_attempted',
         messageIdHash,
         senderHash,
+        ...(message.type === 'unsupported' ? unsupportedDiagnostic(message.errors, message.unsupported) : {}),
       });
       continue;
     }
