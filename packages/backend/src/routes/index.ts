@@ -17,7 +17,6 @@ import { registerUploadRoutes } from './uploads.routes';
 import { registerPublicDeliveryRoutes } from './public-delivery.routes';
 import { registerOrderChatRoutes } from './order-chat.routes';
 import { registerWhatsAppWebhookRoutes } from './whatsapp-webhook.routes';
-import { registerAdminWhatsAppCaptureRoutes } from './admin-whatsapp-capture.routes';
 import { registerAdminCategoriesRoutes } from './admin-categories.routes';
 import { registerAdminOrdersRoutes } from './admin-orders.routes';
 
@@ -43,7 +42,6 @@ export const setupRoutes = async (fastify: FastifyInstance) => {
   await registerDriverPanelRoutes(fastify);
   await registerOrderRoutes(fastify);
   await registerAdminRoutes(fastify);
-  await registerAdminWhatsAppCaptureRoutes(fastify);
   await registerUploadRoutes(fastify);
   await registerCustomerRoutes(fastify);
   await registerPublicDeliveryRoutes(fastify);
