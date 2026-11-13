@@ -128,10 +128,6 @@ const REQUIRED_ENV_VARS: EnvVar[] = [
   // con una clave anterior durante una rotación. Nunca se usan para cifrar.
   { key: 'DATABASE_ENCRYPTION_KEYS', required: false, secret: true },
   { key: 'REDIS_URL', required: false, secret: false },
-  // Clave dedicada y opcional para la captura temporal de WhatsApp. Es
-  // independiente de JWT_SECRET y de DATABASE_ENCRYPTION_KEY: si se repite una
-  // de ellas, la captura se rechaza en tiempo de ejecución.
-  { key: 'WHATSAPP_CAPTURE_ENCRYPTION_KEY', required: false, secret: true },
   { key: 'CORS_ORIGIN', required: false, secret: false },
   { key: 'VAPID_PUBLIC_KEY', required: false, secret: false },
   { key: 'VAPID_PRIVATE_KEY', required: false, secret: true },

@@ -1,20 +1,6 @@
 import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
 import { FastifyInstance } from 'fastify';
 import { getRedis } from '../config/redis';
-import {
-  captureIncomingTextMessage,
-  isAuthorizedCapturePhoneNumberId,
-  resolveWhatsAppCaptureStatus,
-} from '../services/whatsapp-capture.service';
-import {
-  CaptureDiagnosticRecorder,
-  hashMetaMessageId,
-  hashSender,
-  normalizeMessageType,
-  resultForReason,
-  redisStatusForReason,
-  unsupportedDiagnostic,
-} from '../services/whatsapp-capture-diagnostics';
 import { normalizeWhatsAppSenderPhone } from '../utils/mexican-phone';
 import { logger } from '../utils/logger';
 
@@ -23,13 +9,8 @@ const WEBHOOK_APP_SECRET = process.env.WHATSAPP_WEBHOOK_APP_SECRET || '';
 
 type WhatsAppMessage = {
   from?: string;
-  from_user_id?: string;
-  id?: string;
-  timestamp?: string;
   type?: string;
   text?: { body?: string };
-  errors?: unknown;
-  unsupported?: unknown;
 };
 
 type WhatsAppWebhookChange = {
@@ -37,10 +18,6 @@ type WhatsAppWebhookChange = {
   value?: {
     messages?: WhatsAppMessage[];
     statuses?: unknown[];
-    metadata?: {
-      phone_number_id?: string;
-      display_phone_number?: string;
-    };
     [key: string]: unknown;
   };
 };
@@ -115,141 +92,10 @@ async function confirmChallengeFromMessage(message: WhatsAppMessage): Promise<vo
   logger.info('[WhatsApp Webhook] Verificación de teléfono completada', { intent: challenge.intent });
 }
 
-/**
- * Captura temporal (opt-in) de los mensajes de TEXTO entrantes.
- *
- * No altera el flujo principal: si la captura está apagada —que es el estado por
- * defecto— esta función no hace nada. Solo se guardan mensajes de texto
- * dirigidos al `phone_number_id` autorizado y nunca se registra su contenido.
- *
- * Adicionalmente emite un diagnóstico estructurado POR MENSAJE (resultado,
- * motivo, coincidencia del número destino y estado de Redis) que permite
- * distinguir un mensaje capturado de uno descartado sin exponer información
- * sensible. La instrumentación es puramente observacional: no cambia qué se
- * almacena.
- */
-async function captureMessagesFromChange(change: WhatsAppWebhookChange): Promise<void> {
-  const value = change.value ?? {};
-  const recorder = new CaptureDiagnosticRecorder();
-
-  const phoneNumberId = value.metadata?.phone_number_id;
-  const messages = value.messages ?? [];
-  const captureStatus = resolveWhatsAppCaptureStatus();
-
-  // Captura apagada o mal configurada: el servicio devolvería {captured:false}
-  // para cada mensaje sin llegar a tocar Redis, así que se registra una sola
-  // vez. Comportamiento observable idéntico (nada se almacena en ambos casos).
-  if (!captureStatus.enabled) {
-    recorder.record({
-      type: 'n/a',
-      result: 'ignored',
-      reason: captureStatus.reason,
-      phoneNumberIdMatch: null,
-      redis: 'not_attempted',
-      messageIdHash: null,
-      senderHash: null,
-    });
-    recorder.summarize({ captureEnabled: false });
-    return;
-  }
-
-  // Sin metadata no se puede validar el número destino: se descarta todo el
-  // lote (fail closed), igual que antes. Se registra el tipo de cada mensaje
-  // para que el diagnóstico indique qué se recibió.
-  if (!phoneNumberId) {
-    for (const message of messages) {
-      recorder.record({
-        type: normalizeMessageType(message.type),
-        result: 'ignored',
-        reason: 'missing_metadata',
-        phoneNumberIdMatch: false,
-        redis: 'not_attempted',
-        messageIdHash: hashMetaMessageId(message.id),
-        senderHash: hashSender(message.from_user_id ?? message.from),
-        ...(message.type === 'unsupported' ? unsupportedDiagnostic(message.errors, message.unsupported) : {}),
-      });
-    }
-    recorder.summarize({ captureEnabled: true, phoneNumberIdMatch: false });
-    return;
-  }
-
-  const phoneNumberIdMatch = isAuthorizedCapturePhoneNumberId(phoneNumberId);
-
-  let captured = 0;
-  for (const message of messages) {
-    const type = normalizeMessageType(message.type);
-    const messageIdHash = hashMetaMessageId(message.id);
-    const senderHash = hashSender(message.from_user_id ?? message.from);
-
-    if (message.type !== 'text') {
-      recorder.record({
-        type,
-        result: 'ignored',
-        reason: 'type_not_supported',
-        phoneNumberIdMatch,
-        redis: 'not_attempted',
-        messageIdHash,
-        senderHash,
-        ...(message.type === 'unsupported' ? unsupportedDiagnostic(message.errors, message.unsupported) : {}),
-      });
-      continue;
-    }
-
-    const body = message.text?.body;
-    if (!body || typeof body !== 'string' || !body.trim()) {
-      recorder.record({
-        type,
-        result: 'ignored',
-        reason: 'empty_body',
-        phoneNumberIdMatch,
-        redis: 'not_attempted',
-        messageIdHash,
-        senderHash,
-      });
-      continue;
-    }
-
-    const result = await captureIncomingTextMessage({
-      metaMessageId: message.id ?? null,
-      phoneNumberId,
-      from: message.from ?? '',
-      body,
-      timestamp: message.timestamp ?? null,
-    });
-
-    if (result.captured) captured += 1;
-
-    recorder.record({
-      type,
-      result: resultForReason(result.reason),
-      reason: result.reason,
-      phoneNumberIdMatch,
-      redis: redisStatusForReason(result.reason),
-      messageIdHash,
-      senderHash,
-    });
-  }
-
-  if (captured > 0) {
-    // Solo conteos: nunca contenido, códigos ni números.
-    logger.info('[WhatsApp Webhook] Captura temporal', { captured });
-  }
-
-  recorder.summarize({ captureEnabled: true, phoneNumberIdMatch });
-}
-
 async function handleChange(change: WhatsAppWebhookChange): Promise<void> {
   const value = change.value ?? {};
 
   if (change.field === 'messages') {
-    // La captura nunca debe alterar el procesamiento principal ni la respuesta a
-    // Meta: si falla, se registra y se continúa con el flujo de códigos SADEL.
-    try {
-      await captureMessagesFromChange(change);
-    } catch {
-      logger.warn('[WhatsApp Webhook] Captura temporal fallida', { reason: 'capture_error' });
-    }
-
     for (const message of value.messages ?? []) {
       await confirmChallengeFromMessage(message);
     }
