@@ -3,9 +3,9 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "dev": "next dev -p 3003 --webpack",
-    "build": "next build --webpack",
-    "start": "next start",
+    "dev": "node ../../scripts/blocked-operation.cjs",
+    "build": "node ../../scripts/wingslab-run.cjs customer build",
+    "start": "node ../../scripts/wingslab-run.cjs customer start",
     "lint": "eslint . --ext .ts,.tsx",
     "type-check": "tsc --noEmit",
     "optimize:icons": "node scripts/optimize-tab-icons.mjs"

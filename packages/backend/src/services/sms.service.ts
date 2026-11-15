@@ -1,4 +1,5 @@
 import { logger } from '../utils/logger';
+import { externalServicesEnabled } from '../config/isolation';
 
 const SMS_360NRS_USER = process.env.SMS_360NRS_USER || '';
 const SMS_360NRS_PASSWORD = process.env.SMS_360NRS_PASSWORD || '';
@@ -7,6 +8,7 @@ const SMS_360NRS_HOST =
   process.env.SMS_360NRS_HOST || 'https://dashboard.360nrs.com';
 
 export function isSmsConfigured(): boolean {
+  if (!externalServicesEnabled()) return false;
   return Boolean(SMS_360NRS_USER && SMS_360NRS_PASSWORD);
 }
 

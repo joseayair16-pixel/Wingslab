@@ -1,115 +1,71 @@
-import fs from 'node:fs';
-import path from 'node:path';
+import { assertConnection, assertOrigin } from '@sadel/shared';
 
-let envLoaded = false;
+export type BackendConfiguration = Readonly<{
+  profile: 'host' | 'container'; instanceId: string; databaseUrl: string; redisUrl: string;
+  jwtSecret: string; encryptionKey: string; storageProvider: 'memory';
+}>;
+let configuration: BackendConfiguration | undefined;
+let identityVerified = false;
 
-function directoryExists(filePath: string): boolean {
-  try {
-    return fs.statSync(filePath).isDirectory();
-  } catch {
-    return false;
-  }
+export function isHermeticTest(): boolean {
+  return process.env.WINGSLAB_MODE === 'test';
 }
 
-function fileExists(filePath: string): boolean {
-  try {
-    return fs.statSync(filePath).isFile();
-  } catch {
-    return false;
+/** Pure validation: does not initialize clients, read files or mutate the process. */
+export function parseBackendConfiguration(env: Record<string, string | undefined>): BackendConfiguration {
+  const profile = env.WINGSLAB_PROFILE;
+  if (profile !== 'host' && profile !== 'container') throw new Error('[WingsLab] Invalid runtime profile.');
+  const instanceId = env.WINGSLAB_INSTANCE_ID || '';
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(instanceId)) {
+    throw new Error('[WingsLab] A new instance UUID is required.');
   }
-}
-
-function findWorkspaceRoot(startDir: string): string {
-  let currentDir = path.resolve(startDir);
-
-  // Bucle intencional: sube de directorio hasta hallar la raíz del workspace.
-  // eslint-disable-next-line no-constant-condition
-  while (true) {
-    if (
-      fileExists(path.join(currentDir, 'package.json')) &&
-      directoryExists(path.join(currentDir, 'packages', 'backend'))
-    ) {
-      return currentDir;
-    }
-
-    const parentDir = path.dirname(currentDir);
-    if (parentDir === currentDir) {
-      return path.resolve(startDir);
-    }
-
-    currentDir = parentDir;
-  }
-}
-
-function stripWrappingQuotes(value: string): string {
-  if (
-    (value.startsWith('"') && value.endsWith('"')) ||
-    (value.startsWith("'") && value.endsWith("'"))
-  ) {
-    return value.slice(1, -1);
-  }
-
-  return value;
-}
-
-function parseEnvFile(contents: string): Record<string, string> {
-  const parsed: Record<string, string> = {};
-
-  for (const rawLine of contents.split(/\r?\n/)) {
-    const line = rawLine.trim();
-
-    if (!line || line.startsWith('#')) {
-      continue;
-    }
-
-    const separatorIndex = line.indexOf('=');
-    if (separatorIndex <= 0) {
-      continue;
-    }
-
-    const key = line.slice(0, separatorIndex).trim();
-    const value = line.slice(separatorIndex + 1).trim();
-
-    if (!key || process.env[key] !== undefined) {
-      continue;
-    }
-
-    parsed[key] = stripWrappingQuotes(value);
-  }
-
-  return parsed;
+  const jwtSecret = env.WINGSLAB_JWT_SECRET || '';
+  const encryptionKey = env.WINGSLAB_DATABASE_ENCRYPTION_KEY || '';
+  if (jwtSecret.length < 32 || encryptionKey.length < 32 || jwtSecret === encryptionKey ||
+      /replace|sample|changeme/i.test(jwtSecret + encryptionKey)) throw new Error('[WingsLab] New independent keys required.');
+  if (env.WINGSLAB_STORAGE_PROVIDER !== 'memory') throw new Error('[WingsLab] Only simulated storage is authorized.');
+  return Object.freeze({ profile, instanceId, jwtSecret, encryptionKey, storageProvider: 'memory',
+    databaseUrl: assertConnection(env.WINGSLAB_DATABASE_URL, 'postgres', profile),
+    redisUrl: assertConnection(env.WINGSLAB_REDIS_URL, 'redis', profile),
+  });
 }
 
 export function loadEnvironment(): void {
-  if (envLoaded) {
-    return;
-  }
+  if (configuration) return;
 
-  const cwd = process.cwd();
-  const workspaceRoot = findWorkspaceRoot(cwd);
-  const backendRoot = path.join(workspaceRoot, 'packages', 'backend');
-  const backendCwd = path.resolve(cwd);
-  const uniqueCandidatePaths = new Set([
-    path.join(workspaceRoot, '.env.local'),
-    path.join(workspaceRoot, '.env'),
-    path.join(backendRoot, '.env.local'),
-    path.join(backendRoot, '.env'),
-    path.join(backendCwd, '.env.local'),
-    path.join(backendCwd, '.env'),
-  ]);
-  const candidatePaths = [...uniqueCandidatePaths];
+  // No .env discovery: inherited SaDeL credentials must never be consumed.
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const policy = require('../../../../config/wingslab.cjs');
+  policy.assertLocalAuthorization();
+  const inherited = Object.keys(process.env).filter((key) =>
+    /^(DATABASE_URL|REDIS_URL|JWT_SECRET|DATABASE_ENCRYPTION_KEYS?|FIREBASE_.*|GOOGLE_APPLICATION_CREDENTIALS|VAPID_.*|WHATSAPP_.*|SMS_.*|SMTP_.*|RESEND_.*|R2_.*|AWS_.*|CF_.*|PAYMENT_GATEWAY_.*)$/.test(key) && process.env[key]
+  );
+  if (inherited.length) throw new Error('[WingsLab] Legacy service variables present; use a clean process environment.');
+  configuration = parseBackendConfiguration(process.env);
+  process.env.DATABASE_URL = configuration.databaseUrl;
+  process.env.REDIS_URL = configuration.redisUrl;
+  process.env.JWT_SECRET = configuration.jwtSecret;
+  process.env.DATABASE_ENCRYPTION_KEY = configuration.encryptionKey;
+  process.env.PORT = '3101';
+  process.env.CORS_ORIGIN = [3100, 3102, 3103, 3104].map(port => `http://127.0.0.1:${port}`).join(',');
 
-  for (const filePath of candidatePaths) {
-    if (!fs.existsSync(filePath)) {
-      continue;
-    }
+  process.env.RESTAURANT_PANEL_URL = assertOrigin('http://127.0.0.1:3102', 'restaurant');
+  process.env.DRIVER_APP_URL = assertOrigin('http://127.0.0.1:3104', 'driver');
+  process.env.CUSTOMER_WEB_URL = assertOrigin('http://127.0.0.1:3103', 'customer');
+  process.env.WEBAPP_URL = process.env.CUSTOMER_WEB_URL;
+}
 
-    const fileContents = fs.readFileSync(filePath, 'utf8');
-    const parsedEntries = parseEnvFile(fileContents);
-    Object.assign(process.env, parsedEntries);
-  }
+export function getBackendConfiguration(): BackendConfiguration {
+  if (!configuration) throw new Error('[WingsLab] Runtime has not been explicitly initialized.');
+  return configuration;
+}
 
-  envLoaded = true;
+export function markServiceIdentityVerified(): void { identityVerified = true; }
+export function localOtpSimulationAllowed(): boolean {
+  return isHermeticTest() || (!!configuration && identityVerified && configuration.profile === 'container');
+}
+export function assertServiceIdentityVerified(): void {
+  if (!isHermeticTest() && !identityVerified) throw new Error('[WingsLab] Service identities have not been verified.');
 }
 
 type EnvVar = {
@@ -169,4 +125,4 @@ export function validateEnvironment(): void {
   }
 }
 
-loadEnvironment();
+// Deliberately no import-time initialization. Only the approved entry point calls loadEnvironment().

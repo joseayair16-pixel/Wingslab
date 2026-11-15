@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "profile": "container",
+  "instanceId": "",
+  "authorization": { "build": false, "runtime": false, "networkVerified": false },
+  "origins": {
+    "backend": "http://127.0.0.1:3101",
+    "admin": "http://127.0.0.1:3100",
+    "restaurant": "http://127.0.0.1:3102",
+    "customer": "http://127.0.0.1:3103",
+    "driver": "http://127.0.0.1:3104"
+  },
+  "backend": { "databaseUrl": "", "redisUrl": "", "jwtSecret": "", "encryptionKey": "" }
+}

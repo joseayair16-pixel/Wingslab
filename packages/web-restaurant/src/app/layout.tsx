@@ -1,3 +1,4 @@
+import { wingslabExternalServicesEnabled } from '@sadel/shared';
 import type { Metadata } from 'next';
 import Script from 'next/script';
 import '../styles/globals.css';
@@ -7,8 +8,8 @@ import AppUpdateBanner from '../components/AppUpdateBanner';
 import SplashScreen from '../components/SplashScreen';
 
 export const metadata: Metadata = {
-  title: 'SaDeL Restaurant',
-  description: 'Opera pedidos, menu y despacho desde el panel de restaurante de SaDeL.',
+  title: 'WingsLab · Operaciones',
+  description: 'Pedidos, cocina y reparto propio de WingsLab.',
   robots: {
     index: false,
     follow: false,
@@ -66,10 +67,10 @@ export default function RootLayout({
         <InstallAppButton />
         <AppUpdateBanner />
         <SplashScreen />
-        <Script 
+        {wingslabExternalServicesEnabled() ? <Script
           src={`https://maps.googleapis.com/maps/api/js?key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || ''}&libraries=places&loading=async`}
           strategy="lazyOnload"
-        />
+        /> : null}
         {children}
       </body>
     </html>

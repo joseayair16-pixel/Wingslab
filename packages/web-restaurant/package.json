@@ -3,12 +3,12 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "dev": "next dev -p 3002 --webpack",
-    "build": "next build --webpack",
-    "start": "next start",
+    "dev": "node ../../scripts/blocked-operation.cjs",
+    "build": "node ../../scripts/wingslab-run.cjs restaurant build",
+    "start": "node ../../scripts/wingslab-run.cjs restaurant start",
     "lint": "eslint . --ext .ts,.tsx",
     "type-check": "tsc --noEmit",
-    "test": "jest"
+    "test": "node ../../scripts/blocked-operation.cjs"
   },
   "dependencies": {
     "@iconify-json/fluent-emoji-flat": "^1.2.5",

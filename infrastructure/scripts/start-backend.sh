@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# Phase 1: never run the legacy migration/deployment sequence.
+echo '[WingsLab] Deployment and automatic migrations are blocked.' >&2
+exit 1
 # Resilient backend startup for Railway.
 #
 # - Retries `prisma migrate deploy` so a cold start or briefly-unavailable

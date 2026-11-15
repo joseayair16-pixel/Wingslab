@@ -5,7 +5,7 @@ const config: CapacitorConfig = {
   appName: 'SaDeL',
   webDir: 'www',
   server: {
-    url: 'https://pideloporsadel.app',
+    url: 'https://wingslab-disabled.invalid',
     cleartext: false,
     androidScheme: 'https',
     errorPath: 'offline.html',

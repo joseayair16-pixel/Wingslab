@@ -1,4 +1,5 @@
 import fs from 'fs';
+import { externalServicesEnabled } from '../config/isolation';
 import { cert, initializeApp, type ServiceAccount } from 'firebase-admin/app';
 import { getMessaging, type BaseMessage, type Message } from 'firebase-admin/messaging';
 import { prisma } from '../config/database';
@@ -29,6 +30,8 @@ type ServiceAccountInput = {
  * Si no hay ninguna, FCM queda desactivado (no-op) sin romper el envío web-push.
  */
 function initFcm(): void {
+  // Before any fs access or Firebase initialization, including credential paths.
+  if (!externalServicesEnabled()) return;
   try {
     const serviceAccountPath =
       process.env.FIREBASE_SERVICE_ACCOUNT_PATH || process.env.GOOGLE_APPLICATION_CREDENTIALS;

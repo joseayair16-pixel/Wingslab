@@ -3,8 +3,8 @@ import { MetadataRoute } from 'next';
 export default function manifest(): MetadataRoute.Manifest {
   return {
     id: '/',
-    name: 'SaDeL',
-    short_name: 'SaDeL',
+    name: 'WingsLab',
+    short_name: 'WingsLab',
     description: 'Pide comida y productos en línea. Recoge en tienda o recibe en casa con seguimiento en tiempo real.',
     lang: 'es-MX',
     start_url: '/',

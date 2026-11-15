@@ -11,6 +11,9 @@ import { getOrCreateRequestContext } from '../utils/request-context';
 const sendMessageSchema = z.object({
   content: z.string().min(1, 'El mensaje no puede estar vacío.').max(1000, 'El mensaje es demasiado largo.'),
 });
+export function isChatOrderActive(status: string): boolean {
+  return ['PENDING', 'CONFIRMED', 'PREPARING', 'READY', 'PICKED_UP', 'IN_TRANSIT'].includes(status);
+}
 
 export async function registerOrderChatRoutes(fastify: FastifyInstance): Promise<void> {
   // GET /orders/:orderId/messages - Retrieve historical chat messages for an order
@@ -44,13 +47,13 @@ export async function registerOrderChatRoutes(fastify: FastifyInstance): Promise
           },
         });
       }
+      if (!isChatOrderActive(order.status)) return reply.status(409).send({ success: false, error: { code: 'CHAT_CLOSED', message: 'El chat se cierra al finalizar o cancelar el pedido.' } });
 
-      // Check authorization: user must be either the customer, the restaurant, or an ADMIN
+      // Only the customer and restaurant assigned to the order may access its chat.
       const isCustomer = order.customer.user.id === user.sub;
       const isRestaurant = order.restaurant.userId === user.sub;
-      const isAdmin = user.role === UserRole.ADMIN;
 
-      if (!isCustomer && !isRestaurant && !isAdmin) {
+      if (!isCustomer && !isRestaurant) {
         return reply.status(403).send({
           success: false,
           error: {
@@ -163,6 +166,7 @@ export async function registerOrderChatRoutes(fastify: FastifyInstance): Promise
           },
         });
       }
+      if (!isChatOrderActive(order.status)) return reply.status(409).send({ success: false, error: { code: 'CHAT_CLOSED', message: 'El chat se cierra al finalizar o cancelar el pedido.' } });
 
       // Check authorization
       const isCustomer = order.customer.user.id === user.sub;

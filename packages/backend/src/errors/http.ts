@@ -1,13 +1,11 @@
 import { FastifyReply } from 'fastify';
 
 import { AppError, isAppError } from './app-error';
-import { recordErrorMetric } from '../utils/metrics';
 import { getOrCreateRequestContext } from '../utils/request-context';
 
 export function sendAppError(reply: FastifyReply, error: unknown): FastifyReply {
   if (isAppError(error)) {
     const requestContext = getOrCreateRequestContext(reply.request);
-    recordErrorMetric(error.code);
     return reply.status(error.statusCode).send({
       success: false,
       meta: {

@@ -7,7 +7,7 @@ import {
   persistStoredSession,
   requestJson,
 } from '@sadel/shared';
-import { SaDelLogo } from './SaDelLogo';
+import { WingsLabLogo as SaDelLogo } from './WingsLabLogo';
 
 type AuthMode = 'login' | 'register' | 'recovery';
 type AuthStep = 'welcome' | 'details' | 'contact' | 'request' | 'verify' | 'create-password' | 'new-password';
@@ -617,7 +617,7 @@ export const AuthModal = memo(function AuthModal({ isOpen, onClose, onSuccess, a
               <div className="text-center">
                 <h3 className="text-2xl font-bold tracking-[-0.03em] text-neutral-900">¡Hola!</h3>
                 <p className="mt-2 text-sm text-neutral-500 leading-relaxed">
-                  Inicia sesión para pedir por SaDeL
+                  Inicia sesión para pedir por WingsLab
                 </p>
 
                 <div className="mt-8 grid gap-3">

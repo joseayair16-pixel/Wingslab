@@ -1,3 +1,4 @@
+require('../../scripts/blocked-operation.cjs');
 const { PrismaClient } = require('./node_modules/@prisma/client');
 const prisma = new PrismaClient();
 

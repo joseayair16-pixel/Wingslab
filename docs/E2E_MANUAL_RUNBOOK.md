@@ -7,7 +7,6 @@ Validate the real user flow across:
 1. `web-customer`
 2. `web-restaurant`
 3. `web-driver`
-4. `web-admin` as supporting control panel
 
 The goal is to catch friction that automated tests do not cover:
 
@@ -23,7 +22,6 @@ The goal is to catch friction that automated tests do not cover:
 2. Redis running on `localhost:6379`
 3. Backend running on `http://localhost:3001`
 4. Frontends running:
-   - Admin: `http://localhost:3000`
    - Restaurant: `http://localhost:3002`
    - Customer: `http://localhost:3003`
    - Driver: `http://localhost:3004`
@@ -49,8 +47,8 @@ npm run verify:backend
 
 - Date: `2026-04-18 16:42 CST`
 - Result: manual E2E flow validated successfully in local environment.
-- Scope covered: `web-customer` -> `web-restaurant` -> `web-driver` -> `web-admin`.
-- Verified transitions: order creation, restaurant acceptance, preparation, ready for pickup, driver delivery flow, and final delivered state reflected in customer/admin views.
+- Scope covered: `web-customer` -> `web-restaurant` -> `web-driver`.
+- Verified transitions: order creation, restaurant acceptance, preparation, ready for pickup, driver delivery flow, and final delivered state reflected in customer views.
 
 ## Manual Flow
 

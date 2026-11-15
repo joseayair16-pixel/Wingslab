@@ -1,5 +1,6 @@
 'use client';
 
+import { getWingslabSocketUrl } from '@sadel/shared';
 import { useEffect, useRef, useState } from 'react';
 import { io } from 'socket.io-client';
 import { requestJson, readStoredSession, forceSessionExpired, handleSocketUnauthorized } from '@sadel/shared';
@@ -145,7 +146,7 @@ export default function DriverArrivalModal() {
     let cancelled = false;
 
     const getSocketToken = () => readStoredSession('sadel.customer').token || '';
-    const socket = io(process.env.NEXT_PUBLIC_SOCKET_URL || 'https://sadel-production.up.railway.app', {
+    const socket = io(getWingslabSocketUrl(), {
       path: '/socket.io',
       transports: ['websocket', 'polling'],
       autoConnect: true,

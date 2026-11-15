@@ -4,9 +4,9 @@
   "private": true,
   "description": "App nativa Android del comensal SaDeL (Capacitor + FCM).",
   "scripts": {
-    "sync": "cap sync",
-    "open:android": "cap open android",
-    "build:apk": "cd android && ./gradlew assembleRelease"
+    "sync": "node ../../scripts/blocked-operation.cjs",
+    "open:android": "node ../../scripts/blocked-operation.cjs",
+    "build:apk": "node ../../scripts/blocked-operation.cjs"
   },
   "dependencies": {
     "@capacitor-community/keep-awake": "^8.0.1",

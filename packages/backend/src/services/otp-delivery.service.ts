@@ -1,4 +1,5 @@
 import { logger } from '../utils/logger';
+import { localOtpSimulationAllowed } from '../config/env';
 import { isEmailConfigured, sendOtpEmail } from './email.service';
 import { isSmsConfigured, sendSmsOtp } from './sms.service';
 
@@ -40,23 +41,17 @@ export async function deliverOtp(params: {
   const result = (await preferredFirst()) ?? (await fallback());
   if (result) return result;
 
-  // Se lee en cada llamada para permitir config/entornos dinámicos (y tests).
-  const allowMockInProd = process.env.ALLOW_MOCK_OTP_IN_PROD === 'true';
-
-  // Sin canal real disponible y el modo simulación está permitido (fuera de
-  // producción o con la bandera explícita): el código solo se muestra ahí.
-  if (process.env.NODE_ENV !== 'production' || allowMockInProd) {
+  // Only an identified local runtime or hermetic test may expose a simulated OTP.
+  // NODE_ENV controls optimizations, not permission to simulate authentication.
+  if (localOtpSimulationAllowed()) {
     logger.warn(
       '[OTP] Sin canal de entrega real (email/SMS): el código solo se muestra en modo simulación.',
     );
-    console.log(`\n--- [OTP SIMULATOR] ---`);
-    console.log(`Para: ${email ?? 'sin email'} / tel ${phone}`);
-    console.log(`Código OTP: ${code}`);
-    console.log(`------------------------\n`);
+    // The caller receives mockCode explicitly; do not print contacts or OTPs.
     return { ok: true, channel: 'mock', mockCode: code };
   }
 
   // En producción sin bandera no se finge éxito ni se imprime el código.
-  logger.warn('[OTP] Sin canal de entrega real (email/SMS) en producción.');
+  logger.warn('[OTP] Sin canal real ni simulador local autorizado.');
   return { ok: false, channel: 'mock' };
 }

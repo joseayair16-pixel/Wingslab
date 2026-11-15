@@ -1,0 +1,247 @@
+# WingsLab local runtime (Fase 2B). Prepared and reviewed; only WingsLab resources.
+#
+# Topology (validated empirically on Docker Desktop/macOS):
+#   - `wingslab_2b_internal` (internal: true) holds PostgreSQL, Redis and the
+#     applications. There is no default route there: external DNS fails, the
+#     host gateway is unreachable and only the internal services answer.
+#   - Docker does NOT publish ports of internal networks, so `edge` is the single
+#     component on a routable network. It contains no application code and no
+#     credentials: it only relays TCP to fixed internal addresses, and publishes
+#     exclusively on 127.0.0.1.
+#
+# Profiles: `approved-2b` = data + edge; `approved-backend` = backend only;
+# `approved-apps` = frontends. Application startup requires separate authorization.
+name: wingslab-2b
+
+x-ownership: &ownership
+  org.wingslab.project: wingslab
+  org.wingslab.phase: "2b"
+  org.wingslab.instance: ${WINGSLAB_INSTANCE_ID:?New instance UUID required}
+
+x-data-service: &data-service
+  pull_policy: never
+  profiles: [approved-2b]
+  labels: *ownership
+  cap_drop: [ALL]
+  security_opt: [no-new-privileges:true]
+  restart: unless-stopped
+
+x-application: &application
+  image: ${WINGSLAB_RUNTIME_IMAGE:?Approved locally built WingsLab image required}
+  pull_policy: never
+  profiles: [approved-apps]
+  labels: *ownership
+  user: "1000:1000"
+  read_only: true
+  cap_drop: [ALL]
+  security_opt: [no-new-privileges:true]
+  restart: unless-stopped
+
+services:
+  postgres:
+    <<: *data-service
+    image: ${WINGSLAB_POSTGRES_IMAGE:?Approved local PostgreSQL image required}
+    # The official entrypoint must own PGDATA and switch to the postgres user.
+    cap_add: [CHOWN, DAC_OVERRIDE, FOWNER, SETUID, SETGID]
+    environment:
+      POSTGRES_USER: wingslab_owner
+      POSTGRES_DB: wingslab_local
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_owner
+      WINGSLAB_INSTANCE_ID: ${WINGSLAB_INSTANCE_ID:?New instance UUID required}
+    secrets: [postgres_owner, postgres_app]
+    volumes:
+      - wingslab_postgres:/var/lib/postgresql/data
+      - type: bind
+        source: ./postgres-identity.sh
+        target: /docker-entrypoint-initdb.d/010-wingslab-identity.sh
+        read_only: true
+        bind: { create_host_path: false }
+    networks:
+      wingslab:
+        ipv4_address: 172.30.240.10
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U wingslab_owner -d wingslab_local"]
+      interval: 3s
+      timeout: 5s
+      retries: 20
+
+  redis:
+    <<: *data-service
+    image: ${WINGSLAB_REDIS_IMAGE:?Approved local Redis image required}
+    cap_add: [SETUID, SETGID, CHOWN, FOWNER, DAC_OVERRIDE] # Allow the redis user to own /data and drop privileges.
+    environment:
+      WINGSLAB_INSTANCE_ID: ${WINGSLAB_INSTANCE_ID:?New instance UUID required}
+    secrets: [redis_app]
+    read_only: true
+    tmpfs: ["/run/wingslab:rw,nosuid,nodev,mode=1777"]
+    entrypoint: ["/bin/sh", "/policy/redis-identity.sh"]
+    volumes:
+      - wingslab_redis:/data
+      - type: bind
+        source: ./redis-identity.sh
+        target: /policy/redis-identity.sh
+        read_only: true
+        bind: { create_host_path: false }
+    networks:
+      wingslab:
+        ipv4_address: 172.30.240.11
+    healthcheck:
+      test: ["CMD", "test", "-f", "/run/wingslab/ready"]
+      interval: 3s
+      timeout: 5s
+      retries: 20
+
+  edge:
+    image: ${WINGSLAB_EDGE_IMAGE:?Approved local Alpine image required}
+    pull_policy: never
+    profiles: [approved-2b]
+    labels: *ownership
+    user: "1000:1000"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    init: true
+    sysctls:
+      net.ipv4.ip_forward: "0"
+      net.ipv6.conf.all.forwarding: "0"
+      net.ipv6.conf.all.disable_ipv6: "1"
+    tmpfs: ["/tmp:rw,nosuid,nodev,size=16m,uid=1000,gid=1000"]
+    entrypoint: ["/bin/sh", "/edge/start-edge.sh"]
+    volumes:
+      - type: bind
+        source: ./edge
+        target: /edge
+        read_only: true
+        bind: { create_host_path: false }
+    ports:
+      # Backend, customer and restaurant authorized; driver remains closed.
+      - "127.0.0.1:3101:3101"
+      - "127.0.0.1:3103:3103"
+      - "127.0.0.1:3102:3102"
+      - "127.0.0.1:15432:15432" # PostgreSQL (host tooling only)
+      - "127.0.0.1:16379:16379" # Redis (host tooling only)
+    networks:
+      edge_bridge:
+        ipv4_address: 172.31.240.10
+      wingslab:
+        ipv4_address: 172.30.240.30
+
+  backend:
+    <<: *application
+    image: ${WINGSLAB_BACKEND_IMAGE:?Verified local backend image required}
+    profiles: [approved-backend]
+    restart: "no"
+    sysctls:
+      net.ipv4.ip_forward: "0"
+      net.ipv6.conf.all.forwarding: "0"
+      net.ipv6.conf.all.disable_ipv6: "1"
+    command: ["node", "scripts/wingslab-run.cjs", "backend", "start"]
+    tmpfs:
+      - /tmp:rw,nosuid,nodev,size=256m,uid=1000,gid=1000
+    volumes:
+      - type: bind
+        source: ../../config/wingslab.local.json
+        target: /app/config/wingslab.local.json
+        read_only: true
+        bind: { create_host_path: false }
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+    networks:
+      wingslab:
+        ipv4_address: 172.30.240.21
+
+  customer:
+    <<: *application
+    image: ${WINGSLAB_CUSTOMER_IMAGE:-wingslab-customer:pending-phase-3}
+    profiles: [approved-customer]
+    restart: "no"
+    sysctls:
+      net.ipv4.ip_forward: "0"
+      net.ipv6.conf.all.forwarding: "0"
+      net.ipv6.conf.all.disable_ipv6: "1"
+    command: ["node", "scripts/wingslab-run.cjs", "customer", "start"]
+    tmpfs:
+      - /tmp:rw,nosuid,nodev,size=256m,uid=1000,gid=1000
+      - /app/packages/web-customer/.next/cache:rw,nosuid,nodev,size=128m,uid=1000,gid=1000
+    volumes:
+      - type: bind
+        source: ../../config/wingslab.customer.local.json
+        target: /app/config/wingslab.local.json
+        read_only: true
+        bind: { create_host_path: false }
+    depends_on:
+      backend: { condition: service_started }
+    networks:
+      wingslab:
+        ipv4_address: 172.30.240.22
+
+  restaurant:
+    <<: *application
+    image: ${WINGSLAB_RESTAURANT_IMAGE:-wingslab-restaurant:pending-phase-3b}
+    profiles: [approved-restaurant]
+    restart: "no"
+    sysctls:
+      net.ipv4.ip_forward: "0"
+      net.ipv6.conf.all.forwarding: "0"
+      net.ipv6.conf.all.disable_ipv6: "1"
+    command: ["node", "scripts/wingslab-run.cjs", "restaurant", "start"]
+    tmpfs:
+      - /tmp:rw,nosuid,nodev,size=256m,uid=1000,gid=1000
+      - /app/packages/web-restaurant/.next/cache:rw,nosuid,nodev,size=128m,uid=1000,gid=1000
+    volumes:
+      - type: bind
+        source: ../../config/wingslab.restaurant.local.json
+        target: /app/config/wingslab.local.json
+        read_only: true
+        bind: { create_host_path: false }
+    depends_on:
+      backend: { condition: service_started }
+    networks:
+      wingslab:
+        ipv4_address: 172.30.240.23
+
+  driver:
+    <<: *application
+    command: ["node", "scripts/wingslab-run.cjs", "driver", "start"]
+    tmpfs:
+      - /tmp:rw,nosuid,nodev,size=256m,uid=1000,gid=1000
+      - /app/packages/web-driver/.next/cache:rw,nosuid,nodev,size=128m,uid=1000,gid=1000
+    volumes:
+      - type: bind
+        source: ../../config/wingslab.frontend.local.json
+        target: /app/config/wingslab.local.json
+        read_only: true
+        bind: { create_host_path: false }
+    depends_on:
+      backend: { condition: service_started }
+    networks:
+      wingslab:
+        ipv4_address: 172.30.240.24
+
+secrets:
+  postgres_owner: { file: ./secrets/postgres-owner.txt }
+  postgres_app: { file: ./secrets/postgres-app.txt }
+  redis_app: { file: ./secrets/redis-app.txt }
+
+volumes:
+  wingslab_postgres: { name: wingslab_2b_postgres_v1, labels: *ownership }
+  wingslab_redis: { name: wingslab_2b_redis_v1, labels: *ownership }
+
+networks:
+  wingslab:
+    name: wingslab_2b_internal
+    labels: *ownership
+    internal: true
+    enable_ipv6: false
+    ipam:
+      config: [{ subnet: 172.30.240.0/24 }]
+  edge_bridge:
+    name: wingslab_2b_edge
+    labels: *ownership
+    internal: false
+    enable_ipv6: false
+    driver_opts:
+      com.docker.network.bridge.enable_icc: "false"
+    ipam:
+      config: [{ subnet: 172.31.240.0/24 }]

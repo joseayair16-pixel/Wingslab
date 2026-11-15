@@ -1,3 +1,4 @@
+import '../config/blocked-operation';
 import { PrismaClient, UserRole } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
 

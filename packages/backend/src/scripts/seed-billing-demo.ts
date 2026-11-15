@@ -1,3 +1,4 @@
+import '../config/blocked-operation';
 import { BillingCycle, OrderStatus, PaymentMethod, PaymentStatus } from '@prisma/client';
 
 import { prisma } from '../config/database';

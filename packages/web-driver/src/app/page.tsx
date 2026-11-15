@@ -1,4 +1,5 @@
 'use client';
+import { getWingslabSocketUrl } from '@sadel/shared';
 import { Check, ChevronRight, ChevronUp, Clock, Mail, RefreshCw, User, X } from 'lucide-react';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -1739,9 +1740,9 @@ export default function Home() {
     }
 
     setSocketStatus('connecting');
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || (typeof window !== 'undefined' && window.location.hostname !== 'localhost' && !window.location.hostname.includes('192.168.') ? 'https://sadel-production.up.railway.app' : '');
-    const socket = io(apiUrl || '', {
-      path: apiUrl ? '/socket.io' : '/api/socket.io',
+    const apiUrl = getWingslabSocketUrl();
+    const socket = io(apiUrl, {
+      path: '/socket.io',
       transports: apiUrl ? ['websocket', 'polling'] : ['polling'],
       autoConnect: true,
       reconnection: true,

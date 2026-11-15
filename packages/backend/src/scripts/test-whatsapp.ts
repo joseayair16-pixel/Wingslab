@@ -1,3 +1,4 @@
+import '../config/blocked-operation';
 import '../config/env';
 import { sendWhatsAppNewOrder } from '../services/whatsapp.service';
 

@@ -30,7 +30,8 @@ export function buildRequestContext(request: FastifyRequest) {
   return {
     requestId: requestContext.requestId,
     method: request.method,
-    url: request.url || '/',
+    // QR URLs contain bearer capabilities, never retain them in request logs.
+    url: (request.url || '/').replace(/(\/public\/delivery-ticket\/)[^/?]+/, '$1[withheld]'),
     route: request.routeOptions?.url || request.url || '/',
     actorId: user?.sub,
     actorRole: user?.role,

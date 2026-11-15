@@ -13,7 +13,6 @@ sadel/
 ├── packages/
 │   ├── backend/          # Node.js + Fastify API
 │   ├── shared/           # Shared types and utilities
-│   ├── web-admin/        # Admin dashboard (Next.js)
 │   ├── web-restaurant/   # Restaurant portal (Next.js)
 │   ├── web-customer/     # Customer app (Next.js)
 │   └── web-driver/       # Driver app (Next.js)

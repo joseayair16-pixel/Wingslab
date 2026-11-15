@@ -48,7 +48,7 @@ export default memo(function RatingModal({
               {isPickup ? '¡Pedido recogido!' : '¡Tu pedido ha llegado!'}
             </h3>
             <p className="mx-auto mt-2 max-w-xs text-sm leading-relaxed text-neutral-500">
-              {isPickup ? 'Gracias por comprar con SaDeL. Tu opinión nos ayuda a mejorar cada día.' : (bizType && bizType !== 'RESTAURANT' ? '¡Disfruta tu pedido! Gracias por confiar en SaDeL.' : '¡Buen provecho! Gracias por pedir con SaDeL.')}
+              {isPickup ? 'Gracias por comprar con WingsLab. Tu opinión nos ayuda a mejorar.' : '¡Buen provecho! Gracias por pedir con WingsLab.'}
             </p>
           </div>
 
@@ -115,7 +115,7 @@ export default memo(function RatingModal({
               </button>
             </div>
             <p className="text-center text-[11px] font-medium text-neutral-400">
-              Tu calificación ayuda a otros usuarios de SaDeL
+              Tu calificación ayuda a mejorar WingsLab
             </p>
           </div>
         </div>

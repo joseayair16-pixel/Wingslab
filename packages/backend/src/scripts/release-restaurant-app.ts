@@ -1,3 +1,4 @@
+import '../config/blocked-operation';
 /**
  * Sube el APK de restaurante a R2 (versionado + alias `latest`) y publica la
  * version en SystemSetting para que `GET /app/restaurant-version` la sirva.

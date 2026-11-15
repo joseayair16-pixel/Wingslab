@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { SaDelLogo } from './SaDelLogo';
+import { WingsLabLogo as SaDelLogo } from './WingsLabLogo';
 
 type Phase = 'visible' | 'fading' | 'gone';
 

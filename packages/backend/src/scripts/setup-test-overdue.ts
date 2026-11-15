@@ -1,4 +1,5 @@
 process.env.DATABASE_URL = 'postgresql://sadel_user:sadel_password_dev@127.0.0.1:5433/sadel_db';
+import '../config/blocked-operation';
 import { PrismaClient } from '@prisma/client';
 const prisma = new PrismaClient();
 

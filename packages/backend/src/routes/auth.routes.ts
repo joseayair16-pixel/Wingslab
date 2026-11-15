@@ -1,4 +1,5 @@
-import { Admin, Customer, UserRole } from '@prisma/client';
+import { UserRole } from '@prisma/client';
+import { businessPrincipalAllowed } from '../config/single-restaurant';
 import { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import bcryptjs from 'bcryptjs';
@@ -6,6 +7,7 @@ import bcryptjs from 'bcryptjs';
 import crypto from 'node:crypto';
 import { prisma } from '../config/database';
 import { getRedis } from '../config/redis';
+import { localOtpSimulationAllowed } from '../config/env';
 import { isEmailConfigured, sendOtpEmail } from '../services/email.service';
 import {
   createRefreshToken,
@@ -198,7 +200,7 @@ async function authenticateUserByRole(params: {
         },
   });
 
-  if (!user) {
+  if (!user || !await businessPrincipalAllowed(prisma, { sub: user.id, role: user.role })) {
     return { error: 'INVALID_CREDENTIALS' as const };
   }
 
@@ -221,24 +223,8 @@ async function authenticateUserByRole(params: {
   return { user };
 }
 
-async function createRelatedProfile(userId: string, role: UserRole): Promise<Admin | Customer | null> {
-  if (role === UserRole.ADMIN) {
-    return prisma.admin.create({
-      data: {
-        userId,
-      },
-    });
-  }
-
-  if (role === UserRole.CUSTOMER) {
-    return prisma.customer.create({
-      data: {
-        userId,
-      },
-    });
-  }
-
-  return null;
+function createCustomerProfile(userId: string) {
+  return prisma.customer.create({ data: { userId } });
 }
 
 export async function registerAuthRoutes(fastify: FastifyInstance): Promise<void> {
@@ -357,7 +343,7 @@ export async function registerAuthRoutes(fastify: FastifyInstance): Promise<void
       let mockCode: string | undefined;
       if (isEmailConfigured()) {
         delivered = (await sendOtpEmail(email, code)).ok;
-      } else if (process.env.NODE_ENV !== 'production' || process.env.ALLOW_MOCK_OTP_IN_PROD === 'true') {
+      } else if (localOtpSimulationAllowed()) {
         delivered = true;
         mockCode = code;
         console.log(`[OTP SIMULATOR] Email OTP generado (${parsed.data.intent}).`);
@@ -952,65 +938,6 @@ export async function registerAuthRoutes(fastify: FastifyInstance): Promise<void
     });
   });
 
-  fastify.post('/auth/admin-login', { config: { rateLimit: { max: 10, timeWindow: '15 minutes' } } }, async (request, reply) => {
-    const parsed = loginSchema.safeParse(request.body);
-
-    if (!parsed.success) {
-      return reply.status(400).send({
-        success: false,
-        error: {
-          code: 'INVALID_PAYLOAD',
-          message: parsed.error.issues[0]?.message || 'Datos invalidos.',
-        },
-      });
-    }
-
-    const result = await authenticateUserByRole({
-      phone: parsed.data.phone,
-      password: parsed.data.password,
-      role: UserRole.ADMIN,
-    });
-
-    if ('error' in result) {
-      const statusMap: Record<string, [number, string]> = {
-        INVALID_CREDENTIALS: [401, 'Usuario o contraseña incorrectos.'],
-      };
-      const [httpStatus, message] = statusMap[result.error as string] ?? [401, 'Credenciales inválidas.'];
-      return reply.status(httpStatus).send({
-        success: false,
-        error: { code: result.error, message },
-      });
-    }
-
-    const { user } = result;
-
-    const token = await reply.jwtSign({
-      sub: user.id,
-      phone: user.phone,
-      role: user.role,
-    });
-
-    const refreshToken = await createRefreshToken(user.id);
-
-    return reply.send({
-      success: true,
-      data: {
-        token,
-        refreshToken,
-        user: {
-          id: user.id,
-          name: user.name,
-          phone: user.phone,
-          role: user.role,
-          region: user.region,
-          status: user.status,
-          profilePhoto: user.profilePhoto,
-          lastName: user.lastName,
-        },
-      },
-    });
-  });
-
   fastify.post('/auth/driver-login', { config: { rateLimit: { max: 10, timeWindow: '15 minutes' } } }, async (request, reply) => {
     const parsed = loginSchema.safeParse(request.body);
 
@@ -1264,11 +1191,10 @@ export async function registerAuthRoutes(fastify: FastifyInstance): Promise<void
         throw err;
       }
 
-      await createRelatedProfile(createdUser.id, role);
+      await createCustomerProfile(createdUser.id);
 
       const user = await prisma.user.findUniqueOrThrow({
         where: { id: createdUser.id },
-        include: { admin: true },
       });
 
       const token = await reply.jwtSign({
@@ -1336,7 +1262,7 @@ export async function registerAuthRoutes(fastify: FastifyInstance): Promise<void
       where: { id: result.userId },
     });
 
-    if (!user) {
+    if (!user || !await businessPrincipalAllowed(prisma, { sub: user.id, role: user.role })) {
       return reply.status(401).send({
         success: false,
         error: {

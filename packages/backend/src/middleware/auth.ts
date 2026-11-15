@@ -1,7 +1,6 @@
 import { UserRole } from '@prisma/client';
 import { FastifyReply, FastifyRequest } from 'fastify';
 import { prisma } from '../config/database';
-import { recordErrorMetric } from '../utils/metrics';
 import { getOrCreateRequestContext } from '../utils/request-context';
 
 type AuthenticatedUser = {
@@ -42,7 +41,6 @@ export async function authenticate(request: FastifyRequest, reply: FastifyReply)
     await request.jwtVerify();
   } catch {
     const requestContext = getOrCreateRequestContext(request);
-    recordErrorMetric('UNAUTHORIZED');
     return reply.status(401).send({
       success: false,
       meta: {
@@ -59,7 +57,6 @@ export async function authenticate(request: FastifyRequest, reply: FastifyReply)
 
   if (!authenticatedUser?.sub) {
     const requestContext = getOrCreateRequestContext(request);
-    recordErrorMetric('UNAUTHORIZED');
     return reply.status(401).send({
       success: false,
       meta: {
@@ -90,7 +87,6 @@ export async function authenticate(request: FastifyRequest, reply: FastifyReply)
     if (status === null) {
       // El usuario ya no existe en la BD (fue eliminado). La sesión ya no es válida.
       const requestContext = getOrCreateRequestContext(request);
-      recordErrorMetric('UNAUTHORIZED');
       return reply.status(401).send({
         success: false,
         meta: { requestId: requestContext.requestId },
@@ -107,7 +103,6 @@ export async function authenticate(request: FastifyRequest, reply: FastifyReply)
       // operaciones (pedir, repartir, abrir negocio) quedan bloqueadas en cada
       // ruta con checks específicos.
       const requestContext = getOrCreateRequestContext(request);
-      recordErrorMetric('UNAUTHORIZED');
       return reply.status(403).send({
         success: false,
         meta: { requestId: requestContext.requestId },
@@ -122,7 +117,6 @@ export async function authenticate(request: FastifyRequest, reply: FastifyReply)
     // 503 para que el cliente lo trate como transitorio y reintente en vez
     // de cerrar la sesión. Un 401 aquí mentiría sobre la validez del token.
     const requestContext = getOrCreateRequestContext(request);
-    recordErrorMetric('AUTH_VALIDATION_ERROR');
     return reply.status(503).send({
       success: false,
       meta: { requestId: requestContext.requestId },
@@ -140,7 +134,6 @@ export function authorize(allowedRoles: UserRole[]) {
 
     if (!user) {
       const requestContext = getOrCreateRequestContext(request);
-      recordErrorMetric('UNAUTHORIZED');
       return reply.status(401).send({
         success: false,
         meta: { requestId: requestContext.requestId },
@@ -153,7 +146,6 @@ export function authorize(allowedRoles: UserRole[]) {
 
     if (!allowedRoles.includes(user.role)) {
       const requestContext = getOrCreateRequestContext(request);
-      recordErrorMetric('FORBIDDEN');
       return reply.status(403).send({
         success: false,
         meta: { requestId: requestContext.requestId },

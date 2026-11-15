@@ -1,6 +1,6 @@
+import { getWingslabSiteUrl, wingslabExternalServicesEnabled } from '@sadel/shared';
 import type { Metadata } from 'next';
 import Script from 'next/script';
-import { Inter, Plus_Jakarta_Sans } from 'next/font/google';
 import '../styles/globals.css';
 import ServiceWorkerRegister from './ServiceWorkerRegister';
 import InstallAppButton from '../components/InstallAppButton';
@@ -8,29 +8,17 @@ import AppUpdateBanner from '../components/AppUpdateBanner';
 import SplashScreen from '../components/SplashScreen';
 import DriverArrivalModal from '../components/DriverArrivalModal';
 
-const inter = Inter({
-  subsets: ['latin'],
-  variable: '--font-inter',
-  display: 'swap',
-});
-
-const plusJakartaSans = Plus_Jakarta_Sans({
-  subsets: ['latin'],
-  variable: '--font-plus-jakarta-sans',
-  display: 'swap',
-});
-
-const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://pideloporsadel.app';
+const siteUrl = getWingslabSiteUrl();
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
   title: {
-    default: 'SaDeL — Pídelo por aquí',
-    template: '%s | SaDeL',
+    default: 'WingsLab — Del antojo a tu puerta',
+    template: '%s | WingsLab',
   },
   description:
-    'Pide comida y productos en línea desde tu localidad. Entrega a domicilio o recogida en tienda, pago en efectivo o por transferencia y seguimiento en tiempo real. El comercio local, ahora en digital con SaDeL.',
-  applicationName: 'SaDeL',
+    'El menú de WingsLab, promociones y pedidos con recogida o reparto propio. Sigue tu pedido desde la cocina hasta la entrega.',
+  applicationName: 'WingsLab',
   manifest: '/manifest.webmanifest',
   alternates: {
     canonical: '/',
@@ -39,17 +27,17 @@ export const metadata: Metadata = {
     'pedir comida en línea',
     'entrega a domicilio',
     'recoger en tienda',
-    'restaurantes cerca de mí',
+    'menú WingsLab',
     'comida rápida',
     'pídelo por aquí',
-    'SaDeL',
+    'WingsLab',
   ],
   openGraph: {
     type: 'website',
-    siteName: 'SaDeL',
+    siteName: 'WingsLab',
     locale: 'es_MX',
     url: siteUrl,
-    title: 'SaDeL — Pídelo por aquí',
+    title: 'WingsLab — Del antojo a tu puerta',
     description:
       'Pide comida y productos en línea desde tu localidad. Entrega a domicilio o recogida en tienda, con seguimiento en tiempo real.',
     images: [
@@ -57,13 +45,13 @@ export const metadata: Metadata = {
         url: `${siteUrl}/app-icon-512.png`,
         width: 512,
         height: 512,
-        alt: 'SaDeL',
+        alt: 'WingsLab',
       },
     ],
   },
   twitter: {
     card: 'summary',
-    title: 'SaDeL — Pídelo por aquí',
+    title: 'WingsLab — Del antojo a tu puerta',
     description: 'Pide comida y productos en línea desde tu localidad.',
     images: [`${siteUrl}/app-icon-512.png`],
   },
@@ -82,7 +70,7 @@ export const metadata: Metadata = {
   appleWebApp: {
     capable: true,
     statusBarStyle: 'default',
-    title: 'SaDeL',
+    title: 'WingsLab',
   },
   other: {
     'mobile-web-app-capable': 'yes',
@@ -102,7 +90,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="es" className={`${inter.variable} ${plusJakartaSans.variable}`} suppressHydrationWarning>
+    <html lang="es" suppressHydrationWarning>
       <head>
         <script
           dangerouslySetInnerHTML={{
@@ -136,11 +124,9 @@ export default function RootLayout({
           name="viewport"
           content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover"
         />
-        <link rel="preconnect" href="https://maps.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
       </head>
       <body>
-        {process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY ? (
+        {wingslabExternalServicesEnabled() && process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY ? (
           <Script
             src={`https://maps.googleapis.com/maps/api/js?key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}&libraries=places&loading=async`}
             strategy="lazyOnload"

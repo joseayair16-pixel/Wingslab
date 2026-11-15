@@ -8,6 +8,8 @@ WORKDIR /app
 
 # Copy root config
 COPY package.json package-lock.json tsconfig.json ./
+COPY config ./config
+COPY scripts ./scripts
 
 # Copy packages
 COPY packages/shared ./packages/shared
@@ -35,6 +37,9 @@ RUN apk add --no-cache dumb-init tini
 
 # Copy root package files
 COPY package.json package-lock.json ./
+COPY --from=builder /app/config ./config
+COPY --from=builder /app/scripts ./scripts
+COPY --from=builder /app/packages/shared/src/wingslab-policy.js ./packages/shared/src/wingslab-policy.js
 
 # Copy built artifacts
 COPY --from=builder /app/packages/shared/dist ./packages/shared/dist
@@ -57,4 +62,4 @@ EXPOSE 3001
 # Use tini for proper signal handling
 ENTRYPOINT ["/sbin/tini", "--"]
 
-CMD ["node", "packages/backend/dist/index.js"]
+CMD ["node", "-e", "throw new Error('WingsLab Phase 1: legacy container startup blocked')"]

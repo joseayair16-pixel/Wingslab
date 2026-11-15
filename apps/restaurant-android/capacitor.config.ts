@@ -5,7 +5,7 @@ const config: CapacitorConfig = {
   appName: 'SaDeL Restaurant',
   webDir: 'www',
   server: {
-    url: 'https://tutienda.pideloporsadel.app',
+    url: 'https://wingslab-disabled.invalid',
     cleartext: false,
     androidScheme: 'https',
     errorPath: 'offline.html',

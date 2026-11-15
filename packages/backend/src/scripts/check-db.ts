@@ -1,3 +1,4 @@
+import '../config/blocked-operation';
 import { prisma } from '../config/database';
 
 async function main() {

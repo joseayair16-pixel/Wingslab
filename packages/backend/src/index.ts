@@ -3,23 +3,27 @@ process.env.TZ = 'America/Mexico_City';
 
 import { prisma } from './config/database';
 import { closeRedis } from './config/redis';
-import { buildApp } from './app';
+import { initializeDatabase } from './config/database';
+import { initializeRedis } from './config/redis';
+import { loadEnvironment, getBackendConfiguration, markServiceIdentityVerified } from './config/env';
 import { logger } from './utils/logger';
 import type { FastifyInstance } from 'fastify';
-
-const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3001;
-const NODE_ENV = process.env.NODE_ENV || 'development';
 
 let fastify: FastifyInstance | null = null;
 
 async function startServer() {
   try {
+    loadEnvironment();
+    const config = getBackendConfiguration();
+    await initializeDatabase(config);
+    await initializeRedis(config);
+    markServiceIdentityVerified();
+    const { buildApp } = await import('./app');
     fastify = await buildApp();
 
-    await fastify.listen({ port: PORT, host: '0.0.0.0' });
+    await fastify.listen({ port: 3101, host: config.profile === 'container' ? '0.0.0.0' : '127.0.0.1' });
 
-    logger.info(`Server running at http://localhost:${PORT}`);
-    logger.info(`Environment: ${NODE_ENV}`);
+    logger.info('WingsLab backend: service identities verified; external capabilities disabled.');
   } catch (error) {
     logger.error('Failed to start server:', error);
     process.exit(1);

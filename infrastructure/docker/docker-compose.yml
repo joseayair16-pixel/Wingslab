@@ -1,7 +1,10 @@
+name: wingslab-quarantined
 services:
   postgres:
+    profiles: [legacy-blocked]
+    entrypoint: ["sh", "-c", "echo 'WingsLab: legacy service blocked' >&2; exit 1"]
     image: postgres:16-alpine
-    container_name: sadel-postgres
+    container_name: wingslab-quarantined-postgres
     environment:
       POSTGRES_USER: sadel_user
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-sadel_password_dev}
@@ -20,8 +23,10 @@ services:
       - sadel-network
 
   redis:
+    profiles: [legacy-blocked]
+    entrypoint: ["sh", "-c", "echo 'WingsLab: legacy service blocked' >&2; exit 1"]
     image: redis:7-alpine
-    container_name: sadel-redis
+    container_name: wingslab-quarantined-redis
     ports:
       - "6379:6379"
     command: redis-server --appendonly yes
@@ -37,10 +42,12 @@ services:
       - sadel-network
 
   backend:
+    profiles: [legacy-blocked]
+    entrypoint: ["node", "-e", "throw new Error('WingsLab: legacy service blocked')"]
     build:
       context: ../..
       dockerfile: infrastructure/docker/Dockerfile.backend
-    container_name: sadel-backend
+    container_name: wingslab-quarantined-backend
     environment:
       NODE_ENV: ${NODE_ENV:-development}
       DATABASE_URL: postgresql://sadel_user:${POSTGRES_PASSWORD:-sadel_password_dev}@postgres:5432/sadel_db
@@ -61,33 +68,16 @@ services:
     networks:
       - sadel-network
 
-  web-admin:
-    build:
-      context: ../..
-      dockerfile: infrastructure/docker/Dockerfile.web
-      args:
-        APP: web-admin
-        PORT: 3000
-    container_name: sadel-web-admin
-    environment:
-      NODE_ENV: ${NODE_ENV:-development}
-      NEXT_PUBLIC_API_URL: http://localhost:3001
-    ports:
-      - "3000:3000"
-    depends_on:
-      - backend
-    restart: unless-stopped
-    networks:
-      - sadel-network
-
   web-restaurant:
+    profiles: [legacy-blocked]
+    entrypoint: ["node", "-e", "throw new Error('WingsLab: legacy service blocked')"]
     build:
       context: ../..
       dockerfile: infrastructure/docker/Dockerfile.web
       args:
         APP: web-restaurant
         PORT: 3002
-    container_name: sadel-web-restaurant
+    container_name: wingslab-quarantined-web-restaurant
     environment:
       NODE_ENV: ${NODE_ENV:-development}
       NEXT_PUBLIC_API_URL: http://localhost:3001
@@ -100,13 +90,15 @@ services:
       - sadel-network
 
   web-customer:
+    profiles: [legacy-blocked]
+    entrypoint: ["node", "-e", "throw new Error('WingsLab: legacy service blocked')"]
     build:
       context: ../..
       dockerfile: infrastructure/docker/Dockerfile.web
       args:
         APP: web-customer
         PORT: 3003
-    container_name: sadel-web-customer
+    container_name: wingslab-quarantined-web-customer
     environment:
       NODE_ENV: ${NODE_ENV:-development}
       NEXT_PUBLIC_API_URL: http://localhost:3001
@@ -119,13 +111,15 @@ services:
       - sadel-network
 
   web-driver:
+    profiles: [legacy-blocked]
+    entrypoint: ["node", "-e", "throw new Error('WingsLab: legacy service blocked')"]
     build:
       context: ../..
       dockerfile: infrastructure/docker/Dockerfile.web
       args:
         APP: web-driver
         PORT: 3004
-    container_name: sadel-web-driver
+    container_name: wingslab-quarantined-web-driver
     environment:
       NODE_ENV: ${NODE_ENV:-development}
       NEXT_PUBLIC_API_URL: http://localhost:3001

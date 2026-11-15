@@ -1,3 +1,4 @@
+import '../config/blocked-operation';
 import { sendPushNotification } from '../services/notification.service';
 import { prisma } from '../config/database';
 import { logger } from '../utils/logger';

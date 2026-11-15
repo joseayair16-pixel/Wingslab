@@ -1,9 +1,11 @@
 'use client';
 import { Clock } from 'lucide-react';
 
-import React, { useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 
 interface DashboardSectionProps {
+  apiBase: string;
+  token: string;
   orders: any[];
   profile: any;
   products: any[];
@@ -44,7 +46,7 @@ interface DashboardSectionProps {
 }
 
 export const DashboardSection = React.memo(function DashboardSection({
-  orders, profile, products, drivers, kitchenClockNow,
+  apiBase, token, orders, profile, products, drivers, kitchenClockNow,
   selectedWeekOffset, dashboardChartView, revenueMode, isPrintingTicket,
   unreadMessagesMap, updatingOperationalStatus, isBusinessOpen, isBusinessPaused,
   isWithinHours, operationalStatusLabel, restaurantName,
@@ -55,6 +57,17 @@ export const DashboardSection = React.memo(function DashboardSection({
   getRestaurantCollectionAmount,   getCustomerOrigin, formatWeekday, formatCalendarDate,
   Panel,
 }: DashboardSectionProps) {
+  const [reportDays, setReportDays] = useState(30);
+  const [report, setReport] = useState<any>(null);
+  const [reportError, setReportError] = useState('');
+  useEffect(() => {
+    let active = true;
+    void fetch(`${apiBase}/restaurant-panel/reportes?days=${reportDays}`, { headers: { Authorization: `Bearer ${token}` } })
+      .then(async r => { const json = await r.json(); if (!r.ok) throw Error(json.error?.message || 'No se pudo cargar el reporte.'); return json.data; })
+      .then(value => { if (active) { setReport(value); setReportError(''); } })
+      .catch(error => { if (active) setReportError(error.message); });
+    return () => { active = false; };
+  }, [apiBase, token, reportDays]);
   const ProfileBadge = React.useCallback(function ProfileBadge({ tone, label, detail }: { tone: string; label: string; detail: string }) {
     const colorMap: Record<string, string> = {
       amber: 'bg-amber-50 text-amber-800 border-amber-200/50',
@@ -305,6 +318,11 @@ export const DashboardSection = React.memo(function DashboardSection({
 
   return (
     <div className="space-y-3 md:space-y-5">
+      <section className="rounded-2xl border border-orange-100 bg-white p-4 shadow-sm md:p-5" aria-labelledby="business-report-title">
+        <div className="flex flex-wrap items-center justify-between gap-3"><div><p className="text-xs font-bold uppercase tracking-widest text-orange-700">Resultados del negocio</p><h2 id="business-report-title" className="text-lg font-bold">Ventas y operación</h2></div><label className="text-sm font-medium">Periodo <select value={reportDays} onChange={e=>setReportDays(Number(e.target.value))} className="ml-2 rounded-lg border px-3 py-2"><option value={1}>Hoy</option><option value={7}>7 días</option><option value={30}>30 días</option><option value={90}>90 días</option></select></label></div>
+        {reportError&&<p role="alert" className="mt-3 text-sm text-red-700">{reportError}</p>}
+        {report&&<><div className="mt-4 grid grid-cols-2 gap-2 md:grid-cols-4"><div className="rounded-xl bg-emerald-50 p-3"><p className="text-xs text-emerald-800">Ventas netas completadas</p><b className="text-lg">{formatCurrency(report.sales.net)}</b></div><div className="rounded-xl bg-sky-50 p-3"><p className="text-xs text-sky-800">Ticket promedio</p><b className="text-lg">{formatCurrency(report.sales.averageTicket)}</b></div><div className="rounded-xl bg-amber-50 p-3"><p className="text-xs text-amber-800">En preparación / listos</p><b className="text-lg">{report.orders.preparing} / {report.orders.ready}</b></div><div className="rounded-xl bg-rose-50 p-3"><p className="text-xs text-rose-800">Cancelados</p><b className="text-lg">{report.orders.cancelled}</b></div></div><div className="mt-4 grid gap-4 lg:grid-cols-2"><div><h3 className="text-sm font-bold">Más vendidos</h3>{report.topProducts.length?report.topProducts.slice(0,5).map((p:any)=><div key={p.productId} className="mt-2 flex justify-between gap-2 text-sm"><span className="truncate">{p.name}</span><b>{p.units} uds.</b></div>):<p className="mt-2 text-sm text-neutral-500">Sin ventas completadas en este periodo.</p>}</div><div><h3 className="text-sm font-bold">Clientes y servicio</h3><p className="mt-2 text-sm">Compradores: <b>{report.customers.uniqueBuyers}</b> · recurrentes: <b>{report.customers.repeatBuyers}</b> · nuevos (primera compra WingsLab): <b>{report.customers.newBuyers}</b></p><p className="mt-1 text-sm">Preparación media: <b>{report.operations.averagePreparationMinutes===null?'—':`${report.operations.averagePreparationMinutes} min`}</b> · entrega media: <b>{report.operations.averageDeliveryMinutes===null?'—':`${report.operations.averageDeliveryMinutes} min`}</b></p><p className="mt-1 text-sm">Pedidos: {report.orders.pending} pendientes · {report.orders.inTransit} en reparto · {report.orders.delivered} entregados/recogidos</p></div></div>{report.promotions.length>0&&<div className="mt-4 border-t pt-3"><h3 className="text-sm font-bold">Uso de cupones completados</h3><div className="mt-2 flex flex-wrap gap-2">{report.promotions.slice(0,6).map((p:any)=><span key={p.code} className="rounded-full bg-violet-50 px-3 py-1 text-xs text-violet-900">{p.code}: {p.uses} usos · {formatCurrency(p.discount)}</span>)}</div></div>}</>}
+      </section>
       {wasAutoPausedByInactivity && (
         <div className="flex flex-col gap-3 rounded-[20px] border border-sky-200 bg-gradient-to-r from-sky-50 to-blue-50/60 px-5 py-4 shadow-[0_4px_16px_rgba(14,165,233,0.08)] sm:flex-row sm:items-center">
           <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-sky-100 text-xl text-sky-600">☕</span>

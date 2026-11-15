@@ -45,6 +45,7 @@ interface DeliveryTicketData {
   handoverPin?: string | null;
   driverArrivedAtCustomer?: string | null;
   isSupportDelivery?: boolean;
+  isOwnDelivery?: boolean;
   supportRestaurant?: {
     id: string;
     name: string;
@@ -401,7 +402,7 @@ export default function DeliveryTicketPage({ params }: PageProps) {
       const waitingHandoverForToken =
         typeof window !== 'undefined' &&
         localStorage.getItem(`sadel_pickupwaiting_${token || ''}`) === 'true';
-      if (token && waitingHandoverForToken) {
+      if (token && (waitingHandoverForToken || fetchedTicket?.isOwnDelivery)) {
         setSelectedToken(token);
       } else {
         setSelectedToken(null);
@@ -834,6 +835,7 @@ export default function DeliveryTicketPage({ params }: PageProps) {
 
   // Completar entrega real tras confirmación del modal
   const executeDeliver = async () => {
+    if (submitting) return;
     const targetToken = selectedToken;
     if (!targetToken) return;
 
@@ -852,7 +854,7 @@ export default function DeliveryTicketPage({ params }: PageProps) {
       const response = await fetch(`${apiBase}/public/delivery-ticket/${targetToken}/entregar`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(isCash ? {} : { pin }),
+        body: JSON.stringify(isCash ? { cashReceived: true } : { pin }),
       });
 
       const data = await response.json();
@@ -2214,6 +2216,27 @@ export default function DeliveryTicketPage({ params }: PageProps) {
   // ══════════════════════════════════════
   // FASE 1 (SOLO APOYO A RED): DIRÍGETE AL RESTAURANTE ORIGEN A RECOGER
   // ══════════════════════════════════════
+  if (currentTicket.isOwnDelivery && currentTicket.status === 'READY') {
+    return (
+      <main className="min-h-screen bg-slate-50 px-4 py-8 text-slate-900">
+        <section className="mx-auto max-w-lg rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+          <p className="text-xs font-bold uppercase tracking-widest text-orange-600">WingsLab · reparto propio</p>
+          <h1 className="mt-3 text-2xl font-bold">Recoger pedido #{currentTicket.dailyCounter || currentTicket.orderReference}</h1>
+          <p className="mt-4 font-semibold">{currentTicket.restaurant.name}</p>
+          <p className="mt-1 text-sm text-slate-600">{currentTicket.restaurant.address}</p>
+          <p className="mt-5 text-sm">Para {fullCustomerName(currentTicket.customer)} · ${currentTicket.totalAmount.toFixed(2)}</p>
+          <p className="mt-2 text-sm text-slate-600">Confirma cuando tengas el pedido contigo. Todavía no se ha iniciado el reparto.</p>
+          {llegueError && <p role="alert" className="mt-4 text-sm text-red-700">{llegueError}</p>}
+          <button type="button" disabled={notifying} onClick={() => void handleLlegueRestaurante()}
+            className="mt-6 w-full rounded-2xl bg-orange-600 px-5 py-4 font-semibold text-white disabled:opacity-50">
+            {notifying ? 'Confirmando…' : 'Recoger e iniciar reparto'}
+          </button>
+          <p className="mt-4 text-xs text-slate-500">Entorno ficticio local. Sin cargos ni notificaciones externas.</p>
+        </section>
+      </main>
+    );
+  }
+
   if (currentTicket.isSupportDelivery && !currentPickedUp && !currentSupportStarted) {
     const pickupName = currentTicket.restaurant.name;
     const pickupAddress = currentTicket.restaurant.address || 'Restaurante origen';
@@ -3049,7 +3072,7 @@ export default function DeliveryTicketPage({ params }: PageProps) {
                 
                 <p className={`mt-1.5 text-xs ${textSecondary}`}>
                   {isCash 
-                    ? 'Valida que recibiste el efectivo antes de cerrar el pedido.'
+                    ? 'Prueba local: confirma la entrega y el registro ficticio del efectivo. No mueve dinero real.'
                     : 'Confirma que entregaste físicamente el pedido al cliente.'
                   }
                 </p>
@@ -3094,7 +3117,7 @@ export default function DeliveryTicketPage({ params }: PageProps) {
                       <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="3" stroke="currentColor" className="w-4 h-4">
                         <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75 6 6 9-13.5" />
                       </svg>
-                      <span>{isCash ? 'Cobrado y entregado' : 'Confirmar Entrega'}</span>
+                      <span>{isCash ? 'Confirmar entrega y efectivo ficticio' : 'Confirmar Entrega'}</span>
                     </>
                   )}
                 </button>

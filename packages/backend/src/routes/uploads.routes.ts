@@ -13,7 +13,6 @@ const uploadImageSchema = z.object({
     'restaurant-cover',
     'product-image',
     'payment-proof',
-    'site-image',
     'driver-photo',
   ] satisfies [MediaUploadKind, ...MediaUploadKind[]]),
   source: z
@@ -26,7 +25,7 @@ const uploadImageSchema = z.object({
 export async function registerUploadRoutes(fastify: FastifyInstance): Promise<void> {
   fastify.register(async function uploadScope(upload) {
     upload.addHook('preHandler', authenticate);
-    upload.addHook('preHandler', authorize([UserRole.ADMIN, UserRole.RESTAURANT, UserRole.CUSTOMER, UserRole.DRIVER]));
+    upload.addHook('preHandler', authorize([UserRole.RESTAURANT, UserRole.CUSTOMER, UserRole.DRIVER]));
 
     upload.post('/uploads/images', async (request, reply) => {
       const parsed = uploadImageSchema.safeParse(request.body);

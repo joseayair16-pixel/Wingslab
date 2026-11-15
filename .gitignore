@@ -89,7 +89,16 @@ packages/backend/scratch_*
 packages/backend/test-db.js
 packages/backend/src/check_transfer_db.*
 .env*
+!.env.wingslab.example
+config/wingslab.local.json
+config/wingslab.frontend.local.json
+infrastructure/runtime/secrets/
 .vercel
 
 # Editor/AI session state
 .continue/
+config/wingslab.local.host.json
+infrastructure/runtime/runtime.env
+packages/backend/prisma/wingslab-baseline/
+config/wingslab.customer.local.json
+config/wingslab.restaurant.local.json

@@ -105,7 +105,7 @@ export default function InstallAppButton() {
               <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
             </svg>
           </span>
-          <span className="text-sm font-semibold text-neutral-900">Instala SaDeL</span>
+          <span className="text-sm font-semibold text-neutral-900">Instala WingsLab</span>
           <button
             type="button"
             onClick={isIOS ? () => setShowIOSHelp(true) : () => void handleAndroidInstall()}
@@ -128,7 +128,7 @@ export default function InstallAppButton() {
         <div className="fixed inset-0 z-[9995] flex items-end justify-center bg-black/45 px-4 pb-8 sm:items-center sm:pb-0">
           <div className="w-full max-w-sm rounded-[28px] bg-white p-6 shadow-2xl">
             <div className="mb-4 flex items-center justify-between">
-              <h3 className="text-lg font-bold text-neutral-900">Instalar SaDeL en tu iPhone</h3>
+              <h3 className="text-lg font-bold text-neutral-900">Instalar WingsLab en tu iPhone</h3>
               <button
                 type="button"
                 onClick={() => setShowIOSHelp(false)}

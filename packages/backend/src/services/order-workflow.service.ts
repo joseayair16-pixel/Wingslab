@@ -8,6 +8,8 @@ import {
   PaymentStatus,
 } from '@prisma/client';
 import { AppError, isAppError } from '../errors/app-error';
+import { assertManualOrderAction } from '../config/order-actions';
+import { MANUAL_ORDER_ACTIONS } from '@sadel/shared';
 import {
   driverScopedOrderSelect,
   restaurantOrderWorkflowSelect,
@@ -372,6 +374,9 @@ export async function updateOrderStatusByRestaurant({
   cancellationReason,
   cancelledBy,
 }: RestaurantOrderActionParams) {
+  const manualAction = Object.keys(MANUAL_ORDER_ACTIONS).find(key =>
+    MANUAL_ORDER_ACTIONS[key as keyof typeof MANUAL_ORDER_ACTIONS].to === nextStatus);
+  assertManualOrderAction(orderId, manualAction || '');
   const updatedOrder = await prisma.$transaction(async (tx) => {
     const order = await tx.order.findFirst({
       where: { id: orderId, restaurant: { userId: restaurantUserId } },
@@ -380,6 +385,10 @@ export async function updateOrderStatusByRestaurant({
 
     if (!order) {
       throw createDomainError(404, 'ORDER_NOT_FOUND', 'No se encontro el pedido.');
+    }
+
+    if (order.status !== MANUAL_ORDER_ACTIONS[manualAction as keyof typeof MANUAL_ORDER_ACTIONS].from) {
+      throw createDomainError(409, 'INVALID_ORDER_TRANSITION', 'El estado actual no permite esta acción manual.');
     }
 
     if (!canRestaurantTransitionTo(order.status, nextStatus)) {
@@ -460,8 +469,8 @@ export async function updateOrderStatusByRestaurant({
       nextStatus === OrderStatus.CONFIRMED || nextStatus === OrderStatus.PREPARING;
     const isCancelling = nextStatus === OrderStatus.CANCELLED;
 
-    const updated = await tx.order.update({
-      where: { id: order.id },
+    const claimed = await tx.order.updateMany({
+      where: { id: order.id, status: order.status, updatedAt: order.updatedAt },
       data: {
         status: nextStatus,
         ...(isAccepting ? { noDriversAvailable: false } : {}),
@@ -535,8 +544,11 @@ export async function updateOrderStatusByRestaurant({
               : {}
           : {}),
       },
-      select: restaurantOrderWorkflowSelect,
     });
+    if (claimed.count !== 1) {
+      throw createDomainError(409, 'ORDER_STATE_CHANGED', 'Otro operador modificó el pedido. Consulta su estado antes de reintentar.');
+    }
+    const updated = await tx.order.findUniqueOrThrow({ where: { id: order.id }, select: restaurantOrderWorkflowSelect });
 
     await tx.orderTracking.create({
       data: {
@@ -570,15 +582,13 @@ export async function updateOrderStatusByRestaurant({
       await restoreStockForOrder(tx, order.id);
     }
 
-    appEvents.emit('order.status_changed', {
-      orderId: order.id,
-      status: nextStatus,
-      initiator: { id: restaurantUserId, role: 'RESTAURANT' },
-    });
-
     return updated;
   });
 
+  // Never notify subscribers before the transaction has committed.
+  appEvents.emit('order.status_changed', {
+    orderId, status: nextStatus, initiator: { id: restaurantUserId, role: 'RESTAURANT' },
+  });
   return updatedOrder;
 }
 

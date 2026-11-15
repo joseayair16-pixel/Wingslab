@@ -43,14 +43,14 @@ export function OrdersView({
           </div>
           <h3 className="text-lg font-semibold text-neutral-900">Aún no hay pedidos</h3>
           <p className="mt-1 mb-6 text-sm text-neutral-500 max-w-[260px]">
-            Descubre los mejores restaurantes cerca de ti y haz tu primer pedido.
+            Elige tus favoritos del menú de WingsLab y haz tu primer pedido.
           </p>
           <button
             type="button"
-            onClick={() => setActiveSection('home')}
+            onClick={() => { window.location.href = '/'; }}
             className="rounded-full bg-neutral-900 px-6 py-2.5 text-sm font-semibold text-white hover:bg-neutral-800 transition"
           >
-            Explorar restaurantes
+            Ver menú WingsLab
           </button>
         </div>
       ) : (

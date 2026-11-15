@@ -4,7 +4,6 @@ import bcryptjs from 'bcryptjs';
 import { buildApp } from './app';
 import { prisma } from './config/database';
 import { UserRole } from '@prisma/client';
-import { resetMetrics } from './utils/metrics';
 
 function parseJson<T>(payload: string): T {
   return JSON.parse(payload) as T;
@@ -209,7 +208,6 @@ describe('app integration', () => {
 
   it('verifica OTP por correo y crea la cuenta del cliente', async () => {
     jest.spyOn(prisma.user, 'findFirst').mockResolvedValue(null);
-    jest.spyOn(prisma.admin, 'count').mockResolvedValue(1);
     jest.spyOn(prisma.user, 'create').mockResolvedValue({
       id: 'user-1',
       email: '5512345678@sadel.local',
@@ -221,7 +219,6 @@ describe('app integration', () => {
       status: 'ACTIVE',
       createdAt: new Date(),
       updatedAt: new Date(),
-      admin: null,
     } as never);
     jest.spyOn(prisma.customer, 'create').mockResolvedValue({
       id: 'customer-1',
@@ -242,7 +239,6 @@ describe('app integration', () => {
       status: 'ACTIVE',
       createdAt: new Date(),
       updatedAt: new Date(),
-      admin: null,
     } as never);
     jest.spyOn(prisma.customer, 'findUnique').mockResolvedValue({
       id: 'customer-1',
@@ -523,48 +519,4 @@ describe('app integration', () => {
     expect(body.error.code).toBe('UNAUTHORIZED');
   });
 
-  it('expone metricas operativas basicas para administracion', async () => {
-    resetMetrics();
-
-    await app.inject({
-      method: 'GET',
-      url: '/health',
-    });
-
-    await app.inject({
-      method: 'GET',
-      url: '/me/pedidos',
-    });
-
-    const token = await createToken({
-      sub: 'admin-user-1',
-      phone: '+5215522222222',
-      role: UserRole.ADMIN,
-    });
-
-    const response = await app.inject({
-      method: 'GET',
-      url: '/admin/observabilidad/metricas',
-      headers: {
-        authorization: `Bearer ${token}`,
-      },
-    });
-
-    const body = parseJson<{
-      success: boolean;
-      data: {
-        totals: { requests: number; errors: number; errorRate: number };
-        routes: Array<{ route: string; count: number; errorCount: number }>;
-        errorsByCode: Array<{ code: string; count: number }>;
-      };
-    }>(response.body);
-
-    expect(response.statusCode).toBe(200);
-    expect(body.success).toBe(true);
-    expect(body.data.totals.requests).toBeGreaterThanOrEqual(2);
-    expect(body.data.totals.errors).toBeGreaterThanOrEqual(1);
-    expect(body.data.routes.some((route) => route.route === '/health')).toBe(true);
-    expect(body.data.routes.some((route) => route.route === '/me/pedidos')).toBe(true);
-    expect(body.data.errorsByCode.some((error) => error.code === 'UNAUTHORIZED')).toBe(true);
-  });
 });

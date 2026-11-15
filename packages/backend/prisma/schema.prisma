@@ -7,7 +7,7 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
+  url      = env("WINGSLAB_DATABASE_URL")
 }
 
 // ============== Users ==============
@@ -34,6 +34,7 @@ model User {
   restaurant        Restaurant?
   customer          Customer?
   driver            Driver?
+  marketingConsent  MarketingConsent?
   pushSubscriptions PushSubscription[]
   fcmTokens         FcmToken[]
   sentMessages      OrderMessage[]
@@ -644,6 +645,8 @@ model PromoCode {
   validFrom      DateTime?
   validUntil     DateTime?
   maxUses        Int?
+  maxUsesPerCustomer Int?
+  firstPurchaseOnly  Boolean  @default(false)
   usesCount      Int      @default(0)
   isActive       Boolean  @default(true)
 
@@ -895,6 +898,18 @@ model PushSubscription {
   updatedAt DateTime @updatedAt
 
   @@index([userId])
+}
+
+// Marketing consent is separate from device/browser notification permission.
+// Only explicit account-level opt-in allows a user into commercial audiences.
+model MarketingConsent {
+  userId    String   @id
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  enabled   Boolean  @default(false)
+  grantedAt DateTime?
+  revokedAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 // Tokens de dispositivos móviles (FCM) para la app nativa Android.

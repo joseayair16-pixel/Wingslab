@@ -3,9 +3,9 @@
   "version": "1.0.0",
   "private": true,
 "scripts": {
-  "dev": "next dev -p 3004 --webpack",
-  "build": "next build --webpack",
-  "start": "next start",
+    "dev": "node ../../scripts/blocked-operation.cjs",
+    "build": "node ../../scripts/wingslab-run.cjs driver build",
+    "start": "node ../../scripts/wingslab-run.cjs driver start",
   "lint": "eslint . --ext .ts,.tsx",
   "type-check": "tsc --noEmit"
  },

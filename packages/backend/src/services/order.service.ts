@@ -1,5 +1,19 @@
 import { OrderStatus, PaymentMethod, PaymentStatus, Prisma, PrismaClient } from '@prisma/client';
 import { AppError } from '../errors/app-error';
+import { assertRestaurantId, RESTAURANT_ID } from '../config/single-restaurant';
+
+export function validateOptionSelection(groups: Array<{ id: string; name: string; minSelection: number; maxSelection: number; options: Array<{ id: string; isAvailable: boolean }> }>, selectedIds: string[]) {
+  if (new Set(selectedIds).size !== selectedIds.length) throw new AppError(400, 'INVALID_OPTION_SELECTION', 'No puedes seleccionar una misma opción más de una vez.');
+  const all = new Set(groups.flatMap(g => g.options.map(o => o.id)));
+  if (selectedIds.some(id => !all.has(id))) throw new AppError(400, 'INVALID_OPTION_SELECTION', 'Una o más opciones no corresponden a este producto.');
+  for (const group of groups) {
+    const ids = new Set(group.options.map(o => o.id));
+    const selected = selectedIds.filter(id => ids.has(id));
+    if (selected.length < group.minSelection || selected.length > group.maxSelection) throw new AppError(400, 'INVALID_OPTION_SELECTION', `Revisa la selección para "${group.name}".`);
+    if (selected.some(id => !group.options.find(option => option.id === id)?.isAvailable)) throw new AppError(400, 'OPTION_NOT_AVAILABLE', `Una opción de "${group.name}" ya no está disponible.`);
+  }
+  return true;
+}
 import { customerCreatedOrderSelect } from './order-selects';
 import { isRestaurantOpenNow } from '../utils/restaurant';
 import { getDistanceInKm } from '../utils/restaurant';
@@ -8,6 +22,7 @@ import { resolveMaxCashOrder } from '../utils/cash-policy';
 import { logger } from '../utils/logger';
 import { buildApartmentWhere } from '../utils/address';
 import { calculateOrderEta } from '../utils/order-eta';
+import { getPromoLimitViolation } from './order-promotion-policy';
 
 const WHATSAPP_NOTIFICATION_FEE = 0.5;
 
@@ -194,6 +209,7 @@ export async function createOrderForCustomer({
   input,
   requestHeaders: _requestHeaders,
 }: CreateOrderParams & { requestHeaders?: any }) {
+  assertRestaurantId(input.restaurantId);
   logger.info('Creating order for customer', {
     customerUserId,
     restaurantId: input.restaurantId,
@@ -236,7 +252,7 @@ export async function createOrderForCustomer({
     });
 
     if (existingByKey) {
-      if (existingByKey.customerId !== customer.id) {
+      if (existingByKey.customerId !== customer.id || existingByKey.restaurant.id !== RESTAURANT_ID) {
         throw new AppError(
           403,
           'ORDER_IDEMPOTENCY_FORBIDDEN',
@@ -253,7 +269,7 @@ export async function createOrderForCustomer({
   }
 
   const restaurant = await prisma.restaurant.findUnique({
-    where: { id: input.restaurantId },
+    where: { id: RESTAURANT_ID },
     include: {
       user: true,
       operatingHours: true,
@@ -430,6 +446,7 @@ export async function createOrderForCustomer({
       id: { in: productIds },
       restaurantId: restaurant.id,
       isAvailable: true,
+      deleted: false,
     },
     include: {
       optionGroups: {
@@ -504,6 +521,7 @@ export async function createOrderForCustomer({
     }
 
     const selectedOptionIds = item.optionIds || [];
+    validateOptionSelection(product.optionGroups as any, selectedOptionIds);
     let itemOptionsPrice = 0;
     const validatedOptions: Array<{ id: string; name: string; price: number }> = [];
 
@@ -684,6 +702,8 @@ export async function createOrderForCustomer({
   let promoDiscountAmount = 0;
   let appliedPromoCode: string | null = null;
   let appliedPromoMaxUses: number | null = null;
+  let appliedPromoMaxUsesPerCustomer: number | null = null;
+  let appliedPromoFirstPurchaseOnly = false;
   let freeDeliveryGranted = false;
   const discountBreakdown: Record<string, number | string> = {};
   if (multiBuySaving > 0) discountBreakdown.multiBuy = multiBuySaving;
@@ -727,6 +747,8 @@ export async function createOrderForCustomer({
     }
     appliedPromoCode = promoCode.code;
     appliedPromoMaxUses = promoCode.maxUses;
+    appliedPromoMaxUsesPerCustomer = promoCode.maxUsesPerCustomer;
+    appliedPromoFirstPurchaseOnly = promoCode.firstPurchaseOnly;
     discountBreakdown.coupon = {
       type: promoCode.type,
       value: promoCode.value,
@@ -807,7 +829,7 @@ export async function createOrderForCustomer({
       // de adquisición que respetar (es el único lock explícito del flujo) y
       // sin impacto en compras secuenciales (el lock vive solo durante el tx).
       // Clave estable por cliente para que el mismo lock proteja reintentos.
-      await tx.$executeRawUnsafe(
+      await tx.$queryRawUnsafe(
         'SELECT pg_advisory_xact_lock(hashtext($1))',
         `order-create:${customer.id}`
       );
@@ -831,6 +853,19 @@ export async function createOrderForCustomer({
           }
           return { order: existingInTx, isDuplicate: true };
         }
+      }
+
+      // The per-customer advisory lock above makes these eligibility checks
+      // atomic with the order insert, including concurrent first-order attempts.
+      if (appliedPromoCode && (appliedPromoFirstPurchaseOnly || appliedPromoMaxUsesPerCustomer != null)) {
+        const [customerUseCount, previousPurchaseCount] = await Promise.all([
+          appliedPromoMaxUsesPerCustomer == null ? Promise.resolve(0) : tx.order.count({ where: { restaurantId: restaurant.id, customerId: customer.id, promoCode: { equals: appliedPromoCode, mode: 'insensitive' } } }),
+          !appliedPromoFirstPurchaseOnly ? Promise.resolve(0) : tx.order.count({ where: { restaurantId: restaurant.id, customerId: customer.id, status: { notIn: [OrderStatus.CANCELLED, OrderStatus.REJECTED] } } }),
+        ]);
+        const violation = getPromoLimitViolation({ firstPurchaseOnly: appliedPromoFirstPurchaseOnly, previousPurchaseCount,
+          maxUsesPerCustomer: appliedPromoMaxUsesPerCustomer, customerUseCount });
+        if (violation === 'FIRST_PURCHASE_ONLY') throw new AppError(400, violation, 'Este cupón es exclusivo para la primera compra en WingsLab.');
+        if (violation === 'PROMO_CODE_CUSTOMER_LIMIT') throw new AppError(400, violation, 'Ya alcanzaste el límite de uso de este cupón.');
       }
 
       // Seguridad: Límite de Pedidos Activos (Máximo 2) — dentro de la transacción

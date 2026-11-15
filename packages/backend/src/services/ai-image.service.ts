@@ -9,6 +9,7 @@
  */
 
 import { AppError } from '../errors/app-error';
+import { externalServicesEnabled, assertExternalOperationAllowed } from '../config/isolation';
 import { getRedis } from '../config/redis';
 import { logger } from '../utils/logger';
 
@@ -18,6 +19,7 @@ const REQUEST_TIMEOUT_MS = 60_000;
 const PROMPT_MAX_LENGTH = 2048;
 
 export function isAiImageConfigured(): boolean {
+  if (!externalServicesEnabled()) return false;
   return Boolean(process.env.CF_ACCOUNT_ID?.trim() && process.env.CF_API_TOKEN?.trim());
 }
 
@@ -106,6 +108,7 @@ function buildPrompt(params: GenerateFoodImageParams): string {
  * Lanza AppError 503 si no hay configuración y 502 ante fallos del proveedor.
  */
 export async function generateFoodImage(params: GenerateFoodImageParams): Promise<string> {
+  assertExternalOperationAllowed();
   const accountId = process.env.CF_ACCOUNT_ID?.trim();
   const apiToken = process.env.CF_API_TOKEN?.trim();
 

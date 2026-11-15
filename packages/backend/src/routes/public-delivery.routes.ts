@@ -13,10 +13,38 @@ import { sendAppError } from '../errors/http';
 import { emitNotification } from '../services/socket.service';
 import { sendPushNotification } from '../services/notification.service';
 import { hashToken } from '../utils/crypto';
+import { ownDeliveryAction, resolveOwnTicket } from '../services/own-delivery.service';
 
 
 export async function registerPublicDeliveryRoutes(fastify: FastifyInstance): Promise<void> {
   const deliveryTicketRateLimitConfig = {
+    // One scoped bearer capability per authorized own-delivery order. All
+    // state changes use the transactional service; legacy recovery/debt paths
+    // remain unavailable in this local phase.
+    preHandler: async (request: FastifyRequest, reply: any) => {
+      try {
+        const token = (request.params as { token: string }).token;
+        await resolveOwnTicket(prisma, token);
+        reply.header('Cache-Control', 'no-store').header('Referrer-Policy', 'no-referrer');
+        if (request.method === 'GET') return;
+        const suffix = request.url.split('?')[0].split('/').pop();
+        const actions = { 'llegue-restaurante': 'start', llegue: 'arrive', ubicacion: 'location', entregar: 'deliver' } as const;
+        const action = actions[suffix as keyof typeof actions];
+        if (!action) return reply.status(403).send({ success: false, error: { code: 'DELIVERY_ACTION_BLOCKED', message: 'Esta operación no está habilitada en WingsLab.' } });
+        const result = await ownDeliveryAction(prisma, token, action, request.body || {});
+        const order = result.order;
+        if (result.changed) {
+          const event = { start: 'order:in-transit', arrive: 'order:driver-arrived', location: 'order:driver-location', deliver: 'order:delivered' }[action];
+          const payload = { orderId: order.id, status: order.status, updatedAt: order.updatedAt,
+            ...(action === 'location' ? { latitude: order.lastDriverLatitude, longitude: order.lastDriverLongitude } : {}) };
+          emitNotification(fastify.io, order.customer.user.id, 'CUSTOMER', event, payload, { orderId: order.id });
+          emitNotification(fastify.io, order.restaurant.userId, 'RESTAURANT', event, payload, { orderId: order.id });
+        }
+        return reply.send({ success: true, data: { id: order.id, status: order.status,
+          arrived: action === 'arrive' || action === 'start', needsHandover: false,
+          paymentStatus: order.paymentStatus }, message: action === 'deliver' ? 'Entrega confirmada.' : 'Pedido actualizado.' });
+      } catch (error) { return sendAppError(reply, error); }
+    },
     config: {
       rateLimit: {
         max: 60,
@@ -118,6 +146,7 @@ export async function registerPublicDeliveryRoutes(fastify: FastifyInstance): Pr
           orderReference: dToken.order.orderReference,
           dailyCounter: dToken.order.dailyCounter ?? null,
           status: dToken.order.status,
+          isOwnDelivery: true,
           driverArrivedAtCustomer: dToken.order.driverArrivedAtCustomer ?? null,
           totalAmount: dToken.order.totalAmount,
           deliveryFee: dToken.order.deliveryFee,

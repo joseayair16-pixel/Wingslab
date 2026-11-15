@@ -3,6 +3,7 @@ import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 
 import { prisma } from '../config/database';
+import { RESTAURANT_ID } from '../config/single-restaurant';
 import { sendAppError } from '../errors/http';
 import { authenticate, authorize, getAuthenticatedUser } from '../middleware/auth';
 import { customerOrderDetailSelect, customerOrderListSelect } from '../services/order-selects';
@@ -14,10 +15,11 @@ import { sendPushNotification } from '../services/notification.service';
 import { enqueueRestaurantOrder, requestOrderCancellation, retractCancellationRequest } from '../services/order-workflow.service';
 import { decisionWindowMs } from '../services/order-ring.service';
 import { createTransferRefundTicket } from '../services/refund-ticket.service';
+import { getPromoLimitViolation } from '../services/order-promotion-policy';
 import { sendWhatsAppNewOrder } from '../services/whatsapp.service';
 
 const createOrderSchema = z.object({
-  restaurantId: z.string().min(1, 'El restaurante es obligatorio.'),
+  restaurantId: z.literal(RESTAURANT_ID).default(RESTAURANT_ID),
   clientOrderKey: z.string().min(8, 'La clave de pedido es obligatoria.').max(64).optional(),
   items: z
     .array(
@@ -92,7 +94,7 @@ export async function registerOrderRoutes(fastify: FastifyInstance): Promise<voi
       },
     }, async (request, reply) => {
       const validateCouponSchema = z.object({
-        restaurantId: z.string().min(1, 'El restaurante es obligatorio.'),
+        restaurantId: z.literal(RESTAURANT_ID).default(RESTAURANT_ID),
         promoCode: z.string().max(30).trim().transform(v => v.toUpperCase()),
         subtotal: z.number().nonnegative(),
         isPickup: z.boolean().optional().default(false),
@@ -112,7 +114,7 @@ export async function registerOrderRoutes(fastify: FastifyInstance): Promise<voi
 
       const { restaurantId, promoCode, subtotal, isPickup, deliveryFee } = parsed.data;
 
-      const restaurant = await prisma.restaurant.findUnique({ where: { id: restaurantId } });
+      const restaurant = await prisma.restaurant.findUnique({ where: { id: RESTAURANT_ID } });
       if (!restaurant) {
         return reply.status(404).send({
           success: false,
@@ -153,6 +155,18 @@ export async function registerOrderRoutes(fastify: FastifyInstance): Promise<voi
           },
         });
       }
+
+      const user = getAuthenticatedUser(request);
+      const customer = await prisma.customer.findUnique({ where: { userId: user.sub }, select: { id: true } });
+      if (!customer) return reply.status(404).send({ success: false, error: { code: 'CUSTOMER_NOT_FOUND', message: 'No se encontró la cuenta de cliente.' } });
+      const [customerUseCount, previousPurchaseCount] = await Promise.all([
+        promo.maxUsesPerCustomer == null ? Promise.resolve(0) : prisma.order.count({ where: { restaurantId: restaurant.id, customerId: customer.id, promoCode: { equals: promo.code, mode: 'insensitive' } } }),
+        !promo.firstPurchaseOnly ? Promise.resolve(0) : prisma.order.count({ where: { restaurantId: restaurant.id, customerId: customer.id, status: { notIn: [OrderStatus.CANCELLED, OrderStatus.REJECTED] } } }),
+      ]);
+      const violation = getPromoLimitViolation({ firstPurchaseOnly: promo.firstPurchaseOnly, previousPurchaseCount,
+        maxUsesPerCustomer: promo.maxUsesPerCustomer, customerUseCount });
+      if (violation === 'FIRST_PURCHASE_ONLY') return reply.status(400).send({ success: false, error: { code: violation, message: 'Este cupón es exclusivo para la primera compra en WingsLab.' } });
+      if (violation === 'PROMO_CODE_CUSTOMER_LIMIT') return reply.status(400).send({ success: false, error: { code: violation, message: 'Ya alcanzaste el límite de uso de este cupón.' } });
 
       let discount = 0;
       if (promo.type === 'PERCENT') {
@@ -345,14 +359,14 @@ export async function registerOrderRoutes(fastify: FastifyInstance): Promise<voi
       const { page, limit } = parsed.data;
       const [items, total] = await prisma.$transaction([
         prisma.order.findMany({
-          where: { customerId: customerProfile.id },
+          where: { customerId: customerProfile.id, restaurantId: RESTAURANT_ID },
           select: customerOrderListSelect,
           orderBy: { createdAt: 'desc' },
           skip: (page - 1) * limit,
           take: limit,
         }),
         prisma.order.count({
-          where: { customerId: customerProfile.id },
+          where: { customerId: customerProfile.id, restaurantId: RESTAURANT_ID },
         }),
       ]);
 

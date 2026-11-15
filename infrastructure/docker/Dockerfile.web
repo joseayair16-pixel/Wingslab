@@ -1,6 +1,6 @@
 ARG NODE_VERSION=18
-ARG APP=web-admin
-ARG PORT=3000
+ARG APP=web-customer
+ARG PORT=3003
 
 # Build stage
 FROM node:${NODE_VERSION}-alpine AS builder
@@ -9,6 +9,8 @@ WORKDIR /app
 
 # Copy root config
 COPY package.json package-lock.json tsconfig.json ./
+COPY config ./config
+COPY scripts ./scripts
 
 # Copy packages
 COPY packages/shared ./packages/shared
@@ -33,6 +35,9 @@ RUN apk add --no-cache tini
 
 # Copy root package files
 COPY package.json package-lock.json ./
+COPY --from=builder /app/config ./config
+COPY --from=builder /app/scripts ./scripts
+COPY --from=builder /app/packages/shared/src/wingslab-policy.js ./packages/shared/src/wingslab-policy.js
 
 # Copy built artifacts from builder
 COPY --from=builder /app/packages/shared/dist ./packages/shared/dist

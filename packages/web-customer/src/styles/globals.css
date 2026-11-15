@@ -3,6 +3,9 @@
 @tailwind utilities;
 
 :root {
+  /* Offline build: no Google download. Keep the existing font variable contract. */
+  --font-inter: Arial, sans-serif;
+  --font-plus-jakarta-sans: Arial, sans-serif;
   color-scheme: light;
   --app-bg: #f6f6f4;
   --surface: #ffffff;

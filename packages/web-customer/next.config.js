@@ -1,6 +1,8 @@
 /** @type {import('next').NextConfig} */
 const path = require('path');
+const { frontendConfig } = require('../../config/wingslab.cjs');
 const nextConfig = {
+  ...frontendConfig('customer'),
   reactStrictMode: true,
   webpack: (config) => {
     // Resolver @sadel/shared directo al fuente TS: evita que el pipeline de
@@ -11,23 +13,7 @@ const nextConfig = {
     );
     return config;
   },
-  images: {
-    remotePatterns: [
-      {
-        protocol: 'https',
-        hostname: 'pub-3520d4c651424664b0fe934a0dbed662.r2.dev',
-        pathname: '/**',
-      },
-    ],
-  },
-  async rewrites() {
-    return [
-      {
-        source: '/api/:path*',
-        destination: 'https://sadel-production.up.railway.app/:path*',
-      },
-    ];
-  },
+  images: { remotePatterns: [] },
 };
 
 module.exports = nextConfig;

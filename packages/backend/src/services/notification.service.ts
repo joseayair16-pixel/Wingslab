@@ -1,4 +1,5 @@
 import webpush from 'web-push';
+import { externalServicesEnabled } from '../config/isolation';
 import { prisma } from '../config/database';
 import { logger } from '../utils/logger';
 import { sendFcmNotification } from './fcm.service';
@@ -10,6 +11,7 @@ export type { NotificationPayload, PushOptions };
 let vapidConfigured = false;
 
 function initVapid(): void {
+  if (!externalServicesEnabled()) return;
   const vapidPublicKey = process.env.VAPID_PUBLIC_KEY;
   const vapidPrivateKey = process.env.VAPID_PRIVATE_KEY;
   const vapidEmail = process.env.VAPID_EMAIL || 'mailto:support@sadel.app';

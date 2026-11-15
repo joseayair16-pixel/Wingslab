@@ -1,3 +1,4 @@
+import '../config/blocked-operation';
 import {
   S3Client,
   ListObjectsV2Command,

@@ -1,0 +1,30 @@
+# Template only. Do not start until resource identity and network review is approved.
+name: wingslab-local
+services:
+  postgres:
+    image: postgres:16-alpine
+    profiles: [approved-local]
+    environment:
+      POSTGRES_USER: wingslab_local
+      POSTGRES_DB: wingslab_local
+      POSTGRES_PASSWORD: ${WINGSLAB_POSTGRES_PASSWORD:?New local password required}
+    ports: ["127.0.0.1:55433:5432"]
+    volumes: ["wingslab_postgres:/var/lib/postgresql/data"]
+    networks: [wingslab_internal]
+  redis:
+    image: redis:7-alpine
+    profiles: [approved-local]
+    environment:
+      WINGSLAB_REDIS_PASSWORD: ${WINGSLAB_REDIS_PASSWORD:?New local password required}
+    entrypoint: ["sh", "-c", "exec redis-server --appendonly yes --requirepass \"$$WINGSLAB_REDIS_PASSWORD\""]
+    ports: ["127.0.0.1:56379:6379"]
+    volumes: ["wingslab_redis:/data"]
+    networks: [wingslab_internal]
+volumes:
+  wingslab_postgres:
+    name: wingslab_local_postgres_v1
+  wingslab_redis:
+    name: wingslab_local_redis_v1
+networks:
+  wingslab_internal:
+    internal: true

@@ -1,3 +1,4 @@
+import '../config/blocked-operation';
 import {
   sendWhatsAppPaymentReminder,
   sendWhatsAppPaymentSuspended,

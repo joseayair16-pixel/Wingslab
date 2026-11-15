@@ -7,21 +7,22 @@ import Fastify, { FastifyInstance } from 'fastify';
 import { Server as SocketIOServer } from 'socket.io';
 import crypto from 'node:crypto';
 import http from 'http';
-import { UserRole } from '@prisma/client';
 import { createAdapter } from '@socket.io/redis-adapter';
 
 import './config/env';
 import { validateEnvironment } from './config/env';
+import { assertJobsDisabled } from './config/isolation';
+import { assertServiceIdentityVerified, isHermeticTest } from './config/env';
+import { JobSelection, startSelectedJobs, validateJobSelection } from './jobs/policy';
 import { prisma } from './config/database';
 import { getRedis } from './config/redis';
 import { errorHandler } from './middleware/error.handler';
-import { authenticate, authorize } from './middleware/auth';
 import { setupRoutes } from './routes';
+import { registerSingleRestaurantBoundary } from './middleware/single-restaurant';
 import { setupSocketIO } from './services/socket.service';
 import { setupNotificationSubscribers } from './subscribers/notification.subscriber';
 import { buildRequestContext, getOrCreateRequestContext } from './utils/request-context';
 import { logger } from './utils/logger';
-import { recordRequestMetric, getMetricsSnapshot } from './utils/metrics';
 import { startBillingJob } from './jobs/billing.job';
 import { startBillingOverdueJob } from './jobs/billing-overdue.job';
 import { startOrderTimeoutJob } from './jobs/order-timeout.job';
@@ -32,7 +33,6 @@ import { startStuckOrderJob } from './jobs/stuck-order.job';
 import { startOwnDeliveryTimeoutJob } from './jobs/own-delivery-timeout.job';
 import { startDriverBillingCutoffJob } from './jobs/driver-billing-cutoff.job';
 import { scheduleDriverBillingOverdueCron, processOverdueDriverSettlements } from './jobs/driver-billing-overdue.job';
-import { startFeaturedExpirationJob } from './jobs/featured-expiration.job';
 import { startPickupReadyJob } from './jobs/pickup-ready.job';
 import { startCustomerPickupReminderJob } from './jobs/customer-pickup-reminder.job';
 import { startCustomerArrivalReminderJob } from './jobs/customer-arrival-reminder.job';
@@ -58,28 +58,32 @@ type BuildAppOptions = {
   // Los trabajos de fondo (jobs/crons) acceden a la BD al arrancar. En tests
   // se desactivan para que el suite sea hermético y no dependa de Postgres.
   enableJobs?: boolean;
+  jobs?: JobSelection;
 };
 
 const NODE_ENV = process.env.NODE_ENV || 'development';
 
-if (NODE_ENV === 'production') {
-  validateEnvironment();
-}
-
 // Fail-fast: sin JWT_SECRET la firma de tokens es predecible = toma de cuentas total.
-if (!process.env.JWT_SECRET) {
-  if (NODE_ENV === 'production') {
-    throw new Error('FATAL: JWT_SECRET is required in production.');
+function jwtSecret(): string {
+  if (!process.env.JWT_SECRET) {
+    if (NODE_ENV === 'production') {
+      throw new Error('FATAL: JWT_SECRET is required in production.');
+    }
+    console.warn('[AUTH] JWT_SECRET no configurado — generando secreto efimero de desarrollo. Las sesiones se invalidan al reiniciar.');
   }
-  console.warn('[AUTH] JWT_SECRET no configurado — generando secreto efimero de desarrollo. Las sesiones se invalidan al reiniciar.');
-}
 
 // Nunca usar un secreto hardcodeado. En desarrollo, si falta JWT_SECRET, se
 // genera uno aleatorio por proceso (sesiones efímeras, seguro por defecto).
-const JWT_SECRET = process.env.JWT_SECRET || crypto.randomBytes(32).toString('hex');
+  return process.env.JWT_SECRET || crypto.randomBytes(32).toString('hex');
+}
 
 export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyInstance> {
-  const { enableRateLimit = true, enableSocketIO = true, enableJobs = true } = options;
+  const { enableRateLimit = true, enableSocketIO = true, enableJobs = false } = options;
+  assertJobsDisabled(enableJobs);
+  validateJobSelection(options.jobs);
+  assertServiceIdentityVerified();
+  if (!isHermeticTest()) validateEnvironment();
+  const JWT_SECRET = jwtSecret();
 
   const httpServer = http.createServer();
 
@@ -104,6 +108,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     },
   });
 
+  registerSingleRestaurantBoundary(fastify);
   await fastify.register(fastifyHelmet, {
     contentSecurityPolicy: {
       directives: {
@@ -190,13 +195,6 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
 
     reply.header('x-request-id', requestContext.requestId);
 
-    recordRequestMetric({
-      method: request.method,
-      route: request.routeOptions.url || request.url,
-      statusCode: reply.statusCode,
-      durationMs,
-    });
-
     logger.info('Request completed', {
       ...context,
       statusCode: reply.statusCode,
@@ -243,37 +241,25 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
 
   await setupRoutes(fastify);
 
-  if (enableJobs) {
-    startBillingJob();
-    startBillingOverdueJob();
-    startPaymentRemindersJob();
-    startThankYouMessagesJob();
-
-    const cutoffStartup = startDriverBillingCutoffJob();
-    scheduleDriverBillingOverdueCron();
-    cutoffStartup.then(() => {
-      processOverdueDriverSettlements();
-      console.log('[App] Driver billing overdue startup check completed after cutoff sync.');
-    });
-
-    startOrderTimeoutJob(fastify);
-    startRestaurantHoursJob(fastify);
-    startJitDispatchJob(fastify);
-    startDriverPickupAlertJob(fastify);
-    startStuckOrderJob(fastify);
-    startFeaturedExpirationJob(fastify);
-    startPickupReadyJob(fastify);
-    startOwnDeliveryTimeoutJob(fastify);
-    startCustomerPickupReminderJob(fastify);
-    startCustomerArrivalReminderJob(fastify);
-    startOverduePreparationJob(fastify);
-    startScheduledDeliveryReminderJob(fastify);
-    startCleanupProofsJob();
-    startCleanupOrphanMediaJob();
-    startCleanupPushSubscriptionsJob();
-    startNotificationRetryJob();
-    startOrderRingJob();
-  }
+  let cutoffStartup: Promise<void> | undefined;
+  startSelectedJobs(options.jobs || {}, {
+    billing: () => startBillingJob(), billingOverdue: () => startBillingOverdueJob(),
+    paymentReminders: () => startPaymentRemindersJob(), thankYouMessages: () => startThankYouMessagesJob(),
+    driverBillingCutoff: () => { cutoffStartup = startDriverBillingCutoffJob(); },
+    driverBillingOverdue: () => {
+      scheduleDriverBillingOverdueCron();
+      return (cutoffStartup || Promise.resolve()).then(() => processOverdueDriverSettlements());
+    },
+    orderTimeout: () => startOrderTimeoutJob(fastify), restaurantHours: () => startRestaurantHoursJob(fastify),
+    jitDispatch: () => startJitDispatchJob(fastify), driverPickupAlert: () => startDriverPickupAlertJob(fastify),
+    stuckOrder: () => startStuckOrderJob(fastify),
+    pickupReady: () => startPickupReadyJob(fastify), ownDeliveryTimeout: () => startOwnDeliveryTimeoutJob(fastify),
+    customerPickupReminder: () => startCustomerPickupReminderJob(fastify), customerArrivalReminder: () => startCustomerArrivalReminderJob(fastify),
+    overduePreparation: () => startOverduePreparationJob(fastify), scheduledDeliveryReminder: () => startScheduledDeliveryReminderJob(fastify),
+    cleanupProofs: () => startCleanupProofsJob(), cleanupOrphanMedia: () => startCleanupOrphanMediaJob(),
+    cleanupPushSubscriptions: () => startCleanupPushSubscriptionsJob(), notificationRetry: () => startNotificationRetryJob(),
+    orderRing: () => startOrderRingJob(),
+  });
 
   fastify.setErrorHandler(errorHandler);
 
@@ -299,25 +285,6 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
       timestamp: new Date().toISOString(),
       environment: NODE_ENV,
       uptime: process.uptime(),
-    };
-  });
-
-  fastify.get('/metrics', {
-    preHandler: [authenticate, authorize([UserRole.ADMIN])],
-  }, async () => {
-    const snapshot = getMetricsSnapshot();
-    return {
-      requests_total: snapshot.totals.requests,
-      errors_total: snapshot.totals.errors,
-      error_rate_percent: snapshot.totals.errorRate,
-      routes: snapshot.routes.map((r) => ({
-        route: `${r.method} ${r.route}`,
-        count: r.count,
-        errors: r.errorCount,
-        avg_duration_ms: r.avgDurationMs,
-        last_status: r.lastStatusCode,
-      })),
-      errors_by_code: snapshot.errorsByCode,
     };
   });
 

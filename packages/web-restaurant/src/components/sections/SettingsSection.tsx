@@ -28,6 +28,8 @@ type PromoCodeItem = {
   validFrom?: string | null;
   validUntil?: string | null;
   maxUses?: number | null;
+  maxUsesPerCustomer?: number | null;
+  firstPurchaseOnly?: boolean;
   usesCount: number;
   isActive: boolean;
   createdAt: string;
@@ -294,6 +296,8 @@ export const SettingsSection = React.memo(function SettingsSection({
     validFrom: '',
     validUntil: '',
     maxUses: '',
+    maxUsesPerCustomer: '',
+    firstPurchaseOnly: false,
     isActive: true,
   });
 
@@ -332,6 +336,8 @@ export const SettingsSection = React.memo(function SettingsSection({
       validFrom: promo?.validFrom ? promo.validFrom.slice(0, 10) : '',
       validUntil: promo?.validUntil ? promo.validUntil.slice(0, 10) : '',
       maxUses: promo?.maxUses != null ? String(promo.maxUses) : '',
+      maxUsesPerCustomer: promo?.maxUsesPerCustomer != null ? String(promo.maxUsesPerCustomer) : '',
+      firstPurchaseOnly: promo?.firstPurchaseOnly ?? false,
       isActive: promo?.isActive ?? true,
     });
     setPromoCodeModalOpen(true);
@@ -370,6 +376,13 @@ export const SettingsSection = React.memo(function SettingsSection({
         return;
       }
     }
+    if (promoCodeForm.maxUsesPerCustomer) {
+      const maxPerCustomer = Number(promoCodeForm.maxUsesPerCustomer);
+      if (!Number.isInteger(maxPerCustomer) || maxPerCustomer <= 0 || maxPerCustomer > 1000000) {
+        pushToast('error', 'Límite por cliente inválido', 'Indica un entero entre 1 y 1,000,000.');
+        return;
+      }
+    }
     if (promoCodeForm.validFrom && promoCodeForm.validUntil) {
       const from = new Date(`${promoCodeForm.validFrom}T00:00:00`);
       const until = new Date(`${promoCodeForm.validUntil}T23:59:59`);
@@ -387,6 +400,8 @@ export const SettingsSection = React.memo(function SettingsSection({
         value: valueNum,
         minOrderAmount: promoCodeForm.minOrderAmount ? Number(promoCodeForm.minOrderAmount) : null,
         maxUses: promoCodeForm.maxUses ? Number(promoCodeForm.maxUses) : null,
+        maxUsesPerCustomer: promoCodeForm.maxUsesPerCustomer ? Number(promoCodeForm.maxUsesPerCustomer) : null,
+        firstPurchaseOnly: promoCodeForm.firstPurchaseOnly,
         isActive: promoCodeForm.isActive,
       };
       if (promoCodeForm.validFrom) body.validFrom = new Date(`${promoCodeForm.validFrom}T00:00:00`).toISOString();
@@ -935,11 +950,11 @@ export const SettingsSection = React.memo(function SettingsSection({
                     <span className="text-[11px] text-neutral-500">Así se verá el fondo del menú.</span>
                   </div>
                 </div>
-                <div className="md:col-span-2 min-w-0">
+                {false && <div className="md:col-span-2 min-w-0">
                   <div className="flex items-center justify-between gap-3 mb-3">
                     <div className="min-w-0 flex-1">
                       <label htmlFor="sadel-category-search" className="block text-[13px] font-semibold text-neutral-900">Categorías</label>
-                      <p className="text-xs text-neutral-500 mt-0.5 break-words">Selecciona hasta 2 categorías que mejor describan tu negocio para aparecer en esas secciones de la app cliente.</p>
+                      <p className="text-xs text-neutral-500 mt-0.5 break-words">Clasificación interna heredada.</p>
                     </div>
                     <span className={`inline-flex shrink-0 items-center gap-1 text-[11px] font-medium ${storeDraft.storeCategories.length >= 2 ? 'text-sky-600' : 'text-neutral-400'}`}>
                       {storeDraft.storeCategories.length}/2
@@ -1010,6 +1025,7 @@ export const SettingsSection = React.memo(function SettingsSection({
                   )}
                 </div>
 
+                }
                 <div className="md:col-span-2 rounded-[20px] border border-black/5 bg-neutral-50 p-4 text-sm text-neutral-600">
                   <span className="font-semibold text-neutral-900">Estado actual: </span>
                   {(profile as RestaurantProfile | null)?.status === 'ACTIVE'
@@ -1121,14 +1137,14 @@ export const SettingsSection = React.memo(function SettingsSection({
                   <ToggleField
                     mobileCompact
                     label="Solo recoger en tienda"
-                    description="Desactiva la entrega, su tarifa y el apoyo a la red."
+                    description="Los clientes recogen sus pedidos en WingsLab."
                     checked={storeDraft.pickupOnly === true}
                     onChange={(checked: boolean) =>
                       setStoreDraft((c: any) => ({
                         ...c,
                         pickupOnly: checked,
-                        hasOwnDelivery: checked ? false : c.hasOwnDelivery,
-                        supportsNetworkDelivery: checked ? false : c.supportsNetworkDelivery,
+                        hasOwnDelivery: true,
+                        supportsNetworkDelivery: false,
                         deliveryFee: checked ? '' : c.deliveryFee,
                       }))
                     }
@@ -1147,34 +1163,11 @@ export const SettingsSection = React.memo(function SettingsSection({
                 ) : (
                   <>
                     <div className="md:col-span-2">
-                      <ToggleField
-                        mobileCompact
-                        label="Servicio a domicilio propio"
-                        description="Usa tus repartidores; si lo desactivas, entrega SaDeL."
-                        checked={storeDraft.hasOwnDelivery}
-                        onChange={(checked: boolean) =>
-                          setStoreDraft((c: any) => ({
-                            ...c,
-                            hasOwnDelivery: checked,
-                            deliveryFee: checked ? c.deliveryFee : '',
-                          }))
-                        }
-                      />
+                      <p className="rounded-xl bg-orange-50 p-4 text-sm font-semibold text-orange-900">Reparto propio WingsLab · recogida y entrega mediante QR</p>
                     </div>
 
                     {storeDraft.hasOwnDelivery ? (
                       <>
-                        <div className="md:col-span-2">
-                          <ToggleField
-                            mobileCompact
-                            label="Prestar apoyo a la red"
-                            description="Entrega pedidos de otros negocios y gana la tarifa de envío."
-                            checked={storeDraft.supportsNetworkDelivery !== false}
-                            onChange={(checked: boolean) =>
-                              setStoreDraft((c: any) => ({ ...c, supportsNetworkDelivery: checked }))
-                            }
-                          />
-                        </div>
 
                         <div className="md:col-span-2">
                           <span className="text-[12px] font-bold uppercase tracking-[0.1em] text-neutral-600">Tipo de tarifa</span>
@@ -1242,7 +1235,7 @@ export const SettingsSection = React.memo(function SettingsSection({
                     ) : (
                       <div className="rounded-[16px] border border-black/5 bg-neutral-50 p-3.5 text-sm text-neutral-600">
                         <p className="font-semibold text-neutral-800 text-xs uppercase tracking-wider mb-1">Costo de envío</p>
-                        Lo define SaDeL según la región configurada en el panel de administración.
+                        La tarifa se configura en WingsLab.
                       </div>
                     )}
                     {storeDraft.hasOwnDelivery ? (
@@ -1256,7 +1249,7 @@ export const SettingsSection = React.memo(function SettingsSection({
                     ) : (
                       <div className="rounded-[16px] border border-black/5 bg-neutral-50 p-3.5 text-sm text-neutral-600">
                         <p className="font-semibold text-neutral-800 text-xs uppercase tracking-wider mb-1">Radio de cobertura</p>
-                        Lo define SaDeL según la región configurada en el panel de administración.
+                        La cobertura se configura en WingsLab.
                       </div>
                     )}
                     <div className="md:col-span-2 rounded-[18px] border border-black/5 bg-neutral-50 p-4 text-sm text-neutral-600 leading-6">
@@ -1266,7 +1259,7 @@ export const SettingsSection = React.memo(function SettingsSection({
                           {(profile as RestaurantProfile | null)?.isAcceptingOrders ? 'Aceptando pedidos' : 'No aceptando pedidos'}
                         </span>
                       </div>
-                      <p>Modalidad: <span className="font-medium text-neutral-800">{storeDraft.hasOwnDelivery ? 'Entrega propia' : 'Repartidores SaDeL'}</span>
+                      <p>Modalidad: <span className="font-medium text-neutral-800">Reparto propio WingsLab</span>
                         {storeDraft.hasOwnDelivery ? (
                           <> · Tarifa: <span className="font-medium text-neutral-800">{storeDraft.deliveryPricingModel === 'distance' ? 'Dinámica por distancia' : 'Fija'}</span></>
                         ) : null}
@@ -1907,6 +1900,8 @@ export const SettingsSection = React.memo(function SettingsSection({
                             <p className="mt-0.5 text-[11px] text-neutral-400">
                               {promo.usesCount} uso(s)
                               {promo.maxUses != null ? ` de ${promo.maxUses}` : ''}
+                              {promo.maxUsesPerCustomer != null ? ` · máx. ${promo.maxUsesPerCustomer} por cliente` : ''}
+                              {promo.firstPurchaseOnly ? ' · primera compra' : ''}
                               {promo.minOrderAmount != null ? ` · min $${promo.minOrderAmount}` : ''}
                               {promo.validUntil ? ` · vence ${promo.validUntil.slice(0, 10)}` : ''}
                             </p>
@@ -2095,7 +2090,18 @@ export const SettingsSection = React.memo(function SettingsSection({
                         className="rounded-xl border border-black/10 bg-white px-3.5 py-3 text-base text-neutral-900 shadow-sm transition-all focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-400/20 sm:text-sm"
                       />
                     </label>
+                    <label className="grid min-w-0 gap-1.5 text-sm text-neutral-600">
+                      <span className="text-[11px] font-bold uppercase tracking-[0.1em] text-neutral-500">Usos máximos por cliente <span className="font-normal normal-case text-neutral-400">(opcional)</span></span>
+                      <input type="number" min="1" value={promoCodeForm.maxUsesPerCustomer}
+                        onChange={(e) => setPromoCodeForm((c) => ({ ...c, maxUsesPerCustomer: e.target.value }))}
+                        placeholder="Sin límite"
+                        className="rounded-xl border border-black/10 bg-white px-3.5 py-3 text-base text-neutral-900 shadow-sm transition-all focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-400/20 sm:text-sm" />
+                    </label>
                   </div>
+                  <label className="mt-4 flex items-start gap-2 text-sm text-neutral-700">
+                    <input type="checkbox" checked={promoCodeForm.firstPurchaseOnly} onChange={(e) => setPromoCodeForm((c) => ({ ...c, firstPurchaseOnly: e.target.checked }))} className="mt-1" />
+                    <span><b>Solo primera compra en WingsLab</b><span className="mt-0.5 block text-xs text-neutral-500">El checkout la vuelve a validar dentro de la transacción del pedido.</span></span>
+                  </label>
                   <div className="mt-4 grid min-w-0 grid-cols-1 gap-4 md:grid-cols-2">
                     <label className="grid min-w-0 gap-1.5 text-sm text-neutral-600">
                       <span className="text-[11px] font-bold uppercase tracking-[0.1em] text-neutral-500">Válido desde</span>

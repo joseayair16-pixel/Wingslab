@@ -6,6 +6,8 @@ import { prisma } from '../config/database';
 import { sendAppError } from '../errors/http';
 import { authenticate, authorize, getAuthenticatedUser } from '../middleware/auth';
 import { requireRestaurantOperable } from './restaurant-panel.routes';
+import { requireManualOrderAction } from '../config/order-actions';
+import { prepareOwnDelivery } from '../services/own-delivery.service';
 import { emitNotification } from '../services/socket.service';
 import { sendPushNotification } from '../services/notification.service';
 import {
@@ -57,6 +59,7 @@ export async function registerRestaurantOrderRoutes(fastify: FastifyInstance): P
     restaurantOrders.addHook('preHandler', authenticate);
     restaurantOrders.addHook('preHandler', authorize([UserRole.RESTAURANT]));
     restaurantOrders.addHook('preHandler', requireRestaurantOperable);
+    restaurantOrders.addHook('preHandler', requireManualOrderAction);
 
     restaurantOrders.get('/restaurant-panel/pedidos', async (request, reply) => {
       const parsed = listOrdersQuerySchema.safeParse(request.query);
@@ -168,11 +171,13 @@ export async function registerRestaurantOrderRoutes(fastify: FastifyInstance): P
 
         // Obtener o generar/autocurar el token de reparto existente. Si ya existe uno
         // vigente se reutiliza (no se invalida el QR ya escaneado por el repartidor).
-        const { getOrCreateDeliveryToken } = require('../services/delivery-token.service');
-        const { tokenStr, expiresAt: tokenExpiresAt } = await getOrCreateDeliveryToken(
-          prisma,
-          order.id
-        );
+        if (!['READY', 'IN_TRANSIT'].includes(order.status) || !order.deliveredByRestaurant) {
+          return reply.status(409).send({ success: false, error: { code: 'DELIVERY_NOT_PREPARED', message: 'Genera el QR desde el pedido listo.' } });
+        }
+        const { readDeliveryToken } = require('../services/delivery-token.service');
+        const ticket = await readDeliveryToken(prisma, order.id);
+        if (!ticket) return reply.status(410).send({ success: false, error: { code: 'TOKEN_EXPIRED', message: 'Genera un nuevo enlace desde el pedido listo.' } });
+        const { tokenStr, expiresAt: tokenExpiresAt } = ticket;
 
         return reply.send({
           success: true,
@@ -188,20 +193,6 @@ export async function registerRestaurantOrderRoutes(fastify: FastifyInstance): P
       }
     });
 
-    restaurantOrders.get('/restaurant-panel/repartidores/disponibles', async (request, reply) => {
-      const user = getAuthenticatedUser(request);
-
-      try {
-        const drivers = await getAvailableDriversForRestaurant(prisma, user.sub);
-
-        return reply.send({
-          success: true,
-          data: drivers,
-        });
-      } catch (error) {
-        return sendAppError(reply, error);
-      }
-    });
 
     const restaurantActions = [
       {
@@ -351,6 +342,11 @@ export async function registerRestaurantOrderRoutes(fastify: FastifyInstance): P
               orderId: params.data.id,
             }
           );
+
+          // Same restaurant's other tabs receive only committed state. No broadcast.
+          emitNotification(fastify.io, user.sub, 'RESTAURANT', config.customerEvent,
+            { orderId: params.data.id, status: config.status, updatedAt: order.updatedAt },
+            { requestId: requestContext.requestId, orderId: params.data.id });
 
           if (isScheduleProposal) {
             request.log.info(`[Push] Enviando notificacion de propuesta de programacion al comensal ${order.customer.user.id}`);
@@ -972,138 +968,18 @@ export async function registerRestaurantOrderRoutes(fastify: FastifyInstance): P
       const user = getAuthenticatedUser(request);
       const requestContext = getOrCreateRequestContext(request);
 
+      // QR assignment is not departure: the driver explicitly starts the trip.
       try {
-        const order = await prisma.order.findUnique({
-          where: { id: params.data.id },
-          include: { restaurant: true },
-        });
+        const result = await prepareOwnDelivery(prisma, user.sub, params.data.id);
+        emitNotification(fastify.io, user.sub, 'RESTAURANT', 'order:delivery-assigned',
+          { orderId: result.order.id, status: result.order.status, updatedAt: result.order.updatedAt },
+          { requestId: requestContext.requestId, orderId: result.order.id });
+        return reply.send({ success: true, data: { ...result.order, deliveryToken: {
+          token: result.token.tokenStr, expiresAt: result.token.expiresAt,
+          url: buildCustomerDeliveryUrl(result.token.tokenStr),
+        } } });
+      } catch (error) { return sendAppError(reply, error); }
 
-        if (!order) {
-          return reply.status(404).send({
-            success: false,
-            error: {
-              code: 'ORDER_NOT_FOUND',
-              message: 'No se encontro el pedido.',
-            },
-          });
-        }
-
-        if (order.restaurant.userId !== user.sub) {
-          return reply.status(403).send({
-            success: false,
-            error: {
-              code: 'FORBIDDEN',
-              message: 'No tienes permiso para modificar este pedido.',
-            },
-          });
-        }
-
-        // Avanzar el estado a IN_TRANSIT (asumiendo que el restaurante sale a entregarlo)
-        const updatedOrder = await prisma.order.update({
-          where: { id: order.id },
-          data: {
-            status: OrderStatus.IN_TRANSIT,
-            driverId: null, // Asegurar que no tenga repartidor asignado
-            deliveredByRestaurant: true,
-            inTransitAt: new Date(),
-            estimatedDeliveryTime: computeInTransitEta(order.restaurant, order),
-          },
-          include: {
-            customer: {
-              include: {
-                user: true,
-              },
-            },
-          },
-        });
-
-        // Registrar evento de tracking
-        await prisma.orderTracking.create({
-          data: {
-            orderId: order.id,
-            status: OrderStatus.IN_TRANSIT,
-            notes: 'El repartidor inició la entrega del pedido.',
-          },
-        });
-
-        // Notificar al cliente que el pedido va en camino (por el restaurante)
-        emitNotification(
-          fastify.io,
-          updatedOrder.customer.user.id,
-          'CUSTOMER',
-          'order:in-transit',
-          {
-            orderId: updatedOrder.id,
-            status: 'IN_TRANSIT',
-            message: `${getBusinessArticleCapitalized(order.restaurant?.businessType)} ${getBusinessRef(order.restaurant?.businessType)} asumio el reparto y va en camino.`,
-          },
-          {
-            requestId: requestContext.requestId,
-            orderId: updatedOrder.id,
-          }
-        );
-
-        // Notificar al restaurante
-        emitNotification(
-          fastify.io,
-          user.sub,
-          'RESTAURANT',
-          'order:in-transit',
-          {
-            orderId: updatedOrder.id,
-            orderReference: updatedOrder.orderReference,
-            status: 'IN_TRANSIT',
-            customerName: updatedOrder.customer?.user?.name,
-          },
-          {
-            requestId: requestContext.requestId,
-            orderId: updatedOrder.id,
-          }
-        );
-
-        // Enviar notificación push al comensal
-        request.log.info(`[Push] Intentando enviar notificacion push al comensal ${updatedOrder.customer.user.id} para reparto propio (IN_TRANSIT)`);
-        try {
-          const pushResult = await sendPushNotification(updatedOrder.customer.user.id, {
-            title: '¡Tu pedido va en camino!',
-            body: `${getBusinessArticleCapitalized(order.restaurant?.businessType)} ${getBusinessRef(order.restaurant?.businessType)} ha enviado tu pedido y va hacia tu dirección.`,
-            icon: '/app-icon-192.png',
-            badge: '/badge.png',
-            vibrate: [300, 100, 300, 100, 300], // 3 pulses
-            requireInteraction: false,
-            data: {
-              orderId: updatedOrder.id,
-              event: 'order:in-transit',
-              url: `/?orderId=${updatedOrder.id}`,
-            },
-          });
-          request.log.info(`[Push] Resultado de notificacion push para comensal ${updatedOrder.customer.user.id}: ${JSON.stringify(pushResult)}`);
-        } catch (pushErr) {
-          request.log.error(pushErr as any, `[Push] Error al enviar notificacion push al comensal ${updatedOrder.customer.user.id}`);
-        }
-
-        // Obtener o generar un token de reparto seguro de un solo uso para el QR.
-        // Si ya existe uno vigente se reutiliza (no se invalida el QR escaneado).
-        const { getOrCreateDeliveryToken } = require('../services/delivery-token.service');
-        const { tokenStr, expiresAt: tokenExpiresAt } = await getOrCreateDeliveryToken(
-          prisma,
-          updatedOrder.id
-        );
-
-        return reply.send({
-          success: true,
-          data: {
-            ...updatedOrder,
-            deliveryToken: {
-              token: tokenStr, // Devolver token en texto plano al cliente
-              expiresAt: tokenExpiresAt,
-              url: buildCustomerDeliveryUrl(tokenStr),
-            },
-          },
-        });
-      } catch (error) {
-        return sendAppError(reply, error);
-      }
     });
 
     restaurantOrders.patch('/restaurant-panel/pedidos/:id/quitar-repartidor', async (request, reply) => {
@@ -1562,594 +1438,12 @@ export async function registerRestaurantOrderRoutes(fastify: FastifyInstance): P
     });
 
     // LISTAR PEDIDOS QUE SOLICITAN APOYO
-    restaurantOrders.get('/restaurant-panel/pedidos-apoyo', async (request, reply) => {
-      const user = getAuthenticatedUser(request);
-
-      try {
-        const myRestaurant = await prisma.restaurant.findUnique({
-          where: { userId: user.sub },
-        });
-
-        if (!myRestaurant) {
-          return reply.status(404).send({
-            success: false,
-            error: {
-              code: 'RESTAURANT_NOT_FOUND',
-              message: 'No se encontro tu restaurante.',
-            },
-          });
-        }
-
-        // Si el restaurante desactivó prestar apoyo a la red, no es candidato.
-        if (myRestaurant.supportsNetworkDelivery === false || myRestaurant.pickupOnly) {
-          return reply.send({
-            success: true,
-            data: [],
-          });
-        }
-
-        const orders = await prisma.order.findMany({
-          where: {
-            status: OrderStatus.READY,
-            driverId: null,
-            isSupportRequested: true,
-            supportRestaurantId: null,
-            restaurantId: { not: myRestaurant.id },
-          },
-          include: { restaurant: true },
-        });
-
-        // Filtrar por distancia <= 2km
-        const nearbyOrders = orders.filter((order) => {
-          if (!order.restaurant.latitude || !order.restaurant.longitude || !myRestaurant.latitude || !myRestaurant.longitude) {
-            return false;
-          }
-          const dist = getDistanceInKm(
-            { latitude: myRestaurant.latitude, longitude: myRestaurant.longitude },
-            { latitude: order.restaurant.latitude, longitude: order.restaurant.longitude }
-          );
-          return dist <= 2.0;
-        });
-
-        return reply.send({
-          success: true,
-          data: nearbyOrders,
-        });
-      } catch (error) {
-        return sendAppError(reply, error);
-      }
-    });
 
     // SOLICITAR APOYO A OTROS RESTAURANTES
-    restaurantOrders.patch('/restaurant-panel/pedidos/:id/solicitar-apoyo', async (request, reply) => {
-      const params = z.object({ id: z.string().min(1) }).safeParse(request.params);
-
-      if (!params.success) {
-        return reply.status(400).send({
-          success: false,
-          error: {
-            code: 'INVALID_PARAMS',
-            message: params.error.issues[0]?.message || 'Parametros invalidos.',
-          },
-        });
-      }
-
-      const user = getAuthenticatedUser(request);
-      const requestContext = getOrCreateRequestContext(request);
-
-      try {
-        const order = await prisma.order.findUnique({
-          where: { id: params.data.id },
-          include: { restaurant: true, address: true },
-        });
-
-        if (!order) {
-          return reply.status(404).send({
-            success: false,
-            error: {
-              code: 'ORDER_NOT_FOUND',
-              message: 'No se encontro el pedido.',
-            },
-          });
-        }
-
-        if (order.restaurant.userId !== user.sub) {
-          return reply.status(403).send({
-            success: false,
-            error: {
-              code: 'FORBIDDEN',
-              message: 'No tienes permiso para modificar este pedido.',
-            },
-          });
-        }
-
-        if (order.status !== OrderStatus.READY && !order.noDriversAvailable) {
-          return reply.status(400).send({
-            success: false,
-            error: {
-              code: 'INVALID_STATUS',
-              message: 'Solo se puede solicitar apoyo para pedidos listos o sin repartidores disponibles.',
-            },
-          });
-        }
-
-        if (order.driverId) {
-          return reply.status(400).send({
-            success: false,
-            error: {
-              code: 'HAS_DRIVER',
-              message: 'Este pedido ya tiene un repartidor asignado.',
-            },
-          });
-        }
-
-        if (order.supportRestaurantId) {
-          return reply.status(400).send({
-            success: false,
-            error: {
-              code: 'ALREADY_SUPPORTED',
-              message: 'Este pedido ya fue aceptado por un restaurante aliado.',
-            },
-          });
-        }
-
-        const supportAttemptsUsed = order.supportAttempts ?? 0;
-        if (supportAttemptsUsed >= 2) {
-          return reply.status(400).send({
-            success: false,
-            error: {
-              code: 'SUPPORT_LIMIT_REACHED',
-              message: 'Agotaste los 2 intentos de solicitar apoyo a la red. Solo puedes ir a entregar tú mismo.',
-            },
-          });
-        }
-
-        const originLat = order.restaurant.latitude;
-        const originLng = order.restaurant.longitude;
-
-        if (!originLat || !originLng) {
-          return reply.status(400).send({
-            success: false,
-            error: {
-              code: 'NO_COORDINATES',
-              message: 'El restaurante no tiene coordenadas configuradas.',
-            },
-          });
-        }
-
-        // Buscar restaurantes cercanos con reparto propio que acepten prestar apoyo
-        const restaurants = await prisma.restaurant.findMany({
-          where: {
-            id: { not: order.restaurant.id },
-            hasOwnDelivery: true,
-            supportsNetworkDelivery: true,
-            pickupOnly: false,
-            status: 'ACTIVE',
-            isAcceptingOrders: true,
-          },
-          select: {
-            id: true,
-            name: true,
-            userId: true,
-            latitude: true,
-            longitude: true,
-          },
-        });
-
-        const nearbyRestaurants = restaurants.filter((r) => {
-          if (!r.latitude || !r.longitude) return false;
-          const dist = getDistanceInKm(
-            { latitude: originLat, longitude: originLng },
-            { latitude: r.latitude, longitude: r.longitude }
-          );
-          return dist <= 2.0; // 2 km radius
-        });
-
-        if (nearbyRestaurants.length === 0) {
-          return reply.status(404).send({
-            success: false,
-            error: {
-              code: 'NO_RESTAURANTS_FOUND',
-              message: 'No se encontraron restaurantes con reparto propio a menos de 2km.',
-            },
-          });
-        }
-
-        // Actualizar el pedido para marcar que solicita apoyo
-        await prisma.order.update({
-          where: { id: order.id },
-          data: {
-            isSupportRequested: true,
-            supportRequestedAt: new Date(),
-            supportCount: nearbyRestaurants.length,
-            supportRejectionCount: 0,
-            supportAttempts: { increment: 1 },
-          },
-        });
-
-        const deliveryLat = order.address?.latitude ?? order.latitude;
-        const deliveryLng = order.address?.longitude ?? order.longitude;
-        const attemptsUsed = (order.supportAttempts ?? 0) + 1;
-        const attemptsLeft = Math.max(0, 2 - attemptsUsed);
-
-        // Emitir notificaciones a los restaurantes cercanos
-        for (const r of nearbyRestaurants) {
-          const dist = getDistanceInKm(
-            { latitude: originLat, longitude: originLng },
-            { latitude: r.latitude!, longitude: r.longitude! }
-          );
-
-          // Distancia precisa del restaurante aliado (pickup) a la dirección de entrega
-          let distanceToDeliveryKm: number | null = null;
-          if (deliveryLat && deliveryLng && r.latitude && r.longitude) {
-            distanceToDeliveryKm = getDistanceInKm(
-              { latitude: r.latitude, longitude: r.longitude },
-              { latitude: deliveryLat, longitude: deliveryLng }
-            );
-          }
-          emitNotification(
-            fastify.io,
-            r.userId,
-            'RESTAURANT',
-            'order:support-requested',
-            {
-              orderId: order.id,
-              restaurantName: order.restaurant.name,
-              deliveryFee: order.deliveryFee,
-              address: order.address ? `${order.address.street} ${order.address.number}, ${order.address.neighborhood}` : 'Recoger en tienda',
-              distanceToRestaurant: dist,
-              distanceToDeliveryKm,
-              supportAttempts: attemptsUsed,
-              attemptsLeft,
-              message: `El restaurante ${order.restaurant.name} solicita apoyo para una entrega. Tarifa: $${order.deliveryFee}`,
-            },
-            {
-              requestId: requestContext.requestId,
-              orderId: order.id,
-            }
-          );
-
-          // Send Push Notification to nearby restaurant
-          void sendPushNotification(r.userId, {
-            title: '¡Solicitud de Apoyo!',
-            body: `El restaurante ${order.restaurant.name} solicita apoyo para una entrega. Tarifa: $${order.deliveryFee}`,
-            data: {
-              orderId: order.id,
-              tag: `support-request-${order.id}`,
-              vibrate: [500, 100, 500, 100, 500, 100, 500],
-              supportAttempts: attemptsUsed,
-              attemptsLeft,
-              url: `/?orderId=${order.id}`,
-            }
-          }).catch((err) => {
-            request.log.error('Error sending push for support request', err);
-          });
-        }
-
-        // Configurar temporizador de 2 minutos para cancelar la solicitud si nadie acepta
-        setTimeout(async () => {
-          try {
-            const currentOrder = await prisma.order.findUnique({
-              where: { id: order.id },
-              select: {
-                supportRestaurantId: true,
-                supportAttempts: true,
-                driverId: true,
-                restaurant: { select: { userId: true } },
-                orderReference: true,
-              },
-            });
-
-            // Guarda anti-timers obsoletos: si el pedido fue reenviado (supportAttempts
-            // avanzó) o ya tiene un repartidor asignado (driverId), este temporizador
-            // de la ronda anterior ya no debe notificar "nadie aceptó".
-            if (
-              currentOrder &&
-              !currentOrder.supportRestaurantId &&
-              !currentOrder.driverId &&
-              currentOrder.supportAttempts === attemptsUsed
-            ) {
-              // Nadie aceptó en 2 minutos!
-              await prisma.order.update({
-                where: { id: order.id },
-                data: {
-                  isSupportRequested: false,
-                  supportRequestedAt: null,
-                },
-              });
-
-              const attemptsUsed = currentOrder.supportAttempts ?? 0;
-              const attemptsLeft = Math.max(0, 2 - attemptsUsed);
-              const exhausted = attemptsLeft === 0;
-
-              emitNotification(
-                fastify.io,
-                currentOrder.restaurant.userId,
-                'RESTAURANT',
-                exhausted ? 'order:support-exhausted' : 'order:support-rejected-all',
-                {
-                  orderId: order.id,
-                  supportAttempts: attemptsUsed,
-                  attemptsLeft,
-                  exhausted,
-                  message: exhausted
-                    ? `Nadie aceptó tu solicitud de apoyo y agotaste tus 2 intentos para el pedido ${currentOrder.orderReference}. Entrega tú mismo el pedido.`
-                    : `Nadie aceptó tu solicitud de apoyo para el pedido ${currentOrder.orderReference}. Puedes reintentar (te queda${attemptsLeft === 1 ? '' : 'n'} ${attemptsLeft} intento${attemptsLeft === 1 ? '' : 's'}) o entregarlo tú mismo.`,
-                },
-                {
-                  requestId: requestContext.requestId,
-                  orderId: order.id,
-                }
-              );
-            }
-          } catch (err) {
-            console.error('Error in support request timeout:', err);
-          }
-        }, 2 * 60 * 1000);
-
-        return reply.send({
-          success: true,
-          message: `Solicitud enviada a ${nearbyRestaurants.length} restaurantes cercanos.`,
-        });
-      } catch (error) {
-        return sendAppError(reply, error);
-      }
-    });
 
     // ACEPTAR APOYO DE OTRO RESTAURANTE
-    restaurantOrders.post('/restaurant-panel/pedidos/:id/aceptar-apoyo', async (request, reply) => {
-      const params = z.object({ id: z.string().min(1) }).safeParse(request.params);
-
-      if (!params.success) {
-        return reply.status(400).send({
-          success: false,
-          error: {
-            code: 'INVALID_PARAMS',
-            message: params.error.issues[0]?.message || 'Parametros invalidos.',
-          },
-        });
-      }
-
-      const user = getAuthenticatedUser(request);
-      const requestContext = getOrCreateRequestContext(request);
-
-      try {
-        const supportRestaurant = await prisma.restaurant.findUnique({
-          where: { userId: user.sub },
-        });
-
-        if (!supportRestaurant) {
-          return reply.status(404).send({
-            success: false,
-            error: {
-              code: 'RESTAURANT_NOT_FOUND',
-              message: 'No se encontro tu restaurante.',
-            },
-          });
-        }
-
-        // Defensa: si el restaurante desactivó prestar apoyo a la red, no puede aceptar.
-        if (supportRestaurant.supportsNetworkDelivery === false || supportRestaurant.pickupOnly) {
-          return reply.status(400).send({
-            success: false,
-            error: {
-              code: 'SUPPORT_DISABLED',
-              message: 'Desactivaste prestar apoyo a la red. Actívalo en Ajustes para aceptar entregas de otros restaurantes.',
-            },
-          });
-        }
-
-        const order = await prisma.order.findUnique({
-          where: { id: params.data.id },
-          include: { restaurant: true },
-        });
-
-        if (!order) {
-          return reply.status(404).send({
-            success: false,
-            error: {
-              code: 'ORDER_NOT_FOUND',
-              message: 'No se encontro el pedido.',
-            },
-          });
-        }
-
-        if (order.status !== OrderStatus.READY || order.driverId) {
-          return reply.status(400).send({
-            success: false,
-            error: {
-              code: 'INVALID_STATUS',
-              message: 'Este pedido ya no esta disponible para apoyo.',
-            },
-          });
-        }
-
-        if (order.supportRestaurantId) {
-          return reply.status(409).send({
-            success: false,
-            error: {
-              code: 'ALREADY_SUPPORTED',
-              message: 'Este pedido ya fue aceptado por otro restaurante aliado.',
-            },
-          });
-        }
-
-        // Marcar el pedido como tomado por apoyo (actualización atómica para evitar
-        // que dos restaurantes acepten el mismo pedido de forma concurrente).
-        const existingNotes = order.notes ? order.notes + ' | ' : '';
-        const newNotes = existingNotes + `[ApoyoId: ${supportRestaurant.id}]`;
-
-        const acceptedCount = await prisma.order.updateMany({
-          where: {
-            id: order.id,
-            status: OrderStatus.READY,
-            driverId: null,
-            supportRestaurantId: null,
-          },
-          data: {
-            supportRestaurantId: supportRestaurant.id,
-            notes: newNotes,
-            isSupportRequested: false,
-            supportRequestedAt: null,
-            noDriversAvailable: false,
-          },
-        });
-
-        if (acceptedCount.count === 0) {
-          return reply.status(409).send({
-            success: false,
-            error: {
-              code: 'ALREADY_SUPPORTED',
-              message: 'Este pedido ya fue aceptado por otro restaurante aliado o ya no está disponible.',
-            },
-          });
-        }
-
-        // PIN de entrega para transferencias: el restaurante origen lo validará
-        // al entregar el pedido al aliado (mismo mecanismo del repartidor SaDeL).
-        if (order.paymentMethod === 'TRANSFER' && !order.handoverPin) {
-          const handoverPin = Math.floor(1000 + Math.random() * 9000).toString();
-          await prisma.order.update({
-            where: { id: order.id },
-            data: { handoverPin, handoverPinUpdatedAt: new Date() },
-          });
-        }
-
-        const updatedOrder = await prisma.order.findUniqueOrThrow({
-          where: { id: order.id },
-          include: {
-            customer: {
-              include: {
-                user: true,
-              },
-            },
-          },
-        });
-
-        // Notificar al restaurante original
-        emitNotification(
-          fastify.io,
-          order.restaurant.userId,
-          'RESTAURANT',
-          'order:support-accepted',
-          {
-            orderId: order.id,
-            supportRestaurantName: supportRestaurant.name,
-            message: `El restaurante ${supportRestaurant.name} ha aceptado entregar tu pedido.`,
-          },
-          {
-            requestId: requestContext.requestId,
-            orderId: order.id,
-          }
-        );
-
-        // Generar un token de reparto seguro de un solo uso para que el restaurante aliado
-        // Obtener o generar el token de reparto para que el aliado genere el QR de
-        // entrega (mismo mecanismo del reparto propio/express). Si ya existe uno
-        // vigente se reutiliza (no se invalida el QR ya escaneado).
-        const { getOrCreateDeliveryToken } = require('../services/delivery-token.service');
-        const { tokenStr: supportTokenStr, expiresAt: supportTokenExpiresAt } =
-          await getOrCreateDeliveryToken(prisma, order.id);
-
-        return reply.send({
-          success: true,
-          data: {
-            ...updatedOrder,
-            deliveryToken: {
-              token: supportTokenStr, // Token en texto plano para el QR
-              expiresAt: supportTokenExpiresAt,
-              url: buildCustomerDeliveryUrl(supportTokenStr),
-            },
-          },
-        });
-      } catch (error) {
-        return sendAppError(reply, error);
-      }
-    });
 
     // RECHAZAR APOYO DE OTRO RESTAURANTE
-    restaurantOrders.post('/restaurant-panel/pedidos/:id/rechazar-apoyo', async (request, reply) => {
-      const params = z.object({ id: z.string().min(1) }).safeParse(request.params);
-
-      if (!params.success) {
-        return reply.status(400).send({
-          success: false,
-          error: {
-            code: 'INVALID_PARAMS',
-            message: params.error.issues[0]?.message || 'Parametros invalidos.',
-          },
-        });
-      }
-
-      const requestContext = getOrCreateRequestContext(request);
-
-      try {
-        const order = await prisma.order.findUnique({
-          where: { id: params.data.id },
-          include: { restaurant: true },
-        });
-
-        if (!order) {
-          return reply.status(404).send({
-            success: false,
-            error: {
-              code: 'ORDER_NOT_FOUND',
-              message: 'No se encontro el pedido.',
-            },
-          });
-        }
-
-        if (!order.isSupportRequested) {
-          return reply.status(400).send({
-            success: false,
-            error: {
-              code: 'NOT_REQUESTING_SUPPORT',
-              message: 'Este pedido no esta solicitando apoyo.',
-            },
-          });
-        }
-
-        const updatedOrder = await prisma.order.update({
-          where: { id: order.id },
-          data: {
-            supportRejectionCount: { increment: 1 },
-          },
-        });
-
-        // Si todos rechazaron, notificar al restaurante solicitante
-        if (updatedOrder.supportRejectionCount >= updatedOrder.supportCount) {
-          const attemptsUsed = updatedOrder.supportAttempts ?? 0;
-          const attemptsLeft = Math.max(0, 2 - attemptsUsed);
-          const exhausted = attemptsLeft === 0;
-          emitNotification(
-            fastify.io,
-            order.restaurant.userId,
-            'RESTAURANT',
-            exhausted ? 'order:support-exhausted' : 'order:support-rejected-all',
-            {
-              orderId: order.id,
-              supportAttempts: attemptsUsed,
-              attemptsLeft,
-              exhausted,
-              message: exhausted
-                ? `Ningun restaurante acepto tu solicitud de apoyo y agotaste tus 2 intentos para el pedido ${order.orderReference}. Entrega tú mismo el pedido.`
-                : `Ningun restaurante acepto tu solicitud de apoyo para el pedido ${order.orderReference}. Puedes reintentar (te queda${attemptsLeft === 1 ? '' : 'n'} ${attemptsLeft} intento${attemptsLeft === 1 ? '' : 's'}) o entregarlo tú mismo.`,
-            },
-            {
-              requestId: requestContext.requestId,
-              orderId: order.id,
-            }
-          );
-        }
-
-        return reply.send({
-          success: true,
-          message: 'Apoyo rechazado.',
-        });
-      } catch (error) {
-        return sendAppError(reply, error);
-      }
-    });
 
     // INICIAR ENTREGA DE APOYO
     restaurantOrders.post('/restaurant-panel/pedidos/:id/iniciar-entrega', async (request, reply) => {

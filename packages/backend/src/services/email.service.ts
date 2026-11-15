@@ -1,5 +1,6 @@
 import nodemailer, { Transporter } from 'nodemailer';
 import { logger } from '../utils/logger';
+import { externalServicesEnabled } from '../config/isolation';
 
 // RSEND_API_KEY activa el envío por la API HTTPS de Resend (funciona incluso en
 // redes que bloquean SMTP saliente, p. ej. Railway).
@@ -15,6 +16,7 @@ const SMTP_FROM = process.env.SMTP_FROM || 'SaDeL <no-reply@sadel.mx>';
 let transporter: Transporter | null = null;
 
 function getTransporter(): Transporter | null {
+  if (!externalServicesEnabled()) return null;
   if (!SMTP_HOST || !SMTP_USER || !SMTP_PASSWORD) return null;
 
   if (!transporter) {
@@ -34,6 +36,7 @@ function getTransporter(): Transporter | null {
 }
 
 export function isEmailConfigured(): boolean {
+  if (!externalServicesEnabled()) return false;
   return Boolean(RESEND_API_KEY || (SMTP_HOST && SMTP_USER && SMTP_PASSWORD));
 }
 
@@ -48,6 +51,7 @@ function buildOtpText(code: string): string {
 
 // Envío por la API HTTPS de Resend (https://api.resend.com/emails).
 async function sendViaResend(to: string, subject: string, text: string): Promise<boolean> {
+  if (!externalServicesEnabled()) return false;
   if (!RESEND_API_KEY) return false;
 
   try {

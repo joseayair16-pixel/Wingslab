@@ -1,7 +1,7 @@
 'use client';
 
 import { memo, useState } from 'react';
-import { SaDelLogo } from './SaDelLogo';
+import { WingsLabLogo as SaDelLogo } from './WingsLabLogo';
 
 export const SaDelLoader = memo(function SaDelLoader({
   className = '',

@@ -1,15 +1,19 @@
 const { PHASE_DEVELOPMENT_SERVER } = require('next/constants');
 const path = require('path');
+const { frontendConfig } = require('../../config/wingslab.cjs');
 
 // @sadel/shared se resuelve al fuente TS (ver comentario en web-customer/next.config.js).
 const withSharedAlias = (config) => {
-  config.resolve = config.resolve || {};
-  config.resolve.alias = { ...(config.resolve.alias || {}), '@sadel/shared': path.resolve(__dirname, '../../packages/shared/src/index.ts') };
+  config.webpack = (webpackConfig) => {
+    webpackConfig.resolve.alias['@sadel/shared'] = path.resolve(__dirname, '../../packages/shared/src/index.ts');
+    return webpackConfig;
+  };
   return config;
 };
 
 module.exports = (phase) => {
   const config = withSharedAlias({
+    ...frontendConfig('restaurant'),
     reactStrictMode: true,
     distDir: phase === PHASE_DEVELOPMENT_SERVER ? '.next-dev' : '.next',
     images: {
@@ -17,15 +21,5 @@ module.exports = (phase) => {
     },
   });
 
-  if (phase !== PHASE_DEVELOPMENT_SERVER) {
-    config.rewrites = async () => [
-      {
-        source: '/api/:path*',
-        destination: 'https://sadel-production.up.railway.app/:path*',
-      },
-    ];
-  }
-
   return config;
 };
-

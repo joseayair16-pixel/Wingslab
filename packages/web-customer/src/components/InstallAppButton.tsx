@@ -254,7 +254,7 @@ export default function InstallAppButton() {
             )}
           </span>
           <span className="text-sm font-semibold text-neutral-900">
-            {androidNative ? 'Instala la app de SaDeL' : 'Instala SaDeL'}
+            {androidNative ? 'WingsLab local' : 'Instala WingsLab'}
           </span>
           <button
             type="button"
@@ -278,7 +278,7 @@ export default function InstallAppButton() {
         <div className="fixed inset-0 z-[9995] flex items-end justify-center bg-black/45 px-4 pb-8 sm:items-center sm:pb-0" role="dialog" aria-modal="true" aria-label="Instalar SaDeL en iPhone o iPad">
           <div className="max-h-[85dvh] w-full max-w-sm overflow-y-auto rounded-[28px] bg-white p-6 shadow-2xl">
             <div className="mb-4 flex items-center justify-between">
-              <h3 className="text-lg font-bold text-neutral-900">Instalar SaDeL en tu iPhone</h3>
+              <h3 className="text-lg font-bold text-neutral-900">Instalar WingsLab en tu iPhone</h3>
               <button
                 type="button"
                 onClick={() => setShowIOSHelp(false)}

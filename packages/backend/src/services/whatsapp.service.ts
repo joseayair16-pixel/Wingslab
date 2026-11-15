@@ -1,3 +1,5 @@
+import { externalServicesEnabled } from '../config/isolation';
+
 const WHATSAPP_API_KEY = process.env.WHATSAPP_API_KEY || '';
 const WHATSAPP_API_URL = process.env.WHATSAPP_API_URL || '';
 const WHATSAPP_API_TOKEN = process.env.WHATSAPP_API_TOKEN || '';
@@ -24,6 +26,7 @@ function toE164(raw: string): string {
 }
 
 async function sendViaApi(params: SendMessageParams): Promise<boolean> {
+  if (!externalServicesEnabled()) return false;
   if (!WHATSAPP_API_KEY || !WHATSAPP_API_URL) return false;
   try {
     const response = await fetch(WHATSAPP_API_URL, {
@@ -48,6 +51,7 @@ async function sendTemplateViaCloudApi(params: {
   templateName: string;
   bodyParameters: string[];
 }): Promise<boolean> {
+  if (!externalServicesEnabled()) return false;
   if (!WHATSAPP_API_TOKEN || !WHATSAPP_PHONE_NUMBER_ID) {
     console.error(
       '[WhatsApp Cloud API] No configurado: define WHATSAPP_API_TOKEN y WHATSAPP_PHONE_NUMBER_ID en el entorno.',

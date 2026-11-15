@@ -26,11 +26,6 @@ SaDeL/
 │   │   │   └── index.ts           # Exports
 │   │   └── package.json
 │   │
-│   ├── web-admin/                  # Admin Dashboard (Next.js)
-│   │   ├── src/app/               # Next.js App Router
-│   │   ├── tailwind.config.ts     # Styling
-│   │   └── package.json
-│   │
 │   ├── web-restaurant/             # Restaurant Portal (Next.js)
 │   │   ├── src/app/               # Next.js App Router
 │   │   ├── tailwind.config.ts     # Styling

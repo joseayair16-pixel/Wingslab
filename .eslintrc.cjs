@@ -26,7 +26,6 @@ module.exports = {
     project: [
       './packages/backend/tsconfig.json',
       './packages/shared/tsconfig.json',
-      './packages/web-admin/tsconfig.json',
       './packages/web-restaurant/tsconfig.json',
       './packages/web-customer/tsconfig.json',
       './packages/web-driver/tsconfig.json',
@@ -45,7 +44,6 @@ module.exports = {
   overrides: [
     {
       files: [
-        'packages/web-admin/**/*.{ts,tsx}',
         'packages/web-restaurant/**/*.{ts,tsx}',
         'packages/web-customer/**/*.{ts,tsx}',
         'packages/web-driver/**/*.{ts,tsx}',

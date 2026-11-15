@@ -1,3 +1,4 @@
+import '../../scripts/blocked-operation.cjs';
 import http from 'http';
 import Fastify from 'fastify';
 import fastifySocketIO from 'fastify-socket.io';

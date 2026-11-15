@@ -1,3 +1,4 @@
+import '../config/blocked-operation';
 /**
  * Sube el APK del comensal a R2 (versionado + alias `latest`) y publica la
  * version en SystemSetting para que `GET /app/version` la sirva.

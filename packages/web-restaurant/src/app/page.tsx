@@ -1,4 +1,8 @@
 'use client';
+import { getWingslabApiUrl, getWingslabSocketUrl, getWingslabCustomerUrl, wingslabExternalServicesEnabled,
+  AUTOMATIC_ORDER_DECISIONS_ENABLED, SIMULATED_ORDERS_ENABLED, manualOrderActionAllowed,
+  manualOrderActionsForStatus, manualOrderTargetStatus } from '@sadel/shared';
+import { createOrderSyncGate, createOrderActionFlight, mergeConfirmedOrder, reconcileOrders } from '../lib/order-sync';
 import { Activity, AlertTriangle, Check, ChefHat, ChevronUp, ClipboardList, Clock, Info, Loader2, Lock, Mail, MessageCircle, Minus, Package, Pencil, Phone, Plus, RefreshCw, Sparkles, Tag, Trash2, User, Wand2, X } from 'lucide-react';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -40,12 +44,13 @@ import {
 import { useForegroundPolling } from '../hooks/useForegroundPolling';
 import { printHtmlString, NativePrintError } from '../utils/printHelper';
 import { generateTicketHtml } from '../utils/ticketGenerator';
-import { SaDelLogo } from '../components/SaDelLogo';
+import { WingsLabLogo as SaDelLogo } from '../components/WingsLabLogo';
 import { SaDelLoader } from '../components/SaDelLoader';
 import { DashboardSection } from '../components/sections/DashboardSection';
+import { CampaignsSection } from '../components/sections/CampaignsSection';
+import { CustomersSection } from '../components/sections/CustomersSection';
 import { BillingSection } from '../components/sections/BillingSection';
 import { SettingsSection } from '../components/sections/SettingsSection';
-import { FeaturedSection } from '../components/sections/FeaturedSection';
 import PushEnableBanner from '../components/PushEnableBanner';
 import { createPlacesSource } from '../lib/places';
 import { ensureGoogleMapsScript } from '../lib/googleMaps';
@@ -170,6 +175,7 @@ type OperatingHourItem = {
 
 type OrderItem = {
   id: string;
+  updatedAt?: string;
   orderReference: string;
   restaurantId?: string;
   supportRestaurantId?: string | null;
@@ -386,7 +392,7 @@ type RestaurantRetryAction =
     label: string;
   };
 
-type RestaurantPortalSection = 'dashboard' | 'orders' | 'store' | 'settings' | 'billing' | 'featured';
+type RestaurantPortalSection = 'dashboard' | 'orders' | 'store' | 'settings' | 'billing' | 'campaigns' | 'customers';
 type PreparationPresetMinutes = 10 | 15 | 20 | 30 | 45 | 60;
 type StoreProfileDraft = {
   name: string;
@@ -631,38 +637,23 @@ function debugLog(...args: unknown[]): void {
   }
 }
 
-const defaultApiBase = 'https://sadel-production.up.railway.app';
+// Independent capabilities: only explicit local manual actions; automatic decisions stay off.
+function isLocalManualOrderAction(orderId: string, action: string) {
+  return manualOrderActionAllowed(orderId, action, typeof window !== 'undefined' &&
+    window.location.origin === 'http://127.0.0.1:3102' && process.env.NEXT_PUBLIC_WINGSLAB_ROLE === 'restaurant');
+}
+function isWingslabImage(value: string): boolean {
+  if (value.startsWith('/') && !value.startsWith('//')) return true;
+  try {
+    return ['http://127.0.0.1:3101', 'http://127.0.0.1:3102'].includes(new URL(value).origin);
+  } catch { return false; }
+}
+const defaultApiBase = getWingslabApiUrl();
 function getCanonicalCustomerUrl(): string {
-  return 'https://pideloporsadel.app';
+  return getWingslabCustomerUrl();
 }
 
 function getCustomerOrigin(): string {
-  // NUNCA usar un *.vercel.app como origen del comensal: es un preview/deplegado
-  // temporal, no el dominio público. Si la env quedó mal configurada, ignorarla.
-  const customerUrl = process.env.NEXT_PUBLIC_CUSTOMER_URL;
-  if (customerUrl && !customerUrl.includes('.vercel.app')) return customerUrl;
-  if (typeof window !== 'undefined') {
-    const { hostname, port, protocol } = window.location;
-    if (hostname === 'localhost' || hostname === '127.0.0.1') {
-      return 'http://localhost:3000';
-    }
-    const prefixes = ['restaurante.', 'restaurant.', 'admin.', 'dashboard.', 'r.'];
-    for (const prefix of prefixes) {
-      if (hostname.startsWith(prefix)) {
-        const rest = hostname.slice(prefix.length);
-        return `${protocol}//app.${rest}${port ? `:${port}` : ''}`;
-      }
-    }
-    if (!hostname.endsWith('.vercel.app')) {
-      const subdomains = hostname.split('.');
-      if (subdomains.length >= 3) {
-        return `${protocol}//${subdomains.slice(1).join('.')}${port ? `:${port}` : ''}`;
-      }
-    }
-  }
-  // La app del comensal nunca se sirve desde un hostname *.vercel.app
-  // (esos dominios pertenecen al host actual del panel). Devolvemos el
-  // origen canónico de producción para nunca generar links con el preview.
   return getCanonicalCustomerUrl();
 }
 
@@ -760,6 +751,12 @@ function stopWebRepeatAlarm(): void {
 
 const liveEvents = [
   'order:created',
+  'order:accepted',
+  'order:preparing',
+  'order:ready',
+  'order:delivery-assigned',
+  'order:driver-arrived',
+  'order:driver-location',
   'order:driver-accepted',
   'order:driver-rejected',
   'order:driver-auto-unassigned',
@@ -767,11 +764,6 @@ const liveEvents = [
   'order:in-transit',
   'order:eta-updated',
   'order:delivered',
-  'order:support-requested',
-  'order:support-accepted',
-  'order:support-rejected-all',
-  'order:support-exhausted',
-  'order:support-picked-up',
   'order:no-drivers-available',
   'order:driver-arrived-restaurant',
   'order:queue-next',
@@ -840,7 +832,7 @@ const restaurantActionMap: Record<
   },
   preparing: {
     path: 'preparacion',
-    label: 'Marcar en preparacion',
+    label: 'Iniciar preparacion',
     successMessage: 'Pedido movido a preparacion.',
   },
   ready: {
@@ -850,8 +842,8 @@ const restaurantActionMap: Record<
   },
   asumirReparto: {
     path: 'asumir-reparto',
-    label: 'Entregar yo mismo',
-    successMessage: 'Has asumido el reparto de este pedido.',
+    label: 'Generar QR de reparto',
+    successMessage: 'QR listo. El repartidor debe confirmar la recogida.',
   },
   quitarRepartidor: {
     path: 'quitar-repartidor',
@@ -1010,26 +1002,19 @@ export default function Home() {
   const [error, setError] = useState('');
   const [authMessage, setAuthMessage] = useState('');
   const [profile, setProfile] = useState<RestaurantProfile | null>(null);
+  const [profileLoadState, setProfileLoadState] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle');
   const [platformCategories, setPlatformCategories] = useState<StoreCategoryItem[]>([]);
   const [transferBankName, setTransferBankName] = useState('');
   const [transferAccountNumber, setTransferAccountNumber] = useState('');
   const [transferBeneficiaryName, setTransferBeneficiaryName] = useState('');
   const [orders, setOrders] = useState<OrderItem[]>([]);
-  const [supportRequestsQueue, setSupportRequestsQueue] = useState<Array<{
-    orderId: string;
-    restaurantName: string;
-    deliveryFee: number;
-    address: string;
-    distanceToRestaurant: number;
-    distanceToDeliveryKm?: number | null;
-    supportAttempts?: number;
-    attemptsLeft?: number;
-    expiresAt: number;
-  }>>([]);
+  const [orderSyncError, setOrderSyncError] = useState('');
+  const ordersSyncGateRef = useRef(createOrderSyncGate());
+  const orderActionFlightRef = useRef(createOrderActionFlight());
+  const uncertainOrderIdsRef = useRef(new Set<string>());
   const [supportNotifyByOrder, setSupportNotifyByOrder] = useState<Record<string, { attemptsLeft: number; exhausted: boolean }>>({});
   const [supportAliadoNamesByOrder, setSupportAliadoNamesByOrder] = useState<Record<string, string>>({});
   const [supportCountdownNow, setSupportCountdownNow] = useState(() => Date.now());
-  const supportAlertLoopRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [products, setProducts] = useState<ProductItem[]>([]);
   const [categories, setCategories] = useState<CategoryItem[]>([]);
   const [categoryOrderDraft, setCategoryOrderDraft] = useState<CategoryItem[] | null>(null);
@@ -1047,18 +1032,8 @@ export default function Home() {
     return () => clearInterval(timer);
   }, []);
 
-  // Featured / Destacados
-  const [featuredRequests, setFeaturedRequests] = useState<any[]>([]);
-  const [featuredPackages, setFeaturedPackages] = useState<{ days: number; price: number }[]>([]);
-  const [showFeaturedModal, setShowFeaturedModal] = useState(false);
-  const [showPhonePreviewModal, setShowPhonePreviewModal] = useState(false);
   const [showMenuPreview, setShowMenuPreview] = useState(false);
   const [proofPreviewUrl, setProofPreviewUrl] = useState<string | null>(null);
-  const [featuredDays, setFeaturedDays] = useState(1);
-  const [featuredPaymentProof, setFeaturedPaymentProof] = useState('');
-  const [featuredUploading, setFeaturedUploading] = useState(false);
-  const [featuredSubmitting, setFeaturedSubmitting] = useState(false);
-  const [featuredFlyerUploading, setFeaturedFlyerUploading] = useState(false);
   const [selectedStatus, setSelectedStatus] = useState<'ACTIVE' | 'REJECTED' | 'CANCELLED' | 'DELIVERED' | 'COMPLETED'>('ACTIVE');
   const [selectedDriverByOrder, setSelectedDriverByOrder] = useState<Record<string, string>>({});
   const [activeActionKey, setActiveActionKey] = useState<string | null>(null);
@@ -1150,6 +1125,7 @@ export default function Home() {
   }, [showHelpModal]);
 
   const simulateIncomingOrder = (paymentMethod: 'CASH' | 'TRANSFER' | 'CREDIT_CARD') => {
+    if (!SIMULATED_ORDERS_ENABLED) return;
     const mockId = `mock-order-${Date.now()}`;
     const mockOrder: OrderItem = {
       id: mockId,
@@ -1855,10 +1831,10 @@ export default function Home() {
           };
         }>({ apiBase, path: '/settings', token });
         if (data.success) {
-          if (data.data.restaurantWelcomeImage) {
+          if (data.data.restaurantWelcomeImage && isWingslabImage(data.data.restaurantWelcomeImage)) {
             setWelcomeImage(data.data.restaurantWelcomeImage);
           }
-          if (data.data.restaurantPromoModalEnabled && data.data.restaurantPromoModalImage) {
+          if (data.data.restaurantPromoModalEnabled && data.data.restaurantPromoModalImage && isWingslabImage(data.data.restaurantPromoModalImage)) {
             setPromoImageUrl(data.data.restaurantPromoModalImage);
             try {
               // Clean up legacy key
@@ -1917,7 +1893,7 @@ export default function Home() {
       setIsDarkMode(document.documentElement.classList.contains('dark'));
 
       const savedSection = window.localStorage.getItem('restaurantActiveSection');
-      if (savedSection) {
+      if (savedSection && ['dashboard', 'orders', 'store', 'settings', 'campaigns', 'customers'].includes(savedSection)) {
         setActiveSection(savedSection as RestaurantPortalSection);
       }
 
@@ -1997,8 +1973,8 @@ export default function Home() {
       const section = params.get('section');
       if (section === 'billing') {
         window.history.replaceState({}, '', window.location.pathname);
-        setActiveSection('billing');
-        window.localStorage.setItem('restaurantActiveSection', 'billing');
+        setActiveSection('dashboard');
+        window.localStorage.setItem('restaurantActiveSection', 'dashboard');
       }
       if (orderId) {
         window.history.replaceState({}, '', window.location.pathname);
@@ -2278,6 +2254,7 @@ export default function Home() {
     | { ok: true }
     | { ok: false; reason: 'DENIED' | 'BLOCKED' | 'INSECURE' | 'NOT_SUPPORTED' | 'VAPID_NOT_CONFIGURED' | 'SUBSCRIBE_FAILED' | 'UNKNOWN' }
   > => {
+    if (!wingslabExternalServicesEnabled()) return { ok: false, reason: 'BLOCKED' };
     if (typeof window === 'undefined') {
       return { ok: false, reason: 'NOT_SUPPORTED' };
     }
@@ -2515,7 +2492,11 @@ export default function Home() {
     setIsMobileNavOpen(false);
     setActiveSection('dashboard');
     setProfile(null);
+    setProfileLoadState('idle');
     setOrders([]);
+    ordersSyncGateRef.current.invalidate();
+    uncertainOrderIdsRef.current.clear();
+    setOrderSyncError('');
     setProducts([]);
     setCategories([]);
     setDrivers([]);
@@ -2778,35 +2759,6 @@ export default function Home() {
     return result === 'played';
   }, [isOrderAlertSoundEnabled]);
 
-  // Alerta de apoyo continua: mientras haya una solicitud sin responder, suena
-  // cada pocos segundos y se actualiza el countdown visible del modal.
-  useEffect(() => {
-    if (supportRequestsQueue.length === 0) {
-      if (supportAlertLoopRef.current) {
-        clearInterval(supportAlertLoopRef.current);
-        supportAlertLoopRef.current = null;
-      }
-      return;
-    }
-
-    let lastSoundAt = 0;
-    const tick = () => {
-      setSupportCountdownNow(Date.now());
-      if (Date.now() - lastSoundAt >= 3000) {
-        lastSoundAt = Date.now();
-        void playIncomingOrderAlert();
-      }
-    };
-    tick();
-    supportAlertLoopRef.current = setInterval(tick, 1000);
-
-    return () => {
-      if (supportAlertLoopRef.current) {
-        clearInterval(supportAlertLoopRef.current);
-        supportAlertLoopRef.current = null;
-      }
-    };
-  }, [supportRequestsQueue.length, playIncomingOrderAlert]);
 
   // Ticker global (1s) para el countdown de "esperando respuesta de la red" en
   // las tarjetas de pedido. Independiente del loop de sonido para que el countdown
@@ -2824,20 +2776,6 @@ export default function Home() {
     };
   }, []);
 
-  // Auto-rechazo del modal cuando se agotan los 2 minutos sin responder
-  useEffect(() => {
-    const headItem = supportRequestsQueue[0];
-    if (!headItem || !headItem.expiresAt) return;
-    if (headItem.expiresAt > supportCountdownNow) return;
-
-    setSupportRequestsQueue((prev) => prev.filter((item) => item.orderId !== headItem.orderId));
-    pushToast('info', 'Tiempo agotado', `La solicitud de ${headItem.restaurantName} expiró sin responder.`);
-
-    void fetch(`${apiBase}/restaurant-panel/pedidos/${headItem.orderId}/rechazar-apoyo`, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${token}` },
-    }).catch(() => undefined);
-  }, [supportRequestsQueue, supportCountdownNow, apiBase, token, pushToast]);
 
   const playOverdueAlert = useCallback(async () => {
     if (!isOrderAlertSoundEnabled) return false;
@@ -3019,6 +2957,12 @@ export default function Home() {
   };
 
   function openAcceptOrderPrompt(orderId: string) {
+    // La autorización se evalúa antes de mostrar cualquier control de acción:
+    // un pedido no autorizado no debe abrir diálogos que no se van a permitir.
+    if (!isLocalManualOrderAction(orderId, 'accept')) {
+      setError('[WingsLab] Esta acción o pedido no está autorizado para operaciones manuales.');
+      return;
+    }
     setSelectedPreparationTime(15);
     setAcceptancePromptOrderId(orderId);
   }
@@ -3073,12 +3017,14 @@ export default function Home() {
   }
 
   const loadDashboard = useCallback(async () => {
+    const ordersTicket = ordersSyncGateRef.current.begin();
     setLoading(true);
+    setProfileLoadState('loading');
     setError('');
     persistApiBase(storageKey, apiBase);
 
     try {
-      const [profileData, ordersData, productsData, categoriesData, driversData, billingData, storeCategoriesData, featuredPriceData, featuredRequestsData] = await Promise.all([
+      const [profileData, ordersData, productsData, categoriesData, driversData, billingData, storeCategoriesData] = await Promise.all([
         apiRequest<SuccessResponse<RestaurantProfile>>({
           apiBase,
           path: '/restaurant-panel/perfil',
@@ -3119,55 +3065,21 @@ export default function Home() {
             backoffMs: 350,
           },
         }),
-        apiRequest<SuccessResponse<DriverItem[]>>({
-          apiBase,
-          path: '/restaurant-panel/repartidores/disponibles',
-          token,
-          fallbackMessage: 'No se pudieron cargar los repartidores disponibles.',
-          retry: {
-            attempts: 2,
-            backoffMs: 350,
-          },
-        }),
-        apiRequest<SuccessResponse<RestaurantBillingSummary>>({
-          apiBase,
-          path: '/restaurant-panel/facturacion',
-          token,
-          fallbackMessage: 'No se pudo cargar el resumen de facturacion.',
-          retry: {
-            attempts: 2,
-            backoffMs: 350,
-          },
-        }),
-        apiRequest<SuccessResponse<StoreCategoryItem[]>>({
-          apiBase,
-          path: '/store-categories',
-          fallbackMessage: 'No se pudieron cargar las categorías de plataforma.',
-          retry: {
-            attempts: 2,
-            backoffMs: 350,
-          },
-        }),
-        apiRequest<SuccessResponse<{ packages: { days: number; price: number }[] }>>({
-          apiBase,
-          path: '/restaurant/featured/packages',
-          token,
-        }).catch(() => ({ success: false, data: { packages: [] } })),
-        apiRequest<SuccessResponse<any[]>>({
-          apiBase,
-          path: '/restaurant/featured/my-requests',
-          token,
-        }).catch(() => ({ success: false, data: [] })),
+        Promise.resolve({ data: [] as DriverItem[] }),
+        Promise.resolve({ data: null }),
+        Promise.resolve({ data: [] as StoreCategoryItem[] }),
       ]);
 
       setProfile(profileData.data);
+      setProfileLoadState('ready');
       setTransferBankName(profileData.data.transferBankName || '');
       setTransferAccountNumber(profileData.data.transferAccountNumber || '');
       setTransferBeneficiaryName(profileData.data.transferBeneficiaryName || '');
-      setOrders((current) => {
-        const mockOrders = current.filter((o) => o.id.startsWith('mock-order-'));
-        return [...mockOrders, ...ordersData.data];
-      });
+      if (ordersSyncGateRef.current.current(ordersTicket)) {
+        setOrders(current => ordersSyncGateRef.current.current(ordersTicket) ? reconcileOrders(current, ordersData.data) : current);
+        ordersData.data.forEach(order => uncertainOrderIdsRef.current.delete(order.id));
+        setOrderSyncError('');
+      }
       // Detectar llegadas de repartidor desde datos de la API
       {
         const arrived: Record<string, true> = {};
@@ -3185,8 +3097,6 @@ export default function Home() {
       setDrivers(driversData.data);
       setPlatformCategories(storeCategoriesData.data);
       setBillingSummary(billingData.data);
-      setFeaturedPackages((featuredPriceData as any)?.data?.packages ?? []);
-      setFeaturedRequests((featuredRequestsData as any)?.data ?? []);
       setStoreDraft({
         name: profileData.data.name || '',
         description: profileData.data.description || '',
@@ -3207,7 +3117,7 @@ export default function Home() {
         logo: profileData.data.logo || '',
         coverImage: profileData.data.coverImage || '',
         hasOwnDelivery: profileData.data.hasOwnDelivery,
-        supportsNetworkDelivery: profileData.data.supportsNetworkDelivery ?? true,
+        supportsNetworkDelivery: false,
         pickupOnly: profileData.data.pickupOnly ?? false,
         accentColor: profileData.data.accentColor ?? null,
         menuTheme: profileData.data.menuTheme ?? null,
@@ -3246,12 +3156,16 @@ export default function Home() {
       });
     } catch (requestError) {
       setProfile(null);
-      setOrders([]);
+      setProfileLoadState('error');
+      if (ordersSyncGateRef.current.current(ordersTicket)) {
+        setOrderSyncError('No se pudieron sincronizar los pedidos. Se conservan los últimos datos confirmados.');
+      }
       setProducts([]);
       setCategories([]);
       setDrivers([]);
       setBillingSummary(null);
       setOperatingHoursDraft(buildDefaultOperatingHours());
+      setActiveSection('dashboard');
       const message = getRequestErrorMessage(requestError, 'No se pudo cargar el panel.');
       setError(message);
       if (isAuthRequestError(requestError)) {
@@ -3277,6 +3191,7 @@ export default function Home() {
 
   // Carga ligera solo de pedidos — para usar en eventos live sin recargar todo el panel
   const loadOrdersOnly = useCallback(async () => {
+    const ticket = ordersSyncGateRef.current.begin();
     try {
       const ordersData = await apiRequest<SuccessResponse<OrderItem[]>>({
         apiBase,
@@ -3289,10 +3204,10 @@ export default function Home() {
         },
       });
       if (ordersData.success) {
-        setOrders((current) => {
-          const mockOrders = current.filter((o) => o.id.startsWith('mock-order-'));
-          return [...mockOrders, ...ordersData.data];
-        });
+        if (!ordersSyncGateRef.current.current(ticket)) return false;
+        setOrders(current => ordersSyncGateRef.current.current(ticket) ? reconcileOrders(current, ordersData.data) : current);
+        ordersData.data.forEach(order => uncertainOrderIdsRef.current.delete(order.id));
+        setOrderSyncError('');
         // Actualizar llegada de repartidores desde datos de la API
         const arrived: Record<string, true> = {};
         for (const o of ordersData.data) {
@@ -3303,9 +3218,14 @@ export default function Home() {
         if (Object.keys(arrived).length > 0) {
           setDriverArrivedOrders((prev) => ({ ...prev, ...arrived }));
         }
+        return true;
       }
+      throw new Error('Respuesta de pedidos no válida.');
     } catch {
-      // Falla silenciosa — el loadDashboard completo se hará en reconexión
+      if (ordersSyncGateRef.current.current(ticket)) {
+        setOrderSyncError('No se pudieron sincronizar los pedidos. Se conservan los últimos datos confirmados; vuelve a consultar antes de reintentar una acción.');
+      }
+      return false;
     }
   }, [apiBase, token]);
 
@@ -3439,44 +3359,15 @@ export default function Home() {
       if (first) seenLiveEventKeysRef.current.delete(first);
     }
 
-    if (eventName === 'order:support-requested') {
-      setSupportRequestsQueue((current) => {
-        const exists = current.some((item) => item.orderId === (payload as any).orderId);
-        if (exists) return current;
-        return [...current, { ...(payload as any), expiresAt: Date.now() + 2 * 60 * 1000 }];
-      });
-      void playIncomingOrderAlert();
-      pushToast('info', 'Solicitud de apoyo', '¡Un restaurante cercano solicita apoyo!');
-      return;
-    }
-
-    if (eventName === 'order:support-rejected-all' || eventName === 'order:support-exhausted') {
-      const payloadAny = payload as any;
-      if (payloadAny.orderId) {
-        setSupportNotifyByOrder((prev) => ({
-          ...prev,
-          [payloadAny.orderId]: {
-            attemptsLeft: Number(payloadAny.attemptsLeft ?? 0),
-            exhausted: Boolean(payloadAny.exhausted || eventName === 'order:support-exhausted'),
-          },
-        }));
-      }
-      pushToast(eventName === 'order:support-exhausted' ? 'error' : 'info', 'Apoyo a red', payloadAny.message || 'Nadie aceptó tu solicitud de apoyo.');
+    if (['order:accepted', 'order:preparing', 'order:ready', 'order:delivery-assigned', 'order:in-transit', 'order:delivered', 'order:driver-arrived'].includes(eventName)) {
+      // Another tab of this restaurant committed the change: re-read the
+      // authoritative list instead of trusting a partial payload.
       void loadOrdersOnly();
       return;
     }
 
-    if (eventName === 'order:support-accepted' && (payload as any).orderId) {
-      setSupportNotifyByOrder((prev) => {
-        const next = { ...prev };
-        delete next[(payload as any).orderId];
-        return next;
-      });
-      if ((payload as any).supportRestaurantName) {
-        setSupportAliadoNamesByOrder((prev) => ({ ...prev, [(payload as any).orderId]: (payload as any).supportRestaurantName }));
-      }
-      void loadOrdersOnly();
-    }
+
+
 
     if (eventName === 'order:created') {
       // Play sound DIRECTLY — no depende del reload de pedidos
@@ -3580,7 +3471,7 @@ export default function Home() {
 
     setSocketStatus('connecting');
     const getSocketToken = () => readStoredSession(storageKey).token || '';
-    const socket = io('https://sadel-production.up.railway.app', {
+    const socket = io(getWingslabSocketUrl(), {
       path: '/socket.io',
       transports: ['websocket', 'polling'],
       autoConnect: true,
@@ -3809,6 +3700,7 @@ export default function Home() {
   }, [incomingOrderQueue, pendingIncomingOrderMap, pendingIncomingOrders.length]);
 
   useEffect(() => {
+    if (!AUTOMATIC_ORDER_DECISIONS_ENABLED) return;
     if (!orders.length) {
       return;
     }
@@ -3828,7 +3720,7 @@ export default function Home() {
       const decisionWindow = order.paymentMethod === 'TRANSFER' ? 10 * 60 * 1000 : isStoreOrder ? 8 * 60 * 1000 : 2 * 60 * 1000;
       const expiresAtMs = createdAtMs + decisionWindow;
 
-      if (expiresAtMs <= now) {
+      if (expiresAtMs <= now && AUTOMATIC_ORDER_DECISIONS_ENABLED) {
         if (!autoRejectingOrderIdsRef.current.includes(order.id)) {
           autoRejectingOrderIdsRef.current = [...autoRejectingOrderIdsRef.current.slice(-29), order.id];
           resolvedIncomingOrderIdsRef.current = [...resolvedIncomingOrderIdsRef.current.slice(-79), order.id];
@@ -4015,6 +3907,21 @@ export default function Home() {
       pin?: string;
     }
   ) {
+    if (!isLocalManualOrderAction(orderId, actionKey)) {
+      setError('[WingsLab] Esta acción o pedido no está autorizado para operaciones manuales.');
+      return;
+    }
+    if (uncertainOrderIdsRef.current.has(orderId)) {
+      setOrderSyncError('Consulta el estado real del pedido antes de volver a operar.');
+      void loadOrdersOnly();
+      return;
+    }
+    const initialStatus = ordersRef.current.find(order => order.id === orderId)?.status;
+    if (!initialStatus || !manualOrderActionsForStatus(initialStatus).includes(actionKey)) {
+      setError('El estado confirmado del pedido no permite esta acción. Actualiza los pedidos.');
+      return;
+    }
+    if (!orderActionFlightRef.current.acquire(orderId)) return;
     const action = restaurantActionMap[actionKey];
     setActiveActionKey(`${orderId}:${actionKey}`);
     setError('');
@@ -4057,6 +3964,7 @@ export default function Home() {
     }
 
     if (orderId.startsWith('mock-order-')) {
+      orderActionFlightRef.current.release(orderId);
       setOrders((current) =>
         current.map((o) => {
           if (o.id !== orderId) return o;
@@ -4152,10 +4060,16 @@ export default function Home() {
         },
         fallbackMessage: `No se pudo ejecutar la accion "${action.label}".`,
         retry: {
-          attempts: 1,
+          attempts: 0,
           backoffMs: 400,
         },
       });
+
+      if (!res.success || res.data?.id !== orderId || res.data?.status !== manualOrderTargetStatus(actionKey)) {
+        throw new Error('La respuesta no confirmó el estado esperado. Consulta el pedido antes de reintentar.');
+      }
+      ordersSyncGateRef.current.invalidate();
+      setOrders(current => current.map(order => order.id === orderId ? mergeConfirmedOrder(order, res.data) : order));
 
       if (actionKey === 'asumirReparto' && res?.data?.deliveryToken) {
         setActiveQrCodeData({
@@ -4194,6 +4108,8 @@ export default function Home() {
     } catch (requestError) {
       const message = getRequestErrorMessage(requestError, `No se pudo ejecutar ${action.label}.`);
 
+      // A mutation is never blindly retried. First verify the authoritative result.
+      let retryVerifiedSafe = false;
       // Verificar si la accion realmente se aplicó en el servidor a pesar del error de red
       // (el servidor pudo procesar el PATCH pero la respuesta HTTP no llegó al cliente)
       try {
@@ -4205,33 +4121,44 @@ export default function Home() {
           const verifyData = await verifyRes.json();
           const currentStatus: string | undefined = verifyData?.data?.status || verifyData?.status;
           const expectedStatuses: Record<string, string[]> = {
-            accept: ['PREPARING'],
+            accept: ['CONFIRMED'],
+            preparing: ['PREPARING'],
             ready: ['READY'],
             reject: ['REJECTED', 'CANCELLED'],
             delivered: ['DELIVERED'],
             handover: ['PICKED_UP', 'IN_TRANSIT'],
-            asumirReparto: ['IN_TRANSIT'],
+            asumirReparto: ['READY'],
             quitarRepartidor: ['READY'],
             confirmarPagoEfectivo: ['DELIVERED', 'READY', 'IN_TRANSIT'],
             iniciarEntrega: ['IN_TRANSIT'],
             marcarRecogido: ['COMPLETED'],
           };
           const expected = expectedStatuses[actionKey];
+          const verified = verifyData?.data || verifyData;
+          if (verified?.id !== orderId || !currentStatus) throw new Error('No se pudo verificar el pedido.');
+          ordersSyncGateRef.current.invalidate();
+          setOrders(current => current.map(order => order.id === orderId ? mergeConfirmedOrder(order, verified) : order));
           if (expected && expected.includes(currentStatus || '')) {
-            await loadDashboard();
+            uncertainOrderIdsRef.current.delete(orderId);
+            await loadOrdersOnly();
             setLastFailedAction(null);
             setAuthMessage(action.successMessage);
             triggerHaptic([30, 50, 30]);
             pushToast('success', action.label, action.successMessage);
             return;
           }
+          retryVerifiedSafe = currentStatus === initialStatus;
         }
       } catch {
         // Fallo la verificación, se muestra el error original
       }
 
       setError(message);
-      if (preserveFailedAction) {
+      if (!retryVerifiedSafe) {
+        uncertainOrderIdsRef.current.add(orderId);
+        setLastFailedAction(null);
+        setOrderSyncError('No se confirmó un resultado seguro para reintentar. Consulta el estado del pedido; no se reenviará la acción automáticamente.');
+      } else if (preserveFailedAction) {
         setLastFailedAction({
           kind: 'order-action',
           orderId,
@@ -4246,10 +4173,11 @@ export default function Home() {
         'error',
         isTransientRequestError(requestError) ? 'Fallo transitorio' : `Fallo al ${action.label.toLowerCase()}`,
         isTransientRequestError(requestError)
-          ? `${message} Ya se intentó una vez más en automático. Puedes reintentar sin recargar.`
-          : `${message} Puedes reintentar sin recargar.`
+            ? `${message} No se reenvió la operación. Consulta el estado antes de volver a intentarlo.`
+            : `${message} No se reenvió la operación.`
       );
     } finally {
+      orderActionFlightRef.current.release(orderId);
       autoRejectingOrderIdsRef.current = autoRejectingOrderIdsRef.current.filter((id) => id !== orderId);
       setActiveActionKey(null);
     }
@@ -4427,12 +4355,12 @@ export default function Home() {
       body.pickupOnly = storeDraft.pickupOnly ?? false;
       if (storeDraft.pickupOnly) {
         // Solo recoger en tienda excluye la entrega: se apagan reparto propio y apoyo.
-        body.hasOwnDelivery = false;
+        body.hasOwnDelivery = true;
         body.supportsNetworkDelivery = false;
         body.deliveryFee = null;
       } else {
-        body.hasOwnDelivery = storeDraft.hasOwnDelivery;
-        body.supportsNetworkDelivery = storeDraft.supportsNetworkDelivery ?? true;
+        body.hasOwnDelivery = true;
+        body.supportsNetworkDelivery = false;
       }
       body.deliveryPricingModel = storeDraft.hasOwnDelivery ? storeDraft.deliveryPricingModel : 'fixed';
       if (storeDraft.hasOwnDelivery) {
@@ -6138,13 +6066,19 @@ export default function Home() {
   const isBusinessOpen = profile?.isAcceptingOrders ?? false;
   const isBusinessPaused = profile?.isPaused ?? false;
   const isWithinHours = isCurrentlyWithinOperatingHours(profile?.operatingHours);
-  const operationalStatusLabel = getRestaurantOperationalStatusLabel(profile?.status, profile?.isAcceptingOrders, profile?.isPaused, isWithinHours);
+  const operationalStatusLabel = profileLoadState === 'loading'
+    ? 'Consultando estado…'
+    : profileLoadState === 'error'
+      ? 'No se pudo consultar el estado'
+      : profileLoadState === 'ready' && profile
+        ? getRestaurantOperationalStatusLabel(profile.status, profile.isAcceptingOrders, profile.isPaused, isWithinHours)
+        : 'Estado no disponible';
   const navigationItems: Array<{ key: RestaurantPortalSection; label: string }> = [
     { key: 'dashboard', label: 'Dashboard' },
     { key: 'orders', label: 'Ordenes' },
-    { key: 'store', label: 'Mi Tienda' },
-    { key: 'billing', label: 'Balance' },
-    { key: 'featured', label: 'Destacados' },
+    { key: 'store', label: 'Menú WingsLab' },
+    { key: 'campaigns', label: 'Campañas' },
+    { key: 'customers', label: 'Clientes y puntos' },
     { key: 'settings', label: 'Configuracion' },
   ];
 
@@ -6226,7 +6160,7 @@ export default function Home() {
   return (
     <main className="min-h-[100dvh] text-neutral-900">
       <PushEnableBanner
-        visible={Boolean(token)}
+        visible={Boolean(token) && wingslabExternalServicesEnabled()}
         onEnable={() => subscribeToPush(token || '')}
       />
 
@@ -6843,130 +6777,6 @@ export default function Home() {
         </div>
       ) : null}
 
-      {/* MODAL DE SOLICITUD DE APOYO */}
-      {supportRequestsQueue.length > 0 ? (
-        <div
-          className="fixed inset-0 z-[75] flex items-end justify-center bg-black/60 px-3 py-3 sm:items-center sm:px-4 sm:py-5"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="support-request-title"
-        >
-          <div className="flex max-h-[min(92vh,960px)] w-full max-w-lg flex-col overflow-hidden rounded-[24px] bg-white shadow-[0_28px_90px_rgba(15,15,15,0.34)] sm:rounded-[20px]">
-            <div className="border-b border-black/10 px-4 py-4 sm:px-7">
-              <p className="text-sm font-semibold uppercase tracking-[0.22em] text-sky-600">
-                Solicitud de entrega
-              </p>
-              <h2
-                id="support-request-title"
-                className="mt-2 text-2xl font-semibold tracking-[-0.04em] text-neutral-950 sm:text-3xl"
-              >
-                Apoyo a {businessTypeLabel(profile?.businessType)}
-              </h2>
-              <p className="mt-2 text-sm text-neutral-600">
-                {businessTypeLabel(profile?.businessType)} <strong>{supportRequestsQueue[0].restaurantName}</strong> solicita tu apoyo para entregar un pedido.
-              </p>
-
-              {(() => {
-                const remainingMs = Math.max(0, supportRequestsQueue[0].expiresAt - supportCountdownNow);
-                const secs = Math.ceil(remainingMs / 1000);
-                const mm = String(Math.floor(secs / 60)).padStart(2, '0');
-                const ss = String(secs % 60).padStart(2, '0');
-                const progress = remainingMs / (2 * 60 * 1000);
-                return (
-                  <div className="mt-3 flex items-center gap-3 rounded-2xl border border-sky-100 bg-sky-50/70 px-4 py-3">
-                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-sky-600 text-[11px] font-black text-white tabular-nums">
-                      {mm}:{ss}
-                    </span>
-                    <div className="min-w-0 flex-1">
-                      <div className="h-1.5 w-full overflow-hidden rounded-full bg-sky-100">
-                        <div
-                          className="h-full rounded-full bg-sky-500 transition-[width] duration-1000 ease-linear"
-                          style={{ width: `${progress * 100}%` }}
-                        />
-                      </div>
-                      <p className="mt-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-sky-700">
-                        Si no respondes, se rechazará automáticamente en 2 minutos
-                      </p>
-                    </div>
-                  </div>
-                );
-              })()}
-            </div>
-
-            <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-7 sm:py-5">
-              <div className="grid gap-4">
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.2em] text-neutral-500">Dirección de entrega</p>
-                  <p className="mt-1 text-sm font-medium text-neutral-900">{supportRequestsQueue[0].address}</p>
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <p className="text-xs font-semibold uppercase tracking-[0.2em] text-neutral-500">Tarifa de envío</p>
-                    <p className="mt-1 text-lg font-bold text-emerald-600">${supportRequestsQueue[0].deliveryFee} MXN</p>
-                  </div>
-                  <div>
-                    <p className="text-xs font-semibold uppercase tracking-[0.2em] text-neutral-500">Distancia</p>
-                    <p className="mt-1 text-sm font-medium text-neutral-900">
-                      {supportRequestsQueue[0].distanceToDeliveryKm != null
-                        ? `${supportRequestsQueue[0].distanceToDeliveryKm.toFixed(2)} km hasta la entrega`
-                        : `${supportRequestsQueue[0].distanceToRestaurant.toFixed(2)} km (aprox)`}
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="border-t border-black/10 px-4 py-4 sm:px-7 sm:py-5">
-              <div className="flex flex-col gap-3 sm:flex-row-reverse">
-                <button
-                  type="button"
-                  onClick={async () => {
-                    const res = await fetch(`${apiBase}/restaurant-panel/pedidos/${supportRequestsQueue[0].orderId}/aceptar-apoyo`, {
-                      method: 'POST',
-                      headers: { Authorization: `Bearer ${token}` },
-                    });
-                    const data = await res.json();
-                    if (data.success) {
-                      pushToast('success', 'Éxito', 'Has aceptado la solicitud de apoyo.');
-                      setSupportRequestsQueue((current) => current.slice(1));
-                      void loadOrdersOnly();
-
-                      // Mostrar el QR de entrega inmediatamente (igual que reparto propio/express)
-                      if (data.data?.deliveryToken?.token) {
-                        setActiveQrCodeData({
-                          token: data.data.deliveryToken.token,
-                          orderReference: data.data.orderReference || '',
-                          id: supportRequestsQueue[0].orderId,
-                          url: data.data.deliveryToken.url,
-                        });
-                      }
-                    } else {
-                      pushToast('error', 'Error', data.error?.message || 'No se pudo aceptar la solicitud.');
-                    }
-                  }}
-                  className="w-full rounded-full bg-sky-600 px-5 py-4 text-sm font-semibold text-white shadow-[0_4px_12px_rgba(2,132,199,0.3)] transition hover:bg-sky-700 disabled:cursor-not-allowed disabled:bg-neutral-100 disabled:text-neutral-400 sm:w-auto"
-                >
-                  Aceptar entrega
-                </button>
-                <button
-                  type="button"
-                  onClick={async () => {
-                    await fetch(`${apiBase}/restaurant-panel/pedidos/${supportRequestsQueue[0].orderId}/rechazar-apoyo`, {
-                      method: 'POST',
-                      headers: { Authorization: `Bearer ${token}` },
-                    });
-                    pushToast('info', 'Rechazado', 'Has rechazado la solicitud de apoyo.');
-                    setSupportRequestsQueue((current) => current.slice(1));
-                  }}
-                  className="w-full rounded-full border border-black/10 bg-white px-5 py-4 text-sm font-semibold text-neutral-700 transition hover:bg-neutral-50 sm:w-auto"
-                >
-                  Rechazar
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      ) : null}
 
       {/* MODAL DE ADVERTENCIA AL CERRAR SESIÓN */}
       {showLogoutWarningModal ? (
@@ -7026,215 +6836,7 @@ export default function Home() {
       ) : null}
 
       {/* MODAL DE DESTACADOS (PIZZAS POWER) */}
-      {showFeaturedModal ? (
-        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/60 px-4 py-5"
-          role="dialog" aria-modal="true">
-          <div className="flex max-h-[min(92vh,960px)] w-full max-w-lg flex-col overflow-hidden rounded-[24px] bg-white shadow-[0_28px_90px_rgba(15,15,15,0.34)]">
-            <div className="border-b border-black/10 px-4 py-4 sm:px-7">
-              <div className="flex items-center justify-between">
-                <h2 className="text-xl font-bold text-neutral-900">Aparecer en destacados</h2>
-                <button onClick={() => setShowFeaturedModal(false)} className="w-8 h-8 rounded-full bg-neutral-100 hover:bg-neutral-200 flex items-center justify-center text-neutral-500 transition-colors">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
-                </button>
-              </div>
-            </div>
-            <div className="flex-1 overflow-y-auto px-4 py-5 sm:px-7 space-y-5">
-              <div className="rounded-2xl bg-gradient-to-br from-sky-50 to-blue-50 border border-sky-200 p-4">
-                <p className="text-sm text-sky-900 leading-relaxed">
-                  Al comprar días destacado, tu restaurante aparecerá en la sección de <strong>Restaurantes Destacados</strong>,
-                  un carrusel horizontal que los clientes ven <strong>apenas abren la aplicación</strong>, antes que cualquier otro restaurante.
-                </p>
-              </div>
-
-              <div>
-                <label className="text-sm font-semibold text-neutral-700 block mb-2">Elige un paquete</label>
-                {featuredPackages.length === 0 ? (
-                  <p className="text-sm text-neutral-400">No hay paquetes disponibles por el momento.</p>
-                ) : (
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                    {featuredPackages.map(pkg => (
-                      <button key={pkg.days} onClick={() => setFeaturedDays(pkg.days)}
-                        className={`rounded-xl border-2 p-3 text-center transition-all duration-200 ${
-                          featuredDays === pkg.days
-                            ? 'border-sky-500 bg-sky-50 shadow-lg shadow-sky-300/20 scale-105'
-                            : 'border-black/5 bg-white hover:border-sky-200 hover:bg-sky-50/50'
-                        }`}>
-                        <span className="block text-lg font-black text-neutral-900">{pkg.days}</span>
-                        <span className="block text-[11px] text-neutral-400 font-medium">día{pkg.days > 1 ? 's' : ''}</span>
-                        <span className="block mt-1 text-sm font-bold text-sky-600">${(pkg.price ?? 0).toFixed(2)}</span>
-                        <span className="block text-[10px] text-neutral-400">MXN</span>
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              {featuredPackages.length > 0 && (() => {
-                const selectedPkg = featuredPackages.find(p => p.days === featuredDays);
-                return (
-                  <div className="rounded-2xl bg-neutral-50 border border-black/5 p-4">
-                    <div className="flex justify-between items-center">
-                      <span className="text-sm text-neutral-600">Paquete seleccionado</span>
-                      <span className="font-semibold text-neutral-900">{selectedPkg?.days ?? 0} día{(selectedPkg?.days ?? 0) > 1 ? 's' : ''}</span>
-                    </div>
-                    <div className="flex justify-between items-center mt-2 pt-2 border-t border-black/5">
-                      <span className="text-sm font-semibold text-neutral-800">Total a pagar</span>
-                      <span className="text-lg font-black text-sky-600">${(selectedPkg?.price ?? 0).toFixed(2)} MXN</span>
-                    </div>
-                  </div>
-                );
-              })()}
-
-              <div className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm">
-                <div className="flex items-center gap-2 mb-4">
-                  <div className="w-8 h-8 rounded-lg bg-sky-100 flex items-center justify-center">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-sky-700"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
-                  </div>
-                  <div>
-                    <p className="text-sm font-bold text-neutral-900">Transferencia bancaria</p>
-                    <p className="text-xs text-neutral-400">Transfiere el monto exacto a la siguiente cuenta</p>
-                  </div>
-                </div>
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between rounded-xl bg-neutral-50 border border-neutral-100 px-4 py-3">
-                    <div>
-                      <p className="text-[11px] font-semibold text-neutral-400 uppercase tracking-wider">Banco</p>
-                      <p className="text-sm font-bold text-neutral-900 mt-0.5">{adminBankName || 'Cargando...'}</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center justify-between rounded-xl bg-neutral-50 border border-neutral-100 px-4 py-3">
-                    <div>
-                      <p className="text-[11px] font-semibold text-neutral-400 uppercase tracking-wider">Número de cuenta</p>
-                      <p className="text-sm font-bold text-neutral-900 mt-0.5 font-mono tracking-wider">{adminBankAccount || 'Cargando...'}</p>
-                    </div>
-                    <button onClick={() => { navigator.clipboard.writeText(adminBankAccount || ''); pushToast('success', 'Copiado', 'Cuenta copiada al portapapeles.'); }}
-                      className="shrink-0 w-9 h-9 rounded-lg bg-white border border-neutral-200 flex items-center justify-center text-neutral-400 hover:text-sky-600 hover:border-sky-200 transition-colors"
-                      title="Copiar cuenta">
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
-                    </button>
-                  </div>
-                  <div className="flex items-center justify-between rounded-xl bg-neutral-50 border border-neutral-100 px-4 py-3">
-                    <div>
-                      <p className="text-[11px] font-semibold text-neutral-400 uppercase tracking-wider">Beneficiario</p>
-                      <p className="text-sm font-bold text-neutral-900 mt-0.5">{adminBankBeneficiary || 'Cargando...'}</p>
-                    </div>
-                    <button onClick={() => { navigator.clipboard.writeText(adminBankBeneficiary || ''); pushToast('success', 'Copiado', 'Beneficiario copiado al portapapeles.'); }}
-                      className="shrink-0 w-9 h-9 rounded-lg bg-white border border-neutral-200 flex items-center justify-center text-neutral-400 hover:text-sky-600 hover:border-sky-200 transition-colors"
-                      title="Copiar beneficiario">
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              <div>
-                <label className="text-sm font-semibold text-neutral-700 block mb-3">Comprobante de pago</label>
-                <div className="space-y-3">
-                  <button disabled={featuredUploading}
-                    onClick={async () => {
-                      const input = document.createElement('input');
-                      input.type = 'file';
-                      input.accept = 'image/*';
-                      input.onchange = async () => {
-                        const file = input.files?.[0];
-                        if (!file) return;
-                        setFeaturedUploading(true);
-                        try {
-                          const toBase64 = (f: File): Promise<string> => new Promise((res, rej) => {
-                            const reader = new FileReader();
-                            reader.onload = () => res(reader.result as string);
-                            reader.onerror = rej;
-                            reader.readAsDataURL(f);
-                          });
-                          const base64 = await toBase64(file);
-                          const uploadRes = await fetch(`${apiBase}/uploads/images`, {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-                            body: JSON.stringify({ kind: 'payment-proof', source: base64 }),
-                          });
-                          const uploadData = await uploadRes.json();
-                          if (uploadData.success) {
-                            setFeaturedPaymentProof(uploadData.data.url);
-                          } else {
-                            pushToast('error', 'Error', 'No se pudo subir la imagen.');
-                          }
-                        } catch {
-                          pushToast('error', 'Error', 'Error al subir la imagen.');
-                        } finally {
-                          setFeaturedUploading(false);
-                        }
-                      };
-                      input.click();
-                    }}
-                    className="rounded-xl bg-neutral-100 border border-black/10 px-4 py-3 text-sm font-medium text-neutral-700 hover:bg-neutral-200 transition-colors disabled:opacity-50"
-                  >
-                    {featuredUploading ? 'Subiendo...' : featuredPaymentProof ? 'Cambiar comprobante' : 'Subir comprobante'}
-                  </button>
-                  {featuredPaymentProof && (
-                    <div className="rounded-xl border border-neutral-200 overflow-hidden bg-white">
-                      <div className="relative group">
-                        <img src={featuredPaymentProof} alt="Comprobante de pago"
-                          className="w-full h-48 object-contain bg-neutral-50 p-2" />
-                        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/5 transition-colors" />
-                      </div>
-                      <div className="flex items-center justify-between px-4 py-2.5 border-t border-neutral-100">
-                        <div className="flex items-center gap-2">
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-emerald-600"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
-                          <span className="text-xs font-medium text-emerald-700">Comprobante adjunto</span>
-                        </div>
-                        <button onClick={() => window.open(featuredPaymentProof, '_blank')}
-                          className="text-xs font-semibold text-sky-600 hover:text-sky-700 underline-offset-2 hover:underline transition-colors">
-                          Ver original
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-            <div className="border-t border-black/10 px-4 py-4 sm:px-7">
-              <div className="flex gap-3 justify-end">
-                <button onClick={() => setShowFeaturedModal(false)}
-                  className="rounded-full border border-black/10 px-5 py-2.5 text-sm font-medium text-neutral-700 hover:bg-neutral-50 transition-colors">
-                  Cancelar
-                </button>
-                <button disabled={featuredSubmitting || !featuredPaymentProof}
-                  onClick={async () => {
-                    if (!featuredPaymentProof) return;
-                    setFeaturedSubmitting(true);
-                    try {
-                      const res = await fetch(`${apiBase}/restaurant/featured/request`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-                        body: JSON.stringify({ daysRequested: featuredDays, paymentProof: featuredPaymentProof }),
-                      });
-                      const data = await res.json();
-                      if (data.success) {
-                        pushToast('success', 'Solicitud enviada', 'Tu solicitud sera revisada por un administrador.');
-                        setShowFeaturedModal(false);
-                        const refreshRes = await fetch(`${apiBase}/restaurant/featured/my-requests`, {
-                          headers: { Authorization: `Bearer ${token}` },
-                        });
-                        const refreshData = await refreshRes.json();
-                        if (refreshData.success) setFeaturedRequests(refreshData.data);
-                      } else {
-                        pushToast('error', 'Error', data.error?.message || 'No se pudo enviar la solicitud.');
-                      }
-                    } catch {
-                      pushToast('error', 'Error', 'Error de conexion.');
-                    } finally {
-                      setFeaturedSubmitting(false);
-                    }
-                  }}
-                  className="rounded-full bg-gradient-to-r from-sky-600 to-blue-600 px-6 py-2.5 text-sm font-bold text-white shadow-lg shadow-sky-300/30 hover:shadow-xl hover:shadow-sky-300/40 hover:scale-[1.02] active:scale-[0.98] transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
-                >
-                  {featuredSubmitting ? 'Enviando...' : `Enviar solicitud — $${(featuredPackages.find(p => p.days === featuredDays)?.price ?? 0).toFixed(2)}`}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      ) : null}
+      
 
       {/* MODAL DE VISTA PREVIA DE COMPROBANTE */}
       {proofPreviewUrl ? (
@@ -7279,13 +6881,13 @@ export default function Home() {
                   🛵
                 </span>
                 <h3 className="mt-4 text-2xl font-bold tracking-tight text-neutral-900">
-                  ¡Pedido Despachado!
+                  Reparto WingsLab listo
                 </h3>
                 <p className="mt-1 text-xs font-semibold uppercase tracking-wider text-amber-600">
                   Pedido {activeQrCodeData.orderReference}
                 </p>
                 <p className="mt-2 text-sm text-neutral-500 max-w-xs">
-                  Pídele al repartidor que escanee este código QR con la cámara de su celular para abrir los mapas y la información de la entrega.
+                  Abre el enlace local o escanea el QR. El pedido saldrá cuando el repartidor confirme la recogida. No compartas el enlace fuera de tu equipo.
                 </p>
 
                 {/* Contenedor del QR Code */}
@@ -7294,10 +6896,16 @@ export default function Home() {
                 </div>
 
                 <div className="mt-6 w-full gap-2 flex flex-col">
+                  <a href={deliveryUrl} target="_blank" rel="noopener noreferrer" referrerPolicy="no-referrer"
+                    className="block w-full rounded-xl bg-orange-600 py-3 text-sm font-semibold text-white hover:bg-orange-700">
+                    Abrir enlace de reparto
+                  </a>
                   <button
                     type="button"
+                    disabled={!wingslabExternalServicesEnabled()}
                     onClick={() => {
-                      const message = `🛵 Entrega SaDeL — Pedido ${activeQrCodeData.orderReference}\nAbre este enlace para ver la ruta y entregar: ${deliveryUrl}`;
+                      if (!wingslabExternalServicesEnabled()) return;
+                      const message = `Entrega WingsLab — Pedido ${activeQrCodeData.orderReference}\n${deliveryUrl}`;
                       window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, '_blank', 'noopener,noreferrer');
                     }}
                     className="w-full rounded-xl bg-[#25D366] py-3 text-sm font-semibold text-white shadow-md shadow-emerald-600/20 hover:bg-[#1fb857] transition active:scale-[0.98]"
@@ -7317,7 +6925,7 @@ export default function Home() {
                   >
                     <span className="inline-flex items-center gap-2">
                       <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="3 11 22 2 13 21 11 13 3 11" /></svg>
-                      Entregar con este teléfono
+                      Abrir reparto local
                     </span>
                   </button>
                 </div>
@@ -9615,7 +9223,7 @@ export default function Home() {
 
             <div className="mx-auto mt-auto w-full max-w-lg lg:mx-0">
               <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-sky-300 lg:text-xs">
-                SaDeL para restaurantes
+                WingsLab · Cocina y reparto
               </p>
               <h1 className="mt-3 text-[clamp(1.75rem,5.6vw,2.85rem)] font-bold leading-[1.08] tracking-tight text-white lg:mt-5 lg:text-[clamp(2.3rem,3.3vw,3.3rem)]">
                 Tu restaurante,{' '}
@@ -9749,7 +9357,7 @@ export default function Home() {
 
                 <p className="flex items-start gap-2 pt-1 text-[13px] leading-relaxed text-slate-400">
                   <Lock className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-                  <span>Acceso exclusivo para restaurantes registrados en SaDeL. Nunca compartas tu contraseña.</span>
+                  <span>Acceso al equipo de WingsLab. Los pedidos de esta instalación son ficticios.</span>
                 </p>
               </form>
             </div>
@@ -9898,6 +9506,19 @@ export default function Home() {
 
             <div className="flex-1 bg-[#f8f8f8] lg:ml-[260px] min-w-0">
               <div className="p-3 min-[420px]:p-4 md:p-6 max-w-full overflow-hidden">
+                {orderSyncError ? (
+                  <div role="alert" className="mb-5 flex flex-col gap-2 rounded-[24px] border border-amber-200 bg-amber-50 p-4 text-amber-900 sm:flex-row sm:items-center sm:justify-between">
+                    <p className="text-sm font-semibold">{orderSyncError}</p>
+                    <button
+                      type="button"
+                      onClick={() => void loadDashboard()}
+                      disabled={loading || !sessionUser}
+                      className="shrink-0 rounded-full bg-neutral-950 px-4 py-2 text-xs font-bold text-white transition hover:bg-neutral-800 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      Consultar de nuevo
+                    </button>
+                  </div>
+                ) : null}
                 {(() => {
                   const overdueCount = billingSummary?.recentSettlements?.filter((s: any) => s.status === 'OVERDUE').length ?? 0;
                   const isSuspended = profile?.status === 'SUSPENDED';
@@ -9947,8 +9568,27 @@ export default function Home() {
                   );
                 })()}
 
-                                {activeSection === 'dashboard' ? (
+                                {activeSection === 'dashboard' && profileLoadState === 'loading' ? (
+                  <div role="status" className="flex min-h-64 flex-col items-center justify-center rounded-[32px] border border-black/5 bg-white px-6 py-16 text-center shadow-[0_10px_30px_rgba(15,15,15,0.04)]">
+                    <SaDelLoader size="md" label="Consultando el estado del restaurante..." />
+                  </div>
+                ) : activeSection === 'dashboard' && profileLoadState === 'error' ? (
+                  <div role="alert" className="rounded-[32px] border border-rose-100 bg-white px-6 py-10 text-center shadow-[0_10px_30px_rgba(15,15,15,0.04)]">
+                    <p className="text-base font-semibold text-neutral-900">No se pudo consultar el estado del restaurante</p>
+                    <p className="mt-2 text-sm text-neutral-600">{error || 'No hay datos actuales para mostrar.'}</p>
+                    <button
+                      type="button"
+                      onClick={() => void loadDashboard()}
+                      disabled={loading || !sessionUser}
+                      className="mt-5 rounded-full bg-neutral-950 px-5 py-3 text-sm font-semibold text-white transition hover:bg-neutral-800 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      Reintentar
+                    </button>
+                  </div>
+                ) : activeSection === 'dashboard' && profileLoadState === 'ready' && profile ? (
                   <DashboardSection
+                    apiBase={apiBase}
+                    token={token}
                     orders={orders}
                     profile={profile}
                     products={products}
@@ -9989,6 +9629,9 @@ export default function Home() {
                   />
                 ) : null}
 
+                {activeSection === 'campaigns' ? <CampaignsSection apiBase={apiBase} token={token} /> : null}
+                {activeSection === 'customers' ? <CustomersSection apiBase={apiBase} token={token} /> : null}
+
                 {activeSection === 'billing' ? (
                   <BillingSection
                     billingSummary={billingSummary}
@@ -10009,25 +9652,6 @@ export default function Home() {
                   />
                 ) : null}
 
-                {activeSection === 'featured' ? (
-                  <FeaturedSection
-                    featuredPackages={featuredPackages}
-                    featuredRequests={featuredRequests}
-                    featuredFlyerUploading={featuredFlyerUploading}
-                    showPhonePreviewModal={showPhonePreviewModal}
-                    setFeaturedDays={setFeaturedDays}
-                    setFeaturedPaymentProof={setFeaturedPaymentProof}
-                    setShowFeaturedModal={setShowFeaturedModal}
-                    setProofPreviewUrl={setProofPreviewUrl}
-                    setShowPhonePreviewModal={setShowPhonePreviewModal}
-                    setFeaturedFlyerUploading={setFeaturedFlyerUploading}
-                    profile={profile}
-                    setProfile={setProfile}
-                    token={token}
-                    apiBase={apiBase}
-                    pushToast={pushToast}
-                  />
-                ) : null}
 
                 {activeSection === 'orders' ? (
                    <Panel title={profile?.businessType !== 'RESTAURANT' ? 'Pedidos' : 'Ordenes'} subtitle={profile?.businessType !== 'RESTAURANT' ? 'Vista rapida para surtido y despacho' : 'Vista rapida para cocina y despacho'} tone="violet">
@@ -10110,6 +9734,10 @@ export default function Home() {
                                     ? ['handover'] as Array<keyof typeof restaurantActionMap>
                                     : [])
                                 : getRestaurantActions(order, hasOwnDelivery, Boolean(driverArrivedOrders[order.id])));
+                          // Solo los pedidos ficticios explícitamente autorizados
+                          // exponen controles de acción manual en WingsLab.
+                          const authorizedActionButtons = actionButtons.filter(actionKey =>
+                            isLocalManualOrderAction(order.id, actionKey));
                           const selectedDriverId = selectedDriverByOrder[order.id] || '';
                           const canAssignDriver =
                             !hasOwnDelivery &&
@@ -10791,9 +10419,9 @@ export default function Home() {
                                   )}
 
                                   {/* Botones de Accion (solo para pedidos propios; las entregas de apoyo usan el QR) */}
-                                  {!isHelper && actionButtons.length > 0 ? (
+                                  {!isHelper && authorizedActionButtons.length > 0 ? (
                                     <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
-                                      {actionButtons.map((actionKey) => {
+                                      {authorizedActionButtons.map((actionKey) => {
                                         const action = restaurantActionMap[actionKey];
                                         const isBusy = activeActionKey === `${order.id}:${actionKey}`;
                                         const tone =
@@ -10976,12 +10604,12 @@ export default function Home() {
                                     <button
                                       type="button"
                                       onClick={() => void runOrderAction(order.id, 'asumirReparto')}
-                                      disabled={activeActionKey === `${order.id}:asumirReparto`}
+                                      disabled={activeActionKey === `${order.id}:asumirReparto` || !isLocalManualOrderAction(order.id, 'asumirReparto')}
                                       className="flex-1 rounded-xl border border-emerald-200 bg-emerald-600 px-4 py-3 text-sm font-semibold text-white shadow-[0_4px_12px_rgba(16,185,129,0.2)] transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-neutral-300 disabled:text-neutral-500"
                                     >
                                       {activeActionKey === `${order.id}:asumirReparto`
                                         ? 'Procesando...'
-                                        : '🚴‍♂️ Ir a entregar'}
+                                        : 'Generar QR de reparto'}
                                     </button>
                                     {!profile?.hasOwnDelivery && !supportExhaustedHere && !supportNotifyHere?.exhausted && !order.isSupportRequested && (
                                       <button
@@ -14527,13 +14155,6 @@ function RestaurantNavIcon({ kind }: { kind: RestaurantPortalSection }) {
     );
   }
 
-  if (kind === 'featured') {
-    return (
-      <svg className="h-5 w-5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
-      </svg>
-    );
-  }
 
   if (kind === 'settings') {
     return (
@@ -15148,28 +14769,6 @@ function buildRestaurantLiveMessage(
     return `${orderLabel} ya va en camino.`;
   }
 
-  if (eventName === 'order:support-requested') {
-    return `¡Un restaurante cercano solicita apoyo para una entrega!`;
-  }
-
-  if (eventName === 'order:support-accepted') {
-    const supportName = (payload as any).supportRestaurantName || 'Un restaurante aliado';
-    return `¡${supportName} aceptó entregar ${orderLabel}!`;
-  }
-
-  if (eventName === 'order:support-picked-up') {
-    const supportName = (payload as any).supportRestaurantName || 'Tu aliado';
-    return `${supportName} recogió ${orderLabel} y va en camino.`;
-  }
-
-  if (eventName === 'order:support-rejected-all') {
-    return `Nadie aceptó la solicitud de apoyo de ${orderLabel}.`;
-  }
-
-  if (eventName === 'order:support-exhausted') {
-    return `Agotaste los 2 intentos de apoyo para ${orderLabel}; entrega tú mismo.`;
-  }
-
   if (eventName === 'order:no-drivers-available' as any) {
     return `No hay repartidores disponibles para ${orderLabel}.`;
   }
@@ -15210,10 +14809,13 @@ function getRestaurantActions(
 ): Array<keyof typeof restaurantActionMap> {
   const status = order.status;
   if (status === 'PENDING') {
-    return ['accept', 'reject'];
+    return ['accept'];
   }
 
-  if (status === 'CONFIRMED' || status === 'PREPARING') {
+  if (status === 'CONFIRMED') {
+    return ['preparing'];
+  }
+  if (status === 'PREPARING') {
     return ['ready'];
   }
 
@@ -15627,16 +15229,23 @@ function isCurrentlyWithinOperatingHours(operatingHours?: any[]) {
 
 function getRestaurantOperationalStatusLabel(status?: string, isAcceptingOrders?: boolean, isPaused?: boolean, isWithinHours = true) {
   if (status === 'ACTIVE') {
+    if (typeof isPaused !== 'boolean' || typeof isAcceptingOrders !== 'boolean') {
+      return 'Estado operativo no disponible';
+    }
     if (isPaused) return 'Negocio pausado';
     if (!isAcceptingOrders) return 'Negocio cerrado';
     return isWithinHours ? 'Negocio abierto' : 'Cerrado (fuera de horario)';
+  }
+
+  if (status === 'SUSPENDED') {
+    return 'Negocio suspendido';
   }
 
   if (status === 'DELETED') {
     return 'Negocio eliminado';
   }
 
-  return 'Negocio suspendido';
+  return 'Estado no disponible';
 }
 
 function getImageValidationMessage(value: string, kind: 'cover' | 'logo' | 'product') {

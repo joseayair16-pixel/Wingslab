@@ -1,5 +1,7 @@
 import { S3Client, PutObjectCommand, DeleteObjectsCommand } from '@aws-sdk/client-s3';
 import sharp from 'sharp';
+import { assertExternalOperationAllowed } from '../config/isolation';
+import { memoryStorageProvider } from './storage/memory.provider';
 
 import { AppError } from '../errors/app-error';
 
@@ -8,7 +10,6 @@ export type MediaUploadKind =
   | 'restaurant-cover'
   | 'product-image'
   | 'payment-proof'
-  | 'site-image'
   | 'driver-photo';
 
 export type UploadResult = {
@@ -18,16 +19,40 @@ export type UploadResult = {
   width?: number;
   height?: number;
   bytes?: number;
-  provider: 'r2';
+  provider: 'r2' | 'memory';
   deliveryType: 'upload';
 };
+
+export type UploadParameters = {
+  source: string; kind: MediaUploadKind; actorId?: string; requestId?: string; fileName?: string;
+};
+export interface StorageProvider {
+  readonly name: 'memory' | 'r2';
+  upload(params: UploadParameters): Promise<UploadResult>;
+  delete(keys: string[]): Promise<void>;
+}
+
+// R2 implementation is retained below, but cannot be selected by configuration in 2A.
+export const r2StorageProvider: StorageProvider = {
+  name: 'r2', upload: uploadR2Image, delete: deleteR2Images,
+};
+
+export function getStorageProvider(): StorageProvider { return memoryStorageProvider; }
+export async function uploadImage(params: UploadParameters): Promise<UploadResult> {
+  return getStorageProvider().upload(params);
+}
+export async function deleteImages(keys: (string | null | undefined)[]): Promise<void> {
+  const validKeys = Array.from(new Set(keys.filter((key): key is string => !!key)));
+  // The only selectable provider has no files and a no-throw delete contract.
+  // Future real deletion must use an outbox/best-effort policy, not fail after commit.
+  await getStorageProvider().delete(validKeys);
+}
 
 const kindFolderMap: Record<MediaUploadKind, string> = {
   'restaurant-logo': 'restaurant/logos',
   'restaurant-cover': 'restaurant/covers',
   'product-image': 'restaurant/products',
   'payment-proof': 'payments/proofs',
-  'site-image': 'site/assets',
   'driver-photo': 'drivers/photos',
 };
 
@@ -42,6 +67,7 @@ function getR2Config() {
 }
 
 function getRequiredR2Config() {
+  assertExternalOperationAllowed();
   const config = getR2Config();
 
   if (!config.accountId || !config.accessKeyId || !config.secretAccessKey || !config.bucketName) {
@@ -104,7 +130,7 @@ export function urlToKey(url: string | null | undefined): string | null {
   }
 }
 
-export async function deleteImages(keys: (string | null | undefined)[]): Promise<void> {
+async function deleteR2Images(keys: (string | null | undefined)[]): Promise<void> {
   // Dedupe y descarta nulos: reintentar sobre una clave ya eliminada es un no-op en R2.
   const validKeys = Array.from(new Set(keys.filter((k): k is string => !!k)));
   if (validKeys.length === 0) return;
@@ -130,7 +156,7 @@ export async function deleteImages(keys: (string | null | undefined)[]): Promise
     );
   }
 }
-export async function uploadImage(params: {
+async function uploadR2Image(params: {
   source: string;
   kind: MediaUploadKind;
   actorId?: string;
@@ -156,27 +182,9 @@ export async function uploadImage(params: {
   let metadata: { width?: number; height?: number };
 
   try {
-    // Imágenes "site-image" (promociones y billboards) se ven a pantalla completa,
-    // por eso se re-encoden con mayor calidad y se acotan a un límite de píxeles
-    // (sin ampliar nunca, para no fabricar nitidez que no existe).
-    const isHighQuality = kind === 'site-image';
-    const maxHighQualityDimension = 2400;
-
     // rotate() respeta la orientación EXIF de fotos tomadas con el celular.
     const image = sharp(buffer).rotate();
-
-    const encodeImage = isHighQuality
-      ? sharp(buffer).rotate().resize({
-          width: maxHighQualityDimension,
-          height: maxHighQualityDimension,
-          fit: 'inside',
-          withoutEnlargement: true,
-        })
-      : image;
-
-    webpBuffer = await encodeImage
-      .webp({ quality: isHighQuality ? 92 : 80, effort: 4 })
-      .toBuffer();
+    webpBuffer = await image.webp({ quality: 80, effort: 4 }).toBuffer();
 
     const finalMetadata = await sharp(webpBuffer).metadata();
     metadata = { width: finalMetadata.width, height: finalMetadata.height };

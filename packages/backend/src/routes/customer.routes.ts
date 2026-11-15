@@ -11,6 +11,8 @@ import { authenticate, authorize, getAuthenticatedUser } from '../middleware/aut
 import { buildApartmentWhere, normalizeOptionalAddressText } from '../utils/address';
 import { urlToKey, deleteImages } from '../services/storage.service';
 import { isMexicanLocalPhone } from '../utils/mexican-phone';
+import { getLoyaltyConfiguration } from '../services/restaurant-marketing.service';
+import { RESTAURANT_ID } from '../config/single-restaurant';
 
 const updatePreferencesSchema = z.object({
   deliveryPreference: z
@@ -95,7 +97,39 @@ const updateAddressSchema = createAddressSchema.partial();
 export async function registerCustomerRoutes(fastify: FastifyInstance): Promise<void> {
   fastify.register(async function customerScope(customerPanel) {
     customerPanel.addHook('preHandler', authenticate);
-    customerPanel.addHook('preHandler', authorize([UserRole.CUSTOMER]));
+  customerPanel.addHook('preHandler', authorize([UserRole.CUSTOMER]));
+
+    customerPanel.get('/customer/lealtad', async (request, reply) => {
+      const user = getAuthenticatedUser(request);
+      const customer = await prisma.customer.findUnique({ where: { userId: user.sub }, select: { id: true } });
+      if (!customer) return reply.status(404).send({ success: false, error: { code: 'CUSTOMER_NOT_FOUND', message: 'No se encontró la cuenta.' } });
+      const [program, orders] = await Promise.all([
+        getLoyaltyConfiguration(),
+        prisma.order.findMany({ where: { restaurantId: RESTAURANT_ID, customerId: customer.id, status: { in: ['DELIVERED', 'COMPLETED', 'PICKED_UP'] } }, select: { id: true, totalAmount: true, createdAt: true }, orderBy: { createdAt: 'desc' } }),
+      ]);
+      const points = program.enabled ? Math.floor(orders.reduce((sum, order) => sum + order.totalAmount, 0) / 100 * program.pointsPer100) : 0;
+      return reply.send({ success: true, data: { enabled: program.enabled, points, eligibleOrders: orders.length,
+        nextRewardPoints: program.rewardPoints, rewardAmount: program.rewardAmount, redemptionEnabled: false } });
+    });
+
+    customerPanel.get('/customer/marketing-consent', async (request, reply) => {
+      const user = getAuthenticatedUser(request);
+      const consent = await prisma.marketingConsent.findUnique({ where: { userId: user.sub }, select: { enabled: true, grantedAt: true, revokedAt: true } });
+      return reply.send({ success: true, data: consent || { enabled: false, grantedAt: null, revokedAt: null } });
+    });
+
+    customerPanel.put('/customer/marketing-consent', async (request, reply) => {
+      const parsed = z.object({ enabled: z.boolean() }).safeParse(request.body);
+      if (!parsed.success) return reply.status(400).send({ success: false, error: { code: 'INVALID_CONSENT', message: 'Indica si autorizas o revocas las campañas comerciales.' } });
+      const user = getAuthenticatedUser(request), now = new Date();
+      const consent = await prisma.marketingConsent.upsert({
+        where: { userId: user.sub },
+        create: { userId: user.sub, enabled: parsed.data.enabled, grantedAt: parsed.data.enabled ? now : null, revokedAt: parsed.data.enabled ? null : now },
+        update: { enabled: parsed.data.enabled, ...(parsed.data.enabled ? { grantedAt: now, revokedAt: null } : { revokedAt: now }) },
+        select: { enabled: true, grantedAt: true, revokedAt: true },
+      });
+      return reply.send({ success: true, data: consent });
+    });
 
     customerPanel.get('/customer/profile', async (request, reply) => {
       const user = getAuthenticatedUser(request);

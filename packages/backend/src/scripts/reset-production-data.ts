@@ -1,3 +1,4 @@
+import '../config/blocked-operation';
 import { prisma } from '../config/database';
 
 // All data tables that get wiped. Kept untouched: User (only non-admin rows are

@@ -72,8 +72,7 @@ export type UploadAssetKind =
   | 'restaurant-logo'
   | 'restaurant-cover'
   | 'product-image'
-  | 'payment-proof'
-  | 'site-image';
+  | 'payment-proof';
 
 export type UploadAssetResponse = {
   success: true;
@@ -84,7 +83,7 @@ export type UploadAssetResponse = {
     width?: number;
     height?: number;
     bytes?: number;
-    provider: 'r2';
+    provider: 'r2' | 'memory';
     deliveryType: 'upload' | 'authenticated';
   };
 };
@@ -925,7 +924,7 @@ export async function uploadMediaAsset(params: {
 }): Promise<{
   url: string;
   publicId: string;
-  provider: 'r2' | 'inline';
+  provider: 'r2' | 'memory' | 'inline';
   deliveryType?: 'upload' | 'authenticated';
 }> {
   try {

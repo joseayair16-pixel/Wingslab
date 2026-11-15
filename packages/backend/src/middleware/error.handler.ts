@@ -4,7 +4,6 @@
 
 import { FastifyError, FastifyReply, FastifyRequest } from 'fastify';
 import { isAppError } from '../errors/app-error';
-import { recordErrorMetric } from '../utils/metrics';
 import { logger } from '../utils/logger';
 import { buildRequestContext } from '../utils/request-context';
 
@@ -25,7 +24,6 @@ export const errorHandler = async (
   reply.header('x-request-id', context.requestId);
 
   if (isAppError(error)) {
-    recordErrorMetric(error.code);
     return reply.status(error.statusCode).send({
       success: false,
       meta: {
@@ -49,8 +47,6 @@ export const errorHandler = async (
     status >= 500
       ? 'Ocurrió un error interno del servidor. Intenta nuevamente.'
       : error.message || 'Solicitud inválida.';
-
-  recordErrorMetric(error.code || 'INTERNAL_ERROR');
 
   return reply.status(status).send({
     success: false,

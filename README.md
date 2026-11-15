@@ -1,5 +1,10 @@
 # 🚀 SaDeL - Multi-Region Delivery Platform
 
+> **WingsLab — aislamiento en curso.** Las instrucciones SaDeL siguientes son
+> históricas: no iniciar servicios, restaurar datos ni desplegar con ellas.
+> Consultar [el protocolo de aislamiento](docs/AISLAMIENTO_WINGSLAB.md).
+> La ejecución local todavía no está autorizada.
+
 **Professional-Grade Delivery Management System** designed for robustness, scalability, and zero technical debt.
 
 ## 📋 Project Structure
@@ -9,7 +14,6 @@ sadel-monorepo/
 ├── packages/
 │   ├── backend/              # Fastify + Node.js API
 │   ├── shared/               # Shared types & utilities
-│   ├── web-admin/            # Admin portal (Next.js)
 │   ├── web-restaurant/       # Restaurant portal (Next.js)
 │   ├── web-customer/         # Customer portal (Next.js)
 │   └── web-driver/           # Driver portal (Next.js)

@@ -60,7 +60,6 @@ sadel/
 ├── packages/
 │   ├── backend/          # Fastify API
 │   ├── shared/           # Types & utilities
-│   ├── web-admin/        # Admin dashboard
 │   ├── web-restaurant/   # Restaurant portal
 │   ├── web-customer/     # Customer app
 │   └── web-driver/       # Driver app

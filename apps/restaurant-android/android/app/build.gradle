@@ -1,3 +1,4 @@
+throw new GradleException('WingsLab Phase 1: Android blocked pending independent applicationId, Firebase and signing identity.')
 apply plugin: 'com.android.application'
 
 android {

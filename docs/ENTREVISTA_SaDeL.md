@@ -112,7 +112,6 @@ sequenceDiagram
 |---|---|
 | `packages/backend` | API Fastify + jobs + Socket.IO |
 | `packages/shared` | Tipos, esquemas Zod, utilidades, audio, temas de menú |
-| `packages/web-admin` | Panel de administración |
 | `packages/web-restaurant` | Panel del restaurante |
 | `packages/web-driver` | Panel del repartidor |
 | `packages/web-customer` | App del comensal |

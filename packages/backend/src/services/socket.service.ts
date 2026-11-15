@@ -4,6 +4,8 @@
 
 import { Server as SocketIOServer, Socket } from 'socket.io';
 import { logger } from '../utils/logger';
+import { prisma } from '../config/database';
+import { businessPrincipalAllowed } from '../config/single-restaurant';
 
 type NotificationMeta = {
   requestId?: string;
@@ -26,7 +28,7 @@ function getRoom(socket: AuthenticatedSocket): string | null {
 
 export const setupSocketIO = (io: SocketIOServer, verifyToken?: SocketTokenVerifier) => {
   // Autenticacion obligatoria en el handshake: sin JWT valido no hay conexion.
-  io.use((socket: AuthenticatedSocket, next) => {
+  io.use(async (socket: AuthenticatedSocket, next) => {
     if (!verifyToken) {
       // Entornos de prueba sin JWT configurado.
       return next();
@@ -36,6 +38,9 @@ export const setupSocketIO = (io: SocketIOServer, verifyToken?: SocketTokenVerif
       logger.warn(`Socket connection rejected (missing/invalid token): ${socket.id}`);
       return next(new Error('UNAUTHORIZED'));
     }
+    try {
+      if (!await businessPrincipalAllowed(prisma, auth)) return next(new Error('UNAUTHORIZED'));
+    } catch { return next(new Error('UNAUTHORIZED')); }
     socket.data.userId = auth.sub;
     socket.data.role = auth.role;
     next();
