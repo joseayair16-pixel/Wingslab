@@ -1,6 +1,6 @@
 'use client';
 import { getWingslabSocketUrl } from '@sadel/shared';
-import { Check, ChevronRight, ChevronUp, Clock, Mail, RefreshCw, User, X } from 'lucide-react';
+import { Check, ChevronRight, ChevronUp, Clock, RefreshCw, User, X } from 'lucide-react';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { SaDelLogo } from '../components/SaDelLogo';
@@ -10,7 +10,6 @@ import DriverTurnByTurnOverlay from '../components/DriverTurnByTurnOverlay';
 import PushEnableBanner from '../components/PushEnableBanner';
 import { isNativePlatform, requestNativePushPermission, registerNativePush, checkNativePushPermission, onNativeNotificationTap, nativeKeepAwake, nativeAllowSleep, hasNativeOrderAlarm, stopNativeOrderAlarm, isNativeAppInBackground, readNativeFcmToken, clearNativeFcmToken, cancelDeliveredNativeNotifications } from '../lib/native';
 import { playAlertSound } from '../lib/sound';
-import { SettlementStatusBadge } from '../components/ui/Badge';
 import { EmptyState } from '../components/ui/EmptyState';
 import { useForegroundPolling } from '../hooks/useForegroundPolling';
 import { io } from 'socket.io-client';
@@ -39,7 +38,7 @@ import {
   flushPendingDeviceUnpair,
 } from '@sadel/shared';
 
-import { AlertTriangle, Bike, Star, Briefcase, ArrowRight, CreditCard, Calendar, Moon, Settings, Menu, Hourglass, MapPin, Store, ClipboardList, BellOff, Map as MapIcon, CheckCircle2, Banknote, Package, Unlink, Phone, Wallet, Image as ImageIcon, Search, RadioTower, PartyPopper, Ban, Camera, Info } from 'lucide-react';
+import { AlertTriangle, Bike, Star, Briefcase, ArrowRight, Calendar, Moon, Settings, Menu, Hourglass, MapPin, Store, ClipboardList, BellOff, Map as MapIcon, CheckCircle2, Banknote, Package, Unlink, Phone, RadioTower, PartyPopper, Info } from 'lucide-react';
 
 /**
  * ¿El sonido de "nuevo pedido" lo pone la app nativa (Foreground Service) en
@@ -66,8 +65,6 @@ type DriverProfile = {
   totalDeliveries: number;
   currentLatitude?: number | null;
   currentLongitude?: number | null;
-  isSuspendedByDebt?: boolean;
-  suspendedDebtAmount?: number;
   user: {
     id: string;
     name: string;
@@ -78,62 +75,11 @@ type DriverProfile = {
   };
 };
 
-type WalletData = {
-  todayEarnings: number;
-  todayTripsCount: number;
-  weeklyEarnings: number;
-  weeklyTripsCount: number;
-  activeDebt: number;
-  currentDebt: number;
-  pastDebt: number;
-  lastBillingSettledAt: string | null;
-  recentDeliveries: Array<{
-    id: string;
-    orderReference: string;
-    deliveryFee: number;
-    deliveredAt: string;
-  }>;
-  recentSettlements?: Array<{
-    id: string;
-    reference: string;
-    periodStart: string;
-    periodEnd: string;
-    dueDate: string | null;
-    settledAt: string | null;
-    amount: number;
-    deliveredOrders: number;
-    deliveredRevenue: number;
-    platformFeeTotal: number;
-    status: string;
-    paymentProofUrl?: string | null;
-    notes?: string | null;
-    createdAt: string;
-    updatedAt: string;
-  }>;
-  hasPendingSettlement?: boolean;
-  pendingSettlementDueDate?: string | null;
-  nextCutoffDate?: string | null;
-  nextCutoffLabel?: string | null;
-  nextSuspensionDate?: string | null;
-};
 
-type WalletChartData = {
-  weekStart: string;
-  weekEnd: string;
-  chartData: Array<{
-    label: string;
-    date: string;
-    earnings: number;
-    trips: number;
-  }>;
-};
 
-type DebtOrder = {
-  id: string;
-  orderReference: string;
-  deliveredAt: string;
-  driverPlatformFee: number;
-};
+
+
+
 
 type DriverOrder = {
   id: string;
@@ -342,7 +288,6 @@ export default function Home() {
   const [historyHasMore, setHistoryHasMore] = useState(false);
   const [loadingMoreHistory, setLoadingMoreHistory] = useState(false);
   const [historyFilter, setHistoryFilter] = useState<'day' | 'week' | 'month' | 'all'>('all');
-  const [historySubTab, setHistorySubTab] = useState<'orders' | 'payments'>('orders');
   const [selectedHistoryOrder, setSelectedHistoryOrder] = useState<DriverOrder | null>(null);
   const [verifyingCode, setVerifyingCode] = useState(false);
   const [isCheckingSession, setIsCheckingSession] = useState(true);
@@ -357,49 +302,17 @@ export default function Home() {
   const touchStartY = useRef(0);
 
   // UI States
-  const [activeTab, setActiveTab] = useState<'active' | 'history' | 'wallet' | 'profile'>('active');
+  const [activeTab, setActiveTab] = useState<'active' | 'history' | 'profile'>('active');
   useEffect(() => {
     // Informa al banner de instalación si el FAB de conexión ocupa la parte baja.
     window.dispatchEvent(new CustomEvent('sadel:bottom-cta', { detail: activeTab === 'active' }));
   }, [activeTab]);
   useEffect(() => { activeTabRef.current = activeTab; }, [activeTab]);
-  const [walletData, setWalletData] = useState<WalletData | null>(null);
-  const [walletWeekOffset, setWalletWeekOffset] = useState(0);
-  const [walletChartData, setWalletChartData] = useState<WalletChartData | null>(null);
-  const [selectedChartDay, setSelectedChartDay] = useState<number | null>(null);
-  const [loadingChart, setLoadingChart] = useState(false);
+
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [showDeveloperSettings, setShowDeveloperSettings] = useState(false);
   const [showWeeklyEarnings, setShowWeeklyEarnings] = useState(true);
   const [darkMode, setDarkMode] = useState(false);
-
-  const [showDebtModal, setShowDebtModal] = useState(false);
-  const [debtModalMode, setDebtModalMode] = useState<'past' | 'current'>('past');
-  const [hideSuspensionOverlay, setHideSuspensionOverlay] = useState(false);
-  const [loadingDebtDetails, setLoadingDebtDetails] = useState(false);
-  const [driverSettlements, setDriverSettlements] = useState<any[]>([]);
-  const [uploadingProof, setUploadingProof] = useState(false);
-  const [proofPreviewBase64, setProofPreviewBase64] = useState<string | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const [debtDetails, setDebtDetails] = useState<{ pastOrders: DebtOrder[], pastDebt: number, currentOrders: DebtOrder[], currentDebt: number, totalDebt: number } | null>(null);
-  const [debtModalError, setDebtModalError] = useState(false);
-
-  // Pay modal state
-  const [showPayModal, setShowPayModal] = useState(false);
-  const [adminBankName, setAdminBankName] = useState('');
-  const [adminBankAccount, setAdminBankAccount] = useState('');
-  const [adminBankBeneficiary, setAdminBankBeneficiary] = useState('');
-  const [bankDetailsLoaded, setBankDetailsLoaded] = useState(false);
-  const [bankDetailsError, setBankDetailsError] = useState(false);
-  // Payment history modal state
-  const [showSettlementDetailModal, setShowSettlementDetailModal] = useState(false);
-  const [selectedSettlement, setSelectedSettlement] = useState<any | null>(null);
-  const [settlementPeriodOrders, setSettlementPeriodOrders] = useState<any[]>([]);
-  const [loadingSettlementOrders, setLoadingSettlementOrders] = useState(false);
-  // Proof image modal
-  const [showProofModal, setShowProofModal] = useState(false);
-  const [showProofSentModal, setShowProofSentModal] = useState(false);
-  const [proofImageUrl, setProofImageUrl] = useState('');
 
   // Calcular ganancias netas de la semana en curso (inicia el lunes)
   const weeklyEarnings = useMemo(() => {
@@ -472,15 +385,6 @@ export default function Home() {
     });
   }, [filteredHistoryOrders]);
 
-  const orderRefMap = useMemo(() => {
-    const map = new Map<string, DriverOrder>();
-    for (const o of historyOrders) {
-      if (o.orderReference && !map.has(o.orderReference)) {
-        map.set(o.orderReference, o);
-      }
-    }
-    return map;
-  }, [historyOrders]);
 
   const batchGroups = useMemo(() => {
     const groups = new Map<string, DriverOrder[]>();
@@ -1107,22 +1011,6 @@ export default function Home() {
             backoffMs: 350,
           },
         }),
-        requestJson<SuccessResponse<WalletData>>({
-          apiBase,
-          path: '/driver-panel/billetera',
-          token,
-          fallbackMessage: 'No se pudo cargar la billetera.',
-          retry: {
-            attempts: 2,
-            backoffMs: 350,
-          },
-        }),
-        requestJson<SuccessResponse<any[]>>({
-          apiBase,
-          path: '/driver-panel/billetera/settlements',
-          token,
-          fallbackMessage: 'No se pudieron cargar los comprobantes.',
-        }).catch(() => ({ success: true, data: [] })),
       ]);
 
       const fulfill = <T,>(r: PromiseSettledResult<T>, fallback: T): T =>
@@ -1141,8 +1029,6 @@ export default function Home() {
       const profileData = requestData(results[0] as PromiseSettledResult<SuccessResponse<DriverProfile>>, null);
       const pendingData = requestData(results[1] as PromiseSettledResult<SuccessResponse<DriverOrder[]>>, []);
       const historyData = fulfill(results[2] as PromiseSettledResult<SuccessResponse<{ items: DriverOrder[]; hasMore: boolean }>>, null);
-      const walletData = requestData(results[3] as PromiseSettledResult<SuccessResponse<WalletData>>, null);
-      const settlementsPayload = fulfill(results[4] as PromiseSettledResult<SuccessResponse<any[]>>, null);
 
       const hadFailures = results.some(r => r.status === 'rejected');
 
@@ -1174,18 +1060,9 @@ export default function Home() {
         setHistoryHasMore(historyData.data.hasMore);
         setHistoryPage(1);
       }
-      setWalletData(walletData);
-      setDriverSettlements(
-        walletData?.recentSettlements ||
-        (settlementsPayload?.success ? settlementsPayload.data : []) ||
-        []
-      );
       setDeliveryPinInput('');
       setDeliveryPinError('');
 
-      if (profileData?.isSuspendedByDebt && (activeTabRef.current !== 'active' && activeTabRef.current !== 'wallet')) {
-        setActiveTab('wallet');
-      }
 
       if (hadFailures) {
         pushToast('error', 'Sincronización parcial', 'Algunos datos no pudieron cargarse.');
@@ -1194,7 +1071,6 @@ export default function Home() {
       setDriverProfile(null);
       setPendingOrders([]);
       setHistoryOrders([]);
-      setWalletData(null);
       const message = getRequestErrorMessage(requestError, 'Error de sincronización.');
       setError(message);
       if (isAuthRequestError(requestError)) {
@@ -1254,56 +1130,6 @@ export default function Home() {
     }
     void loadDashboard();
   }, [loadDashboard, token, sessionUser]);
-
-  const fetchWalletChartData = useCallback(async (offset: number) => {
-    if (!token) return;
-    setLoadingChart(true);
-    setSelectedChartDay(null);
-    try {
-      const response = await requestJson<SuccessResponse<WalletChartData>>({
-        apiBase,
-        path: `/driver-panel/billetera/grafica?weekOffset=${offset}`,
-        token,
-        fallbackMessage: 'Error cargando gráfica.',
-      });
-      setWalletChartData(response.data);
-    } catch (err) {
-      console.error(err);
-      pushToast('error', 'Error', 'No se pudo cargar la gráfica.');
-    } finally {
-      setLoadingChart(false);
-    }
-  }, [token, apiBase]);
-
-  const openDebtModal = async (mode: 'past' | 'current') => {
-    setShowDebtModal(true);
-    setDebtModalMode(mode);
-    setLoadingDebtDetails(true);
-    setDebtModalError(false);
-    try {
-      const response = await requestJson<SuccessResponse<{ pastOrders: DebtOrder[], pastDebt: number, currentOrders: DebtOrder[], currentDebt: number, totalDebt: number }>>({
-        apiBase,
-        path: '/driver-panel/billetera/deuda',
-        token,
-      });
-      if (response.success) {
-        setDebtDetails(response.data);
-      } else {
-        setDebtModalError(true);
-      }
-    } catch (e) {
-      console.error(e);
-      setDebtModalError(true);
-    } finally {
-      setLoadingDebtDetails(false);
-    }
-  };
-
-  useEffect(() => {
-    if (activeTab === 'wallet') {
-      void fetchWalletChartData(walletWeekOffset);
-    }
-  }, [activeTab, walletWeekOffset, fetchWalletChartData]);
 
   const subscribeToPush = useCallback(async (tokenToUse: string): Promise<
     | { ok: true }
@@ -2169,57 +1995,6 @@ export default function Home() {
     await runDriverAction(lastFailedAction.orderId, lastFailedAction.actionKey);
   }
 
-  // Settlement detail modal
-  const openSettlementDetailModal = async (settlement: any) => {
-    setSelectedSettlement(settlement);
-    setShowSettlementDetailModal(true);
-    setLoadingSettlementOrders(true);
-    try {
-      const periodStart = settlement.periodStart ? new Date(settlement.periodStart).toISOString() : '';
-      const periodEnd = settlement.periodEnd ? new Date(settlement.periodEnd).toISOString() : '';
-      const res = await requestJson<{ success: boolean; data: { orders: any[]; totalDebt: number } }>({
-        apiBase,
-        path: `/driver-panel/billetera/periodo-actual/pedidos?periodStart=${encodeURIComponent(periodStart)}&periodEnd=${encodeURIComponent(periodEnd)}`,
-        token,
-      });
-      if (res.success) {
-        setSettlementPeriodOrders(res.data.orders);
-      } else {
-        setSettlementPeriodOrders([]);
-      }
-    } catch {
-      setSettlementPeriodOrders([]);
-      pushToast('error', 'Error', 'No se pudieron cargar los pedidos del periodo.');
-    } finally {
-      setLoadingSettlementOrders(false);
-    }
-  };
-
-  // Pay modal: load admin bank details and open
-  const openPayModal = useCallback(async () => {
-    setShowPayModal(true);
-    setProofPreviewBase64(null);
-    setBankDetailsLoaded(false);
-    setBankDetailsError(false);
-    try {
-      const res = await requestJson<{ success: boolean; data: { adminBankName: string; adminBankAccount: string; adminBankBeneficiary: string } }>({
-        apiBase,
-        path: '/settings',
-        token,
-      });
-      if (res.success) {
-        setAdminBankName(res.data.adminBankName);
-        setAdminBankAccount(res.data.adminBankAccount);
-        setAdminBankBeneficiary(res.data.adminBankBeneficiary);
-        setBankDetailsLoaded(true);
-      } else {
-        setBankDetailsError(true);
-      }
-    } catch {
-      setBankDetailsError(true);
-    }
-  }, [apiBase, token]);
-
   // ==========================================
   // PANTALLA 1: AUTENTICACIÓN (LOGIN) REDISEÑADO
   // ==========================================
@@ -2393,52 +2168,6 @@ export default function Home() {
   // ==========================================
   // COMPONENTES PRINCIPALES (LOGGED IN)
   // ==========================================
-  const handleSelectPaymentProof = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    try {
-      const dataUrl = await convertImageFileToDataUrl(file, 900, 900, 0.7);
-      setProofPreviewBase64(dataUrl);
-    } catch (err) {
-      pushToast('error', 'Error', err instanceof Error ? err.message : 'No se pudo procesar la imagen. Formatos permitidos: JPG, PNG, HEIC.');
-      setUploadingProof(false);
-    }
-  };
-
-  const handleSubmitPaymentProof = async () => {
-    if (!proofPreviewBase64) return;
-    setUploadingProof(true);
-    try {
-      const uploadPayload = await requestJson<{ success: boolean; data: { url: string } }>({
-        apiBase,
-        path: '/uploads/images',
-        token,
-        options: { method: 'POST', body: JSON.stringify({ kind: 'payment-proof', source: proofPreviewBase64 }) },
-        fallbackMessage: 'No se pudo subir la imagen.'
-      });
-      if (uploadPayload.success && uploadPayload.data?.url) {
-        const settlementPayload = await requestJson<{ success: boolean; data: any }>({
-          apiBase,
-          path: '/driver-panel/billetera/settlements',
-          token,
-          options: { method: 'POST', body: JSON.stringify({ paymentProofUrl: uploadPayload.data.url }) },
-          fallbackMessage: 'No se pudo registrar el comprobante.'
-        });
-        if (settlementPayload.success) {
-          setProofPreviewBase64(null);
-          setShowPayModal(false);
-          setShowProofSentModal(true);
-          loadDashboard();
-        }
-      }
-    } catch {
-      pushToast('error', 'Error', 'Error al subir el comprobante.');
-    } finally {
-      setUploadingProof(false);
-    }
-  };
-
   const loadMoreHistory = async () => {
     if (loadingMoreHistory || !historyHasMore) return;
     setLoadingMoreHistory(true);
@@ -2774,20 +2503,7 @@ export default function Home() {
                 <span><Bike className="h-5 w-5" /></span> Inicio
               </button>
 
-              <button
-                type="button"
-                onClick={() => {
-                  triggerHaptic(20);
-                  setActiveTab('wallet');
-                  setIsMenuOpen(false);
-                }}
-                className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl text-xs font-black uppercase tracking-wider transition ${activeTab === 'wallet'
-                    ? 'bg-gradient-to-r from-sky-400 to-sky-600 text-white shadow-md shadow-sky-500/40'
-                    : 'hover:bg-black/5 dark:hover:bg-zinc-900 text-muted dark:text-zinc-400'
-                  }`}
-              >
-                <span><CreditCard className="h-5 w-5" /></span> Mi Billetera
-              </button>
+
 
               <button
                 type="button"
@@ -3990,24 +3706,7 @@ export default function Home() {
             ========================================== */}
         {activeTab === 'history' && (
           <div className="space-y-4">
-            {/* Sub-tab selector: Pedidos | Pagos */}
-            <div className="flex gap-1.5 rounded-3xl border border-black/5 dark:border-zinc-900 bg-surface dark:bg-zinc-950 p-1 shadow-sm">
-              {(['orders', 'payments'] as const).map((sub) => (
-                <button
-                  key={sub}
-                  onClick={() => setHistorySubTab(sub)}
-                  className={`flex-1 px-3 py-2 rounded-2xl text-[10px] font-black uppercase tracking-wider transition-all ${
-                    historySubTab === sub
-                      ? 'bg-neutral-950 text-white dark:bg-surface dark:text-neutral-950 shadow-md'
-                      : 'text-muted hover:text-muted dark:hover:text-zinc-300'
-                  }`}
-                >
-                  {sub === 'orders' ? 'Pedidos' : 'Pagos'}
-                </button>
-              ))}
-            </div>
-
-            {historySubTab === 'orders' && (
+            {(
               <>
                 {/* Tarjeta de Resumen Acumulado en el Historial */}
                 <div className="rounded-3xl border border-black/5 bg-surface p-5 dark:bg-zinc-950 dark:border-zinc-900 shadow-sm transition">
@@ -4128,457 +3827,10 @@ export default function Home() {
               </>
             )}
 
-            {historySubTab === 'payments' && (
-              <div className="space-y-4">
-                {driverSettlements.length === 0 ? (
-                  <EmptyState
-                    icon={Wallet}
-                    title="Sin pagos registrados"
-                    description="Aún no hay cortes de comisión registrados."
-                  />
-                ) : (
-                  driverSettlements.map((s) => {
-                    const isPending = s.status === 'PENDING' || s.status === 'OVERDUE';
-                    return (
-                      <div
-                        key={s.id}
-                        className={`rounded-2xl border p-5 transition shadow-sm hover:shadow-md duration-200 ${
-                          isPending
-                            ? 'border-amber-200 bg-gradient-to-r from-amber-50/40 via-amber-50/10 to-white dark:from-amber-950/20 dark:to-zinc-950'
-                            : s.status === 'PAID'
-                              ? 'border-black/5 bg-gradient-to-r from-neutral-50/50 to-white dark:from-zinc-900/30 dark:to-zinc-950 hover:border-border'
-                              : s.status === 'IN_REVIEW'
-                                ? 'border-sky-200 bg-gradient-to-r from-sky-50/40 to-white dark:from-sky-950/20 dark:to-zinc-950'
-                                : 'border-black/5 bg-gradient-to-r from-neutral-50/50 to-white dark:from-zinc-900/30 dark:to-zinc-950'
-                        }`}
-                      >
-                        <div className="flex flex-wrap items-center justify-between gap-4">
-                          <div className="space-y-1">
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <p className="font-extrabold text-neutral-950 dark:text-zinc-100 tracking-tight text-xs">{s.reference || 'Corte'}</p>
-                            </div>
-                            <p className="text-[10px] text-muted dark:text-zinc-400 font-medium">
-                              Periodo: {new Date(s.periodStart).toLocaleDateString('es-MX', { day: 'numeric', month: 'short' })} - {new Date(s.periodEnd).toLocaleDateString('es-MX', { day: 'numeric', month: 'short', year: 'numeric' })}
-                            </p>
-                          </div>
-                          <div className="flex items-center gap-6">
-                            <div className="text-right">
-                              <p className="text-xl font-black text-neutral-950 dark:text-zinc-100">{formatCurrency(
-                                s.status === 'PENDING' && (walletData?.pastDebt || 0) > 0 ? (walletData?.pastDebt ?? 0) : s.amount
-                              )}</p>
-                              <p className="text-[9px] text-muted dark:text-zinc-400 font-semibold mt-0.5">{s.deliveredOrders || 0} pedidos</p>
-                            </div>
-                            <div className="min-w-[100px] text-right">
-                              <SettlementStatusBadge status={s.status} />
-                            </div>
-                          </div>
-                        </div>
 
-                        {s.dueDate && (s.status === 'PENDING' || s.status === 'OVERDUE') && (
-                          <div className={`mt-3 flex items-center gap-1.5 text-[10px] font-bold rounded-xl px-3 py-1.5 w-fit ${new Date(s.dueDate) < new Date() ? 'text-red-600 dark:text-red-400 bg-red-50/40 dark:bg-red-950/20 border border-red-200/40 dark:border-red-900/30' : 'text-amber-700 dark:text-amber-400 bg-amber-50/40 dark:bg-amber-950/20 border border-amber-100/40 dark:border-amber-900/30'}`}>
-                            <span>{new Date(s.dueDate) < new Date() ? '' : ''}</span>
-                            <span>{new Date(s.dueDate) < new Date() ? 'Retrasado' : `Límite de pago: ${new Date(s.dueDate).toLocaleDateString('es-MX', { day: 'numeric', month: 'long', year: 'numeric' })}`}</span>
-                          </div>
-                        )}
-
-                        <div className="mt-4 flex gap-2 justify-end border-t border-black/5 dark:border-zinc-800 pt-3">
-                          <button
-                            type="button"
-                            onClick={() => openSettlementDetailModal(s)}
-                            className="rounded-xl border border-black/10 dark:border-zinc-700 bg-surface dark:bg-zinc-900 px-3.5 py-2 text-[10px] font-bold text-foreground dark:text-zinc-300 transition hover:bg-surface-2 dark:hover:bg-zinc-800 active:scale-95 shadow-sm"
-                          >
-                            Ver detalles
-                          </button>
-                          {s.paymentProofUrl && (
-                            <button
-                              type="button"
-                              onClick={() => { setProofImageUrl(s.paymentProofUrl ?? ''); setShowProofModal(true); }}
-                              className="rounded-xl border border-black/10 dark:border-zinc-700 bg-surface dark:bg-zinc-900 px-3.5 py-2 text-[10px] font-bold text-foreground dark:text-zinc-300 transition hover:bg-surface-2 dark:hover:bg-zinc-800 active:scale-95 shadow-sm inline-flex items-center gap-1.5"
-                            >
-                              <ImageIcon className="h-5 w-5" /> Ver comprobante
-                            </button>
-                          )}
-                          {(s.status === 'PENDING' || s.status === 'OVERDUE') && (
-                            <button
-                              type="button"
-                              onClick={openPayModal}
-                              className="rounded-xl bg-neutral-950 dark:bg-surface px-4 py-2 text-[10px] font-bold text-white dark:text-neutral-950 transition hover:bg-neutral-800 dark:hover:bg-surface-2 active:scale-95 shadow-sm"
-                            >
-                              Pagar Corte
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })
-                )}
-              </div>
-            )}
           </div>
         )}
 
-        {/* ==========================================
-            PESTAÑA: BILLETERA (GANANCIAS Y DEUDA)
-            ========================================== */}
-        {activeTab === 'wallet' && (
-          <div className="space-y-4 animate-fadeIn">
-            {/* Gráfica de Ganancias */}
-            <div className="rounded-3xl border border-black/5 bg-surface p-5 dark:bg-zinc-950 dark:border-zinc-900 shadow-sm transition">
-              <div className="flex justify-between items-center mb-4">
-                <span className="text-[9px] font-extrabold uppercase tracking-widest text-sky-500 dark:text-sky-400">Rendimiento</span>
-                <select
-                  value={walletWeekOffset}
-                  onChange={(e) => setWalletWeekOffset(parseInt(e.target.value, 10))}
-                  className="bg-surface-2 dark:bg-zinc-900 text-xs font-black text-foreground dark:text-zinc-300 rounded-lg px-2 py-1 outline-none appearance-none cursor-pointer border border-transparent focus:border-accent/50 transition-colors"
-                >
-                  {[0, 1, 2, 3, 4, 5, 6, 7].map(offset => (
-                    <option key={offset} value={offset}>
-                      {offset === 0 ? 'Semana Actual' : `Hace ${offset} sem.`}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {loadingChart ? (
-                <div className="h-44 flex items-center justify-center">
-                  <div className="animate-spin h-6 w-6 border-2 border-accent border-t-transparent rounded-full"></div>
-                </div>
-              ) : walletChartData ? (
-                <div className="mt-2">
-                  <div className="flex justify-between items-end mb-6">
-                    {(() => {
-                      const displayedData = selectedChartDay !== null 
-                        ? walletChartData.chartData[selectedChartDay] 
-                        : { 
-                            label: 'Total Semana', 
-                            earnings: walletChartData.chartData.reduce((acc, d) => acc + d.earnings, 0),
-                            trips: walletChartData.chartData.reduce((acc, d) => acc + d.trips, 0)
-                          };
-                      const dateTitle = selectedChartDay !== null && 'date' in displayedData
-                        ? new Date(displayedData.date as string).toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'short' })
-                        : 'Total Semana';
-                      
-                      return (
-                        <>
-                          <div onClick={() => setSelectedChartDay(null)} className="cursor-pointer">
-                            <p className="text-[10px] text-accent-hover dark:text-sky-400 uppercase tracking-widest font-black transition-colors">
-                              {dateTitle}
-                            </p>
-                            <p className="text-2xl font-black text-foreground dark:text-white mt-0.5 transition-all">
-                              {formatCurrency(displayedData.earnings)}
-                            </p>
-                          </div>
-                          <div className="text-right">
-                            <p className="text-[10px] text-muted dark:text-zinc-500 uppercase tracking-widest font-black transition-colors">Viajes</p>
-                            <p className="text-xl font-black text-foreground dark:text-white mt-0.5 transition-all">
-                              {displayedData.trips}
-                            </p>
-                          </div>
-                        </>
-                      );
-                    })()}
-                  </div>
-
-                  {(() => {
-                    const maxE = Math.max(...walletChartData.chartData.map(d => d.earnings), 50); // min max to avoid flatline at 0
-
-                    return (
-                      <div className="relative h-32 w-full mt-2 select-none">
-                        <svg className="absolute inset-0 h-full w-full overflow-visible" preserveAspectRatio="none" viewBox="0 0 100 100">
-                          {/* Grid lines */}
-                          <line x1="0" y1="10" x2="100" y2="10" stroke="currentColor" strokeWidth="0.5" strokeDasharray="2,2" className="text-black/5 dark:text-white/5" />
-                          <line x1="0" y1="50" x2="100" y2="50" stroke="currentColor" strokeWidth="0.5" strokeDasharray="2,2" className="text-black/5 dark:text-white/5" />
-                          <line x1="0" y1="90" x2="100" y2="90" stroke="currentColor" strokeWidth="0.5" strokeDasharray="2,2" className="text-black/5 dark:text-white/5" />
-
-                          {/* Gradient definition */}
-                          <defs>
-                            <linearGradient id="gradientSky" x1="0%" y1="0%" x2="0%" y2="100%">
-                              <stop offset="0%" stopColor="#0ea5e9" />
-                              <stop offset="100%" stopColor="#7dd3fc" />
-                            </linearGradient>
-                          </defs>
-
-                          {/* Data Bars */}
-                          {walletChartData.chartData.map((d, i) => {
-                            const barWidth = 7; // ancho relativo
-                            const x = (i + 0.5) * (100 / 7) - (barWidth / 2);
-                            const height = Math.max((d.earnings / maxE) * 80, 2); // altura mínima de 2
-                            const y = 90 - height;
-                            const isSelected = selectedChartDay === i;
-                            const isFaded = selectedChartDay !== null && !isSelected;
-                            
-                            return (
-                              <g key={`bar-group-${i}`} onClick={() => setSelectedChartDay(isSelected ? null : i)} className="cursor-pointer">
-                                {/* Zona de toque más ancha */}
-                                <rect
-                                  x={(i * (100 / 7))}
-                                  y="10"
-                                  width={100 / 7}
-                                  height="80"
-                                  fill="transparent"
-                                />
-                                <rect
-                                  x={x}
-                                  y={y}
-                                  width={barWidth}
-                                  height={height}
-                                  rx="1.5"
-                                  fill="url(#gradientSky)"
-                                  opacity={isFaded ? 0.3 : 1}
-                                  className="drop-shadow-sm transition-all duration-300"
-                                />
-                              </g>
-                            );
-                          })}
-                        </svg>
-
-                        {/* X Axis Labels */}
-                        <div className="absolute top-[100%] left-0 right-0 flex mt-2">
-                          {walletChartData.chartData.map((d, i) => (
-                            <div key={i} className="flex-1 flex justify-center">
-                              <span className="text-[10px] font-black text-muted dark:text-zinc-500">{d.label}</span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    );
-                  })()}
-                </div>
-              ) : (
-                <div className="h-44 flex flex-col items-center justify-center gap-2 text-xs text-muted">
-                  <ClipboardList className="h-6 w-6" />
-                  Sin datos
-                </div>
-              )}
-            </div>
-
-            {/* Tarjeta de Resumen General */}
-            <div className="rounded-3xl border border-black/5 bg-surface p-5 dark:bg-zinc-950 dark:border-zinc-900 shadow-sm transition">
-              <span className="text-[9px] font-extrabold uppercase tracking-widest text-[#A78BFA]">Saldo y Ganancias</span>
-              <h3 className="text-lg font-black text-foreground dark:text-zinc-50 leading-tight mt-1">Resumen Financiero</h3>
-
-              <div className="mt-5 space-y-4">
-                {/* Deuda de la semana pasada (corte pendiente) */}
-                {((walletData?.pastDebt || 0) > 0 || walletData?.recentSettlements?.some(s => s.status === 'PENDING' || s.status === 'OVERDUE' || s.status === 'IN_REVIEW')) && (() => {
-                  const activeSettlement = walletData?.recentSettlements?.find(s => s.status === 'PENDING' || s.status === 'IN_REVIEW' || s.status === 'OVERDUE');
-                  const hasProof = activeSettlement?.status === 'IN_REVIEW';
-                  const displayDebt = (walletData?.pastDebt || 0) > 0 ? (walletData?.pastDebt || 0) : (activeSettlement?.amount || 0);
-                  return (
-                    <div className="rounded-2xl bg-amber-50/50 dark:bg-amber-950/20 border border-amber-200/50 dark:border-amber-900/30 p-4">
-                      <div className="flex justify-between items-start">
-                        <div>
-                          <p className="text-[9px] font-black uppercase tracking-wider text-amber-700 dark:text-amber-400">Corte de Semana Pasada</p>
-                        </div>
-                        <span className="text-xl">{hasProof ? '' : displayDebt > 0 ? '' : ''}</span>
-                      </div>
-                      <div className="flex justify-between items-baseline mt-4 border-t border-amber-200/40 dark:border-amber-900/30 pt-3">
-                        <span className="text-xs font-black text-amber-800 dark:text-amber-300">Deuda pendiente:</span>
-                        <span className="text-2xl font-black text-amber-700 dark:text-amber-400">
-                          {formatCurrency(displayDebt)}
-                        </span>
-                      </div>
-                      {walletData?.pendingSettlementDueDate && (
-                        <div className={`mt-2 flex items-center gap-1.5 text-[11px] font-bold ${new Date(walletData.pendingSettlementDueDate) < new Date() ? 'text-red-600 dark:text-red-400' : 'text-amber-700 dark:text-amber-400'}`}>
-                          <span>{new Date(walletData.pendingSettlementDueDate) < new Date() ? '' : ''}</span>
-                          <span>{new Date(walletData.pendingSettlementDueDate) < new Date() ? 'Retrasado' : `Límite de pago: ${new Date(walletData.pendingSettlementDueDate).toLocaleDateString('es-MX', { day: 'numeric', month: 'long', year: 'numeric' })}`}</span>
-                        </div>
-                      )}
-                      {hasProof ? (
-                        <div className="mt-3 space-y-2">
-                          <div className="rounded-xl bg-sky-50 dark:bg-sky-950/20 border border-sky-200 dark:border-sky-900/30 p-3 flex items-center gap-2">
-                            <span className="text-sm"><Search className="h-5 w-5" /></span>
-                            <div>
-                              <p className="text-[10px] font-black text-sky-700 dark:text-sky-300 uppercase tracking-wider">Comprobante enviado</p>
-                              <p className="text-[9px] text-sky-600 dark:text-sky-400">Esperando revisión del administrador</p>
-                            </div>
-                          </div>
-                          <div className="flex gap-2">
-                            <button
-                              onClick={() => openDebtModal('past')}
-                              className="flex-1 py-2 bg-surface-2 dark:bg-zinc-900 text-foreground dark:text-zinc-300 text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-surface-2 dark:hover:bg-zinc-800 transition"
-                            >
-                              Ver detalle
-                            </button>
-                            {activeSettlement?.paymentProofUrl && (
-                              <button
-                                type="button"
-                                onClick={() => { setProofImageUrl(activeSettlement.paymentProofUrl ?? ''); setShowProofModal(true); }}
-                                className="py-2 px-3.5 bg-surface-2 dark:bg-zinc-900 text-foreground dark:text-zinc-300 text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-surface-2 dark:hover:bg-zinc-800 transition inline-flex items-center gap-1"
-                              >
-                                <ImageIcon className="h-5 w-5" /> Comprobante
-                              </button>
-                            )}
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="mt-3 flex gap-2">
-                          <button
-                            onClick={() => openDebtModal('past')}
-                            className="flex-1 py-2 bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-amber-200 dark:hover:bg-amber-900/60 transition"
-                          >
-                            Ver detalle
-                          </button>
-                          <button
-                            onClick={openPayModal}
-                            className="flex-1 py-2 bg-neutral-950 dark:bg-surface text-white dark:text-neutral-950 text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-neutral-800 dark:hover:bg-surface-2 transition animate-wiggle"
-                          >
-                            Pagar ahora
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })()}
-
-                {/* Deuda acumulada de esta semana */}
-                {(walletData?.currentDebt || 0) > 0 && (
-                  <div className="rounded-2xl bg-rose-50/50 dark:bg-rose-950/20 border border-rose-200/50 dark:border-rose-900/30 p-4">
-                    <div className="flex justify-between items-start">
-                      <div>
-                        <p className="text-[9px] font-black uppercase tracking-wider text-rose-600 dark:text-rose-450">Comisión por Servicio Ocupado</p>
-                        <p className="text-[11px] text-muted dark:text-zinc-400 mt-1 leading-relaxed">
-                          Deuda acumulada de esta semana. Se cortará el próximo domingo.
-                        </p>
-                      </div>
-                      <span className="text-xl"><AlertTriangle className="h-5 w-5" /></span>
-                    </div>
-                    <div className="flex justify-between items-baseline mt-4 border-t border-rose-200/40 dark:border-rose-900/30 pt-3">
-                      <span className="text-xs font-black text-rose-800 dark:text-rose-300">Deuda acumulada:</span>
-                      <span className="text-2xl font-black text-rose-700 dark:text-rose-450">
-                        {formatCurrency(walletData?.currentDebt || 0)}
-                      </span>
-                    </div>
-                    {(walletData?.currentDebt ?? 0) > 0 && (
-                      <div className="mt-3">
-                        <button
-                          onClick={() => openDebtModal('current')}
-                          className="w-full py-2 bg-rose-100 dark:bg-rose-900/40 text-rose-700 dark:text-rose-300 text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-rose-200 dark:hover:bg-rose-900/60 transition"
-                        >
-                          Ver detalle
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {/* If there's no debt at all — only after walletData loads */}
-                {walletData && (!walletData?.currentDebt || walletData.currentDebt <= 0) && (!walletData?.pastDebt || walletData.pastDebt <= 0) && (
-                  <div className="rounded-2xl bg-emerald-50/50 dark:bg-emerald-950/10 border border-emerald-200/50 dark:border-emerald-900/30 p-4 text-center">
-                    <p className="text-2xl mb-1"><CheckCircle2 className="h-5 w-5" /></p>
-                    <p className="text-sm font-black text-emerald-700 dark:text-emerald-400">Estás al día</p>
-                    <p className="text-[10px] text-emerald-600 dark:text-emerald-500 mt-0.5">No tienes deuda pendiente</p>
-                  </div>
-                )}
-
-                {/* Ganancias de la semana */}
-                <div className="rounded-2xl bg-sky-50/55 dark:bg-sky-950/15 border border-sky-100 dark:border-sky-900/25 p-4">
-                  <p className="text-[9px] font-black uppercase tracking-wider text-accent dark:text-[#A78BFA]">Semana en Curso</p>
-                  <div className="flex justify-between items-baseline mt-2">
-                    <span className="text-xs text-muted dark:text-zinc-450">Ganancias estimadas:</span>
-                    <span className="text-xl font-black text-neutral-950 dark:text-zinc-100">
-                      {formatCurrency(walletData?.weeklyEarnings || 0)}
-                    </span>
-                  </div>
-                  <div className="flex justify-between items-baseline mt-1">
-                    <span className="text-xs text-muted dark:text-zinc-450">Entregas de la semana:</span>
-                    <span className="text-xs font-black text-foreground dark:text-zinc-200">
-                      {walletData?.weeklyTripsCount || 0} viajes
-                    </span>
-                  </div>
-                </div>
-
-                {/* Ganancias de hoy */}
-                <div className="rounded-2xl bg-surface-2 dark:bg-zinc-900/50 p-4">
-                  <p className="text-[9px] font-black uppercase tracking-wider text-neutral-555 dark:text-zinc-400">Actividad de Hoy</p>
-                  <div className="flex justify-between items-baseline mt-2">
-                    <span className="text-xs text-muted dark:text-zinc-450">Ganancia neta hoy:</span>
-                    <span className="text-lg font-black text-neutral-950 dark:text-zinc-100">
-                      {formatCurrency(walletData?.todayEarnings || 0)}
-                    </span>
-                  </div>
-                  <div className="flex justify-between items-baseline mt-1">
-                    <span className="text-xs text-muted dark:text-zinc-450">Entregas de hoy:</span>
-                    <span className="text-xs font-black text-foreground dark:text-zinc-200">
-                      {walletData?.todayTripsCount || 0} viajes
-                    </span>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-
-            {/* Historial reciente de ganancias de los viajes */}
-            <div className="rounded-3xl border border-black/5 bg-surface p-5 dark:bg-zinc-950 dark:border-zinc-900 shadow-sm transition">
-              <span className="text-[9px] font-extrabold uppercase tracking-widest text-sky-500 dark:text-sky-400">Detalle</span>
-              <h3 className="text-lg font-black text-foreground dark:text-zinc-50 leading-tight mt-1">Viajes Recientes (7d)</h3>
-
-              <div className="mt-4 space-y-4">
-                {!walletData?.recentDeliveries || walletData.recentDeliveries.length === 0 ? (
-                  <div className="py-6 text-center text-xs text-muted">
-                    No hay viajes registrados en los últimos 7 días.
-                  </div>
-                ) : (() => {
-                  const groups = new Map<string, typeof walletData.recentDeliveries>();
-                  for (const d of walletData.recentDeliveries) {
-                    const key = new Date(d.deliveredAt).toLocaleDateString('es-MX', {
-                      year: 'numeric', month: 'short', day: 'numeric',
-                    });
-                    if (!groups.has(key)) groups.set(key, []);
-                    groups.get(key)!.push(d);
-                  }
-                  const sorted = Array.from(groups.entries()).sort((a, b) => {
-                    return new Date(b[1][0].deliveredAt).getTime() - new Date(a[1][0].deliveredAt).getTime();
-                  });
-                  return sorted.map(([dateLabel, deliveries]) => (
-                    <div key={dateLabel}>
-                      <div className="flex items-center gap-2 mb-2 px-1">
-                        <h4 className="text-[10px] font-bold text-muted dark:text-zinc-500 uppercase tracking-wider">{dateLabel}</h4>
-                        <div className="flex-1 h-px bg-surface-2/50 dark:bg-zinc-800/50" />
-                        <span className="text-[9px] font-bold text-neutral-300 dark:text-zinc-600">{deliveries.length} viaje{deliveries.length !== 1 ? 's' : ''}</span>
-                      </div>
-                      <div className="space-y-2">
-                        {deliveries.map((delivery) => (
-                          <div
-                            key={delivery.id}
-                            onClick={() => {
-                              const order = orderRefMap.get(delivery.orderReference);
-                              if (order) setSelectedHistoryOrder(order);
-                            }}
-                            className="rounded-2xl border border-black/5 bg-surface p-3.5 flex justify-between items-center cursor-pointer hover:bg-surface-2 dark:bg-zinc-900/40 dark:border-zinc-900/50 dark:hover:bg-zinc-800/60 transition"
-                          >
-                            <div className="min-w-0 flex-1 mr-3">
-                              {(() => {
-                                const full = orderRefMap.get(delivery.orderReference);
-                                return full ? (
-                                  <>
-                                    <span className="text-xs font-black text-foreground dark:text-zinc-100 truncate block">
-                                      {full.restaurant.name} — {full.customer?.user?.name ?? 'Cliente'} #{full.dailyCounter ?? '?'}
-                                    </span>
-                                    <p className="text-[8px] text-muted dark:text-zinc-500 mt-0.5 font-mono tracking-tight truncate">
-                                      {delivery.orderReference}
-                                    </p>
-                                  </>
-                                ) : (
-                                  <span className="text-xs font-black text-foreground dark:text-zinc-100">
-                                    {delivery.orderReference}
-                                  </span>
-                                );
-                              })()}
-                              <p className="text-[9px] text-muted dark:text-zinc-400 mt-0.5">{formatDate(delivery.deliveredAt)}</p>
-                            </div>
-                            <span className="text-xs font-extrabold text-emerald-600 dark:text-emerald-400">
-                              +{formatCurrency(delivery.deliveryFee)}
-                            </span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  ));
-                })()}
-              </div>
-            </div>
-          </div>
-        )}
 
         {/* ==========================================
             PESTAÑA 3: SEGURIDAD Y PERFIL DEL REPARTIDOR
@@ -4951,9 +4203,7 @@ export default function Home() {
           <button
             type="button"
             onClick={() => {
-              if (driverProfile?.isSuspendedByDebt) {
-                setHideSuspensionOverlay(false);
-              } else if (driverProfile?.availability === 'AVAILABLE' || driverProfile?.availability === 'BUSY') {
+              if (driverProfile?.availability === 'AVAILABLE' || driverProfile?.availability === 'BUSY') {
                 void updateAvailability('OFFLINE');
               } else {
                 void updateAvailability('AVAILABLE');
@@ -4985,424 +4235,6 @@ export default function Home() {
               </>
             )}
           </button>
-        </div>
-      )}
-
-      {/* ==========================================
-          PANTALLA DE BLOQUEO POR DEUDA (FULL SCREEN)
-          ========================================== */}
-      {driverProfile?.isSuspendedByDebt && !hideSuspensionOverlay && (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-surface dark:bg-black p-6">
-          <div className="w-full max-w-md mx-auto text-center">
-            <div className="rounded-[32px] bg-rose-600/95 p-8 text-white shadow-2xl backdrop-blur-md shadow-rose-900/50 border border-rose-500">
-              <span className="text-5xl mb-4 block"><Ban className="h-5 w-5" /></span>
-              <h2 className="text-xl font-black uppercase tracking-widest mb-2">Cuenta Suspendida</h2>
-              <p className="text-sm text-rose-100 font-bold leading-relaxed">
-                No puedes trabajar hasta que liquides tu deuda pendiente de la semana anterior.
-              </p>
-              <div className="mt-6 inline-block bg-surface/20 rounded-2xl px-6 py-4 border border-white/30">
-                <p className="text-[10px] uppercase tracking-widest text-rose-100 font-black mb-1">Deuda Vencida</p>
-                <p className="text-3xl font-black">{formatCurrency(driverProfile.suspendedDebtAmount || 0)}</p>
-              </div>
-              <button
-                type="button"
-                onClick={() => { setHideSuspensionOverlay(true); setActiveTab('wallet'); }}
-                className="mt-4 w-full py-3 rounded-full border-2 border-white/40 text-white text-xs font-black uppercase tracking-widest hover:bg-surface/10 transition-colors"
-              >
-                Ir a Billetera
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-
-
-      {/* ==========================================
-          MODAL DE PAGO
-          ========================================== */}
-      {showPayModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-          <div className="w-full max-w-md rounded-[32px] bg-surface p-6 shadow-2xl dark:bg-zinc-950 dark:border-zinc-900 animate-fadeIn">
-            <div className="flex items-start justify-between gap-4 mb-4">
-              <div>
-                <div className="flex items-center gap-2 mb-1">
-                  <div className="flex h-7 w-7 items-center justify-center rounded-full bg-sky-100 dark:bg-sky-900/30 text-sky-600 dark:text-sky-400">
-                    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5.586a1 1 0 0 1 .707.293l5.414 5.414a1 1 0 0 1 .293.707V19a2 2 0 0 1-2 2Z" /></svg>
-                  </div>
-                  <p className="text-[10px] font-bold uppercase tracking-widest text-sky-600 dark:text-sky-400">Liquidación</p>
-                </div>
-                <h3 className="text-xl font-black text-foreground dark:text-zinc-100">Pagar Deuda</h3>
-              </div>
-              <button
-                type="button"
-                onClick={() => { setShowPayModal(false); setProofPreviewBase64(null); }}
-                className="h-8 w-8 rounded-full flex items-center justify-center border border-black/5 dark:border-zinc-900 bg-surface-2 dark:bg-zinc-900"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-
-            <div className="space-y-5">
-              {/* Amount hero */}
-              <div className="relative overflow-hidden rounded-[24px] bg-neutral-900 dark:bg-zinc-800 p-5 text-white shadow-lg">
-                <div className="absolute -right-8 -top-8 h-32 w-32 rounded-full bg-surface/5 blur-3xl"></div>
-                <div className="relative z-10">
-                  <p className="text-xs font-medium text-muted">Total a liquidar</p>
-                  <div className="mt-1 flex items-baseline gap-1">
-                    <span className="text-3xl font-black">{formatCurrency(walletData?.pastDebt || 0)}</span>
-                    <span className="text-sm font-semibold text-muted">MXN</span>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      navigator.clipboard.writeText(String(walletData?.pastDebt || '0'));
-                      pushToast('success', 'Copiado', 'Monto copiado al portapapeles.');
-                    }}
-                    className="mt-2 inline-flex items-center gap-1.5 text-[10px] font-bold text-neutral-300 hover:text-white transition"
-                  >
-                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" /></svg>
-                    Copiar monto
-                  </button>
-                </div>
-              </div>
-
-              {/* Bank details */}
-              <div className="rounded-[20px] border border-black/5 dark:border-zinc-800 bg-surface-2 dark:bg-zinc-900/50 p-1">
-                <div className="flex items-center gap-2 border-b border-black/5 dark:border-zinc-800 px-4 py-3">
-                  <Mail className="h-4 w-4 text-muted" />
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-muted dark:text-zinc-400">Datos Bancarios</span>
-                </div>
-                {bankDetailsError ? (
-                  <div className="px-4 py-4 text-center">
-                    <p className="text-[11px] font-bold text-rose-600 dark:text-rose-400">Error al cargar datos bancarios</p>
-                    <p className="text-[10px] text-muted mt-1">Intenta de nuevo o contacta a soporte.</p>
-                  </div>
-                ) : !bankDetailsLoaded ? (
-                  <div className="px-4 py-4 text-center">
-                    <div className="animate-spin h-5 w-5 border-2 border-sky-500 border-t-transparent rounded-full mx-auto"></div>
-                    <p className="text-[10px] text-muted mt-2">Cargando datos bancarios...</p>
-                  </div>
-                ) : (
-                  <div className="divide-y divide-black/5 dark:divide-zinc-800">
-                    {[
-                      { label: 'Banco', value: adminBankName },
-                      { label: 'Cuenta', value: adminBankAccount },
-                      { label: 'Beneficiario', value: adminBankBeneficiary },
-                    ].map((row) => (
-                      <div key={row.label} className="flex items-center justify-between px-4 py-2.5">
-                        <span className="text-[11px] font-semibold text-muted dark:text-zinc-400">{row.label}</span>
-                        <div className="flex items-center gap-1.5">
-                          <span className="text-xs font-black text-foreground dark:text-zinc-100">{row.value}</span>
-                          <button
-                            type="button"
-                            onClick={() => { navigator.clipboard.writeText(row.value); pushToast('success', 'Copiado', `${row.label} copiado.`); }}
-                            className="flex h-7 w-7 items-center justify-center rounded-full bg-surface-2 text-muted hover:bg-surface-2 hover:text-foreground active:scale-90 dark:bg-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-700 dark:hover:text-zinc-100 transition"
-                            title={`Copiar ${row.label.toLowerCase()}`}
-                          >
-                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              {/* Upload proof */}
-              <div className="rounded-[20px] border border-black/5 dark:border-zinc-800 p-4">
-                <p className="text-[10px] font-bold uppercase tracking-wider text-muted dark:text-zinc-400 mb-3">Sube tu comprobante de pago</p>
-                {proofPreviewBase64 ? (
-                  <div className="space-y-3">
-                    <div className="relative rounded-2xl overflow-hidden bg-surface-2 dark:bg-zinc-900 border border-black/5 dark:border-zinc-800 p-2">
-                      <img src={proofPreviewBase64} alt="Vista previa" className="w-full max-h-40 object-contain rounded-xl" />
-                      <button
-                        type="button"
-                        onClick={() => setProofPreviewBase64(null)}
-                        disabled={uploadingProof}
-                        className="absolute top-3 right-3 bg-black/60 text-white rounded-full p-1.5 hover:bg-black/80 transition disabled:opacity-50"
-                      >
-                        <X className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={handleSubmitPaymentProof}
-                      disabled={uploadingProof}
-                      className="w-full py-3 bg-neutral-950 dark:bg-surface text-white dark:text-neutral-950 rounded-xl text-sm font-black uppercase tracking-widest hover:bg-neutral-800 dark:hover:bg-surface-2 transition disabled:opacity-50"
-                    >
-                      {uploadingProof ? 'Subiendo...' : 'Enviar Comprobante'}
-                    </button>
-                  </div>
-                ) : (
-                  <>
-                    <input type="file" accept="image/*" className="hidden" ref={fileInputRef} onChange={handleSelectPaymentProof} />
-                    <button
-                      type="button"
-                      onClick={() => fileInputRef.current?.click()}
-                      disabled={uploadingProof}
-                      className="w-full py-3 border-2 border-dashed border-border dark:border-zinc-700 rounded-xl text-xs font-bold text-muted dark:text-zinc-400 hover:border-neutral-400 dark:hover:border-zinc-600 transition disabled:opacity-50"
-                    >
-                      <Camera className="h-5 w-5" /> Seleccionar foto del comprobante
-                    </button>
-                  </>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ==========================================
-          MODAL DE DETALLE DEL PERÍODO DE PAGO
-          ========================================== */}
-      {showSettlementDetailModal && selectedSettlement && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-          <div className="w-full max-w-md rounded-[32px] border border-black/5 bg-surface p-6 shadow-2xl dark:bg-zinc-950 dark:border-zinc-900 animate-fadeIn max-h-[80vh] flex flex-col">
-            <div className="flex justify-between items-center mb-4 shrink-0">
-              <h3 className="text-sm font-black uppercase tracking-wider text-emerald-600 dark:text-emerald-400">Detalle del Período</h3>
-              <button
-                type="button"
-                onClick={() => setShowSettlementDetailModal(false)}
-                className="h-8 w-8 rounded-full flex items-center justify-center border border-black/5 dark:border-zinc-900 bg-surface-2 dark:bg-zinc-900"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-            <div className="flex-1 overflow-y-auto">
-              <div className="rounded-2xl bg-surface-2 dark:bg-zinc-900/50 p-4 mb-4">
-                <p className="text-xs text-muted dark:text-zinc-400">
-                  Período: {new Date(selectedSettlement.periodStart).toLocaleDateString('es-MX', { day: 'numeric', month: 'short' })} - {new Date(selectedSettlement.periodEnd).toLocaleDateString('es-MX', { day: 'numeric', month: 'short', year: 'numeric' })}
-                </p>
-                <div className="flex justify-between items-baseline mt-2">
-                  <span className="text-xs font-bold text-muted dark:text-zinc-400">
-                    {selectedSettlement.status === 'PENDING' && (walletData?.pastDebt || 0) > 0 ? 'Deuda pendiente:' : 'Total pagado:'}
-                  </span>
-                  <span className="text-xl font-black text-emerald-600 dark:text-emerald-400">{formatCurrency(
-                    selectedSettlement.status === 'PENDING' && (walletData?.pastDebt || 0) > 0 ? (walletData?.pastDebt ?? 0) : selectedSettlement.amount
-                  )}</span>
-                </div>
-                <SettlementStatusBadge status={selectedSettlement.status} className="mt-2" />
-              </div>
-
-              <div className="space-y-2">
-                {loadingSettlementOrders ? (
-                  <div className="flex justify-center py-8">
-                    <div className="animate-spin h-6 w-6 border-2 border-emerald-500 border-t-transparent rounded-full"></div>
-                  </div>
-                ) : settlementPeriodOrders.length > 0 ? (
-                  settlementPeriodOrders.map((order: any) => (
-                    <div key={order.id} className="flex justify-between items-center p-3 rounded-2xl bg-surface-2 dark:bg-zinc-900/50 border border-border dark:border-zinc-800">
-                      <div>
-                        <p className="text-xs font-black text-foreground dark:text-zinc-100">{order.orderReference}</p>
-                        <p className="text-[10px] text-muted dark:text-zinc-400 mt-0.5">
-                          {new Date(order.deliveredAt).toLocaleDateString('es-MX', { day: 'numeric', month: 'short' })}
-                        </p>
-                      </div>
-                      <span className="text-sm font-black text-rose-600 dark:text-rose-400">{formatCurrency(order.driverPlatformFee)}</span>
-                    </div>
-                  ))
-                ) : (
-                  <p className="text-center text-xs text-muted py-4">No se encontraron pedidos en este período.</p>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Modal de Comprobante de Pago */}
-      {showProofSentModal && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
-          onClick={() => setShowProofSentModal(false)}
-        >
-          <div
-            className="relative w-full max-w-sm rounded-[32px] border border-emerald-200 bg-surface p-7 shadow-2xl dark:border-emerald-900/30 dark:bg-zinc-950 animate-scaleUp"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <button
-              type="button"
-              onClick={() => setShowProofSentModal(false)}
-              className="absolute top-3 right-3 flex h-6 w-6 items-center justify-center rounded-full text-muted hover:text-foreground dark:hover:text-zinc-200 transition"
-            >
-              <X className="h-5 w-5" />
-            </button>
-            <div className="text-center">
-              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-900/30 mb-4">
-                <Check className="h-8 w-8 text-emerald-600 dark:text-emerald-400" strokeWidth={2.5} />
-              </div>
-              <h3 className="text-lg font-black text-foreground dark:text-zinc-50">¡Listo!</h3>
-              <p className="mt-2 text-sm text-muted dark:text-zinc-400 leading-relaxed">
-                Comprobante enviado. La administración lo revisará y confirmará tu pago.
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={() => setShowProofSentModal(false)}
-              className="mt-6 w-full rounded-full bg-emerald-600 hover:bg-emerald-700 active:scale-[0.97] text-white py-3 text-sm font-bold shadow-md shadow-emerald-600/20 transition"
-            >
-              Entendido
-            </button>
-          </div>
-        </div>
-      )}
-
-      {showProofModal && proofImageUrl && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm" onClick={() => setShowProofModal(false)}>
-          <div className="relative w-full max-w-2xl max-h-[90vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
-            <button
-              type="button"
-              onClick={() => setShowProofModal(false)}
-              className="absolute -top-3 -right-3 z-10 h-9 w-9 rounded-full bg-surface dark:bg-zinc-900 border border-black/10 dark:border-zinc-700 flex items-center justify-center shadow-lg hover:scale-105 active:scale-95 transition text-foreground dark:text-zinc-300 text-sm"
-            >
-              <X className="h-5 w-5" />
-            </button>
-            <div className="rounded-[24px] overflow-hidden bg-surface dark:bg-zinc-950 shadow-2xl border border-black/10 dark:border-zinc-800">
-              <img
-                src={proofImageUrl}
-                alt="Comprobante de pago"
-                className="w-full h-auto max-h-[80vh] object-contain"
-              />
-            </div>
-            <div className="mt-3 flex justify-center gap-3">
-              <a
-                href={proofImageUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1.5 rounded-xl bg-surface/10 backdrop-blur-md px-4 py-2 text-[11px] font-bold text-white hover:bg-surface/20 transition"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
-                Abrir en nueva pestaña
-              </a>
-              <button
-                type="button"
-                onClick={() => setShowProofModal(false)}
-                className="rounded-xl bg-surface/10 backdrop-blur-md px-4 py-2 text-[11px] font-bold text-white hover:bg-surface/20 transition"
-              >
-                Cerrar
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Modal de Detalle de Deuda */}
-      {showDebtModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-          <div className="w-full max-w-md rounded-[32px] border border-black/5 bg-surface p-6 shadow-2xl dark:bg-zinc-950 dark:border-zinc-900 animate-fadeIn max-h-[80vh] flex flex-col">
-            <div className="flex justify-between items-center mb-4 shrink-0">
-              <div className="flex items-center gap-2">
-                <div className="h-2 w-2 rounded-full bg-sky-500" />
-                <h3 className="text-sm font-black uppercase tracking-wider text-sky-600 dark:text-sky-400">
-                  {debtModalMode === 'past' ? 'Corte de Semana Pasada' : 'Deuda de esta Semana'}
-                </h3>
-              </div>
-              <button
-                type="button"
-                onClick={() => setShowDebtModal(false)}
-                className="h-8 w-8 rounded-full flex items-center justify-center border border-black/5 dark:border-zinc-900 bg-surface-2 dark:bg-zinc-900 hover:bg-surface-2 dark:hover:bg-zinc-800 transition"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-
-            <div className="flex-1 overflow-y-auto min-h-[200px]">
-              {loadingDebtDetails ? (
-                <div className="h-full flex items-center justify-center">
-                  <div className="animate-spin h-6 w-6 border-2 border-sky-500 border-t-transparent rounded-full"></div>
-                </div>
-              ) : debtModalError ? (
-                <div className="h-full flex flex-col items-center justify-center gap-3 px-4">
-                  <p className="text-xs font-bold text-rose-600 dark:text-rose-400">Error al cargar la deuda</p>
-                  <button
-                    onClick={() => openDebtModal(debtModalMode)}
-                    className="px-4 py-2 bg-surface-2 dark:bg-zinc-900 text-xs font-bold rounded-xl hover:bg-surface-2 dark:hover:bg-zinc-800 transition"
-                  >
-                    Reintentar
-                  </button>
-                </div>
-              ) : debtDetails && (debtDetails.pastOrders.length > 0 || debtDetails.currentOrders.length > 0) ? (
-                <div className="space-y-4">
-                  {/* Semana Pasada */}
-                  {debtModalMode === 'past' && debtDetails.pastOrders.length > 0 && (
-                    <div>
-                      <div className="flex items-center gap-2 mb-3">
-                        <span className="text-[9px] font-black uppercase tracking-widest text-sky-600 dark:text-sky-400">Semana Pasada</span>
-                        <div className="flex-1 h-px bg-sky-200/50 dark:bg-sky-900/30" />
-                      </div>
-                      <div className="space-y-2">
-                        {debtDetails.pastOrders.map(order => (
-                          <div key={order.id} className="flex justify-between items-center p-3 rounded-2xl bg-sky-50/50 dark:bg-sky-950/20 border border-sky-100 dark:border-sky-900/30">
-                            <div className="min-w-0 flex-1 mr-3">
-                              <p className="text-xs font-black text-foreground dark:text-zinc-100 truncate">Pedido {order.orderReference}</p>
-                              <p className="text-[10px] text-muted dark:text-zinc-400 mt-0.5">
-                                Entregado: {new Date(order.deliveredAt).toLocaleDateString('es-ES', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
-                              </p>
-                            </div>
-                            <span className="text-sm font-black text-sky-700 dark:text-sky-400 shrink-0">
-                              +{formatCurrency(order.driverPlatformFee)}
-                            </span>
-                          </div>
-                        ))}
-                        <div className="flex justify-between items-center px-3 py-2 border-t border-sky-100/50 dark:border-sky-900/20 mt-2">
-                          <span className="text-[10px] font-black text-sky-700 dark:text-sky-400">Subtotal</span>
-                          <span className="text-sm font-black text-sky-700 dark:text-sky-400">{formatCurrency(debtDetails.pastDebt)}</span>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Semana Actual */}
-                  {debtModalMode === 'current' && debtDetails.currentOrders.length > 0 && (
-                    <div>
-                      <div className="flex items-center gap-2 mb-3">
-                        <span className="text-[9px] font-black uppercase tracking-widest text-sky-600 dark:text-sky-400">Semana Actual</span>
-                        <div className="flex-1 h-px bg-sky-200/50 dark:bg-sky-900/30" />
-                      </div>
-                      <p className="text-[10px] text-muted dark:text-zinc-400 mb-3 leading-relaxed">
-                        Pedidos entregados esta semana que generaron comisión. Se cortarán el próximo domingo.
-                      </p>
-                      <div className="space-y-2">
-                        {debtDetails.currentOrders.map(order => (
-                          <div key={order.id} className="flex justify-between items-center p-3 rounded-2xl bg-sky-50/50 dark:bg-sky-950/20 border border-sky-100 dark:border-sky-900/30">
-                            <div className="min-w-0 flex-1 mr-3">
-                              <p className="text-xs font-black text-foreground dark:text-zinc-100 truncate">Pedido {order.orderReference}</p>
-                              <p className="text-[10px] text-muted dark:text-zinc-400 mt-0.5">
-                                Entregado: {new Date(order.deliveredAt).toLocaleDateString('es-ES', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
-                              </p>
-                            </div>
-                            <span className="text-sm font-black text-sky-700 dark:text-sky-400 shrink-0">
-                              +{formatCurrency(order.driverPlatformFee)}
-                            </span>
-                          </div>
-                        ))}
-                        <div className="flex justify-between items-center px-3 py-2 border-t border-sky-100/50 dark:border-sky-900/20 mt-2">
-                          <span className="text-[10px] font-black text-sky-700 dark:text-sky-400">Subtotal</span>
-                          <span className="text-sm font-black text-sky-700 dark:text-sky-400">{formatCurrency(debtDetails.currentDebt)}</span>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              ) : (
-                <div className="h-full flex items-center justify-center text-xs text-muted text-center px-4">
-                  No hay deuda pendiente de cobro.<br/>¡Todo al corriente!
-                </div>
-              )}
-            </div>
-
-            {!loadingDebtDetails && debtDetails && (
-              <div className="mt-4 pt-4 border-t border-black/5 dark:border-zinc-900 flex justify-between items-end shrink-0">
-                <span className="text-xs font-black uppercase tracking-wider text-muted">
-                  {debtModalMode === 'past' ? 'Total corte pasado' : 'Deuda esta semana'}
-                </span>
-                <span className="text-2xl font-black text-sky-600 dark:text-sky-400">
-                  {formatCurrency(debtModalMode === 'past' ? debtDetails.pastDebt : debtDetails.currentDebt)}
-                </span>
-              </div>
-            )}
-          </div>
         </div>
       )}
 

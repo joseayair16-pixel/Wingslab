@@ -23,22 +23,16 @@ import { setupSocketIO } from './services/socket.service';
 import { setupNotificationSubscribers } from './subscribers/notification.subscriber';
 import { buildRequestContext, getOrCreateRequestContext } from './utils/request-context';
 import { logger } from './utils/logger';
-import { startBillingJob } from './jobs/billing.job';
-import { startBillingOverdueJob } from './jobs/billing-overdue.job';
 import { startOrderTimeoutJob } from './jobs/order-timeout.job';
-import { startJitDispatchJob } from './jobs/jit-dispatch.job';
 import { startRestaurantHoursJob } from './jobs/restaurant-hours.job';
 import { startDriverPickupAlertJob } from './jobs/driver-pickup-alert.job';
 import { startStuckOrderJob } from './jobs/stuck-order.job';
 import { startOwnDeliveryTimeoutJob } from './jobs/own-delivery-timeout.job';
-import { startDriverBillingCutoffJob } from './jobs/driver-billing-cutoff.job';
-import { scheduleDriverBillingOverdueCron, processOverdueDriverSettlements } from './jobs/driver-billing-overdue.job';
 import { startPickupReadyJob } from './jobs/pickup-ready.job';
 import { startCustomerPickupReminderJob } from './jobs/customer-pickup-reminder.job';
 import { startCustomerArrivalReminderJob } from './jobs/customer-arrival-reminder.job';
 import { startOverduePreparationJob } from './jobs/overdue-preparation.job';
 import { startScheduledDeliveryReminderJob } from './jobs/scheduled-delivery-reminder.job';
-import { startCleanupProofsJob } from './jobs/cleanup-proofs.job';
 import { startCleanupOrphanMediaJob } from './jobs/cleanup-orphan-media.job';
 import { startCleanupPushSubscriptionsJob } from './jobs/cleanup-push-subscriptions.job';
 import { startNotificationRetryJob } from './jobs/notification-retry.job';
@@ -241,22 +235,14 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
 
   await setupRoutes(fastify);
 
-  let cutoffStartup: Promise<void> | undefined;
   startSelectedJobs(options.jobs || {}, {
-    billing: () => startBillingJob(), billingOverdue: () => startBillingOverdueJob(),
     paymentReminders: () => startPaymentRemindersJob(), thankYouMessages: () => startThankYouMessagesJob(),
-    driverBillingCutoff: () => { cutoffStartup = startDriverBillingCutoffJob(); },
-    driverBillingOverdue: () => {
-      scheduleDriverBillingOverdueCron();
-      return (cutoffStartup || Promise.resolve()).then(() => processOverdueDriverSettlements());
-    },
     orderTimeout: () => startOrderTimeoutJob(fastify), restaurantHours: () => startRestaurantHoursJob(fastify),
-    jitDispatch: () => startJitDispatchJob(fastify), driverPickupAlert: () => startDriverPickupAlertJob(fastify),
+    driverPickupAlert: () => startDriverPickupAlertJob(fastify),
     stuckOrder: () => startStuckOrderJob(fastify),
     pickupReady: () => startPickupReadyJob(fastify), ownDeliveryTimeout: () => startOwnDeliveryTimeoutJob(fastify),
     customerPickupReminder: () => startCustomerPickupReminderJob(fastify), customerArrivalReminder: () => startCustomerArrivalReminderJob(fastify),
-    overduePreparation: () => startOverduePreparationJob(fastify), scheduledDeliveryReminder: () => startScheduledDeliveryReminderJob(fastify),
-    cleanupProofs: () => startCleanupProofsJob(), cleanupOrphanMedia: () => startCleanupOrphanMediaJob(),
+    overduePreparation: () => startOverduePreparationJob(fastify), scheduledDeliveryReminder: () => startScheduledDeliveryReminderJob(fastify), cleanupOrphanMedia: () => startCleanupOrphanMediaJob(),
     cleanupPushSubscriptions: () => startCleanupPushSubscriptionsJob(), notificationRetry: () => startNotificationRetryJob(),
     orderRing: () => startOrderRingJob(),
   });

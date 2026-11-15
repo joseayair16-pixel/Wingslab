@@ -1,11 +1,10 @@
 /** Capability inventory, independent from cron registration and domain logic. */
 export const JOB_GROUPS = {
-  billing: ['billing', 'billingOverdue', 'driverBillingCutoff', 'driverBillingOverdue'],
-  orderLifecycle: ['orderTimeout', 'restaurantHours', 'jitDispatch', 'pickupReady', 'ownDeliveryTimeout'],
+  orderLifecycle: ['orderTimeout', 'restaurantHours', 'pickupReady', 'ownDeliveryTimeout'],
   notifications: ['paymentReminders', 'thankYouMessages', 'driverPickupAlert', 'stuckOrder', 'customerPickupReminder',
     'customerArrivalReminder', 'overduePreparation', 'scheduledDeliveryReminder', 'notificationRetry', 'orderRing'],
   maintenance: ['cleanupPushSubscriptions'],
-  externalStorage: ['cleanupProofs', 'cleanupOrphanMedia'],
+  externalStorage: ['cleanupOrphanMedia'],
 } as const;
 export type JobName = typeof JOB_GROUPS[keyof typeof JOB_GROUPS][number];
 export type JobSelection = Partial<Record<JobName, boolean>>;

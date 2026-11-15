@@ -258,17 +258,12 @@ packages/backend/src/scripts/check-db.ts
 packages/backend/src/scripts/check_db.ts
 packages/backend/src/scripts/clear-r2-bucket.ts
 packages/backend/src/scripts/create-admin.ts
-packages/backend/src/scripts/create-demo-settlement.ts
 packages/backend/src/scripts/create-test-customer.ts
-packages/backend/src/scripts/list-billing-status.ts
 packages/backend/src/scripts/release-customer-app.ts
 packages/backend/src/scripts/release-restaurant-app.ts
 packages/backend/src/scripts/reset-production-data.ts
-packages/backend/src/scripts/run-billing-overdue-check.ts
-packages/backend/src/scripts/seed-billing-demo.ts
 packages/backend/src/scripts/seed-platform-categories.ts
 packages/backend/src/scripts/seed-store-categories.ts
-packages/backend/src/scripts/setup-test-overdue.ts
 packages/backend/src/scripts/test-push.ts
 packages/backend/src/scripts/test-whatsapp-messages.ts
 packages/backend/src/scripts/test-whatsapp.ts
@@ -1138,4 +1133,3 @@ runtime sigue con las imágenes de Fase 3B y el panel en el navegador continúa
 bloqueado hasta que se autorice reconstruir. Pruebas herméticas: backend 24,
 restaurante 63, cliente 120; TypeScript sin emisión sin diagnósticos.
 Detalle: [`FASE_3B_RESTAURANTE.md`](FASE_3B_RESTAURANTE.md).
-

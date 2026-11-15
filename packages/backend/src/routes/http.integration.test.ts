@@ -5,7 +5,6 @@ import { buildApp } from '../app';
 import { prisma } from '../config/database';
 import { AppError } from '../errors/app-error';
 import * as orderService from '../services/order.service';
-import * as driverBillingService from '../services/driver-billing.service';
 import * as orderWorkflowService from '../services/order-workflow.service';
 import * as socketService from '../services/socket.service';
 
@@ -684,11 +683,6 @@ describe('http integration contracts', () => {
       availability: DriverAvailability.OFFLINE,
       status: 'SUSPENDED',
     } as never);
-    jest.spyOn(driverBillingService, 'enforceDriverBillingSuspension').mockResolvedValue(undefined as never);
-    jest.spyOn(driverBillingService, 'checkDriverSuspension').mockResolvedValue({
-      isSuspendedByDebt: true,
-      suspendedDebtAmount: 80,
-    } as never);
 
     const response = await app.inject({
       method: 'PATCH',
@@ -696,16 +690,10 @@ describe('http integration contracts', () => {
       headers: { authorization: `Bearer ${token}` },
       payload: { availability: DriverAvailability.AVAILABLE },
     });
-
-    const body = parseJson<{
-      success: boolean;
-      error: { code: string; message: string };
-    }>(response.body);
-
+    const body = parseJson<{ success: boolean; error: { code: string } }>(response.body);
     expect(response.statusCode).toBe(403);
     expect(body.success).toBe(false);
     expect(body.error.code).toBe('DRIVER_SUSPENDED');
-    expect(body.error.message).toContain('80');
   });
 
   it('bloquea a un restaurante suspendido para operar pero le permite operaciones de cuenta', async () => {
@@ -1279,20 +1267,12 @@ describe('http integration contracts', () => {
         status: 'ACTIVE',
       },
     } as never);
-    jest.spyOn(driverBillingService, 'enforceDriverBillingSuspension').mockResolvedValue(undefined as never);
-    jest.spyOn(driverBillingService, 'checkDriverSuspension').mockResolvedValue({
-      isSuspendedByDebt: false,
-      suspendedDebtAmount: 0,
-    } as never);
 
     const response = await app.inject({
       method: 'GET',
       url: '/driver-panel/perfil',
-      headers: {
-        authorization: `Bearer ${token}`,
-      },
+      headers: { authorization: `Bearer ${token}` },
     });
-
     const body = parseJson<{
       success: boolean;
       data: { id: string; availability: DriverAvailability; currentLatitude: number | null };

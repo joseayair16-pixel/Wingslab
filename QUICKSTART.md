@@ -31,7 +31,6 @@ This starts:
 ```bash
 npm run db:migrate
 npm run db:generate
-npm run db:seed:billing-demo
 ```
 
 ### 4. Start Development Servers
@@ -87,7 +86,6 @@ npm run verify:backend   # Validate backend HTTP contracts and failure handling
 ```bash
 npm run db:migrate       # Run migrations
 npm run db:generate      # Generate Prisma client
-npm run db:seed:billing-demo # Seed a billing demo with debt + settlement history
 npm run db:studio        # Open Prisma Studio (UI)
 ```
 

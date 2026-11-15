@@ -20,7 +20,6 @@
     "verify:backend": "npm run test:http --workspace @sadel/backend && npm run test:failures --workspace @sadel/backend",
     "db:migrate": "cd packages/backend && npm run db:migrate",
     "db:generate": "cd packages/backend && npm run db:generate",
-    "db:seed:billing-demo": "cd packages/backend && npm run db:seed:billing-demo",
     "docker:up": "node scripts/blocked-operation.cjs",
     "docker:down": "node scripts/blocked-operation.cjs",
     "docker:build": "node scripts/blocked-operation.cjs"

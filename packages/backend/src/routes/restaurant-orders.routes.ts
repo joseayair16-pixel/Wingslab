@@ -28,7 +28,7 @@ import {
 } from '../services/order-workflow.service';
 import { restaurantOrderListSelect } from '../services/order-selects';
 import { getOrCreateRequestContext } from '../utils/request-context';
-import { getDistanceInKm, isRestaurant, getBusinessRef, getBusinessArticleCapitalized } from '../utils/restaurant';
+import { isRestaurant, getBusinessRef, getBusinessArticleCapitalized } from '../utils/restaurant';
 import { buildCustomerDeliveryUrl } from '../utils/customer-web';
 
 const listOrdersQuerySchema = z.object({

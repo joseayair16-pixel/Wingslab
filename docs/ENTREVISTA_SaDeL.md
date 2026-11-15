@@ -525,7 +525,6 @@ Prefijos por scope extraídos del código: los endpoints cuelgan de la raíz del
 | Job | Cron | Función |
 |---|---|---|
 | `order-ring.job.ts` | `*/3 * * * * *` (3 s) | Reconcilia alarmas continuas de pedidos nuevos; si el pedido se acepta en otro dispositivo, la alarma se detiene igual |
-| `jit-dispatch.job.ts` | `*/30 * * * * *` (30 s) | Dispatch *just-in-time*: expulsa repartidores que no aceptan en 2 min, suma rechazo, re-encola |
 | `order-timeout.job.ts` | `*/30 * * * * *` | Vence ventanas de decisión; auto-aprueba cancelaciones a los 5 min; auto-cierra restaurantes inactivos |
 | `overdue-preparation.job.ts` | `*/${POLL_INTERVAL_SEC} * * * * *` (constante) | Escala alertas de preparación vencida |
 | `stuck-order.job.ts` | `*/${POLL_INTERVAL_SEC} * * * * *` (constante) | Red de seguridad: detecta y recupera pedidos atascados |
@@ -537,15 +536,10 @@ Prefijos por scope extraídos del código: los endpoints cuelgan de la raíz del
 | `thank-you-messages.job.ts` | `* * * * *` | Mensajes de agradecimiento post-entrega |
 | `payment-reminders.job.ts` | `*/10 * * * *` | Recordatorios de pago por transferencia |
 | `notification-retry.job.ts` | `*/5 * * * *` | Reintenta notificaciones que fallaron |
-| `billing.job.ts` | `*/15 * * * *` | Liquidaciones de restaurante |
-| `driver-billing-cutoff.job.ts` | `*/30 * * * *` | Cierre de periodo de repartidor |
-| `driver-billing-overdue.job.ts` | `0 0 * * *` | Vencimientos y suspensión por deuda |
-| `billing-overdue.job.ts` | `0 0 * * *` | Vencimientos de restaurante |
 | `customer-arrival-reminder.job.ts` | `*/30 * * * * *` | "Tu repartidor va llegando" |
 | `customer-pickup-reminder.job.ts` | `*/30 * * * * *` | Recordatorio de recogida |
 | `driver-pickup-alert.job.ts` | `*/30 * * * * *` | Alerta al repartidor para recoger |
 | `cleanup-push-subscriptions.job.ts` | `0 4 * * 1` | Borra suscripciones/tokens FCM sin actividad > 30 días, en lotes de 25 |
-| `cleanup-proofs.job.ts` | `0 3 * * 0` | Comprobantes de pago > 90 días: borra el objeto en R2 y anula la URL en base de datos |
 | `cleanup-orphan-media.job.ts` | `10 3 * * 0` | Media huérfana de restaurantes con estado DELETED |
 
 - Se arrancan desde `app.ts:246-276` cuando `enableJobs=true` (los tests lo apagan).
@@ -583,7 +577,7 @@ Concurrencia y consistencia:
 
 - Cola FIFO por restaurante en Redis (ZSET `restaurant:queue:<id>` + marcadores de activo con TTL). Solo el primero de la cola tiene ventana de decisión activa; al decidir, se saca de la cola y se activa el siguiente. Esto serializa la decisión del restaurante sin bloquear la base de datos.
 - Cada cambio de estado deja rastro en `OrderTracking` (estado + lat/lng + notas) → historial auditable.
-- Operaciones multi-tabla en `prisma.$transaction` (`order-workflow.service.ts:375, 702, 771, 848, 1045, 1112, 1200`, `driver-billing.service.ts:93, 138`, `jit-dispatch.job.ts:59`).
+- Operaciones multi-tabla en `prisma.$transaction` para pedidos y entregas (`order-workflow.service.ts`).
 - Escalas de alerta porLevels: `stuckAlertLevel` y `overdueAlertLevel` con índices dedicados, en lugar de recomputar "lleva demasiado" con un `COUNT` global.
 
 ---
@@ -703,7 +697,7 @@ Restricciones únicas que sostienen reglas de negocio:
 - **CASCADE** en la mayoría de dependientes: perfil→`User`, `MenuCategory`→`Restaurant`, `Product`→`MenuCategory`, `OrderItem`/`OrderTracking`/`OrderMessage`/`DeliveryToken`→`Order`, `PushSubscription`/`FcmToken`/`RefreshToken`→`User`.
 - **Sin cascade deliberado:** `OrderItem`→`Product` y `Transaction`→`Order`. Preservan el histórico económico y el detalle de pedidos pasados aunque el producto o el pedido se eliminen.
 - **Borrado lógico:** `Product.deleted` y `MenuCategory.deleted` (`Boolean @default(false)`). En el menú se filtra por `deleted: false`, pero el registro físico sobrevive porque los pedidos antigos lo referencian.
-- **Retención:** los jobs de limpieza borran objetos de R2 y luego anulan la referencia en base de datos (`cleanup-proofs.job.ts`, `cleanup-orphan-media.job.ts`, `cleanup-push-subscriptions.job.ts`), es decir, borra en el almacenamiento y en la BD de forma consistente.
+- **Retención:** los jobs de liquidaciones y sus comprobantes se retiraron de WingsLab. Los datos persistidos anteriores se conservan.
 - **Backups:** existe un dump manual `backups/sadel_backup_20260806_143902.dump`; no hay scripts ni política de retención versionada.
 
 ### 7.7 Migraciones
@@ -741,7 +735,7 @@ Configuración ioredis: `maxRetriesPerRequest: 3`, `enableReadyCheck`, `enableOf
 | 3 | **Índices compuestos** alineados con los filtros reales | 17 en `Order`, incl. `[restaurantId, status, createdAt]` y `[customerId, createdAt]` |
 | 4 | **Paginación** en listados | `order.routes.ts:351-352` (`skip: (page - 1) * limit`, `take: limit`); `limit` con `.max(100)` en los schemas Zod |
 | 5 | **Caché de lecturas calientes** | `cache.service.ts` (restaurantes 30 s, menús 120 s) + overview del admin cacheado 300 s en Redis (`admin.routes.ts:491-568`) + resumen de facturación cacheado (`restaurant-panel.routes.ts:466-471`) |
-| 6 | **Transacciones** en operaciones multi-tabla | `order-workflow.service.ts:375, 702, 771, 848, 1045, 1112, 1200`; `driver-billing.service.ts:93, 138`; `jit-dispatch.job.ts:59`; rotación de refresh token `refresh-token.service.ts:50` |
+| 6 | **Transacciones** en operaciones multi-tabla | Pedidos y entregas en `order-workflow.service.ts`; rotación de refresh token en `refresh-token.service.ts` |
 | 7 | **Idempotencia durable en BD** | `Order.clientOrderKey` `@unique` |
 | 8 | **Borrado lógico** para no romper histórico | `Product.deleted`, `MenuCategory.deleted` |
 | 9 | **Invalidación dirigida** de caché en escrituras | `admin.routes.ts:2133-2134` (invalida restaurantes y menú del restaurante afectado); `restaurant-panel.routes.ts:1277` (invalida patrón al cambiar horarios) |

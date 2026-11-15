@@ -4,7 +4,7 @@ import { z } from 'zod';
 
 import { prisma } from '../config/database';
 import { RESTAURANT_ID } from '../config/single-restaurant';
-import { getDistanceInKm, isRestaurantOpenNow, getNextOpenTime, resolveZoneFromNearestRestaurant } from '../utils/restaurant';
+import { getDistanceInKm, isRestaurantOpenNow, getNextOpenTime } from '../utils/restaurant';
 import { calculateDistanceDeliveryFee } from '../utils/delivery-pricing';
 import { decrypt } from '../utils/crypto';
 import { tryAuthenticate } from '../middleware/auth';
@@ -231,94 +231,6 @@ export async function registerPublicRoutes(fastify: FastifyInstance): Promise<vo
     restaurantPromoModalImage: '', customerThankYouWhatsappEnabled: false,
     socialInstagram: '', socialFacebook: '', socialTiktok: '',
   } }));
-
-  const getPromotionsQuerySchema = z.object({
-    region: z.string().optional(),
-    role: z.string().optional(),
-    latitude: z.coerce.number().min(-90).max(90).optional(),
-    longitude: z.coerce.number().min(-180).max(180).optional(),
-  });
-
-  const getBillboardsQuerySchema = z.object({
-    region: z.string().optional(),
-    latitude: z.coerce.number().min(-90).max(90).optional(),
-    longitude: z.coerce.number().min(-180).max(180).optional(),
-  });
-
-  /**
-   * Cached active restaurants that define serviceable zones, with their
-   * effective delivery radius (own delivery, or the region's fallback radius).
-   * Built once and refreshed after ZONE_CACHE_TTL_MS so billboard requests
-   * don't hammer the DB on every call while still picking up new restaurants
-   * within a minute.
-   */
-  let zoneRestaurantCache: {
-    at: number;
-    restaurants: { region: string; latitude: number; longitude: number; radiusKm: number }[];
-  } | null = null;
-  const ZONE_CACHE_TTL_MS = 60_000;
-
-  async function getActiveZoneRestaurants() {
-    const now = Date.now();
-    if (zoneRestaurantCache && now - zoneRestaurantCache.at < ZONE_CACHE_TTL_MS) {
-      return zoneRestaurantCache.restaurants;
-    }
-
-    const restaurants = await prisma.restaurant.findMany({
-      where: {
-        status: RestaurantStatus.ACTIVE,
-        region: { not: '' },
-      },
-      select: {
-        region: true,
-        latitude: true,
-        longitude: true,
-        hasOwnDelivery: true,
-        deliveryRadius: true,
-      },
-    });
-
-    const regionCodes = Array.from(new Set(restaurants.map((r) => r.region).filter(Boolean)));
-    const regions = regionCodes.length
-      ? await prisma.region.findMany({ where: { code: { in: regionCodes } } })
-      : [];
-    const regionRadiusByCode = new Map(regions.map((r) => [r.code, r.deliveryRadius]));
-
-    const zoneRestaurants = restaurants.map((r) => ({
-      region: r.region,
-      latitude: r.latitude,
-      longitude: r.longitude,
-      radiusKm: r.hasOwnDelivery ? r.deliveryRadius : (regionRadiusByCode.get(r.region) ?? 20),
-    }));
-
-    zoneRestaurantCache = { at: now, restaurants: zoneRestaurants };
-    return zoneRestaurantCache.restaurants;
-  }
-
-  /**
-   * Resolves the zone nearest to the given coordinates using cached active
-   * restaurants. Returns the zone code when the user is within the delivery
-   * radius of at least one active restaurant; otherwise null.
-   */
-  async function resolveNearestZone(params: {
-    latitude: number;
-    longitude: number;
-  }): Promise<string | null> {
-    const restaurants = await getActiveZoneRestaurants();
-    return resolveZoneFromNearestRestaurant(params, restaurants);
-  }
-
-
-
-  const platformRequestSchema = z.object({
-    type: z.enum(['RESTAURANT', 'DRIVER']),
-    ownerName: z.string().min(1, 'El nombre es obligatorio'),
-    businessName: z.string().optional(),
-    giro: z.string().optional(),
-    whatsapp: z.string().min(1, 'El WhatsApp es obligatorio'),
-    location: z.string().min(1, 'La ubicación es obligatoria'),
-    motorcycle: z.enum(['SI', 'NO']).optional(),
-  });
 
   fastify.get('/app/version', async (request, reply) => {
     try {

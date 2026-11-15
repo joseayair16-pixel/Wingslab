@@ -49,7 +49,6 @@ import { SaDelLoader } from '../components/SaDelLoader';
 import { DashboardSection } from '../components/sections/DashboardSection';
 import { CampaignsSection } from '../components/sections/CampaignsSection';
 import { CustomersSection } from '../components/sections/CustomersSection';
-import { BillingSection } from '../components/sections/BillingSection';
 import { SettingsSection } from '../components/sections/SettingsSection';
 import PushEnableBanner from '../components/PushEnableBanner';
 import { createPlacesSource } from '../lib/places';
@@ -332,39 +331,6 @@ type DriverItem = {
   };
 };
 
-type BillingCycle = 'WEEKLY' | 'MONTHLY';
-
-type RestaurantBillingSummary = {
-  currentDebt: number;
-  deliveredRevenue: number;
-  serviceFeeRevenue: number;
-  platformFeeRevenue: number;
-  whatsappFeeRevenue: number;
-  deliveredOrders: number;
-  platformFeeRate: number;
-  serviceFee: number;
-  platformFeePerOrder: number;
-  billingCycle: BillingCycle;
-  periodStart: string;
-  periodEnd: string;
-  nextChargeDate: string;
-  recentSettlements: Array<{
-    id: string;
-    amount: number;
-    reference: string;
-    settledAt?: string | null;
-    status: 'PENDING' | 'PAID' | 'OVERDUE' | 'IN_REVIEW';
-    dueDate?: string | null;
-    periodStart: string;
-    periodEnd: string;
-    serviceFeeTotal: number;
-    platformFeeTotal: number;
-    whatsappFeeTotal: number;
-    paymentProofUrl?: string | null;
-    createdAt: string;
-    updatedAt?: string | null;
-  }>;
-};
 
 type SuccessResponse<T> = {
   success: true;
@@ -392,7 +358,7 @@ type RestaurantRetryAction =
     label: string;
   };
 
-type RestaurantPortalSection = 'dashboard' | 'orders' | 'store' | 'settings' | 'billing' | 'campaigns' | 'customers';
+type RestaurantPortalSection = 'dashboard' | 'orders' | 'store' | 'settings' | 'campaigns' | 'customers';
 type PreparationPresetMinutes = 10 | 15 | 20 | 30 | 45 | 60;
 type StoreProfileDraft = {
   name: string;
@@ -1022,15 +988,6 @@ export default function Home() {
   const [drivers, setDrivers] = useState<DriverItem[]>([]);
   const [driverArrivedOrders, setDriverArrivedOrders] = useState<Record<string, boolean>>({});
   const [driverContactOpen, setDriverContactOpen] = useState<Record<string, boolean>>({});
-  const [billingSummary, setBillingSummary] = useState<RestaurantBillingSummary | null>(null);
-  const [currentTime, setCurrentTime] = useState(new Date());
-
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setCurrentTime(new Date());
-    }, 30000);
-    return () => clearInterval(timer);
-  }, []);
 
   const [showMenuPreview, setShowMenuPreview] = useState(false);
   const [proofPreviewUrl, setProofPreviewUrl] = useState<string | null>(null);
@@ -1342,22 +1299,8 @@ export default function Home() {
   const [continueAfterSave, setContinueAfterSave] = useState(false);
   const [selectedWeekOffset, setSelectedWeekOffset] = useState(0);
   const [isDarkMode, setIsDarkMode] = useState(false);
-  const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
-  const [selectedSettlementForDetails, setSelectedSettlementForDetails] = useState<any | null>(null);
-  const [settlementOrders, setSettlementOrders] = useState<any[]>([]);
-  const [loadingSettlementOrders, setLoadingSettlementOrders] = useState(false);
   const [isPrintingTicket, setIsPrintingTicket] = useState(false);
-  const [isCurrentPeriodDetailsOpen, setIsCurrentPeriodDetailsOpen] = useState(false);
-  const [currentPeriodOrders, setCurrentPeriodOrders] = useState<any[]>([]);
-  const [loadingCurrentPeriodOrders, setLoadingCurrentPeriodOrders] = useState(false);
   const [revenueMode, setRevenueMode] = useState<'gross' | 'net'>('gross');
-  const [adminBankName, setAdminBankName] = useState('');
-  const [adminBankAccount, setAdminBankAccount] = useState('');
-  const [adminBankBeneficiary, setAdminBankBeneficiary] = useState('');
-  const [isPayModalOpen, setIsPayModalOpen] = useState(false);
-  const [selectedSettlementForPay, setSelectedSettlementForPay] = useState<any | null>(null);
-  const [uploadingProof, setUploadingProof] = useState(false);
-  const [proofPreviewBase64, setProofPreviewBase64] = useState<string | null>(null);
   const [isDeleteProductModalOpen, setIsDeleteProductModalOpen] = useState(false);
   const [deletingProductId, setDeletingProductId] = useState<string | null>(null);
   const [deletingProductName, setDeletingProductName] = useState('');
@@ -1825,9 +1768,6 @@ export default function Home() {
             restaurantWelcomeImage?: string;
             restaurantPromoModalEnabled?: boolean;
             restaurantPromoModalImage?: string;
-            adminBankName?: string;
-            adminBankAccount?: string;
-            adminBankBeneficiary?: string;
           };
         }>({ apiBase, path: '/settings', token });
         if (data.success) {
@@ -1866,9 +1806,6 @@ export default function Home() {
               setShowPromoModal(true);
             }
           }
-          if (data.data.adminBankName) setAdminBankName(data.data.adminBankName);
-          if (data.data.adminBankAccount) setAdminBankAccount(data.data.adminBankAccount);
-          if (data.data.adminBankBeneficiary) setAdminBankBeneficiary(data.data.adminBankBeneficiary);
         }
       } catch (error) {
         console.error('Error fetching settings:', error);
@@ -1970,12 +1907,6 @@ export default function Home() {
     const checkUrlForOrderId = () => {
       const params = new URLSearchParams(window.location.search);
       const orderId = params.get('orderId');
-      const section = params.get('section');
-      if (section === 'billing') {
-        window.history.replaceState({}, '', window.location.pathname);
-        setActiveSection('dashboard');
-        window.localStorage.setItem('restaurantActiveSection', 'dashboard');
-      }
       if (orderId) {
         window.history.replaceState({}, '', window.location.pathname);
         navigateToOrder(orderId);
@@ -2808,153 +2739,10 @@ export default function Home() {
     [warmOrderAlertAudio]
   );
 
-  const fetchSettlementOrders = async (settlementId: string) => {
-    setLoadingSettlementOrders(true);
-    try {
-      const response = await fetch(`${apiBase}/restaurant-panel/facturacion/${settlementId}/pedidos`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-      const data = await response.json();
-      if (data.success) {
-        setSettlementOrders(data.data);
-      } else {
-        pushToast('error', 'Error', 'No se pudieron cargar los pedidos.');
-      }
-    } catch (error) {
-      console.error('Error fetching settlement orders:', error);
-      pushToast('error', 'Error', 'Error de conexion.');
-    } finally {
-      setLoadingSettlementOrders(false);
-    }
-  };
 
-  const billingFetchRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const billingFetchInFlight = useRef(false);
 
-  const fetchBillingSummary = useCallback(async () => {
-    if (!token) return;
-    if (billingFetchInFlight.current) return;
-    if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
-    billingFetchInFlight.current = true;
-    try {
-      const response = await fetch(`${apiBase}/restaurant-panel/facturacion`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const data = await response.json();
-      if (data.success) {
-        setBillingSummary(data.data);
-      }
-    } catch (err) {
-      console.error('[Billing] Error fetching summary:', err);
-    } finally {
-      billingFetchInFlight.current = false;
-    }
-  }, [apiBase, token]);
 
-  const enqueueBillingRefetch = useCallback((immediate = false) => {
-    if (billingFetchRef.current) clearTimeout(billingFetchRef.current);
-    if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
-    const delay = immediate ? 0 : 300;
-    billingFetchRef.current = setTimeout(() => {
-      void fetchBillingSummary();
-    }, delay);
-  }, [fetchBillingSummary]);
 
-  // Refetch billing summary when entering the Balance section
-  useEffect(() => {
-    if (activeSection === 'billing') {
-      enqueueBillingRefetch(true);
-    }
-  }, [activeSection, enqueueBillingRefetch]);
-
-  const fetchCurrentPeriodOrders = async () => {
-    setLoadingCurrentPeriodOrders(true);
-    try {
-      const response = await fetch(`${apiBase}/restaurant-panel/facturacion/periodo-actual/pedidos`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-      const data = await response.json();
-      if (data.success) {
-        setCurrentPeriodOrders(data.data);
-      } else {
-        pushToast('error', 'Error', 'No se pudieron cargar los pedidos del periodo actual.');
-      }
-    } catch (error) {
-      console.error('Error fetching current period orders:', error);
-      pushToast('error', 'Error', 'Error de conexion.');
-    } finally {
-      setLoadingCurrentPeriodOrders(false);
-    }
-  };
-
-  const handleSelectProof = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.readAsDataURL(file);
-    reader.onload = () => {
-      setProofPreviewBase64(reader.result as string);
-    };
-  };
-
-  const handleSubmitProof = async () => {
-    if (!proofPreviewBase64) return;
-    setUploadingProof(true);
-
-    try {
-      const uploadResponse = await fetch(`${apiBase}/uploads/images`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          kind: 'payment-proof',
-          source: proofPreviewBase64,
-        }),
-      });
-
-      const uploadData = await uploadResponse.json();
-      if (!uploadData.success) {
-        pushToast('error', 'Error', 'No se pudo subir la imagen.');
-        setUploadingProof(false);
-        return;
-      }
-
-      const imageUrl = uploadData.data.url;
-
-      const response = await fetch(`${apiBase}/restaurant-panel/facturacion/${selectedSettlementForPay?.id}/comprobante`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          paymentProofUrl: imageUrl,
-        }),
-      });
-
-      const data = await response.json();
-      if (data.success) {
-        pushToast('success', 'Exito', 'Comprobante subido. El corte esta en revision.');
-        setIsPayModalOpen(false);
-        setProofPreviewBase64(null);
-        loadDashboard();
-      } else {
-        pushToast('error', 'Error', 'No se pudo registrar el comprobante.');
-      }
-    } catch (error) {
-      console.error('Error uploading proof:', error);
-      pushToast('error', 'Error', 'Error de conexion.');
-    } finally {
-      setUploadingProof(false);
-    }
-  };
 
   function openAcceptOrderPrompt(orderId: string) {
     // La autorización se evalúa antes de mostrar cualquier control de acción:
@@ -3024,7 +2812,7 @@ export default function Home() {
     persistApiBase(storageKey, apiBase);
 
     try {
-      const [profileData, ordersData, productsData, categoriesData, driversData, billingData, storeCategoriesData] = await Promise.all([
+      const [profileData, ordersData, productsData, categoriesData, driversData, storeCategoriesData] = await Promise.all([
         apiRequest<SuccessResponse<RestaurantProfile>>({
           apiBase,
           path: '/restaurant-panel/perfil',
@@ -3066,7 +2854,6 @@ export default function Home() {
           },
         }),
         Promise.resolve({ data: [] as DriverItem[] }),
-        Promise.resolve({ data: null }),
         Promise.resolve({ data: [] as StoreCategoryItem[] }),
       ]);
 
@@ -3096,7 +2883,6 @@ export default function Home() {
       setCategories(categoriesData.data);
       setDrivers(driversData.data);
       setPlatformCategories(storeCategoriesData.data);
-      setBillingSummary(billingData.data);
       setStoreDraft({
         name: profileData.data.name || '',
         description: profileData.data.description || '',
@@ -3163,7 +2949,6 @@ export default function Home() {
       setProducts([]);
       setCategories([]);
       setDrivers([]);
-      setBillingSummary(null);
       setOperatingHoursDraft(buildDefaultOperatingHours());
       setActiveSection('dashboard');
       const message = getRequestErrorMessage(requestError, 'No se pudo cargar el panel.');
@@ -3571,9 +3356,6 @@ export default function Home() {
       void loadOrdersOnly();
     });
 
-    socket.on('billing:updated', () => {
-      enqueueBillingRefetch(false);
-    });
 
     // Zombie socket detection: si no se reciben eventos en 90s, refrescar datos
     let lastEventTime = Date.now();
@@ -3615,7 +3397,6 @@ export default function Home() {
         }
         void warmup();
         loadOrdersOnly();
-        enqueueBillingRefetch(false);
       }
     };
     document.addEventListener('visibilitychange', handleVisibilityChange);
@@ -3624,7 +3405,6 @@ export default function Home() {
       clearInterval(healthCheckInterval);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       socket.off('order_chat:message_received');
-      socket.off('billing:updated');
       // Disconnect socket ONLY when token or sessionUser.id/role changes, not on hot reload re-renders
       if (!token || !sessionUser || sessionUser.role !== 'RESTAURANT') {
         socket.emit('leave-room', sessionUser.id, 'RESTAURANT');
@@ -3645,9 +3425,6 @@ export default function Home() {
     if (token && sessionUser?.role === 'RESTAURANT') {
       if (!socketRef.current || socketRef.current.disconnected) {
         void loadOrdersOnly();
-      }
-      if (activeSection === 'billing') {
-        enqueueBillingRefetch(false);
       }
     }
   });
@@ -6088,74 +5865,10 @@ export default function Home() {
 
 
 
-  const getSecondsUntilNextCutoff = () => {
-    const now = currentTime;
-    const result = new Date(now);
-    const day = result.getDay();
-    const daysToAdd = day === 0 ? 0 : 7 - day;
-    result.setDate(result.getDate() + daysToAdd);
-    result.setHours(23, 59, 59, 999);
-    const diff = result.getTime() - now.getTime();
-    return Math.max(0, diff);
-  };
 
-  const getSecondsUntilNextSuspension = () => {
-    const now = currentTime;
-    const result = new Date(now);
-    const day = result.getDay();
-    let daysToAdd = 3 - day;
-    if (daysToAdd < 0) {
-      daysToAdd += 7;
-    } else if (daysToAdd === 0) {
-      if (now.getHours() > 23 || (now.getHours() === 23 && now.getMinutes() > 59)) {
-        daysToAdd = 7;
-      }
-    }
-    result.setDate(result.getDate() + daysToAdd);
-    result.setHours(23, 59, 59, 999);
-    const diff = result.getTime() - now.getTime();
-    return Math.max(0, diff);
-  };
 
-  const formatTimeLeft = (diffMs: number) => {
-    const totalSeconds = Math.floor(diffMs / 1000);
-    const days = Math.floor(totalSeconds / 86400);
-    const hours = Math.floor((totalSeconds % 86400) / 3600);
-    const minutes = Math.floor((totalSeconds % 3600) / 60);
 
-    if (days > 0) {
-      return `${days} ${days === 1 ? 'día' : 'días'}${hours > 0 ? `, ${hours} h` : ''}`;
-    }
-    if (hours > 0) {
-      return `${hours} h${minutes > 0 ? `, ${minutes} min` : ''}`;
-    }
-    return `${minutes} min`;
-  };
 
-  const getDaysOverdue = (dueDateStr?: string | Date) => {
-    if (!dueDateStr) return 0;
-    const due = new Date(dueDateStr);
-    const now = new Date(currentTime);
-    due.setHours(0, 0, 0, 0);
-    now.setHours(0, 0, 0, 0);
-    const diffTime = now.getTime() - due.getTime();
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    return diffDays > 0 ? diffDays : 0;
-  };
-
-  const getCycleProgress = () => {
-    if (!billingSummary?.periodStart || !billingSummary?.nextChargeDate) return 0;
-    const start = new Date(billingSummary.periodStart).getTime();
-    const end = new Date(billingSummary.nextChargeDate).getTime();
-    const now = currentTime.getTime();
-    
-    if (now >= end) return 100;
-    if (now <= start) return 0;
-    
-    const total = end - start;
-    const current = now - start;
-    return Math.min(100, Math.max(0, Math.round((current / total) * 100)));
-  };
 
   return (
     <main className="min-h-[100dvh] text-neutral-900">
@@ -9519,54 +9232,6 @@ export default function Home() {
                     </button>
                   </div>
                 ) : null}
-                {(() => {
-                  const overdueCount = billingSummary?.recentSettlements?.filter((s: any) => s.status === 'OVERDUE').length ?? 0;
-                  const isSuspended = profile?.status === 'SUSPENDED';
-                  if (!isSuspended && overdueCount === 0) return null;
-
-                  return (
-                    <div className={`mb-5 relative overflow-hidden rounded-[24px] border p-4 shadow-sm transition-all duration-300 ${
-                      isSuspended
-                        ? 'border-rose-200 bg-gradient-to-r from-rose-50 to-red-50 text-rose-900 shadow-[0_4px_20px_rgba(220,38,38,0.06)]'
-                        : 'border-amber-200 bg-gradient-to-r from-amber-50 to-orange-50/60 text-amber-900 shadow-[0_4px_20px_rgba(217,119,6,0.06)]'
-                    }`}>
-                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                        <div className="flex items-start gap-3">
-                          <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-white ${
-                            isSuspended
-                              ? 'bg-rose-600 shadow-[0_4px_12px_rgba(225,29,72,0.3)] animate-pulse'
-                              : 'bg-amber-600 shadow-[0_4px_12px_rgba(217,119,6,0.3)]'
-                          }`}>
-                            <AlertTriangle className="h-5 w-5" />
-                          </span>
-                          <div>
-                            <p className="text-sm font-bold">
-                              {isSuspended ? 'Cuenta Suspendida' : 'Acción Requerida: Pago Pendiente Vencido'}
-                            </p>
-                            <p className="text-xs text-neutral-600 mt-1">
-                              {isSuspended
-                                ? 'Tu restaurante se encuentra inactivo para recibir pedidos debido a un corte de facturación vencido. Realiza la transferencia y sube tu comprobante para la reactivación automática.'
-                                : 'Tienes uno o más cortes de facturación vencidos. Recuerda liquidar antes de las 23:59 del miércoles para evitar la suspensión automática de tu servicio.'}
-                            </p>
-                          </div>
-                        </div>
-                        {activeSection !== 'billing' && (
-                          <button
-                            type="button"
-                            onClick={() => setActiveSection('billing')}
-                            className={`shrink-0 rounded-full px-4 py-2 text-xs font-bold transition-all duration-200 ${
-                              isSuspended
-                                ? 'bg-rose-600 text-white hover:bg-rose-700 shadow-[0_4px_12px_rgba(225,29,72,0.2)] font-semibold'
-                                : 'bg-amber-600 text-white hover:bg-amber-700 shadow-[0_4px_12px_rgba(217,119,6,0.2)] font-semibold'
-                            }`}
-                          >
-                            Ir a Facturación
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })()}
 
                                 {activeSection === 'dashboard' && profileLoadState === 'loading' ? (
                   <div role="status" className="flex min-h-64 flex-col items-center justify-center rounded-[32px] border border-black/5 bg-white px-6 py-16 text-center shadow-[0_10px_30px_rgba(15,15,15,0.04)]">
@@ -9632,25 +9297,6 @@ export default function Home() {
                 {activeSection === 'campaigns' ? <CampaignsSection apiBase={apiBase} token={token} /> : null}
                 {activeSection === 'customers' ? <CustomersSection apiBase={apiBase} token={token} /> : null}
 
-                {activeSection === 'billing' ? (
-                  <BillingSection
-                    billingSummary={billingSummary}
-                    profile={profile}
-                    getCycleProgress={getCycleProgress}
-                    formatTimeLeft={formatTimeLeft}
-                    getSecondsUntilNextCutoff={getSecondsUntilNextCutoff}
-                    getSecondsUntilNextSuspension={getSecondsUntilNextSuspension}
-                    formatSettlementReference={formatSettlementReference}
-                    setSelectedSettlementForDetails={setSelectedSettlementForDetails}
-                    setIsDetailsModalOpen={setIsDetailsModalOpen}
-                    fetchSettlementOrders={fetchSettlementOrders}
-                    setSelectedSettlementForPay={setSelectedSettlementForPay}
-                    setIsPayModalOpen={setIsPayModalOpen}
-                    setIsCurrentPeriodDetailsOpen={setIsCurrentPeriodDetailsOpen}
-                    fetchCurrentPeriodOrders={fetchCurrentPeriodOrders}
-                    getDaysOverdue={getDaysOverdue}
-                  />
-                ) : null}
 
 
                 {activeSection === 'orders' ? (
@@ -12680,228 +12326,7 @@ export default function Home() {
             </div>
           ) : null}
 
-          {isDetailsModalOpen ? (
-            <div className="fixed inset-0 z-[80] flex items-start sm:items-center justify-center bg-black/55 px-2 py-4 sm:px-4 sm:py-5 backdrop-blur-sm animate-fade-in overflow-y-auto">
-              <div className="w-full max-w-[640px] rounded-[28px] bg-white p-4 sm:p-6 shadow-[0_28px_90px_rgba(15,15,15,0.34)] max-h-[90vh] sm:max-h-[85vh] flex flex-col animate-scale-up mx-auto">
-                <div className="flex items-start justify-between gap-4">
-                  <div className="min-w-0">
-                    <p className="text-xs font-semibold uppercase tracking-[0.22em] text-neutral-400">Facturación</p>
-                    <h3 className="mt-2 text-xl sm:text-2xl font-bold tracking-[-0.03em] text-neutral-950">
-                      Detalle del Corte
-                    </h3>
-                    <p className="text-xs text-neutral-500 mt-1">
-                      Referencia: {selectedSettlementForDetails ? formatSettlementReference(selectedSettlementForDetails.reference) : ''}
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setIsDetailsModalOpen(false)}
-                    className="shrink-0 rounded-full border border-black/10 px-3 py-1.5 sm:px-4 sm:py-2 text-xs sm:text-sm font-semibold text-neutral-700 transition hover:bg-neutral-100"
-                  >
-                    Cerrar
-                  </button>
-                </div>
 
-                {/* Summary Cards */}
-                <div className="mt-5 sm:mt-6 grid grid-cols-3 gap-2 sm:gap-3 rounded-2xl bg-neutral-50 p-3 sm:p-4 border border-black/5">
-                  <div className="text-center">
-                    <p className="text-[10px] uppercase font-bold text-neutral-400">Pedidos</p>
-                    <p className="text-base sm:text-lg font-bold text-neutral-950 mt-1">{settlementOrders.length}</p>
-                  </div>
-                  <div className="text-center border-x border-black/5 px-2">
-                    <p className="text-[10px] uppercase font-bold text-neutral-400">Volumen Bruto</p>
-                    <p className="text-base sm:text-lg font-bold text-neutral-950 mt-1">
-                      ${settlementOrders.reduce((sum: number, o: any) => sum + (o.totalAmount || 0), 0).toFixed(2)}
-                    </p>
-                  </div>
-                  <div className="text-center">
-                    <p className="text-[10px] uppercase font-bold text-neutral-400">Total Deuda</p>
-                    <p className="text-base sm:text-lg font-bold text-sky-700 mt-1">
-                      ${(selectedSettlementForDetails?.amount ?? 0).toFixed(2)}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="mt-4 sm:mt-6 overflow-y-auto flex-1 space-y-3 pr-0.5 sm:pr-1 -mr-0.5 sm:-mr-1">
-                  {loadingSettlementOrders ? (
-                    <div className="flex justify-center py-12">
-                      <div className="h-6 w-6 animate-spin rounded-full border-2 border-neutral-300 border-t-neutral-900"></div>
-                    </div>
-                  ) : settlementOrders.length > 0 ? (
-                    settlementOrders.map((order: any) => (
-                      <div key={order.id} className="rounded-2xl border border-black/5 bg-white p-3 sm:p-4 text-sm transition hover:shadow-md hover:border-neutral-200">
-                        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-3 sm:gap-0">
-                          <div className="min-w-0 flex-1">
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <span className="text-sm sm:text-base font-bold text-neutral-950 leading-tight">
-                                {getCustomerFullName(order.customer?.user) || 'Comensal Anónimo'}
-                              </span>
-                              {order.dailyCounter && (
-                                <span className="text-[11px] font-bold text-neutral-500 bg-neutral-100/80 rounded-full px-2 py-0.5">
-                                  Pedido #{order.dailyCounter}
-                                </span>
-                              )}
-                              <span className="text-[10px] font-bold text-neutral-500 bg-neutral-100 rounded-full px-2 py-0.5 whitespace-nowrap">
-                                Facturado
-                              </span>
-                            </div>
-                            <p className="text-[10px] text-neutral-400 mt-1.5 font-mono tracking-tight">
-                              {order.orderReference}
-                            </p>
-                            <p className="text-[11px] text-neutral-500 mt-0.5">
-                              {new Date(order.createdAt).toLocaleString('es-MX', { dateStyle: 'medium', timeStyle: 'short' })}
-                            </p>
-                          </div>
-                          <div className="flex sm:flex-col items-center sm:items-end gap-3 sm:gap-0 sm:text-right">
-                            <div className="text-right shrink-0">
-                              <span className="text-[10px] sm:text-[11px] font-bold text-neutral-400 block uppercase leading-tight">Total</span>
-                              <span className="text-base sm:text-lg font-extrabold text-neutral-950">${(order.totalAmount || 0).toFixed(2)}</span>
-                            </div>
-                            <div className="text-xs bg-sky-50/50 text-sky-700 border border-sky-100/30 rounded-lg p-1.5 sm:p-2 inline-block text-left shrink-0">
-                              <p className="flex justify-between gap-3 sm:gap-4">
-                                <span className="text-[10px] text-sky-600 font-semibold">Servicio:</span>
-                                <span className="font-bold tabular-nums">${(order.serviceFee || 0).toFixed(2)}</span>
-                              </p>
-                              <p className="flex justify-between gap-3 sm:gap-4 mt-0.5">
-                                <span className="text-[10px] text-sky-600 font-semibold">Plataforma:</span>
-                                <span className="font-bold tabular-nums">${(order.platformFee || 0).toFixed(2)}</span>
-                              </p>
-                              {order.whatsappFee > 0 && (
-                                <p className="flex justify-between gap-3 sm:gap-4 mt-0.5">
-                                  <span className="text-[10px] text-sky-600 font-semibold">WhatsApp:</span>
-                                  <span className="font-bold tabular-nums">${(order.whatsappFee || 0).toFixed(2)}</span>
-                                </p>
-                              )}
-                              <div className="border-t border-sky-200/50 mt-1 pt-1 flex justify-between gap-3 sm:gap-4 font-black">
-                                <span className="text-[10px] text-sky-700">Comisión Total:</span>
-                                <span className="tabular-nums">${((order.serviceFee || 0) + (order.platformFee || 0) + (order.whatsappFee || 0)).toFixed(2)}</span>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    ))
-                  ) : (
-                    <p className="text-center text-neutral-500 py-4">No se encontraron pedidos para este corte.</p>
-                  )}
-                </div>
-              </div>
-            </div>
-          ) : null}
-
-          {isCurrentPeriodDetailsOpen ? (
-            <div className="fixed inset-0 z-[80] flex items-start sm:items-center justify-center bg-black/55 px-2 py-4 sm:px-4 sm:py-5 backdrop-blur-sm animate-fade-in overflow-y-auto">
-              <div className="w-full max-w-[640px] rounded-[28px] bg-white p-4 sm:p-6 shadow-[0_28px_90px_rgba(15,15,15,0.34)] max-h-[90vh] sm:max-h-[85vh] flex flex-col animate-scale-up mx-auto">
-                <div className="flex items-start justify-between gap-4">
-                  <div className="min-w-0">
-                    <p className="text-xs font-semibold uppercase tracking-[0.22em] text-neutral-400">Semana Actual</p>
-                    <h3 className="mt-2 text-xl sm:text-2xl font-bold tracking-[-0.03em] text-neutral-950">
-                      Desglose de Comisiones
-                    </h3>
-                    <p className="text-xs text-neutral-500 mt-1">
-                      Pedidos entregados desde el último corte ({billingSummary?.periodStart ? new Date(billingSummary.periodStart).toLocaleDateString() : '--'} al día de hoy)
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setIsCurrentPeriodDetailsOpen(false)}
-                    className="shrink-0 rounded-full border border-black/10 px-3 py-1.5 sm:px-4 sm:py-2 text-xs sm:text-sm font-semibold text-neutral-700 transition hover:bg-neutral-100"
-                  >
-                    Cerrar
-                  </button>
-                </div>
-
-                {/* Summary Cards */}
-                <div className="mt-5 sm:mt-6 grid grid-cols-3 gap-2 sm:gap-3 rounded-2xl bg-neutral-50 p-3 sm:p-4 border border-black/5">
-                  <div className="text-center">
-                    <p className="text-[10px] uppercase font-bold text-neutral-400">Pedidos</p>
-                    <p className="text-base sm:text-lg font-bold text-neutral-950 mt-1">{currentPeriodOrders.length}</p>
-                  </div>
-                  <div className="text-center border-x border-black/5 px-2">
-                    <p className="text-[10px] uppercase font-bold text-neutral-400">Volumen Bruto</p>
-                    <p className="text-base sm:text-lg font-bold text-neutral-950 mt-1">
-                      ${currentPeriodOrders.reduce((sum: number, o: any) => sum + (o.totalAmount || 0), 0).toFixed(2)}
-                    </p>
-                  </div>
-                  <div className="text-center">
-                    <p className="text-[10px] uppercase font-bold text-neutral-400">Total Deuda</p>
-                    <p className="text-base sm:text-lg font-bold text-sky-700 mt-1">
-                      ${(billingSummary?.currentDebt ?? 0).toFixed(2)}
-                    </p>
-                  </div>
-                </div>
-
-                {/* Order List */}
-                <div className="mt-4 sm:mt-6 overflow-y-auto flex-1 space-y-3 pr-0.5 sm:pr-1 -mr-0.5 sm:-mr-1">
-                  {loadingCurrentPeriodOrders ? (
-                    <div className="flex justify-center py-12">
-                      <div className="h-6 w-6 animate-spin rounded-full border-2 border-neutral-300 border-t-neutral-900"></div>
-                    </div>
-                  ) : currentPeriodOrders.length > 0 ? (
-                    currentPeriodOrders.map((order: any) => (
-                      <div key={order.id} className="rounded-2xl border border-black/5 bg-white p-3 sm:p-4 text-sm transition hover:shadow-md hover:border-neutral-200">
-                        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-3 sm:gap-0">
-                          <div className="min-w-0 flex-1">
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <span className="text-sm sm:text-base font-bold text-neutral-950 leading-tight">
-                                {getCustomerFullName(order.customer?.user) || 'Comensal Anónimo'}
-                              </span>
-                              {order.dailyCounter && (
-                                <span className="text-[11px] font-bold text-neutral-500 bg-neutral-100/80 rounded-full px-2 py-0.5">
-                                  Pedido #{order.dailyCounter}
-                                </span>
-                              )}
-                              <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 border border-emerald-200/40 rounded-full px-2 py-0.5 whitespace-nowrap">
-                                Entregado
-                              </span>
-                            </div>
-                            <p className="text-[10px] text-neutral-400 mt-1.5 font-mono tracking-tight">
-                              {order.orderReference}
-                            </p>
-                            <p className="text-[11px] text-neutral-500 mt-0.5">
-                              {new Date(order.createdAt).toLocaleString('es-MX', { dateStyle: 'medium', timeStyle: 'short' })}
-                            </p>
-                          </div>
-                          <div className="flex sm:flex-col items-center sm:items-end gap-3 sm:gap-0 sm:text-right">
-                            <div className="text-right shrink-0">
-                              <span className="text-[10px] sm:text-[11px] font-bold text-neutral-400 block uppercase leading-tight">Total</span>
-                              <span className="text-base sm:text-lg font-extrabold text-neutral-950">${(order.totalAmount || 0).toFixed(2)}</span>
-                            </div>
-                            <div className="text-xs bg-sky-50/50 text-sky-700 border border-sky-100/30 rounded-lg p-1.5 sm:p-2 inline-block text-left shrink-0">
-                              <p className="flex justify-between gap-3 sm:gap-4">
-                                <span className="text-[10px] text-sky-600 font-semibold">Servicio:</span>
-                                <span className="font-bold tabular-nums">${(order.serviceFee || 0).toFixed(2)}</span>
-                              </p>
-                              <p className="flex justify-between gap-3 sm:gap-4 mt-0.5">
-                                <span className="text-[10px] text-sky-600 font-semibold">Plataforma:</span>
-                                <span className="font-bold tabular-nums">${(order.platformFee || 0).toFixed(2)}</span>
-                              </p>
-                              {order.whatsappFee > 0 && (
-                                <p className="flex justify-between gap-3 sm:gap-4 mt-0.5">
-                                  <span className="text-[10px] text-sky-600 font-semibold">WhatsApp:</span>
-                                  <span className="font-bold tabular-nums">${(order.whatsappFee || 0).toFixed(2)}</span>
-                                </p>
-                              )}
-                              <div className="border-t border-sky-200/50 mt-1 pt-1 flex justify-between gap-3 sm:gap-4 font-black">
-                                <span className="text-[10px] text-sky-700">Comisión Total:</span>
-                                <span className="tabular-nums">${((order.serviceFee || 0) + (order.platformFee || 0) + (order.whatsappFee || 0)).toFixed(2)}</span>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    ))
-                  ) : (
-                    <div className="text-center py-8 text-neutral-500">
-                      <span className="text-3xl block mb-2">🍽️</span>
-                      <p className="font-semibold text-neutral-700">No hay pedidos registrados aún</p>
-                      <p className="text-xs mt-1">Los pedidos entregados en esta semana aparecerán aquí.</p>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-          ) : null}
 
           {/* Modal de Confirmación de Cancelación de Pedido */}
           {cancelConfirmOrder ? (
@@ -13084,192 +12509,6 @@ export default function Home() {
             </div>
           ) : null}
 
-          {isPayModalOpen ? (
-            <div className="fixed inset-0 z-[80] flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm animate-in fade-in duration-300">
-              <div className="w-full max-w-[540px] max-h-[92dvh] overflow-y-auto rounded-t-[28px] sm:rounded-[32px] bg-white p-5 sm:p-8 shadow-xl ring-1 ring-black/5 animate-in zoom-in-95 duration-300">
-                <div className="flex items-start justify-between gap-3 mb-5">
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2 mb-2">
-                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-sky-50 text-sky-600">
-                        <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5.586a1 1 0 0 1 .707.293l5.414 5.414a1 1 0 0 1 .293.707V19a2 2 0 0 1-2 2Z" /></svg>
-                      </div>
-                      <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-sky-600">Liquidación</p>
-                    </div>
-                    <h3 className="text-xl sm:text-2xl font-black tracking-tight text-neutral-900 truncate">
-                      Pagar Corte
-                    </h3>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setIsPayModalOpen(false)}
-                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-neutral-100 text-neutral-500 transition hover:bg-neutral-200 hover:text-neutral-900 active:scale-95"
-                    title="Cerrar"
-                  >
-                    <X className="h-5 w-5" />
-                  </button>
-                </div>
-
-                <div className="space-y-5 sm:space-y-6">
-                  {/* Amount to Pay (Hero Section) */}
-                  <div className="relative overflow-hidden rounded-[24px] bg-neutral-900 p-5 sm:p-6 text-white shadow-lg">
-                    <div className="absolute -right-10 -top-10 h-40 w-40 rounded-full bg-white/5 blur-3xl"></div>
-                    <div className="relative z-10 flex items-center gap-3">
-                      <div className="min-w-0 flex-1">
-                        <p className="text-sm font-medium text-neutral-400">Total a liquidar</p>
-                        <div className="mt-1 flex items-baseline gap-1 flex-wrap">
-                          <span className="text-2xl sm:text-3xl lg:text-4xl font-black break-all">${selectedSettlementForPay?.amount}</span>
-                          <span className="text-sm font-semibold text-neutral-400 shrink-0">MXN</span>
-                        </div>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          navigator.clipboard.writeText(String(selectedSettlementForPay?.amount ?? ''));
-                          pushToast('success', 'Monto copiado', 'Pegalo en tu app de banco.');
-                        }}
-                        className="group flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white/10 text-white transition hover:bg-white hover:text-neutral-900 active:scale-95"
-                        title="Copiar monto"
-                      >
-                        <svg className="h-5 w-5 transition-transform group-hover:scale-110" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
-                        </svg>
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Digital Receipt (Bank Details) */}
-                  <div className="rounded-[24px] border border-black/5 bg-neutral-50">
-                    <div className="flex items-center gap-2 border-b border-black/5 px-4 py-3">
-                      <Mail className="h-4 w-4 shrink-0 text-neutral-400" />
-                      <span className="text-xs font-bold uppercase tracking-wider text-neutral-500">Datos Bancarios</span>
-                    </div>
-                    <div className="divide-y divide-black/5">
-                      {[
-                        { label: 'Banco', value: adminBankName || 'Cargando...', clip: adminBankName },
-                        { label: 'CLABE / Cuenta', value: adminBankAccount || 'Cargando...', clip: adminBankAccount, highlight: true },
-                        { label: 'Beneficiario', value: adminBankBeneficiary || 'Cargando...', clip: adminBankBeneficiary },
-                        { label: 'Referencia', value: profile?.name || 'Nombre del restaurante', clip: profile?.name },
-                      ].map((item, idx) => (
-                        <div key={idx} className="flex items-center justify-between gap-2 px-4 py-3 transition hover:bg-black/[0.02]">
-                          <div className="min-w-0">
-                            <p className="text-[11px] font-semibold text-neutral-500">{item.label}</p>
-                            <p className={`mt-0.5 text-sm truncate ${item.highlight ? 'font-bold text-neutral-900' : 'font-semibold text-neutral-700'}`}>
-                              {item.value}
-                            </p>
-                          </div>
-                          {item.clip && (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                navigator.clipboard.writeText(item.clip!);
-                                pushToast('success', 'Copiado', `${item.label} copiado al portapapeles.`);
-                              }}
-                              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-neutral-100 text-neutral-500 transition hover:bg-neutral-200 hover:text-neutral-900 active:scale-90"
-                              title={`Copiar ${item.label.toLowerCase()}`}
-                            >
-                              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                              </svg>
-                            </button>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Warning Note */}
-                  <div className="flex gap-3 rounded-2xl bg-sky-50/60 p-4 border border-sky-100">
-                    <div className="shrink-0 pt-0.5">
-                      <svg className="h-5 w-5 text-sky-500" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg>
-                    </div>
-                    <div className="min-w-0">
-                      <p className="text-sm font-semibold text-sky-900">Instrucciones Importantes</p>
-                      <p className="mt-1 text-xs text-sky-800/80 leading-relaxed">
-                        Transfiere el monto exacto y usa el nombre de tu restaurante como <b>Referencia</b>. Al finalizar, sube el comprobante (ej. captura de tu app bancaria) aquí abajo.
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* Upload Zone (Drag & Drop UI) */}
-                  {/* Upload Zone & Preview */}
-                  <div className="mt-6">
-                    {proofPreviewBase64 ? (
-                      <div className="space-y-4">
-                        <div className="relative overflow-hidden rounded-[24px] border-2 border-black/10 bg-neutral-50 p-2">
-                          <img 
-                            src={proofPreviewBase64} 
-                            alt="Vista previa del comprobante" 
-                            className="max-h-48 w-full rounded-2xl object-contain"
-                          />
-                          <button
-                            type="button"
-                            onClick={() => setProofPreviewBase64(null)}
-                            disabled={uploadingProof}
-                            className="absolute right-4 top-4 flex h-8 w-8 items-center justify-center rounded-full bg-black/50 text-white backdrop-blur-md transition hover:bg-black/70 disabled:opacity-50"
-                          >
-                            <X className="h-4 w-4" />
-                          </button>
-                        </div>
-                        
-                        <button
-                          type="button"
-                          onClick={handleSubmitProof}
-                          disabled={uploadingProof}
-                          className={`w-full flex items-center justify-center gap-2 rounded-full py-3.5 text-sm font-bold text-white transition-all active:scale-95 ${
-                            uploadingProof ? 'bg-sky-400' : 'bg-sky-500 hover:bg-sky-600 hover:shadow-lg hover:shadow-sky-500/20'
-                          }`}
-                        >
-                          {uploadingProof ? (
-                            <>
-                              <svg className="h-5 w-5 animate-spin text-white" fill="none" viewBox="0 0 24 24">
-                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                              </svg>
-                              Subiendo...
-                            </>
-                          ) : (
-                            <>
-                              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" /></svg>
-                              Enviar Comprobante
-                            </>
-                          )}
-                        </button>
-                      </div>
-                    ) : (
-                      <>
-                        <input
-                          type="file"
-                          accept="image/*"
-                          onChange={handleSelectProof}
-                          className="hidden"
-                          id="proof-upload"
-                          disabled={uploadingProof}
-                        />
-                        <label
-                          htmlFor="proof-upload"
-                          className={`group relative flex flex-col items-center justify-center gap-3 overflow-hidden rounded-[24px] border-2 border-dashed p-5 sm:p-8 transition-all ${
-                            uploadingProof
-                              ? 'cursor-not-allowed border-black/10 bg-black/5'
-                              : 'cursor-pointer border-sky-500/30 bg-sky-50/30 hover:border-sky-500 hover:bg-sky-50/80'
-                          }`}
-                        >
-                          <div className="flex h-16 w-16 items-center justify-center rounded-full bg-white shadow-sm transition-transform group-hover:scale-110 group-active:scale-95">
-                            <svg className="h-7 w-7 text-sky-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" /></svg>
-                          </div>
-                          <div className="text-center">
-                            <p className="text-sm font-bold text-neutral-900">Haz clic para elegir foto</p>
-                            <p className="mt-1 text-xs font-medium text-neutral-500">
-                              Soporta JPG, PNG hasta 10MB
-                            </p>
-                          </div>
-                        </label>
-                      </>
-                    )}
-                  </div>
-                </div>
-              </div>
-            </div>
-          ) : null}
 
           {/* Modal del Centro de Ayuda y Soporte */}
           {showHelpModal ? (
@@ -14145,15 +13384,6 @@ function RestaurantNavIcon({ kind }: { kind: RestaurantPortalSection }) {
     );
   }
 
-  if (kind === 'billing') {
-    return (
-      <svg className="h-5 w-5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-        <rect x="3" y="5" width="18" height="14" rx="3" strokeWidth={1.7} />
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M3 10h18" />
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M7 15h.01M11 15h2" />
-      </svg>
-    );
-  }
 
 
   if (kind === 'settings') {
@@ -14946,30 +14176,6 @@ function unitToGrams(value: string, unit: 'kg' | 'g'): number | null {
   return rounded > 0 && Math.abs(grams - rounded) < 1e-7 ? rounded : null;
 }
 
-function formatSettlementReference(ref: string): string {
-  if (!ref) return '';
-  const parts = ref.split('-');
-  if (parts[0] === 'SETTLE' && parts.length >= 5) {
-    const cuid = parts[1];
-    const year = parts[2].slice(-2);
-    const month = parts[3].padStart(2, '0');
-    const day = parts[4].padStart(2, '0');
-    const suffix = cuid.slice(-6).toUpperCase();
-    return `CRT-${year}${month}${day}-${suffix}`;
-  }
-  if (ref.startsWith('OP-') && parts.length >= 3) {
-    const suffix = parts[1].toUpperCase();
-    const timestamp = Number(parts[2]);
-    if (!isNaN(timestamp)) {
-      const date = new Date(timestamp);
-      const year = date.getFullYear().toString().slice(-2);
-      const month = (date.getMonth() + 1).toString().padStart(2, '0');
-      const day = date.getDate().toString().padStart(2, '0');
-      return `OP-${year}${month}${day}-${suffix}`;
-    }
-  }
-  return ref;
-}
 
 function formatDate(date: string) {
   return new Intl.DateTimeFormat('es-MX', {

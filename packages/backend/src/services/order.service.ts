@@ -24,7 +24,6 @@ import { buildApartmentWhere } from '../utils/address';
 import { calculateOrderEta } from '../utils/order-eta';
 import { getPromoLimitViolation } from './order-promotion-policy';
 
-const WHATSAPP_NOTIFICATION_FEE = 0.5;
 
 type OrderInput = {
   restaurantId: string;
@@ -649,16 +648,6 @@ export async function createOrderForCustomer({
   const subtotal = calculatedSubtotal;
   const taxAmount = 0;
   const serviceFee = restaurant.serviceFee || 0;
-  // Tarifa de uso de la app: tarifa fija por pedido O porcentaje del subtotal neto de productos.
-  // Son mutuamente excluyentes: si hay porcentaje (>0), se usa ese; si no, la tarifa fija.
-  // El porcentaje NUNCA incluye envío ni tarifa de servicio, solo el importe de los productos.
-  const platformFeeRate = (restaurant.platformFeeRate as number) || 0;
-  const platformFee =
-    platformFeeRate > 0
-      ? Math.round(subtotal * platformFeeRate * 100) / 100
-      : restaurant.platformFeePerOrder || 0;
-  const whatsappFee =
-    restaurant.whatsappNotifications && restaurant.contactPhone ? WHATSAPP_NOTIFICATION_FEE : 0;
 
   const deliveryDistanceKm =
     !isPickup &&
@@ -1045,8 +1034,10 @@ export async function createOrderForCustomer({
           subtotal,
           taxAmount,
           serviceFee,
-          platformFee,
-          whatsappFee,
+          // Persisted legacy columns remain, but WingsLab does not charge operator commissions.
+          platformFee: 0,
+          driverPlatformFee: 0,
+          whatsappFee: 0,
           deliveryFee,
           deliveryDistanceKm,
           totalAmount,

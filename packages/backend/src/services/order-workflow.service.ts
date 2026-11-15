@@ -1199,7 +1199,7 @@ export async function updateOrderStatusByDriver({
       throw createDomainError(
         409,
         'DRIVER_SUSPENDED',
-        'No puedes aceptar pedidos mientras tu cuenta esté suspendida. Dirígete a tu billetera para liquidar tu deuda.'
+        'No puedes aceptar pedidos mientras tu cuenta esté suspendida. Contacta al restaurante.'
       );
     }
 
@@ -1220,7 +1220,7 @@ export async function updateOrderStatusByDriver({
           status: { in: [OrderStatus.CONFIRMED, OrderStatus.PREPARING, OrderStatus.READY] },
         },
         data: {
-          driverPlatformFee: driver.platformFeePerOrder || 0,
+          driverPlatformFee: 0,
           isAcceptedByDriver: true,
         },
       });

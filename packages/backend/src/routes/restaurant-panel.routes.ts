@@ -7,10 +7,7 @@ import { MENU_THEME_IDS } from '@sadel/shared';
 import { prisma } from '../config/database';
 import { authenticate, authorize, getAuthenticatedUser } from '../middleware/auth';
 import { isAppError } from '../errors/app-error';
-import { buildRestaurantBillingSummary, getCachedBillingSummary, setCachedBillingSummary, type RestaurantBillingSummary } from '../services/restaurant-billing.service';
 import { encrypt, decrypt } from '../utils/crypto';
-import { emitNotification } from '../services/socket.service';
-import { sendPushNotification } from '../services/notification.service';
 import { urlToKey, deleteImages, uploadImage } from '../services/storage.service';
 import { isAiImageConfigured, assertAiImageQuota, getAiImageDailyCap, generateFoodImage } from '../services/ai-image.service';
 import { invalidateCachePattern } from '../services/cache.service';
@@ -267,66 +264,12 @@ function isPasswordHash(password: string): boolean {
   return /^\$2[aby]\$\d{2}\$/.test(password);
 }
 
-async function checkAndEnforceBillingSuspension(restaurantId: string, currentStatus: string) {
-  const now = new Date();
-
-  try {
-    const result = await prisma.$transaction(async (tx) => {
-      const pastDuePending = await tx.restaurantBillingSettlement.findMany({
-        where: {
-          restaurantId,
-          status: 'PENDING',
-          dueDate: { lte: now },
-        },
-        select: { id: true },
-      });
-
-      if (pastDuePending.length > 0) {
-        await tx.restaurantBillingSettlement.updateMany({
-          where: { id: { in: pastDuePending.map(s => s.id) } },
-          data: { status: 'OVERDUE' },
-        });
-      }
-
-      const overdueCount = await tx.restaurantBillingSettlement.count({
-        where: { restaurantId, status: 'OVERDUE' },
-      });
-
-      if (overdueCount > 0 && currentStatus === 'ACTIVE') {
-        await tx.restaurant.update({
-          where: { id: restaurantId },
-          data: {
-            status: 'SUSPENDED',
-            statusReason: 'Suspensión automática por pago vencido.',
-            statusChangedAt: now,
-            statusChangedBy: 'SYSTEM_DYNAMIC_BILLING_CHECK',
-            isAcceptingOrders: false,
-          },
-        });
-        return 'SUSPENDED';
-      }
-
-      return currentStatus;
-    });
-
-    if (result === 'SUSPENDED') {
-      console.log(`[DynamicBillingCheck] Automatically suspended restaurant ${restaurantId}.`);
-    }
-
-    return result;
-  } catch (error) {
-    console.error(`[DynamicBillingCheck] Error processing billing suspension for ${restaurantId}:`, error);
-    return currentStatus;
-  }
-}
 
 async function getOwnedRestaurant(userId: string) {
   const restaurant = await prisma.restaurant.findUnique({
     where: { userId },
   });
   if (restaurant) {
-    const finalStatus = await checkAndEnforceBillingSuspension(restaurant.id, restaurant.status);
-    restaurant.status = finalStatus as any;
   }
   return restaurant;
 }
@@ -520,12 +463,6 @@ export async function registerRestaurantPanelRoutes(fastify: FastifyInstance): P
         });
       }
 
-      const finalStatus = await checkAndEnforceBillingSuspension(ownedRestaurant.id, ownedRestaurant.status);
-      if (finalStatus !== ownedRestaurant.status) {
-        ownedRestaurant.status = finalStatus as any;
-        ownedRestaurant.statusReason = 'Suspensión automática por pago vencido.';
-        ownedRestaurant.isAcceptingOrders = false;
-      }
 
       if (ownedRestaurant) {
         ownedRestaurant.transferAccountNumber = ownedRestaurant.transferAccountNumber 
@@ -539,272 +476,9 @@ export async function registerRestaurantPanelRoutes(fastify: FastifyInstance): P
       });
     });
 
-    restaurant.get('/restaurant-panel/facturacion', async (request, reply) => {
-      const user = getAuthenticatedUser(request);
-      const ownedRestaurant = await prisma.restaurant.findUnique({
-        where: { userId: user.sub },
-        select: {
-          id: true,
-          billingCycle: true,
-          platformFeeRate: true,
-          serviceFee: true,
-          platformFeePerOrder: true,
-          lastBillingSettledAt: true,
-          status: true,
-          createdAt: true,
-        },
-      });
 
-      if (!ownedRestaurant) {
-        return reply.status(404).send({
-          success: false,
-          error: {
-            code: 'RESTAURANT_NOT_FOUND',
-            message: 'No se encontro el restaurante asociado a este usuario.',
-          },
-        });
-      }
 
-      const enforcedStatus = await checkAndEnforceBillingSuspension(ownedRestaurant.id, ownedRestaurant.status);
-      ownedRestaurant.status = enforcedStatus as any;
 
-      const cached = getCachedBillingSummary(ownedRestaurant.id);
-      const billingSummary = cached
-        ? (cached as RestaurantBillingSummary)
-        : await buildRestaurantBillingSummary(ownedRestaurant);
-      if (!cached) {
-        setCachedBillingSummary(ownedRestaurant.id, billingSummary);
-      }
-      const recentSettlements = await prisma.restaurantBillingSettlement.findMany({
-        where: { restaurantId: ownedRestaurant.id, status: { not: 'REJECTED' } },
-        orderBy: { createdAt: 'desc' },
-        take: 50,
-      });
-
-      return reply.send({
-        success: true,
-        data: {
-          ...billingSummary,
-          recentSettlements,
-        },
-      });
-    });
-
-    restaurant.get('/restaurant-panel/facturacion/periodo-actual/pedidos', async (request, reply) => {
-      const user = getAuthenticatedUser(request);
-      const ownedRestaurant = await prisma.restaurant.findUnique({
-        where: { userId: user.sub },
-        select: {
-          id: true,
-          lastBillingSettledAt: true,
-          createdAt: true,
-        },
-      });
-
-      if (!ownedRestaurant) {
-        return reply.status(404).send({
-          success: false,
-          error: {
-            code: 'RESTAURANT_NOT_FOUND',
-            message: 'No se encontro el restaurante asociado a este usuario.',
-          },
-        });
-      }
-
-      const periodStart = ownedRestaurant.lastBillingSettledAt && ownedRestaurant.lastBillingSettledAt.getTime() <= Date.now()
-        ? ownedRestaurant.lastBillingSettledAt
-        : ownedRestaurant.createdAt;
-
-      const orders = await prisma.order.findMany({
-        where: {
-          restaurantId: ownedRestaurant.id,
-          status: { in: ['DELIVERED', 'COMPLETED'] },
-          createdAt: {
-            gte: periodStart,
-          },
-        },
-        orderBy: { createdAt: 'desc' },
-        take: 200,
-        select: {
-          id: true,
-          orderReference: true,
-          dailyCounter: true,
-          totalAmount: true,
-          serviceFee: true,
-          platformFee: true,
-          whatsappFee: true,
-          createdAt: true,
-          customer: {
-            select: {
-              user: {
-                select: {
-                  name: true,
-                },
-              },
-            },
-          },
-        },
-      });
-
-      return reply.send({
-        success: true,
-        data: orders,
-      });
-    });
-
-    restaurant.get('/restaurant-panel/facturacion/:id/pedidos', async (request, reply) => {
-      const params = z.object({ id: z.string().min(1) }).safeParse(request.params);
-      
-      if (!params.success) {
-        return reply.status(400).send({
-          success: false,
-          error: {
-            code: 'INVALID_PARAMS',
-            message: params.error.issues[0]?.message || 'Parametros invalidos.',
-          },
-        });
-      }
-      
-      const user = getAuthenticatedUser(request);
-      const ownedRestaurant = await prisma.restaurant.findUnique({
-        where: { userId: user.sub },
-        select: { id: true },
-      });
-      
-      if (!ownedRestaurant) {
-        return reply.status(404).send({
-          success: false,
-          error: {
-            code: 'RESTAURANT_NOT_FOUND',
-            message: 'No se encontro el restaurante asociado a este usuario.',
-          },
-        });
-      }
-      
-      const settlement = await prisma.restaurantBillingSettlement.findFirst({
-        where: {
-          id: params.data.id,
-          restaurantId: ownedRestaurant.id,
-        },
-      });
-      
-      if (!settlement) {
-        return reply.status(404).send({
-          success: false,
-          error: {
-            code: 'SETTLEMENT_NOT_FOUND',
-            message: 'No se encontro la liquidacion.',
-          },
-        });
-      }
-      
-      const orders = await prisma.order.findMany({
-        where: {
-          restaurantId: ownedRestaurant.id,
-          status: { in: ['DELIVERED', 'COMPLETED'] },
-          createdAt: {
-            gte: settlement.periodStart,
-            lte: settlement.periodEnd,
-          },
-        },
-        orderBy: { createdAt: 'asc' },
-        select: {
-          id: true,
-          orderReference: true,
-          dailyCounter: true,
-          totalAmount: true,
-          serviceFee: true,
-          platformFee: true,
-          whatsappFee: true,
-          createdAt: true,
-          customer: {
-            select: {
-              user: {
-                select: {
-                  name: true,
-                },
-              },
-            },
-          },
-        },
-      });
-
-      return reply.send({
-        success: true,
-        data: orders,
-      });
-    });
-
-    restaurant.post('/restaurant-panel/facturacion/:id/comprobante', async (request, reply) => {
-      const params = z.object({ id: z.string().min(1) }).safeParse(request.params);
-      const body = z.object({ paymentProofUrl: z.string().url() }).safeParse(request.body);
-      
-      if (!params.success) {
-        return reply.status(400).send({
-          success: false,
-          error: {
-            code: 'INVALID_PARAMS',
-            message: params.error.issues[0]?.message || 'Parametros invalidos.',
-          },
-        });
-      }
-      
-      if (!body.success) {
-        return reply.status(400).send({
-          success: false,
-          error: {
-            code: 'INVALID_BODY',
-            message: body.error.issues[0]?.message || 'Datos invalidos.',
-          },
-        });
-      }
-      
-      const user = getAuthenticatedUser(request);
-      const ownedRestaurant = await prisma.restaurant.findUnique({
-        where: { userId: user.sub },
-        select: { id: true },
-      });
-      
-      if (!ownedRestaurant) {
-        return reply.status(404).send({
-          success: false,
-          error: {
-            code: 'RESTAURANT_NOT_FOUND',
-            message: 'No se encontro el restaurante asociado a este usuario.',
-          },
-        });
-      }
-      
-      const settlement = await prisma.restaurantBillingSettlement.findFirst({
-        where: {
-          id: params.data.id,
-          restaurantId: ownedRestaurant.id,
-        },
-      });
-      
-      if (!settlement) {
-        return reply.status(404).send({
-          success: false,
-          error: {
-            code: 'SETTLEMENT_NOT_FOUND',
-            message: 'No se encontro la liquidacion.',
-          },
-        });
-      }
-      
-      const updatedSettlement = await prisma.restaurantBillingSettlement.update({
-        where: { id: settlement.id },
-        data: {
-          paymentProofUrl: body.data.paymentProofUrl,
-          status: 'IN_REVIEW',
-        },
-      });
-      
-      return reply.send({
-        success: true,
-        data: updatedSettlement,
-      });
-    });
 
     restaurant.patch('/restaurant-panel/perfil', async (request, reply) => {
       const parsed = parseBody(restaurantProfileSchema.safeParse(request.body));
@@ -2219,22 +1893,6 @@ export async function registerRestaurantPanelRoutes(fastify: FastifyInstance): P
         },
       });
     });
-
-    // ==================== Featured / Destacados ====================
-
-    function parseFeaturedPackages(setting: { value: string } | null): { days: number; price: number }[] {
-      try {
-        if (!setting) return [];
-        const parsed = JSON.parse(setting.value);
-        if (!Array.isArray(parsed)) return [];
-        return parsed.filter((p: any) => typeof p.days === 'number' && typeof p.price === 'number');
-      } catch {
-        return [];
-      }
-    }
-
-
-
 
     // ===== Cupones (promocodes) =====
     restaurant.get('/restaurant-panel/promocodes', async (request, reply) => {
