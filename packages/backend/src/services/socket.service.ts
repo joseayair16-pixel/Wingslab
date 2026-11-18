@@ -91,10 +91,10 @@ export const setupSocketIO = (io: SocketIOServer, verifyToken?: SocketTokenVerif
           typeof location.longitude === 'number' &&
           Number.isFinite(location.longitude)
         ) {
-          socket.broadcast.emit(`driver:location:${socket.data.userId}`, {
-            latitude: location.latitude,
-            longitude: location.longitude,
-          });
+          // Location is published only through the authenticated order action,
+          // which checks assignment and targets the customer/restaurant rooms.
+          // Never broadcast a driver's coordinates to every connected session.
+          return;
         }
       } catch (error) {
         logger.error('Error in driver:location handler', { socketId: socket.id, error });

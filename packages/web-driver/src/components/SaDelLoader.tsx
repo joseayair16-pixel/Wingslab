@@ -33,7 +33,7 @@ export const SaDelLoader = memo(function SaDelLoader({
       aria-live="polite"
     >
       {logoFailed ? (
-        <span className={textClass}>SaDeL</span>
+        <span className={textClass}>WingsLab</span>
       ) : (
         <SaDelLogo
           onError={() => setLogoFailed(true)}

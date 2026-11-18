@@ -1,5 +1,7 @@
 import React from 'react';
 import { useStore } from '../store';
+import { ReceiptText, ChevronRight } from 'lucide-react';
+import logo from '../assets/wingslab-wordmark.png';
 
 interface OrdersViewProps {
   sortedOrders: any[];
@@ -35,11 +37,11 @@ export function OrdersView({
   const setActiveSection = useStore(state => state.setActiveSection);
 
   return (
-    <div className="max-w-3xl mx-auto w-full space-y-4">
+    <div className="wl-order-history max-w-3xl mx-auto w-full space-y-4">
       {!sortedOrders.length ? (
         <div className="flex flex-col items-center justify-center py-20 px-6 text-center">
           <div className="mb-6 h-16 w-16 rounded-full bg-neutral-100 flex items-center justify-center">
-            <span className="text-2xl">🍔</span>
+            <ReceiptText className="h-7 w-7 text-red-600" />
           </div>
           <h3 className="text-lg font-semibold text-neutral-900">Aún no hay pedidos</h3>
           <p className="mt-1 mb-6 text-sm text-neutral-500 max-w-[260px]">
@@ -58,15 +60,13 @@ export function OrdersView({
           {sortedOrders.slice(0, visibleOrdersCount).map((order) => {
 
             return (
-              <div key={order.id} className="bg-white rounded-2xl border border-neutral-100 overflow-hidden">
+              <div key={order.id} className="wl-history-card bg-white rounded-2xl border border-neutral-100 overflow-hidden">
                 <div className="flex gap-4 p-4">
-                  <div className="relative w-28 h-28 rounded-xl overflow-hidden flex-shrink-0 bg-neutral-50">
+                  <div className="wl-history-mark relative w-28 h-28 rounded-xl overflow-hidden flex-shrink-0 bg-neutral-50">
                     {order.restaurant.logo ? (
                       <img src={order.restaurant.logo} alt="" className="h-full w-full object-cover" />
                     ) : (
-                      <div className="h-full w-full flex items-center justify-center text-sm font-bold text-neutral-400">
-                        {order.restaurant.name.substring(0, 2).toUpperCase()}
-                      </div>
+                      <div className="h-full w-full flex items-center justify-center bg-[#bb0a0e] p-2"><img src={logo.src} alt="WingsLab" /></div>
                     )}
                   </div>
                   <div className="flex-1 min-w-0">
@@ -87,6 +87,7 @@ export function OrdersView({
                       <span className="mx-1.5">·</span>
                       {formatDate(order.createdAt)}
                     </p>
+                    {order.orderReference && <p className="mt-2 break-all text-[10px] text-neutral-500">{order.orderReference}</p>}
                   </div>
                 </div>
 
@@ -99,7 +100,7 @@ export function OrdersView({
                     }}
                     className="w-full rounded-xl border border-neutral-200 py-2.5 text-sm font-semibold text-neutral-800 hover:bg-neutral-50 transition active:scale-[0.98]"
                   >
-                    Ver detalles
+                    Ver detalles <ChevronRight className="ml-1 inline h-4 w-4" aria-hidden="true" />
                   </button>
                 </div>
               </div>

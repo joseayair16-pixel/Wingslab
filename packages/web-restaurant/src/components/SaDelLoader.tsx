@@ -1,7 +1,8 @@
 'use client';
 
 import { memo, useState } from 'react';
-import { SaDelLogo } from './SaDelLogo';
+import redWordmark from '../assets/wingslab-wordmark-red.png';
+import whiteWordmark from '../assets/wingslab-wordmark-white.png';
 
 export const SaDelLoader = memo(function SaDelLoader({
   className = '',
@@ -26,19 +27,19 @@ export const SaDelLoader = memo(function SaDelLoader({
 
   return (
     <div
-      className={`flex flex-col items-center justify-center gap-5 ${
-        fullScreen ? 'min-h-[100dvh] w-full' : ''
+      className={`wl-restaurant-loader flex flex-col items-center justify-center gap-5 ${
+        fullScreen ? 'wl-loader-full min-h-[100dvh] w-full' : ''
       } ${className}`}
       role={fullScreen ? 'status' : undefined}
       aria-live="polite"
     >
       {logoFailed ? (
-        <span className={textClass}>SaDeL</span>
+        <span className={textClass}>WingsLab</span>
       ) : (
-        <SaDelLogo
-          onError={() => setLogoFailed(true)}
-          className={`sadel-loader-logo animate-sadel-breathe select-none pointer-events-none ${logoHeightClass} w-auto`}
-        />
+        <span className={`wl-loader-brand animate-sadel-breathe ${logoHeightClass}`}>
+          <img className="wl-loader-logo-light" src={redWordmark.src} alt="WingsLab" onError={() => setLogoFailed(true)} />
+          <img className="wl-loader-logo-dark" src={whiteWordmark.src} alt="" aria-hidden="true" onError={() => setLogoFailed(true)} />
+        </span>
       )}
       {label ? (
         <p className="text-sm font-medium text-neutral-500">{label}</p>
@@ -48,7 +49,7 @@ export const SaDelLoader = memo(function SaDelLoader({
           role="progressbar"
           aria-label="Cargando"
         >
-          <div className="h-full w-1/3 rounded-full bg-gradient-to-r from-sky-500 to-blue-600 animate-sadel-progress" />
+          <div className="h-full w-1/3 rounded-full bg-[#f20d12] animate-sadel-progress" />
         </div>
       )}
     </div>

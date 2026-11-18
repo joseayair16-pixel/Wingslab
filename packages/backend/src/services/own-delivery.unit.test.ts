@@ -3,8 +3,8 @@ import { getOrCreateDeliveryToken, readDeliveryToken } from './delivery-token.se
 import { hashToken } from '../utils/crypto';
 
 const ID = 'cmwgzrpnm0047orggilrr3fxu', TOKEN = 't'.repeat(43);
-function fixture(status = 'READY') {
-  let order: any = { id: ID, status, updatedAt: new Date(1), fulfillmentType: 'DELIVERY', driverId: null,
+function fixture(status = 'READY', orderId = ID) {
+  let order: any = { id: orderId, status, updatedAt: new Date(1), fulfillmentType: 'DELIVERY', driverId: null,
     supportRestaurantId: null, deliveredByRestaurant: true, paymentMethod: 'CASH', paymentStatus: 'PENDING',
     totalAmount: 163, driverArrivedAtCustomer: null, latitude: 19.433, longitude: -99.134,
     restaurant: { id: 'restaurant', userId: 'owner', hasOwnDelivery: true, latitude: 19.4326, longitude: -99.1332 },
@@ -36,12 +36,19 @@ function fixture(status = 'READY') {
   return { db, history, order: () => order, setOrder: (data: any) => { order = { ...order, ...data }; }, setToken: (data: any) => { row = data; } };
 }
 beforeEach(() => { process.env.DATABASE_ENCRYPTION_KEY = 'independent-hermetic-key-'.repeat(3); });
-test('QR assignment refuses wrong owner, unready and protected orders', async () => {
+test('QR assignment refuses wrong owner and unready orders', async () => {
   const f = fixture('PREPARING');
   await expect(prepareOwnDelivery(f.db, 'owner', ID)).rejects.toMatchObject({ code: 'INVALID_ORDER_STATE' });
   await expect(prepareOwnDelivery(f.db, 'other-owner', ID)).rejects.toMatchObject({ code: 'ORDER_NOT_FOUND' });
-  await expect(prepareOwnDelivery(f.db, 'owner', 'wl_order_pendiente')).rejects.toMatchObject({ code: 'WINGSLAB_ORDER_ACTION_BLOCKED' });
   expect(f.db.order.update).not.toHaveBeenCalled();
+});
+test('a real restaurant-owned ready order can use the QR flow without a test-ID allowlist', async () => {
+  const f = fixture('READY', 'wl_order_ready');
+  f.setToken(null);
+  f.setOrder({ deliveredByRestaurant: false });
+  const result = await prepareOwnDelivery(f.db, 'owner', 'wl_order_ready');
+  expect(result.order.status).toBe('READY');
+  expect(result.order.deliveredByRestaurant).toBe(true);
 });
 test('tokens reuse a valid QR, rotate after expiry and GET never creates', async () => {
   const f = fixture(); f.setToken(null);
@@ -89,10 +96,10 @@ test('failed history write rolls back order and token, preventing partial delive
   await expect(ownDeliveryAction(f.db, TOKEN, 'deliver', { cashReceived: true })).rejects.toThrow('simulated failure');
   expect(f.order().status).toBe('IN_TRANSIT');expect(await resolveOwnTicket(f.db, TOKEN)).toBeTruthy();
 });
-test('closed/expired/wrong-mode tickets and protected fixtures are refused without writes', async () => {
+test('closed/expired/wrong-mode tickets are refused without writes', async () => {
   const f = fixture('DELIVERED');
   await expect(resolveOwnTicket(f.db, TOKEN)).rejects.toMatchObject({ code: 'INVALID_ORDER_STATE' });
-  f.setOrder({ status: 'READY', id: 'wl_order_entregado' });
-  await expect(resolveOwnTicket(f.db, TOKEN)).rejects.toMatchObject({ code: 'DELIVERY_NOT_AUTHORIZED' });
+  f.setOrder({ status: 'READY', fulfillmentType: 'PICKUP' });
+  await expect(resolveOwnTicket(f.db, TOKEN)).rejects.toMatchObject({ code: 'INVALID_DELIVERY_MODE' });
   expect(f.db.order.updateMany).not.toHaveBeenCalled();
 });

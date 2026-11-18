@@ -6,8 +6,7 @@ import { prisma } from '../config/database';
 import { sendAppError } from '../errors/http';
 import { authenticate, authorize, getAuthenticatedUser } from '../middleware/auth';
 import { requireRestaurantOperable } from './restaurant-panel.routes';
-import { requireManualOrderAction } from '../config/order-actions';
-import { prepareOwnDelivery } from '../services/own-delivery.service';
+import { completeUnassignedOwnDeliveryByRestaurant, prepareOwnDelivery } from '../services/own-delivery.service';
 import { emitNotification } from '../services/socket.service';
 import { sendPushNotification } from '../services/notification.service';
 import {
@@ -59,7 +58,6 @@ export async function registerRestaurantOrderRoutes(fastify: FastifyInstance): P
     restaurantOrders.addHook('preHandler', authenticate);
     restaurantOrders.addHook('preHandler', authorize([UserRole.RESTAURANT]));
     restaurantOrders.addHook('preHandler', requireRestaurantOperable);
-    restaurantOrders.addHook('preHandler', requireManualOrderAction);
 
     restaurantOrders.get('/restaurant-panel/pedidos', async (request, reply) => {
       const parsed = listOrdersQuerySchema.safeParse(request.query);
@@ -1306,13 +1304,14 @@ export async function registerRestaurantOrderRoutes(fastify: FastifyInstance): P
 
     restaurantOrders.patch('/restaurant-panel/pedidos/:id/entregado', async (request, reply) => {
       const params = z.object({ id: z.string().min(1) }).safeParse(request.params);
+      const body = z.object({ pin: z.string().optional(), cashReceived: z.boolean().optional() }).safeParse(request.body ?? {});
 
-      if (!params.success) {
+      if (!params.success || !body.success) {
         return reply.status(400).send({
           success: false,
           error: {
             code: 'INVALID_PARAMS',
-            message: params.error.issues[0]?.message || 'Parametros invalidos.',
+            message: !params.success ? params.error.issues[0]?.message || 'Parametros invalidos.' : 'Datos de entrega inválidos.',
           },
         });
       }
@@ -1321,58 +1320,7 @@ export async function registerRestaurantOrderRoutes(fastify: FastifyInstance): P
       const requestContext = getOrCreateRequestContext(request);
 
       try {
-        const order = await prisma.order.findUnique({
-          where: { id: params.data.id },
-          include: { restaurant: true },
-        });
-
-        if (!order) {
-          return reply.status(404).send({
-            success: false,
-            error: {
-              code: 'ORDER_NOT_FOUND',
-              message: 'No se encontro el pedido.',
-            },
-          });
-        }
-
-        if (order.restaurant.userId !== user.sub) {
-          return reply.status(403).send({
-            success: false,
-            error: {
-              code: 'FORBIDDEN',
-              message: 'No tienes permiso para modificar este pedido.',
-            },
-          });
-        }
-
-        // Marcar como entregado
-        const updatedOrder = await prisma.order.update({
-          where: { id: order.id },
-          data: {
-            status: OrderStatus.DELIVERED,
-            deliveredAt: new Date(),
-            ...(order.paymentMethod === 'CASH' ? { paymentStatus: 'COMPLETED' } : {}),
-          },
-          include: {
-            customer: {
-              include: {
-                user: true,
-              },
-            },
-          },
-        });
-
-        // Registrar evento de tracking
-        await prisma.orderTracking.create({
-          data: {
-            orderId: order.id,
-            status: OrderStatus.DELIVERED,
-            notes: 'Pedido entregado exitosamente.',
-          },
-        });
-
-        // Notificar al cliente que el pedido fue entregado
+        const updatedOrder = await completeUnassignedOwnDeliveryByRestaurant(prisma, user.sub, params.data.id, body.data);
         emitNotification(
           fastify.io,
           updatedOrder.customer.user.id,
@@ -1381,7 +1329,7 @@ export async function registerRestaurantOrderRoutes(fastify: FastifyInstance): P
           {
             orderId: updatedOrder.id,
             status: 'DELIVERED',
-            message: 'Tu pedido ha sido entregado.',
+            message: 'Tu pedido fue entregado.',
           },
           {
             requestId: requestContext.requestId,
@@ -1389,7 +1337,6 @@ export async function registerRestaurantOrderRoutes(fastify: FastifyInstance): P
           }
         );
 
-        // Notificar al restaurante
         emitNotification(
           fastify.io,
           user.sub,
@@ -1407,15 +1354,13 @@ export async function registerRestaurantOrderRoutes(fastify: FastifyInstance): P
           }
         );
 
-        // Enviar notificación push al comensal
-        request.log.info(`[Push] Intentando enviar notificacion push al comensal ${updatedOrder.customer.user.id} para reparto propio (DELIVERED)`);
         try {
-          const pushResult = await sendPushNotification(updatedOrder.customer.user.id, {
-            title: '¡Pedido entregado! 🎉',
-            body: 'Tu pedido ha sido entregado exitosamente. ¡Que lo disfrutes!',
+          await sendPushNotification(updatedOrder.customer.user.id, {
+            title: '¡Pedido entregado!',
+            body: 'Tu entrega propia fue confirmada.',
             icon: '/app-icon-192.png',
             badge: '/badge.png',
-            vibrate: [1000, 500, 1000, 500, 1000], // 3 long pulses
+            vibrate: [500, 200, 500],
             requireInteraction: true,
             data: {
               orderId: updatedOrder.id,
@@ -1423,9 +1368,8 @@ export async function registerRestaurantOrderRoutes(fastify: FastifyInstance): P
               url: `/?orderId=${updatedOrder.id}`,
             },
           });
-          request.log.info(`[Push] Resultado de notificacion push para comensal ${updatedOrder.customer.user.id}: ${JSON.stringify(pushResult)}`);
         } catch (pushErr) {
-          request.log.error(pushErr as any, `[Push] Error al enviar notificacion push al comensal ${updatedOrder.customer.user.id}`);
+          request.log.error(pushErr as any, 'No se pudo enviar el aviso de entrega al cliente.');
         }
 
         return reply.send({

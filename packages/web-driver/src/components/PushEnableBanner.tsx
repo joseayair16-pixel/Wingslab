@@ -39,7 +39,7 @@ const REASON_MESSAGES: Record<EnableStatus, string> = {
   BLOCKED: 'Notificaciones bloqueadas en este sitio. Actívalas en los ajustes del navegador.',
   INSECURE: 'Estás entrando por HTTP. Abre el panel con https:// para poder activar las notificaciones.',
   NOT_SUPPORTED: 'Este navegador no soporta notificaciones push.',
-  VAPID_NOT_CONFIGURED: 'Las notificaciones del servidor no están configuradas. Contacta al soporte de SaDeL.',
+  VAPID_NOT_CONFIGURED: 'Las notificaciones del servidor no están configuradas. Contacta al restaurante.',
   SUBSCRIBE_FAILED: 'No se pudo completar la suscripción. Inténtalo de nuevo en unos segundos.',
   UNKNOWN: 'Ocurrió un error al activar las notificaciones. Inténtalo de nuevo.',
 };

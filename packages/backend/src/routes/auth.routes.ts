@@ -11,6 +11,7 @@ import { localOtpSimulationAllowed } from '../config/env';
 import { isEmailConfigured, sendOtpEmail } from '../services/email.service';
 import {
   createRefreshToken,
+  revokeAllUserRefreshTokens,
   validateAndRotateRefreshToken,
 } from '../services/refresh-token.service';
 import { isMexicanLocalPhone, toWhatsAppLinkNumber } from '../utils/mexican-phone';
@@ -1026,6 +1027,7 @@ export async function registerAuthRoutes(fastify: FastifyInstance): Promise<void
           status: user.status,
           profilePhoto: user.profilePhoto,
           dateOfBirth: user.dateOfBirth,
+          mustChangePassword: user.mustChangePassword,
         },
       },
     });
@@ -1062,9 +1064,11 @@ export async function registerAuthRoutes(fastify: FastifyInstance): Promise<void
       await prisma.user.update({
         where: { id: decoded.sub },
         data: {
-          password: await bcryptjs.hash(parsed.data.newPassword, 10),
+          password: await bcryptjs.hash(parsed.data.newPassword, 12),
         },
       });
+      // A password reset must invalidate every existing session.
+      await revokeAllUserRefreshTokens(decoded.sub);
 
       return reply.send({
         success: true,

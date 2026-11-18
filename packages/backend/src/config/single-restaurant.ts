@@ -14,6 +14,8 @@ export function businessQueryArgs(model: string, operation: string, original: an
     Restaurant: 'id', Order: 'restaurantId', Product: 'restaurantId', MenuCategory: 'restaurantId',
     PromoCode: 'restaurantId', RestaurantStats: 'restaurantId', OperatingHours: 'restaurantId',
     RestaurantBillingSettlement: 'restaurantId', RestaurantStoreCategory: 'restaurantId',
+    Driver: 'restaurantId', DriverEarning: 'restaurantId', DriverPayout: 'restaurantId', LoyaltyCard: 'restaurantId',
+    LoyaltyVisit: 'restaurantId', LoyaltyScanSession: 'restaurantId',
   };
   const field = fields[model];
   const orderScope = { order: { restaurantId: RESTAURANT_ID } };
@@ -21,6 +23,10 @@ export function businessQueryArgs(model: string, operation: string, original: an
     OrderItem: orderScope, OrderTracking: orderScope, DeliveryToken: orderScope,
     ProductOptionGroup: { product: { restaurantId: RESTAURANT_ID } },
     ProductOption: { group: { product: { restaurantId: RESTAURANT_ID } } },
+    DriverStats: { driver: { restaurantId: RESTAURANT_ID } },
+    DriverBillingSettlement: { driver: { restaurantId: RESTAURANT_ID } },
+    LoyaltyStamp: { card: { restaurantId: RESTAURANT_ID } },
+    LoyaltyRedemption: { card: { restaurantId: RESTAURANT_ID } },
   };
   const scope = field ? { [field]: RESTAURANT_ID } : indirect[model];
   if (!scope) return original;
@@ -57,7 +63,16 @@ export async function assertBusinessIdentity(db: any): Promise<void> {
 
 export async function businessPrincipalAllowed(db: any, auth: { sub: string; role: string }): Promise<boolean> {
   if (auth.role === 'CUSTOMER') return true;
-  if (auth.role !== 'RESTAURANT') return false;
-  const row = await db.restaurant.findUnique({ where: { id: RESTAURANT_ID }, select: { userId: true } });
-  return row?.userId === auth.sub;
+  if (auth.role === 'RESTAURANT') {
+    const row = await db.restaurant.findUnique({ where: { id: RESTAURANT_ID }, select: { userId: true } });
+    return row?.userId === auth.sub;
+  }
+  if (auth.role === 'DRIVER') {
+    const driver = await db.driver.findFirst({
+      where: { userId: auth.sub, restaurantId: RESTAURANT_ID },
+      select: { status: true, user: { select: { status: true } } },
+    });
+    return driver?.status === 'ACTIVE' && driver.user.status === 'ACTIVE';
+  }
+  return false;
 }

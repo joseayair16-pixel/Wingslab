@@ -14,6 +14,7 @@ const uploadImageSchema = z.object({
     'product-image',
     'payment-proof',
     'driver-photo',
+    'customer-avatar',
   ] satisfies [MediaUploadKind, ...MediaUploadKind[]]),
   source: z
     .string()

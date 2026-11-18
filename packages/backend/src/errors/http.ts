@@ -19,13 +19,15 @@ export function sendAppError(reply: FastifyReply, error: unknown): FastifyReply 
     });
   }
 
-  const message = error instanceof Error ? error.message : String(error);
+  // Never leak internal error messages (Prisma errors include model names,
+  // fields and query fragments). Log the detail server-side and return a
+  // generic message, mirroring the global error handler's redaction.
   console.error('[sendAppError] Unhandled non-AppError:', error);
   return reply.status(500).send({
     success: false,
     error: {
       code: 'INTERNAL_ERROR',
-      message,
+      message: 'Ocurrió un error interno del servidor.',
     },
   });
 }

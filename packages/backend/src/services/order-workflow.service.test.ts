@@ -1,6 +1,6 @@
 import { OrderStatus } from '@prisma/client';
 
-import { canRestaurantTransitionTo } from './order-workflow.service';
+import { canRestaurantApplyStatus, canRestaurantTransitionTo } from './order-workflow.service';
 
 describe('order workflow transitions', () => {
   it('permite transiciones validas del restaurante', () => {
@@ -13,5 +13,14 @@ describe('order workflow transitions', () => {
     expect(canRestaurantTransitionTo(OrderStatus.PENDING, OrderStatus.READY)).toBe(false);
     expect(canRestaurantTransitionTo(OrderStatus.REJECTED, OrderStatus.CONFIRMED)).toBe(false);
     expect(canRestaurantTransitionTo(OrderStatus.DELIVERED, OrderStatus.CANCELLED)).toBe(false);
+  });
+
+  it('exige el estado de origen correcto para cada botón del panel', () => {
+    expect(canRestaurantApplyStatus(OrderStatus.PENDING, OrderStatus.CONFIRMED)).toBe(true);
+    expect(canRestaurantApplyStatus(OrderStatus.CONFIRMED, OrderStatus.PREPARING)).toBe(true);
+    expect(canRestaurantApplyStatus(OrderStatus.PREPARING, OrderStatus.READY)).toBe(true);
+    expect(canRestaurantApplyStatus(OrderStatus.PENDING, OrderStatus.REJECTED)).toBe(true);
+    expect(canRestaurantApplyStatus(OrderStatus.PENDING, OrderStatus.PREPARING)).toBe(false);
+    expect(canRestaurantApplyStatus(OrderStatus.CONFIRMED, OrderStatus.REJECTED)).toBe(false);
   });
 });

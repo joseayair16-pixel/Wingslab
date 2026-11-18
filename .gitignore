@@ -102,3 +102,7 @@ infrastructure/runtime/runtime.env
 packages/backend/prisma/wingslab-baseline/
 config/wingslab.customer.local.json
 config/wingslab.restaurant.local.json
+
+# Python bytecode
+__pycache__/
+*.pyc

@@ -39,8 +39,10 @@ export default function InstallAppButton() {
 
     setIsIOS(isIosDevice());
 
+    // No se intercepta beforeinstallprompt: llamar preventDefault() sin
+    // prompt() inmediato hace que Chrome emita un aviso en consola en cada
+    // carga. El navegador muestra su propio banner nativo cuando corresponde.
     const onBeforeInstallPrompt = (event: Event) => {
-      event.preventDefault();
       setDeferredPrompt(event as BeforeInstallPromptEvent);
     };
     const onAppInstalled = () => {
@@ -98,7 +100,7 @@ export default function InstallAppButton() {
 
   return (
     <>
-      <div className="fixed inset-x-0 bottom-4 z-[9990] flex justify-center px-4 pb-[env(safe-area-inset-bottom)]">
+      <div className="wl-install-app-banner fixed inset-x-0 bottom-4 z-[9990] flex justify-center px-4 pb-[env(safe-area-inset-bottom)]">
         <div className="flex items-center gap-2.5 rounded-full border border-black/5 bg-white py-2 pl-3 pr-2 shadow-[0_12px_40px_-8px_rgba(15,15,15,0.25)]">
           <span className="flex h-9 w-9 items-center justify-center rounded-full bg-sky-100 text-sky-600">
             <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.8}>

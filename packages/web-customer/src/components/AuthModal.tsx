@@ -1,5 +1,5 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { CalendarDays, Check, Clock3, Loader2, Mail, RefreshCw, X } from 'lucide-react';
+import { CalendarDays, Check, ChevronRight, Clock3, Crown, LockKeyhole, Loader2, Mail, Phone, RefreshCw, UserRound, X } from 'lucide-react';
 import {
   ApiResponse,
   AuthResponse,
@@ -7,7 +7,7 @@ import {
   persistStoredSession,
   requestJson,
 } from '@sadel/shared';
-import { WingsLabLogo as SaDelLogo } from './WingsLabLogo';
+import officialLogo from '../assets/wingslab-wordmark.png';
 
 type AuthMode = 'login' | 'register' | 'recovery';
 type AuthStep = 'welcome' | 'details' | 'contact' | 'request' | 'verify' | 'create-password' | 'new-password';
@@ -550,7 +550,7 @@ export const AuthModal = memo(function AuthModal({ isOpen, onClose, onSuccess, a
             ? 'Elige dónde recibir tu código de verificación.'
             : authStep === 'verify'
               ? authChannel === 'email' ? 'Ingresa el código de 6 dígitos.' : 'Envía el mensaje preparado desde el mismo teléfono.'
-              : 'La usarás para iniciar sesión en SaDeL.',
+              : 'La usarás para iniciar sesión en WingsLab.',
       cta: startingWhatsApp ? 'Preparando verificación...' : 'Continuar',
       submit: verifyingCode ? 'Creando cuenta...' : 'Crear cuenta',
     }
@@ -563,7 +563,7 @@ export const AuthModal = memo(function AuthModal({ isOpen, onClose, onSuccess, a
         ? 'Elige dónde recibir tu código para recuperar la cuenta.'
         : authStep === 'verify'
           ? authChannel === 'email' ? 'Ingresa el código de 6 dígitos.' : 'Envía el mensaje preparado desde ese mismo teléfono.'
-          : 'La usarás para iniciar sesión en SaDeL.',
+          : 'La usarás para iniciar sesión en WingsLab.',
       cta: startingWhatsApp ? 'Preparando verificación...' : 'Continuar',
       submit: verifyingCode ? 'Verificando...' : 'Confirmar contraseña',
     }
@@ -591,8 +591,8 @@ export const AuthModal = memo(function AuthModal({ isOpen, onClose, onSuccess, a
   }
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-md p-4 max-sm:p-0 max-sm:items-end animate-[fadeIn_0.2s_ease-out]">
-      <div className="relative w-full max-w-md overflow-hidden rounded-[32px] bg-white p-6 shadow-[0_32px_64px_-12px_rgba(0,0,0,0.14)] border border-black/[0.04] flex flex-col max-h-[90dvh] max-sm:max-h-[92dvh] max-sm:rounded-t-[32px] max-sm:rounded-b-none pb-[calc(1.5rem+env(safe-area-inset-bottom))] animate-[scaleUp_0.25s_cubic-bezier(0.16,1,0.3,1)] max-sm:animate-[slideUp_0.3s_cubic-bezier(0.16,1,0.3,1)]">
+    <div className="wl-auth fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-md p-4 animate-[fadeIn_0.2s_ease-out]" role="dialog" aria-modal="true" aria-label="Acceso a tu cuenta WingsLab">
+      <div className="wl-auth-sheet relative w-full max-w-md overflow-hidden rounded-[24px] bg-white p-6 shadow-[0_32px_64px_-12px_rgba(0,0,0,0.14)] border border-black/[0.04] flex flex-col max-h-[90dvh] max-sm:max-h-[92dvh] max-sm:rounded-t-[32px] max-sm:rounded-b-none pb-[calc(1.5rem+env(safe-area-inset-bottom))] animate-[scaleUp_0.25s_cubic-bezier(0.16,1,0.3,1)] max-sm:animate-[slideUp_0.3s_cubic-bezier(0.16,1,0.3,1)]">
         {/* Close Button */}
         <button
           type="button"
@@ -604,20 +604,17 @@ export const AuthModal = memo(function AuthModal({ isOpen, onClose, onSuccess, a
         </button>
 
         {/* Content Container */}
-        <div className="overflow-y-auto overflow-x-hidden flex-1 pr-1.5 scrollbar-thin">
-          <div className="text-center pt-2">
-            <SaDelLogo className="mx-auto h-12 w-auto object-contain" />
-            <p className="mt-1.5 text-[11px] uppercase tracking-[0.2em] text-neutral-400 font-semibold">
-              ¡Pídelo por aquí!
-            </p>
+        <div className="wl-auth-scroll overflow-y-auto overflow-x-hidden flex-1 scrollbar-thin">
+          <div className="wl-auth-brand">
+            <img src={officialLogo.src} alt="WingsLab" width={783} height={229} />
           </div>
 
-          <div className="mt-6">
+          <div className="wl-auth-body">
             {authStep === 'welcome' ? (
               <div className="text-center">
-                <h3 className="text-2xl font-bold tracking-[-0.03em] text-neutral-900">¡Hola!</h3>
+                <h3 className="text-2xl font-bold tracking-[-0.03em] text-neutral-900">Bienvenido a WingsLab</h3>
                 <p className="mt-2 text-sm text-neutral-500 leading-relaxed">
-                  Inicia sesión para pedir por WingsLab
+                  Inicia sesión o crea tu cuenta para disfrutar de WingsLab.
                 </p>
 
                 <div className="mt-8 grid gap-3">
@@ -629,7 +626,7 @@ export const AuthModal = memo(function AuthModal({ isOpen, onClose, onSuccess, a
                     }}
                     className="w-full rounded-2xl bg-[#0a0a0a] py-3.5 text-sm font-semibold text-[#ffffff] transition-all duration-200 hover:bg-[#262626] hover:shadow-[0_8px_24px_rgba(10,10,10,0.12)] active:scale-[0.98]"
                   >
-                    Ya tengo cuenta
+                    Iniciar sesión
                   </button>
                   <button
                     type="button"
@@ -639,17 +636,14 @@ export const AuthModal = memo(function AuthModal({ isOpen, onClose, onSuccess, a
                     }}
                     className="w-full rounded-2xl border border-black/[0.08] bg-white py-3.5 text-sm font-semibold text-[#171717] transition-all duration-200 hover:bg-neutral-50 hover:shadow-[0_8px_24px_rgba(0,0,0,0.06)] active:scale-[0.98] shadow-sm"
                   >
-                    Registrarme
+                    Crear cuenta
                   </button>
                 </div>
               </div>
             ) : (
               <div>
-                <div className="mb-6">
-                  <span className="inline-block rounded-full bg-accent-soft/80 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.12em] text-sky-600">
-                    {authMode === 'register' ? 'Nuevo usuario' : authMode === 'recovery' ? 'Restablecer' : 'Miembro'}
-                  </span>
-                  <h3 className="mt-3 text-2xl font-bold tracking-[-0.03em] text-neutral-950">{modeCopy.title}</h3>
+                <div className="wl-auth-intro mb-6">
+                  <h3 className="text-2xl font-bold tracking-[-0.03em] text-neutral-950">{modeCopy.title}</h3>
                   <p className="text-sm text-neutral-500 mt-1.5">{modeCopy.subtitle}</p>
                 </div>
 
@@ -881,7 +875,13 @@ export const AuthModal = memo(function AuthModal({ isOpen, onClose, onSuccess, a
                     </>
                   )}
 
-                  {!verificationSuccessNextStep && (
+                  {!verificationSuccessNextStep && (authMode === 'login' || (authMode === 'register' && authStep === 'details')) && (
+                    <button type="button" className="wl-auth-switch" onClick={() => { setError(''); setAuthMessage(''); setAuthMode(authMode === 'login' ? 'register' : 'login'); setAuthStep(authMode === 'login' ? 'details' : 'request'); }}>
+                      {authMode === 'login' ? <Crown aria-hidden="true" /> : <UserRound aria-hidden="true" />}
+                      <span><strong>{authMode === 'login' ? '¿Aún no tienes cuenta?' : '¿Ya tienes cuenta?'}</strong><small>{authMode === 'login' ? 'Regístrate para comenzar.' : 'Inicia sesión para continuar.'}</small></span><ChevronRight aria-hidden="true" />
+                    </button>
+                  )}
+                  {!verificationSuccessNextStep && !(authMode === 'login' || (authMode === 'register' && authStep === 'details')) && (
                     <button
                       type="button"
                       onClick={goBack}
@@ -1075,12 +1075,12 @@ function EmailOtpPanel({
 
   return (
     <div className="space-y-5">
-      <div className="flex items-start gap-3 rounded-2xl border border-sky-100 bg-sky-50/70 p-3.5 sm:p-4">
-        <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-sky-100 bg-white text-sky-700 shadow-sm">
+      <div className="flex items-start gap-3 rounded-2xl border border-red-100 bg-red-50/70 p-3.5 sm:p-4">
+        <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-red-100 bg-white text-red-700 shadow-sm">
           <Mail className="h-[18px] w-[18px]" strokeWidth={1.9} aria-hidden="true" />
         </span>
         <div className="min-w-0 flex-1 pt-0.5">
-          <p className="text-[11px] font-bold uppercase tracking-[0.1em] text-sky-800">Enviado a</p>
+          <p className="text-[11px] font-bold uppercase tracking-[0.1em] text-red-800">Enviado a</p>
           <p className="mt-0.5 break-all text-sm font-bold leading-5 text-neutral-950">{email}</p>
         </div>
       </div>
@@ -1093,7 +1093,7 @@ function EmailOtpPanel({
           </span>
         </div>
 
-        <div className={`relative rounded-2xl transition-shadow ${isCodeFocused ? 'ring-4 ring-sky-500/10' : ''}`}>
+        <div className={`relative rounded-2xl transition-shadow ${isCodeFocused ? 'ring-4 ring-red-500/10' : ''}`}>
           <div aria-hidden="true" className="grid grid-cols-6 gap-2">
             {Array.from({ length: 6 }, (_, index) => {
               const digit = code[index] ?? '';
@@ -1104,7 +1104,7 @@ function EmailOtpPanel({
                 <div
                   key={index}
                   className={`flex h-[54px] min-w-0 items-center justify-center rounded-xl border font-mono text-[22px] font-bold tabular-nums transition-all duration-150 sm:h-14 ${isActive
-                    ? 'border-sky-500 bg-white text-neutral-950 shadow-[0_2px_8px_rgba(14,165,233,0.12)] ring-2 ring-sky-500/15'
+                    ? 'border-red-500 bg-white text-neutral-950 shadow-[0_2px_8px_rgba(14,165,233,0.12)] ring-2 ring-red-500/15'
                     : isComplete
                       ? 'border-emerald-200 bg-emerald-50/70 text-neutral-950'
                       : digit
@@ -1170,7 +1170,7 @@ function EmailOtpPanel({
             type="button"
             onClick={onRetry}
             disabled={starting}
-            className="inline-flex min-h-9 items-center gap-1.5 self-start font-bold text-sky-700 transition-colors hover:text-sky-800 focus-visible:rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-offset-2 disabled:cursor-wait disabled:text-neutral-400 min-[420px]:self-auto"
+            className="inline-flex min-h-9 items-center gap-1.5 self-start font-bold text-red-700 transition-colors hover:text-red-800 focus-visible:rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-2 disabled:cursor-wait disabled:text-neutral-400 min-[420px]:self-auto"
           >
             {starting ? <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" /> : <RefreshCw className="h-3.5 w-3.5" aria-hidden="true" />}
             {starting ? 'Enviando…' : 'Reenviar'}
@@ -1307,9 +1307,10 @@ function Field({
           : {};
 
   return (
-    <label className="grid gap-1.5 text-xs text-neutral-600 font-medium">
+    <label className="wl-auth-field grid gap-1.5 text-xs text-neutral-600 font-medium">
       <span>{label}</span>
       <div className="relative">
+        <span className="wl-auth-field-icon" aria-hidden="true">{isPassword ? <LockKeyhole /> : mask ? <Phone /> : type === 'email' ? <Mail /> : <UserRound />}</span>
         <input
           type={isPassword && showPassword ? 'text' : type}
           value={mask ? mask(value) : value}
@@ -1326,7 +1327,6 @@ function Field({
             type="button"
             onClick={() => setShowPassword((current) => !current)}
             aria-label={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
-            tabIndex={-1}
             className="absolute right-2 inset-y-0 my-auto flex h-8 w-8 items-center justify-center rounded-full text-neutral-400 transition-colors duration-200 hover:bg-neutral-100 hover:text-neutral-800 active:scale-95 focus-visible:text-neutral-800"
           >
             {showPassword ? <EyeSlashIcon /> : <EyeIcon />}
@@ -1642,7 +1642,7 @@ function Callout({
   children: React.ReactNode;
 }) {
   const styles = {
-    info: 'border-sky-100 bg-sky-50 text-sky-700',
+    info: 'border-red-100 bg-red-50 text-red-700',
     success: 'border-emerald-100 bg-emerald-50 text-emerald-700',
     danger: 'border-rose-100 bg-rose-50 text-rose-700',
   };

@@ -8,8 +8,6 @@ import {
   PaymentStatus,
 } from '@prisma/client';
 import { AppError, isAppError } from '../errors/app-error';
-import { assertManualOrderAction } from '../config/order-actions';
-import { MANUAL_ORDER_ACTIONS } from '@sadel/shared';
 import {
   driverScopedOrderSelect,
   restaurantOrderWorkflowSelect,
@@ -346,6 +344,19 @@ export function canRestaurantTransitionTo(
   return restaurantStatusTransitions[currentStatus].includes(nextStatus);
 }
 
+const restaurantExpectedFromStatuses: Partial<Record<OrderStatus, OrderStatus[]>> = {
+  [OrderStatus.CONFIRMED]: [OrderStatus.PENDING],
+  [OrderStatus.PREPARING]: [OrderStatus.CONFIRMED],
+  [OrderStatus.READY]: [OrderStatus.PREPARING],
+  [OrderStatus.REJECTED]: [OrderStatus.PENDING],
+  [OrderStatus.CANCELLED]: [OrderStatus.PENDING, OrderStatus.CONFIRMED, OrderStatus.PREPARING, OrderStatus.READY],
+};
+
+export function canRestaurantApplyStatus(currentStatus: OrderStatus, nextStatus: OrderStatus): boolean {
+  return restaurantExpectedFromStatuses[nextStatus]?.includes(currentStatus) === true &&
+    canRestaurantTransitionTo(currentStatus, nextStatus);
+}
+
 export async function getRestaurantScopedOrder(
   prisma: PrismaClient,
   restaurantUserId: string,
@@ -374,9 +385,6 @@ export async function updateOrderStatusByRestaurant({
   cancellationReason,
   cancelledBy,
 }: RestaurantOrderActionParams) {
-  const manualAction = Object.keys(MANUAL_ORDER_ACTIONS).find(key =>
-    MANUAL_ORDER_ACTIONS[key as keyof typeof MANUAL_ORDER_ACTIONS].to === nextStatus);
-  assertManualOrderAction(orderId, manualAction || '');
   const updatedOrder = await prisma.$transaction(async (tx) => {
     const order = await tx.order.findFirst({
       where: { id: orderId, restaurant: { userId: restaurantUserId } },
@@ -387,7 +395,7 @@ export async function updateOrderStatusByRestaurant({
       throw createDomainError(404, 'ORDER_NOT_FOUND', 'No se encontro el pedido.');
     }
 
-    if (order.status !== MANUAL_ORDER_ACTIONS[manualAction as keyof typeof MANUAL_ORDER_ACTIONS].from) {
+    if (!canRestaurantApplyStatus(order.status, nextStatus)) {
       throw createDomainError(409, 'INVALID_ORDER_TRANSITION', 'El estado actual no permite esta acción manual.');
     }
 

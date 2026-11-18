@@ -92,7 +92,7 @@ services:
       retries: 20
 
   edge:
-    image: ${WINGSLAB_EDGE_IMAGE:?Approved local Alpine image required}
+    image: ${WINGSLAB_EDGE_NODE_IMAGE:-wingslab-node@sha256:75c03198160d884d61ac1609ae3895d10932c0c4a339f4fa4881bb67628123f5}
     pull_policy: never
     profiles: [approved-2b]
     labels: *ownership
@@ -106,7 +106,7 @@ services:
       net.ipv6.conf.all.forwarding: "0"
       net.ipv6.conf.all.disable_ipv6: "1"
     tmpfs: ["/tmp:rw,nosuid,nodev,size=16m,uid=1000,gid=1000"]
-    entrypoint: ["/bin/sh", "/edge/start-edge.sh"]
+    entrypoint: ["node", "/edge/relay.cjs"]
     volumes:
       - type: bind
         source: ./edge
@@ -114,10 +114,11 @@ services:
         read_only: true
         bind: { create_host_path: false }
     ports:
-      # Backend, customer and restaurant authorized; driver remains closed.
+      # Backend, customer, restaurant and driver authorized; admin stays closed.
       - "127.0.0.1:3101:3101"
       - "127.0.0.1:3103:3103"
       - "127.0.0.1:3102:3102"
+      - "127.0.0.1:3104:3104"
       - "127.0.0.1:15432:15432" # PostgreSQL (host tooling only)
       - "127.0.0.1:16379:16379" # Redis (host tooling only)
     networks:
@@ -203,6 +204,8 @@ services:
 
   driver:
     <<: *application
+    image: ${WINGSLAB_DRIVER_IMAGE:-wingslab-driver:pending-phase-3c}
+    profiles: [approved-driver]
     command: ["node", "scripts/wingslab-run.cjs", "driver", "start"]
     tmpfs:
       - /tmp:rw,nosuid,nodev,size=256m,uid=1000,gid=1000

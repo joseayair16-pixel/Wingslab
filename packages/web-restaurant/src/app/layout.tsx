@@ -43,23 +43,10 @@ export default function RootLayout({
       <head>
         <script
           dangerouslySetInnerHTML={{
-            __html: `(function(){
-  try {
-    // Hard reset: la PWA SIEMPRE arranca en modo claro, sin importar el modo
-    // del sistema ni valores legados de localStorage. El modo oscuro es por
-    // sesión: solo se mantiene mientras el usuario no cierre/recargue la app.
-    var d = document.documentElement;
-    d.classList.remove('dark');
-    if (window.localStorage) {
-      try { window.localStorage.removeItem('darkMode'); } catch (e) {}
-    }
-    var cs = document.querySelector('meta[name="color-scheme"]');
-    if (cs) cs.setAttribute('content', 'light');
-  } catch (e) {}
-})();`,
+            __html: `(function(){try{var d=document.documentElement,m=matchMedia('(prefers-color-scheme: dark)'),p='system';try{p=localStorage.getItem('wingslab.restaurant.theme')||'system'}catch(e){};function apply(){var dark=p==='dark'||(p==='system'&&m.matches);d.classList.toggle('dark',dark);d.style.colorScheme=dark?'dark':'light'}apply();m.addEventListener&&m.addEventListener('change',apply);window.addEventListener('wingslab:restaurant-theme',function(e){p=e.detail;apply()});window.addEventListener('storage',function(e){if(e.key==='wingslab.restaurant.theme'){p=e.newValue||'system';apply()}})}catch(e){}})();`,
           }}
         />
-        <meta name="color-scheme" content="light" />
+        <meta name="color-scheme" content="light dark" />
         <meta name="theme-color" content="#f6f6f4" />
       </head>
       <body>

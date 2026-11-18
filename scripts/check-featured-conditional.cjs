@@ -1,0 +1,8 @@
+// Clone the menu response in memory; no screenshots or backend writes.
+const {createBrowser}=require('./wingslab-visual-cdp.cjs');
+const assert=require('assert/strict'),path=require('path');
+const root=path.resolve(__dirname,'..'),run=String(Date.now());
+(async()=>{for(const promoted of [false,true]){
+ async function route(req){assert(['GET','HEAD','OPTIONS'].includes(req.method));const r=await fetch(req.url,{signal:AbortSignal.timeout(10000)});if(new URL(req.url).pathname.replace(/^\/api(?=\/)/,'')==='/menu'){const result=await r.json();for(const category of result.data.categories)for(const product of category.products){product.discountPrice=null;product.promoType=null;}if(promoted){const product=result.data.categories[0].products[0];product.discountPrice=Number(product.price)*.9;}return{statusCode:200,headers:{'content-type':'application/json','access-control-allow-origin':'*'},body:JSON.stringify(result)};}return{statusCode:r.status,headers:Object.fromEntries(r.headers),body:Buffer.from(await r.arrayBuffer())};}
+ const b=createBrowser({profileDir:path.join(root,'tmp/featured-profiles',run,String(promoted)),origins:['http://127.0.0.1:3101','http://127.0.0.1:3103'],width:390,height:844,route});try{await b.init();await b.open('http://127.0.0.1:3103/',1800);await b.waitFor(()=>b.evaluate(`!!document.querySelector('[data-wl-product]')`));assert.equal(await b.evaluate(`!!document.querySelector('#wl-featured')`),promoted);if(promoted)assert(await b.evaluate(`document.querySelectorAll('.wl-featured-card').length>0`));assert(!b.requests.some(r=>!['GET','HEAD','OPTIONS'].includes(r.method)));console.log('PASS featured',promoted?'present':'absent');}finally{await b.close();}
+}})().catch(e=>{console.error(e);process.exitCode=1;});

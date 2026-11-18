@@ -41,6 +41,7 @@ export class ApiRequestError extends Error {
 export type AuthUser = {
   id: string;
   name: string;
+  lastName?: string | null;
   phone: string;
   role: 'ADMIN' | 'RESTAURANT' | 'CUSTOMER' | 'DRIVER';
   region: string;
@@ -48,6 +49,7 @@ export type AuthUser = {
   profilePhoto?: string | null;
   dateOfBirth?: string;
   createdAt?: string;
+  mustChangePassword?: boolean;
 };
 
 export type SendCodeResponse = {
@@ -249,6 +251,21 @@ export function getRequestErrorMessage(
   return fallback;
 }
 
+/**
+ * Only accept a same-origin absolute path as a stored API base. A value like
+ * `//evil.com` would make `fetch` send the Bearer token to another origin.
+ */
+function safeStoredApiBase(value: string | null): string | null {
+  if (!value) return null;
+  if (!/^\/(?!\/)/.test(value) || value.includes('\\') || value.includes('..')) return null;
+  try {
+    const url = new URL(value, window.location.origin);
+    return url.origin === window.location.origin ? `${url.pathname}${url.search}${url.hash}` : null;
+  } catch {
+    return null;
+  }
+}
+
 export function readStoredSession(storageKey: string): {
   apiBase: string | null;
   token: string | null;
@@ -259,7 +276,7 @@ export function readStoredSession(storageKey: string): {
     if (typeof window === 'undefined' || !window.localStorage) {
       return { apiBase: null, token: null, refreshToken: null, user: null };
     }
-    const apiBase = window.localStorage.getItem(`${storageKey}.apiBase`);
+    const apiBase = safeStoredApiBase(window.localStorage.getItem(`${storageKey}.apiBase`));
     const token = window.localStorage.getItem(`${storageKey}.token`);
     const refreshToken = window.localStorage.getItem(`${storageKey}.refreshToken`);
     const serializedUser = window.localStorage.getItem(`${storageKey}.user`);

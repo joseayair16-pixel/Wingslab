@@ -1,7 +1,7 @@
 'use client';
 
-import { memo, useState } from 'react';
-import { WingsLabLogo as SaDelLogo } from './WingsLabLogo';
+import { memo } from 'react';
+import redWordmark from '../assets/wingslab-wordmark-red.png';
 
 export const SaDelLoader = memo(function SaDelLoader({
   className = '',
@@ -14,15 +14,7 @@ export const SaDelLoader = memo(function SaDelLoader({
   size?: 'sm' | 'md' | 'lg';
   fullScreen?: boolean;
 }) {
-  const [logoFailed, setLogoFailed] = useState(false);
-
   const logoHeightClass = size === 'sm' ? 'h-7' : size === 'lg' ? 'h-16' : 'h-11';
-  const textClass =
-    size === 'sm'
-      ? 'text-xl font-black tracking-tight text-neutral-900'
-      : size === 'lg'
-        ? 'text-4xl font-black tracking-tight text-neutral-900'
-        : 'text-3xl font-black tracking-tight text-neutral-900';
 
   return (
     <div
@@ -32,14 +24,11 @@ export const SaDelLoader = memo(function SaDelLoader({
       role={fullScreen ? 'status' : undefined}
       aria-live="polite"
     >
-      {logoFailed ? (
-        <span className={textClass}>SaDeL</span>
-      ) : (
-        <SaDelLogo
-          onError={() => setLogoFailed(true)}
-          className={`sadel-loader-logo animate-sadel-breathe select-none pointer-events-none ${logoHeightClass} w-auto`}
-        />
-      )}
+      <img
+        src={redWordmark.src}
+        alt="WingsLab"
+        className={`sadel-loader-logo animate-sadel-breathe select-none pointer-events-none ${logoHeightClass} w-auto`}
+      />
       {label ? (
         <p className="text-sm font-medium text-neutral-500">{label}</p>
       ) : (
@@ -48,7 +37,7 @@ export const SaDelLoader = memo(function SaDelLoader({
           role="progressbar"
           aria-label="Cargando"
         >
-          <div className="h-full w-1/3 rounded-full bg-gradient-to-r from-sky-500 to-blue-600 animate-sadel-progress" />
+          <div className="h-full w-1/3 rounded-full bg-gradient-to-r from-[#f20d12] to-[#a8070b] animate-sadel-progress" />
         </div>
       )}
     </div>

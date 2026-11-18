@@ -85,12 +85,10 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     logger: NODE_ENV === 'development',
     bodyLimit: 10485760,
     requestTimeout: 30000,
-    // Behind a reverse proxy (Railway/cloud) all requests share the proxy IP.
-    // Confiamos exactamente un salto (el proxy inmediato) para que request.ip
-    // resuelva el IP real del cliente; cadenas X-Forwarded-For fabricadas no
-    // pueden inventar direcciones extra (en Fastify 5 el formato numérico de
-    // trustProxy cambió de semántica y ya no confía, por eso la función).
-    trustProxy: (_address, hop) => hop === 0,
+    // Only the WingsLab edge relay is trusted to set X-Forwarded-For. Trusting
+    // every hop-0 peer would let a client that reaches 3101 directly forge
+    // `X-Forwarded-For: 127.0.0.1` and bypass every route rate limit.
+    trustProxy: (address, hop) => hop === 0 && address === '172.30.240.30',
     serverFactory: (handler) => {
       httpServer.on('request', (req, res) => {
         if (req.url?.startsWith('/socket.io')) {

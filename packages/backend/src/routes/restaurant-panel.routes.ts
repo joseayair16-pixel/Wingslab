@@ -1,8 +1,7 @@
-import { UserRole } from '@prisma/client';
+import { Prisma, UserRole } from '@prisma/client';
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import bcryptjs from 'bcryptjs';
-import { MENU_THEME_IDS } from '@sadel/shared';
 
 import { prisma } from '../config/database';
 import { authenticate, authorize, getAuthenticatedUser } from '../middleware/auth';
@@ -12,12 +11,16 @@ import { urlToKey, deleteImages, uploadImage } from '../services/storage.service
 import { isAiImageConfigured, assertAiImageQuota, getAiImageDailyCap, generateFoodImage } from '../services/ai-image.service';
 import { invalidateCachePattern } from '../services/cache.service';
 import { buildRestaurantInsights } from '../services/restaurant-insights';
+import { calendarReportRange } from '../services/report-calendar';
 import { RESTAURANT_ID } from '../config/single-restaurant';
 import { audienceCount, cancelCampaign, createCampaign, duplicateCampaign, getLoyaltyConfiguration, listCampaigns, prepareCampaign, saveLoyaltyConfiguration, updateCampaign } from '../services/restaurant-marketing.service';
+import { previewInPerson, quoteInPerson, recentVisits, registerInPerson, voidInPerson } from '../services/loyalty-inperson.service';
 
 const restaurantProfileSchema = z.object({
   name: z.string().min(3, 'El nombre es obligatorio.').optional(),
   description: z.string().min(10, 'La descripcion es obligatoria.').optional(),
+  seoTitle: z.string().trim().max(65, 'El título SEO no debe superar 65 caracteres.').nullable().optional(),
+  seoDescription: z.string().trim().max(160, 'La descripción SEO no debe superar 160 caracteres.').nullable().optional(),
   address: z.string().min(5, 'La direccion es obligatoria.').optional(),
   latitude: z.number().optional(),
   longitude: z.number().optional(),
@@ -29,8 +32,6 @@ const restaurantProfileSchema = z.object({
   supportsNetworkDelivery: z.boolean().optional(),
   pickupOnly: z.boolean().optional(),
   autoOpenEnabled: z.boolean().optional(),
-  accentColor: z.string().regex(/^#[0-9a-fA-F]{6}$/, 'El color debe ser un hex válido (#RRGGBB).').nullable().optional(),
-  menuTheme: z.string().refine((id) => id === null || MENU_THEME_IDS.includes(id), { message: 'El tema de fondo no es válido.' }).nullable().optional(),
   deliveryFee: z.number().nonnegative().nullable().optional(),
   deliveryRadius: z.number().nonnegative().optional(),
   deliveryPricingModel: z.enum(['fixed', 'distance']).optional(),
@@ -105,6 +106,7 @@ const operatingHoursSchema = z
 const categorySchema = z.object({
   name: z.string().min(2, 'El nombre es obligatorio.'),
   description: z.string().max(300, 'La descripcion es demasiado larga.').nullable().optional(),
+  icon: z.string().max(120).nullable().optional(),
   order: z.number().int().min(0).default(0),
 });
 
@@ -201,8 +203,9 @@ const promoCodeSchemaBase = z.object({
     .trim()
     .transform((v) => v.toUpperCase()),
   description: z.string().max(140).nullish(),
-  type: z.enum(['PERCENT', 'AMOUNT', 'FREE_DELIVERY']),
+  type: z.enum(['PERCENT', 'AMOUNT', 'FREE_DELIVERY', 'FREE_PRODUCT']),
   value: z.number().positive('El valor debe ser mayor a cero.'),
+  giftProductId: z.string().min(1).nullable().optional(),
   minOrderAmount: z.number().nonnegative().nullable().optional(),
   validFrom: z.string().datetime().nullish().transform((v) => (v ? new Date(v) : undefined)),
   validUntil: z.string().datetime().nullish().transform((v) => (v ? new Date(v) : undefined)),
@@ -213,8 +216,9 @@ const promoCodeSchemaBase = z.object({
 });
 
 function refinePromoCodeConsistency(data: {
-  type?: 'PERCENT' | 'AMOUNT' | 'FREE_DELIVERY';
+  type?: 'PERCENT' | 'AMOUNT' | 'FREE_DELIVERY' | 'FREE_PRODUCT';
   value?: number;
+  giftProductId?: string | null;
   minOrderAmount?: number | null;
   validFrom?: Date | undefined;
   validUntil?: Date | undefined;
@@ -231,6 +235,13 @@ function refinePromoCodeConsistency(data: {
       code: 'custom',
       path: ['value'],
       message: 'El monto del cupon no puede ser mayor a la compra minima.',
+    });
+  }
+  if (data.type === 'FREE_PRODUCT' && !data.giftProductId) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['giftProductId'],
+      message: 'Selecciona el producto que se regalará.',
     });
   }
   if (data.validFrom && data.validUntil && data.validUntil <= data.validFrom) {
@@ -269,8 +280,6 @@ async function getOwnedRestaurant(userId: string) {
   const restaurant = await prisma.restaurant.findUnique({
     where: { userId },
   });
-  if (restaurant) {
-  }
   return restaurant;
 }
 
@@ -340,15 +349,27 @@ export async function registerRestaurantPanelRoutes(fastify: FastifyInstance): P
     restaurant.addHook('preHandler', requireRestaurantOperable);
 
     restaurant.get('/restaurant-panel/reportes', async (request, reply) => {
-      const parsed = z.object({ days: z.coerce.number().int().refine(n => [1, 7, 30, 90].includes(n)).default(30) }).safeParse(request.query);
+      const parsed = z.object({ days: z.coerce.number().int().refine(n => [1, 7, 30, 90].includes(n)).default(30), period: z.enum(['today']).optional(), date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(), weekOffset: z.coerce.number().int().min(0).max(6).optional() }).refine(v => !(v.date && v.weekOffset !== undefined)).safeParse(request.query);
       if (!parsed.success) return reply.status(400).send({ success: false, error: { code: 'INVALID_PERIOD', message: 'Elige un periodo de 1, 7, 30 o 90 días.' } });
-      const from = new Date(Date.now() - parsed.data.days * 86400000);
+      const now = new Date();
+      let from: Date;
+      let to = now;
+      try {
+        if (parsed.data.date || parsed.data.weekOffset !== undefined) {
+          const range = calendarReportRange(now, parsed.data.date, parsed.data.weekOffset);
+          from = range.from;
+          to = range.to;
+        } else if (parsed.data.period === 'today') {
+          const localDate = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Mexico_City', year: 'numeric', month: '2-digit', day: '2-digit' }).format(now);
+          from = calendarReportRange(now, localDate).from;
+        } else from = new Date(now.getTime() - parsed.data.days * 86400000);
+      } catch { return reply.status(400).send({ success: false, error: { code: 'INVALID_PERIOD', message: 'Fecha no válida.' } }); }
       const rows = await prisma.order.findMany({
-        where: { restaurantId: RESTAURANT_ID, createdAt: { gte: from } },
+        where: { restaurantId: RESTAURANT_ID, createdAt: { gte: from, lt: to } },
         select: { id: true, customerId: true, status: true, totalAmount: true, createdAt: true, preparationStartedAt: true,
           inTransitAt: true, deliveredAt: true, promoCode: true, promoDiscountAmount: true,
           items: { select: { quantity: true, subtotal: true, product: { select: { id: true, name: true } } } } },
-        orderBy: { createdAt: 'desc' }, take: 10000,
+        orderBy: { createdAt: 'desc' },
       });
       const buyerIds = [...new Set(rows.filter(order => ['DELIVERED', 'COMPLETED', 'PICKED_UP'].includes(order.status)).map(order => order.customerId))];
       const history = buyerIds.length ? await prisma.order.groupBy({
@@ -356,7 +377,7 @@ export async function registerRestaurantPanelRoutes(fastify: FastifyInstance): P
         _count: { _all: true },
       }) : [];
       const lifetimeOrderCounts = Object.fromEntries(history.map(row => [row.customerId, row._count._all]));
-      return reply.send({ success: true, data: buildRestaurantInsights(rows as any, parsed.data.days, new Date(), lifetimeOrderCounts) });
+      return reply.send({ success: true, data: buildRestaurantInsights(rows as any, parsed.data.date ? 1 : parsed.data.weekOffset !== undefined ? 7 : parsed.data.days, to, lifetimeOrderCounts, from) });
     });
 
     restaurant.get('/restaurant-panel/clientes', async (request, reply) => {
@@ -385,6 +406,75 @@ export async function registerRestaurantPanelRoutes(fastify: FastifyInstance): P
           customerType: orderCount >= 2 ? 'RECURRENT' : orderCount === 1 ? 'NEW' : 'NO_COMPLETED_ORDERS', recentOrders: c.orders };
       }).filter(c => c.orderCount > 0);
       return reply.send({ success: true, data });
+    });
+
+    // Directorio paginado: incluye cuentas registradas sin pedidos. La consulta
+    // anterior se conserva para clientes existentes del API.
+    restaurant.get('/restaurant-panel/directorio-clientes', async (request, reply) => {
+      const parsed = z.object({ search: z.string().trim().max(80).default(''), status: z.enum(['all', 'ACTIVE', 'SUSPENDED', 'INACTIVE']).default('all'), page: z.coerce.number().int().min(1).max(10000).default(1), limit: z.coerce.number().int().min(1).max(50).default(20) }).safeParse(request.query);
+      if (!parsed.success) return reply.status(400).send({ success: false, error: { code: 'INVALID_QUERY', message: 'Filtros de clientes no válidos.' } });
+      const { search, status, page, limit } = parsed.data;
+      const where: Prisma.CustomerWhereInput = { user: { role: 'CUSTOMER', ...(status === 'all' ? {} : { status }), ...(search ? { OR: [{ name: { contains: search, mode: 'insensitive' } }, { lastName: { contains: search, mode: 'insensitive' } }, { email: { contains: search, mode: 'insensitive' } }, { phone: { contains: search } }] } : {}) } };
+      const [total, customers] = await Promise.all([
+        prisma.customer.count({ where }),
+        prisma.customer.findMany({ where, select: { id: true, user: { select: { name: true, lastName: true, email: true, phone: true, status: true, createdAt: true } } }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], skip: (page - 1) * limit, take: limit }),
+      ]);
+      const ids = customers.map(c => c.id);
+      const aggregates = ids.length ? await prisma.order.groupBy({ by: ['customerId'], where: { restaurantId: RESTAURANT_ID, customerId: { in: ids }, status: { in: ['DELIVERED', 'COMPLETED', 'PICKED_UP'] } }, _count: { _all: true }, _sum: { totalAmount: true }, _max: { createdAt: true } }) : [];
+      const summary = new Map(aggregates.map(row => [row.customerId, row]));
+      return reply.send({ success: true, data: { items: customers.map(customer => { const stats = summary.get(customer.id); return { ...customer, orderCount: stats?._count._all ?? 0, totalSpent: stats?._sum.totalAmount ?? 0, lastOrderAt: stats?._max.createdAt ?? null }; }), page, limit, total, totalPages: Math.max(1, Math.ceil(total / limit)) } });
+    });
+
+    restaurant.get('/restaurant-panel/directorio-clientes/:id/pedidos', async (request, reply) => {
+      const params = z.object({ id: z.string().min(1).max(100) }).safeParse(request.params);
+      const query = z.object({ page: z.coerce.number().int().min(1).max(10000).default(1), limit: z.coerce.number().int().min(1).max(50).default(10) }).safeParse(request.query);
+      if (!params.success || !query.success) return reply.status(400).send({ success: false, error: { code: 'INVALID_QUERY', message: 'Consulta no válida.' } });
+      const customer = await prisma.customer.findFirst({ where: { id: params.data.id, user: { role: 'CUSTOMER' } }, select: { id: true } });
+      if (!customer) return reply.status(404).send({ success: false, error: { code: 'CUSTOMER_NOT_FOUND', message: 'No se encontró al cliente.' } });
+      const where = { customerId: customer.id, restaurantId: RESTAURANT_ID };
+      const [total, items] = await Promise.all([prisma.order.count({ where }), prisma.order.findMany({ where, select: { id: true, orderReference: true, dailyCounter: true, status: true, totalAmount: true, createdAt: true }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], skip: (query.data.page - 1) * query.data.limit, take: query.data.limit })]);
+      return reply.send({ success: true, data: { items, total, page: query.data.page, totalPages: Math.max(1, Math.ceil(total / query.data.limit)) } });
+    });
+
+    restaurant.post('/restaurant-panel/directorio-clientes/:id/suspender', async (request, reply) => {
+      const params = z.object({ id: z.string().min(1).max(100) }).safeParse(request.params);
+      const body = z.object({ reason: z.string().trim().min(5).max(500) }).safeParse(request.body);
+      if (!params.success || !body.success) return reply.status(400).send({ success: false, error: { code: 'INVALID_PAYLOAD', message: 'Indica un motivo de al menos 5 caracteres.' } });
+      const actor = getAuthenticatedUser(request);
+      const result = await prisma.$transaction(async tx => {
+        const customer = await tx.customer.findFirst({ where: { id: params.data.id, user: { role: 'CUSTOMER' } }, select: { userId: true } });
+        if (!customer) return 'not_found';
+        const updated = await tx.user.updateMany({ where: { id: customer.userId, role: 'CUSTOMER', status: 'ACTIVE' }, data: { status: 'SUSPENDED' } });
+        if (updated.count !== 1) return 'not_active';
+        const suspended = await tx.user.findUniqueOrThrow({ where: { id: customer.userId }, select: { updatedAt: true } });
+        await tx.auditLog.create({ data: { userId: actor.sub, action: 'CUSTOMER_SUSPENDED_BY_RESTAURANT', entity: 'Customer', entityId: params.data.id, oldValue: JSON.stringify({ status: 'ACTIVE' }), newValue: JSON.stringify({ status: 'SUSPENDED', reason: body.data.reason, updatedAt: suspended.updatedAt.toISOString() }), ipAddress: request.ip } });
+        return 'ok';
+      });
+      if (result === 'not_found') return reply.status(404).send({ success: false, error: { code: 'CUSTOMER_NOT_FOUND', message: 'No se encontró al cliente.' } });
+      if (result !== 'ok') return reply.status(409).send({ success: false, error: { code: 'CUSTOMER_NOT_ACTIVE', message: 'La cuenta ya no está activa. Actualiza el directorio.' } });
+      return reply.send({ success: true, data: { status: 'SUSPENDED' } });
+    });
+
+    restaurant.post('/restaurant-panel/directorio-clientes/:id/reactivar', async (request, reply) => {
+      const params = z.object({ id: z.string().min(1).max(100) }).safeParse(request.params);
+      if (!params.success) return reply.status(400).send({ success: false, error: { code: 'INVALID_PAYLOAD', message: 'Cliente no válido.' } });
+      const actor = getAuthenticatedUser(request);
+      const result = await prisma.$transaction(async tx => {
+        const customer = await tx.customer.findFirst({ where: { id: params.data.id, user: { role: 'CUSTOMER' } }, select: { userId: true, isSuspendedByDebt: true, user: { select: { status: true, updatedAt: true } } } });
+        if (!customer) return 'not_found';
+        if (customer.isSuspendedByDebt || customer.user.status !== 'SUSPENDED') return 'blocked';
+        const audit = await tx.auditLog.findFirst({ where: { entity: 'Customer', entityId: params.data.id }, select: { action: true, newValue: true }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }] });
+        let recorded: unknown;
+        try { recorded = JSON.parse(audit?.newValue || 'null')?.updatedAt; } catch { return 'blocked'; }
+        if (audit?.action !== 'CUSTOMER_SUSPENDED_BY_RESTAURANT' || recorded !== customer.user.updatedAt.toISOString()) return 'blocked';
+        const updated = await tx.user.updateMany({ where: { id: customer.userId, role: 'CUSTOMER', status: 'SUSPENDED', updatedAt: customer.user.updatedAt, customer: { isSuspendedByDebt: false } }, data: { status: 'ACTIVE' } });
+        if (updated.count !== 1) return 'blocked';
+        await tx.auditLog.create({ data: { userId: actor.sub, action: 'CUSTOMER_REACTIVATED_BY_RESTAURANT', entity: 'Customer', entityId: params.data.id, oldValue: JSON.stringify({ status: 'SUSPENDED' }), newValue: JSON.stringify({ status: 'ACTIVE' }), ipAddress: request.ip } });
+        return 'ok';
+      });
+      if (result === 'not_found') return reply.status(404).send({ success: false, error: { code: 'CUSTOMER_NOT_FOUND', message: 'No se encontró al cliente.' } });
+      if (result !== 'ok') return reply.status(409).send({ success: false, error: { code: 'REACTIVATION_REQUIRES_REVIEW', message: 'No se puede reactivar automáticamente: la suspensión tiene otra causa o la cuenta cambió. Requiere revisión.' } });
+      return reply.send({ success: true, data: { status: 'ACTIVE' } });
     });
 
     const campaignInputBase = z.object({ title: z.string().trim().min(3).max(65), body: z.string().trim().min(3).max(160),
@@ -426,11 +516,102 @@ export async function registerRestaurantPanelRoutes(fastify: FastifyInstance): P
       const params = z.object({ id: z.string().uuid() }).safeParse(request.params); if (!params.success) return reply.status(400).send({ success: false, error: { code: 'INVALID_ID', message: 'Campaña no válida.' } });
       try { return reply.send({ success: true, data: await cancelCampaign(params.data.id) }); } catch (error: any) { return reply.status(error.statusCode || 400).send({ success: false, error: { code: error.code || 'CAMPAIGN_CANCEL_FAILED', message: error.message } }); }
     });
-    restaurant.get('/restaurant-panel/lealtad', async (_request, reply) => reply.send({ success: true, data: await getLoyaltyConfiguration(), redemptionsEnabled: false }));
+    restaurant.get('/restaurant-panel/lealtad', async (_request, reply) => { const data = await getLoyaltyConfiguration(); return reply.send({ success: true, data, redemptionsEnabled: data.redemptionReady === true }); });
     restaurant.put('/restaurant-panel/lealtad', async (request, reply) => {
-      const parsed = z.object({ enabled: z.boolean(), pointsPer100: z.number().positive().max(100), rewardPoints: z.number().int().positive().max(100000), rewardAmount: z.number().positive().max(5000) }).safeParse(request.body);
+      const parsed = z.object({ enabled: z.boolean(), pointsPer100: z.number().positive().max(100).default(1), rewardPoints: z.number().int().positive().max(100000).default(100), rewardAmount: z.number().positive().max(5000).default(10), stampGoal: z.number().int().min(2).max(30), rewardType: z.enum(['DISCOUNT','PRODUCT','GIFT']).default('DISCOUNT'), rewardKind: z.enum(['AMOUNT','PERCENT','PRODUCT']), rewardValue: z.number().int().positive().max(500000).nullable(), rewardProductId: z.string().min(1).nullable(), rewardDescription: z.string().trim().min(3).max(200), stampTerms: z.string().trim().max(1000).default('') }).refine(value => value.rewardKind === 'PRODUCT' ? !!value.rewardProductId && value.rewardValue === null : value.rewardProductId === null && value.rewardValue !== null && (value.rewardKind !== 'PERCENT' || value.rewardValue <= 100), 'Revisa el valor o producto de la recompensa.').safeParse(request.body);
       if (!parsed.success) return reply.status(400).send({ success: false, error: { code: 'INVALID_LOYALTY_RULES', message: 'Reglas de puntos fuera de límites.' } });
-      return reply.send({ success: true, data: await saveLoyaltyConfiguration(parsed.data), redemptionsEnabled: false });
+      try { return reply.send({ success: true, data: await saveLoyaltyConfiguration(parsed.data), redemptionsEnabled: true }); }
+      catch (error: any) { return reply.status(error.statusCode || 500).send({ success: false, error: { code: error.code || 'LOYALTY_SAVE_FAILED', message: error.statusCode ? error.message : 'No se pudieron guardar las reglas. Intenta de nuevo.' } }); }
+    });
+
+    restaurant.post('/restaurant-panel/lealtad/verificar', {
+      config: { rateLimit: { max: 30, timeWindow: '1 minute' } },
+    }, async (request, reply) => {
+      const parsed = z.object({ code: z.string().trim().min(6).max(32) }).safeParse(request.body);
+      if (!parsed.success) return reply.status(400).send({ success: false, error: { code: 'INVALID_CODE', message: 'Código no válido.' } });
+      try { return reply.send({ success: true, data: await previewInPerson(prisma, parsed.data.code) }); }
+      catch (error: any) { return reply.status(error.statusCode || 400).send({ success: false, error: { code: error.code || 'LOYALTY_PREVIEW_FAILED', message: error.message } }); }
+    });
+    restaurant.get('/restaurant-panel/lealtad/catalogo-local', async (_request, reply) => {
+      const products = await prisma.product.findMany({
+        where: { restaurantId: RESTAURANT_ID, isAvailable: true, deleted: false, isAdultOnly: false },
+        orderBy: [{ category: { order: 'asc' } }, { name: 'asc' }], take: 200,
+        select: { id: true, name: true, price: true, discountPrice: true, promoType: true, promoBuyQuantity: true, promoPayQuantity: true,
+          sellBy: true, unitPrice: true, minWeightG: true, maxWeightG: true, stepWeightG: true, trackStock: true, stock: true,
+          optionGroups: { select: { id: true, name: true, minSelection: true, maxSelection: true,
+            options: { select: { id: true, name: true, price: true, isAvailable: true }, orderBy: { name: 'asc' } } } },
+          category: { select: { name: true, order: true } } },
+      });
+      return reply.send({ success: true, data: products });
+    });
+    const inPersonItem = z.object({ productId: z.string().min(1).max(100), quantity: z.number().int().min(1).max(100), weightG: z.number().int().positive().max(5000).optional(), optionIds: z.array(z.string().min(1).max(100)).max(40).optional() });
+    restaurant.post('/restaurant-panel/lealtad/cotizar-local', {
+      config: { rateLimit: { max: 30, timeWindow: '1 minute' } },
+    }, async (request, reply) => {
+      const parsed = z.object({ code: z.string().trim().min(6).max(32), items: z.array(inPersonItem).min(1).max(50), applyReward: z.boolean().default(false) }).safeParse(request.body);
+      if (!parsed.success) return reply.status(400).send({ success: false, error: { code: 'INVALID_SALE', message: 'Revisa los productos de la venta.' } });
+      try { return reply.send({ success: true, data: await quoteInPerson(prisma, parsed.data.code, parsed.data.items, parsed.data.applyReward) }); }
+      catch (error: any) { return reply.status(error.statusCode || 400).send({ success: false, error: { code: error.code || 'LOYALTY_QUOTE_FAILED', message: error.message } }); }
+    });
+    restaurant.post('/restaurant-panel/lealtad/registrar', {
+      config: { rateLimit: { max: 30, timeWindow: '1 minute' } },
+    }, async (request, reply) => {
+      const parsed = z.object({ code: z.string().trim().min(6).max(32), items: z.array(inPersonItem).min(1).max(50), applyReward: z.boolean().default(false), paymentMethod: z.enum(['CASH','CARD','TRANSFER','OTHER']), note: z.string().trim().max(300).optional() }).safeParse(request.body);
+      if (!parsed.success) return reply.status(400).send({ success: false, error: { code: 'INVALID_VISIT', message: 'Revisa los productos, el pago y el código.' } });
+      const staff = getAuthenticatedUser(request);
+      try { return reply.status(201).send({ success: true, data: await registerInPerson(prisma, { ...parsed.data, staffUserId: staff.sub }) }); }
+      catch (error: any) { return reply.status(error.statusCode || 400).send({ success: false, error: { code: error.code || 'LOYALTY_VISIT_FAILED', message: error.message } }); }
+    });
+    restaurant.get('/restaurant-panel/lealtad/visitas', async (request, reply) => {
+      const parsed = z.object({ limit: z.coerce.number().int().min(1).max(50).default(20) }).safeParse(request.query);
+      if (!parsed.success) return reply.status(400).send({ success: false, error: { code: 'INVALID_QUERY', message: 'Consulta no válida.' } });
+      return reply.send({ success: true, data: await recentVisits(prisma, parsed.data.limit) });
+    });
+    restaurant.post('/restaurant-panel/lealtad/visitas/:id/anular', async (request, reply) => {
+      const params = z.object({ id: z.string().min(1).max(100) }).safeParse(request.params);
+      if (!params.success) return reply.status(400).send({ success: false, error: { code: 'INVALID_ID', message: 'Venta no válida.' } });
+      const staff = getAuthenticatedUser(request);
+      try { return reply.send({ success: true, data: await voidInPerson(prisma, params.data.id, staff.sub) }); }
+      catch (error: any) { return reply.status(error.statusCode || 400).send({ success: false, error: { code: error.code || 'LOYALTY_VOID_FAILED', message: error.message } }); }
+    });
+
+    restaurant.get('/restaurant-panel/soporte', async (_request, reply) => {
+      // WingsLab is a single-restaurant deployment. APP reports also belong to this restaurant.
+      const data = await prisma.supportTicket.findMany({ orderBy: { createdAt: 'desc' }, take: 100, include: { customer: { select: { user: { select: { name: true } } } } } });
+      return reply.send({ success: true, data });
+    });
+    restaurant.get('/restaurant-panel/soporte/lista', async (request, reply) => {
+      const parsed = z.object({ page: z.coerce.number().int().min(1).max(10000).default(1), limit: z.coerce.number().int().min(1).max(50).default(10), status: z.enum(['ALL', 'PENDING', 'IN_PROGRESS', 'RESOLVED']).default('ALL'), type: z.enum(['ALL', 'APP', 'ORDER']).default('ALL'), search: z.string().trim().max(100).default('') }).safeParse(request.query);
+      if (!parsed.success) return reply.status(400).send({ success: false, error: { code: 'INVALID_QUERY', message: 'Filtros no válidos.' } });
+      const { page, limit, status, type, search } = parsed.data;
+      const where: Prisma.SupportTicketWhereInput = { ...(status !== 'ALL' ? { status } : {}), ...(type !== 'ALL' ? { type } : {}), ...(search ? { OR: [{ subject: { contains: search, mode: 'insensitive' } }, { description: { contains: search, mode: 'insensitive' } }, { orderNumber: { contains: search, mode: 'insensitive' } }, { customer: { user: { name: { contains: search, mode: 'insensitive' } } } }] } : {}) };
+      const [items, total, counts] = await Promise.all([
+        prisma.supportTicket.findMany({ where, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], skip: (page - 1) * limit, take: limit, select: { id: true, type: true, subject: true, description: true, orderNumber: true, status: true, response: true, respondedAt: true, createdAt: true, customer: { select: { user: { select: { name: true, lastName: true } } } } } }),
+        prisma.supportTicket.count({ where }),
+        prisma.supportTicket.groupBy({ by: ['status'], _count: { _all: true } }),
+      ]);
+      return reply.send({ success: true, data: { items, total, page, limit, counts } });
+    });
+    restaurant.get('/restaurant-panel/resenas', async (request, reply) => {
+      const parsed = z.object({ page: z.coerce.number().int().min(1).max(10000).default(1), limit: z.coerce.number().int().min(1).max(50).default(10), rating: z.enum(['ALL', '1', '2', '3', '4', '5']).default('ALL'), search: z.string().trim().max(100).default('') }).safeParse(request.query);
+      if (!parsed.success) return reply.status(400).send({ success: false, error: { code: 'INVALID_QUERY', message: 'Filtros no válidos.' } });
+      const { page, limit, rating, search } = parsed.data;
+      const where: Prisma.ReviewWhereInput = { restaurantId: RESTAURANT_ID, ...(rating !== 'ALL' ? { rating: Number(rating) } : {}), ...(search ? { OR: [{ comment: { contains: search, mode: 'insensitive' } }, { customer: { user: { name: { contains: search, mode: 'insensitive' } } } }, { order: { orderReference: { contains: search, mode: 'insensitive' } } }] } : {}) };
+      const [items, total, summary] = await Promise.all([
+        prisma.review.findMany({ where, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], skip: (page - 1) * limit, take: limit, select: { id: true, rating: true, comment: true, createdAt: true, customer: { select: { user: { select: { name: true, lastName: true } } } }, order: { select: { id: true, orderReference: true, dailyCounter: true, createdAt: true } } } }),
+        prisma.review.count({ where }),
+        prisma.review.aggregate({ where: { restaurantId: RESTAURANT_ID }, _avg: { rating: true }, _count: { _all: true } }),
+      ]);
+      return reply.send({ success: true, data: { items, total, page, limit, summary: { average: summary._avg.rating, total: summary._count._all } } });
+    });
+    restaurant.patch('/restaurant-panel/soporte/:id', async (request, reply) => {
+      const params = z.object({ id: z.string().min(1).max(100) }).safeParse(request.params);
+      const parsed = z.object({ status: z.enum(['PENDING','IN_PROGRESS','RESOLVED']), response: z.string().trim().min(1).max(4000) }).safeParse(request.body);
+      if (!params.success || !parsed.success) return reply.status(400).send({ success: false, error: { code: 'INVALID_REPORT', message: 'Escribe una respuesta y un estado válido.' } });
+      const found = await prisma.supportTicket.findUnique({ where: { id: params.data.id }, select: { id: true } });
+      if (!found) return reply.status(404).send({ success: false, error: { code: 'NOT_FOUND', message: 'Reporte no encontrado.' } });
+      const data = await prisma.supportTicket.update({ where: { id: found.id }, data: { ...parsed.data, respondedAt: new Date() } });
+      return reply.send({ success: true, data });
     });
 
     restaurant.get('/restaurant-panel/perfil', async (request, reply) => {
@@ -766,6 +947,7 @@ export async function registerRestaurantPanelRoutes(fastify: FastifyInstance): P
           restaurantId: ownedRestaurant.id,
           name: parsed.data.name,
           description: parsed.data.description || null,
+          icon: parsed.data.icon || null,
           order: parsed.data.order,
         },
       });
@@ -829,6 +1011,7 @@ export async function registerRestaurantPanelRoutes(fastify: FastifyInstance): P
         data: {
           ...(parsed.data.name !== undefined ? { name: parsed.data.name } : {}),
           ...(parsed.data.description !== undefined ? { description: parsed.data.description } : {}),
+          ...(parsed.data.icon !== undefined ? { icon: parsed.data.icon } : {}),
           ...(parsed.data.order !== undefined ? { order: parsed.data.order } : {}),
         },
       });
@@ -1951,6 +2134,7 @@ export async function registerRestaurantPanelRoutes(fastify: FastifyInstance): P
           description: parsed.data.description ?? null,
           type: parsed.data.type,
           value: parsed.data.value,
+          giftProductId: parsed.data.type === 'FREE_PRODUCT' ? parsed.data.giftProductId! : null,
           minOrderAmount: parsed.data.minOrderAmount ?? null,
           validFrom: parsed.data.validFrom ?? null,
           validUntil: parsed.data.validUntil ?? null,

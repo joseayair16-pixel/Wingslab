@@ -1,8 +1,8 @@
 'use client';
-import { Check, Info, Tag } from 'lucide-react';
+import { Info, Settings2, Tag } from 'lucide-react';
 
 import React, { useEffect, useState } from 'react';
-import { requestJson, MENU_THEMES, getMenuThemeById } from '@sadel/shared';
+import { requestJson } from '@sadel/shared';
 import { getGoogleMaps } from '../../lib/googleMaps';
 import { hasNativeOrderAlarm, isNativePlatform } from '../../lib/native';
 import { CategoryIcon } from '../CategoryIcon';
@@ -22,8 +22,9 @@ type PromoCodeItem = {
   id: string;
   code: string;
   description?: string | null;
-  type: 'PERCENT' | 'AMOUNT' | 'FREE_DELIVERY';
+  type: 'PERCENT' | 'AMOUNT' | 'FREE_DELIVERY' | 'FREE_PRODUCT';
   value: number;
+  giftProductId?: string | null;
   minOrderAmount?: number | null;
   validFrom?: string | null;
   validUntil?: string | null;
@@ -39,6 +40,7 @@ const PROMO_CODE_TYPE_LABELS: Record<PromoCodeItem['type'], { label: string; hin
   PERCENT: { label: 'Porcentaje (%)', hint: 'Descuenta un % del subtotal.' },
   AMOUNT: { label: 'Monto fijo ($)', hint: 'Descuenta una cantidad fija en pesos.' },
   FREE_DELIVERY: { label: 'Envío gratis', hint: 'Elimina el costo de envío del pedido.' },
+  FREE_PRODUCT: { label: 'Producto gratis', hint: 'Regala 1 unidad de un producto eligiendo cuál en la primera compra.' },
 };
 
 const weekDayOptions = [
@@ -148,7 +150,7 @@ interface SettingsSectionProps {
   onEnablePush?: () => Promise<{ ok: boolean; reason?: string }>;
   pushToast: (tone: 'info' | 'success' | 'error', title: string, message: string) => void;
   businessTypeLabel: (type?: string | null) => string;
-  Field: React.ComponentType<{ label: string; value: string; onChange: (value: string) => void; placeholder: string; type?: string }>;
+  Field: React.ComponentType<{ label: string; value: string; onChange: (value: string) => void; placeholder: string; type?: string; maxLength?: number }>;
   TextAreaField: React.ComponentType<{ label: string; value: string; onChange: (value: string) => void; placeholder: string }>;
   ToggleField: React.ComponentType<{ label: string; checked: boolean; onChange: (checked: boolean) => void; description?: string; disabled?: boolean; compact?: boolean; mobileCompact?: boolean }>;
 }
@@ -277,12 +279,10 @@ export const SettingsSection = React.memo(function SettingsSection({
   const [editingHoursDay, setEditingHoursDay] = useState<number | null>(null);
   const [categorySearch, setCategorySearch] = useState('');
   const [showAllCategories, setShowAllCategories] = useState(false);
-  const [canScrollTabsLeft, setCanScrollTabsLeft] = useState(false);
-  const [canScrollTabsRight, setCanScrollTabsRight] = useState(false);
-  const tabsScrollRef = React.useRef<HTMLDivElement | null>(null);
   const hoursDraft = (operatingHoursDraft ?? []) as HoursBlock[];
 
   const [promoCodes, setPromoCodes] = useState<PromoCodeItem[]>([]);
+  const [promoProducts, setPromoProducts] = useState<Array<{ id: string; name: string }>>([]);
   const [promoCodesLoading, setPromoCodesLoading] = useState(false);
   const [promoCodeModalOpen, setPromoCodeModalOpen] = useState(false);
   const [promoCodeSaving, setPromoCodeSaving] = useState(false);
@@ -292,6 +292,7 @@ export const SettingsSection = React.memo(function SettingsSection({
     description: '',
     type: 'PERCENT' as PromoCodeItem['type'],
     value: '',
+    giftProductId: '',
     minOrderAmount: '',
     validFrom: '',
     validUntil: '',
@@ -300,6 +301,16 @@ export const SettingsSection = React.memo(function SettingsSection({
     firstPurchaseOnly: false,
     isActive: true,
   });
+
+  useEffect(() => {
+    if (activeSettingsTab !== 'cupones' || !token || promoProducts.length) return;
+    void requestJson<SuccessResponse<Array<{ id: string; name: string; isAvailable?: boolean; deleted?: boolean; sellBy?: string; isAdultOnly?: boolean }>>>({
+      apiBase, path: '/restaurant-panel/productos', token,
+      fallbackMessage: 'No se pudieron cargar los productos.',
+    }).then(res => {
+      setPromoProducts((res.data || []).filter(p => p.isAvailable !== false && !p.deleted && p.sellBy !== 'WEIGHT' && !p.isAdultOnly).map(p => ({ id: p.id, name: p.name })));
+    }).catch(() => {});
+  }, [activeSettingsTab, token, promoProducts.length]);
 
   const loadPromoCodes = async () => {
     if (!token) return;
@@ -332,6 +343,7 @@ export const SettingsSection = React.memo(function SettingsSection({
       description: promo?.description ?? '',
       type: promo?.type ?? 'PERCENT',
       value: promo ? String(promo.value) : '',
+      giftProductId: promo?.giftProductId ?? '',
       minOrderAmount: promo?.minOrderAmount != null ? String(promo.minOrderAmount) : '',
       validFrom: promo?.validFrom ? promo.validFrom.slice(0, 10) : '',
       validUntil: promo?.validUntil ? promo.validUntil.slice(0, 10) : '',
@@ -349,7 +361,11 @@ export const SettingsSection = React.memo(function SettingsSection({
       pushToast('error', 'Campos obligatorios', 'Indica el código y el valor del cupón.');
       return;
     }
-    const valueNum = Number(promoCodeForm.value);
+    if (promoCodeForm.type === 'FREE_PRODUCT' && !promoCodeForm.giftProductId) {
+      pushToast('error', 'Producto requerido', 'Selecciona el producto que se regalará.');
+      return;
+    }
+    const valueNum = promoCodeForm.type === 'FREE_PRODUCT' ? 1 : Number(promoCodeForm.value);
     if (!Number.isFinite(valueNum) || valueNum <= 0) {
       pushToast('error', 'Valor inválido', 'El valor debe ser un número mayor a cero.');
       return;
@@ -398,6 +414,7 @@ export const SettingsSection = React.memo(function SettingsSection({
         description: promoCodeForm.description.trim() || null,
         type: promoCodeForm.type,
         value: valueNum,
+        giftProductId: promoCodeForm.type === 'FREE_PRODUCT' ? promoCodeForm.giftProductId : null,
         minOrderAmount: promoCodeForm.minOrderAmount ? Number(promoCodeForm.minOrderAmount) : null,
         maxUses: promoCodeForm.maxUses ? Number(promoCodeForm.maxUses) : null,
         maxUsesPerCustomer: promoCodeForm.maxUsesPerCustomer ? Number(promoCodeForm.maxUsesPerCustomer) : null,
@@ -590,7 +607,7 @@ export const SettingsSection = React.memo(function SettingsSection({
   const showSaveBar = activeSettingsTab !== 'preferencias' && activeSettingsTab !== 'cupones';
 
   const saveBarCopy: Record<string, { title: string; subtitle: string }> = {
-    perfil: { title: 'Perfil público', subtitle: 'Nombre, contacto y marca' },
+    perfil: { title: 'Perfil público', subtitle: 'Guarda los cambios de esta sección' },
     ubicacion: { title: 'Ubicación', subtitle: 'Dirección y mapa' },
     entrega: { title: 'Entrega', subtitle: 'Modalidad, tiempos y tarifas' },
     horarios: { title: 'Horarios', subtitle: 'Días y turnos de servicio' },
@@ -665,45 +682,20 @@ export const SettingsSection = React.memo(function SettingsSection({
     !normalizedCategorySearch || normalizeSearchText(cat.name).includes(normalizedCategorySearch)
   );
 
-  // Mantén la pestaña activa visible en pantallas donde se usa la navegación horizontal.
-  useEffect(() => {
-    const el = tabsScrollRef.current;
-    if (!el) return;
-    const update = () => {
-      setCanScrollTabsLeft(el.scrollLeft > 8);
-      setCanScrollTabsRight(el.scrollWidth - el.clientWidth - el.scrollLeft > 8);
-    };
-    update();
-    el.addEventListener('scroll', update, { passive: true });
-    window.addEventListener('resize', update);
-    return () => {
-      el.removeEventListener('scroll', update);
-      window.removeEventListener('resize', update);
-    };
-  }, []);
-
-  useEffect(() => {
-    tabsScrollRef.current
-      ?.querySelector('[data-active="true"]')
-      ?.scrollIntoView({ inline: 'center', block: 'nearest', behavior: 'smooth' });
-  }, [activeSettingsTab]);
-
   return (
-    <div className="flex flex-col gap-4 sm:gap-6 w-full max-w-[1400px] mx-auto min-w-0">
-        <header className="relative overflow-hidden rounded-[24px] border border-white/80 bg-gradient-to-br from-white via-white to-sky-50/70 p-4 shadow-[0_10px_35px_-24px_rgba(15,23,42,0.28)] sm:rounded-[28px] sm:p-6 md:p-7">
-          <div aria-hidden="true" className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-sky-500 via-blue-500 to-violet-500 opacity-70" />
-          <div className="relative">
-            <p className="mb-2 text-[11px] font-bold uppercase tracking-[0.16em] text-sky-700">{businessTypeLabel(profile?.businessType)}</p>
-            <h2 className="text-[25px] font-extrabold leading-tight tracking-[-0.04em] text-neutral-950 sm:text-3xl">Configuración</h2>
-            <p className="mt-1.5 max-w-2xl text-sm leading-5 text-neutral-600">Administra la información, operación y apariencia de tu negocio.</p>
+    <div className="wl-settings">
+        <header className="wl-settings-header">
+          <span className="wl-settings-header-icon"><Settings2 aria-hidden="true" /></span>
+          <div>
+            <p>WingsLab · {businessTypeLabel(profile?.businessType)}</p>
+            <h2>Configuración</h2>
           </div>
         </header>
 
         {/* Contenedor Principal */}
-        <div className="flex flex-col gap-4 sm:gap-6 min-w-0">
-          {/* Navegación horizontal táctil en celular, tablet y escritorio. */}
-          <nav aria-label="Secciones de configuración" className="relative z-10 -mx-3 w-full shrink-0 sm:mx-0">
-            <div ref={tabsScrollRef} className="scrollbar-none flex snap-x snap-proximity gap-2 overflow-x-auto overscroll-x-contain px-3 py-1 pb-3 sm:px-1" style={{ WebkitOverflowScrolling: 'touch', scrollPaddingLeft: '0.75rem', scrollPaddingRight: '0.75rem' }}>
+        <div className="wl-settings-layout">
+          <nav aria-label="Secciones de configuración" className="wl-settings-nav">
+            <div className="wl-settings-nav-grid">
               {settingsTabs.map((tab: any) => {
                 const isActive = activeSettingsTab === tab.key;
                 return (
@@ -713,45 +705,38 @@ export const SettingsSection = React.memo(function SettingsSection({
                     data-active={isActive}
                     aria-pressed={isActive}
                     onClick={() => setActiveSettingsTab(tab.key)}
-                    className={`group relative flex min-h-12 shrink-0 snap-start touch-manipulation items-center gap-2.5 whitespace-nowrap rounded-2xl border px-3 py-2 text-left transition-[background-color,border-color,color,box-shadow,transform] duration-200 active:scale-[0.98] sm:min-h-14 sm:gap-3 sm:px-4 sm:py-2.5 ${
-                      isActive
-                        ? 'border-sky-700 bg-sky-700 text-white shadow-[0_4px_12px_-4px_rgba(3,105,161,0.45)]'
-                        : 'border-neutral-200/80 bg-white text-neutral-700 shadow-[0_1px_2px_rgba(15,23,42,0.04)] hover:border-neutral-300 hover:bg-neutral-50 hover:text-neutral-950'
-                    }`}
+                    className="wl-settings-nav-item"
                   >
-                    <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-xl transition-colors duration-200 sm:h-9 sm:w-9 ${isActive ? 'bg-white/15 text-white' : 'bg-neutral-100 text-neutral-500 group-hover:bg-sky-50 group-hover:text-sky-700'}`}>
+                    <span className="wl-settings-nav-icon">
                       {tab.icon}
                     </span>
-                    <div className="min-w-0 flex-1 pr-1">
-                      <span className={`block text-[13px] font-semibold ${isActive ? 'text-white' : 'text-neutral-800'}`}>{tab.label}</span>
-                      <span className={`mt-0.5 hidden text-[11px] font-medium leading-tight sm:block ${isActive ? 'text-white/75' : 'text-neutral-500'}`}>{tab.desc}</span>
+                    <div className="wl-settings-nav-copy">
+                      <span>{tab.label}</span>
                     </div>
                   </button>
                 );
               })}
             </div>
-            <div aria-hidden="true" className={`pointer-events-none absolute inset-y-0 bottom-3 left-0 w-5 bg-gradient-to-r from-[#f8f8f8] to-transparent transition-opacity duration-200 ${canScrollTabsLeft ? 'opacity-100' : 'opacity-0'}`} />
-            <div aria-hidden="true" className={`pointer-events-none absolute inset-y-0 bottom-3 right-0 w-5 bg-gradient-to-l from-[#f8f8f8] to-transparent transition-opacity duration-200 ${canScrollTabsRight ? 'opacity-100' : 'opacity-0'}`} />
           </nav>
 
           {/* Área de Contenido Glassmórfica */}
-          <div className="min-w-0 flex-1 animate-fade-in">
-            <div className="relative min-h-[420px] min-w-0 overflow-visible rounded-[24px] border border-white/80 bg-white/90 p-4 shadow-[0_12px_40px_-28px_rgba(15,23,42,0.3)] sm:rounded-[28px] sm:p-6 md:p-8">
+          <div className="wl-settings-main">
+            <div className="wl-settings-content" data-section={activeSettingsTab}>
               
               {/* Encabezado de sección dinámico */}
-              <div className="mb-5 hidden items-center gap-4 border-b border-black/5 pb-5 md:flex md:mb-7 md:pb-6">
-                <div className="flex h-12 w-12 sm:h-14 sm:w-14 shrink-0 items-center justify-center rounded-[18px] sm:rounded-[20px] bg-gradient-to-br from-sky-100 to-blue-50 text-sky-600 border border-sky-200/50 shadow-inner">
-                  <span className="scale-110 sm:scale-125">{currentSettingsTab.icon}</span>
+              <div className="wl-settings-section-heading">
+                <div className="wl-settings-section-icon">
+                  {currentSettingsTab.icon}
                 </div>
                 <div className="min-w-0">
-                  <h3 className="text-lg sm:text-xl font-black text-neutral-950 tracking-[-0.02em]">{currentSettingsTab.label}</h3>
-                  <p className="mt-0.5 sm:mt-1 text-sm font-medium text-neutral-500 max-w-xl leading-relaxed">{currentSettingsTab.desc}</p>
+                  <h3>{currentSettingsTab.label}</h3>
                 </div>
               </div>
 
             {/* ─── PERFIL ─── */}
             {activeSettingsTab === 'perfil' && (
-              <div className="grid min-w-0 grid-cols-1 gap-4 md:grid-cols-2">
+              <div className="wl-settings-form grid min-w-0 grid-cols-1 gap-4 md:grid-cols-2">
+                <div className="wl-settings-group-heading md:col-span-2"><div><h4>Identidad del negocio</h4></div></div>
                 <div className="md:col-span-2">
                   <Field
                     label="Nombre del restaurante"
@@ -760,6 +745,7 @@ export const SettingsSection = React.memo(function SettingsSection({
                     placeholder="Tacos Centro"
                   />
                 </div>
+                <div className="wl-settings-group-heading md:col-span-2"><div><h4>Datos de contacto</h4></div></div>
                 <Field
                   label="Correo de contacto"
                   value={storeDraft.email}
@@ -773,9 +759,8 @@ export const SettingsSection = React.memo(function SettingsSection({
                   placeholder="5512345678"
                 />
                 <div className="md:col-span-2">
-                  <div className="border-t border-black/5 pt-4 mt-2 mb-3">
-                    <p className="text-[13px] font-bold text-neutral-900">Redes Sociales</p>
-                    <p className="text-xs text-neutral-500 mt-0.5">Opcional. Se mostrarán en la página de tu restaurante para clientes.</p>
+                  <div className="wl-settings-group-heading">
+                    <div><h4>Redes sociales <span>Opcional</span></h4></div>
                   </div>
                 </div>
                 <Field
@@ -807,6 +792,7 @@ export const SettingsSection = React.memo(function SettingsSection({
                   </div>
                 )}
                 <div className="md:col-span-2">
+                  <div className="wl-settings-group-heading"><div><h4>Sobre tu negocio</h4></div></div>
                   <TextAreaField
                     label="Descripción"
                     value={storeDraft.description}
@@ -814,140 +800,29 @@ export const SettingsSection = React.memo(function SettingsSection({
                     placeholder="Describe tu restaurante, tu cocina y la experiencia que ofreces a tus clientes."
                   />
                 </div>
-                <div className="md:col-span-2 min-w-0">
-                  <div className="border-t border-black/5 pt-4 mt-2 mb-3">
-                    <p className="text-[13px] font-bold text-neutral-900">Color de tu marca</p>
-                    <p className="text-xs text-neutral-500 mt-0.5">
-                      Elige el color de los botones y acentos de tu página. Tu menú se verá con tu identidad.
-                    </p>
+                <div className="md:col-span-2">
+                  <div className="wl-settings-group-heading">
+                    <div>
+                      <h4>Metadatos para buscadores <span>Opcional</span></h4>
+                      <p className="mt-1 text-xs font-medium leading-relaxed text-neutral-500">
+                        Controla cómo aparece tu menú en Google y al compartirlo. Si los dejas vacíos, se generan automáticamente desde el nombre, la descripción y el tipo de servicio de tu negocio.
+                      </p>
+                    </div>
                   </div>
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-[11px] font-bold uppercase tracking-wider text-neutral-500">Colores disponibles</span>
-                    <span className="inline-flex items-center gap-1 text-[11px] font-medium text-neutral-500">
-                      Desliza
-                      <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" /></svg>
-                    </span>
-                  </div>
-                  <div className="scrollbar-none flex items-center gap-2.5 overflow-x-auto pb-3 -mx-1 px-1 snap-x snap-mandatory">
-                    <button
-                      type="button"
-                      aria-pressed={!storeDraft.accentColor}
-                      onClick={() => setStoreDraft((c: any) => ({ ...c, accentColor: null }))}
-                      className={`inline-flex min-h-11 shrink-0 snap-start items-center gap-2 rounded-full border px-4 text-xs font-bold transition-all active:scale-95 ${
-                        !storeDraft.accentColor
-                          ? 'border-sky-500 bg-sky-50 text-sky-700 ring-2 ring-sky-500/20'
-                          : 'border-black/10 bg-white text-neutral-600 hover:border-black/20'
-                      }`}
-                    >
-                      <span className="h-3.5 w-3.5 rounded-full bg-sky-500" />
-                      Por defecto
-                    </button>
-                    {[
-                      '#0ea5e9', '#3b82f6', '#2563eb', '#6366f1', '#4f46e5', '#8b5cf6',
-                      '#7c3aed', '#9333ea', '#d946ef', '#c026d3', '#ec4899', '#db2777',
-                      '#f43f5e', '#e11d48', '#ef4444', '#dc2626', '#f97316', '#f59e0b',
-                      '#eab308', '#84cc16', '#22c55e', '#16a34a', '#10b981', '#14b8a6',
-                      '#0d9488', '#06b6d4', '#0891b2', '#fda4af',
-                    ].map((color) => {
-                      const isSelected = storeDraft.accentColor?.toLowerCase() === color;
-                      return (
-                        <button
-                          key={color}
-                          type="button"
-                          aria-label={`Color ${color}`}
-                          aria-pressed={isSelected}
-                          onClick={() => setStoreDraft((c: any) => ({ ...c, accentColor: color }))}
-                          className={`flex h-11 w-11 shrink-0 snap-start items-center justify-center rounded-full transition-all active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900 focus-visible:ring-offset-2 ${
-                            isSelected ? 'ring-2 ring-offset-2 ring-neutral-900' : 'hover:scale-105'
-                          }`}
-                          style={{ backgroundColor: color }}
-                        >
-                          {isSelected && (
-                            <Check className="h-4 w-4 text-white" strokeWidth={3.5} />
-                          )}
-                        </button>
-                      );
-                    })}
-                  </div>
-                  <div className="mt-4 flex flex-wrap items-center gap-2 sm:gap-3 rounded-2xl border border-black/5 bg-neutral-50 p-3">
-                    <span className="text-[11px] font-bold uppercase tracking-wider text-neutral-400">Vista previa</span>
-                    <span
-                      className="inline-flex items-center gap-1.5 rounded-full px-4 py-2 text-xs font-bold text-white shadow-sm"
-                      style={{ backgroundColor: storeDraft.accentColor || '#0ea5e9' }}
-                    >
-                      Pedir ahora
-                    </span>
-                    <span className="text-[11px] text-neutral-500">Así se verá el botón para pedir.</span>
-                  </div>
-                </div>
-                <div className="md:col-span-2 min-w-0">
-                  <div className="border-t border-black/5 pt-4 mt-2 mb-3">
-                    <p className="text-[13px] font-bold text-neutral-900">Fondo de tu menú</p>
-                    <p className="text-xs text-neutral-500 mt-0.5">
-                      Elige el fondo y la ambientación de tu página de menú. Aplica a todo tu portal en la app del comensal.
-                    </p>
-                  </div>
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-[11px] font-bold uppercase tracking-wider text-neutral-500">Temas de fondo</span>
-                    <span className="inline-flex items-center gap-1 text-[11px] font-medium text-neutral-500">
-                      Desliza
-                      <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" /></svg>
-                    </span>
-                  </div>
-                  <div className="scrollbar-none flex gap-3 overflow-x-auto pb-3 -mx-1 px-1 snap-x snap-mandatory">
-                    <button
-                      type="button"
-                      aria-pressed={!storeDraft.menuTheme}
-                      onClick={() => setStoreDraft((c: any) => ({ ...c, menuTheme: null }))}
-                      className={`flex w-36 shrink-0 snap-start flex-col items-start gap-2 rounded-2xl border p-3 text-left transition-all active:scale-95 ${
-                        !storeDraft.menuTheme
-                          ? 'border-neutral-900 ring-2 ring-neutral-900/15'
-                          : 'border-black/10 hover:border-black/25'
-                      }`}
-                    >
-                      <span
-                        className="h-14 w-full rounded-xl border border-black/5"
-                        style={{ background: getMenuThemeById(null)?.gradientLight || 'linear-gradient(180deg,#fafafa,#f4f4f2)' }}
-                      />
-                      <span className="flex items-center gap-1.5 text-xs font-bold text-neutral-800">
-                        {!storeDraft.menuTheme && (
-                          <Check className="h-3.5 w-3.5 text-emerald-600" strokeWidth={3} />
-                        )}
-                        Por defecto
-                      </span>
-                    </button>
-                    {MENU_THEMES.map((theme) => {
-                      const isSelected = storeDraft.menuTheme === theme.id;
-                      return (
-                        <button
-                          key={theme.id}
-                          type="button"
-                          aria-pressed={isSelected}
-                          onClick={() => setStoreDraft((c: any) => ({ ...c, menuTheme: theme.id }))}
-                          className={`flex w-36 shrink-0 snap-start flex-col items-start gap-2 rounded-2xl border p-3 text-left transition-all active:scale-95 ${
-                            isSelected ? 'border-neutral-900 ring-2 ring-neutral-900/15' : 'border-black/10 hover:border-black/25'
-                          }`}
-                        >
-                          <span className="h-14 w-full rounded-xl border border-black/5" style={{ background: theme.gradientLight }} />
-                          <span className="flex items-center gap-1.5 text-xs font-bold text-neutral-800">
-                            {isSelected && (
-                              <Check className="h-3.5 w-3.5 text-emerald-600" strokeWidth={3} />
-                            )}
-                            {theme.name}
-                          </span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                  <div className="mt-4 flex flex-wrap items-center gap-2 sm:gap-3 rounded-2xl border border-black/5 bg-neutral-50 p-3">
-                    <span className="text-[11px] font-bold uppercase tracking-wider text-neutral-400">Vista previa</span>
-                    <span
-                      className="inline-flex items-center gap-1.5 rounded-full px-4 py-2 text-xs font-bold text-white shadow-sm"
-                      style={{ background: (storeDraft.menuTheme ? getMenuThemeById(storeDraft.menuTheme)?.gradientLight : 'linear-gradient(180deg,#fafafa,#f4f4f2)') || 'linear-gradient(180deg,#fafafa,#f4f4f2)' }}
-                    >
-                      Fondo de tu menú
-                    </span>
-                    <span className="text-[11px] text-neutral-500">Así se verá el fondo del menú.</span>
+                  <div className="grid min-w-0 grid-cols-1 gap-4">
+                    <Field
+                      label="Título SEO"
+                      value={storeDraft.seoTitle ?? ''}
+                      onChange={(value: string) => setStoreDraft((c: any) => ({ ...c, seoTitle: value }))}
+                      placeholder="Ej. Menú de alitas en WingsLab"
+                      maxLength={65}
+                    />
+                    <TextAreaField
+                      label="Descripción SEO"
+                      value={storeDraft.seoDescription ?? ''}
+                      onChange={(value: string) => setStoreDraft((c: any) => ({ ...c, seoDescription: value }))}
+                      placeholder="Ej. Pide alitas y comida rápida en línea. Recoge en tienda o recibe a domicilio."
+                    />
                   </div>
                 </div>
                 {false && <div className="md:col-span-2 min-w-0">
@@ -1026,7 +901,7 @@ export const SettingsSection = React.memo(function SettingsSection({
                 </div>
 
                 }
-                <div className="md:col-span-2 rounded-[20px] border border-black/5 bg-neutral-50 p-4 text-sm text-neutral-600">
+                <div className="wl-settings-status md:col-span-2">
                   <span className="font-semibold text-neutral-900">Estado actual: </span>
                   {(profile as RestaurantProfile | null)?.status === 'ACTIVE'
                     ? (profile as RestaurantProfile | null)?.isAcceptingOrders ? '🟢 Abierto y aceptando pedidos' : '🟡 Cerrado temporalmente'
@@ -1037,7 +912,8 @@ export const SettingsSection = React.memo(function SettingsSection({
 
 
             {/* ─── UBICACIÓN ─── */}
-            <div className={`grid min-w-0 grid-cols-1 gap-4 md:grid-cols-2 ${activeSettingsTab === 'ubicacion' ? '' : 'hidden'}`}>
+            <div className={`wl-settings-form grid min-w-0 grid-cols-1 gap-4 md:grid-cols-2 ${activeSettingsTab === 'ubicacion' ? '' : 'hidden'}`}>
+                <div className="wl-settings-group-heading md:col-span-2"><div><h4>Dirección del negocio</h4></div></div>
                 <div className="md:col-span-2 relative z-[9999]">
                   <Field
                     label="Dirección"
@@ -1110,15 +986,15 @@ export const SettingsSection = React.memo(function SettingsSection({
                     placeholder="123"
                   />
                 </div>
-                <div className="md:col-span-2 rounded-[16px] border border-black/5 bg-neutral-50 p-3 text-xs text-neutral-500 flex items-center gap-2">
+                 <div className="wl-settings-map-hint md:col-span-2">
                   <Info className="w-4 h-4 text-neutral-400 shrink-0" strokeWidth={1.8} />
-                  Mueve el marcador en el mapa para ajustar la ubicación exacta. Las coordenadas se actualizan solas.
+                   Mueve el marcador para ajustar la ubicación.
                 </div>
                 <div className="md:col-span-2">
-                  <label className="block text-sm font-semibold text-neutral-900 mb-2">Ubicación en el mapa</label>
+                  <div className="wl-settings-group-heading"><div><h4>Ubicación en el mapa</h4></div></div>
                   <div id="settings-map" className="h-[280px] w-full rounded-[24px] border border-black/5 overflow-hidden shadow-[0_8px_30px_rgba(0,0,0,0.03)]" />
                 </div>
-                <div className="md:col-span-2 grid grid-cols-1 min-[420px]:grid-cols-2 gap-4 rounded-[20px] border border-black/5 bg-[#f8f7f4]/60 p-4 shadow-[inset_0_1px_1px_rgba(0,0,0,0.01)]">
+                <div className="wl-settings-coordinates md:col-span-2 grid grid-cols-2 gap-4">
                   <div className="min-w-0 space-y-1">
                     <span className="text-[11px] font-semibold uppercase tracking-wider text-neutral-400">Latitud</span>
                     <code className="block text-sm font-mono font-bold text-neutral-800 break-all">{storeDraft.latitude || 'Sin configurar'}</code>
@@ -1132,7 +1008,8 @@ export const SettingsSection = React.memo(function SettingsSection({
 
             {/* ─── ENTREGA ─── */}
             {activeSettingsTab === 'entrega' && (
-              <div className="grid min-w-0 grid-cols-1 gap-4 md:grid-cols-2">
+              <div className="wl-settings-form grid min-w-0 grid-cols-1 gap-4 md:grid-cols-2">
+                <div className="wl-settings-group-heading md:col-span-2"><div><h4>Modalidad de servicio</h4></div></div>
                 <div className="md:col-span-2">
                   <ToggleField
                     mobileCompact
@@ -1152,14 +1029,7 @@ export const SettingsSection = React.memo(function SettingsSection({
                 </div>
 
                 {storeDraft.pickupOnly ? (
-                  <div className="md:col-span-2 rounded-[18px] border border-sky-200/70 bg-sky-50/60 p-4 text-sm text-neutral-700 leading-6">
-                    <p className="font-semibold text-neutral-900 flex items-center gap-2">
-                      Solo recoger en tienda
-                    </p>
-                    <p className="mt-1">
-                      Los clientes recogen sus pedidos en el local.
-                    </p>
-                  </div>
+                  null
                 ) : (
                   <>
                     <div className="md:col-span-2">
@@ -1174,6 +1044,7 @@ export const SettingsSection = React.memo(function SettingsSection({
                           <div className="mt-2 grid gap-3 md:grid-cols-2">
                             <button
                               type="button"
+                              aria-pressed={storeDraft.deliveryPricingModel !== 'distance'}
                               onClick={() => setStoreDraft((c: any) => ({ ...c, deliveryPricingModel: 'fixed' }))}
                               className={`group flex flex-col gap-1 rounded-[18px] border px-5 py-4 text-left transition-all duration-200 ${storeDraft.deliveryPricingModel !== 'distance' ? 'border-sky-400 bg-sky-50/70 ring-4 ring-sky-400/15' : 'border-black/5 bg-white hover:border-black/15'}`}
                             >
@@ -1182,6 +1053,7 @@ export const SettingsSection = React.memo(function SettingsSection({
                             </button>
                             <button
                               type="button"
+                              aria-pressed={storeDraft.deliveryPricingModel === 'distance'}
                               onClick={() => setStoreDraft((c: any) => ({ ...c, deliveryPricingModel: 'distance' }))}
                               className={`group flex flex-col gap-1 rounded-[18px] border px-5 py-4 text-left transition-all duration-200 ${storeDraft.deliveryPricingModel === 'distance' ? 'border-sky-400 bg-sky-50/70 ring-4 ring-sky-400/15' : 'border-black/5 bg-white hover:border-black/15'}`}
                             >
@@ -1274,39 +1146,41 @@ export const SettingsSection = React.memo(function SettingsSection({
             {activeSettingsTab === 'horarios' && (() => {
               const openDaysCount = weekDayOptions.filter((d) => isDayOpen(d.dayOfWeek)).length;
               return (
-              <div className="grid gap-4">
-                <div className="rounded-[20px] border border-sky-100 bg-sky-50 p-4 text-sm text-sky-700">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="wl-hours">
+                <div className="wl-hours-summary">
+                  <div className="wl-hours-summary-head">
                     <div className="min-w-0">
-                      <p className="mb-0.5 font-semibold">Horario operativo</p>
-                      <p className="text-sky-700/80">
-                        Toca un día para editar su horario.
-                      </p>
+                      <p className="wl-hours-title">Horario operativo</p>
+                      <p className="wl-hours-subtitle">Toca un día para editar su horario.</p>
                     </div>
-                    <span className="inline-flex items-center gap-1.5 rounded-full bg-white/80 px-3 py-1 text-[11px] font-bold text-sky-700 ring-1 ring-sky-200">
-                      <span className="h-1.5 w-1.5 rounded-full bg-sky-500" />
+                    <span className="wl-hours-count">
+                      <span className="wl-hours-count-dot" />
                       {openDaysCount} de {weekDayOptions.length} días abiertos
                     </span>
                   </div>
-                  <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">
-                    <label className="flex items-center gap-2 text-[12px] font-semibold text-sky-700/90">
+                  <div className="wl-hours-week" aria-hidden="true">
+                    {weekDayOptions.map((day) => (
+                      <span key={day.dayOfWeek} className={`wl-hours-week-day ${isDayOpen(day.dayOfWeek) ? 'is-open' : ''}`}>
+                        {day.label.slice(0, 2)}
+                      </span>
+                    ))}
+                  </div>
+                  <div className="wl-hours-copy">
+                    <label className="wl-hours-select-label">
                       Copiar horario de
                       <select
                         value={copySourceDay}
                         onChange={(e) => setCopySourceDay(Number(e.target.value))}
-                        className="rounded-[12px] border border-sky-200 bg-white px-2.5 py-2 text-base font-medium text-neutral-900 outline-none transition-all duration-200 focus:border-sky-400 focus:ring-4 focus:ring-sky-400/20 sm:text-[13px]"
                       >
                         {weekDayOptions.map((opt) => (
-                          <option key={opt.dayOfWeek} value={opt.dayOfWeek}>
-                            {opt.label}
-                          </option>
+                          <option key={opt.dayOfWeek} value={opt.dayOfWeek}>{opt.label}</option>
                         ))}
                       </select>
                     </label>
                     <button
                       type="button"
                       onClick={() => { if (window.confirm('Esto reemplazará los horarios y días cerrados de toda la semana. ¿Deseas continuar?')) applyToAllDays(); }}
-                      className="w-full sm:w-auto rounded-full bg-neutral-950 px-5 py-3 text-sm font-semibold text-white transition hover:bg-neutral-800"
+                      className="wl-hours-copy-button"
                     >
                       Aplicar a todos los días
                     </button>
@@ -1314,51 +1188,45 @@ export const SettingsSection = React.memo(function SettingsSection({
                 </div>
 
                 {/* Apertura automática */}
-                <div className="rounded-[20px] border border-sky-100 bg-white p-5 shadow-sm">
-                  <div className="flex flex-wrap items-start justify-between gap-4">
-                    <div className="min-w-0 flex-1">
-                      <p className="font-semibold text-neutral-900">Apertura automática</p>
-                      <p className="mt-1 text-[13px] leading-relaxed text-neutral-500">
-                        Abre tu negocio automáticamente según el horario. Si lo cierras o se pausa, volverá a abrir el siguiente día de servicio.
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      role="switch"
-                      aria-checked={profile?.autoOpenEnabled ?? false}
-                      aria-label="Apertura automática"
-                      onClick={() => toggleAutoOpen(!(profile?.autoOpenEnabled ?? false))}
-                      className={`relative inline-flex h-11 w-[68px] shrink-0 items-center rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-sky-400 focus:ring-offset-2 ${profile?.autoOpenEnabled ? 'bg-sky-500' : 'bg-neutral-300'}`}
-                    >
-                      <span
-                        className={`inline-block h-9 w-9 rounded-full bg-white shadow-sm ring-0 transition-transform duration-200 ${profile?.autoOpenEnabled ? 'translate-x-7' : 'translate-x-0'}`}
-                      />
-                    </button>
+                <div className="wl-hours-auto">
+                  <div className="min-w-0 flex-1">
+                    <p className="wl-hours-auto-title">Apertura automática</p>
+                    <p className="wl-hours-auto-desc">
+                      Abre según el horario, incluso después de un cierre o pausa, el siguiente día de servicio.
+                    </p>
                   </div>
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={profile?.autoOpenEnabled ?? false}
+                    aria-label="Apertura automática"
+                    onClick={() => toggleAutoOpen(!(profile?.autoOpenEnabled ?? false))}
+                    className={`wl-hours-switch ${profile?.autoOpenEnabled ? 'is-on' : ''}`}
+                  >
+                    <span className="wl-hours-switch-thumb">{profile?.autoOpenEnabled ? 'On' : 'Off'}</span>
+                  </button>
                 </div>
 
-                <div className="overflow-hidden rounded-[20px] border border-black/5 bg-white shadow-sm">
-                  <div className="divide-y divide-black/5">
+                <div className="wl-hours-list">
+                  <div className="wl-hours-days">
                     {weekDayOptions.map((day) => {
                       const blocks = dayBlocks(day.dayOfWeek);
                       const open = isDayOpen(day.dayOfWeek);
                       const invalid = dayHasInvalid(day.dayOfWeek);
                       return (
-                        <div key={day.dayOfWeek} className="px-4 py-3 transition-colors sm:px-5">
-                          <div className="flex items-center justify-between gap-3">
-                            <button type="button" className="min-w-0 flex-1 text-left" aria-expanded={editingHoursDay === day.dayOfWeek} onClick={() => setEditingHoursDay(editingHoursDay === day.dayOfWeek ? null : day.dayOfWeek)}>
-                              <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
-                                <p className="text-sm font-semibold text-neutral-900">{day.label}</p>
-                                <span className={`text-[11px] font-medium ${open ? 'text-emerald-600' : 'text-neutral-400'}`}>
-                                  {open ? formatDaySummary(blocks) : 'Cerrado'}
-                                </span>
-                              </div>
+                        <div key={day.dayOfWeek} className={`wl-hours-day ${open ? 'is-open' : ''} ${editingHoursDay === day.dayOfWeek ? 'is-editing' : ''}`}>
+                          <div className="wl-hours-day-row">
+                            <button type="button" className="wl-hours-day-main" aria-expanded={editingHoursDay === day.dayOfWeek} onClick={() => setEditingHoursDay(editingHoursDay === day.dayOfWeek ? null : day.dayOfWeek)}>
+                              <span className="wl-hours-day-name">{day.label}</span>
+                              <span className={`wl-hours-day-schedule ${open ? 'is-open' : ''}`}>
+                                {open ? formatDaySummary(blocks) : 'Cerrado'}
+                              </span>
                               {invalid && (
-                                <p className="mt-1 text-[11px] font-semibold text-red-600">
+                                <span className="wl-hours-day-error">
                                   La hora de apertura no puede ser igual a la de cierre.
-                                </p>
+                                </span>
                               )}
-                              <span className="text-xs font-semibold text-sky-600">{!open ? 'Activa para editar' : editingHoursDay === day.dayOfWeek ? 'Ocultar' : 'Editar'}</span>
+                              <span className="wl-hours-day-edit">{editingHoursDay === day.dayOfWeek ? 'Ocultar' : open ? 'Editar horario' : 'Activa para editar'}</span>
                             </button>
                             <button
                               type="button"
@@ -1366,64 +1234,58 @@ export const SettingsSection = React.memo(function SettingsSection({
                               aria-checked={open}
                               aria-label={open ? `Cerrar ${day.label}` : `Abrir ${day.label}`}
                               onClick={() => { toggleDay(day.dayOfWeek); if (!open) setEditingHoursDay(day.dayOfWeek); }}
-                              className={`relative inline-flex h-11 w-[68px] shrink-0 items-center rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-sky-400 focus:ring-offset-2 ${open ? 'bg-sky-500' : 'bg-neutral-300'}`}
+                              className={`wl-hours-switch ${open ? 'is-on' : ''}`}
                             >
-                              <span
-                                className={`inline-block h-9 w-9 rounded-full bg-white shadow-sm ring-0 transition-transform duration-200 ${open ? 'translate-x-7' : 'translate-x-0'}`}
-                              />
+                              <span className="wl-hours-switch-thumb">{open ? 'On' : 'Off'}</span>
                             </button>
                           </div>
 
                           {open && editingHoursDay === day.dayOfWeek && (
-                            <div className="mt-3 grid gap-2.5">
+                            <div className="wl-hours-shifts">
                               {blocks
                                 .slice()
                                 .sort((a: HoursBlock, b: HoursBlock) => a.shiftIndex - b.shiftIndex)
                                 .map((block: HoursBlock, idx: number) => (
                                   <div
                                     key={`${block.dayOfWeek}-${block.shiftIndex}`}
-                                    className="rounded-[16px] border border-black/5 bg-neutral-50/70 p-3"
+                                    className="wl-hours-shift"
                                   >
-                                    <div className="flex flex-wrap items-center justify-between gap-2">
-                                      <div className="flex flex-wrap items-center gap-2">
-                                        <span className="text-[11px] font-bold uppercase tracking-wider text-neutral-400">
+                                    <div className="wl-hours-shift-head">
+                                      <div className="wl-hours-shift-labels">
+                                        <span className="wl-hours-shift-name">
                                           {blocks.length > 1 ? `Turno ${idx + 1}` : 'Horario'}
                                         </span>
                                         {isOvernightShift(block) && (
-                                          <span className="rounded-full bg-indigo-50 px-2 py-0.5 text-[10px] font-semibold text-indigo-600">
-                                            Cierra al día siguiente
-                                          </span>
+                                          <span className="wl-hours-overnight">Cierra al día siguiente</span>
                                         )}
                                       </div>
                                       {blocks.length > 1 && (
                                         <button
                                           type="button"
                                           onClick={() => removeShift(day.dayOfWeek, block.shiftIndex)}
-                                          className="text-[11px] font-semibold text-red-500 transition hover:text-red-600"
+                                          className="wl-hours-remove"
                                         >
                                           Quitar turno
                                         </button>
                                       )}
                                     </div>
-                                    <div className="mt-2.5 grid grid-cols-2 gap-2.5 sm:gap-3">
+                                    <div className="wl-hours-shift-times">
                                       <div className="min-w-0">
-                                          <label className="mb-0.5 block text-[10px] font-bold uppercase tracking-wider text-neutral-400" htmlFor={`open-${day.dayOfWeek}-${block.shiftIndex}`}>Apertura</label>
-                                          <input
-                                            id={`open-${day.dayOfWeek}-${block.shiftIndex}`}
+                                        <label className="wl-hours-time-label" htmlFor={`open-${day.dayOfWeek}-${block.shiftIndex}`}>Apertura</label>
+                                        <input
+                                          id={`open-${day.dayOfWeek}-${block.shiftIndex}`}
                                           type="time"
                                           value={block.openTime}
                                           onChange={(e: any) => updateShift(day.dayOfWeek, block.shiftIndex, { openTime: e.target.value })}
-                                          className="w-full min-w-0 rounded-[12px] border border-black/5 bg-white px-2.5 py-2.5 text-base text-neutral-900 outline-none transition-all duration-200 focus:border-sky-400 focus:ring-4 focus:ring-sky-400/20 sm:text-[13px]"
                                         />
                                       </div>
                                       <div className="min-w-0">
-                                          <label className="mb-0.5 block text-[10px] font-bold uppercase tracking-wider text-neutral-400" htmlFor={`close-${day.dayOfWeek}-${block.shiftIndex}`}>Cierre</label>
-                                          <input
-                                            id={`close-${day.dayOfWeek}-${block.shiftIndex}`}
+                                        <label className="wl-hours-time-label" htmlFor={`close-${day.dayOfWeek}-${block.shiftIndex}`}>Cierre</label>
+                                        <input
+                                          id={`close-${day.dayOfWeek}-${block.shiftIndex}`}
                                           type="time"
                                           value={block.closeTime}
                                           onChange={(e: any) => updateShift(day.dayOfWeek, block.shiftIndex, { closeTime: e.target.value })}
-                                          className="w-full min-w-0 rounded-[12px] border border-black/5 bg-white px-2.5 py-2.5 text-base text-neutral-900 outline-none transition-all duration-200 focus:border-sky-400 focus:ring-4 focus:ring-sky-400/20 sm:text-[13px]"
                                         />
                                       </div>
                                     </div>
@@ -1433,7 +1295,7 @@ export const SettingsSection = React.memo(function SettingsSection({
                                 <button
                                   type="button"
                                   onClick={() => addShift(day.dayOfWeek)}
-                                  className="inline-flex w-fit items-center gap-1.5 rounded-full border border-dashed border-neutral-300 px-3.5 py-1.5 text-[12px] font-semibold text-neutral-600 transition hover:border-sky-400 hover:text-sky-600"
+                                  className="wl-hours-add-shift"
                                 >
                                   + Agregar segundo turno
                                 </button>
@@ -1447,7 +1309,7 @@ export const SettingsSection = React.memo(function SettingsSection({
                 </div>
 
                 {hasInvalidHours && (
-                  <p className="text-[12px] font-medium text-red-600">
+                  <p className="wl-hours-error-note">
                     Revisa los horarios marcados en rojo antes de guardar.
                   </p>
                 )}
@@ -1457,10 +1319,10 @@ export const SettingsSection = React.memo(function SettingsSection({
 
             {/* ─── PAGOS ─── */}
             {activeSettingsTab === 'pagos' && (
-              <div className="grid min-w-0 grid-cols-1 gap-4 md:grid-cols-2">
+              <div className="wl-settings-form grid min-w-0 grid-cols-1 gap-4 md:grid-cols-2">
                 <div className="md:col-span-2 rounded-[18px] border border-sky-100 bg-sky-50 p-4 text-sm text-sky-700">
                   <p className="font-semibold mb-0.5">Pago en efectivo</p>
-                  <p className="text-sky-700/80">Define el monto máximo que tus clientes pueden pagar en efectivo. Por encima de este monto deberán pagar con transferencia.</p>
+                  <p className="text-sky-700/80">Los pedidos que superen el límite se pagan por transferencia.</p>
                 </div>
                 <div className="md:col-span-2">
                   <ToggleField
@@ -1481,7 +1343,7 @@ export const SettingsSection = React.memo(function SettingsSection({
                 </div>
                 <div className="md:col-span-2 rounded-[18px] border border-emerald-100 bg-emerald-50 p-4 text-sm text-emerald-800">
                   <p className="font-semibold mb-0.5">Cuenta para recibir transferencias</p>
-                  <p className="text-emerald-700/80">Estos datos se mostrarán al cliente cuando elija pagar con transferencia bancaria en tu restaurante.</p>
+                  <p className="text-emerald-700/80">Estos datos se muestran al elegir transferencia.</p>
                 </div>
                 <Field
                   label="Banco"
@@ -1510,7 +1372,7 @@ export const SettingsSection = React.memo(function SettingsSection({
             {activeSettingsTab === 'seguridad' && (
               <form
                 id="sadel-security-form"
-                className="grid gap-4 max-w-md"
+                className="wl-settings-form grid gap-4 max-w-md"
                 onSubmit={(event) => {
                   event.preventDefault();
                   void savePasswordChange();
@@ -1545,7 +1407,8 @@ export const SettingsSection = React.memo(function SettingsSection({
 
             {/* ─── PREFERENCIAS ─── */}
             {activeSettingsTab === 'preferencias' && (
-              <div className="grid gap-4">
+              <div className="wl-settings-panel-list grid gap-4">
+                <div className="wl-settings-group-heading"><div><h4>Alertas y dispositivo</h4></div></div>
                 <ToggleField
                   mobileCompact
                   label="Alertas de sonido para pedidos nuevos"
@@ -1585,13 +1448,14 @@ export const SettingsSection = React.memo(function SettingsSection({
                   <div className="rounded-2xl border border-black/5 bg-neutral-50/60 p-4">
                     <p className="text-sm font-bold text-neutral-900">Ancho del papel</p>
                     <p className="mt-0.5 text-xs text-neutral-500">
-                      Ajusta el formato de la comanda al papel de tu impresora térmica.
+                      Elige el ancho de tu impresora.
                     </p>
                     <div className="mt-3 flex gap-2">
                       {(['58', '80'] as const).map((w) => (
                         <button
                           key={w}
                           type="button"
+                          aria-pressed={paperWidth === w}
                           onClick={() => {
                             setPaperWidth(w);
                             try { window.localStorage.setItem('sadel.restaurant.paperWidth', w); } catch {}
@@ -1758,7 +1622,7 @@ export const SettingsSection = React.memo(function SettingsSection({
 
             {/* ─── CUPONES ─── */}
             {activeSettingsTab === 'cupones' && (
-              <div className="grid gap-5">
+              <div className="wl-settings-panel-list wl-settings-coupons grid gap-5">
                 <div className="rounded-[24px] border border-white/60 bg-white/80 p-5 shadow-[0_8px_30px_rgba(0,0,0,0.04)] backdrop-blur-xl sm:p-6">
                   <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                     <div>
@@ -1774,7 +1638,7 @@ export const SettingsSection = React.memo(function SettingsSection({
                         </div>
                       </div>
                       <p className="mt-3 max-w-xl text-[12px] leading-relaxed text-neutral-500">
-                        Deja vacío para desactivar. Orden: cantidad → cupón → descuento por monto → envío gratis.
+                        Deja vacío para desactivar. Orden: cantidad → cupón → descuento → envío gratis.
                       </p>
                     </div>
                   </div>
@@ -1890,6 +1754,9 @@ export const SettingsSection = React.memo(function SettingsSection({
                               {promo.type === 'FREE_DELIVERY' && (
                                 <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-bold text-emerald-700">Envío gratis</span>
                               )}
+                              {promo.type === 'FREE_PRODUCT' && (
+                                <span className="rounded-full bg-violet-100 px-2 py-0.5 text-[11px] font-bold text-violet-700">Producto gratis</span>
+                              )}
                               {isOff && (
                                 <span className="rounded-full bg-neutral-200 px-2 py-0.5 text-[11px] font-bold text-neutral-600">
                                   {!promo.isActive ? 'Desactivado' : expired ? 'Vencido' : 'Sin usos'}
@@ -1901,7 +1768,8 @@ export const SettingsSection = React.memo(function SettingsSection({
                               {promo.usesCount} uso(s)
                               {promo.maxUses != null ? ` de ${promo.maxUses}` : ''}
                               {promo.maxUsesPerCustomer != null ? ` · máx. ${promo.maxUsesPerCustomer} por cliente` : ''}
-                              {promo.firstPurchaseOnly ? ' · primera compra' : ''}
+                              {promo.firstPurchaseOnly ? ' · solo primera compra' : ''}
+                              {promo.type === 'FREE_PRODUCT' && promo.giftProductId ? ` · regalo: ${promoProducts.find(p => p.id === promo.giftProductId)?.name || 'Producto'}` : ''}
                               {promo.minOrderAmount != null ? ` · min $${promo.minOrderAmount}` : ''}
                               {promo.validUntil ? ` · vence ${promo.validUntil.slice(0, 10)}` : ''}
                             </p>
@@ -1941,22 +1809,19 @@ export const SettingsSection = React.memo(function SettingsSection({
             )}
 
           </div>
-        </div>
-        {showSaveBar && <div className="h-24 shrink-0 md:h-20" aria-hidden="true" />}
-      </div>
       {showSaveBar && (
-        <div className="pointer-events-none fixed inset-x-0 bottom-0 z-[60] px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-4">
-          <div className="pointer-events-auto mx-auto flex max-w-2xl items-center gap-2.5 rounded-[20px] border border-black/10 bg-white/95 p-2.5 pl-3.5 shadow-[0_12px_36px_rgba(15,15,15,0.18)] backdrop-blur-xl sm:gap-3 sm:rounded-[24px] sm:p-3 sm:pl-5">
+        <div className="wl-settings-save-wrap">
+          <div className="wl-settings-save">
             <div className="min-w-0 flex-1">
-              <p className="truncate text-[13px] font-bold text-neutral-900">{activeSaveBarCopy.title}</p>
-              <p className="truncate text-[11px] text-neutral-500">{activeSaveBarCopy.subtitle}</p>
+              <p>{activeSaveBarCopy.title}</p>
+              <span>{activeSaveBarCopy.subtitle}</span>
             </div>
             {activeSettingsTab === 'seguridad' ? (
               <button
                 type="submit"
                 form="sadel-security-form"
                 disabled={globalSaving}
-                className="min-h-12 shrink-0 rounded-full bg-neutral-950 px-4 text-sm font-bold text-white transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 sm:px-5 md:px-6 md:py-3.5"
+                className="wl-settings-save-button"
               >
                 <span className="md:hidden">{globalSaving ? 'Actualizando' : 'Actualizar'}</span>
                 <span className="hidden md:inline">{globalLabel}</span>
@@ -1967,7 +1832,7 @@ export const SettingsSection = React.memo(function SettingsSection({
                 onClick={handleGlobalSave}
                 disabled={globalSaving || (activeSettingsTab === 'horarios' && hasInvalidHours)}
                 title={activeSettingsTab === 'horarios' && hasInvalidHours ? 'Revisa los horarios marcados en rojo antes de guardar.' : undefined}
-                className="min-h-12 shrink-0 rounded-full bg-neutral-950 px-4 text-sm font-bold text-white transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 sm:px-5 md:px-6 md:py-3.5"
+                className="wl-settings-save-button"
               >
                 <span className="md:hidden">{globalSaving ? 'Guardando' : 'Guardar'}</span>
                 <span className="hidden md:inline">{globalLabel}</span>
@@ -1976,6 +1841,8 @@ export const SettingsSection = React.memo(function SettingsSection({
           </div>
         </div>
       )}
+        </div>
+      </div>
       {promoCodeModalOpen && (
         <div className="fixed inset-0 z-[96] flex items-end justify-center bg-black/60 animate-fade-in sm:items-center sm:p-5"
           onClick={() => setPromoCodeModalOpen(false)}>
@@ -2020,18 +1887,35 @@ export const SettingsSection = React.memo(function SettingsSection({
                         <option value="PERCENT">Porcentaje (%)</option>
                         <option value="AMOUNT">Monto fijo ($)</option>
                         <option value="FREE_DELIVERY">Envío gratis</option>
+                        <option value="FREE_PRODUCT">Producto gratis</option>
                       </select>
                     </label>
-                    <label className="grid min-w-0 gap-1.5 text-sm text-neutral-600">
-                      <span className="text-[11px] font-bold uppercase tracking-[0.1em] text-neutral-500">Valor</span>
-                      <input
-                        type="number"
-                        value={promoCodeForm.value}
-                        onChange={(e) => setPromoCodeForm((c) => ({ ...c, value: e.target.value }))}
-                        placeholder={promoCodeForm.type === 'PERCENT' ? '15' : promoCodeForm.type === 'AMOUNT' ? '50' : '0'}
-                        className="rounded-xl border border-black/10 bg-white px-3.5 py-3 text-base text-neutral-900 shadow-sm transition-all focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-400/20 sm:text-sm"
-                      />
-                    </label>
+                    {promoCodeForm.type !== 'FREE_PRODUCT' ? (
+                      <label className="grid min-w-0 gap-1.5 text-sm text-neutral-600">
+                        <span className="text-[11px] font-bold uppercase tracking-[0.1em] text-neutral-500">Valor</span>
+                        <input
+                          type="number"
+                          value={promoCodeForm.value}
+                          onChange={(e) => setPromoCodeForm((c) => ({ ...c, value: e.target.value }))}
+                          placeholder={promoCodeForm.type === 'PERCENT' ? '15' : promoCodeForm.type === 'AMOUNT' ? '50' : '0'}
+                          className="rounded-xl border border-black/10 bg-white px-3.5 py-3 text-base text-neutral-900 shadow-sm transition-all focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-400/20 sm:text-sm"
+                        />
+                      </label>
+                    ) : (
+                      <label className="grid min-w-0 gap-1.5 text-sm text-neutral-600">
+                        <span className="text-[11px] font-bold uppercase tracking-[0.1em] text-neutral-500">Producto a regalar</span>
+                        <select
+                          value={promoCodeForm.giftProductId}
+                          onChange={(e) => setPromoCodeForm((c) => ({ ...c, giftProductId: e.target.value }))}
+                          className="rounded-xl border border-black/10 bg-white px-3.5 py-3 text-base text-neutral-900 shadow-sm transition-all focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-400/20 sm:text-sm"
+                        >
+                          <option value="">Selecciona un producto</option>
+                          {promoProducts.map((product) => (
+                            <option key={product.id} value={product.id}>{product.name}</option>
+                          ))}
+                        </select>
+                      </label>
+                    )}
                   </div>
                   <div className="mt-3 flex items-start gap-2.5 rounded-xl border border-neutral-100 bg-neutral-50 px-4 py-3">
                     <Info className="mt-0.5 h-4 w-4 shrink-0 text-neutral-400" strokeWidth={1.8} />
@@ -2098,9 +1982,12 @@ export const SettingsSection = React.memo(function SettingsSection({
                         className="rounded-xl border border-black/10 bg-white px-3.5 py-3 text-base text-neutral-900 shadow-sm transition-all focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-400/20 sm:text-sm" />
                     </label>
                   </div>
-                  <label className="mt-4 flex items-start gap-2 text-sm text-neutral-700">
-                    <input type="checkbox" checked={promoCodeForm.firstPurchaseOnly} onChange={(e) => setPromoCodeForm((c) => ({ ...c, firstPurchaseOnly: e.target.checked }))} className="mt-1" />
-                    <span><b>Solo primera compra en WingsLab</b><span className="mt-0.5 block text-xs text-neutral-500">El checkout la vuelve a validar dentro de la transacción del pedido.</span></span>
+                  <label className={`mt-4 flex items-start gap-3 rounded-2xl border p-4 transition ${promoCodeForm.firstPurchaseOnly ? 'border-[#bb0a0e] bg-[#fff0ef]' : 'border-black/10 bg-white'}`}>
+                    <input type="checkbox" checked={promoCodeForm.firstPurchaseOnly} onChange={(e) => setPromoCodeForm((c) => ({ ...c, firstPurchaseOnly: e.target.checked }))} className="mt-0.5 h-5 w-5 shrink-0 accent-[#bb0a0e]" />
+                    <span className="min-w-0">
+                      <b className="block text-sm text-neutral-900">🎁 Promoción exclusiva para nuevos clientes</b>
+                      <span className="mt-1 block text-xs leading-relaxed text-neutral-600">Solo se puede usar en la <b>primera compra</b> de cada cliente en WingsLab. Perfecto para dar la bienvenida con un descuento o un producto gratis. El servidor lo valida dentro del pedido, así que no se puede repetir.</span>
+                    </span>
                   </label>
                   <div className="mt-4 grid min-w-0 grid-cols-1 gap-4 md:grid-cols-2">
                     <label className="grid min-w-0 gap-1.5 text-sm text-neutral-600">

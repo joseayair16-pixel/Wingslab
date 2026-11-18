@@ -1,7 +1,8 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { SaDelLogo } from './SaDelLogo';
+import redWordmark from '../assets/wingslab-wordmark-red.png';
+import whiteWordmark from '../assets/wingslab-wordmark-white.png';
 
 type Phase = 'visible' | 'fading' | 'gone';
 
@@ -54,16 +55,16 @@ export default function SplashScreen() {
   return (
     <div
       aria-hidden="true"
-      className={`sadel-splash fixed inset-0 z-[10000] flex flex-col items-center justify-center bg-[#fafaf9] transition-opacity duration-300 ${
+      className={`wl-restaurant-splash fixed inset-0 z-[10000] flex flex-col items-center justify-center transition-opacity duration-300 ${
         phase === 'fading' ? 'pointer-events-none opacity-0' : 'opacity-100'
       }`}
     >
-      <SaDelLogo
-        className="sadel-loader-logo animate-sadel-breathe select-none pointer-events-none h-auto max-h-[68px] w-auto max-w-[72vw]"
-      />
-      <p className="sadel-splash-title mt-4 text-lg font-bold tracking-[-0.02em] text-neutral-800">SaDeL</p>
-      <div className="sadel-splash-track mt-4 h-1 w-16 overflow-hidden rounded-full bg-neutral-200">
-        <div className="sadel-splash-fill h-full w-full rounded-full bg-sky-500 animate-pulse" />
+      <span className="wl-loader-brand wl-splash-brand animate-sadel-breathe">
+        <img className="wl-loader-logo-light" src={redWordmark.src} alt="" />
+        <img className="wl-loader-logo-dark" src={whiteWordmark.src} alt="" />
+      </span>
+      <div className="wl-restaurant-splash-track mt-5 h-1 w-20 overflow-hidden rounded-full">
+        <div className="h-full w-1/3 rounded-full bg-[#f20d12] animate-sadel-progress" />
       </div>
     </div>
   );

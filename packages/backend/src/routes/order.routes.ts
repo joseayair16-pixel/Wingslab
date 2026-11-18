@@ -58,6 +58,7 @@ const createOrderSchema = z.object({
   notes: z.string().max(500).nullish().transform(v => v ?? undefined),
   locationVerified: z.boolean().optional().default(false),
   promoCode: z.string().max(30).trim().optional().transform(v => v?.toUpperCase() ?? undefined),
+  loyalty: z.object({ cardId: z.string().uuid(), discountCents: z.number().int().min(0).max(100000000), expectedTotalCents: z.number().int().min(0).max(100000000) }).optional(),
 }).superRefine((data, context) => {
   if (data.fulfillmentType === 'DELIVERY' && !data.deliveryAddress) {
     context.addIssue({
@@ -169,12 +170,22 @@ export async function registerOrderRoutes(fastify: FastifyInstance): Promise<voi
       if (violation === 'PROMO_CODE_CUSTOMER_LIMIT') return reply.status(400).send({ success: false, error: { code: violation, message: 'Ya alcanzaste el límite de uso de este cupón.' } });
 
       let discount = 0;
+      let gift: { id: string; name: string } | null = null;
       if (promo.type === 'PERCENT') {
         discount = Math.round((subtotal * promo.value) / 100 * 100) / 100;
       } else if (promo.type === 'AMOUNT') {
         discount = Math.min(promo.value, subtotal);
       } else if (promo.type === 'FREE_DELIVERY') {
         discount = isPickup ? 0 : deliveryFee;
+      } else if (promo.type === 'FREE_PRODUCT') {
+        const product = await prisma.product.findFirst({
+          where: { id: promo.giftProductId ?? '', restaurantId: restaurant.id, isAvailable: true, deleted: false, sellBy: 'UNIT', isAdultOnly: false },
+          select: { id: true, name: true, trackStock: true, stock: true, optionGroups: { select: { minSelection: true } } },
+        });
+        if (!product || (product.trackStock && product.stock < 1) || product.optionGroups.some(g => g.minSelection > 0)) {
+          return reply.status(400).send({ success: false, error: { code: 'PROMO_GIFT_UNAVAILABLE', message: 'El producto de regalo no está disponible en este momento.' } });
+        }
+        gift = { id: product.id, name: product.name };
       }
 
       return reply.status(200).send({
@@ -186,6 +197,7 @@ export async function registerOrderRoutes(fastify: FastifyInstance): Promise<voi
           description: promo.description,
           minOrderAmount: promo.minOrderAmount,
           discount: discount,
+          gift,
         },
       });
     });

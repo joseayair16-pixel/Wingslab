@@ -10,7 +10,8 @@ export type MediaUploadKind =
   | 'restaurant-cover'
   | 'product-image'
   | 'payment-proof'
-  | 'driver-photo';
+  | 'driver-photo'
+  | 'customer-avatar';
 
 export type UploadResult = {
   url: string;
@@ -54,6 +55,7 @@ const kindFolderMap: Record<MediaUploadKind, string> = {
   'product-image': 'restaurant/products',
   'payment-proof': 'payments/proofs',
   'driver-photo': 'drivers/photos',
+  'customer-avatar': 'customers/avatars',
 };
 
 function getR2Config() {

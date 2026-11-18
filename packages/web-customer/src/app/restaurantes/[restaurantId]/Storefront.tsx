@@ -1,11 +1,17 @@
 'use client';
 import { WINGSLAB_BUSINESS } from '@sadel/shared';
 import { getWingslabSocketUrl } from '@sadel/shared';
-import { AlertTriangle, ArrowLeft, Banknote, Bell, BellOff, Bike, Check, ChevronLeft, ChevronRight, ChevronUp, CircleCheck, CirclePlus, ClipboardCheck, Clock, Copy, DollarSign, Gift, Home, Landmark, Loader2, Mail, Map, MapPin, MessageCircle, Minus, Package, Plus, RefreshCw, Search, ShoppingBag, Store, Tag, Ticket,   Trash2, Upload, User, X, ZoomIn } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, Banknote, Bell, BellOff, Bike, Check, ChevronLeft, ChevronRight, ChevronUp, CircleCheck, CirclePlus, ClipboardCheck, Clock, Copy, DollarSign, Gift, Home, Landmark, Loader2, Mail, Map, MapPin, MessageCircle, Minus, Package, Plus, RefreshCw, Search, ShoppingBag, ShoppingCart, Store, Tag, Ticket, Trash2, Upload, User, X, ZoomIn, Flame, LayoutGrid, Drumstick, Sandwich, CupSoda, Utensils, MoreHorizontal, ReceiptText } from 'lucide-react';
+import officialWordmark from '../../../assets/wingslab-wordmark.png';
+import { Hamburger } from 'lucide-react';
+import { CategoryIcon } from '../../../components/CategoryIcon';
+import { CustomerNavigation } from '../../../components/CustomerNavigation';
+import { CartIcon } from '../../../components/CartIcon';
 
 import { use, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { AuthUser, clearStoredSession, readStoredSession, requestJson, submitReview, uploadMediaAsset, convertImageFileToDataUrl, getOrderStatusLabel, isRestaurant, ApiRequestError, isSessionInvalidError, handleSocketUnauthorized, setGlobalSessionExpiredHandler, forceSessionExpired, setDefaultRefreshConfig } from '@sadel/shared';
+import { AuthUser, clearStoredSession, readStoredSession, requestJson, submitReview, uploadMediaAsset, convertImageFileToDataUrl, getOrderStatusLabel, isRestaurant, ApiRequestError, isSessionInvalidError, handleSocketUnauthorized, setGlobalSessionExpiredHandler, forceSessionExpired, setDefaultRefreshConfig, formatCurrency as formatSharedCurrency } from '@sadel/shared';
+import { MenuPromotions } from '../../../components/MenuPromotions';
 import { io } from 'socket.io-client';
 import { AuthModal } from '../../../components/AuthModal';
 import { CompactActiveOrderBanner, computeDelayState, formatEstimatedArrivalMinutes, formatOverdueMinutes } from '../../../components/CompactActiveOrderBanner';
@@ -16,11 +22,10 @@ import { ensureGoogleMapsScript, getGoogleMaps } from '../../../lib/googleMaps';
 import RatingModal from '../../../components/RatingModal';
 import { useForegroundPolling } from '../../../hooks/useForegroundPolling';
 import { SaDelLoader } from '../../../components/SaDelLoader';
-import { WingsLabLogo as SaDelLogo } from '../../../components/WingsLabLogo';
 import CartDrawer from '../../../components/CartDrawer';
 import ImageZoomLightbox from '../../../components/ImageZoomLightbox';
-import { SectionHeader } from '../../../components/SectionHeader';
 import { createPlacesSource } from '../../../lib/places';
+import type { ProductOptionGroup, PublicRestaurantDetail } from '../../../lib/public-menu-types';
 
 function weightInputGrams(input: string, unit: 'g' | 'kg'): number | null {
   const normalized = input.replace(',', '.');
@@ -45,103 +50,6 @@ type OrderStatus =
   | 'DELIVERED'
   | 'CANCELLED'
   | 'REJECTED';
-
-type ProductOption = {
-  id: string;
-  groupId: string;
-  name: string;
-  price: number;
-  isAvailable: boolean;
-};
-
-type ProductOptionGroup = {
-  id: string;
-  productId: string;
-  name: string;
-  minSelection: number;
-  maxSelection: number;
-  options: ProductOption[];
-};
-
-type PublicRestaurantDetail = {
-  id: string;
-  name: string;
-  description: string;
-  address: string;
-  region: string;
-  logo?: string | null;
-  coverImage?: string | null;
-  status: string;
-  isOpen: boolean;
-  hasOwnDelivery: boolean;
-  pickupOnly?: boolean;
-  serviceFee?: number | null;
-  deliveryFee?: number | null;
-  effectiveDeliveryFee?: number | null;
-  maxCashOrder?: number | null;
-  pricingModel?: string | null;
-  baseRate?: number | null;
-  perKmRate?: number | null;
-  minDeliveryFee?: number | null;
-  maxDeliveryFee?: number | null;
-  deliveryRadius?: number | null;
-  businessType?: string;
-  minDeliveryTime: number;
-  maxDeliveryTime: number;
-  latitude?: number;
-  longitude?: number;
-  transferBankName?: string | null;
-  transferAccountNumber?: string | null;
-  transferBeneficiaryName?: string | null;
-  acceptsCash?: boolean | null;
-  acceptedPaymentMethods?: string[];
-  rating?: number;
-  reviewCount?: number;
-  accentColor?: string | null;
-  instagram?: string | null;
-  facebook?: string | null;
-  tiktok?: string | null;
-  promoFreeDeliveryThreshold?: number | null;
-  promoMinOrderAmount?: number | null;
-  promoMinOrderPercent?: number | null;
-  operatingHours?: Array<{
-    dayOfWeek: number; // 0 = domingo
-    shiftIndex?: number;
-    openTime: string; // HH:mm
-    closeTime: string; // HH:mm
-    isClosed: boolean;
-  }>;
-  nextOpenTime?: string | null;
-  categories: Array<{
-    id: string;
-    name: string;
-      products: Array<{
-        id: string;
-        name: string;
-        description: string;
-        price: number;
-        sellBy?: string;
-        unitPrice?: number | null;
-        minWeightG?: number | null;
-        maxWeightG?: number | null;
-        stepWeightG?: number | null;
-        weightPresets?: string | number[] | null;
-        image?: string | null;
-        images?: string[];
-        imagePosition?: string | null;
-        imageZoom?: number | null;
-        discountPrice?: number | null;
-        promoType?: 'MULTI_BUY' | null;
-        promoBuyQuantity?: number | null;
-        promoPayQuantity?: number | null;
-        isAdultOnly?: boolean;
-        trackStock?: boolean;
-        stock?: number;
-        lowStockThreshold?: number;
-        optionGroups?: ProductOptionGroup[];
-      }>;
-  }>;
-};
 
 import { usePushNotifications } from '../../../hooks/usePushNotifications';
 import { useCustomerSounds } from '../../../hooks/useCustomerSounds';
@@ -471,8 +379,10 @@ function CarouselOrGrid({
 
 export default function RestaurantPage({
   searchParams,
+  initialRestaurant,
 }: {
   searchParams?: Promise<{ [key: string]: string | string[] | undefined }>;
+  initialRestaurant?: PublicRestaurantDetail | null;
 }) {
   // En Next 15+ params/searchParams son Promises en client components: se
   // 'desenvuelven' con use() (un solo resultado, estable entre renders).
@@ -487,7 +397,7 @@ export default function RestaurantPage({
   const [isPushReminderModalOpen, setIsPushReminderModalOpen] = useState(false);
   const [showMaxCashModal, setShowMaxCashModal] = useState(false);
   const [showGpsCashModal, setShowGpsCashModal] = useState(false);
-  const [rawRestaurant, setRawRestaurant] = useState<PublicRestaurantDetail | null>(null);
+  const [rawRestaurant, setRawRestaurant] = useState<PublicRestaurantDetail | null>(initialRestaurant ?? null);
 
   const restaurant = useMemo(() => {
     if (!rawRestaurant) return null;
@@ -526,6 +436,9 @@ export default function RestaurantPage({
   }, [rawRestaurant, sessionUser?.dateOfBirth]);
 
   const [productSearchQuery, setProductSearchQuery] = useState('');
+  const [showRestaurantInfo, setShowRestaurantInfo] = useState(false);
+  const [menuTab, setMenuTab] = useState<'home' | 'promos'>('home');
+  const featuredProducts = restaurant?.categories.find(category => category.id === '__promotions__')?.products ?? [];
 
   const filteredRestaurant = useMemo(() => {
     if (!productSearchQuery.trim() || !restaurant) return restaurant;
@@ -567,6 +480,7 @@ export default function RestaurantPage({
   const [unreadMessagesMap, setUnreadMessagesMap] = useState<Record<string, number>>({});
   const [carouselIndex, setCarouselIndex] = useState(0);
   const [isScrolledPastHeader, setIsScrolledPastHeader] = useState(false);
+  const [headerIsPinned, setHeaderIsPinned] = useState(false);
 
   // Chat State
   const [isChatOpen, setIsChatOpen] = useState(false);
@@ -581,6 +495,12 @@ export default function RestaurantPage({
   const [isTrackingEnabled, setIsTrackingEnabled] = useState(false);
   const [driverLocation, setDriverLocation] = useState<{ lat: number; lng: number; updatedAt?: string | null } | null>(null);
   const [showAuthModal, setShowAuthModal] = useState(false);
+  const handleLogout = useCallback(() => {
+    clearStoredSession(storageKey);
+    setToken('');
+    setSessionUser(null);
+  }, []);
+
   const handleLoginSuccess = useCallback((newToken: string, newUser: AuthUser) => {
     setToken(newToken);
     setSessionUser(newUser);
@@ -611,6 +531,7 @@ export default function RestaurantPage({
   useEffect(() => {
     const handleScroll = () => {
       setIsScrolledPastHeader(window.scrollY > 280);
+      setHeaderIsPinned(window.scrollY > 0);
     };
     window.addEventListener('scroll', handleScroll, { passive: true });
     // Check initial position
@@ -766,11 +687,11 @@ export default function RestaurantPage({
     }
   }, [rawRestaurant, checkoutForm.paymentMethod]);
   const [promoCodeState, setPromoCodeState] = useState<'idle' | 'validating' | 'valid' | 'invalid'>('idle');
-  const [promoCodeInfo, setPromoCodeInfo] = useState<{ code: string; type: 'PERCENT' | 'AMOUNT' | 'FREE_DELIVERY'; value: number; discount: number; description?: string | null } | null>(null);
+  const [promoCodeInfo, setPromoCodeInfo] = useState<{ code: string; type: 'PERCENT' | 'AMOUNT' | 'FREE_DELIVERY' | 'FREE_PRODUCT'; value: number; discount: number; description?: string | null; gift?: { id: string; name: string } | null } | null>(null);
   const [isCouponOpen, setIsCouponOpen] = useState(false);
   const [couponFeedback, setCouponFeedback] = useState<{ tone: 'success' | 'error'; title: string; message?: string } | null>(null);
   const couponFeedbackTimerRef = useRef<number | null>(null);
-  const [loadingRestaurant, setLoadingRestaurant] = useState(true);
+  const [loadingRestaurant, setLoadingRestaurant] = useState(!initialRestaurant);
   const [creatingOrder, setCreatingOrder] = useState(false);
   const [isPreConfirmOpen, setIsPreConfirmOpen] = useState(false);
   const [isHoursModalOpen, setIsHoursModalOpen] = useState(false);
@@ -1150,7 +1071,9 @@ export default function RestaurantPage({
         }
       }
 
-      if (savedSession.apiBase && savedSession.apiBase.startsWith('/')) {
+      // `readStoredSession` already rejects cross-origin values (e.g. //evil.com);
+      // keep an explicit guard as defence in depth before using it with the JWT.
+      if (savedSession.apiBase && /^\/(?!\/)/.test(savedSession.apiBase) && !savedSession.apiBase.includes('..')) {
         setApiBase(savedSession.apiBase);
       }
 
@@ -1229,7 +1152,6 @@ export default function RestaurantPage({
     }
 
     return () => {
-      document.documentElement.classList.remove('pure-dark');
       window.removeEventListener('sadel:token-refreshed', onTokenRefreshed);
     };
   }, []);
@@ -1262,7 +1184,6 @@ export default function RestaurantPage({
     let cancelled = false;
 
     async function loadRestaurant() {
-      setLoadingRestaurant(true);
       setError('');
 
       try {
@@ -1298,23 +1219,22 @@ export default function RestaurantPage({
   }, [apiBase, urlParams.restaurantId, menuReloadKey, token]);
 
   useEffect(() => {
-    if (!document.documentElement) return;
-    const hex =
-      rawRestaurant?.accentColor && /^#[0-9a-fA-F]{6}$/.test(rawRestaurant.accentColor)
-        ? rawRestaurant.accentColor
-        : '#0ea5e9';
-    const clean = hex.replace('#', '');
-    const shade = (factor: number) =>
-      `#${[0, 2, 4].map((i) => Math.round(parseInt(clean.slice(i, i + 2), 16) * factor).toString(16).padStart(2, '0')).join('')}`;
-    const strong = shade(0.78);
-    const hover = shade(0.68);
-    const style = document.documentElement.style;
-    style.setProperty('--menu-accent', hex);
-    style.setProperty('--menu-accent-strong', strong);
-    style.setProperty('--menu-accent-hover', hover);
-    style.setProperty('--menu-accent-soft', `${hex}1A`);
-    style.setProperty('--menu-accent-soft-strong', `${hex}2E`);
-  }, [rawRestaurant?.accentColor]);
+    let cancelled = false;
+    const refreshStatus = async () => {
+      try {
+        const response = await fetch(`${apiBase}/menu`, { cache: 'no-store' });
+        if (!response.ok) return;
+        const result = await response.json();
+        if (!cancelled && typeof result?.data?.isOpen === 'boolean') {
+          setRawRestaurant(current => current ? { ...current, isOpen: result.data.isOpen } : current);
+        }
+      } catch { /* Keep the last successfully loaded restaurant state. */ }
+    };
+    const onVisible = () => { if (document.visibilityState === 'visible') void refreshStatus(); };
+    const timer = window.setInterval(refreshStatus, 60000);
+    document.addEventListener('visibilitychange', onVisible);
+    return () => { cancelled = true; window.clearInterval(timer); document.removeEventListener('visibilitychange', onVisible); };
+  }, [apiBase]);
 
   useEffect(() => {
     if (!token || sessionUser?.role !== 'CUSTOMER') {
@@ -2179,6 +2099,48 @@ export default function RestaurantPage({
     () => cart.reduce((sum, item) => sum + Math.max(0, item.quantity), 0),
     [cart]
   );
+  // El carrito se hidruta desde localStorage (Zustand persist): en SSR es 0.
+  // Mostramos 0 en el primer render del cliente y el valor real tras el mount
+  // para evitar un mismatch de hidratación (React error #418).
+  const [displayCartCount, setDisplayCartCount] = useState(0);
+  useEffect(() => { setDisplayCartCount(totalProducts); }, [totalProducts]);
+  const cartButtonRef = useRef<HTMLButtonElement>(null);
+  const cartAnimationSource = useRef<{ x: number; y: number; time: number } | null>(null);
+  const previousCartCount = useRef(totalProducts);
+  useEffect(() => {
+    const rememberSource = (event: MouseEvent) => {
+      const button = (event.target as Element | null)?.closest('button');
+      if (!button || button.closest('.wl-cart-drawer') || button === cartButtonRef.current) return;
+      const rect = button.getBoundingClientRect();
+      cartAnimationSource.current = { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2, time: Date.now() };
+    };
+    document.addEventListener('click', rememberSource, true);
+    return () => document.removeEventListener('click', rememberSource, true);
+  }, []);
+  useEffect(() => {
+    const previous = previousCartCount.current;
+    previousCartCount.current = totalProducts;
+    const source = cartAnimationSource.current;
+    if (totalProducts <= previous || !source || Date.now() - source.time > 1000) return;
+    cartAnimationSource.current = null;
+    const target = cartButtonRef.current;
+    if (!target || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    const rect = target.getBoundingClientRect();
+    if (!rect.width || !rect.height) return;
+    const destination = { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+    const flying = document.createElement('span');
+    flying.className = 'wl-cart-flying';
+    flying.setAttribute('aria-hidden', 'true');
+    flying.textContent = `+${totalProducts - previous}`;
+    document.body.appendChild(flying);
+    const animation = flying.animate([
+      { transform: `translate(${source.x}px, ${source.y}px) translate(-50%, -50%) scale(.8)`, opacity: 1, offset: 0 },
+      { transform: `translate(${(source.x + destination.x) / 2}px, ${Math.min(source.y, destination.y) - 70}px) translate(-50%, -50%) scale(1.1)`, opacity: 1, offset: .5 },
+      { transform: `translate(${destination.x}px, ${destination.y}px) translate(-50%, -50%) scale(.35)`, opacity: 0, offset: 1 },
+    ], { duration: 650, easing: 'ease-in-out' });
+    animation.onfinish = () => { flying.remove(); if (target.isConnected) target.animate([{ transform:'scale(1)', backgroundColor:'#ffffff1f', boxShadow:'0 0 0 0 #fff0' }, { transform:'scale(1.12)', backgroundColor:'#ffffff70', boxShadow:'0 0 0 8px #fff5' }, { transform:'scale(1)', backgroundColor:'#ffffff1f', boxShadow:'0 0 0 0 #fff0' }, { transform:'scale(1.06)', backgroundColor:'#ffffff55', boxShadow:'0 0 0 4px #fff3' }, { transform:'scale(1)', backgroundColor:'#ffffff1f', boxShadow:'0 0 0 0 #fff0' }], { duration: 550, easing:'ease-out' }); };
+    animation.oncancel = () => flying.remove();
+  }, [totalProducts]);
   const discountAmount = useMemo(
     () => cart.reduce((sum, item) => {
       const price = toMoney(item.price);
@@ -2330,7 +2292,25 @@ export default function RestaurantPage({
     effectiveSubtotal >= restaurant.promoMinOrderAmount
       ? Math.round(effectiveSubtotal * restaurant.promoMinOrderPercent / 100 * 100) / 100
       : 0;
-  const orderTotal = Math.max(0, effectiveSubtotal - couponDiscount - minOrderDiscount + serviceFee + (fulfillmentType === 'PICKUP' ? 0 : deliveryFee));
+  const [loyaltyQuote, setLoyaltyQuote] = useState<{ source: string; eligible: boolean; cardId?: string; discountCents?: number; gift?: { id: string; name: string } | null; rewardDescription?: string; reason?: string } | null>(null);
+  const [useLoyalty, setUseLoyalty] = useState(true);
+  const [loyaltyLoading, setLoyaltyLoading] = useState(false);
+  const loyaltyKey = JSON.stringify({ subtotalCents: Math.round(effectiveSubtotal * 100), productIds: cart.map(item => item.productId), otherPromotion: couponDiscount > 0 || minOrderDiscount > 0 || discountAmount > 0 || (fulfillmentType !== 'PICKUP' && restaurant?.promoFreeDeliveryThreshold != null && effectiveSubtotal >= restaurant.promoFreeDeliveryThreshold) });
+  useEffect(() => {
+    if (!token || !isCheckoutOpen || !cart.length) { setLoyaltyQuote(null); return; }
+    let active = true;
+    setLoyaltyLoading(true);
+    const timer = window.setTimeout(() => {
+      void requestJson<{ data: { eligible: boolean; cardId?: string; discountCents?: number; gift?: { id: string; name: string } | null; rewardDescription?: string; reason?: string } }>({ apiBase, token, path: '/customer/lealtad/cotizar', options: { method: 'POST', body: loyaltyKey }, retry: { attempts: 0 } })
+        .then(result => { if (active) setLoyaltyQuote({ ...result.data, source: loyaltyKey }); })
+        .catch(() => { if (active) setLoyaltyQuote({ source: loyaltyKey, eligible: false, reason: 'No se pudo consultar tu recompensa. Puedes comprar sin usarla; tu progreso se conserva.' }); })
+        .finally(() => { if (active) setLoyaltyLoading(false); });
+    }, 250);
+    return () => { active = false; window.clearTimeout(timer); };
+  }, [apiBase, token, isCheckoutOpen, loyaltyKey]);
+  const loyaltyApplied = useLoyalty && !loyaltyLoading && loyaltyQuote?.source === loyaltyKey && loyaltyQuote.eligible;
+  const loyaltyDiscount = loyaltyApplied ? (loyaltyQuote?.discountCents || 0) / 100 : 0;
+  const orderTotal = Math.max(0, effectiveSubtotal - couponDiscount - minOrderDiscount - loyaltyDiscount + serviceFee + (fulfillmentType === 'PICKUP' ? 0 : deliveryFee));
   const checkoutValidationMessage = useMemo(() => {
     return getCheckoutValidationMessage(checkoutForm, cart, restaurant, token, Boolean(transferProofSource), fulfillmentType);
   }, [cart, checkoutForm, restaurant, token, transferProofSource, fulfillmentType]);
@@ -2341,11 +2321,11 @@ function triggerHaptic(pattern: number | number[] = 10) {
   }
 }
 
-function getProductAvailability(p: { trackStock?: boolean; stock?: number; lowStockThreshold?: number }) {
+function getProductAvailability(p: { trackStock?: boolean; stock?: number; lowStockThreshold?: number; isAvailable?: boolean }) {
   const tracked = !!p.trackStock;
   const stock = typeof p.stock === 'number' ? p.stock : 0;
   const threshold = typeof p.lowStockThreshold === 'number' ? p.lowStockThreshold : 5;
-  const available = tracked ? stock > 0 : true;
+  const available = p.isAvailable !== false && (!tracked || stock > 0);
   const lowStock = tracked && stock > 0 && stock <= threshold;
   const maxQty = available ? (tracked ? stock : Number.POSITIVE_INFINITY) : 0;
   return { available, lowStock, maxQty, tracked };
@@ -2386,14 +2366,16 @@ function ProductImage({
 }) {
   const images = product.images?.length ? product.images : [];
   const src = images.length > 1 && typeof carouselIndex === 'number' ? images[carouselIndex % images.length] : product.image;
-
-  if (!src) return null;
+  const [failed, setFailed] = useState(false);
+  useEffect(() => setFailed(false), [src]);
+  if (!src || failed) return <div className="wl-product-placeholder"><Utensils aria-hidden="true" /><span>Fotografía no disponible</span></div>;
 
   return (
     <div className="h-full w-full overflow-hidden" style={{ transform: `scale(${(product.imageZoom ?? 100) / 100})`, transformOrigin: 'center center' }}>
       <img
         src={src}
         alt={product.name}
+        onError={() => setFailed(true)}
         loading={eager ? 'eager' : 'lazy'}
         decoding="async"
         draggable={false}
@@ -2566,8 +2548,8 @@ function ProductImage({
     if (!restaurant?.categories) return;
     
     // Initialize active category so the selector has an active tab on first load
-    if (!activeCategory && restaurant.categories.length > 0) {
-      setActiveCategory(restaurant.categories[0].id);
+    if (!activeCategory || activeCategory === '__promotions__') {
+      setActiveCategory(restaurant.categories.find(category => category.id !== '__promotions__')?.id ?? null);
     }
 
     const observer = new IntersectionObserver(
@@ -2578,7 +2560,7 @@ function ProductImage({
           }
         });
       },
-      { rootMargin: '-184px 0px -60% 0px', threshold: 0 }
+      { rootMargin: '-80px 0px -60% 0px', threshold: 0 }
     );
 
     Object.values(categorySectionRefs.current).forEach((section) => {
@@ -2586,7 +2568,7 @@ function ProductImage({
     });
 
     return () => observer.disconnect();
-  }, [restaurant]);
+  }, [restaurant, menuTab, productSearchQuery]);
 
   function scrollToCategory(categoryId: string) {
     setActiveCategory(categoryId);
@@ -2596,8 +2578,7 @@ function ProductImage({
       return;
     }
 
-    const stickyHeader = document.querySelector('[data-sticky-header]');
-    const stickyHeight = stickyHeader ? stickyHeader.getBoundingClientRect().height + 72 : 184;
+    const stickyHeight = document.querySelector('.wl-header')?.getBoundingClientRect().height ?? 68;
 
     const targetPosition = target.getBoundingClientRect().top + window.scrollY - stickyHeight;
 
@@ -2853,7 +2834,7 @@ function ProductImage({
       const effectiveSubtotal = Math.max(0, cartSubtotal - discountAmount);
       const payload = await requestJson<{
         success: true;
-        data: { code: string; type: 'PERCENT' | 'AMOUNT' | 'FREE_DELIVERY'; value: number; description?: string | null; minOrderAmount?: number | null; discount: number };
+        data: { code: string; type: 'PERCENT' | 'AMOUNT' | 'FREE_DELIVERY' | 'FREE_PRODUCT'; value: number; description?: string | null; minOrderAmount?: number | null; discount: number; gift?: { id: string; name: string } | null };
       }>({
         apiBase,
         path: '/pedidos/validar-cupon',
@@ -2877,7 +2858,9 @@ function ProductImage({
           ? `${payload.data.value}% de descuento`
           : payload.data.type === 'AMOUNT'
             ? `-${formatCurrency(payload.data.discount)} en tu pedido`
-            : 'Envío gratis';
+            : payload.data.type === 'FREE_PRODUCT'
+              ? `${payload.data.gift?.name || 'Producto gratis'} de regalo en tu pedido`
+              : 'Envío gratis';
       showCouponFeedback('success', `Cupón ${payload.data.code} aplicado`, typeLabel);
     } catch (e: any) {
       setPromoCodeState('invalid');
@@ -2933,6 +2916,10 @@ function ProductImage({
 
   async function createOrder() {
     if (creatingOrderRef.current || creatingOrder || !restaurant) {
+      return;
+    }
+    if (loyaltyLoading || (token && isCheckoutOpen && loyaltyQuote?.source !== loyaltyKey)) {
+      setError('Espera a que termine de consultar tu recompensa antes de confirmar.');
       return;
     }
     creatingOrderRef.current = true;
@@ -3092,6 +3079,7 @@ function ProductImage({
         ...(paymentProofUrl ? { paymentProofUrl } : {}),
         ...(combinedNotes ? { notes: combinedNotes } : {}),
         locationVerified: !!currentLocation,
+        ...(loyaltyApplied && loyaltyQuote?.cardId ? { loyalty: { cardId: loyaltyQuote.cardId, discountCents: loyaltyQuote.discountCents || 0, expectedTotalCents: Math.round(orderTotal * 100) } } : {}),
         ...(promoCodeState === 'valid' && promoCodeInfo
           ? { promoCode: promoCodeInfo.code }
           : {}),
@@ -3355,7 +3343,8 @@ function ProductImage({
 
   return (
     <main
-      className="min-h-[100dvh] bg-[var(--menu-bg)] bg-fixed text-neutral-900 transition-colors duration-500 dark:bg-[var(--menu-bg-dark)] dark:text-zinc-100"
+      className="wl-storefront min-h-[100dvh] text-neutral-900"
+      data-order-overlay={isCartOpen || isCheckoutOpen || !!customizingProduct || showAuthModal ? 'open' : undefined}
     >
       {/* Pull to refresh indicator */}
       <div
@@ -3387,72 +3376,37 @@ function ProductImage({
           token={token || undefined}
         />
       ) : null}
-      <div className="sticky top-0 z-40">
-        <header className="border-b border-black/5 bg-[var(--menu-header,#ffffff)] dark:bg-[var(--menu-header-dark,#0c0c0e)] sticky top-0 z-40 shadow-[0_4px_20px_rgba(0,0,0,0.03)] pt-[env(safe-area-inset-top)]">
-          <div className="mx-auto flex max-w-7xl items-center gap-3 px-4 py-4 md:px-6">
+      <header suppressHydrationWarning className={`wl-header wl-official-header sticky top-0 z-40 pt-[env(safe-area-inset-top)] ${headerIsPinned ? 'wl-header-pinned' : ''}`}>
+        <div className="wl-official-header-inner">
+          <button type="button" className="wl-header-status" aria-label={`${restaurant ? (restaurant.isOpen ? 'Restaurante abierto' : 'Restaurante cerrado') : 'Consultando estado del restaurante'}. Ver información del restaurante`} aria-haspopup="dialog" onClick={() => window.dispatchEvent(new Event('wingslab:restaurant-info'))}><span className={`wl-header-status-dot ${restaurant ? (restaurant.isOpen ? 'is-open' : 'is-closed') : ''}`} aria-hidden="true" /><span>{restaurant ? (restaurant.isOpen ? 'Abierto' : 'Cerrado') : 'Consultando'}</span><ChevronRight className="wl-header-status-arrow" aria-hidden="true" /></button>
+          <button type="button" onClick={() => { setMenuTab('home'); window.scrollTo({ top: 0, behavior: 'smooth' }); }} className="wl-official-logo" aria-label="WingsLab, inicio">
+            <img src={officialWordmark.src} width={783} height={229} alt="WingsLab" fetchPriority="high" />
+          </button>
+          <div className="wl-header-actions-right">
             <button
               type="button"
-              onClick={() => router.push('/cuenta')}
-              className="inline-flex h-11 w-11 items-center justify-center rounded-full border transition-all border-black/10 bg-white text-neutral-800 shadow-sm hover:bg-neutral-50 dark:bg-neutral-900 dark:border-white/10 dark:text-neutral-200"
-              aria-label="Mis pedidos y cuenta"
+              className="wl-header-profile"
+              aria-label={sessionUser ? 'Ir a mi cuenta' : 'Iniciar sesión o crear cuenta'}
+              onClick={() => {
+                if (sessionUser) router.push('/cuenta#perfil');
+                else setShowAuthModal(true);
+              }}
             >
-              <ChevronLeft className="h-5 w-5" strokeWidth={2.5} />
+              {sessionUser?.profilePhoto ? (
+                <img src={sessionUser.profilePhoto} alt="" />
+              ) : sessionUser ? (
+                <span>{(sessionUser.name || 'C').trim().charAt(0).toUpperCase()}</span>
+              ) : (
+                <User aria-hidden="true" />
+              )}
             </button>
-
-            <div className="min-w-0 flex-1 relative flex items-center">
-              {/* SaDeL Logo (visible when at top) */}
-              <div className={`transition-all duration-300 ${!isScrolledPastHeader ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2 pointer-events-none'}`}>
-                <button
-                  type="button"
-                  onClick={() => router.push('/')}
-                  className="min-w-0 text-left"
-                >
-                  <SaDelLogo className="h-7 w-auto object-contain md:h-8" />
-                  <p className="truncate text-[8px] font-bold uppercase tracking-[0.12em] text-neutral-400 dark:text-neutral-500 md:text-[9px] mt-0.5 leading-none">
-                    Cocina y reparto propio
-                  </p>
-                </button>
-              </div>
-
-              {/* Restaurant Name (visible when scrolled) - Centered absolutely over the header */}
-              <div className={`absolute inset-0 flex items-center justify-center transition-all duration-300 transform ${isScrolledPastHeader ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2 pointer-events-none'}`}>
-                <p className="text-base md:text-lg font-bold tracking-tight text-neutral-950 dark:text-white truncate max-w-[200px] sm:max-w-xs md:max-w-md">{restaurant?.name || 'Cargando...'}</p>
-              </div>
-            </div>
-
-            {isAuthReady && !token && (
-              <button
-                type="button"
-                onClick={() => setShowAuthModal(true)}
-                className="relative inline-flex h-11 w-11 items-center justify-center rounded-full border transition-all overflow-hidden active:scale-95 active-scale border-black/10 bg-white text-neutral-800 shadow-sm hover:bg-neutral-50 dark:bg-neutral-900 dark:border-white/10 dark:text-neutral-200"
-                aria-label="Iniciar sesión"
-              >
-                <User className="h-5 w-5" />
-              </button>
-            )}
-
-            <button
-              type="button"
-              onClick={() => setIsCartOpen(true)}
-              className={`relative inline-flex h-11 w-11 items-center justify-center rounded-full border transition-all border-black/10 bg-white text-neutral-800 shadow-sm hover:bg-neutral-50 dark:bg-neutral-900 dark:border-white/10 dark:text-neutral-200 ${
-                cartJustUpdated ? 'scale-110 ring-4 ring-[#06c167]/20' : ''
-              } ${cart.length > 0 ? 'animate-[pulse_2s_ease-in-out_infinite]' : ''}`}
-              aria-label="Abrir carrito"
-            >
-              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4h2l.4 2M7 14h10l4-8H5.4M7 14l-1.5 2.5A1 1 0 006.4 18H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
-              </svg>
-              {cart.length > 0 && !isCartOpen ? (
-                 <span className={`absolute -right-1 -top-1 flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-sky-500 px-1 text-[11px] font-bold text-white shadow-sm ${
-                  cartJustUpdated ? 'animate-pulse' : ''
-                }`}>
-                  {totalProducts}
-                </span>
-              ) : null}
+            <button ref={cartButtonRef} type="button" onClick={() => setIsCartOpen(true)} className="wl-header-cart wl-official-cart" aria-label={`Abrir carrito de compra, ${displayCartCount} ${displayCartCount === 1 ? 'producto' : 'productos'}`}>
+              <CartIcon strokeWidth={1.8} /><span className="wl-cart-count">{displayCartCount}</span>
             </button>
           </div>
-        </header>
-      </div>
+        </div>
+      </header>
+      <CustomerNavigation active="inicio" onHome={() => { setMenuTab('home'); setProductSearchQuery(''); window.scrollTo({ top: 0, behavior: 'smooth' }); }} onAuthenticated={handleLoginSuccess} onLogout={handleLogout} />
 
     {activeOrderListItems.length > 0 ? (
         <div className="border-b border-black/5 bg-white dark:border-zinc-800 dark:bg-neutral-900">
@@ -3536,7 +3490,8 @@ function ProductImage({
 
         {/* Modal de Personalización de Producto (Uber Eats / Rappi Style) */}
         {customizingProduct && (
-          <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 backdrop-blur-md px-0 py-0 sm:items-center sm:px-4 sm:py-6" onClick={() => setCustomizingProduct(null)}>
+          <div className="wl-customize fixed inset-0 z-50 flex items-end justify-center bg-black/60 px-0 py-0 sm:items-center sm:px-4 sm:py-6" onClick={() => setCustomizingProduct(null)}>
+
                 <div className="relative bg-white dark:bg-neutral-900 rounded-t-3xl sm:rounded-[32px] overflow-hidden shadow-2xl flex flex-col w-full max-w-2xl max-h-[92dvh] sm:max-h-[90vh] border border-black/5 dark:border-zinc-800 animate-fade-in" onClick={(e) => e.stopPropagation()}>
               
               {/* Drag handle (mobile bottom sheet) */}
@@ -3621,7 +3576,7 @@ function ProductImage({
                               <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold ${
                                 isRequirementMet
                                   ? 'bg-emerald-100 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400'
-                                  : 'bg-sky-100 dark:bg-sky-900/30 text-sky-600 dark:text-sky-400'
+                                  : 'bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400'
                               }`}>
                                 {isRequirementMet ? 'Listo' : 'Faltan datos'}
                               </span>
@@ -3653,7 +3608,7 @@ function ProductImage({
                                 }}
                                 className={`flex w-full items-center justify-between gap-4 rounded-2xl border p-4 text-left transition ${
                                   isChecked
-                                    ? 'border-sky-400/30 bg-sky-100/40 dark:bg-sky-900/10'
+                                    ? 'border-red-400/30 bg-red-100/40 dark:bg-red-900/10'
                                     : 'border-black/5 dark:border-zinc-800 hover:bg-neutral-50 dark:hover:bg-neutral-800/40'
                                 } ${(!opt.isAvailable || isSelectionDisabled) ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'}`}
                               >
@@ -3661,7 +3616,7 @@ function ProductImage({
                                   {isSingleSelection ? (
                                     <div className={`flex h-5 w-5 items-center justify-center rounded-full border transition ${
                                       isChecked
-                                        ? 'border-sky-500 bg-sky-500 text-white'
+                                        ? 'border-red-500 bg-red-500 text-white'
                                         : 'border-black/20 dark:border-zinc-700 bg-white dark:bg-neutral-800'
                                     }`}>
                                       {isChecked && <div className="h-2 w-2 rounded-full bg-white" />}
@@ -3669,7 +3624,7 @@ function ProductImage({
                                   ) : (
                                     <div className={`flex h-5 w-5 items-center justify-center rounded-lg border transition ${
                                       isChecked
-                                        ? 'border-sky-500 bg-sky-500 text-white'
+                                        ? 'border-red-500 bg-red-500 text-white'
                                         : 'border-black/20 dark:border-zinc-700 bg-white dark:bg-neutral-800'
                                     }`}>
                                       {isChecked && (
@@ -3748,9 +3703,9 @@ function ProductImage({
                                 type="button"
                                 onClick={() => updateWeight(p)}
                                 aria-pressed={validWeight && customizingWeight === p}
-                                className={`min-h-12 rounded-2xl border px-2 py-2 text-sm font-bold transition-all active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 ${
+                                className={`min-h-12 rounded-2xl border px-2 py-2 text-sm font-bold transition-all active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500 ${
                                   validWeight && customizingWeight === p
-                                    ? 'border-sky-500 bg-sky-50 text-sky-700 shadow-sm dark:border-sky-500/60 dark:bg-sky-500/15 dark:text-sky-300'
+                                    ? 'border-red-500 bg-red-50 text-red-700 shadow-sm dark:border-red-500/60 dark:bg-red-500/15 dark:text-red-300'
                                     : 'border-neutral-200 bg-neutral-50 text-neutral-700 hover:bg-neutral-100 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-700'
                                 }`}
                               >
@@ -3764,7 +3719,7 @@ function ProductImage({
                           <span className="text-sm font-semibold text-neutral-700 dark:text-neutral-300">Cantidad personalizada</span>
                           <div role="group" aria-label="Unidad de peso" className="flex gap-1 rounded-xl border border-neutral-200 bg-neutral-100 p-1 dark:border-zinc-700 dark:bg-zinc-800">
                             {(['g', 'kg'] as const).map((unit) => (
-                              <button key={unit} type="button" onClick={() => changeUnit(unit)} aria-pressed={weightUnit === unit} aria-label={unit === 'g' ? 'Gramos' : 'Kilogramos'} className={`min-h-11 min-w-12 rounded-lg px-3 text-sm font-bold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 ${weightUnit === unit ? 'bg-sky-600 text-white shadow-sm dark:bg-sky-500 dark:text-white' : 'text-neutral-600 hover:bg-white dark:text-zinc-300 dark:hover:bg-zinc-700'}`}>
+                              <button key={unit} type="button" onClick={() => changeUnit(unit)} aria-pressed={weightUnit === unit} aria-label={unit === 'g' ? 'Gramos' : 'Kilogramos'} className={`min-h-11 min-w-12 rounded-lg px-3 text-sm font-bold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500 ${weightUnit === unit ? 'bg-red-600 text-white shadow-sm dark:bg-red-500 dark:text-white' : 'text-neutral-600 hover:bg-white dark:text-zinc-300 dark:hover:bg-zinc-700'}`}>
                                 {unit}
                               </button>
                             ))}
@@ -3798,7 +3753,7 @@ function ProductImage({
                               }}
                               aria-invalid={!validWeight}
                               aria-describedby="weight-help"
-                              className="w-full rounded-xl border border-black/10 bg-neutral-50 py-3 pl-3 pr-16 text-center text-lg font-bold text-neutral-950 outline-none focus:border-sky-500 focus:ring-4 focus:ring-sky-500/10 dark:border-white/15 dark:bg-zinc-800 dark:text-neutral-100"
+                              className="w-full rounded-xl border border-black/10 bg-neutral-50 py-3 pl-3 pr-16 text-center text-lg font-bold text-neutral-950 outline-none focus:border-red-500 focus:ring-4 focus:ring-red-500/10 dark:border-white/15 dark:bg-zinc-800 dark:text-neutral-100"
                             />
                             <span className="absolute right-4 top-1/2 -translate-y-1/2 text-sm font-semibold text-neutral-400">{weightUnit}</span>
                           </div>
@@ -4227,7 +4182,7 @@ function ProductImage({
         <div className="absolute inset-0 bg-black/50 backdrop-blur-[2px]" onClick={() => setIsCheckoutOpen(false)} />
         <div
           ref={checkoutRef}
-          className={`absolute right-0 top-0 flex h-full w-full max-w-[580px] flex-col overflow-hidden bg-[#faf9f6] dark:bg-[#0c0c0e] shadow-[0_0_0_1px_rgba(0,0,0,0.04),0_40px_100px_rgba(15,15,15,0.25)] sm:rounded-l-[36px] transition-all duration-[350ms] ease-[cubic-bezier(0.16,1,0.3,1)] lg:bottom-auto lg:right-auto lg:left-1/2 lg:top-1/2 lg:h-auto lg:max-h-[92vh] lg:w-full lg:max-w-4xl lg:rounded-[32px] ${isCheckoutOpen ? 'translate-x-0 opacity-100 lg:-translate-x-1/2 lg:-translate-y-1/2 lg:scale-100' : 'translate-x-full opacity-100 lg:-translate-x-1/2 lg:-translate-y-1/2 lg:scale-95 lg:opacity-0'}`}
+          className={`wl-checkout absolute right-0 top-0 flex h-full w-full max-w-[580px] flex-col overflow-hidden bg-white dark:bg-[#0c0c0e] shadow-[0_0_0_1px_rgba(0,0,0,0.04),0_40px_100px_rgba(15,15,15,0.25)] sm:rounded-l-[36px] transition-all duration-[350ms] ease-[cubic-bezier(0.16,1,0.3,1)] lg:bottom-auto lg:right-auto lg:left-1/2 lg:top-1/2 lg:h-auto lg:max-h-[92vh] lg:w-full lg:max-w-4xl lg:rounded-[32px] ${isCheckoutOpen ? 'translate-x-0 opacity-100 lg:-translate-x-1/2 lg:-translate-y-1/2 lg:scale-100' : 'translate-x-full opacity-100 lg:-translate-x-1/2 lg:-translate-y-1/2 lg:scale-95 lg:opacity-0'}`}
         >
             <section className="flex h-full flex-col lg:h-auto lg:max-h-[92vh]">
               {/* ── Header ── */}
@@ -4280,14 +4235,14 @@ function ProductImage({
                     <div className="rounded-[22px] border border-black/[0.04] bg-white dark:bg-neutral-900 p-3 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
                       <div className="mb-2 flex items-center justify-between">
                         <div className="flex items-center gap-2">
-                          <div className="flex h-6 w-6 items-center justify-center rounded-full bg-sky-50 dark:bg-sky-900/40">
+                          <div className="flex h-6 w-6 items-center justify-center rounded-full bg-red-50 dark:bg-red-900/40">
                             <Store className="h-3 w-3 text-[var(--accent)]" strokeWidth={1.5} />
                           </div>
                           <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-neutral-400">
                             Recoger en
                           </p>
                         </div>
-                        <span className="rounded-full bg-sky-50 dark:bg-sky-900/40 px-2 py-0.5 text-[9px] font-bold text-[var(--accent)]">
+                        <span className="rounded-full bg-red-50 dark:bg-red-900/40 px-2 py-0.5 text-[9px] font-bold text-[var(--accent)]">
                           Paso 1
                         </span>
                       </div>
@@ -4457,7 +4412,7 @@ function ProductImage({
                               longitude: '-99.1332',
                             }));
                           }}
-                          className="w-full rounded-2xl border border-[var(--accent)] bg-sky-50 px-4 py-4 text-sm font-bold text-[var(--accent-strong)] transition-all active-scale hover:bg-[var(--accent-soft-strong)]/50 shadow-sm flex items-center justify-center gap-2 dark:bg-sky-500/15 dark:text-sky-200"
+                          className="w-full rounded-2xl border border-[var(--accent)] bg-red-50 px-4 py-4 text-sm font-bold text-[var(--accent-strong)] transition-all active-scale hover:bg-[var(--accent-soft-strong)]/50 shadow-sm flex items-center justify-center gap-2 dark:bg-red-500/15 dark:text-red-200"
                         >
                           <CirclePlus className="h-4 w-4" strokeWidth={1.5} /> Agregar dirección de entrega
                         </button>
@@ -4472,7 +4427,7 @@ function ProductImage({
                         className={`mt-3 inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-[11px] font-bold transition-all active:scale-95 ${
                           showMapForAddress
                             ? 'border-[var(--accent)] bg-[var(--accent)] text-white shadow-sm shadow-[0_4px_14px_var(--accent-soft)]'
-                            : 'border-sky-200 bg-sky-50/60 text-[var(--accent)] hover:bg-[var(--accent-soft-strong)] dark:border-sky-500/30 dark:bg-sky-500/10 dark:text-sky-300'
+                            : 'border-red-200 bg-red-50/60 text-[var(--accent)] hover:bg-[var(--accent-soft-strong)] dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300'
                         }`}
                       >
                         <Map className="h-3.5 w-3.5" strokeWidth={1.5} />
@@ -4507,11 +4462,11 @@ function ProductImage({
                                     setAddressSearchQuery(e.target.value);
                                     void searchAddress(e.target.value, setAddressSuggestions, setIsSearchingAddress);
                                   }}
-                                  className="w-full rounded-2xl border border-black/10 dark:border-white/15 bg-white dark:bg-zinc-800 p-3.5 text-sm dark:text-neutral-100 focus:border-[var(--accent)] focus:outline-none focus:ring-2 focus:ring-sky-300/20 pr-10 shadow-sm transition-all placeholder:text-neutral-400 dark:placeholder:text-zinc-500"
+                                  className="w-full rounded-2xl border border-black/10 dark:border-white/15 bg-white dark:bg-zinc-800 p-3.5 text-sm dark:text-neutral-100 focus:border-[var(--accent)] focus:outline-none focus:ring-2 focus:ring-red-300/20 pr-10 shadow-sm transition-all placeholder:text-neutral-400 dark:placeholder:text-zinc-500"
                                 />
                                 {isSearchingAddress ? (
                                   <div className="absolute right-3.5 top-1/2 -translate-y-1/2">
-                                    <div className="h-5 w-5 animate-spin rounded-full border-2 border-neutral-200 border-t-sky-500" />
+                                    <div className="h-5 w-5 animate-spin rounded-full border-2 border-neutral-200 border-t-red-500" />
                                   </div>
                                 ) : addressSearchQuery ? (
                                   <button
@@ -4542,7 +4497,7 @@ function ProductImage({
                                           setNewAddressStep
                                         );
                                       }}
-                                      className="w-full px-4 py-3.5 text-left text-sm hover:bg-sky-50/40 dark:hover:bg-neutral-800/60 border-b border-black/5 dark:border-white/10 last:border-b-0 transition-colors flex flex-col gap-0.5 dark:text-neutral-200"
+                                      className="w-full px-4 py-3.5 text-left text-sm hover:bg-red-50/40 dark:hover:bg-neutral-800/60 border-b border-black/5 dark:border-white/10 last:border-b-0 transition-colors flex flex-col gap-0.5 dark:text-neutral-200"
                                     >
                                       <div className="flex items-center gap-2">
                                         <span className="text-[var(--accent)]"><MapPin className="h-3.5 w-3.5" strokeWidth={1.5} /></span>
@@ -4614,13 +4569,13 @@ function ProductImage({
                                   setAddressSearchQuery('');
                                   setAddressSuggestions([]);
                                 }}
-                                className="rounded-xl border border-sky-100 dark:border-white/15 bg-white dark:bg-zinc-800 px-3 py-1.5 text-xs font-bold text-[var(--accent)] transition hover:bg-sky-50 dark:hover:bg-zinc-700 shadow-sm shrink-0"
+                                className="rounded-xl border border-red-100 dark:border-white/15 bg-white dark:bg-zinc-800 px-3 py-1.5 text-xs font-bold text-[var(--accent)] transition hover:bg-red-50 dark:hover:bg-zinc-700 shadow-sm shrink-0"
                               >
                                 Cambiar
                               </button>
                             </div>
 
-                            <div className="flex items-center gap-2.5 rounded-2xl bg-sky-50/50 dark:bg-sky-500/10 px-4 py-3 text-xs text-[var(--accent-strong)] dark:text-sky-200 border border-sky-100 dark:border-sky-500/30 shadow-sm">
+                            <div className="flex items-center gap-2.5 rounded-2xl bg-red-50/50 dark:bg-red-500/10 px-4 py-3 text-xs text-[var(--accent-strong)] dark:text-red-200 border border-red-100 dark:border-red-500/30 shadow-sm">
                               <span className="text-base shrink-0"><MapPin className="h-4 w-4" strokeWidth={1.5} /></span>
                               <p className="font-semibold leading-relaxed">Mueve el pin en el mapa para ubicar exactamente el lugar de tu entrega.</p>
                             </div>
@@ -4721,6 +4676,10 @@ function ProductImage({
                     )}
                   </div>
 
+                  <section className="wl-checkout-loyalty" aria-label="Recompensa de fidelidad">
+                    <h3>Tu fidelidad WingsLab</h3>
+                    {loyaltyLoading ? <p role="status">Consultando tu recompensa…</p> : loyaltyQuote?.eligible && loyaltyQuote.source === loyaltyKey ? <><label><input type="checkbox" checked={useLoyalty} onChange={event => setUseLoyalty(event.target.checked)}/><span><strong>{loyaltyQuote.rewardDescription}</strong><small>{loyaltyQuote.gift ? `${loyaltyQuote.gift.name} se agregará automáticamente sin costo.` : `Descuento de ${formatCurrency((loyaltyQuote.discountCents || 0) / 100)} en esta compra.`}</small></span></label><p>El beneficio se reserva al confirmar. Si el pedido se cancela o rechaza, vuelve a estar disponible. No se combina con promociones.</p></> : <p>{loyaltyQuote?.reason || 'Tus compras completadas suman sellos para tu próxima recompensa.'}</p>}
+                  </section>
                   {/* ── PASO 2.5: CUPÓN (opcional, colapsable) ── */}
                   <div className="rounded-[22px] border border-black/[0.04] dark:border-white/10 bg-white dark:bg-neutral-900 p-4 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
                     <button
@@ -4750,8 +4709,8 @@ function ProductImage({
                     <>
                     {promoCodeState === 'valid' && promoCodeInfo ? (
                       <div className="space-y-3.5">
-                        <div className="overflow-hidden rounded-2xl border border-sky-200/70 bg-gradient-to-br from-sky-50/90 via-white to-blue-50/60">
-                          <div className="flex items-start gap-3 border-b border-sky-100/80 px-4 py-3.5">
+                        <div className="overflow-hidden rounded-2xl border border-red-200/70 bg-gradient-to-br from-red-50/90 via-white to-red-50/60">
+                          <div className="flex items-start gap-3 border-b border-red-100/80 px-4 py-3.5">
                             <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-[var(--accent)] to-[var(--accent-strong)] text-white shadow-[0_6px_14px_-4px_rgba(2,132,199,0.5)]">
                               <CircleCheck className="h-5 w-5" strokeWidth={2.5} />
                             </div>
@@ -4763,6 +4722,7 @@ function ProductImage({
                                 {promoCodeInfo.type === 'PERCENT' && `${promoCodeInfo.value}% de descuento`}
                                 {promoCodeInfo.type === 'AMOUNT' && `-${formatCurrency(promoCodeInfo.value)} en tu pedido`}
                                 {promoCodeInfo.type === 'FREE_DELIVERY' && 'Envío gratis en este pedido'}
+                                {promoCodeInfo.type === 'FREE_PRODUCT' && `${promoCodeInfo.gift?.name || 'Producto gratis'} de regalo en este pedido`}
                               </p>
                             </div>
                           </div>
@@ -4987,14 +4947,14 @@ function ProductImage({
                                     ✕
                                   </button>
                                 </div>
-                                <label className="relative flex cursor-pointer items-center justify-center gap-2.5 rounded-2xl border-2 border-dashed border-neutral-200 bg-white px-5 py-4 text-sm font-bold text-neutral-700 transition-all hover:border-[var(--accent)] hover:bg-sky-50/40 hover:text-[var(--accent-strong)] active:scale-[0.97] shadow-sm hover:shadow-md group dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-sky-500/10">
+                                <label className="relative flex cursor-pointer items-center justify-center gap-2.5 rounded-2xl border-2 border-dashed border-neutral-200 bg-white px-5 py-4 text-sm font-bold text-neutral-700 transition-all hover:border-[var(--accent)] hover:bg-red-50/40 hover:text-[var(--accent-strong)] active:scale-[0.97] shadow-sm hover:shadow-md group dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-red-500/10">
                                   <input
                                     type="file"
                                     accept="image/*"
                                     onChange={(event) => void handleTransferProofChange(event)}
                                     className="sr-only"
                                   />
-                                  <div className="flex h-9 w-9 items-center justify-center rounded-full bg-sky-50 text-[var(--accent)] group-hover:bg-[var(--accent-soft-strong)] transition-colors dark:bg-sky-500/15 dark:text-sky-300">
+                                  <div className="flex h-9 w-9 items-center justify-center rounded-full bg-red-50 text-[var(--accent)] group-hover:bg-[var(--accent-soft-strong)] transition-colors dark:bg-red-500/15 dark:text-red-300">
                                     <Upload className="h-4 w-4" strokeWidth={1.5} />
                                   </div>
                                   <div className="flex flex-col items-start">
@@ -5009,7 +4969,7 @@ function ProductImage({
                                 className={`relative flex cursor-pointer items-center justify-center gap-2.5 rounded-2xl border-2 border-dashed px-5 py-4 text-sm font-bold transition-all active:scale-[0.97] shadow-sm group ${
                                   attemptedCheckout && checkoutForm.paymentMethod === 'TRANSFER'
                                     ? 'border-rose-300 bg-rose-50/50 text-rose-700 hover:border-rose-400'
-                                    : 'border-neutral-200 bg-white text-neutral-700 hover:border-[var(--accent)] hover:bg-sky-50/40 hover:text-[var(--accent-strong)] hover:shadow-md dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300'
+                                    : 'border-neutral-200 bg-white text-neutral-700 hover:border-[var(--accent)] hover:bg-red-50/40 hover:text-[var(--accent-strong)] hover:shadow-md dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300'
                                 }`}
                               >
                                 <input
@@ -5018,7 +4978,7 @@ function ProductImage({
                                   onChange={(event) => void handleTransferProofChange(event)}
                                   className="sr-only"
                                 />
-                                <div className={`flex h-9 w-9 items-center justify-center rounded-full transition-colors ${attemptedCheckout && checkoutForm.paymentMethod === 'TRANSFER' ? 'bg-rose-100 text-rose-500 dark:bg-rose-500/20 dark:text-rose-400' : 'bg-sky-50 text-[var(--accent)] group-hover:bg-[var(--accent-soft-strong)] dark:bg-sky-500/15 dark:text-sky-300'}`}>
+                                <div className={`flex h-9 w-9 items-center justify-center rounded-full transition-colors ${attemptedCheckout && checkoutForm.paymentMethod === 'TRANSFER' ? 'bg-rose-100 text-rose-500 dark:bg-rose-500/20 dark:text-rose-400' : 'bg-red-50 text-[var(--accent)] group-hover:bg-[var(--accent-soft-strong)] dark:bg-red-500/15 dark:text-red-300'}`}>
                                   <Upload className="h-4 w-4" strokeWidth={1.5} />
                                 </div>
                                 <div className="flex flex-col items-start">
@@ -5043,7 +5003,7 @@ function ProductImage({
 
                   {/* Redundant login card transformed into a premium callout */}
                   {checkoutValidationMessage && !token && (
-                    <div className="rounded-2xl border border-sky-100 dark:border-sky-500/30 bg-sky-50/60 dark:bg-sky-500/10 p-5 text-center shadow-sm animate-in fade-in duration-300">
+                    <div className="rounded-2xl border border-red-100 dark:border-red-500/30 bg-red-50/60 dark:bg-red-500/10 p-5 text-center shadow-sm animate-in fade-in duration-300">
                       <p className="text-sm font-bold text-neutral-900 dark:text-neutral-100">
                         ¿Listo para confirmar tu pedido?
                       </p>
@@ -5196,7 +5156,7 @@ function ProductImage({
             </div>
 
             <div className="shrink-0 px-4 pt-4 sm:px-6">
-              <div className="flex items-center gap-3.5 rounded-2xl border border-[var(--accent-soft-strong)] bg-[var(--accent-soft)] px-3.5 py-3 dark:bg-sky-500/10">
+              <div className="flex items-center gap-3.5 rounded-2xl border border-[var(--accent-soft-strong)] bg-[var(--accent-soft)] px-3.5 py-3 dark:bg-red-500/10">
                 <div className="relative h-14 w-14 shrink-0" aria-hidden="true">
                   <svg className="h-14 w-14 -rotate-90 text-black/10 dark:text-white/15" viewBox="0 0 56 56">
                     <circle cx="28" cy="28" r="24" fill="none" stroke="currentColor" strokeWidth="4" />
@@ -5631,7 +5591,7 @@ function ProductImage({
         </div>
       )}
 
-      <div className="mx-auto max-w-7xl px-4 pb-5 pt-0 md:px-6 md:pb-8 md:pt-0">
+      <div className="wl-catalog-shell mx-auto max-w-7xl px-4 pb-5 pt-0 md:px-6 md:pb-8 md:pt-0">
 
         {error ? (
           <div className="mt-5">
@@ -5639,7 +5599,7 @@ function ProductImage({
             <button
               type="button"
               onClick={() => setMenuReloadKey((k) => k + 1)}
-              className="mt-3 rounded-full bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-500"
+              className="mt-3 min-h-11 rounded-full bg-[#bb0a0e] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[#94070b]"
             >
               Reintentar
             </button>
@@ -5647,115 +5607,18 @@ function ProductImage({
         ) : null}
 
         {loadingRestaurant ? (
-          <div className="space-y-6">
-            {/* Header Skeleton */}
-            <div className={`-mx-4 ${error ? 'mt-4' : 'mt-0'} lg:mx-0 lg:mt-0 overflow-hidden border-y border-black/5 bg-white shadow-[0_18px_60px_rgba(15,15,15,0.05)] lg:rounded-[32px] lg:border lg:border-black/5`}>
-              <div className="relative h-52 w-full bg-neutral-100 animate-pulse md:h-72 lg:h-64" />
-              <div className="p-5 md:p-7">
-                <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
-                  <div className="flex items-center gap-4">
-                    <div className="h-16 w-16 rounded-2xl bg-neutral-100 animate-pulse" />
-                    <div className="space-y-2">
-                      <div className="h-6 w-48 rounded bg-neutral-100 animate-pulse" />
-                      <div className="h-4 w-32 rounded bg-neutral-100 animate-pulse" />
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Categories Skeleton */}
-            <div className="flex gap-2 overflow-x-auto pb-2">
-              {[1, 2, 3, 4].map((i) => (
-                <div key={i} className="h-10 w-24 flex-shrink-0 rounded-full bg-neutral-100 animate-pulse" />
-              ))}
-            </div>
-
-            {/* Menu Items Skeleton */}
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {[1, 2, 3, 4, 5, 6].map((i) => (
-                <div key={i} className="rounded-[24px] border border-black/5 bg-white p-4 shadow-[0_12px_40px_rgba(15,15,15,0.04)]">
-                  <div className="flex gap-4">
-                    <div className="h-20 w-20 flex-shrink-0 rounded-2xl bg-neutral-100 animate-pulse" />
-                    <div className="flex-1 space-y-2">
-                      <div className="h-5 w-3/4 rounded bg-neutral-100 animate-pulse" />
-                      <div className="h-3 w-full rounded bg-neutral-100 animate-pulse" />
-                      <div className="h-5 w-1/4 rounded bg-neutral-100 animate-pulse" />
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
+          <div className="wl-menu-loading" role="status" aria-label="Cargando menú">
+            <div className="wl-skeleton-banner animate-pulse" />
+            <div className="wl-skeleton-categories">{[1,2,3,4].map(value => <div key={value} className="animate-pulse" />)}</div>
+            <div className="wl-products-grid">{[1,2,3,4].map(value => <div key={value} className="wl-skeleton-product animate-pulse" />)}</div>
           </div>
         ) : restaurant ? (
-          <div className="space-y-6">
+          <div className="wl-menu">
+            <MenuPromotions apiBase={apiBase} token={token} viewerId={sessionUser?.id} allowModal={!isCheckoutOpen && !isCartOpen && !showAuthModal} />
             <div className="space-y-0">
-              <section className={`-mx-4 ${error ? 'mt-4' : 'mt-0'} lg:mx-0 lg:mt-0 overflow-hidden border-y border-black/5 dark:border-zinc-900/80 bg-[var(--menu-surface)] dark:bg-[var(--menu-surface-dark)] shadow-[0_18px_60px_rgba(15,15,15,0.05)] dark:shadow-none lg:rounded-[32px] lg:border lg:border-black/5 lg:dark:border-zinc-900/80`}>
-                <div className="relative">
-                  {restaurant.coverImage ? (
-                      <img
-                        src={restaurant.coverImage}
-                        alt={`Banner de ${restaurant.name}`}
-                        loading="lazy" decoding="async"
-                        className="h-52 w-full object-cover md:h-72 lg:h-64"
-                        fetchPriority="high"
-                      />
-                  ) : (
-                    <div className="h-52 w-full bg-[linear-gradient(135deg,#fcd34d_0%,#f97316_100%)] md:h-72 lg:h-64" />
-                  )}
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/65 via-black/15 to-transparent" />
-
-                  <div className="absolute inset-x-0 bottom-0 hidden p-7 lg:block">
-                    <div className="flex items-end gap-4">
-                      <div className="flex h-20 w-20 items-center justify-center overflow-hidden rounded-[28px] border-4 border-white dark:border-neutral-900 bg-white dark:bg-neutral-900 shadow-[0_10px_24px_rgba(15,15,15,0.14)] dark:shadow-none">
-                        {restaurant.logo ? (
-                          <img
-                            src={restaurant.logo}
-                            alt={`Logo de ${restaurant.name}`}
-                            loading="lazy" decoding="async"
-                            className="h-full w-full object-cover"
-                          />
-                        ) : (
-                          <span className="text-xl font-semibold text-neutral-900 dark:text-white">{buildRestaurantInitials(restaurant.name)}</span>
-                        )}
-                      </div>
-                      <div className="text-white">
-                        <p className="text-3xl font-semibold tracking-[-0.04em]">{restaurant.name}</p>
-                        <div className="mt-1 flex items-center gap-1 text-sm font-semibold text-white">
-                          <svg className="h-3.5 w-3.5 inline-block -mt-0.5" fill="currentColor" viewBox="0 0 24 24"><path d="M10.788 3.21c.448-1.077 1.976-1.077 2.424 0l2.082 5.007 5.404.433c1.164.093 1.636 1.545.749 2.305l-4.117 3.527 1.257 5.273c.271 1.136-.964 2.033-1.96 1.425L12 18.354 7.373 21.18c-.996.608-2.231-.29-1.96-1.425l1.257-5.273-4.117-3.527c-.887-.76-.415-2.212.749-2.305l5.404-.433 2.082-5.006z" /></svg> {restaurant.rating ? restaurant.rating.toFixed(1) : 'Nuevo'}
-                          {(restaurant.reviewCount ?? 0) > 0 && (
-                            <span className="font-normal text-white/70"> ({restaurant.reviewCount} reseñas)</span>
-                          )}
-                        </div>
-                        <p className="mt-2 max-w-2xl text-sm leading-6 text-white/80">{restaurant.description}</p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="relative px-4 pb-2 pt-0 text-sm text-neutral-600 dark:text-neutral-300 md:px-6 md:pb-3 lg:px-7 lg:pt-5">
-                  <div className="-mt-14 flex flex-col items-center text-center lg:hidden">
-                    <div className="flex h-24 w-24 items-center justify-center overflow-hidden rounded-[22px] border-4 border-white dark:border-neutral-900 bg-white dark:bg-neutral-900 shadow-[0_8px_20px_rgba(15,15,15,0.14)] dark:shadow-none">
-                      {restaurant.logo ? (
-                        <img
-                          src={restaurant.logo}
-                          alt={`Logo de ${restaurant.name}`}
-                          loading="lazy" decoding="async"
-                          className="h-full w-full object-cover"
-                        />
-                      ) : (
-                        <span className="text-lg font-semibold text-neutral-900 dark:text-white">{buildRestaurantInitials(restaurant.name)}</span>
-                      )}
-                    </div>
-                    <p className="mt-2 text-2xl font-semibold tracking-[-0.04em] text-neutral-950 dark:text-white">{restaurant.name}</p>
-                    <div className="mt-0.5 flex items-center gap-1 text-sm font-semibold text-neutral-900 dark:text-neutral-100">
-                      <svg className="h-3.5 w-3.5" fill="currentColor" viewBox="0 0 24 24"><path d="M10.788 3.21c.448-1.077 1.976-1.077 2.424 0l2.082 5.007 5.404.433c1.164.093 1.636 1.545.749 2.305l-4.117 3.527 1.257 5.273c.271 1.136-.964 2.033-1.96 1.425L12 18.354 7.373 21.18c-.996.608-2.231-.29-1.96-1.425l1.257-5.273-4.117-3.527c-.887-.76-.415-2.212.749-2.305l5.404-.433 2.082-5.006z" /></svg> {restaurant.rating ? restaurant.rating.toFixed(1) : 'Nuevo'}
-                      {(restaurant.reviewCount ?? 0) > 0 && (
-                        <span className="font-normal text-neutral-500 dark:text-neutral-400"> ({restaurant.reviewCount} reseñas)</span>
-                      )}
-                    </div>
-                  </div>
-
+              <h1 className="wl-menu-title">Menú</h1>
+              <section className="wl-restaurant-info" hidden={!showRestaurantInfo}>
+                <div className="wl-hero-details relative px-4 pb-2 pt-0 text-sm text-neutral-600 md:px-6 md:pb-3 lg:px-7 lg:pt-5">
                   <div className="-mx-4 mt-3 flex min-w-0 flex-col gap-1.5 bg-[var(--menu-surface)] p-1.5 md:-mx-6 lg:mx-0 lg:flex-row lg:items-stretch lg:gap-0 lg:divide-x lg:divide-black/[0.06] lg:rounded-2xl lg:border lg:border-black/[0.06] lg:shadow-[0_6px_24px_rgba(15,23,42,0.06)] dark:divide-zinc-700 lg:dark:border-zinc-700/70 dark:bg-[var(--menu-surface-dark)]">
                     {/* Address */}
                     <div className="flex w-full min-w-0 flex-1 items-center gap-3 rounded-2xl bg-neutral-50 px-3 py-3 text-neutral-700 lg:bg-transparent lg:px-4 dark:bg-zinc-800/70 dark:text-zinc-200 lg:dark:bg-transparent">
@@ -5969,13 +5832,20 @@ function ProductImage({
                 </div>
               )}
 
-              <div data-sticky-header className="sticky top-[calc(env(safe-area-inset-top)+72px)] z-20 -mx-4 mb-6 border-b border-black/[0.04] bg-[var(--menu-surface)] shadow-[0_1px_2px_rgba(0,0,0,0.03),0_8px_24px_rgba(0,0,0,0.05)] md:-mx-6 lg:mx-0 lg:rounded-[26px] lg:border lg:border-black/[0.05] lg:shadow-[0_10px_36px_-14px_rgba(15,15,15,0.18)] dark:border-zinc-800/60 dark:bg-[var(--menu-surface-dark)] lg:dark:border-zinc-800/70 lg:dark:shadow-[0_10px_36px_-14px_rgba(0,0,0,0.55)]">
-                <div className="px-4 py-3 md:px-6 md:py-3.5 lg:px-6">
+              {featuredProducts.length > 0 && <section id="wl-featured" className="wl-featured" aria-labelledby="wl-featured-title">
+                <div className="wl-section-heading"><h2 id="wl-featured-title"><Flame aria-hidden="true" />Destacados</h2><button type="button" onClick={() => setMenuTab('promos')}>Ver todos <ChevronRight aria-hidden="true" /></button></div>
+                <div className="wl-featured-track">{featuredProducts.map(product => <button key={product.id} type="button" className="wl-featured-card" disabled={!restaurant.isOpen || !getProductAvailability(product).available} aria-label={`Agregar ${product.name} desde destacados`} onClick={() => addToCart(product)}>
+                  {product.image && <img src={product.image} alt="" loading="lazy" />}<span><strong>{product.name}</strong><b>{formatCurrency(product.discountPrice ?? product.price)}</b></span>
+                </button>)}</div>
+              </section>}
+              <div data-sticky-header className="wl-menu-nav wl-reference-categories">
+                <div className="px-0 py-3">
                   <div className="relative w-full max-w-2xl mx-auto lg:mx-0">
                     <Search className="pointer-events-none absolute left-4 top-1/2 h-[18px] w-[18px] -translate-y-1/2 text-neutral-400 dark:text-zinc-500" strokeWidth={1.8} />
                     <input
                       type="text"
-                      placeholder={`Buscar en ${restaurant?.name || 'el menú'}...`}
+                      placeholder="Busca tu favorito"
+                      aria-label="Buscar productos en el menú"
                       value={productSearchQuery}
                       onChange={(e) => setProductSearchQuery(e.target.value)}
                       className={`w-full rounded-full border bg-white pl-11 pr-11 py-3 text-base text-neutral-900 outline-none transition-all duration-200 placeholder:text-neutral-400 focus:border-black/25 focus:shadow-[0_4px_16px_rgba(0,0,0,0.07)] active:border-black/15 dark:bg-neutral-900 dark:text-zinc-100 dark:placeholder:text-zinc-500 dark:focus:border-zinc-600 dark:focus:shadow-none ${
@@ -5996,14 +5866,15 @@ function ProductImage({
                     )}
                   </div>
                 </div>
-                {!productSearchQuery.trim() && (
+                {!productSearchQuery.trim() && menuTab === 'home' && (
                 <div className="pb-2.5 lg:pb-3">
+                  <div className="wl-section-heading"><h2><LayoutGrid aria-hidden="true" />Categorías</h2></div>
                   <div
                     ref={categoryNavRef}
                     className="flex overflow-x-auto px-4 pb-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden snap-x snap-proximity md:snap-none md:px-6 lg:px-6"
                   >
                     <div className="flex min-w-max gap-1.5 mx-auto sm:gap-2">
-                      {(productSearchQuery.trim() ? (filteredRestaurant?.categories ?? []) : restaurant.categories).map((category) => {
+                      {restaurant.categories.filter(category => category.id !== '__promotions__').map((category) => {
                         const isActive = activeCategory === category.id;
                         return (
                           <button
@@ -6023,6 +5894,13 @@ function ProductImage({
                                 : undefined
                             }
                           >
+                            {(() => {
+                              const icon = (category as any).icon as string | null | undefined;
+                              if (icon) return <CategoryIcon name={icon} className="wl-cat-icon" />;
+                              const name = category.name.toLowerCase();
+                              const Icon = category.id === '__promotions__' ? Gift : /alita|boneless|pollo/.test(name) ? Drumstick : /hamburg/.test(name) ? Hamburger : /hot dog|sandwich/.test(name) ? Sandwich : /bebida|refresco|agua/.test(name) ? CupSoda : Utensils;
+                              return <Icon aria-hidden="true" />;
+                            })()}
                             {category.name}
                           </button>
                         );
@@ -6033,6 +5911,7 @@ function ProductImage({
                 )}
               </div>
 
+              {!restaurant.categories.length && <p className="wl-content-empty">Estamos preparando el menú. Vuelve pronto para consultar los productos disponibles.</p>}
               {productSearchQuery.trim() ? (
                 searchResults.length === 0 ? (
                   <div className="flex flex-col items-center justify-center py-16 text-center">
@@ -6050,17 +5929,17 @@ function ProductImage({
                     </button>
                   </div>
                 ) : (
-                  <div className="space-y-3">
+                  <div className="wl-products-grid">
                     {searchResults.map((product) => {
                       const quantity = getCartQuantity(product.id);
                       return (
-                        <article id={product.id} key={product.id} className="overflow-hidden rounded-[24px] border border-black/[0.04] bg-[var(--menu-card)] transition-all duration-300 shadow-[0_2px_12px_rgba(0,0,0,0.02)] hover:shadow-[0_8px_24px_rgba(0,0,0,0.06)] dark:border-zinc-800 dark:bg-[var(--menu-card-dark)]">
+                        <article id={product.id} key={product.id} data-wl-product className="overflow-hidden rounded-[24px] border border-black/[0.04] bg-[var(--menu-card)] transition-all duration-300 shadow-[0_2px_12px_rgba(0,0,0,0.02)] hover:shadow-[0_8px_24px_rgba(0,0,0,0.06)] dark:border-zinc-800 dark:bg-[var(--menu-card-dark)]">
                           <div className="flex gap-4 p-4">
                             <div className="relative h-24 w-24 shrink-0 overflow-hidden rounded-2xl sm:h-28 sm:w-28">
                               {product.image ? (
                                 <ProductImage product={product} />
                               ) : (
-                                <div className="h-full w-full bg-gradient-to-br from-neutral-100 to-neutral-200 dark:from-zinc-800 dark:to-zinc-900" />
+                                <div className="wl-product-placeholder"><Drumstick aria-hidden="true" /><span>Sin fotografía</span></div>
                               )}
                             </div>
                             <div className="flex min-w-0 flex-1 flex-col justify-between">
@@ -6104,9 +5983,9 @@ function ProductImage({
                     })}
                   </div>
                 )
-              ) : restaurant.categories.map((category) => {
+              ) : restaurant.categories.filter(category => menuTab === 'promos' ? category.id === '__promotions__' : category.id !== '__promotions__').map((category) => {
                 const isPromotions = category.id === '__promotions__';
-                const isPromoCarousel = isPromotions && category.products.length <= 6;
+                const isPromoCarousel = false;
                 const isStore = !isRestaurant((restaurant as any).businessType);
                 const isLargeCategory = isStore && !isPromotions && category.products.length > 4;
                 return (
@@ -6116,27 +5995,14 @@ function ProductImage({
                   ref={(node) => {
                     categorySectionRefs.current[category.id] = node;
                   }}
-                  className="scroll-mt-[184px] mb-10 px-0 py-0 md:scroll-mt-[184px]"
+                  className="wl-category scroll-mt-[184px] mb-10 px-0 py-0 md:scroll-mt-[184px]"
                 >
-                  <SectionHeader
-                    title={category.name}
-                    eyebrow={isPromotions ? 'Ofertas activas' : undefined}
-                    subtitle={!isPromotions ? (category as any).description || undefined : undefined}
-                    icon={isPromotions ? <Gift className="h-5 w-5" /> : undefined}
-                    count={{ value: category.products.length, label: 'productos' }}
-                    countIcon={<Package className="h-3.5 w-3.5" />}
-                    divider
-                    accent="var(--menu-accent)"
-                  />
+                  <div className="wl-section-heading"><h2>{category.name}</h2><button type="button" onClick={() => scrollToCategory(category.id)}>Ver categoría <ChevronRight aria-hidden="true" /></button></div>
 
                   <div className={isPromoCarousel || isLargeCategory ? "relative" : "overflow-hidden"}>
                     <CarouselOrGrid
-                      isCarousel={isPromoCarousel || isLargeCategory}
-                      gridClassName={
-                        isStore && !isPromotions && category.products.length <= 4
-                          ? 'grid grid-cols-2 gap-4 lg:grid-cols-2'
-                          : 'grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3'
-                      }
+                      isCarousel={false}
+                      gridClassName="wl-products-grid"
                     >
                     {category.products.map((product) => {
                       const quantity = getCartQuantity(product.id);
@@ -6144,7 +6010,7 @@ function ProductImage({
 
                       return (
                         isPromoCarousel ? (
-                          <article id={product.id} key={product.id} className="group w-32 shrink-0 snap-start overflow-hidden rounded-2xl border border-black/[0.04] bg-white transition-all duration-300 shadow-[0_2px_8px_rgba(0,0,0,0.02)] hover:-translate-y-0.5 hover:shadow-[0_8px_24px_rgba(0,0,0,0.06)] active:scale-[0.98] dark:border-zinc-800 dark:bg-neutral-900">
+                          <article id={product.id} key={product.id} data-wl-product className="group w-32 shrink-0 snap-start overflow-hidden rounded-2xl border border-black/[0.04] bg-white transition-all duration-300 shadow-[0_2px_8px_rgba(0,0,0,0.02)] hover:-translate-y-0.5 hover:shadow-[0_8px_24px_rgba(0,0,0,0.06)] active:scale-[0.98] dark:border-zinc-800 dark:bg-neutral-900">
                           
                             <div className="relative h-20 w-full overflow-hidden">
                               {product.image ? (
@@ -6216,7 +6082,7 @@ function ProductImage({
                             </div>
                           </article>
                         ) : isLargeCategory ? (
-                          <article id={product.id} key={product.id} className="w-[42vw] shrink-0 snap-start sm:w-52 overflow-hidden rounded-2xl border border-black/[0.04] bg-white transition-all duration-300 shadow-[0_2px_12px_rgba(0,0,0,0.02)] hover:-translate-y-0.5 hover:shadow-[0_8px_24px_rgba(0,0,0,0.06)] dark:border-zinc-800 dark:bg-neutral-900">
+                          <article id={product.id} key={product.id} data-wl-product className="w-[42vw] shrink-0 snap-start sm:w-52 overflow-hidden rounded-2xl border border-black/[0.04] bg-white transition-all duration-300 shadow-[0_2px_12px_rgba(0,0,0,0.02)] hover:-translate-y-0.5 hover:shadow-[0_8px_24px_rgba(0,0,0,0.06)] dark:border-zinc-800 dark:bg-neutral-900">
                             <div className="flex h-full flex-col">
                               <div
                                 className="relative aspect-square overflow-hidden bg-neutral-50 cursor-pointer dark:bg-neutral-900"
@@ -6300,7 +6166,7 @@ function ProductImage({
                             </div>
                           </article>
                         ) : isStore ? (
-                          <article id={product.id} key={product.id} className="overflow-hidden rounded-2xl border border-black/[0.04] bg-white transition-all duration-300 shadow-[0_2px_12px_rgba(0,0,0,0.02)] hover:-translate-y-0.5 hover:shadow-[0_8px_24px_rgba(0,0,0,0.06)] dark:border-zinc-800 dark:bg-neutral-900">
+                          <article id={product.id} key={product.id} data-wl-product className="overflow-hidden rounded-2xl border border-black/[0.04] bg-white transition-all duration-300 shadow-[0_2px_12px_rgba(0,0,0,0.02)] hover:-translate-y-0.5 hover:shadow-[0_8px_24px_rgba(0,0,0,0.06)] dark:border-zinc-800 dark:bg-neutral-900">
                             <div className="flex h-full flex-col">
                               <div
                                 className="relative aspect-square overflow-hidden bg-neutral-50 cursor-pointer dark:bg-neutral-900"
@@ -6384,7 +6250,7 @@ function ProductImage({
                             </div>
                           </article>
                         ) : (
-                          <article id={product.id} key={product.id} className="overflow-hidden rounded-2xl border border-black/[0.04] bg-white transition-all duration-200 shadow-[0_1px_3px_rgba(0,0,0,0.04)] hover:shadow-[0_4px_12px_rgba(0,0,0,0.06)] dark:border-zinc-800 dark:bg-neutral-900">
+                          <article id={product.id} key={product.id} data-wl-product className="overflow-hidden rounded-2xl border border-black/[0.04] bg-white transition-all duration-200 shadow-[0_1px_3px_rgba(0,0,0,0.04)] hover:shadow-[0_4px_12px_rgba(0,0,0,0.06)] dark:border-zinc-800 dark:bg-neutral-900">
                             <div className="flex gap-3 p-3">
                               <div className="relative h-24 w-24 shrink-0 overflow-hidden rounded-xl sm:h-28 sm:w-28">
                                 {product.image ? (
@@ -6432,11 +6298,7 @@ function ProductImage({
                                     )}
                                   </>
                                 ) : (
-                                  <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-neutral-100 to-neutral-200">
-                                    <svg className="h-6 w-6 text-neutral-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
-                                      <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607zM13.5 10.5h-3" />
-                                    </svg>
-                                  </div>
+                                  <div className="wl-product-placeholder"><Utensils aria-hidden="true" /><span>Sin fotografía</span></div>
                                 )}
                                 {product.discountPrice && (
                                   <div className="absolute left-1.5 top-1.5 z-10 flex items-center gap-0.5 rounded-full bg-rose-500/90 px-1.5 py-0.5 text-[8px] font-bold text-white shadow-sm">
@@ -6450,13 +6312,15 @@ function ProductImage({
                                 )}
                                 <StockBadge avail={avail} />
                               </div>
-                              <div className="flex min-w-0 flex-1 flex-col">
-                                <div className="flex flex-col gap-0.5">
-                                  <h3 className="truncate text-sm font-bold text-neutral-900 dark:text-white">{product.name}</h3>
+                              <div className="wl-product-content flex min-w-0 flex-1 flex-col">
+                                <div className="wl-product-copy flex flex-col gap-0.5">
+                                  <h3 className="text-sm font-bold text-neutral-900 dark:text-white">{product.name}</h3>
                                   {product.description && (
                                     <p className="text-xs leading-relaxed text-neutral-500 line-clamp-2 dark:text-zinc-400">{product.description}</p>
                                   )}
-                                  <div className="mt-1">
+                                </div>
+                                <div className="wl-product-purchase">
+                                  <div className="wl-product-price">
                                     {product.sellBy === 'WEIGHT' ? (
                                       <p className="text-base font-black tracking-[-0.02em] text-neutral-950 dark:text-white">
                                         {formatCurrency(product.unitPrice || product.price)}
@@ -6476,10 +6340,9 @@ function ProductImage({
                                       <span className="text-base font-black tracking-[-0.02em] text-neutral-950 dark:text-white">{formatCurrency(product.price)}</span>
                                     )}
                                   </div>
-                                </div>
-                                <div className="mt-auto pt-3 flex justify-end">
+                                <div className="wl-product-actions">
                                   {quantity > 0 ? (
-                                    <div className="flex w-fit items-center gap-0.5 rounded-full border border-black/[0.06] bg-neutral-50 p-0.5 dark:border-zinc-700 dark:bg-neutral-800">
+                                    <div className="wl-product-stepper" role="group" aria-label={`Cantidad de ${product.name}`}>
                                       <button type="button" onClick={() => { if (product.optionGroups?.length) { decreaseQuantityForProduct(product.id); } else { updateCartItem(product.id, { quantity: quantity - 1 }); } }} className="flex h-7 w-7 items-center justify-center rounded-full text-neutral-500 transition-all hover:bg-white active:scale-90 dark:text-zinc-300 dark:hover:bg-zinc-700" aria-label={`Quitar una unidad de ${product.name}`}>
                                         {quantity === 1 ? (
                                           <Trash2 className="h-3 w-3 text-red-500" />
@@ -6493,10 +6356,11 @@ function ProductImage({
                                       </button>
                                     </div>
                                   ) : (
-                                    <button type="button" onClick={() => addToCart(product)} disabled={!restaurant.isOpen || !avail.available} className="rounded-xl bg-neutral-900 px-5 py-2.5 text-[11px] font-bold text-white transition hover:bg-neutral-800 disabled:bg-neutral-200 disabled:text-neutral-400 dark:bg-white dark:text-neutral-950 dark:hover:bg-zinc-200 dark:disabled:bg-neutral-800 dark:disabled:text-zinc-600">
-                                      Agregar
+                                    <button type="button" onClick={() => addToCart(product)} disabled={!restaurant.isOpen || !avail.available} className="wl-product-add rounded-xl bg-neutral-900 px-5 py-2.5 text-[11px] font-bold text-white transition hover:bg-neutral-800 disabled:bg-neutral-200 disabled:text-neutral-400 dark:bg-white dark:text-neutral-950 dark:hover:bg-zinc-200 dark:disabled:bg-neutral-800 dark:disabled:text-zinc-600" aria-label={`Agregar ${product.name} al carrito`}>
+                                      <span>Agregar</span>
                                     </button>
                                   )}
+                                </div>
                                 </div>
                               </div>
                             </div>
@@ -7055,7 +6919,7 @@ function ProductImage({
 
       {/* Floating Checkout Button */}
       {cart.length > 0 && !isCartOpen && (
-        <div className={`fixed bottom-6 left-1/2 -translate-x-1/2 z-[45] w-[calc(100%-2rem)] max-w-sm pointer-events-auto pb-[env(safe-area-inset-bottom)] transition-all duration-300 ${
+        <div className={`wl-floating-cart fixed bottom-6 left-1/2 -translate-x-1/2 z-[45] w-[calc(100%-2rem)] max-w-sm pointer-events-auto pb-[env(safe-area-inset-bottom)] transition-all duration-300 ${
           hideCartButton ? 'pointer-events-none translate-y-24 opacity-0' : ''
         }`}>
           <button
@@ -7538,11 +7402,7 @@ function StatusBadge({ status, businessType }: { status: OrderStatus; businessTy
 }
 
 function formatCurrency(amount: number) {
-  return new Intl.NumberFormat('es-MX', {
-    style: 'currency',
-    currency: 'MXN',
-    maximumFractionDigits: 0,
-  }).format(toMoney(amount));
+  return formatSharedCurrency(toMoney(amount), 'MXN', 'es-MX');
 }
 
 function formatDeliverySummary(fee?: number | null) {

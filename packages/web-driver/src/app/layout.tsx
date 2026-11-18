@@ -5,8 +5,8 @@ import InstallAppButton from '../components/InstallAppButton';
 import SplashScreen from '../components/SplashScreen';
 
 export const metadata: Metadata = {
-  title: 'SaDeL Repartidor',
-  description: 'Gestiona disponibilidad, entregas y seguimiento desde el panel del repartidor SaDeL.',
+  title: 'WingsLab · Reparto',
+  description: 'Gestiona las entregas propias de WingsLab y consulta tu balance acordado.',
   robots: {
     index: false,
     follow: false,
@@ -19,7 +19,7 @@ export const metadata: Metadata = {
   appleWebApp: {
     capable: true,
     statusBarStyle: 'default',
-    title: 'SaDeL Repartidor',
+    title: 'WingsLab Reparto',
   },
   other: {
     'mobile-web-app-capable': 'yes',

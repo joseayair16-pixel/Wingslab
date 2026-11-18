@@ -2,6 +2,7 @@ import crypto from 'node:crypto';
 import { prisma } from '../config/database';
 import { filterCampaignAudience, type CampaignSegment } from './restaurant-insights';
 import { RESTAURANT_ID } from '../config/single-restaurant';
+import { readProgram, reconcileLoyalty } from './loyalty-runtime.service';
 
 const CAMPAIGNS_KEY = 'wingslab.restaurant.campaigns.v1';
 const loyaltySettingKey = 'wingslab.restaurant.loyalty.v1';
@@ -15,7 +16,7 @@ export type Campaign = {
 
 async function withSettingLock<T>(key: string, fn: (tx: any, current: any) => Promise<T>): Promise<T> {
   return prisma.$transaction(async (tx: any) => {
-    await tx.$queryRawUnsafe('SELECT pg_advisory_xact_lock(hashtext($1))', key);
+    await tx.$queryRawUnsafe('SELECT pg_advisory_xact_lock(hashtext($1))::text', key);
     const row = await tx.systemSetting.findUnique({ where: { key } });
     let current: any = null;
     try { current = row ? JSON.parse(row.value) : null; } catch { current = null; }
@@ -34,12 +35,11 @@ export async function listCampaigns(): Promise<Campaign[]> {
 }
 export async function audienceCount(segment: CampaignSegment, now = new Date()): Promise<number> {
   const customers = await prisma.customer.findMany({
-    where: { user: { status: 'ACTIVE', marketingConsent: { is: { enabled: true } }, OR: [{ pushSubscriptions: { some: {} } }, { fcmTokens: { some: {} } }] } },
+    where: { user: { status: 'ACTIVE', OR: [{ pushSubscriptions: { some: {} } }, { fcmTokens: { some: {} } }] } },
     select: { createdAt: true, orders: { where: { restaurantId: RESTAURANT_ID, status: { in: ['DELIVERED', 'COMPLETED', 'PICKED_UP'] } }, select: { createdAt: true } },
-      user: { select: { marketingConsent: { select: { enabled: true } }, pushSubscriptions: { select: { id: true, updatedAt: true } }, fcmTokens: { select: { id: true, updatedAt: true } } } } },
+      user: { select: { pushSubscriptions: { select: { id: true, updatedAt: true } }, fcmTokens: { select: { id: true, updatedAt: true } } } } },
   });
   return filterCampaignAudience(customers.map(c => ({ createdAt: c.createdAt, orders: c.orders,
-    marketingConsent: c.user.marketingConsent?.enabled === true,
     pushSubscriptions: c.user.pushSubscriptions, fcmTokens: c.user.fcmTokens })), segment, now).length;
 }
 export async function createCampaign(data: Omit<Campaign, 'id' | 'status' | 'recipientCount' | 'blockedReason' | 'metrics' | 'createdAt' | 'updatedAt'>, now = new Date()): Promise<Campaign> {
@@ -106,10 +106,32 @@ export async function cancelCampaign(id: string): Promise<Campaign> {
 }
 export async function getLoyaltyConfiguration() {
   const row = await prisma.systemSetting.findUnique({ where: { key: loyaltySettingKey } });
-  try { return row ? JSON.parse(row.value) : { enabled: false, pointsPer100: 1, rewardPoints: 100, rewardAmount: 10 }; }
-  catch { return { enabled: false, pointsPer100: 1, rewardPoints: 100, rewardAmount: 10 }; }
+  const defaults = { enabled: false, pointsPer100: 1, rewardPoints: 100, rewardAmount: 10, stampGoal: 8, rewardType: 'DISCOUNT', rewardKind: 'AMOUNT', rewardValue: 1000, rewardProductId: null as string | null, programVersion: 0, redemptionReady: false, rewardDescription: '', stampTerms: '', stampStartsAt: null as string | null };
+  try { return { ...defaults, ...(row ? JSON.parse(row.value) : {}) }; }
+  catch { return defaults; }
 }
-export async function saveLoyaltyConfiguration(data: { enabled: boolean; pointsPer100: number; rewardPoints: number; rewardAmount: number }) {
-  await prisma.systemSetting.upsert({ where: { key: loyaltySettingKey }, create: { key: loyaltySettingKey, value: JSON.stringify(data) }, update: { value: JSON.stringify(data) } });
-  return data;
+export async function saveLoyaltyConfiguration(data: { enabled: boolean; pointsPer100: number; rewardPoints: number; rewardAmount: number; stampGoal?: number; rewardType?: string; rewardDescription?: string; stampTerms?: string; rewardKind: 'AMOUNT' | 'PERCENT' | 'PRODUCT'; rewardValue: number | null; rewardProductId: string | null }) {
+  return prisma.$transaction(async tx => {
+    await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${loyaltySettingKey}))::text`;
+    const row = await tx.systemSetting.findUnique({ where: { key: loyaltySettingKey } });
+    const current = row ? JSON.parse(row.value) : {};
+    const oldProgram = await readProgram(tx);
+    if (oldProgram) {
+      // Materialize pending history under OLD rules before publishing a change.
+      const customers = await tx.customer.findMany({ where: { orders: { some: { restaurantId: RESTAURANT_ID } } }, select: { id: true }, orderBy: { id: 'asc' } });
+      for (const customer of customers) await reconcileLoyalty(tx, customer.id, oldProgram);
+    }
+    if (data.rewardKind === 'PRODUCT') {
+      const product = await tx.product.findFirst({ where: { id: data.rewardProductId!, restaurantId: RESTAURANT_ID, deleted: false, isAvailable: true, sellBy: 'UNIT', isAdultOnly: false }, select: { id: true, optionGroups: { select: { minSelection: true } } } });
+      if (!product || product.optionGroups.some(g => g.minSelection > 0)) throw Object.assign(new Error('Selecciona un producto disponible, por unidad y sin opciones obligatorias.'), { statusCode: 400, code: 'INVALID_LOYALTY_PRODUCT' });
+    }
+    const now = new Date().toISOString();
+    const stampStartsAt = current.stampStartsAt || (data.enabled ? now : null);
+    const activePeriods: Array<{ from: string; to: string | null }> = current.activePeriods ? current.activePeriods.map((p: { from: string; to: string | null }) => ({ ...p })) : stampStartsAt ? [{ from: stampStartsAt, to: current.enabled ? null : now }] : [];
+    if (!data.enabled && activePeriods[activePeriods.length - 1]?.to === null) activePeriods[activePeriods.length - 1].to = now;
+    if (data.enabled && (!activePeriods.length || activePeriods[activePeriods.length - 1].to !== null)) activePeriods.push({ from: now, to: null });
+    const next = { ...current, ...data, programVersion: (current.programVersion || 0) + 1, redemptionReady: true, stampStartsAt, activePeriods };
+    await tx.systemSetting.upsert({ where: { key: loyaltySettingKey }, create: { key: loyaltySettingKey, value: JSON.stringify(next) }, update: { value: JSON.stringify(next) } });
+    return next;
+  }, { timeout: 60000 });
 }

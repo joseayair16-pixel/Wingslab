@@ -1,6 +1,6 @@
 /**
- * Contrato de las acciones manuales del restaurante en WingsLab:
- *  - solo el pedido ficticio explícitamente autorizado puede mutarse;
+ * Contrato de las acciones de pedidos del restaurante en WingsLab:
+ *  - cualquier pedido del restaurante puede avanzar por una transición válida;
  *  - JWT, rol RESTAURANT y restaurante ACTIVE siguen siendo obligatorios;
  *  - el evento de socket va a la sala del propio restaurante y al cliente;
  *  - no se emite nada hacia otras salas de restaurante.
@@ -13,14 +13,14 @@ import { prisma } from '../config/database';
 import * as orderWorkflowService from '../services/order-workflow.service';
 import * as notificationService from '../services/notification.service';
 import * as socketService from '../services/socket.service';
-import { AUTHORIZED_MANUAL_ORDER_IDS } from '@sadel/shared';
+import { AppError } from '../errors/app-error';
 
-const AUTHORIZED = AUTHORIZED_MANUAL_ORDER_IDS[0];
+const ORDER_ID = 'wl_order_action_fixture';
 
 function committedOrder() {
   return {
-    id: AUTHORIZED,
-    orderReference: 'SAD-TEST-001',
+    id: ORDER_ID,
+    orderReference: 'WL-TEST-001',
     status: OrderStatus.CONFIRMED,
     fulfillmentType: 'DELIVERY',
     paymentMethod: 'CASH',
@@ -33,7 +33,7 @@ function committedOrder() {
     restaurant: {
       id: 'restaurant-1',
       userId: 'restaurant-user-1',
-      name: 'WingsLab Comedor de Prueba',
+      name: 'WingsLab Restaurante de Prueba',
       businessType: 'RESTAURANT',
       hasOwnDelivery: true,
     },
@@ -80,29 +80,31 @@ describe('acciones manuales del restaurante', () => {
     return app.jwt.sign({ sub: 'restaurant-user-1', phone: '+5215599999999', role });
   }
 
-  it('rechaza mutar un pedido que no está en la lista autorizada', async () => {
+  it('permite un pedido fuera de cualquier lista de pruebas y delega propiedad/estado al servicio', async () => {
     const token = await restaurantToken();
     const response = await app.inject({
       method: 'PATCH',
-      url: '/restaurant-panel/pedidos/wl_order_pendiente/aceptar',
+      url: `/restaurant-panel/pedidos/${ORDER_ID}/aceptar`,
       headers: { authorization: `Bearer ${token}` },
       payload: {},
     });
 
-    expect(response.statusCode).toBe(403);
-    expect(response.json().error.code).toBe('WINGSLAB_ORDER_ACTION_BLOCKED');
-    expect(updateSpy).not.toHaveBeenCalled();
-    expect(emitSpy).not.toHaveBeenCalled();
+    expect(response.statusCode).toBe(200);
+    expect(updateSpy).toHaveBeenCalledWith(expect.objectContaining({
+      restaurantUserId: 'restaurant-user-1',
+      orderId: ORDER_ID,
+      nextStatus: OrderStatus.CONFIRMED,
+    }));
   });
 
   it('exige sesión y rol de restaurante', async () => {
-    const anonymous = await app.inject({ method: 'PATCH', url: `/restaurant-panel/pedidos/${AUTHORIZED}/aceptar`, payload: {} });
+    const anonymous = await app.inject({ method: 'PATCH', url: `/restaurant-panel/pedidos/${ORDER_ID}/aceptar`, payload: {} });
     expect(anonymous.statusCode).toBe(401);
 
     const customer = await restaurantToken(UserRole.CUSTOMER);
     const wrongRole = await app.inject({
       method: 'PATCH',
-      url: `/restaurant-panel/pedidos/${AUTHORIZED}/aceptar`,
+      url: `/restaurant-panel/pedidos/${ORDER_ID}/aceptar`,
       headers: { authorization: `Bearer ${customer}` },
       payload: {},
     });
@@ -110,11 +112,11 @@ describe('acciones manuales del restaurante', () => {
     expect(updateSpy).not.toHaveBeenCalled();
   });
 
-  it('permite la acción autorizada y notifica al cliente y a la sala del propio restaurante', async () => {
+  it('confirma la transición y notifica al cliente y a la sala del propio restaurante', async () => {
     const token = await restaurantToken();
     const response = await app.inject({
       method: 'PATCH',
-      url: `/restaurant-panel/pedidos/${AUTHORIZED}/aceptar`,
+      url: `/restaurant-panel/pedidos/${ORDER_ID}/aceptar`,
       headers: { authorization: `Bearer ${token}` },
       payload: { preparationTimeMinutes: 15 },
     });
@@ -123,7 +125,7 @@ describe('acciones manuales del restaurante', () => {
     expect(response.json().data.status).toBe(OrderStatus.CONFIRMED);
     expect(updateSpy).toHaveBeenCalledWith(expect.objectContaining({
       restaurantUserId: 'restaurant-user-1',
-      orderId: AUTHORIZED,
+      orderId: ORDER_ID,
       nextStatus: OrderStatus.CONFIRMED,
       preparationTimeMinutes: 15,
     }));
@@ -149,22 +151,35 @@ describe('acciones manuales del restaurante', () => {
     const token = await restaurantToken();
     const response = await app.inject({
       method: 'PATCH',
-      url: `/restaurant-panel/pedidos/${AUTHORIZED}/aceptar`,
+      url: `/restaurant-panel/pedidos/${ORDER_ID}/aceptar`,
       headers: { authorization: `Bearer ${token}` },
       payload: {},
     });
     expect(response.statusCode).toBe(200);
 
-    // Segunda operación sobre el mismo pedido: el servicio exige el estado
-    // exacto de origen y la actualización es condicional (updatedAt).
-    updateSpy.mockResolvedValue({ ...committedOrder(), status: OrderStatus.PENDING } as never);
+    // La segunda operación compite con el estado ya cambiado; el servicio
+    // rechaza el estado obsoleto y la ruta no emite notificaciones prematuras.
+    updateSpy.mockRejectedValueOnce(new AppError(409, 'INVALID_ORDER_TRANSITION', 'Estado no válido.'));
     const conflict = await app.inject({
       method: 'PATCH',
-      url: `/restaurant-panel/pedidos/${AUTHORIZED}/aceptar`,
+      url: `/restaurant-panel/pedidos/${ORDER_ID}/aceptar`,
       headers: { authorization: `Bearer ${token}` },
       payload: {},
     });
-    expect(conflict.statusCode).toBe(200);
+    expect(conflict.statusCode).toBe(409);
     expect(updateSpy).toHaveBeenCalledTimes(2);
+  });
+
+  it('rechaza de forma segura un pedido ajeno o en estado inválido', async () => {
+    const token = await restaurantToken();
+    updateSpy.mockRejectedValueOnce(new AppError(404, 'ORDER_NOT_FOUND', 'Pedido no encontrado para este restaurante.'));
+    const response = await app.inject({
+      method: 'PATCH',
+      url: `/restaurant-panel/pedidos/${ORDER_ID}/aceptar`,
+      headers: { authorization: `Bearer ${token}` },
+      payload: {},
+    });
+    expect(response.statusCode).toBe(404);
+    expect(emitSpy).not.toHaveBeenCalled();
   });
 });

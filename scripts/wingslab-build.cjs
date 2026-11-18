@@ -16,7 +16,7 @@ if (!offlineNamespace || process.env.WINGSLAB_OFFLINE_BUILD !== 'yes') {
     interfaces: fs.existsSync('/proc/net/dev') ? fs.readFileSync('/proc/net/dev', 'utf8').trim().split('\n').slice(2).map(line => line.trim().split(':')[0]) : null }));
   throw new Error('[WingsLab] Build requires the reviewed container with network=none.');
 }
-if (!['admin', 'customer', 'restaurant', 'driver'].includes(role)) throw new Error('[WingsLab] Unknown frontend.');
+if (!['customer', 'restaurant', 'driver'].includes(role)) throw new Error('[WingsLab] Unknown WingsLab frontend.');
 const env = processEnvironment({ version: 1, profile: 'container', origins: browserOrigins, authorization: { build: true } }, role, 'build');
 const root = path.resolve(__dirname, '..');
 const result = spawnSync(process.execPath, [path.join(root, 'node_modules/next/dist/bin/next'), 'build',

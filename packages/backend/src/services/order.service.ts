@@ -23,6 +23,7 @@ import { logger } from '../utils/logger';
 import { buildApartmentWhere } from '../utils/address';
 import { calculateOrderEta } from '../utils/order-eta';
 import { getPromoLimitViolation } from './order-promotion-policy';
+import { loyaltyQuote, reserveRuntimeReward, moneyCents } from './loyalty-runtime.service';
 
 
 type OrderInput = {
@@ -60,6 +61,7 @@ type OrderInput = {
   notes?: string;
   locationVerified?: boolean;
   promoCode?: string;
+  loyalty?: { cardId: string; discountCents: number; expectedTotalCents: number };
 };
 
 type CreateOrderParams = {
@@ -694,6 +696,7 @@ export async function createOrderForCustomer({
   let appliedPromoMaxUsesPerCustomer: number | null = null;
   let appliedPromoFirstPurchaseOnly = false;
   let freeDeliveryGranted = false;
+  let promoGift: { id: string; name: string; trackStock: boolean } | null = null;
   const discountBreakdown: Record<string, number | string> = {};
   if (multiBuySaving > 0) discountBreakdown.multiBuy = multiBuySaving;
 
@@ -733,6 +736,15 @@ export async function createOrderForCustomer({
     } else if (promoCode.type === 'FREE_DELIVERY') {
       promoDiscountAmount = deliveryFee;
       freeDeliveryGranted = true;
+    } else if (promoCode.type === 'FREE_PRODUCT') {
+      const giftProduct = await prisma.product.findFirst({
+        where: { id: promoCode.giftProductId ?? '', restaurantId: restaurant.id, isAvailable: true, deleted: false, sellBy: 'UNIT', isAdultOnly: false },
+        select: { id: true, name: true, trackStock: true, stock: true, optionGroups: { select: { minSelection: true } } },
+      });
+      if (!giftProduct || (giftProduct.trackStock && giftProduct.stock < 1) || giftProduct.optionGroups.some((g: { minSelection: number }) => g.minSelection > 0)) {
+        throw new AppError(409, 'PROMO_GIFT_UNAVAILABLE', 'El producto de regalo no está disponible. Tu cupón se conserva para otra compra.');
+      }
+      promoGift = { id: giftProduct.id, name: giftProduct.name, trackStock: giftProduct.trackStock };
     }
     appliedPromoCode = promoCode.code;
     appliedPromoMaxUses = promoCode.maxUses;
@@ -791,7 +803,7 @@ export async function createOrderForCustomer({
 
   // Seguridad: Límite de Monto para Pago en Efectivo (configurable por restaurante)
   const maxCashAmount = resolveMaxCashOrder(restaurant.maxCashOrder);
-  if (input.paymentMethod === PaymentMethod.CASH && totalAmount > maxCashAmount) {
+  if (!input.loyalty && input.paymentMethod === PaymentMethod.CASH && totalAmount > maxCashAmount) {
     throw new AppError(
       400,
       'CASH_LIMIT_EXCEEDED',
@@ -819,7 +831,7 @@ export async function createOrderForCustomer({
       // sin impacto en compras secuenciales (el lock vive solo durante el tx).
       // Clave estable por cliente para que el mismo lock proteja reintentos.
       await tx.$queryRawUnsafe(
-        'SELECT pg_advisory_xact_lock(hashtext($1))',
+        'SELECT pg_advisory_xact_lock(hashtext($1))::text',
         `order-create:${customer.id}`
       );
 
@@ -842,6 +854,20 @@ export async function createOrderForCustomer({
           }
           return { order: existingInTx, isDuplicate: true };
         }
+      }
+
+      let finalTotal = totalAmount;
+      let finalPromoDiscount = promoDiscountAmount;
+      let loyalty: Awaited<ReturnType<typeof loyaltyQuote>> | null = null;
+      if (input.loyalty) {
+        if (rawPromoCode || promoDiscountAmount > 0 || multiBuySaving > 0 || products.some(product => product.discountPrice !== null || (product as any).promoType)) throw new AppError(409, 'LOYALTY_PROMOTION_CONFLICT', 'La recompensa no se combina con promociones. Se conserva para otra compra.');
+        loyalty = await loyaltyQuote(tx, customer.id, moneyCents(subtotal), productIds);
+        if (!loyalty.eligible || loyalty.cardId !== input.loyalty.cardId || loyalty.discountCents !== input.loyalty.discountCents) throw new AppError(409, 'LOYALTY_QUOTE_CHANGED', 'La recompensa cambió o ya no está disponible. Revisa el carrito antes de confirmar.');
+        finalPromoDiscount += loyalty.discountCents / 100;
+        finalTotal = Math.round((subtotal - finalPromoDiscount + taxAmount + serviceFee + deliveryFee) * 100) / 100;
+        if (moneyCents(finalTotal) !== input.loyalty.expectedTotalCents) throw new AppError(409, 'LOYALTY_TOTAL_CHANGED', 'El importe cambió. Actualiza el carrito antes de confirmar.');
+        if (input.paymentMethod === PaymentMethod.CASH && finalTotal > maxCashAmount) throw new AppError(400, 'CASH_LIMIT_EXCEEDED', 'Este importe supera el límite de efectivo.');
+        discountBreakdown.loyalty = { cardId: loyalty.cardId, discount: loyalty.discountCents / 100, giftProductId: loyalty.gift?.id ?? null, description: loyalty.rewardDescription } as any;
       }
 
       // The per-customer advisory lock above makes these eligibility checks
@@ -1018,6 +1044,22 @@ export async function createOrderForCustomer({
         }
       }
 
+      if (loyalty?.eligible && loyalty.gift) {
+        if (loyalty.gift.trackStock) {
+          const giftStock = await tx.product.updateMany({ where: { id: loyalty.gift.id, restaurantId: restaurant.id, isAvailable: true, deleted: false, stock: { gte: 1 } }, data: { stock: { decrement: 1 } } });
+          if (giftStock.count !== 1) throw new AppError(409, 'LOYALTY_GIFT_UNAVAILABLE', 'El producto de regalo se agotó. Tu recompensa se conserva.');
+        }
+        itemsWithOptionsInfo.push({ productId: loyalty.gift.id, quantity: 1, unitPrice: 0, subtotal: 0, specialInstructions: 'REGALO DE FIDELIDAD · 1 unidad sin costo', sellBy: 'UNIT', weightG: null, options: [] });
+      }
+
+      if (promoGift) {
+        if (promoGift.trackStock) {
+          const promoGiftStock = await tx.product.updateMany({ where: { id: promoGift.id, restaurantId: restaurant.id, isAvailable: true, deleted: false, stock: { gte: 1 } }, data: { stock: { decrement: 1 } } });
+          if (promoGiftStock.count !== 1) throw new AppError(409, 'PROMO_GIFT_UNAVAILABLE', 'El producto de regalo se agotó. Tu cupón se conserva para otra compra.');
+        }
+        itemsWithOptionsInfo.push({ productId: promoGift.id, quantity: 1, unitPrice: 0, subtotal: 0, specialInstructions: `REGALO POR CUPÓN ${appliedPromoCode} · 1 unidad sin costo`, sellBy: 'UNIT', weightG: null, options: [] });
+      }
+
       const order = await tx.order.create({
         data: {
           orderReference: generateOrderReference(),
@@ -1040,9 +1082,9 @@ export async function createOrderForCustomer({
           whatsappFee: 0,
           deliveryFee,
           deliveryDistanceKm,
-          totalAmount,
+          totalAmount: finalTotal,
           promoCode: appliedPromoCode,
-          promoDiscountAmount,
+          promoDiscountAmount: finalPromoDiscount,
           discountBreakdown: Object.keys(discountBreakdown).length
             ? JSON.stringify(discountBreakdown)
             : null,
@@ -1087,6 +1129,8 @@ export async function createOrderForCustomer({
         } as any,
         select: customerCreatedOrderSelect,
       });
+
+      if (loyalty?.eligible) await reserveRuntimeReward(tx, customer.id, order.id, loyalty);
 
       await tx.customer.update({
         where: { id: customer.id },

@@ -28,6 +28,7 @@ model User {
   region       String
   status       UserStatus @default(ACTIVE)
   profilePhoto String?
+  mustChangePassword Boolean @default(false)
 
   // Relations
   admin             Admin?
@@ -81,6 +82,8 @@ model Restaurant {
 
   name                    String
   description             String
+  seoTitle                String?
+  seoDescription          String?
   address                 String
   latitude                Float
   longitude               Float
@@ -105,10 +108,6 @@ model Restaurant {
   // Solo recoger en tienda: el negocio no entrega a domicilio bajo ninguna modalidad.
   // Al activarlo se fuerzan hasOwnDelivery=false y supportsNetworkDelivery=false.
   pickupOnly              Boolean          @default(false)
-  // Color de marca (hex) que tiñe los acentos de la página pública del negocio.
-  accentColor             String?
-  // Tema de fondo del menú público (id del catálogo MENU_THEMES, null = default).
-  menuTheme               String?
   deliveryFee             Float?
   deliveryRadius          Float            @default(3)
   // Dynamic delivery pricing (optional per restaurant when own delivery is enabled)
@@ -154,6 +153,9 @@ model Restaurant {
   stats              RestaurantStats?
   billingSettlements RestaurantBillingSettlement[]
   supportedOrders    Order[]                       @relation("SupportRestaurant")
+  ownDrivers         Driver[]                      @relation("RestaurantDrivers")
+  driverEarnings     DriverEarning[]               @relation("RestaurantDriverEarnings")
+  driverPayouts      DriverPayout[]                @relation("RestaurantDriverPayouts")
   storeCategories    RestaurantStoreCategory[]
   featuredPurchases  FeaturedPurchase[]
 
@@ -292,6 +294,7 @@ model MenuCategory {
 
   name        String
   description String?
+  icon        String?
   order       Int     @default(0)
   deleted     Boolean @default(false)
 
@@ -380,6 +383,8 @@ model Customer {
   reviews            Review[]
   supportTickets     SupportTicket[]
   billingSettlements CustomerBillingSettlement[]
+  loyaltyCards       LoyaltyCard[]
+  loyaltyVisits      LoyaltyVisit[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -428,6 +433,8 @@ model Order {
 
   driverId           String?
   driver             Driver?   @relation(fields: [driverId], references: [id])
+  driverCompensation Decimal?  @db.Decimal(10, 2)
+  driverEarning      DriverEarning?
   driverAssignedAt   DateTime?
   isAcceptedByDriver Boolean   @default(false)
 
@@ -545,6 +552,8 @@ model Order {
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
   DeliveryToken DeliveryToken?
+  loyaltyStamp LoyaltyStamp?
+  loyaltyRedemption LoyaltyRedemption?
 
   @@index([restaurantId])
   @@index([customerId])
@@ -562,6 +571,108 @@ model Order {
   @@index([scheduledDeliveryAt, status])
   @@index([isAcceptedByDriver, driverId, status])
   @@index([isSupportRequested, supportRestaurantId])
+}
+
+// Snapshots are immutable after issuance. A new configuration never changes
+// a customer's current card or a previously earned reward.
+model LoyaltyCard {
+  id                String @id @default(cuid())
+  customerId        String
+  customer          Customer @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  restaurantId      String
+  sequence          Int
+  programVersion    Int
+  goal              Int
+  rewardKind        String
+  rewardValue       Int?
+  rewardProductId   String?
+  rewardProductName String?
+  rewardDescription String
+  terms             String
+  state             String @default("OPEN")
+  stamps            LoyaltyStamp[]
+  redemption        LoyaltyRedemption?
+  createdAt         DateTime @default(now())
+  completedAt       DateTime?
+
+  @@unique([restaurantId, customerId, sequence])
+  @@index([restaurantId, customerId, state])
+}
+
+model LoyaltyStamp {
+  id        String @id @default(cuid())
+  cardId    String
+  card      LoyaltyCard @relation(fields: [cardId], references: [id], onDelete: Restrict)
+  source    String @default("ONLINE")
+  orderId   String? @unique
+  order     Order? @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  visitId   String? @unique
+  visit     LoyaltyVisit? @relation(fields: [visitId], references: [id], onDelete: Restrict)
+  earnedAt  DateTime @default(now())
+
+  @@index([cardId])
+  @@index([visitId])
+}
+
+model LoyaltyRedemption {
+  id             String @id @default(cuid())
+  cardId         String @unique
+  card           LoyaltyCard @relation(fields: [cardId], references: [id], onDelete: Restrict)
+  orderId        String? @unique
+  order          Order? @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  visitId        String? @unique
+  visit          LoyaltyVisit? @relation(fields: [visitId], references: [id], onDelete: Restrict)
+  state          String @default("RESERVED")
+  discountCents  Int
+  reservedAt     DateTime @default(now())
+  completedAt    DateTime?
+
+  @@index([state])
+  @@index([visitId])
+}
+
+model LoyaltyVisit {
+  id                String @id @default(cuid())
+  customerId        String
+  customer          Customer @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  restaurantId      String
+  amountCents       Int
+  rewardAppliedCents Int @default(0)
+  rewardDescription String?
+  rewardProductId   String?
+  giftStockDecremented Boolean?
+  itemsJson         String @default("[]") @db.Text
+  totalCents        Int?
+  paymentMethod     String?
+  scanSessionId     String? @unique
+  scanSession       LoyaltyScanSession? @relation(fields: [scanSessionId], references: [id], onDelete: SetNull)
+  requestHash       String?
+  resultJson        String? @db.Text
+  createdBy         String
+  note              String?
+  voidedAt          DateTime?
+  voidedBy          String?
+  stamps            LoyaltyStamp[]
+  redemptions       LoyaltyRedemption[]
+  createdAt         DateTime @default(now())
+
+  @@index([restaurantId, customerId, createdAt])
+  @@index([createdBy])
+}
+
+model LoyaltyScanSession {
+  id          String @id @default(cuid())
+  customerId  String
+  restaurantId String
+  code        String @unique
+  expiresAt   DateTime
+  consumedAt  DateTime?
+  visit       LoyaltyVisit?
+  createdAt   DateTime @default(now())
+
+  @@index([expiresAt])
+  @@index([customerId])
+  @@index([createdAt])
 }
 
 enum OrderStatus {
@@ -638,8 +749,9 @@ model PromoCode {
 
   code        String // código que escribe el cliente (uppercase, sin espacios)
   description String?
-  type        String // "PERCENT" | "AMOUNT" | "FREE_DELIVERY"
-  value       Float  // % (PERCENT 0-100) o monto (AMOUNT $)
+  type          String  // "PERCENT" | "AMOUNT" | "FREE_DELIVERY" | "FREE_PRODUCT"
+  value         Float   // % (PERCENT 0-100) o monto (AMOUNT $)
+  giftProductId String? // Producto regalo cuando type = FREE_PRODUCT
 
   minOrderAmount Float?
   validFrom      DateTime?
@@ -680,6 +792,9 @@ model Driver {
   userId String @unique
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  restaurantId String?
+  restaurant   Restaurant? @relation("RestaurantDrivers", fields: [restaurantId], references: [id], onDelete: SetNull)
+
   region       String
   status       DriverStatus       @default(INACTIVE)
   availability DriverAvailability @default(OFFLINE)
@@ -687,8 +802,8 @@ model Driver {
   rating          Float @default(0)
   totalDeliveries Int   @default(0)
 
-  documentNumber String
-  documentType   String
+  documentNumber String?
+  documentType   String?
   profilePhoto   String?
   licensePhoto   String?
   licenseExpiry  DateTime?
@@ -699,11 +814,14 @@ model Driver {
   currentLongitude     Float?
   platformFeePerOrder  Float     @default(0)
   lastBillingSettledAt DateTime?
+  deliveryCompensation Decimal @default(0) @db.Decimal(10, 2)
 
   orders      Order[]
   stats       DriverStats?
   reviews     Review[]
   settlements DriverBillingSettlement[]
+  earnings    DriverEarning[]              @relation("DriverEarnings")
+  payouts     DriverPayout[]               @relation("DriverPayouts")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -711,6 +829,44 @@ model Driver {
   @@index([region])
   @@index([status])
   @@index([availability])
+  @@index([restaurantId])
+  @@index([restaurantId, status])
+}
+
+// Compensation agreed directly between the restaurant and its own driver.
+// A delivered order creates exactly one immutable earning; payouts group
+// selected pending earnings without involving the marketplace settlement model.
+model DriverEarning {
+  id           String       @id @default(cuid())
+  driverId     String
+  driver       Driver       @relation("DriverEarnings", fields: [driverId], references: [id], onDelete: Restrict)
+  restaurantId String
+  restaurant   Restaurant   @relation("RestaurantDriverEarnings", fields: [restaurantId], references: [id], onDelete: Restrict)
+  orderId      String       @unique
+  order        Order        @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  amount       Decimal      @db.Decimal(10, 2)
+  payoutId     String?
+  payout       DriverPayout? @relation(fields: [payoutId], references: [id], onDelete: Restrict)
+  earnedAt     DateTime     @default(now())
+
+  @@index([driverId, earnedAt])
+  @@index([restaurantId, payoutId])
+}
+
+model DriverPayout {
+  id           String      @id @default(cuid())
+  driverId     String
+  driver       Driver      @relation("DriverPayouts", fields: [driverId], references: [id], onDelete: Restrict)
+  restaurantId String
+  restaurant   Restaurant  @relation("RestaurantDriverPayouts", fields: [restaurantId], references: [id], onDelete: Restrict)
+  reference    String      @unique
+  amount       Decimal     @db.Decimal(10, 2)
+  notes        String?
+  paidAt       DateTime    @default(now())
+  earnings     DriverEarning[]
+  createdAt    DateTime    @default(now())
+
+  @@index([restaurantId, driverId, paidAt])
 }
 
 enum DriverStatus {

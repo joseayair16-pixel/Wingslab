@@ -1,8 +1,8 @@
 {
   "id": "/",
-  "name": "SaDeL Repartidor",
-  "short_name": "SaDeL Rep",
-  "description": "Gestiona disponibilidad, entregas y seguimiento desde el panel del repartidor SaDeL.",
+  "name": "WingsLab Reparto",
+  "short_name": "WingsLab",
+  "description": "Entregas propias y balance acordado de WingsLab.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

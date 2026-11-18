@@ -9,7 +9,9 @@ export default function robots(): MetadataRoute.Robots {
       {
         userAgent: '*',
         allow: '/',
-        disallow: ['/reparto/', '/api/'],
+        // Las páginas privadas entregan noindex para que los buscadores puedan
+        // procesar la directiva. robots.txt no es un mecanismo de privacidad.
+        disallow: ['/api/'],
       },
     ],
     sitemap: `${siteUrl}/sitemap.xml`,

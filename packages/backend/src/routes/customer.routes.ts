@@ -12,7 +12,9 @@ import { buildApartmentWhere, normalizeOptionalAddressText } from '../utils/addr
 import { urlToKey, deleteImages } from '../services/storage.service';
 import { isMexicanLocalPhone } from '../utils/mexican-phone';
 import { getLoyaltyConfiguration } from '../services/restaurant-marketing.service';
+import { loyaltyQuote, loyaltyState } from '../services/loyalty-runtime.service';
 import { RESTAURANT_ID } from '../config/single-restaurant';
+import { createScanSession } from '../services/loyalty-inperson.service';
 
 const updatePreferencesSchema = z.object({
   deliveryPreference: z
@@ -103,13 +105,75 @@ export async function registerCustomerRoutes(fastify: FastifyInstance): Promise<
       const user = getAuthenticatedUser(request);
       const customer = await prisma.customer.findUnique({ where: { userId: user.sub }, select: { id: true } });
       if (!customer) return reply.status(404).send({ success: false, error: { code: 'CUSTOMER_NOT_FOUND', message: 'No se encontró la cuenta.' } });
+      const currentProgram = await getLoyaltyConfiguration();
+      const live = currentProgram.redemptionReady ? await prisma.$transaction(tx => loyaltyState(tx, customer.id), { timeout: 30000 }) : null;
+      if (live) {
+        const visual = live.open || live.next;
+        const brand = await prisma.restaurant.findUnique({ where: { id: RESTAURANT_ID }, select: { name: true, logo: true } });
+        const completedCards = live.list
+          .filter((card: any) => card.state === 'COMPLETED')
+          .sort((a: any, b: any) => b.sequence - a.sequence);
+        const history = completedCards.map((card: any) => ({
+          sequence: card.sequence,
+          goal: card.goal,
+          stamps: card.stamps,
+          rewardDescription: card.rewardDescription,
+          rewardKind: card.rewardKind,
+          rewardValue: card.rewardValue,
+          completedAt: card.completedAt ? new Date(card.completedAt).toISOString() : null,
+          redeemed: card.redemptionState === 'COMPLETED',
+          reserved: card.redemptionState === 'RESERVED',
+        }));
+        // La configuración vigente manda: meta, recompensa y condiciones se leen
+        // siempre del programa actual, no de la tarjeta en curso (que conserva
+        // los valores con los que fue creada). El progreso (stamps) sí es de la
+        // tarjeta abierta. Así los cambios del restaurante se reflejan al instante.
+        const programGoal = Number(live.program.stampGoal) || 8;
+        const openStamps = Math.min(programGoal, live.open?.stamps ?? 0);
+        return reply.send({ success: true, data: {
+          enabled: live.program.enabled, redemptionEnabled: true,
+          stamps: openStamps, stampGoal: programGoal,
+          rewardDescription: live.program.rewardDescription,
+          rewardTerms: live.program.stampTerms,
+          rewardKind: live.program.rewardKind,
+          rewardValue: live.program.rewardValue,
+          stampTerms: live.program.stampTerms,
+          availableRewards: live.available.length, reserved: live.reserved,
+          eligibleForNextOrder: live.eligible, brand,
+          completedCount: history.filter((item: any) => item.redeemed).length,
+          history,
+        } });
+      }
       const [program, orders] = await Promise.all([
-        getLoyaltyConfiguration(),
-        prisma.order.findMany({ where: { restaurantId: RESTAURANT_ID, customerId: customer.id, status: { in: ['DELIVERED', 'COMPLETED', 'PICKED_UP'] } }, select: { id: true, totalAmount: true, createdAt: true }, orderBy: { createdAt: 'desc' } }),
+        Promise.resolve(currentProgram),
+        prisma.order.findMany({ where: { restaurantId: RESTAURANT_ID, customerId: customer.id, paymentStatus: 'COMPLETED', noShowReleasedAt: null, OR: [{ status: { in: ['DELIVERED', 'COMPLETED'] } }, { status: 'PICKED_UP', fulfillmentType: 'PICKUP' }] }, select: { id: true, totalAmount: true, createdAt: true }, orderBy: { createdAt: 'desc' } }),
       ]);
       const points = program.enabled ? Math.floor(orders.reduce((sum, order) => sum + order.totalAmount, 0) / 100 * program.pointsPer100) : 0;
+      const stamps = program.enabled && program.stampStartsAt ? orders.filter(order => order.createdAt >= new Date(program.stampStartsAt)).length : 0;
       return reply.send({ success: true, data: { enabled: program.enabled, points, eligibleOrders: orders.length,
-        nextRewardPoints: program.rewardPoints, rewardAmount: program.rewardAmount, redemptionEnabled: false } });
+        nextRewardPoints: program.rewardPoints, rewardAmount: program.rewardAmount, redemptionEnabled: false,
+        stamps, stampGoal: program.stampGoal, rewardType: program.rewardType, rewardDescription: program.rewardDescription, stampTerms: program.stampTerms, stampStartsAt: program.stampStartsAt } });
+    });
+
+    customerPanel.post('/customer/lealtad/qr', {
+      config: { rateLimit: { max: 20, timeWindow: '1 minute' } },
+    }, async (request, reply) => {
+      const user = getAuthenticatedUser(request);
+      const customer = await prisma.customer.findUnique({ where: { userId: user.sub }, select: { id: true } });
+      if (!customer) return reply.status(404).send({ success: false, error: { code: 'CUSTOMER_NOT_FOUND', message: 'No se encontró la cuenta.' } });
+      const program = await getLoyaltyConfiguration();
+      if (!program.redemptionReady || !program.enabled) return reply.status(409).send({ success: false, error: { code: 'LOYALTY_PROGRAM_OFF', message: 'El programa de fidelidad está en pausa o aún no está configurado.' } });
+      return reply.send({ success: true, data: await createScanSession(prisma, customer.id) });
+    });
+
+    customerPanel.post('/customer/lealtad/cotizar', async (request, reply) => {
+      const parsed = z.object({ subtotalCents: z.number().int().min(0).max(100000000), productIds: z.array(z.string().min(1)).max(100), otherPromotion: z.boolean().default(false) }).safeParse(request.body);
+      if (!parsed.success) return reply.status(400).send({ success: false, error: { code: 'INVALID_QUOTE', message: 'Carrito no válido.' } });
+      const user = getAuthenticatedUser(request);
+      const customer = await prisma.customer.findUnique({ where: { userId: user.sub }, select: { id: true } });
+      if (!customer) return reply.status(404).send({ success: false, error: { code: 'CUSTOMER_NOT_FOUND', message: 'No se encontró la cuenta.' } });
+      const quote = await prisma.$transaction(tx => loyaltyQuote(tx, customer.id, parsed.data.subtotalCents, parsed.data.productIds, parsed.data.otherPromotion), { timeout: 30000 });
+      return reply.send({ success: true, data: quote });
     });
 
     customerPanel.get('/customer/marketing-consent', async (request, reply) => {
@@ -788,10 +852,10 @@ export async function registerCustomerRoutes(fastify: FastifyInstance): Promise<
 
     const createTicketSchema = z.object({
       type: z.enum(['APP', 'ORDER']),
-      subject: z.string().optional(),
-      description: z.string().min(1),
-      storeName: z.string().optional(),
-      orderNumber: z.string().optional(),
+      subject: z.string().trim().max(150).optional(),
+      description: z.string().trim().min(10).max(4000),
+      storeName: z.string().max(150).optional(),
+      orderNumber: z.string().max(100).optional(),
     });
 
     customerPanel.post('/customer/support/tickets', async (request, reply) => {
@@ -822,6 +886,10 @@ export async function registerCustomerRoutes(fastify: FastifyInstance): Promise<
         });
       }
 
+      if (parsed.data.type === 'ORDER') {
+        const order = parsed.data.orderNumber ? await prisma.order.findFirst({ where: { customerId: customer.id, restaurantId: RESTAURANT_ID, orderReference: parsed.data.orderNumber }, select: { id: true } }) : null;
+        if (!order) return reply.status(400).send({ success: false, error: { code: 'INVALID_ORDER', message: 'Selecciona uno de tus pedidos de WingsLab.' } });
+      }
       const ticket = await prisma.supportTicket.create({
         data: {
           ...parsed.data,

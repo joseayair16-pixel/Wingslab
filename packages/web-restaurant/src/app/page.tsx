@@ -1,9 +1,12 @@
 'use client';
-import { getWingslabApiUrl, getWingslabSocketUrl, getWingslabCustomerUrl, wingslabExternalServicesEnabled,
-  AUTOMATIC_ORDER_DECISIONS_ENABLED, SIMULATED_ORDERS_ENABLED, manualOrderActionAllowed,
-  manualOrderActionsForStatus, manualOrderTargetStatus } from '@sadel/shared';
+import { getWingslabApiUrl, getWingslabSocketUrl, getWingslabCustomerUrl, wingslabExternalServicesEnabled, WINGSLAB_BUSINESS,
+  AUTOMATIC_ORDER_DECISIONS_ENABLED, restaurantOrderActionAllowed,
+  restaurantOrderTargetStatus } from '@sadel/shared';
 import { createOrderSyncGate, createOrderActionFlight, mergeConfirmedOrder, reconcileOrders } from '../lib/order-sync';
-import { Activity, AlertTriangle, Check, ChefHat, ChevronUp, ClipboardList, Clock, Info, Loader2, Lock, Mail, MessageCircle, Minus, Package, Pencil, Phone, Plus, RefreshCw, Sparkles, Tag, Trash2, User, Wand2, X } from 'lucide-react';
+import { Activity, AlertTriangle, ArrowRight, Award, Bike, Check, ChefHat, ChevronUp, ClipboardList, Clock, Home as HomeIcon, Info, Layers, Loader2, Lock, Mail, MapPin, Megaphone, MessageCircle, MessageSquareText, Minus, Moon, Package, Pencil, Phone, Plus, RefreshCw, Settings, ShoppingBag, Sparkles, Store, Tag, Trash2, User, Users, Wand2, X } from 'lucide-react';
+import redWordmark from '../assets/wingslab-wordmark-red.png';
+import whiteWordmark from '../assets/wingslab-wordmark-white.png';
+import { CategoryIcon } from '../components/CategoryIcon';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
@@ -31,7 +34,6 @@ import {
   installWarmupListeners,
   installVisibilityResumeListener,
   reset,
-  getMenuThemeById,
   waitForNativeBridge,
   revokeDevicePush,
   closeActiveWebNotifications,
@@ -48,7 +50,12 @@ import { WingsLabLogo as SaDelLogo } from '../components/WingsLabLogo';
 import { SaDelLoader } from '../components/SaDelLoader';
 import { DashboardSection } from '../components/sections/DashboardSection';
 import { CampaignsSection } from '../components/sections/CampaignsSection';
+import { MenuContentSection } from '../components/sections/MenuContentSection';
 import { CustomersSection } from '../components/sections/CustomersSection';
+import { LoyaltySection } from '../components/sections/LoyaltySection';
+import { InPersonSalesSection } from '../components/sections/InPersonSalesSection';
+import { SupportSection } from '../components/sections/SupportSection';
+import { RestaurantDriversSection } from '../components/RestaurantDriversSection';
 import { SettingsSection } from '../components/sections/SettingsSection';
 import PushEnableBanner from '../components/PushEnableBanner';
 import { createPlacesSource } from '../lib/places';
@@ -112,6 +119,8 @@ type RestaurantProfile = {
   id: string;
   name: string;
   description: string;
+  seoTitle?: string | null;
+  seoDescription?: string | null;
   address: string;
   latitude?: number | null;
   longitude?: number | null;
@@ -138,8 +147,6 @@ type RestaurantProfile = {
   supportsNetworkDelivery?: boolean;
   pickupOnly?: boolean;
   autoOpenEnabled?: boolean;
-  accentColor?: string | null;
-  menuTheme?: string | null;
   minDeliveryTime: number;
   maxDeliveryTime: number;
   transferBankName?: string | null;
@@ -269,6 +276,11 @@ type OrderItem = {
   };
 };
 
+// Registros locales de demostración retirados de las vistas operativas.
+function isRetiredLocalTestOrder(order: { id: string }) {
+  return order.id === 'wl_order_pendiente' || order.id === 'wl_order_preparando';
+}
+
 type ProductOption = {
   id?: string;
   name: string;
@@ -316,18 +328,65 @@ type ProductItem = {
   optionGroups?: ProductOptionGroup[];
 };
 
+/** Interruptor accesible y compacto, con una sola definición visual. */
+function Toggle({ checked, label, onClick, disabled = false, tone = 'red' }: {
+  checked: boolean; label: string; onClick: () => void; disabled?: boolean; tone?: 'red' | 'emerald' | 'amber';
+}) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      aria-label={label}
+      onClick={onClick}
+      disabled={disabled}
+      className={`wl-toggle is-${tone} ${checked ? 'is-on' : ''}`}
+    >
+      <span className="wl-toggle-thumb" />
+    </button>
+  );
+}
+
 type CategoryItem = {
   id: string;
   name: string;
   description?: string | null;
+  icon?: string | null;
   order: number;
 };
 
+const CATEGORY_ICON_CHOICES: Array<{ value: string; label: string }> = [
+  { value: 'fluent-emoji-flat:poultry-leg', label: 'Pollo' },
+  { value: 'fluent-emoji-flat:hamburger', label: 'Hamburguesa' },
+  { value: 'fluent-emoji-flat:pizza', label: 'Pizza' },
+  { value: 'fluent-emoji-flat:sushi', label: 'Sushi' },
+  { value: 'fluent-emoji-flat:taco', label: 'Tacos' },
+  { value: 'fluent-emoji-flat:green-salad', label: 'Ensalada' },
+  { value: 'fluent-emoji-flat:bubble-tea', label: 'Bebidas' },
+  { value: 'fluent-emoji-flat:birthday-cake', label: 'Postres' },
+  { value: 'fluent-emoji-flat:cut-of-meat', label: 'Carnes' },
+  { value: 'fluent-emoji-flat:sandwich', label: 'Sándwiches' },
+  { value: 'fluent-emoji-flat:shallow-pan-of-food', label: 'Sopas' },
+  { value: 'fluent-emoji-flat:french-fries', label: 'Botanas' },
+  { value: 'fluent-emoji-flat:ice-cream', label: 'Helados' },
+  { value: 'fluent-emoji-flat:coffee', label: 'Café' },
+  { value: 'fluent-emoji-flat:wrapped-gift', label: 'Promos' },
+  { value: 'fluent-emoji-flat:takeout-box', label: 'Otros' },
+];
+
 type DriverItem = {
   id: string;
-  user?: {
+  status: 'ACTIVE' | 'INACTIVE' | 'SUSPENDED';
+  availability: 'AVAILABLE' | 'BUSY' | 'OFFLINE';
+  totalDeliveries: number;
+  deliveryCompensation: number;
+  balance: { pending: number; pendingDeliveries: number; paid: number; payouts: number };
+  user: {
+    id: string;
     name: string;
     phone: string;
+    lastName?: string | null;
+    profilePhoto?: string | null;
   };
 };
 
@@ -358,11 +417,13 @@ type RestaurantRetryAction =
     label: string;
   };
 
-type RestaurantPortalSection = 'dashboard' | 'orders' | 'store' | 'settings' | 'campaigns' | 'customers';
+type RestaurantPortalSection = 'dashboard' | 'orders' | 'store' | 'settings' | 'campaigns' | 'customers' | 'loyalty' | 'inperson' | 'menu-content' | 'support' | 'drivers';
 type PreparationPresetMinutes = 10 | 15 | 20 | 30 | 45 | 60;
 type StoreProfileDraft = {
   name: string;
   description: string;
+  seoTitle: string;
+  seoDescription: string;
   address: string;
   houseNumber: string;
   latitude: string;
@@ -374,8 +435,6 @@ type StoreProfileDraft = {
   hasOwnDelivery: boolean;
   supportsNetworkDelivery: boolean;
   pickupOnly: boolean;
-  accentColor: string | null;
-  menuTheme: string | null;
   minDeliveryTime: string;
   maxDeliveryTime: string;
   deliveryFee: string;
@@ -603,11 +662,6 @@ function debugLog(...args: unknown[]): void {
   }
 }
 
-// Independent capabilities: only explicit local manual actions; automatic decisions stay off.
-function isLocalManualOrderAction(orderId: string, action: string) {
-  return manualOrderActionAllowed(orderId, action, typeof window !== 'undefined' &&
-    window.location.origin === 'http://127.0.0.1:3102' && process.env.NEXT_PUBLIC_WINGSLAB_ROLE === 'restaurant');
-}
 function isWingslabImage(value: string): boolean {
   if (value.startsWith('/') && !value.startsWith('//')) return true;
   try {
@@ -937,6 +991,17 @@ function getRestaurantCollectionAmount(
   return order.totalAmount - (order.deliveryFee || 0);
 }
 
+// Clave de día en horario de Ciudad de México, para filtrar pedidos por fecha
+// sin depender de la zona horaria del dispositivo.
+function mexicoDayKey(value: string | Date): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Mexico_City',
+    year: 'numeric', month: '2-digit', day: '2-digit',
+  }).format(date);
+}
+
 export default function Home() {
   const [apiBase, setApiBase] = useState(defaultApiBase);
   const [token, setToken] = useState('');
@@ -958,6 +1023,31 @@ export default function Home() {
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  useEffect(() => {
+    try { setSidebarCollapsed(localStorage.getItem('wingslab.restaurant.sidebarCollapsed') === 'true'); } catch {}
+  }, []);
+  const toggleSidebar = () => {
+    const next = !sidebarCollapsed;
+    setSidebarCollapsed(next);
+    try { localStorage.setItem('wingslab.restaurant.sidebarCollapsed', String(next)); } catch {}
+  };
+  useEffect(() => {
+    if (!isMobileNavOpen) return;
+    const opener = document.querySelector<HTMLButtonElement>('[aria-label="Abrir menu"]');
+    document.querySelector<HTMLButtonElement>('[aria-label="Cerrar menu"]')?.focus();
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') { event.preventDefault(); setIsMobileNavOpen(false); return; }
+      if (event.key !== 'Tab') return;
+      const focusable = [...document.querySelectorAll<HTMLButtonElement>('#wl-mobile-navigation button:not(:disabled)')].filter(button => button.getClientRects().length > 0);
+      if (!focusable.length) return;
+      const first = focusable[0], last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => { document.removeEventListener('keydown', onKeyDown); opener?.focus(); };
+  }, [isMobileNavOpen]);
   const [loading, setLoading] = useState(false);
   const [verifyingCode, setVerifyingCode] = useState(false);
   const telefonoValido = /^\d{10}$/.test(phone);
@@ -975,6 +1065,11 @@ export default function Home() {
   const [transferBeneficiaryName, setTransferBeneficiaryName] = useState('');
   const [orders, setOrders] = useState<OrderItem[]>([]);
   const [orderSyncError, setOrderSyncError] = useState('');
+  const [refreshingOrders, setRefreshingOrders] = useState(false);
+  const refreshOrdersFlightRef = useRef(false);
+  const ordersLoadFlightRef = useRef<Promise<boolean> | null>(null);
+  const ordersRequestFlightRef = useRef<Promise<SuccessResponse<OrderItem[]>> | null>(null);
+  const dashboardLoadInFlightRef = useRef(false);
   const ordersSyncGateRef = useRef(createOrderSyncGate());
   const orderActionFlightRef = useRef(createOrderActionFlight());
   const uncertainOrderIdsRef = useRef(new Set<string>());
@@ -992,11 +1087,23 @@ export default function Home() {
   const [showMenuPreview, setShowMenuPreview] = useState(false);
   const [proofPreviewUrl, setProofPreviewUrl] = useState<string | null>(null);
   const [selectedStatus, setSelectedStatus] = useState<'ACTIVE' | 'REJECTED' | 'CANCELLED' | 'DELIVERED' | 'COMPLETED'>('ACTIVE');
+  const [ordersSearch, setOrdersSearch] = useState('');
+  const [ordersFulfillment, setOrdersFulfillment] = useState<'ALL' | 'DELIVERY' | 'PICKUP'>('ALL');
+  const [ordersPeriod, setOrdersPeriod] = useState<'today' | 'week' | 'month'>('today');
   const [selectedDriverByOrder, setSelectedDriverByOrder] = useState<Record<string, string>>({});
   const [activeActionKey, setActiveActionKey] = useState<string | null>(null);
   const [showLogoutWarningModal, setShowLogoutWarningModal] = useState(false);
   const [activeSection, setActiveSection] = useState<RestaurantPortalSection>('dashboard');
   const [selectedOrderForTicket, setSelectedOrderForTicket] = useState<OrderItem | null>(null);
+  const [orderModalId, setOrderModalId] = useState<string | null>(null);
+  useEffect(() => {
+    if (!orderModalId) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setOrderModalId(null);
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [orderModalId]);
   const [selectedOrderForEtaExtension, setSelectedOrderForEtaExtension] = useState<OrderItem | null>(null);
   const [rescheduleDate, setRescheduleDate] = useState('');
   const [rescheduleTime, setRescheduleTime] = useState('');
@@ -1034,110 +1141,8 @@ export default function Home() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   
-  const [showHelpModal, setShowHelpModal] = useState(false);
   const [showClosePromptModal, setShowClosePromptModal] = useState(false);
   const [extendingHours, setExtendingHours] = useState(false);
-  const [activeHelpTab, setActiveHelpTab] = useState<'simulator' | 'faqs' | 'transfers' | 'support' | 'notifications'>('simulator');
-  const [supportSubject, setSupportSubject] = useState('');
-  const [supportMessage, setSupportMessage] = useState('');
-  const [supportCategory, setSupportCategory] = useState('SYSTEM');
-  const [restaurantTickets, setRestaurantTickets] = useState<any[]>([]);
-
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        const stored = window.localStorage.getItem('local_restaurant_tickets');
-        if (stored) {
-          setRestaurantTickets(JSON.parse(stored));
-        } else {
-          const demoTickets = [
-            {
-              id: 'ticket-demo-1',
-              category: 'BILLING',
-              subject: 'Duda sobre fecha de corte',
-              description: 'El corte de facturación de esta semana no coincide con el cierre del domingo.',
-              status: 'RESOLVED',
-              response: 'Hola, el corte se ejecuta el lunes en la madrugada. Ya quedó conciliado y pagado en tu historial.',
-              respondedAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(),
-              createdAt: new Date(Date.now() - 4 * 24 * 60 * 60 * 1000).toISOString(),
-            },
-            {
-              id: 'ticket-demo-2',
-              category: 'SYSTEM',
-              subject: 'Retraso en sonido de alertas',
-              description: 'Al recibir pedidos el sonido tarda unos segundos en activarse.',
-              status: 'RESOLVED',
-              response: 'Se optimizó la conexión websocket de tu terminal para reducir la latencia de audio. Favor de recargar la página.',
-              respondedAt: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString(),
-              createdAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
-            }
-          ];
-          window.localStorage.setItem('local_restaurant_tickets', JSON.stringify(demoTickets));
-          setRestaurantTickets(demoTickets);
-        }
-      } catch (e) {
-        console.error('Error loading restaurant tickets:', e);
-      }
-    }
-  }, [showHelpModal]);
-
-  const simulateIncomingOrder = (paymentMethod: 'CASH' | 'TRANSFER' | 'CREDIT_CARD') => {
-    if (!SIMULATED_ORDERS_ENABLED) return;
-    const mockId = `mock-order-${Date.now()}`;
-    const mockOrder: OrderItem = {
-      id: mockId,
-      orderReference: `SAD-${Math.floor(100000 + Math.random() * 900000)}`,
-      status: 'PENDING',
-      totalAmount: 385.00,
-      deliveryFee: 35.00,
-      paymentMethod: paymentMethod,
-      paymentStatus: 'PENDING',
-      paymentProofUrl: paymentMethod === 'TRANSFER' ? 'https://images.unsplash.com/photo-1554224155-8d04cb21cd6c?auto=format&fit=crop&w=600&q=80' : null,
-      createdAt: new Date().toISOString(),
-      notes: 'Favor de enviar salsa verde y roja extra, servilletas y limones. Tacos con cebolla y cilantro.',
-      address: {
-        street: 'Av. Paseo de la Reforma',
-        number: '222',
-        neighborhood: 'Juárez',
-        reference: 'Torre Reforma, frente al Ángel'
-      },
-      items: [
-        {
-          id: `item-1-${Date.now()}`,
-          quantity: 3,
-          specialInstructions: 'Con cebolla y cilantro',
-          product: {
-            id: 'mock-p-1',
-            name: 'Orden de Tacos al Pastor'
-          },
-          options: [
-            { id: 'opt-1', optionId: '1', name: 'Con Queso', price: 15.00 }
-          ]
-        },
-        {
-          id: `item-2-${Date.now()}`,
-          quantity: 2,
-          product: {
-            id: 'mock-p-2',
-            name: 'Agua de Horchata Grande'
-          }
-        }
-      ],
-      customer: {
-        id: 'mock-cust-1',
-        user: {
-          id: 'mock-u-1',
-          name: 'Carlos Mendoza (Prueba)',
-          phone: '5544332211'
-        }
-      }
-    } as any;
-
-    setOrders(current => [mockOrder, ...current]);
-    setIncomingOrderQueue(current => [...current, mockId]);
-    pushToast('info', 'Simulador Activo', 'Se disparó un pedido entrante de prueba.');
-  };
-  
   // Chat Real-Time State
   const [chatMessages, setChatMessages] = useState<any[]>([]);
   const [chatInput, setChatInput] = useState('');
@@ -1219,6 +1224,8 @@ export default function Home() {
   const [storeDraft, setStoreDraft] = useState<StoreProfileDraft>({
     name: '',
     description: '',
+    seoTitle: '',
+    seoDescription: '',
     address: '',
     houseNumber: '',
     latitude: '',
@@ -1230,8 +1237,6 @@ export default function Home() {
     hasOwnDelivery: false,
     supportsNetworkDelivery: true,
     pickupOnly: false,
-    accentColor: null,
-    menuTheme: null,
     minDeliveryTime: '',
     maxDeliveryTime: '',
     deliveryFee: '',
@@ -1288,6 +1293,7 @@ export default function Home() {
   }, [activeSettingsTab]);
   const [creatingCategory, setCreatingCategory] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState('');
+  const [newCategoryIcon, setNewCategoryIcon] = useState('');
 
   const [isProductModalOpen, setIsProductModalOpen] = useState(false);
   const [creatingProduct, setCreatingProduct] = useState(false);
@@ -1298,7 +1304,9 @@ export default function Home() {
   const [activeAvailabilityProductId, setActiveAvailabilityProductId] = useState<string | null>(null);
   const [continueAfterSave, setContinueAfterSave] = useState(false);
   const [selectedWeekOffset, setSelectedWeekOffset] = useState(0);
-  const [isDarkMode, setIsDarkMode] = useState(false);
+  const [darkMode, setDarkMode] = useState(false);
+  useEffect(() => { const sync = () => setDarkMode(document.documentElement.classList.contains('dark')); sync(); const observer = new MutationObserver(sync); observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] }); return () => observer.disconnect(); }, []);
+  const toggleDarkMode = () => { const value = document.documentElement.classList.contains('dark') ? 'light' : 'dark'; try { localStorage.setItem('wingslab.restaurant.theme', value); } catch {} window.dispatchEvent(new CustomEvent('wingslab:restaurant-theme', { detail: value })); };
   const [isPrintingTicket, setIsPrintingTicket] = useState(false);
   const [revenueMode, setRevenueMode] = useState<'gross' | 'net'>('gross');
   const [isDeleteProductModalOpen, setIsDeleteProductModalOpen] = useState(false);
@@ -1827,10 +1835,10 @@ export default function Home() {
       // El modo oscuro es por sesión: siempre se inicia claro y solo se
       // mantiene mientras el usuario no cierre/recargue la app. Estado del
       // switch sincronizado con la clase real en <html>.
-      setIsDarkMode(document.documentElement.classList.contains('dark'));
+
 
       const savedSection = window.localStorage.getItem('restaurantActiveSection');
-      if (savedSection && ['dashboard', 'orders', 'store', 'settings', 'campaigns', 'customers'].includes(savedSection)) {
+      if (savedSection && ['dashboard', 'orders', 'store', 'settings', 'campaigns', 'customers', 'loyalty', 'inperson', 'menu-content', 'support', 'drivers'].includes(savedSection)) {
         setActiveSection(savedSection as RestaurantPortalSection);
       }
 
@@ -2173,6 +2181,7 @@ export default function Home() {
     token?: string;
     options?: RequestInit;
     fallbackMessage?: string;
+    timeoutMs?: number;
     retry?: { attempts?: number; backoffMs?: number };
   }): Promise<T> {
     return requestJson<T>({
@@ -2180,6 +2189,37 @@ export default function Home() {
       refreshConfig: buildRefreshConfig(),
     });
   }
+
+  const fetchOrders = useCallback((): Promise<SuccessResponse<OrderItem[]>> => {
+    if (ordersRequestFlightRef.current) return ordersRequestFlightRef.current;
+    let sharedRequest: Promise<SuccessResponse<OrderItem[]>>;
+    // El controlador debe ser nuevo en cada intento y cubrir también la lectura
+    // del cuerpo. Solo se reintenta este GET, nunca acciones sobre pedidos.
+    const attempt = async () => {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 7000);
+      try {
+        return await apiRequest<SuccessResponse<OrderItem[]>>({
+          apiBase,
+          path: '/restaurant-panel/pedidos',
+          token,
+          options: { signal: controller.signal },
+          fallbackMessage: 'No se pudieron cargar los pedidos.',
+          timeoutMs: 8000,
+          retry: { attempts: 0 },
+        });
+      } finally { clearTimeout(timeout); }
+    };
+    sharedRequest = attempt().catch(async reason => {
+      if (!isTransientRequestError(reason)) throw reason;
+      await new Promise(resolve => setTimeout(resolve, 500));
+      return attempt();
+    }).finally(() => {
+      if (ordersRequestFlightRef.current === sharedRequest) ordersRequestFlightRef.current = null;
+    });
+    ordersRequestFlightRef.current = sharedRequest;
+    return sharedRequest;
+  }, [apiBase, token]);
 
   const subscribeToPush = async (tokenToUse: string): Promise<
     | { ok: true }
@@ -2444,6 +2484,8 @@ export default function Home() {
     setStoreDraft({
       name: '',
       description: '',
+      seoTitle: '',
+      seoDescription: '',
       address: '',
       houseNumber: '',
       latitude: '',
@@ -2455,8 +2497,6 @@ export default function Home() {
       hasOwnDelivery: false,
       supportsNetworkDelivery: true,
       pickupOnly: false,
-      accentColor: null,
-      menuTheme: null,
       minDeliveryTime: '',
       maxDeliveryTime: '',
       deliveryFee: '',
@@ -2745,12 +2785,6 @@ export default function Home() {
 
 
   function openAcceptOrderPrompt(orderId: string) {
-    // La autorización se evalúa antes de mostrar cualquier control de acción:
-    // un pedido no autorizado no debe abrir diálogos que no se van a permitir.
-    if (!isLocalManualOrderAction(orderId, 'accept')) {
-      setError('[WingsLab] Esta acción o pedido no está autorizado para operaciones manuales.');
-      return;
-    }
     setSelectedPreparationTime(15);
     setAcceptancePromptOrderId(orderId);
   }
@@ -2805,11 +2839,16 @@ export default function Home() {
   }
 
   const loadDashboard = useCallback(async () => {
+    // El montaje y la conexión inicial del socket pueden pedir la carga a la vez.
+    // Una sola carga completa evita que una respuesta antigua invalide la más nueva.
+    if (dashboardLoadInFlightRef.current) return;
+    dashboardLoadInFlightRef.current = true;
     const ordersTicket = ordersSyncGateRef.current.begin();
     setLoading(true);
     setProfileLoadState('loading');
     setError('');
     persistApiBase(storageKey, apiBase);
+    let dashboardOrdersFailed = false;
 
     try {
       const [profileData, ordersData, productsData, categoriesData, driversData, storeCategoriesData] = await Promise.all([
@@ -2823,15 +2862,20 @@ export default function Home() {
             backoffMs: 350,
           },
         }),
-        apiRequest<SuccessResponse<OrderItem[]>>({
-          apiBase,
-          path: '/restaurant-panel/pedidos',
-          token,
-          fallbackMessage: 'No se pudieron cargar los pedidos.',
-          retry: {
-            attempts: 2,
-            backoffMs: 350,
-          },
+        fetchOrders().then((data) => {
+          if (!data.success || !Array.isArray(data.data)) {
+            dashboardOrdersFailed = true;
+            throw new Error('Respuesta de pedidos no válida.');
+          }
+          if (ordersSyncGateRef.current.current(ordersTicket)) {
+            setOrders(current => reconcileOrders(current, data.data));
+            data.data.forEach(order => uncertainOrderIdsRef.current.delete(order.id));
+            setOrderSyncError('');
+          }
+          return data;
+        }, (requestError) => {
+          dashboardOrdersFailed = true;
+          throw requestError;
         }),
         apiRequest<SuccessResponse<ProductItem[]>>({
           apiBase,
@@ -2853,7 +2897,13 @@ export default function Home() {
             backoffMs: 350,
           },
         }),
-        Promise.resolve({ data: [] as DriverItem[] }),
+        apiRequest<SuccessResponse<DriverItem[]>>({
+          apiBase,
+          path: '/restaurant-panel/repartidores',
+          token,
+          fallbackMessage: 'No se pudo cargar el equipo de reparto.',
+          retry: { attempts: 1, backoffMs: 300 },
+        }),
         Promise.resolve({ data: [] as StoreCategoryItem[] }),
       ]);
 
@@ -2886,6 +2936,8 @@ export default function Home() {
       setStoreDraft({
         name: profileData.data.name || '',
         description: profileData.data.description || '',
+        seoTitle: profileData.data.seoTitle || '',
+        seoDescription: profileData.data.seoDescription || '',
         address: (() => {
           const raw = profileData.data.address || '';
           if (/pendiente de registro|pendiente de configurac/i.test(raw.trim())) return '';
@@ -2905,8 +2957,6 @@ export default function Home() {
         hasOwnDelivery: profileData.data.hasOwnDelivery,
         supportsNetworkDelivery: false,
         pickupOnly: profileData.data.pickupOnly ?? false,
-        accentColor: profileData.data.accentColor ?? null,
-        menuTheme: profileData.data.menuTheme ?? null,
         minDeliveryTime: String(profileData.data.minDeliveryTime || ''),
         maxDeliveryTime: String(profileData.data.maxDeliveryTime || ''),
         deliveryFee: profileData.data.deliveryFee?.toString() || '',
@@ -2943,7 +2993,7 @@ export default function Home() {
     } catch (requestError) {
       setProfile(null);
       setProfileLoadState('error');
-      if (ordersSyncGateRef.current.current(ordersTicket)) {
+      if (dashboardOrdersFailed && ordersSyncGateRef.current.current(ordersTicket)) {
         setOrderSyncError('No se pudieron sincronizar los pedidos. Se conservan los últimos datos confirmados.');
       }
       setProducts([]);
@@ -2966,53 +3016,63 @@ export default function Home() {
         );
       }
     } finally {
+      dashboardLoadInFlightRef.current = false;
       setLoading(false);
     }
-  }, [apiBase, token]);
+  }, [apiBase, token, fetchOrders]);
 
   // El pull-to-refresh (listener nativo) usa esta referencia para evitar
   // dependencias circulares: siempre apunta al loadDashboard vigente.
   loadDashboardRef.current = loadDashboard;
 
   // Carga ligera solo de pedidos — para usar en eventos live sin recargar todo el panel
-  const loadOrdersOnly = useCallback(async () => {
+  const loadOrdersOnly = useCallback((): Promise<boolean> => {
+    // Eventos del socket, retorno a primer plano y polling pueden coincidir.
+    // Compartir la consulta evita que solicitudes redundantes se invaliden entre sí.
+    if (ordersLoadFlightRef.current) return ordersLoadFlightRef.current;
     const ticket = ordersSyncGateRef.current.begin();
-    try {
-      const ordersData = await apiRequest<SuccessResponse<OrderItem[]>>({
-        apiBase,
-        path: '/restaurant-panel/pedidos',
-        token,
-        fallbackMessage: 'No se pudieron cargar los pedidos.',
-        retry: {
-          attempts: 1,
-          backoffMs: 300,
-        },
-      });
-      if (ordersData.success) {
+    const request = (async () => {
+      try {
+        const ordersData = await fetchOrders();
+        if (!ordersData.success || !Array.isArray(ordersData.data)) throw new Error('Respuesta de pedidos no válida.');
         if (!ordersSyncGateRef.current.current(ticket)) return false;
         setOrders(current => ordersSyncGateRef.current.current(ticket) ? reconcileOrders(current, ordersData.data) : current);
         ordersData.data.forEach(order => uncertainOrderIdsRef.current.delete(order.id));
         setOrderSyncError('');
-        // Actualizar llegada de repartidores desde datos de la API
         const arrived: Record<string, true> = {};
-        for (const o of ordersData.data) {
-          if (o.driverArrivedAt && o.isAcceptedByDriver) {
-            arrived[o.id] = true;
-          }
-        }
-        if (Object.keys(arrived).length > 0) {
-          setDriverArrivedOrders((prev) => ({ ...prev, ...arrived }));
-        }
+        for (const order of ordersData.data) if (order.driverArrivedAt && order.isAcceptedByDriver) arrived[order.id] = true;
+        if (Object.keys(arrived).length) setDriverArrivedOrders(previous => ({ ...previous, ...arrived }));
         return true;
+      } catch (requestError) {
+        if (ordersSyncGateRef.current.current(ticket)) {
+          const reason = getRequestErrorMessage(requestError, 'No hubo respuesta del servidor.');
+          setOrderSyncError(`No se pudieron sincronizar los pedidos: ${reason} Se muestran los últimos datos confirmados. Intentaremos actualizar de nuevo automáticamente.`);
+        }
+        return false;
       }
-      throw new Error('Respuesta de pedidos no válida.');
-    } catch {
-      if (ordersSyncGateRef.current.current(ticket)) {
-        setOrderSyncError('No se pudieron sincronizar los pedidos. Se conservan los últimos datos confirmados; vuelve a consultar antes de reintentar una acción.');
-      }
-      return false;
-    }
-  }, [apiBase, token]);
+    })();
+    let sharedRequest: Promise<boolean>;
+    sharedRequest = request.finally(() => { if (ordersLoadFlightRef.current === sharedRequest) ordersLoadFlightRef.current = null; });
+    ordersLoadFlightRef.current = sharedRequest;
+    return sharedRequest;
+  }, [apiBase, token, fetchOrders]);
+
+  const refreshOrders = useCallback(async () => {
+    if (refreshOrdersFlightRef.current) return;
+    refreshOrdersFlightRef.current = true;
+    setRefreshingOrders(true);
+    try { await loadOrdersOnly(); } finally { refreshOrdersFlightRef.current = false; setRefreshingOrders(false); }
+  }, [loadOrdersOnly]);
+
+  useEffect(() => {
+    if (!orderSyncError || !token || sessionUser?.role !== 'RESTAURANT') return;
+    const retry = () => {
+      if (document.visibilityState === 'visible' && navigator.onLine) void loadOrdersOnly();
+    };
+    const timer = window.setInterval(retry, 15000);
+    window.addEventListener('online', retry);
+    return () => { window.clearInterval(timer); window.removeEventListener('online', retry); };
+  }, [orderSyncError, token, sessionUser?.role, loadOrdersOnly]);
 
   const loadChatMessages = useCallback(async (orderId: string) => {
     if (!token) return;
@@ -3121,8 +3181,9 @@ export default function Home() {
         socketRef.current.emit('join-room', sessionUser.id, 'RESTAURANT');
       }
     }
-    // Al conectar/reconectar cargamos todo el panel (perfil, pedidos, etc.)
-    void loadDashboard();
+    // Al conectar/reconectar solo se refrescan pedidos: el perfil y el catálogo
+    // no necesitan una carga completa por cada reconexión del socket.
+    void loadOrdersOnly();
   };
 
   handleLiveEventRef.current = (eventName: any, payload: any) => {
@@ -3395,7 +3456,8 @@ export default function Home() {
         if (!socket.connected) {
           socket.connect();
         }
-        void warmup();
+        // El audio se reanuda únicamente desde un gesto real del usuario;
+        // warmup() sin gesto crea un AudioContext bloqueado y Chrome avisa.
         loadOrdersOnly();
       }
     };
@@ -3684,17 +3746,13 @@ export default function Home() {
       pin?: string;
     }
   ) {
-    if (!isLocalManualOrderAction(orderId, actionKey)) {
-      setError('[WingsLab] Esta acción o pedido no está autorizado para operaciones manuales.');
-      return;
-    }
     if (uncertainOrderIdsRef.current.has(orderId)) {
       setOrderSyncError('Consulta el estado real del pedido antes de volver a operar.');
       void loadOrdersOnly();
       return;
     }
     const initialStatus = ordersRef.current.find(order => order.id === orderId)?.status;
-    if (!initialStatus || !manualOrderActionsForStatus(initialStatus).includes(actionKey)) {
+    if (!initialStatus || !restaurantOrderActionAllowed(initialStatus, actionKey)) {
       setError('El estado confirmado del pedido no permite esta acción. Actualiza los pedidos.');
       return;
     }
@@ -3842,7 +3900,7 @@ export default function Home() {
         },
       });
 
-      if (!res.success || res.data?.id !== orderId || res.data?.status !== manualOrderTargetStatus(actionKey)) {
+      if (!res.success || res.data?.id !== orderId || res.data?.status !== restaurantOrderTargetStatus(actionKey)) {
         throw new Error('La respuesta no confirmó el estado esperado. Consulta el pedido antes de reintentar.');
       }
       ordersSyncGateRef.current.invalidate();
@@ -4041,9 +4099,9 @@ export default function Home() {
     setAuthMessage('');
 
     try {
-      await requestJson<SuccessResponse<OrderItem>>({
+      const assignment = await requestJson<SuccessResponse<OrderItem & { deliveryToken?: { token: string; url: string } }>>({
         apiBase,
-        path: `/restaurant-panel/pedidos/${orderId}/asignar-repartidor`,
+        path: `/restaurant-panel/pedidos/${orderId}/repartidor`,
         token,
         options: {
           method: 'POST',
@@ -4055,6 +4113,15 @@ export default function Home() {
           backoffMs: 400,
         },
       });
+
+      if (assignment.data.deliveryToken) {
+        setActiveQrCodeData({
+          token: assignment.data.deliveryToken.token,
+          orderReference: assignment.data.orderReference,
+          id: orderId,
+          url: assignment.data.deliveryToken.url,
+        });
+      }
 
       await loadOrdersOnly();
       const message = 'Repartidor asignado y tablero sincronizado.';
@@ -4108,14 +4175,14 @@ export default function Home() {
     if (section === 'perfil') {
       body.name = storeDraft.name.trim();
       body.description = storeDraft.description.trim();
+      body.seoTitle = storeDraft.seoTitle.trim() || null;
+      body.seoDescription = storeDraft.seoDescription.trim() || null;
       body.contactPhone = storeDraft.contactPhone.trim();
       body.email = storeDraft.email.trim();
       body.instagram = storeDraft.instagram.trim() || null;
       body.facebook = storeDraft.facebook.trim() || null;
       body.tiktok = storeDraft.tiktok.trim() || null;
       body.storeCategories = storeDraft.storeCategories;
-      body.accentColor = storeDraft.accentColor ?? null;
-      body.menuTheme = storeDraft.menuTheme ?? null;
       return body;
     }
 
@@ -4180,6 +4247,8 @@ export default function Home() {
     setAuthMessage('');
 
     try {
+      const draftAtSave = storeDraft;
+      const bankAtSave = { name: transferBankName, account: transferAccountNumber, beneficiary: transferBeneficiaryName };
       const payloadBody = buildSettingsPayload(section);
 
       const payload = await requestJson<SuccessResponse<RestaurantProfile>>({
@@ -4198,9 +4267,11 @@ export default function Home() {
       });
 
       setProfile(payload.data);
-      setStoreDraft({
+      const savedDraft = {
         name: payload.data.name || '',
         description: payload.data.description || '',
+        seoTitle: payload.data.seoTitle || '',
+        seoDescription: payload.data.seoDescription || '',
         address: (payload.data.address || '').replace(/, No\. .*$/, ''),
         houseNumber: (() => {
           const match = (payload.data.address || '').match(/, No\. (.*)$/);
@@ -4215,8 +4286,6 @@ export default function Home() {
         hasOwnDelivery: payload.data.hasOwnDelivery,
         supportsNetworkDelivery: payload.data.supportsNetworkDelivery ?? true,
         pickupOnly: payload.data.pickupOnly ?? false,
-        accentColor: payload.data.accentColor ?? null,
-        menuTheme: payload.data.menuTheme ?? null,
         minDeliveryTime: String(payload.data.minDeliveryTime || ''),
         maxDeliveryTime: String(payload.data.maxDeliveryTime || ''),
         deliveryFee: typeof payload.data.deliveryFee === 'number' ? String(payload.data.deliveryFee) : '',
@@ -4237,10 +4306,27 @@ export default function Home() {
         promoFreeDeliveryThreshold: payload.data.promoFreeDeliveryThreshold?.toString() || '',
         promoMinOrderAmount: payload.data.promoMinOrderAmount?.toString() || '',
         promoMinOrderPercent: payload.data.promoMinOrderPercent?.toString() || '',
+      };
+      const sectionFields: Record<SettingsSectionKey, (keyof typeof savedDraft)[]> = {
+        perfil: ['name', 'description', 'seoTitle', 'seoDescription', 'contactPhone', 'email', 'instagram', 'facebook', 'tiktok', 'storeCategories'],
+        ubicacion: ['address', 'houseNumber', 'latitude', 'longitude'],
+        entrega: ['pickupOnly', 'hasOwnDelivery', 'supportsNetworkDelivery', 'minDeliveryTime', 'maxDeliveryTime', 'deliveryFee', 'deliveryRadius', 'deliveryPricingModel', 'deliveryBaseRate', 'deliveryPerKmRate', 'deliveryMinFee', 'deliveryMaxFee', 'promoFreeDeliveryThreshold', 'promoMinOrderAmount', 'promoMinOrderPercent'],
+        pagos: ['maxCashOrder', 'acceptsCash'],
+      };
+      setStoreDraft((current) => {
+        const next = { ...current };
+        for (const key of sectionFields[section]) {
+          if (current[key] === draftAtSave[key]) {
+            Object.assign(next, { [key]: savedDraft[key] });
+          }
+        }
+        return next;
       });
-      setTransferBankName(payload.data.transferBankName || '');
-      setTransferAccountNumber(payload.data.transferAccountNumber || '');
-      setTransferBeneficiaryName(payload.data.transferBeneficiaryName || '');
+      if (section === 'pagos') {
+        setTransferBankName(current => current === bankAtSave.name ? payload.data.transferBankName || '' : current);
+        setTransferAccountNumber(current => current === bankAtSave.account ? payload.data.transferAccountNumber || '' : current);
+        setTransferBeneficiaryName(current => current === bankAtSave.beneficiary ? payload.data.transferBeneficiaryName || '' : current);
+      }
       const message = 'Tu tienda se actualizo correctamente.';
       setAuthMessage(message);
       pushToast('success', 'Mi Tienda', message);
@@ -4271,7 +4357,7 @@ export default function Home() {
           method: 'POST',
           body: JSON.stringify({
             name: newCategoryName.trim(),
-
+            icon: newCategoryIcon || null,
             order: categories.length,
           }),
         },
@@ -4280,6 +4366,7 @@ export default function Home() {
 
       setIsCategoryModalOpen(false);
       setNewCategoryName('');
+      setNewCategoryIcon('');
 
       await loadDashboard();
       pushToast('success', 'Categoría creada', 'La nueva categoría ya esta disponible.');
@@ -5249,23 +5336,46 @@ export default function Home() {
     }
   }
 
-  const visibleOrders =
+  // Ocultarlos no modifica ni cancela registros del servidor.
+  const operationalOrders = useMemo(() => orders.filter((order) => !isRetiredLocalTestOrder(order)), [orders]);
+  const todayKey = mexicoDayKey(new Date());
+  const periodStartKey = useMemo(() => {
+    if (ordersPeriod === 'today') return todayKey;
+    if (ordersPeriod === 'month') return `${todayKey.slice(0, 7)}-01`;
+    const anchor = new Date(`${todayKey}T12:00:00Z`);
+    anchor.setUTCDate(anchor.getUTCDate() - ((anchor.getUTCDay() + 6) % 7));
+    return anchor.toISOString().slice(0, 10);
+  }, [ordersPeriod, todayKey]);
+  const periodOrders = useMemo(
+    () => operationalOrders.filter((order) => {
+      const key = mexicoDayKey(order.createdAt);
+      return Boolean(key) && key >= periodStartKey && key <= todayKey;
+    }),
+    [operationalOrders, periodStartKey, todayKey]
+  );
+  const statusOrders =
     selectedStatus === 'ACTIVE'
-      ? orders.filter(
+      ? periodOrders.filter(
           (order) =>
             !['CANCELLED', 'REJECTED', 'DELIVERED', 'COMPLETED'].includes(order.status)
         )
       : selectedStatus === 'DELIVERED'
-        ? orders.filter((order) => !order.id.startsWith('mock-order-') && ['DELIVERED', 'COMPLETED'].includes(order.status))
-        : orders.filter((order) => !order.id.startsWith('mock-order-') && order.status === selectedStatus);
+        ? periodOrders.filter((order) => !order.id.startsWith('mock-order-') && ['DELIVERED', 'COMPLETED'].includes(order.status))
+        : periodOrders.filter((order) => !order.id.startsWith('mock-order-') && order.status === selectedStatus);
+  const orderSearchTerm = ordersSearch.trim().toLocaleLowerCase();
+  const visibleOrders = statusOrders.filter((order) => {
+    const customerName = `${order.customer?.user?.name || ''} ${order.customer?.user?.lastName || ''}`;
+    const matchesSearch = !orderSearchTerm || [order.orderReference, String((order as any).dailyCounter || ''), customerName, ...(order.items || []).map((item) => item.product?.name || '')].some((value) => value?.toLocaleLowerCase().includes(orderSearchTerm));
+    return matchesSearch && (ordersFulfillment === 'ALL' || order.fulfillmentType === ordersFulfillment);
+  });
   const socketStatusLabel = socketStatusCopy[socketStatus];
   const isRestaurantSession = Boolean(sessionUser && sessionUser.role === 'RESTAURANT');
-  const restaurantName = profile?.name || sessionUser?.name || 'Panel del restaurante';
+  const restaurantName = WINGSLAB_BUSINESS.name;
   const activeOrders = useMemo(() => {
-    return orders.filter((order) =>
+    return operationalOrders.filter((order) =>
       ['PENDING', 'CONFIRMED', 'PREPARING', 'READY', 'PICKED_UP', 'IN_TRANSIT'].includes(order.status)
     );
-  }, [orders]);
+  }, [operationalOrders]);
 
   const handlePrintTicket = useCallback(async (order: any) => {
     if (!order) return;
@@ -5853,9 +5963,14 @@ export default function Home() {
   const navigationItems: Array<{ key: RestaurantPortalSection; label: string }> = [
     { key: 'dashboard', label: 'Dashboard' },
     { key: 'orders', label: 'Ordenes' },
+    { key: 'drivers', label: 'Repartidores' },
     { key: 'store', label: 'Menú WingsLab' },
     { key: 'campaigns', label: 'Campañas' },
-    { key: 'customers', label: 'Clientes y puntos' },
+    { key: 'menu-content', label: 'Contenido del menú' },
+    { key: 'customers', label: 'Clientes' },
+    { key: 'loyalty', label: 'Fidelidad' },
+    { key: 'inperson', label: 'Ventas en local' },
+    { key: 'support', label: 'Reportes de clientes' },
     { key: 'settings', label: 'Configuracion' },
   ];
 
@@ -5871,7 +5986,7 @@ export default function Home() {
 
 
   return (
-    <main className="min-h-[100dvh] text-neutral-900">
+    <main className="wl-admin min-h-[100dvh] text-neutral-900">
       <PushEnableBanner
         visible={Boolean(token) && wingslabExternalServicesEnabled()}
         onEnable={() => subscribeToPush(token || '')}
@@ -7199,7 +7314,32 @@ export default function Home() {
                 onChange={setNewCategoryName}
                 placeholder="Tacos, Bebidas, Postres..."
               />
-
+              <div className="wl-category-icon-picker">
+                <p className="wl-category-icon-label">Icono <span>Opcional · elige cómo se verá en el menú</span></p>
+                <div className="wl-category-icon-options">
+                  <button
+                    type="button"
+                    aria-pressed={!newCategoryIcon}
+                    onClick={() => setNewCategoryIcon('')}
+                    className={!newCategoryIcon ? 'is-selected' : ''}
+                    title="Automático"
+                  >
+                    <Sparkles aria-hidden="true" />
+                  </button>
+                  {CATEGORY_ICON_CHOICES.map((choice) => (
+                    <button
+                      key={choice.value}
+                      type="button"
+                      aria-pressed={newCategoryIcon === choice.value}
+                      onClick={() => setNewCategoryIcon(choice.value)}
+                      className={newCategoryIcon === choice.value ? 'is-selected' : ''}
+                      title={choice.label}
+                    >
+                      <CategoryIcon name={choice.value} />
+                    </button>
+                  ))}
+                </div>
+              </div>
             </div>
 
             <div className="mt-6 flex justify-end">
@@ -7216,21 +7356,17 @@ export default function Home() {
         </div>
       ) : null}
       {isDeleteProductModalOpen ? (
-        <div className="fixed inset-0 z-[80] flex items-end justify-center bg-black/55 px-4 py-4 sm:items-center sm:py-5">
-          <div className="w-full max-w-[520px] rounded-[28px] bg-white p-5 shadow-[0_28px_90px_rgba(15,15,15,0.34)] sm:p-6">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.22em] text-rose-500">Eliminar producto</p>
-              <h3 className="mt-2 text-2xl font-semibold tracking-[-0.03em] text-neutral-950">
-                Quieres eliminar este producto?
-              </h3>
-              <p className="mt-3 text-sm leading-6 text-neutral-600">
-                {deletingProductName
-                  ? `Se eliminara "${deletingProductName}" de tu menu publicado.`
-                  : 'Se eliminara este producto de tu menu publicado.'}
-              </p>
-            </div>
-
-            <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+        <div className="wl-cm-overlay fixed inset-0 z-[80] flex items-end justify-center sm:items-center sm:px-4 sm:py-5">
+          <div className="wl-cm-sheet w-full max-w-[440px]">
+            <div className="wl-cm-icon" aria-hidden="true"><Trash2 className="h-6 w-6" /></div>
+            <p className="wl-cm-kicker">Eliminar producto</p>
+            <h3 className="wl-cm-title">¿Quieres eliminar este producto?</h3>
+            <p className="wl-cm-desc">
+              {deletingProductName
+                ? `Se eliminará "${deletingProductName}" de tu menú publicado.`
+                : 'Se eliminará este producto de tu menú publicado.'}
+            </p>
+            <div className="wl-cm-actions">
               <button
                 type="button"
                 onClick={() => {
@@ -7239,7 +7375,7 @@ export default function Home() {
                   setDeletingProductName('');
                 }}
                 disabled={deletingProduct}
-                className="rounded-full border border-black/10 px-5 py-3 text-sm font-semibold text-neutral-700 transition hover:bg-neutral-100 disabled:cursor-not-allowed disabled:opacity-60"
+                className="wl-cm-cancel"
               >
                 Cancelar
               </button>
@@ -7247,9 +7383,9 @@ export default function Home() {
                 type="button"
                 onClick={() => void deleteProduct()}
                 disabled={deletingProduct}
-                className="rounded-full bg-rose-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-rose-500 disabled:cursor-not-allowed disabled:bg-rose-300"
+                className="wl-cm-danger"
               >
-                {deletingProduct ? 'Eliminando...' : 'Aceptar'}
+                {deletingProduct ? 'Eliminando...' : 'Eliminar producto'}
               </button>
             </div>
           </div>
@@ -7257,7 +7393,7 @@ export default function Home() {
       ) : null}
       {isProductModalOpen ? (
         <div
-          className="fixed inset-0 z-[80] flex items-end justify-center bg-neutral-950/45 backdrop-blur-sm sm:items-center sm:px-4 sm:py-5"
+          className="wl-pm-overlay fixed inset-0 z-[80] flex items-end justify-center sm:items-center sm:px-4 sm:py-5"
           role="dialog"
           aria-modal="true"
           aria-labelledby="product-modal-title"
@@ -7275,32 +7411,32 @@ export default function Home() {
             }
           }}
         >
-          <div className="relative flex h-[96dvh] w-full max-w-4xl flex-col overflow-hidden rounded-t-[28px] bg-white shadow-[0_24px_80px_rgba(15,23,42,0.22)] ring-1 ring-black/10 sm:h-auto sm:max-h-[90dvh] sm:rounded-[24px]">
-            <div className="flex shrink-0 justify-center bg-white pt-2.5 sm:hidden" aria-hidden="true">
-              <span className="h-1 w-10 rounded-full bg-neutral-300" />
+          <div className="wl-pm-sheet relative flex h-[94dvh] w-full max-w-4xl flex-col overflow-hidden sm:h-auto sm:max-h-[92dvh]">
+            <div className="wl-pm-grip flex shrink-0 justify-center pt-2.5 sm:hidden" aria-hidden="true">
+              <span className="h-1 w-10 rounded-full" />
             </div>
 
-            <div className="relative shrink-0 border-b border-neutral-200/80 bg-white px-4 py-3.5 min-[420px]:px-5 sm:px-7 sm:py-5">
-              <div className="flex items-center justify-between">
+            <div className="wl-pm-header relative shrink-0">
+              <div className="flex items-center justify-between gap-3">
                 <div className="flex min-w-0 items-center gap-3">
-                  <div className="hidden h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-sky-50 text-sky-700 ring-1 ring-sky-100 min-[420px]:flex">
+                  <span className="wl-pm-header-icon" aria-hidden="true">
                     <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /></svg>
-                  </div>
+                  </span>
                   <div className="min-w-0">
-                    <h3 id="product-modal-title" className="truncate text-lg font-bold tracking-tight text-neutral-950 sm:text-xl">
+                    <h3 id="product-modal-title" className="wl-pm-title truncate">
                       {productDraft.id ? 'Editar producto' : 'Nuevo producto'}
                     </h3>
-                    <p className="mt-0.5 text-xs leading-4 text-neutral-500 sm:text-sm sm:leading-5">
+                    <p className="wl-pm-subtitle">
                       {profile?.businessType === 'RESTAURANT' ? 'Información, precios y extras de tu platillo.' : 'Información, precios y variantes de tu producto.'}
                     </p>
                     {productConfigInherited && !productDraft.id ? (
-                      <div className="mt-2 inline-flex flex-wrap items-center gap-x-2 gap-y-1 rounded-xl bg-sky-50 px-3 py-1.5 text-[12px] font-medium text-sky-800 ring-1 ring-sky-100">
+                      <div className="wl-pm-inherited mt-2">
                         <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg>
                         <span>Configuración heredada del último producto</span>
                         <button
                           type="button"
                           onClick={resetInheritedProductConfig}
-                          className="min-h-8 rounded-lg border border-sky-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-sky-800 transition hover:bg-sky-100"
+                          className="wl-pm-inherited-reset"
                         >
                           Restablecer
                         </button>
@@ -7316,7 +7452,7 @@ export default function Home() {
                     setProductConfigInherited(false);
                     setProductDraft(buildEmptyProductDraft(categories[0]?.id || ''));
                   }}
-                  className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-neutral-100 text-neutral-600 transition hover:bg-neutral-200 hover:text-neutral-900 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-sky-500/20"
+                  className="wl-pm-close"
                   aria-label="Cerrar"
                 >
                   <X className="h-5 w-5" strokeWidth={2} />
@@ -7325,25 +7461,21 @@ export default function Home() {
             </div>
 
             {/* Scrollable Content */}
-            <div ref={productModalScrollRef} className="relative min-h-0 flex-1 overflow-y-auto overscroll-contain bg-neutral-50/70 px-4 py-5 min-[420px]:px-5 sm:px-7 sm:py-6" style={{ WebkitOverflowScrolling: 'touch' }}>
+            <div ref={productModalScrollRef} className="wl-pm-body relative min-h-0 flex-1 overflow-y-auto overscroll-contain" style={{ WebkitOverflowScrolling: 'touch' }}>
               <div className="space-y-6 sm:space-y-7">
                 
                 {/* 1. Información Básica */}
                 <section>
-                  <div className="mb-3 flex items-center gap-2.5">
-                    <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-white text-xs font-bold text-neutral-500 ring-1 ring-neutral-200">1</span>
-                    <h4 className="text-sm font-bold tracking-tight text-neutral-900">Información básica</h4>
-                  </div>
+                  <div className="wl-pm-section-head"><span>1</span><h4>Información básica</h4></div>
                   <div className="rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm min-[420px]:p-5 sm:p-6">
                     <div className="grid gap-4 sm:grid-cols-2 sm:gap-5">
-                      <label className="grid gap-2 text-sm text-neutral-600 sm:col-span-2">
-                        <span className="text-[12px] font-bold uppercase tracking-[0.1em] text-neutral-600">Categoría</span>
+                      <label className="wl-pm-field sm:col-span-2">
+                        <span>Categoría</span>
                         <select
                           value={productDraft.categoryId}
                           onChange={(event) =>
                             setProductDraft((current) => ({ ...current, categoryId: event.target.value }))
                           }
-                          className="min-h-12 w-full rounded-[18px] border border-black/5 bg-neutral-100/50 px-5 py-3.5 text-base font-medium text-neutral-950 shadow-inner outline-none transition-all hover:bg-neutral-100/80 focus:border-sky-300 focus:bg-white focus:ring-4 focus:ring-sky-500/20 focus:shadow-md sm:text-[15px]"
                         >
                           <option value="">Selecciona una categoría...</option>
                           {categories.map((category) => (
@@ -7382,24 +7514,20 @@ export default function Home() {
 
                 {/* 2. Precios e Imagen */}
                 <section>
-                  <div className="mb-3 flex items-center gap-2.5">
-                    <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-white text-xs font-bold text-neutral-500 ring-1 ring-neutral-200">2</span>
-                    <h4 className="text-sm font-bold tracking-tight text-neutral-900">Precio e imágenes</h4>
-                  </div>
+                  <div className="wl-pm-section-head"><span>2</span><h4>Precio e imagen</h4></div>
                   <div className="rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm min-[420px]:p-5 sm:p-6">
                     <div className="grid gap-4 sm:grid-cols-2 sm:gap-5">
                       {/* Tipo de venta */}
                       <div className="sm:col-span-2">
-                        <p className="text-[12px] font-bold uppercase tracking-[0.1em] text-neutral-600">¿Cómo vendes este producto?</p>
-                        <div className="mt-2 flex gap-1 rounded-xl border border-neutral-200 bg-neutral-100 p-1">
+                        <div className="wl-pm-segment">
                           <button
                             type="button"
                             onClick={() => setProductDraft((current) => ({ ...current, sellBy: 'UNIT' }))}
                             aria-pressed={productDraft.sellBy === 'UNIT'}
-                            className={`min-h-12 flex-1 rounded-xl px-2 py-3 text-sm font-bold transition-all focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-sky-500/20 ${
+                            className={`wl-pm-segment-btn ${
                               productDraft.sellBy === 'UNIT'
-                                ? 'bg-white text-sky-800 shadow-sm ring-1 ring-sky-200'
-                                : 'text-neutral-500 hover:text-neutral-700'
+                                ? 'is-active'
+                                : ''
                             }`}
                           >
                             Por pieza
@@ -7408,10 +7536,10 @@ export default function Home() {
                             type="button"
                             onClick={() => setProductDraft((current) => ({ ...current, sellBy: 'WEIGHT' }))}
                             aria-pressed={productDraft.sellBy === 'WEIGHT'}
-                            className={`min-h-12 flex-1 rounded-xl px-2 py-3 text-sm font-bold transition-all focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-sky-500/20 ${
+                            className={`wl-pm-segment-btn ${
                               productDraft.sellBy === 'WEIGHT'
-                                ? 'bg-white text-sky-800 shadow-sm ring-1 ring-sky-200'
-                                : 'text-neutral-500 hover:text-neutral-700'
+                                ? 'is-active'
+                                : ''
                             }`}
                           >
                             Por peso (kg)
@@ -7458,7 +7586,6 @@ export default function Home() {
                           placeholder="Opcional"
                           inputMode="decimal"
                         />
-                        <p className="mt-1.5 text-xs leading-4 text-neutral-500">Se mostrará como precio rebajado junto al precio normal.</p>
                       </div>
 
                       {productDraft.sellBy === 'UNIT' && (
@@ -7498,9 +7625,6 @@ export default function Home() {
                               />
                             </div>
                           )}
-                          <p className="mt-2 text-[11px] leading-snug text-neutral-500">
-                            El cliente ve "Comprar N, pagar M" y su ahorro automáticamente. Solo aplica a productos por pieza.
-                          </p>
                         </div>
                       )}
 
@@ -8029,22 +8153,12 @@ export default function Home() {
                             </p>
                           </div>
                         </div>
-                        <button
-                          type="button"
+                        <Toggle
+                          checked={productDraft.isAdultOnly}
+                          label="Activar restricción de edad"
                           onClick={() => setProductDraft((curr) => ({ ...curr, isAdultOnly: !curr.isAdultOnly }))}
-                          className={`relative inline-flex h-11 w-16 shrink-0 cursor-pointer items-center rounded-full p-1 transition-colors duration-200 ease-in-out focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-rose-500/20 ${
-                            productDraft.isAdultOnly ? 'bg-rose-500' : 'bg-neutral-300'
-                          }`}
-                          role="switch"
-                          aria-checked={productDraft.isAdultOnly}
-                          aria-label="Activar restricción de edad"
-                        >
-                          <span
-                            className={`pointer-events-none inline-block h-7 w-7 transform rounded-full bg-white shadow-sm ring-0 transition duration-200 ease-in-out ${
-                              productDraft.isAdultOnly ? 'translate-x-7' : 'translate-x-0'
-                            }`}
-                          />
-                        </button>
+                          tone="red"
+                        />
                       </div>
 
                       <div className="rounded-2xl border border-amber-100 bg-amber-50/50 p-4 sm:col-span-2 mt-2">
@@ -8060,22 +8174,12 @@ export default function Home() {
                               </p>
                             </div>
                           </div>
-                          <button
-                            type="button"
+                          <Toggle
+                            checked={productDraft.trackStock}
+                            label="Activar control de inventario"
                             onClick={() => setProductDraft((curr) => ({ ...curr, trackStock: !curr.trackStock }))}
-                            className={`relative inline-flex h-11 w-16 shrink-0 cursor-pointer items-center rounded-full p-1 transition-colors duration-200 ease-in-out focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-500/20 ${
-                              productDraft.trackStock ? 'bg-amber-500' : 'bg-neutral-300'
-                            }`}
-                            role="switch"
-                            aria-checked={productDraft.trackStock}
-                            aria-label="Activar control de inventario"
-                          >
-                            <span
-                              className={`pointer-events-none inline-block h-7 w-7 transform rounded-full bg-white shadow-sm ring-0 transition duration-200 ease-in-out ${
-                                productDraft.trackStock ? 'translate-x-7' : 'translate-x-0'
-                              }`}
-                            />
-                          </button>
+                            tone="amber"
+                          />
                         </div>
                         {productDraft.trackStock && (
                           <div className="mt-4 grid grid-cols-2 gap-3">
@@ -8342,28 +8446,27 @@ export default function Home() {
             </div>
 
             {/* Sticky Footer */}
-            <div className="relative shrink-0 border-t border-neutral-200 bg-white px-4 py-3.5 shadow-[0_-8px_24px_rgba(15,23,42,0.06)] min-[420px]:px-5 sm:px-7 sm:py-4" style={{ paddingBottom: 'max(0.875rem, env(safe-area-inset-bottom))' }}>
+            <div className="wl-pm-footer relative shrink-0" style={{ paddingBottom: 'max(0.875rem, env(safe-area-inset-bottom))' }}>
               {!productDraft.id ? (
-                <div className="mb-3 flex items-center justify-between gap-3">
-                  <label className="flex min-h-11 cursor-pointer select-none items-center gap-2.5 rounded-xl border border-neutral-200 bg-neutral-50 px-3.5 py-2 text-[13px] font-medium text-neutral-700 transition hover:bg-neutral-100">
+                <div className="wl-pm-footer-top">
+                  <label className="wl-pm-check">
                     <input
                       type="checkbox"
                       checked={continueAfterSave}
                       onChange={(event) => setContinueAfterSave(event.target.checked)}
-                      className="h-5 w-5 shrink-0 accent-sky-700"
                     />
                     Añadir otro al publicar
                   </label>
-                  <span className="hidden text-[11px] font-medium text-neutral-400 sm:block">
+                  <span className="wl-pm-shortcut">
                     Enter en precio publica · Cmd/Ctrl + Enter en cualquier campo
                   </span>
                 </div>
               ) : null}
-              <div className="flex items-center gap-3">
+              <div className="wl-pm-actions">
                 <button
                   type="button"
                   onClick={() => setIsProductModalOpen(false)}
-                  className="min-h-12 flex-1 rounded-2xl border border-neutral-200 bg-neutral-50 px-3 py-3 text-sm font-bold text-neutral-700 transition hover:bg-neutral-100 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-neutral-500/15 sm:flex-none sm:px-5"
+                  className="wl-pm-cancel"
                 >
                   Cancelar
                 </button>
@@ -8371,7 +8474,7 @@ export default function Home() {
                   type="button"
                   onClick={() => void submitProductNow()}
                   disabled={creatingProduct || savingProductChanges || processingProductImage || !canSubmitProduct}
-                  className="min-h-12 flex-[1.5] rounded-2xl bg-sky-700 px-3 py-3 text-sm font-bold text-white shadow-lg shadow-sky-700/20 transition hover:bg-sky-800 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-sky-500/25 disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none sm:flex-none sm:px-6"
+                  className="wl-pm-submit"
                 >
                   <span>
                     {productDraft.id
@@ -8380,7 +8483,7 @@ export default function Home() {
                         : 'Guardar cambios'
                       : creatingProduct
                         ? 'Creando...'
-                      : 'Publicar producto'}
+                        : 'Publicar producto'}
                   </span>
                 </button>
               </div>
@@ -8907,92 +9010,20 @@ export default function Home() {
         </div>
       ) : null}
       {!isRestaurantSession ? (
-        <div className="min-h-dvh bg-white lg:grid lg:grid-cols-[minmax(0,1.04fr)_minmax(0,1fr)] lg:items-stretch lg:bg-slate-50">
-          {/* Identidad y bienvenida: fotografía del restaurante + mensaje de marca */}
-          <section className="relative isolate flex min-h-[clamp(9.5rem,32dvh,15rem)] flex-col justify-end overflow-hidden bg-slate-900 px-5 pb-7 pt-12 sm:px-8 lg:min-h-dvh lg:px-12 lg:pb-14 lg:pt-12 xl:px-16">
-            <picture>
-              {welcomeImage ? null : (
-                <source media="(max-width: 1023px)" srcSet="/login-restaurante-movil-900.jpg" />
-              )}
-              <img
-                src={welcomeImage || '/login-restaurante-1200.jpg'}
-                alt="Salón de un restaurante con mesas montadas, iluminación cálida y barra abierta"
-                width={825}
-                height={1100}
-                fetchPriority="high"
-                decoding="async"
-                className="absolute inset-0 -z-10 h-full w-full object-cover object-[center_60%] lg:object-[center_38%]"
-              />
-            </picture>
-            <div aria-hidden="true" className="absolute inset-0 -z-10 bg-slate-950/40" />
-            <div
-              aria-hidden="true"
-              className="absolute inset-0 -z-10 bg-gradient-to-t from-slate-950 via-slate-950/80 to-slate-950/35 lg:bg-gradient-to-br lg:from-slate-950 lg:via-slate-950/75 lg:to-slate-950/35"
-            />
-
-            <div className="hidden lg:block">
-              <SaDelLogo className="on-dark h-10 w-auto object-contain xl:h-12" />
-            </div>
-
-            <div className="mx-auto mt-auto w-full max-w-lg lg:mx-0">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-sky-300 lg:text-xs">
-                WingsLab · Cocina y reparto
-              </p>
-              <h1 className="mt-3 text-[clamp(1.75rem,5.6vw,2.85rem)] font-bold leading-[1.08] tracking-tight text-white lg:mt-5 lg:text-[clamp(2.3rem,3.3vw,3.3rem)]">
-                Tu restaurante,{' '}
-                <span className="text-sky-400">en buenas manos</span>
-              </h1>
-              <p className="mt-3 max-w-md text-[15px] leading-relaxed text-slate-200/90 lg:mt-5 lg:text-[17px]">
-                Gestiona tus pedidos, menú y operación desde un solo lugar.
-              </p>
-
-              <ul className="mt-8 hidden gap-y-4 lg:grid xl:gap-y-5">
-                <li className="flex items-center gap-3">
-                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white/10 text-sky-300 ring-1 ring-inset ring-white/15">
-                    <ClipboardList className="h-[18px] w-[18px]" aria-hidden="true" />
-                  </span>
-                  <span className="text-sm font-medium text-slate-100">Control de pedidos</span>
-                </li>
-                <li className="flex items-center gap-3">
-                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white/10 text-sky-300 ring-1 ring-inset ring-white/15">
-                    <Activity className="h-[18px] w-[18px]" aria-hidden="true" />
-                  </span>
-                  <span className="text-sm font-medium text-slate-100">Información en tiempo real</span>
-                </li>
-                <li className="flex items-center gap-3">
-                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white/10 text-sky-300 ring-1 ring-inset ring-white/15">
-                    <Sparkles className="h-[18px] w-[18px]" aria-hidden="true" />
-                  </span>
-                  <span className="text-sm font-medium text-slate-100">Gestión simplificada</span>
-                </li>
-              </ul>
-            </div>
-          </section>
-
-          {/* Formulario de acceso */}
-          <section className="flex items-center justify-center bg-white px-5 pb-[max(2rem,env(safe-area-inset-bottom))] pt-8 sm:px-8 lg:bg-slate-50/60 lg:px-10 lg:py-14">
-            <div className="w-full max-w-[27rem]">
-              <header className="lg:hidden">
-                <SaDelLogo className="h-9 w-auto object-contain" />
-              </header>
-
-              <div className="mt-6 lg:mt-0">
-                <p className="text-[11px] font-bold uppercase tracking-[0.24em] text-sky-600">
-                  Panel de administración
-                </p>
-                <span className="mt-6 hidden h-14 w-14 items-center justify-center rounded-2xl bg-sky-50 text-sky-600 ring-1 ring-inset ring-sky-100 lg:flex">
-                  <ChefHat className="h-7 w-7" aria-hidden="true" />
-                </span>
-                <h2 className="mt-4 text-[clamp(1.75rem,5.4vw,2.15rem)] font-bold tracking-tight text-slate-900 lg:mt-5 lg:text-[2.35rem] lg:leading-[1.12]">
-                  ¡Bienvenido de nuevo!
-                </h2>
-                <p className="mt-2.5 text-[15px] leading-relaxed text-slate-500 lg:text-base">
-                  Accede a tu restaurante y comienza a gestionar todo desde un solo lugar.
-                </p>
+        <div className="wl-restaurant-login">
+          <div className="wl-restaurant-login-inner">
+            <header className="wl-restaurant-login-brand">
+              <img className="wl-login-logo-light" src={redWordmark.src} alt="WingsLab" />
+              <img className="wl-login-logo-dark" src={whiteWordmark.src} alt="" aria-hidden="true" />
+              <p><span aria-hidden="true" />Panel del restaurante<span aria-hidden="true" /></p>
+            </header>
+            <section className="wl-restaurant-login-card" aria-labelledby="restaurant-login-title">
+              <div className="wl-restaurant-login-heading">
+                <span className="wl-restaurant-login-icon"><Store aria-hidden="true" /></span>
+                <div><h1 id="restaurant-login-title">Acceso al restaurante</h1><p>Gestiona pedidos, menú y operación de tu negocio.</p></div>
               </div>
-
               <form
-                className="mt-7 grid gap-4 lg:mt-8"
+                className="wl-restaurant-login-form"
                 noValidate
                 onSubmit={(event) => {
                   event.preventDefault();
@@ -9011,7 +9042,7 @@ export default function Home() {
                     setPhone(value.replace(/\D/g, '').slice(-10));
                     if (error) setError('');
                   }}
-                  placeholder="5512345678"
+                  placeholder="Teléfono"
                   autoComplete="tel"
                   inputMode="numeric"
                   icon={<Phone className="h-[19px] w-[19px]" />}
@@ -9027,7 +9058,7 @@ export default function Home() {
                     setPassword(value);
                     if (error) setError('');
                   }}
-                  placeholder="••••••••"
+                  placeholder="Contraseña"
                   type="password"
                   autoComplete="current-password"
                   icon={<Lock className="h-[19px] w-[19px]" />}
@@ -9039,7 +9070,7 @@ export default function Home() {
                   type="submit"
                   disabled={verifyingCode || !puedeEnviar}
                   aria-busy={verifyingCode}
-                  className="mt-1 inline-flex h-14 w-full items-center justify-center gap-2 rounded-xl bg-sky-600 px-5 text-base font-semibold tracking-tight text-white shadow-[0_10px_28px_-12px] shadow-sky-600/60 transition duration-200 hover:bg-sky-700 hover:shadow-[0_12px_32px_-12px] hover:shadow-sky-700/60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-600 active:scale-[0.99] disabled:cursor-not-allowed disabled:bg-sky-200 disabled:text-white/90 disabled:shadow-none"
+                  className="wl-restaurant-login-submit"
                 >
                   {verifyingCode ? (
                     <>
@@ -9047,7 +9078,7 @@ export default function Home() {
                       Iniciando sesión…
                     </>
                   ) : (
-                    'Iniciar sesión'
+                    <>Iniciar sesión <ArrowRight aria-hidden="true" /></>
                   )}
                 </button>
 
@@ -9068,17 +9099,17 @@ export default function Home() {
                   </p>
                 ) : null}
 
-                <p className="flex items-start gap-2 pt-1 text-[13px] leading-relaxed text-slate-400">
-                  <Lock className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-                  <span>Acceso al equipo de WingsLab. Los pedidos de esta instalación son ficticios.</span>
+                <p className="wl-restaurant-login-notice">
+                  <Lock aria-hidden="true" />
+                  <span>Acceso exclusivo para el equipo de WingsLab.</span>
                 </p>
               </form>
-            </div>
-          </section>
+            </section>
+          </div>
         </div>
       ) : (
-        <div className="min-h-[100dvh] bg-[#f7f4ec]">
-          <header className="sticky top-0 z-40 w-full border-b border-black/5 bg-white">
+        <div className="min-h-[100dvh] bg-white">
+          <header className="wl-admin-header sticky top-0 z-40 w-full border-b border-black/5 bg-white">
             <div className="grid grid-cols-[56px_1fr_56px] items-center px-3 py-4 md:px-6 lg:grid-cols-[220px_1fr_220px]">
               <div className="mx-auto w-full max-w-[1540px] contents">
                 <div className="flex items-center">
@@ -9091,6 +9122,8 @@ export default function Home() {
                         : 'border-black/10 bg-white text-neutral-800'
                     }`}
                     aria-label="Abrir menu"
+                    aria-expanded={isMobileNavOpen}
+                    aria-controls="wl-mobile-navigation"
                   >
                     <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M4 7h16M4 12h16M4 17h16" />
@@ -9105,10 +9138,7 @@ export default function Home() {
                   <SaDelLogo className="hidden h-9 w-auto object-contain lg:block" />
                 </div>
                 <div className="px-3 text-center flex flex-col items-center gap-0">
-                  <SaDelLogo className="h-4 w-auto object-contain lg:hidden" />
-                  <p className="truncate text-lg font-semibold tracking-[-0.03em] text-neutral-950 md:text-2xl">
-                    {restaurantName}
-                  </p>
+                  <img className="wl-admin-logo-light wl-admin-header-logo" src={redWordmark.src} alt="WingsLab" /><img className="wl-admin-logo-dark wl-admin-header-logo" src={whiteWordmark.src} alt="" aria-hidden="true" />
                 </div>
                 <div className="flex items-center justify-end">
                   <span className="hidden rounded-full bg-sky-100 px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.18em] text-sky-700 lg:inline-flex">
@@ -9119,17 +9149,17 @@ export default function Home() {
             </div>
           </header>
 
-          <div className="flex min-h-[calc(100dvh-5rem)] w-full bg-transparent">
-            <aside className="fixed left-0 top-[5rem] hidden h-[calc(100dvh-5rem)] w-[260px] border-r border-black/5 bg-white lg:flex lg:flex-col">
+          <div className={`wl-admin-layout flex min-h-[calc(100dvh-5rem)] w-full bg-transparent ${sidebarCollapsed ? 'wl-admin-layout--collapsed' : ''}`}>
+            <aside className="wl-admin-sidebar fixed left-0 top-[5rem] hidden h-[calc(100dvh-5rem)] w-[260px] border-r border-black/5 bg-white lg:flex lg:flex-col">
               <div className="flex-1 overflow-y-auto px-4 py-6">
-                <div className="relative overflow-hidden rounded-[28px] border border-sky-200/60 bg-white p-4 shadow-[0_16px_45px_rgba(14,165,233,0.08)]">
-                  <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-sky-300/80 via-cyan-200/70 to-transparent" />
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-sky-600">Operacion</p>
-                  <p className="mt-2 text-lg font-semibold tracking-[-0.03em] text-neutral-950">{restaurantName}</p>
-                  <p className="mt-1 text-sm text-neutral-500">{operationalStatusLabel}</p>
+                <div className="wl-admin-sidebar-top"><div className="wl-admin-side-logo"><img className="wl-admin-logo-light" src={redWordmark.src} alt="WingsLab" /><img className="wl-admin-logo-dark" src={whiteWordmark.src} alt="" aria-hidden="true" /><span className="wl-admin-logo-compact" aria-label="WingsLab">WL</span></div><button type="button" className="wl-admin-sidebar-toggle" onClick={toggleSidebar} aria-label={sidebarCollapsed ? 'Expandir menú lateral' : 'Contraer menú lateral'} aria-expanded={!sidebarCollapsed} title={sidebarCollapsed ? 'Expandir menú lateral' : 'Contraer menú lateral'}><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="M9 4v16"/><path d={sidebarCollapsed ? 'm13 9 3 3-3 3' : 'm16 9-3 3 3 3'}/></svg></button></div>
+                <div className="wl-admin-business">
+                  <p className="wl-admin-business-label">Operación</p>
+                  <p className="wl-admin-business-name">{restaurantName}</p>
+                  <p className="wl-admin-business-status"><span className={isBusinessOpen && isWithinHours && !isBusinessPaused ? 'is-open' : ''} aria-hidden="true" />{operationalStatusLabel}</p>
                 </div>
 
-                <nav className="mt-6 grid gap-2">
+                <nav className="wl-admin-nav mt-6 grid gap-2" aria-label="Navegación del restaurante">
                   {navigationItems.map((item) => {
                     const showOrderWarning = item.key === 'orders' && activeSection !== 'orders' && activeOrders.length > 0;
                     return (
@@ -9137,69 +9167,28 @@ export default function Home() {
                       key={item.key}
                       type="button"
                       onClick={() => setActiveSection(item.key)}
-                      className={`flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-left text-sm font-semibold transition-all duration-300 ${
-                        activeSection === item.key
-                        ? 'bg-neutral-950 text-white'
-                        : showOrderWarning
-                        ? 'bg-sky-100 text-sky-900 animate-heartbeat shadow-sm'
-                        : 'text-neutral-700 hover:bg-white'
-                        }`}
+                      aria-label={item.label}
+                      title={sidebarCollapsed ? item.label : undefined}
+                      aria-current={activeSection === item.key ? 'page' : undefined}
+                      className="wl-admin-nav-item"
                     >
                       <RestaurantNavIcon kind={item.key} />
                       <span className="flex-1">{item.label}</span>
-                      {item.key === 'orders' && activeSection !== 'orders' && activeOrders.length > 0 && (
-                        <span className="ml-auto flex items-center gap-1.5 shrink-0">
-                          <span className="relative flex h-2 w-2">
-                            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-sky-400 opacity-75"></span>
-                            <span className="relative inline-flex h-2 w-2 rounded-full bg-sky-600"></span>
-                          </span>
-                          <span className="rounded-full bg-sky-100 px-2 py-0.5 text-[10px] font-black text-sky-700">
-                            {activeOrders.length}
-                          </span>
-                        </span>
-                      )}
+                      {showOrderWarning && <span className="wl-admin-nav-count" aria-label={`${activeOrders.length} pedidos activos`}>{activeOrders.length}</span>}
                     </button>
                   );
                   })}
                 </nav>
               </div>
 
-              <div className="mt-auto border-t border-black/5 px-4 py-5">
+              <div className="wl-admin-sidebar-footer mt-auto border-t border-black/5 px-4 py-5">
                 <div className="grid gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setShowHelpModal(true)}
-                    className="flex items-center gap-3 rounded-2xl border border-black/10 bg-white px-4 py-3 text-left text-sm font-semibold text-neutral-700 transition hover:border-black/15 hover:bg-neutral-50"
-                  >
-                    <HelpCircleIcon />
-                    Ayuda
-                  </button>
-
-                  {/* Dark Mode Toggle */}
-                  <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-white px-4 py-3 text-sm font-semibold text-neutral-800">
-                    <div className="flex items-center gap-3">
-                      <svg className="h-5 w-5 text-neutral-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
-                      </svg>
-                      Modo Oscuro
-                    </div>
-                    <button
-                      type="button"
-                      role="switch"
-                      aria-checked={isDarkMode}
-                      onClick={() => {
-                        const isDark = document.documentElement.classList.toggle('dark');
-                        setIsDarkMode(isDark);
-                        triggerHaptic(10);
-                      }}
-                      className={`relative inline-flex h-5 w-9 items-center rounded-full transition ${isDarkMode ? 'bg-sky-600' : 'bg-neutral-300'}`}
-                    >
-                      <span className={`inline-block h-3 w-3 transform rounded-full bg-white shadow-sm transition ${isDarkMode ? 'translate-x-4' : 'translate-x-1'}`} />
-                    </button>
-                  </div>
+                  <button type="button" className="wl-admin-theme-toggle" role="switch" aria-label="Modo oscuro" title={sidebarCollapsed ? 'Modo oscuro' : undefined} aria-checked={darkMode} onClick={toggleDarkMode}><Moon aria-hidden="true" /><span>Modo oscuro</span><span className="wl-admin-switch-track" aria-hidden="true"><i /></span></button>
 
                   <button
                     type="button"
+                    aria-label="Cerrar sesión"
+                    title={sidebarCollapsed ? 'Cerrar sesión' : undefined}
                     onClick={() => {
                       const isBusinessOpen = profile?.isAcceptingOrders ?? false;
                       if (isBusinessOpen) {
@@ -9211,21 +9200,21 @@ export default function Home() {
                     className="flex items-center gap-3 rounded-2xl border border-black/10 bg-white px-4 py-3 text-left text-sm font-semibold text-neutral-800 transition hover:border-black/15 hover:bg-neutral-50"
                   >
                     <OpenStorefrontIcon />
-                    Cerrar sesion
+                    <span>Cerrar sesion</span>
                   </button>
                 </div>
               </div>
             </aside>
 
-            <div className="flex-1 bg-[#f8f8f8] lg:ml-[260px] min-w-0">
+            <div className="wl-admin-main flex-1 bg-white lg:ml-[260px] min-w-0">
               <div className="p-3 min-[420px]:p-4 md:p-6 max-w-full overflow-hidden">
                 {orderSyncError ? (
                   <div role="alert" className="mb-5 flex flex-col gap-2 rounded-[24px] border border-amber-200 bg-amber-50 p-4 text-amber-900 sm:flex-row sm:items-center sm:justify-between">
                     <p className="text-sm font-semibold">{orderSyncError}</p>
                     <button
                       type="button"
-                      onClick={() => void loadDashboard()}
-                      disabled={loading || !sessionUser}
+                      onClick={() => void refreshOrders()}
+                      disabled={refreshingOrders || !sessionUser}
                       className="shrink-0 rounded-full bg-neutral-950 px-4 py-2 text-xs font-bold text-white transition hover:bg-neutral-800 disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       Consultar de nuevo
@@ -9254,7 +9243,7 @@ export default function Home() {
                   <DashboardSection
                     apiBase={apiBase}
                     token={token}
-                    orders={orders}
+                    orders={operationalOrders}
                     profile={profile}
                     products={products}
                     drivers={drivers}
@@ -9295,12 +9284,29 @@ export default function Home() {
                 ) : null}
 
                 {activeSection === 'campaigns' ? <CampaignsSection apiBase={apiBase} token={token} /> : null}
+                {activeSection === 'menu-content' ? <MenuContentSection apiBase={apiBase} token={token} /> : null}
                 {activeSection === 'customers' ? <CustomersSection apiBase={apiBase} token={token} /> : null}
+                {activeSection === 'loyalty' ? <LoyaltySection apiBase={apiBase} token={token} /> : null}
+                {activeSection === 'inperson' ? <InPersonSalesSection apiBase={apiBase} token={token} /> : null}
+                {activeSection === 'support' ? <SupportSection apiBase={apiBase} token={token} /> : null}
+                {activeSection === 'drivers' ? <RestaurantDriversSection apiBase={apiBase} token={token} onDriversChange={setDrivers} /> : null}
 
 
 
                 {activeSection === 'orders' ? (
-                   <Panel title={profile?.businessType !== 'RESTAURANT' ? 'Pedidos' : 'Ordenes'} subtitle={profile?.businessType !== 'RESTAURANT' ? 'Vista rapida para surtido y despacho' : 'Vista rapida para cocina y despacho'} tone="violet">
+                   <section className="wl-orders" aria-labelledby="orders-title">
+                    <header className="wl-orders-heading"><span className="wl-orders-heading-icon"><ClipboardList aria-hidden="true" /></span><div><h1 id="orders-title">Órdenes</h1></div></header>
+                    <div className="wl-orders-overview" aria-label="Resumen de pedidos cargados">
+                      {[
+                        { label: 'Por preparar', statuses: ['PENDING', 'CONFIRMED', 'PREPARING'], Icon: ChefHat, tone: 'preparing' },
+                        { label: 'Listas', statuses: ['READY'], Icon: Package, tone: 'ready' },
+                        { label: 'En entrega', statuses: ['PICKED_UP', 'IN_TRANSIT'], Icon: Bike, tone: 'delivery' },
+                        { label: 'Entregadas', statuses: ['DELIVERED', 'COMPLETED'], Icon: Check, tone: 'done' },
+                      ].map(({ label, statuses, Icon, tone }) => (
+                        <div className={`wl-orders-stat wl-orders-stat--${tone}`} key={label}><Icon aria-hidden="true" /><div><span>{label}</span><strong>{profileLoadState === 'ready' ? periodOrders.filter((order) => statuses.includes(order.status)).length : '—'}</strong></div></div>
+                      ))}
+                    </div>
+                    <p className="wl-orders-overview-note">Pedidos de {ordersPeriod === 'today' ? 'hoy' : ordersPeriod === 'week' ? 'esta semana' : 'este mes'} · zona Ciudad de México.</p>
                     {lastFailedAction ? (
                       <div className="mb-4 rounded-[28px] border border-rose-100 bg-rose-50 p-4">
                         <p className="text-sm font-semibold text-rose-800">Ultima accion fallida: {lastFailedAction.label}</p>
@@ -9317,9 +9323,10 @@ export default function Home() {
                         </button>
                       </div>
                     ) : null}
-                    <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
-                      <label className="grid gap-2 text-sm text-neutral-600 md:min-w-56">
-                        <span className="font-medium text-neutral-800">Filtro por estado</span>
+                    <div className="wl-orders-toolbar">
+                      <label className="wl-orders-search"><span className="sr-only">Buscar orden</span><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="7"/><path d="m16 16 4 4"/></svg><input type="search" placeholder="Buscar orden, cliente o producto..." value={ordersSearch} onChange={(event) => setOrdersSearch(event.target.value)} /></label>
+                      <label className="wl-orders-filter">
+                        <span>Estado</span>
                         <select
                           value={selectedStatus}
                           onChange={(event) => setSelectedStatus(event.target.value as 'ACTIVE' | 'REJECTED' | 'CANCELLED' | 'DELIVERED' | 'COMPLETED')}
@@ -9332,17 +9339,19 @@ export default function Home() {
                           ))}
                         </select>
                       </label>
+                      <label className="wl-orders-filter wl-orders-period"><span>Fecha</span><select value={ordersPeriod} onChange={(event) => setOrdersPeriod(event.target.value as 'today' | 'week' | 'month')}><option value="today">Hoy</option><option value="week">Esta semana</option><option value="month">Este mes</option></select></label>
+                      <label className="wl-orders-filter"><span>Tipo de entrega</span><select value={ordersFulfillment} onChange={(event) => setOrdersFulfillment(event.target.value as 'ALL' | 'DELIVERY' | 'PICKUP')}><option value="ALL">Todos los tipos</option><option value="DELIVERY">A domicilio</option><option value="PICKUP">Para recoger</option></select></label>
 
                       <button
                         type="button"
-                        onClick={() => void loadDashboard()}
-                        disabled={loading || !sessionUser}
-                        className="ml-auto flex items-center gap-2 rounded-full border border-neutral-300 bg-white px-3 py-2 text-sm font-semibold text-neutral-700 transition hover:bg-neutral-50 md:ml-0 md:px-4 md:py-3 disabled:cursor-not-allowed disabled:bg-neutral-300"
+                        onClick={() => void refreshOrders()}
+                        disabled={refreshingOrders || !sessionUser}
+                        className="wl-orders-refresh"
                       >
-                        <svg className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <svg className={`h-4 w-4 ${refreshingOrders ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.582m0 0a8.001 8.001 0 01-15.356-2m15.356 2H15" />
                         </svg>
-                        {loading ? 'Sincronizando...' : 'Actualizar'}
+                        <span>{refreshingOrders ? 'Sincronizando...' : 'Actualizar'}</span>
                       </button>
                       {selectedStatus !== 'ACTIVE' ? (
                         <button
@@ -9359,7 +9368,7 @@ export default function Home() {
                       ) : null}
                     </div>
                     {visibleOrders.length > 0 ? (
-                      <div className="space-y-4">
+                      <div className="wl-orders-list space-y-4">
                         {visibleOrders.map((order) => {
                           const isHelper = order.restaurantId !== profile?.id;
                           const hasOwnDelivery = order.restaurant?.hasOwnDelivery ?? profile?.hasOwnDelivery ?? false;
@@ -9380,22 +9389,19 @@ export default function Home() {
                                     ? ['handover'] as Array<keyof typeof restaurantActionMap>
                                     : [])
                                 : getRestaurantActions(order, hasOwnDelivery, Boolean(driverArrivedOrders[order.id])));
-                          // Solo los pedidos ficticios explícitamente autorizados
-                          // exponen controles de acción manual en WingsLab.
-                          const authorizedActionButtons = actionButtons.filter(actionKey =>
-                            isLocalManualOrderAction(order.id, actionKey));
+                          const authorizedActionButtons = actionButtons;
                           const selectedDriverId = selectedDriverByOrder[order.id] || '';
                           const canAssignDriver =
-                            !hasOwnDelivery &&
-                            order.fulfillmentType !== 'PICKUP' &&
+                            hasOwnDelivery &&
+                            order.fulfillmentType === 'DELIVERY' &&
                             order.status === 'READY' &&
                             !order.driver &&
-                            drivers.length > 0;
+                            drivers.some(driver => driver.status === 'ACTIVE' && driver.availability !== 'OFFLINE');
 
                           return (
                             <article
                               key={order.id}
-                              className={`rounded-xl border border-neutral-200 bg-white px-5 py-4 shadow-sm border-l-4 ${order.status === 'PENDING' ? 'border-l-amber-500' :
+                              className={`wl-order-card rounded-xl border border-neutral-200 bg-white px-5 py-4 shadow-sm border-l-4 ${order.status === 'PENDING' ? 'border-l-amber-500' :
                                 order.status === 'CONFIRMED' ? 'border-l-sky-500' :
                                   order.status === 'PREPARING' ? 'border-l-sky-500' :
                                     order.status === 'READY' ? 'border-l-emerald-500' :
@@ -9405,6 +9411,28 @@ export default function Home() {
                                             'border-l-neutral-300'
                                 }`}
                             >
+                              <div className="wl-order-disclosure">
+                                <button type="button" className="wl-order-summary" aria-haspopup="dialog" onClick={() => setOrderModalId(order.id)}>
+                                  <span className="wl-order-summary-id"><strong>{(order as any).dailyCounter ? `#${String((order as any).dailyCounter).padStart(2, '0')}` : order.orderReference}</strong><span><Clock aria-hidden="true" />{order.createdAt ? formatDate(order.createdAt) : 'Fecha no disponible'}</span></span>
+                                  <span className="wl-order-summary-customer"><span><User aria-hidden="true" /><strong>{[order.customer?.user?.name, order.customer?.user?.lastName].filter(Boolean).join(' ') || 'Cliente'}</strong></span><span className={`wl-order-fulfillment ${order.fulfillmentType === 'PICKUP' ? 'is-pickup' : ''}`}>{order.fulfillmentType === 'PICKUP' ? 'Para recoger' : order.fulfillmentType === 'DELIVERY' ? 'A domicilio' : 'Tipo no disponible'}</span></span>
+                                  <span className="wl-order-summary-products" aria-label="Productos del pedido">{(order.items || []).slice(0, 2).map((item) => <span className="wl-order-thumb" key={item.id} title={item.product?.name || 'Producto'}>{item.product?.image ? <img src={item.product.image} alt={item.product.name || 'Producto'} loading="lazy" /> : <Package aria-label={item.product?.name || 'Producto sin imagen'} />}</span>)}{(order.items?.length || 0) > 2 && <span className="wl-order-more">+{(order.items?.length || 0) - 2}</span>}{!order.items?.length && <span className="wl-order-no-products">Sin productos</span>}</span>
+                                  <span className="wl-order-summary-total">{formatCurrency(order.totalAmount)}</span>
+                                  <span className="wl-order-summary-status"><StatusBadge status={order.status} />{['CONFIRMED', 'PREPARING'].includes(order.status) && (order.scheduledDeliveryAt ? new Date(order.scheduledDeliveryAt).getTime() - kitchenClockNow <= 0 : (getPreparationRemainingMs(order, kitchenClockNow) ?? 0) <= 0) && <span className="wl-order-summary-alert">Pedido rezagado</span>}{unreadMessagesMap[order.id] > 0 && <span className="wl-order-summary-alert">{unreadMessagesMap[order.id]} mensaje{unreadMessagesMap[order.id] === 1 ? '' : 's'} nuevo{unreadMessagesMap[order.id] === 1 ? '' : 's'}</span>}{(order as any).cancellationRequestedAt && !(order as any).cancelledBy && ['CONFIRMED', 'PREPARING'].includes(order.status) && <span className="wl-order-summary-alert">Cancelación solicitada</span>}</span>
+                                  <span className="wl-order-expand"><ArrowRight aria-hidden="true" /><span className="sr-only">Abrir comanda</span></span>
+                                </button>
+                                {orderModalId === order.id && <div className="wl-comanda-overlay" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setOrderModalId(null); }}>
+                                <section className="wl-comanda-modal" role="dialog" aria-modal="true" aria-labelledby={`wl-comanda-${order.id}`}>
+                                  <div className="wl-comanda-heading">
+                                    <div><div className="wl-comanda-title"><h2 id={`wl-comanda-${order.id}`}>{(order as any).dailyCounter ? `#${String((order as any).dailyCounter).padStart(2, '0')}` : order.orderReference}</h2><StatusBadge status={order.status} /></div><p>{order.createdAt ? formatDate(order.createdAt) : 'Fecha no disponible'} · {order.fulfillmentType === 'PICKUP' ? 'Para recoger' : 'A domicilio'}</p></div>
+                                    <button type="button" autoFocus onClick={() => setOrderModalId(null)} aria-label="Cerrar comanda"><X aria-hidden="true" /></button>
+                                  </div>
+                                  <div className="wl-comanda-content">
+                                    <div className="wl-comanda-customer"><p><User aria-hidden="true" /><strong>{getCustomerFullName(order.customer?.user) || 'Cliente'}</strong></p>{order.customer?.user?.phone && <p><Phone aria-hidden="true" /><a href={`tel:${order.customer.user.phone}`}>{order.customer.user.phone}</a></p>}{order.fulfillmentType === 'DELIVERY' && <p><MapPin aria-hidden="true" /><span>{formatAddress(order.address)}</span></p>}</div>
+                                    {!['CANCELLED', 'REJECTED'].includes(order.status) && <div className="wl-comanda-progress" aria-label="Progreso del pedido">{['Preparación', 'Lista', order.fulfillmentType === 'PICKUP' ? 'Recogida' : 'En entrega', 'Completada'].map((label, index) => { const current = ['PENDING', 'CONFIRMED', 'PREPARING'].includes(order.status) ? 0 : order.status === 'READY' ? 1 : ['PICKED_UP', 'IN_TRANSIT'].includes(order.status) ? 2 : 3; return <div key={label} className={index <= current ? 'is-current' : ''}><span>{index + 1}</span><small>{label}</small></div>; })}</div>}
+                                    <div className="wl-comanda-products"><h3>Productos ({order.items?.length || 0})</h3>{(order.items || []).map(item => <div className="wl-comanda-product" key={item.id}><span className="wl-order-thumb">{item.product?.image ? <img src={item.product.image} alt="" /> : <Package aria-hidden="true" />}</span><div><strong>{item.product?.name || 'Producto'}{item.weightG ? ` (${item.weightG} g)` : ''}</strong>{item.options?.length ? <p>{item.options.map(option => option.name).join(' · ')}</p> : null}{item.specialInstructions && <p>{item.specialInstructions}</p>}</div><b>×{item.quantity}</b>{item.unitPrice != null && <b>{formatCurrency(Number(item.unitPrice) * item.quantity)}</b>}</div>)}</div>
+                                    <div className="wl-comanda-total"><span>Total del pedido</span><strong>{formatCurrency(order.totalAmount)}</strong></div>
+                                    {parseStoreNotes(order.notes) && <div className="wl-comanda-note"><strong>Nota del cliente</strong><p>{parseStoreNotes(order.notes)}</p></div>}
+                                <div className="wl-order-details">
                               {/* Fila 1: Cabecera */}
                               <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 mb-3">
                                 <div className="flex flex-wrap items-center gap-2 sm:gap-3 min-w-0">
@@ -9546,7 +9574,7 @@ export default function Home() {
                                       </>
                                     )}
                                   </p>
-                                  {(order as any).fulfillmentType !== 'PICKUP' && (
+                                  {(order as any).fulfillmentType !== 'PICKUP' && (order.driver || order.supportRestaurant?.name || ['READY', 'PICKED_UP', 'IN_TRANSIT', 'DELIVERED'].includes(order.status)) && (
                                   <div className="flex items-center gap-2">
                                     <svg className="w-4 h-4 text-neutral-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
@@ -9617,11 +9645,7 @@ export default function Home() {
                                       </span>
                                     ) : hasOwnDelivery ? (
                                       <span className="font-medium text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-100/50">
-                                        {order.status === 'DELIVERED'
-                                          ? 'Entregado por el restaurante (Reparto propio)'
-                                          : order.status === 'IN_TRANSIT'
-                                            ? 'En camino (Reparto propio)'
-                                            : 'Reparto propio (Sin asignar)'}
+                                        {order.status === 'DELIVERED' ? 'Entregado' : order.status === 'IN_TRANSIT' ? 'En camino' : order.status === 'PICKED_UP' ? 'Recogido para entrega' : 'Pendiente de recogida'}
                                       </span>
                                     ) : (
                                       <span className="font-medium text-sky-600 bg-sky-50 px-2 py-0.5 rounded border border-sky-100/50">
@@ -10131,14 +10155,14 @@ export default function Home() {
                                 </div>
                               </div>
 
-                              {/* Asignar Repartidor (Solo emergencia: pedido listo sin repartidor) */}
+                              {/* Asignar a un repartidor propio del restaurante */}
                               {canAssignDriver ? (
-                                <div className="mt-3 grid gap-3 rounded-[24px] border border-amber-200 bg-amber-50 p-4 md:grid-cols-[1fr_auto] md:items-end" onClick={(e) => e.stopPropagation()}>
-                                  <label className="grid gap-2 text-sm text-amber-800">
+                                <div className="mt-3 grid gap-3 rounded-[24px] border border-[#eadfd3] bg-[#faf7f2] p-4 md:grid-cols-[1fr_auto] md:items-end" onClick={(e) => e.stopPropagation()}>
+                                  <label className="grid gap-2 text-sm text-[#51473f]">
                                     <span className="font-semibold flex items-center gap-1.5">
-                                      <span className="text-base">⚠️</span> Asignar repartidor (emergencia)
+                                      <Bike className="h-4 w-4 text-[#bb0a0e]" /> Asignar repartidor WingsLab
                                     </span>
-                                    <span className="text-xs font-normal text-amber-600">El pedido está listo sin repartidor. Elige uno disponible para no retrasar la entrega.</span>
+                                    <span className="text-xs font-normal text-[#70675f]">El pedido está listo. La tarifa vigente del acuerdo quedará fijada para esta entrega.</span>
                                     <select
                                       value={selectedDriverId}
                                       onChange={(event) =>
@@ -10147,14 +10171,14 @@ export default function Home() {
                                           [order.id]: event.target.value,
                                         }))
                                       }
-                                      className="rounded-2xl border border-amber-200 bg-white px-4 py-3 text-neutral-950 outline-none transition focus:border-amber-300"
+                                      className="rounded-2xl border border-[#e8ddd2] bg-white px-4 py-3 text-neutral-950 outline-none transition focus:border-[#bb0a0e]"
                                     >
                                       <option value="">
                                         Selecciona un repartidor disponible
                                       </option>
-                                      {drivers.map((driver) => (
+                                      {drivers.filter(driver => driver.status === 'ACTIVE' && driver.availability !== 'OFFLINE').map((driver) => (
                                         <option key={driver.id} value={driver.id}>
-                                          {driver.user?.name || 'Repartidor'} · {driver.user?.phone || 'Sin telefono'}
+                                          {driver.user.name || 'Repartidor'} · {driver.availability === 'BUSY' ? 'en entrega' : 'disponible'}
                                         </option>
                                       ))}
                                     </select>
@@ -10163,7 +10187,7 @@ export default function Home() {
                                     type="button"
                                     onClick={() => void assignDriver(order.id)}
                                     disabled={activeActionKey === `${order.id}:assign` || !selectedDriverId}
-                                    className="rounded-full border border-amber-300 bg-amber-500 px-4 py-3 font-semibold text-white shadow-[0_12px_30px_rgba(245,158,11,0.22)] transition hover:bg-amber-400 disabled:cursor-not-allowed disabled:border-black/5 disabled:bg-neutral-300 disabled:shadow-none"
+                                    className="rounded-full bg-[#bb0a0e] px-4 py-3 font-semibold text-white transition hover:bg-[#94070b] disabled:cursor-not-allowed disabled:bg-neutral-300"
                                   >
                                     {activeActionKey === `${order.id}:assign`
                                       ? 'Asignando...'
@@ -10233,7 +10257,7 @@ export default function Home() {
                                             </p>
                                           )}
                                         </div>
-                                        {!supportNotifyHere.exhausted && !order.isSupportRequested && (
+                                        {!WINGSLAB_BUSINESS.ownDeliveryOnly && !supportNotifyHere.exhausted && !order.isSupportRequested && (
                                           <button
                                             type="button"
                                             onClick={() => void runOrderAction(order.id, 'solicitarApoyo')}
@@ -10250,14 +10274,14 @@ export default function Home() {
                                     <button
                                       type="button"
                                       onClick={() => void runOrderAction(order.id, 'asumirReparto')}
-                                      disabled={activeActionKey === `${order.id}:asumirReparto` || !isLocalManualOrderAction(order.id, 'asumirReparto')}
+                                      disabled={activeActionKey === `${order.id}:asumirReparto`}
                                       className="flex-1 rounded-xl border border-emerald-200 bg-emerald-600 px-4 py-3 text-sm font-semibold text-white shadow-[0_4px_12px_rgba(16,185,129,0.2)] transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-neutral-300 disabled:text-neutral-500"
                                     >
                                       {activeActionKey === `${order.id}:asumirReparto`
                                         ? 'Procesando...'
                                         : 'Generar QR de reparto'}
                                     </button>
-                                    {!profile?.hasOwnDelivery && !supportExhaustedHere && !supportNotifyHere?.exhausted && !order.isSupportRequested && (
+                                      {!WINGSLAB_BUSINESS.ownDeliveryOnly && !profile?.hasOwnDelivery && !supportExhaustedHere && !supportNotifyHere?.exhausted && !order.isSupportRequested && (
                                       <button
                                         type="button"
                                         onClick={() => void runOrderAction(order.id, 'solicitarApoyo')}
@@ -10272,32 +10296,21 @@ export default function Home() {
                                   </div>
                                 </div>
                               ) : null}
+                                </div>
+                                  </div>
+                                </section>
+                                </div>}
+                              </div>
                             </article>
                           );
                         })}
                       </div>
                     ) : (
                       <>
-                        {profile?.status === 'ACTIVE' && profile?.isAcceptingOrders ? (
-                          <div className="flex flex-col items-center justify-center rounded-[32px] border border-emerald-100 bg-[radial-gradient(ellipse_at_top_right,rgba(240,253,244,0.7),rgba(255,255,255,0.8)_60%,rgba(248,250,252,0.6)_100%)] px-6 py-16 text-center shadow-[0_20px_60px_rgba(15,15,15,0.04)]">
-                            <div className="relative mb-6 flex h-28 w-28 items-center justify-center rounded-full bg-emerald-100 shadow-[0_12px_30px_rgba(16,185,129,0.2)]">
-                              <div className="absolute inset-0 animate-ping rounded-full border-[3px] border-emerald-400 opacity-30" style={{ animationDuration: '2s' }} />
-                              <div className="absolute -inset-4 animate-[spin_6s_linear_infinite] rounded-full border-2 border-dashed border-emerald-200" />
-                              <span className="relative z-10 text-5xl">👨‍🍳</span>
-                            </div>
-                            <h3 className="text-2xl font-bold tracking-tight text-neutral-900">
-                              Abierto y listo
-                            </h3>
-                            <p className="mt-3 max-w-sm text-[15px] leading-relaxed text-neutral-500">
-                              Tu restaurante está en línea y en condiciones de operar. El sistema de notificación en vivo está <strong className="text-emerald-700">activo</strong> y esperando pedidos.
-                            </p>
-                          </div>
-                        ) : (
-                          <EmptyState text="No hay pedidos en el estado filtrado o todavia no se han cargado." />
-                        )}
+                        <div className="wl-orders-empty"><span><ClipboardList aria-hidden="true" /></span><h2>{loading ? 'Cargando órdenes' : orderSearchTerm || ordersFulfillment !== 'ALL' ? 'Sin resultados' : selectedStatus === 'ACTIVE' ? 'No hay órdenes activas' : 'No hay órdenes en este estado'}</h2><p>{loading ? 'Cargando…' : orderSearchTerm || ordersFulfillment !== 'ALL' ? 'Ajusta la búsqueda o los filtros.' : 'Prueba con otra fecha o estado.'}</p></div>
                       </>
                     )}
-                  </Panel>
+                  </section>
                 ) : null}
 
                 {activeSection === 'store' && loading ? (
@@ -10307,159 +10320,10 @@ export default function Home() {
                 ) : null}
 
                 {activeSection === 'store' && profile ? (
-                    <div className={`w-full space-y-4 sm:space-y-6 ${isSelectionMode ? 'pb-32' : ''}`}>
-                      <section className="overflow-hidden -mx-3 -mt-3 min-[420px]:-mx-4 min-[420px]:-mt-4 rounded-b-[24px] rounded-t-none border-x-0 border-b border-t-0 border-black/5 bg-white shadow-[0_18px_60px_rgba(15,15,15,0.05)] sm:mx-0 sm:mt-0 sm:rounded-[32px] sm:border">
-                        <div className="relative">
-                          {storeDraft.coverImage.trim() ? (
-                            <img
-                              src={storeDraft.coverImage}
-                              alt={`Portada de ${storeDraft.name || 'tu tienda'}`}
-                              className="h-48 w-full bg-neutral-200 object-cover min-[420px]:h-56 md:h-72 lg:h-80"
-                            />
-                          ) : (
-                            <div className="h-48 w-full bg-gradient-to-br from-sky-400 via-sky-600 to-sky-900 min-[420px]:h-56 md:h-72 lg:h-80" />
-                          )}
-                          <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
-                          <div className="absolute inset-x-0 top-0 flex items-start justify-end gap-2 p-3 min-[420px]:p-4 md:p-6 lg:p-8">
-                            <button
-                              type="button"
-                              onClick={openCoverImageModal}
-                              className="inline-flex min-h-[44px] shrink-0 items-center gap-2 rounded-full bg-white/90 px-4 py-2.5 text-sm font-semibold text-neutral-800 shadow-[0_10px_20px_rgba(15,15,15,0.12)] transition active:scale-95 hover:bg-white"
-                            >
-                              <Pencil className="h-4 w-4" strokeWidth={1.9} />
-                              <span className="hidden min-[420px]:inline">Editar portada</span>
-                              <span className="min-[420px]:hidden">Portada</span>
-                            </button>
-                          </div>
-                          <div className="absolute inset-x-0 bottom-0 hidden p-6 md:p-8 lg:block">
-                            <div className="flex items-end gap-6">
-                              <div className="relative flex h-24 w-24 items-center justify-center overflow-hidden rounded-[32px] border-4 border-white bg-white shadow-[0_16px_40px_rgba(0,0,0,0.2)] lg:h-28 lg:w-28">
-                                {storeDraft.logo.trim() ? (
-                                  <img
-                                    src={storeDraft.logo}
-                                    alt={`Logo de ${storeDraft.name || 'tu tienda'}`}
-                                    className="h-full w-full object-cover"
-                                  />
-                                ) : (
-                                  <span className="text-3xl font-bold tracking-tight text-neutral-900">
-                                    {buildRestaurantInitials(storeDraft.name || profile.name)}
-                                  </span>
-                                )}
-                                <button
-                                  type="button"
-                                  onClick={openLogoModal}
-                                  className="absolute bottom-1.5 right-1.5 inline-flex h-9 w-9 items-center justify-center rounded-full bg-white/95 text-sky-600 shadow-md transition active:scale-90 hover:bg-white hover:text-sky-800"
-                                  aria-label="Editar logo"
-                                >
-                                  <Pencil className="h-4 w-4" />
-                                </button>
-                              </div>
-                              <div className="mb-2 text-white text-shadow-sm">
-                                <h1 className="text-4xl font-bold tracking-tight">
-                                  {storeDraft.name || 'Nombre de tu tienda'}
-                                </h1>
-                                <p className="mt-2 max-w-2xl text-[15px] font-medium leading-relaxed text-white/90">
-                                  {storeDraft.description || 'Agrega una descripcion atractiva para tus clientes.'}
-                                </p>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
+                    <div className={`wl-menu-manager w-full space-y-4 sm:space-y-6 ${isSelectionMode ? 'pb-32' : ''}`}>
+                      <header className="wl-menu-manager-hero"><div><p>Catálogo WingsLab</p><h1>Gestiona tu menú</h1><span>Organiza categorías, productos y disponibilidad en un solo lugar.</span></div><button type="button" onClick={() => setShowMenuPreview(true)}><Store aria-hidden="true" />Ver menú como cliente</button></header>
 
-                        <div className="relative px-4 pb-5 pt-0 text-sm text-neutral-600 md:px-6 md:pb-6 lg:px-7 lg:pt-5">
-                          <div className="relative z-10 -mt-10 flex flex-col items-center text-center lg:hidden">
-                            <div className="relative flex h-[76px] w-[76px] items-center justify-center overflow-hidden rounded-[24px] border-4 border-white bg-white shadow-[0_8px_24px_rgba(15,23,42,0.16)] min-[420px]:h-[88px] min-[420px]:w-[88px] min-[420px]:rounded-[28px]">
-                              {storeDraft.logo.trim() ? (
-                                <img
-                                  src={storeDraft.logo}
-                                  alt={`Logo de ${storeDraft.name || 'tu tienda'}`}
-                                  className="h-full w-full object-cover"
-                                />
-                              ) : (
-                                <span className="text-3xl font-bold tracking-tight text-neutral-900">
-                                  {buildRestaurantInitials(storeDraft.name || profile.name)}
-                                </span>
-                              )}
-                              <button
-                                type="button"
-                                onClick={openLogoModal}
-                                className="absolute bottom-0.5 right-0.5 inline-flex h-8 w-8 items-center justify-center rounded-full bg-white text-sky-700 shadow-md ring-1 ring-black/5 transition active:scale-90 hover:bg-sky-50"
-                                aria-label="Editar logo"
-                              >
-                                <Pencil className="h-4 w-4" />
-                              </button>
-                            </div>
-                            <p className="mt-3 max-w-full break-words px-2 text-[23px] font-bold leading-tight tracking-tight text-neutral-950 min-[420px]:text-[27px]">
-                              {storeDraft.name || 'Nombre de tu tienda'}
-                            </p>
-                            <p className="mt-1.5 max-w-sm break-words px-2 text-[14px] leading-5 text-neutral-500">
-                              {storeDraft.description || 'Agrega una descripcion atractiva para tus clientes.'}
-                            </p>
-                          </div>
-
-                          <div className="-mx-4 mt-5 min-w-0 border-y border-neutral-200/80 bg-white p-1.5 shadow-[0_2px_12px_rgba(0,0,0,0.04)] md:-mx-6 lg:mx-0 lg:flex lg:items-stretch lg:rounded-[20px] lg:border">
-                            <div className="flex min-w-0 items-center gap-3 rounded-xl bg-neutral-50 px-3 py-3 lg:flex-1 lg:bg-transparent lg:px-4">
-                              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-neutral-100 bg-white text-neutral-500 shadow-sm">
-                                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.243-4.243a8 8 0 1111.314 0z" />
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                                </svg>
-                              </span>
-                              <span className="min-w-0 flex-1">
-                                <span className="block text-[10px] font-bold uppercase tracking-[0.1em] text-neutral-400">Dirección</span>
-                                <span className="mt-0.5 block break-words text-[13px] font-medium leading-5 text-neutral-700">{storeDraft.address || 'Agrega tu dirección principal'}</span>
-                              </span>
-                            </div>
-
-                            <div className="mt-1.5 grid grid-cols-2 gap-1.5 lg:mt-0 lg:flex lg:gap-0 lg:divide-x lg:divide-neutral-100 lg:border-l lg:border-neutral-100">
-                            <div className="flex min-w-0 items-center gap-2.5 rounded-xl bg-neutral-50 px-3 py-3 lg:min-w-36 lg:bg-transparent lg:px-4">
-                              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-neutral-100 bg-white text-neutral-500 shadow-sm">
-                                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                </svg>
-                              </span>
-                              <span className="min-w-0">
-                                <span className="block text-[10px] font-bold uppercase tracking-[0.1em] text-neutral-400">Entrega</span>
-                                <span className="mt-0.5 block break-words text-[13px] font-semibold leading-4 text-neutral-900">
-                                  {storeDraft.hasOwnDelivery && storeDraft.deliveryPricingModel === 'distance'
-                                    ? 'Por distancia'
-                                    : storeDraft.deliveryFee.trim()
-                                      ? formatCurrency(Number(storeDraft.deliveryFee))
-                                      : 'Sin costo'}
-                                </span>
-                              </span>
-                            </div>
-
-                            <div
-                              className={`flex min-w-0 items-center gap-2.5 rounded-xl bg-neutral-50 px-3 py-3 lg:min-w-40 lg:bg-transparent lg:px-4 ${profile.status === 'ACTIVE' && profile.isAcceptingOrders
-                                ? 'text-emerald-700'
-                                : profile.status === 'SUSPENDED'
-                                  ? 'text-sky-700'
-                                  : 'text-neutral-700'
-                                }`}
-                            >
-                              <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${profile.status === 'ACTIVE' && profile.isAcceptingOrders ? 'bg-emerald-500' : profile.status === 'SUSPENDED' ? 'bg-sky-500' : 'bg-neutral-400'}`} aria-hidden="true" />
-                              <span className="min-w-0">
-                                <span className="block text-[10px] font-bold uppercase tracking-[0.1em] text-neutral-400">Estado</span>
-                                <span className="mt-0.5 block break-words text-[13px] font-semibold leading-4">
-                                  {getRestaurantOperationalStatusLabel(profile.status, profile.isAcceptingOrders)}
-                                </span>
-                              </span>
-                            </div>
-                            </div>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => setShowMenuPreview(true)}
-                            className="mt-4 inline-flex min-h-12 w-full items-center justify-center gap-2.5 rounded-xl bg-neutral-950 px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-neutral-800 active:scale-[0.99] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-neutral-900/15 lg:mt-5 lg:w-auto"
-                          >
-                            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" /></svg>
-                            Ver mi menú como cliente
-                          </button>
-                        </div>
-                      </section>
-
-                      <div className="flex flex-col gap-2.5 -mx-3 min-[420px]:-mx-4 border-y border-black/5 bg-white p-3 shadow-sm sm:mx-0 sm:flex-row sm:items-center sm:justify-between sm:rounded-2xl sm:border sm:p-4">
+                      <div className="wl-menu-manager-toolbar">
                         <div className="relative min-w-0 flex-1 sm:max-w-md">
                           <svg className="pointer-events-none absolute left-4 top-1/2 h-[18px] w-[18px] -translate-y-1/2 text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M17 10a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
                           <input
@@ -10504,7 +10368,7 @@ export default function Home() {
                         </div>
                       </div>
 
-                      <section aria-label="Categorías del menú" className="min-w-0 rounded-[22px] border border-neutral-200/80 bg-white py-4 shadow-[0_4px_20px_rgba(15,23,42,0.04)] sm:py-5">
+                      <section aria-label="Categorías del menú" className="wl-menu-manager-categories min-w-0 rounded-[22px] border border-neutral-200/80 bg-white py-4 shadow-[0_4px_20px_rgba(15,23,42,0.04)] sm:py-5">
                         <div className="mb-3 flex items-center justify-between gap-3 px-4 sm:px-5">
                           <div>
                             <h2 className="text-sm font-bold text-neutral-950">Categorías del menú</h2>
@@ -10586,7 +10450,7 @@ export default function Home() {
                         )}
                       </section>
 
-                      <div role="group" aria-label="Acciones del menú">
+                      <div className="wl-menu-manager-import" role="group" aria-label="Acciones del menú">
                         <button
                           type="button"
                           onClick={openImportModal}
@@ -10612,7 +10476,7 @@ export default function Home() {
                             </div>
                           ) : (
                             filteredStoreCategories.map((category) => (
-                                <section key={category.id} className="overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-sm sm:rounded-[20px]">
+                                <section key={category.id} className="wl-menu-manager-category overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-sm sm:rounded-[20px]">
                                 <div className="flex flex-col gap-3 border-b border-neutral-200 bg-neutral-50 px-4 py-3.5 sm:flex-row sm:items-center sm:justify-between sm:px-5">
                                   <div className="flex min-w-0 items-center gap-2.5">
                                     <h3 className="min-w-0 flex-1 truncate text-base font-extrabold tracking-tight text-neutral-950">{category.name}</h3>
@@ -10665,7 +10529,7 @@ export default function Home() {
                                     category.products.map((product) => (
                                       <div
                                         key={product.id}
-                                        className={`flex flex-col gap-3 px-4 py-3.5 transition hover:bg-neutral-50 ${selectedProductIds.has(product.id) ? 'bg-sky-50/60' : ''} sm:flex-row sm:items-center sm:gap-4`}
+                                        className={`wl-menu-manager-product flex flex-col gap-3 px-4 py-3.5 transition hover:bg-neutral-50 ${selectedProductIds.has(product.id) ? 'bg-sky-50/60' : ''} sm:flex-row sm:items-center sm:gap-4`}
                                       >
                                         <div className="flex min-w-0 flex-1 items-start gap-3">
                                         {isSelectionMode ? (
@@ -10703,17 +10567,13 @@ export default function Home() {
                                           <div className="flex min-w-0 items-center gap-2.5">
                                             <span className="shrink-0 text-[15px] font-bold text-neutral-950">{product.discountPrice ? formatCurrency(product.discountPrice) : formatCurrency(product.price)}</span>
                                             <span className={`text-xs font-medium ${product.isAvailable ? 'text-emerald-700' : 'text-neutral-500'}`}>{product.isAvailable ? 'Disponible' : 'Agotado'}</span>
-                                            <button
-                                              type="button"
-                                              role="switch"
-                                              aria-checked={product.isAvailable}
-                                              aria-label={`${product.isAvailable ? 'Marcar agotado' : 'Marcar disponible'}: ${product.name}`}
+                                            <Toggle
+                                              checked={product.isAvailable}
+                                              label={`${product.isAvailable ? 'Marcar agotado' : 'Marcar disponible'}: ${product.name}`}
                                               onClick={() => void toggleProductAvailability(product)}
                                               disabled={activeAvailabilityProductId === product.id}
-                                              className={`relative inline-flex h-11 w-16 shrink-0 items-center rounded-full border p-1 transition focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-emerald-500/20 ${product.isAvailable ? 'border-emerald-600 bg-emerald-600' : 'border-neutral-300 bg-neutral-300'} disabled:cursor-not-allowed disabled:opacity-60`}
-                                            >
-                                              <span className={`inline-flex h-7 w-7 items-center justify-center rounded-full bg-white shadow-sm transition-transform ${product.isAvailable ? 'translate-x-7' : 'translate-x-0'}`} />
-                                            </button>
+                                              tone="emerald"
+                                            />
                                           </div>
                                           <div className="flex items-center gap-1.5">
                                             <button
@@ -10823,14 +10683,7 @@ export default function Home() {
                         </div>
                       ) : null}
 
-                {showMenuPreview ? (() => {
-                  // La vista previa refleja EN VIVO el tema y color elegidos en
-                  // "Mi tienda", antes incluso de guardar cambios.
-                  const previewTheme = getMenuThemeById(storeDraft.menuTheme ?? null);
-                  const previewAccent = /^#[0-9a-fA-F]{6}$/.test(storeDraft.accentColor || '')
-                    ? (storeDraft.accentColor as string)
-                    : '#0ea5e9';
-                  return (
+                {showMenuPreview ? (
                   <div
                     className="fixed inset-0 z-[85] flex items-center justify-center bg-black/60 px-4 py-5 backdrop-blur-sm animate-fade-in"
                     onClick={() => setShowMenuPreview(false)}
@@ -10838,7 +10691,7 @@ export default function Home() {
                       <div className="relative flex items-center justify-center" onClick={(e) => e.stopPropagation()}>
                         {/* Resplandor ambiental con el color elegido */}
                         <div className="absolute inset-0 flex items-center justify-center pointer-events-none" aria-hidden="true">
-                          <div className="h-[440px] w-[440px] rounded-full opacity-20 blur-3xl" style={{ backgroundColor: previewAccent }} />
+                          <div className="h-[440px] w-[440px] rounded-full opacity-20 blur-3xl" style={{ backgroundColor: '#F20D12' }} />
                         </div>
                       <button
                         onClick={() => setShowMenuPreview(false)}
@@ -10851,7 +10704,7 @@ export default function Home() {
                         <div className="absolute top-0 inset-x-0 h-6 flex justify-center z-20">
                           <div className="w-32 h-5.5 bg-neutral-900 rounded-b-2xl"></div>
                         </div>
-                        <div className="relative w-full h-full rounded-[36px] overflow-hidden flex flex-col" style={{ background: previewTheme?.gradientLight ?? '#ffffff' }}>
+                        <div className="relative w-full h-full rounded-[36px] overflow-hidden flex flex-col" style={{ background: '#ffffff' }}>
                           <div className="flex justify-between items-center px-5 pt-3 pb-0.5 text-[9px] font-bold text-neutral-900">
                             <span>9:41</span>
                             <div className="flex gap-1 items-center">
@@ -10859,7 +10712,7 @@ export default function Home() {
                               <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M15.67 4H14V2h-4v2H8.33C7.6 4 7 4.6 7 5.33v15.33C7 21.4 7.6 22 8.33 22h7.33c.74 0 1.34-.6 1.34-1.33V5.33C17 4.6 16.4 4 15.67 4z"/></svg>
                             </div>
                           </div>
-                          <div className="px-3.5 py-1.5 border-b border-black/5" style={{ backgroundColor: previewTheme?.surface ?? '#ffffff' }}>
+                          <div className="px-3.5 py-1.5 border-b border-black/5" style={{ backgroundColor: '#ffffff' }}>
                             <h1 className="text-sm font-black text-neutral-900">{storeDraft.name || profile.name}</h1>
                             <p className="text-[10px] text-neutral-500 mt-0.5">Menú</p>
                           </div>
@@ -10872,7 +10725,7 @@ export default function Home() {
                               storeCategories.map((category) => (
                                  <div key={category.id}>
                                    <div className="mb-2 flex items-center gap-1.5">
-                                     <span className="h-3 w-[3px] rounded-full" style={{ backgroundColor: previewAccent }} aria-hidden="true" />
+                                     <span className="h-3 w-[3px] rounded-full" style={{ backgroundColor: '#F20D12' }} aria-hidden="true" />
                                      <h2 className="text-xs font-bold text-neutral-900">{category.name}</h2>
                                    </div>
                                   {category.products.length === 0 ? (
@@ -10927,7 +10780,7 @@ export default function Home() {
                                                 )}
                                               </div>
                                               <div className="mt-2 flex items-center justify-end">
-                                                <div className="rounded-full px-3 py-1 text-[8px] font-bold text-white shadow-sm" style={{ backgroundColor: previewAccent }}>
+                                                <div className="rounded-full px-3 py-1 text-[8px] font-bold text-white shadow-sm" style={{ backgroundColor: '#F20D12' }}>
                                                   Agregar
                                                 </div>
                                               </div>
@@ -10948,8 +10801,7 @@ export default function Home() {
                       </div>
                     </div>
                   </div>
-                  );
-                  })() : null}
+                ) : null}
 
                     </div>
 
@@ -12081,12 +11933,12 @@ export default function Home() {
           ) : null}
 
           {isMobileNavOpen ? (
-            <div className="fixed inset-0 z-50 lg:hidden">
+            <div id="wl-mobile-navigation" role="dialog" aria-modal="true" aria-label="Menú del restaurante" className="fixed inset-0 z-50 lg:hidden">
               <div className="absolute inset-0 bg-black/40" onClick={() => setIsMobileNavOpen(false)} />
-              <aside className="absolute left-0 top-0 flex h-full w-[300px] max-w-[86vw] flex-col overflow-hidden bg-[#fffdf8] shadow-[0_24px_90px_rgba(15,15,15,0.18)]">
+              <aside className="wl-admin-mobile-sidebar absolute left-0 top-0 flex h-full w-[300px] max-w-[86vw] flex-col overflow-hidden bg-white shadow-[0_24px_90px_rgba(15,15,15,0.18)]">
                 <div className="shrink-0 border-b border-black/5 px-5 py-5">
                   <div className="flex items-center justify-between gap-3">
-                    <SaDelLogo className="h-9 w-auto object-contain" />
+                    <div className="wl-admin-side-logo"><img className="wl-admin-logo-light" src={redWordmark.src} alt="WingsLab" /><img className="wl-admin-logo-dark" src={whiteWordmark.src} alt="" aria-hidden="true" /></div>
                     <button
                       type="button"
                       onClick={() => setIsMobileNavOpen(false)}
@@ -12096,18 +11948,16 @@ export default function Home() {
                       <X className="h-5 w-5" strokeWidth={1.8} />
                     </button>
                   </div>
-                  <p className="mt-4 truncate text-sm font-medium text-neutral-500">{restaurantName}</p>
                 </div>
 
                 <div className="min-h-0 flex-1 overflow-y-auto px-4 py-5">
-                  <div className="relative overflow-hidden rounded-[28px] border border-sky-200/60 bg-white p-4 shadow-[0_16px_45px_rgba(14,165,233,0.08)]">
-                    <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-sky-300/80 via-cyan-200/70 to-transparent" />
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-sky-600">Operacion</p>
-                    <p className="mt-2 text-lg font-semibold tracking-[-0.03em] text-neutral-950">{restaurantName}</p>
-                    <p className="mt-1 text-sm text-neutral-500">{operationalStatusLabel}</p>
+                  <div className="wl-admin-business">
+                    <p className="wl-admin-business-label">Operación</p>
+                    <p className="wl-admin-business-name">{restaurantName}</p>
+                    <p className="wl-admin-business-status"><span className={isBusinessOpen && isWithinHours && !isBusinessPaused ? 'is-open' : ''} aria-hidden="true" />{operationalStatusLabel}</p>
                   </div>
 
-                  <nav className="mt-6 grid gap-2">
+                  <nav className="wl-admin-nav mt-6 grid gap-2" aria-label="Navegación del restaurante">
                     {navigationItems.map((item) => {
                       const showOrderWarning = item.key === 'orders' && activeSection !== 'orders' && activeOrders.length > 0;
                       return (
@@ -12118,68 +11968,21 @@ export default function Home() {
                           setActiveSection(item.key);
                           setIsMobileNavOpen(false);
                         }}
-                        className={`flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-left text-sm font-semibold transition-all duration-300 ${
-                          activeSection === item.key
-                          ? 'bg-neutral-950 text-white'
-                          : showOrderWarning
-                          ? 'bg-sky-100 text-sky-900 animate-heartbeat shadow-sm'
-                          : 'text-neutral-700 hover:bg-white'
-                          }`}
+                        aria-current={activeSection === item.key ? 'page' : undefined}
+                        className="wl-admin-nav-item"
                       >
                         <RestaurantNavIcon kind={item.key} />
                         <span className="flex-1">{item.label}</span>
-                        {item.key === 'orders' && activeSection !== 'orders' && activeOrders.length > 0 && (
-                          <span className="ml-auto flex items-center gap-1.5 shrink-0">
-                            <span className="relative flex h-2 w-2">
-                              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-sky-400 opacity-75"></span>
-                              <span className="relative inline-flex h-2 w-2 rounded-full bg-sky-600"></span>
-                            </span>
-                            <span className="rounded-full bg-sky-100 px-2 py-0.5 text-[10px] font-black text-sky-700">
-                              {activeOrders.length}
-                            </span>
-                          </span>
-                        )}
+                        {showOrderWarning && <span className="wl-admin-nav-count" aria-label={`${activeOrders.length} pedidos activos`}>{activeOrders.length}</span>}
                       </button>
                     );
                     })}
                   </nav>
                 </div>
 
-                <div className="shrink-0 border-t border-black/5 bg-[#fffdf8] px-4 py-5">
+                <div className="wl-admin-sidebar-footer shrink-0 border-t border-black/5 bg-white px-4 py-5">
                   <div className="grid gap-2">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setShowHelpModal(true);
-                        setIsMobileNavOpen(false);
-                      }}
-                      className="flex items-center gap-3 rounded-2xl border border-black/10 bg-white px-4 py-3 text-left text-sm font-semibold text-neutral-700 transition hover:border-black/15 hover:bg-neutral-50"
-                    >
-                      <HelpCircleIcon />
-                      Ayuda
-                    </button>
-                    {/* Dark Mode Toggle */}
-                    <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-white px-4 py-3 text-sm font-semibold text-neutral-800">
-                      <div className="flex items-center gap-3">
-                        <svg className="h-5 w-5 text-neutral-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
-                        </svg>
-                        Modo Oscuro
-                      </div>
-                      <button
-                        type="button"
-                        role="switch"
-                        aria-checked={isDarkMode}
-                        onClick={() => {
-                          const isDark = document.documentElement.classList.toggle('dark');
-                          setIsDarkMode(isDark);
-                          triggerHaptic(10);
-                        }}
-                        className={`relative inline-flex h-5 w-9 items-center rounded-full transition ${isDarkMode ? 'bg-sky-600' : 'bg-neutral-300'}`}
-                      >
-                        <span className={`inline-block h-3 w-3 transform rounded-full bg-white shadow-sm transition ${isDarkMode ? 'translate-x-4' : 'translate-x-1'}`} />
-                      </button>
-                    </div>
+                    <button type="button" className="wl-admin-theme-toggle" role="switch" aria-checked={darkMode} onClick={toggleDarkMode}><Moon aria-hidden="true" /><span>Modo oscuro</span><span className="wl-admin-switch-track" aria-hidden="true"><i /></span></button>
                     <button
                       type="button"
                       onClick={() => {
@@ -12510,753 +12313,6 @@ export default function Home() {
           ) : null}
 
 
-          {/* Modal del Centro de Ayuda y Soporte */}
-          {showHelpModal ? (
-            <div
-              className="fixed inset-0 z-[80] flex items-center justify-center bg-black/60 px-4 py-5 backdrop-blur-sm animate-fade-in"
-              role="dialog"
-              aria-modal="true"
-            >
-              {/* Backdrop click to close */}
-              <div
-                className="absolute inset-0"
-                onClick={() => setShowHelpModal(false)}
-              />
-
-              {/* Main Card */}
-              <div className="relative z-10 w-full max-w-5xl rounded-[32px] bg-white border border-neutral-100 shadow-[0_32px_100px_rgba(15,15,15,0.22)] flex flex-col overflow-hidden max-h-[85vh] transition-all duration-300">
-                
-                {/* Cabecera / Header */}
-                <div className="border-b border-black/5 bg-gradient-to-r from-neutral-50 to-white px-6 py-5 flex items-center justify-between shrink-0">
-                  <div className="flex items-center gap-3">
-                    <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-tr from-sky-600 to-blue-500 text-white shadow-lg shadow-blue-500/20">
-                      <HelpCircleIcon />
-                    </div>
-                    <div>
-                      <h2 className="text-xl font-bold tracking-tight text-neutral-950">Centro de Ayuda y Soporte</h2>
-                      <p className="mt-0.5 text-xs text-neutral-500 font-medium">
-                        Capacitación operativa, resolución de dudas y contacto directo con la administración.
-                      </p>
-                    </div>
-                  </div>
-                  
-                  <button
-                    type="button"
-                    onClick={() => setShowHelpModal(false)}
-                    className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-black/5 bg-white text-neutral-500 transition hover:bg-neutral-100 hover:text-neutral-900 active:scale-95 shadow-sm"
-                    aria-label="Cerrar modal"
-                  >
-                    <X className="h-5 w-5" strokeWidth={1.8} />
-                  </button>
-                </div>
-
-                {/* Subcontainer for Tabs and Content */}
-                <div className="flex flex-col md:flex-row flex-1 overflow-hidden min-h-0">
-                  
-                  {/* Left Navigation Tabs (Desktop) / Horizontal Tabs (Mobile) */}
-                  <div className="shrink-0 border-b md:border-b-0 md:border-r border-black/5 bg-[#faf8f5]/80 p-4 md:w-60 overflow-x-auto md:overflow-x-visible md:overflow-y-auto scrollbar-none flex md:flex-col gap-2 flex-row">
-                    
-                    {/* Tab Button 0: Notificaciones */}
-                    <button
-                      type="button"
-                      onClick={() => setActiveHelpTab('notifications')}
-                      className={`flex items-center gap-3 rounded-2xl px-4 py-3.5 text-left text-sm font-semibold transition-all duration-200 shrink-0 whitespace-nowrap ${
-                        activeHelpTab === 'notifications'
-                          ? 'bg-gradient-to-r from-sky-600 to-blue-600 text-white shadow-md shadow-blue-600/10 ring-1 ring-sky-500/20'
-                          : 'text-neutral-600 hover:bg-sky-50/70 hover:text-sky-700'
-                      }`}
-                    >
-                      <svg className="h-5 w-5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75v-.7V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0" />
-                      </svg>
-                      Notificaciones
-                    </button>
-
-                    {/* Tab Button 1: Simulador */}
-                    <button
-                      type="button"
-                      onClick={() => setActiveHelpTab('simulator')}
-                      className={`flex items-center gap-3 rounded-2xl px-4 py-3.5 text-left text-sm font-semibold transition-all duration-200 shrink-0 whitespace-nowrap ${
-                        activeHelpTab === 'simulator'
-                          ? 'bg-gradient-to-r from-sky-600 to-blue-600 text-white shadow-md shadow-blue-600/10 ring-1 ring-sky-500/20'
-                          : 'text-neutral-600 hover:bg-sky-50/70 hover:text-sky-700'
-                      }`}
-                    >
-                      <svg className="h-5 w-5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8}>
-                        <rect x="3" y="4" width="18" height="12" rx="3.5" />
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M10 9l5 3-5 3V9z" />
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 20h6M12 16v4" />
-                      </svg>
-                      Simulador de Pedidos
-                    </button>
-
-                    {/* Tab Button 2: FAQs */}
-                    <button
-                      type="button"
-                      onClick={() => setActiveHelpTab('faqs')}
-                      className={`flex items-center gap-3 rounded-2xl px-4 py-3.5 text-left text-sm font-semibold transition-all duration-200 shrink-0 whitespace-nowrap ${
-                        activeHelpTab === 'faqs'
-                          ? 'bg-gradient-to-r from-sky-600 to-blue-600 text-white shadow-md shadow-blue-600/10 ring-1 ring-sky-500/20'
-                          : 'text-neutral-600 hover:bg-sky-50/70 hover:text-sky-700'
-                      }`}
-                    >
-                      <svg className="h-5 w-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.8}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                      </svg>
-                      Crisis y FAQs
-                    </button>
-
-                    {/* Tab Button 3: Transfers */}
-                    <button
-                      type="button"
-                      onClick={() => setActiveHelpTab('transfers')}
-                      className={`flex items-center gap-3 rounded-2xl px-4 py-3.5 text-left text-sm font-semibold transition-all duration-200 shrink-0 whitespace-nowrap ${
-                        activeHelpTab === 'transfers'
-                          ? 'bg-gradient-to-r from-sky-600 to-blue-600 text-white shadow-md shadow-blue-600/10 ring-1 ring-sky-500/20'
-                          : 'text-neutral-600 hover:bg-sky-50/70 hover:text-sky-700'
-                      }`}
-                    >
-                      <svg className="h-5 w-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.8}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-                      </svg>
-                      Validar Transferencias
-                    </button>
-
-                    {/* Tab Button 4: Support */}
-                    <button
-                      type="button"
-                      onClick={() => setActiveHelpTab('support')}
-                      className={`flex items-center gap-3 rounded-2xl px-4 py-3.5 text-left text-sm font-semibold transition-all duration-200 shrink-0 whitespace-nowrap ${
-                        activeHelpTab === 'support'
-                          ? 'bg-gradient-to-r from-sky-600 to-blue-600 text-white shadow-md shadow-blue-600/10 ring-1 ring-sky-500/20'
-                          : 'text-neutral-600 hover:bg-sky-50/70 hover:text-sky-700'
-                      }`}
-                    >
-                      <svg className="h-5 w-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.8}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M3 18v-6a9 9 0 0 1 18 0v6" />
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3v5zm-18 0a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3v5z" />
-                      </svg>
-                      Soporte y Reportes
-                    </button>
-
-                  </div>
-
-                  {/* Right Content Area */}
-                  <div className="flex-1 overflow-y-auto p-6 md:p-8 min-h-0 bg-[#fafaf9]/20">
-                    
-                    {/* Tab 0: Notifications */}
-                    {activeHelpTab === 'notifications' && (
-                      <div className="space-y-6 animate-fade-in">
-                        {/* Banner principal llamativo */}
-                        <div className="relative overflow-hidden rounded-[28px] bg-gradient-to-br from-sky-600 via-blue-600 to-indigo-600 p-6 sm:p-8 text-white shadow-[0_16px_40px_-12px_rgba(37,99,235,0.45)]">
-                          <div className="absolute -right-10 -top-10 h-40 w-40 rounded-full bg-white/10" />
-                          <div className="absolute -bottom-16 -left-8 h-44 w-44 rounded-full bg-white/5" />
-                          <div className="relative">
-                            <span className="inline-flex items-center gap-1.5 rounded-full bg-white/15 px-3 py-1 text-[10px] font-bold uppercase tracking-widest backdrop-blur">
-                              <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
-                                <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
-                              </svg>
-                              No te pierdas ningún pedido
-                            </span>
-                            <h3 className="mt-3 text-xl sm:text-2xl font-bold leading-tight">
-                              Las alertas de nuevos pedidos llegan aunque cierres la app
-                            </h3>
-                            <p className="mt-2 max-w-xl text-sm sm:text-base text-sky-100 leading-relaxed">
-                              Configura tu teléfono <strong className="text-white">una sola vez</strong> y recibe cada
-                              pedido con sonido de alarma, sin importar la plataforma.
-                            </p>
-                          </div>
-                        </div>
-
-                        {/* Tarjetas por plataforma */}
-                        <div className="grid gap-5 sm:grid-cols-2">
-                          {/* Android */}
-                          <div className="rounded-[28px] border border-emerald-100 bg-white p-5 sm:p-6 flex flex-col shadow-[0_8px_24px_-12px_rgba(16,185,129,0.15)]">
-                            <div className="flex items-center gap-3">
-                              <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-600">
-                                <svg className="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8}>
-                                  <path strokeLinecap="round" strokeLinejoin="round" d="M9.75 3.104v5.714a2.25 2.25 0 01-.659 1.591L5 14.5M9.75 3.104c-.251.023-.501.05-.75.082m.75-.082a24.301 24.301 0 014.5 0m0 0v5.714c0 .597.237 1.17.659 1.591L19.8 15.3M16.5 8.963V5.25m.75 14.634a48.465 48.465 0 01-6 0m6 0c-.706.214-1.44.348-2.25.435m6 0a24.24 24.24 0 003.75-.435M9.75 21a1.5 1.5 0 003 0V9.75a1.5 1.5 0 00-3 0V21z" />
-                                </svg>
-                              </div>
-                              <div>
-                                <h4 className="text-base font-bold text-neutral-950">Android</h4>
-                                <span className="text-xs font-semibold text-emerald-600">Samsung, Xiaomi, Motorola, etc.</span>
-                              </div>
-                            </div>
-
-                            <ol className="mt-5 space-y-3 text-sm">
-                              <li className="flex items-start gap-3">
-                                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-[11px] font-bold text-emerald-700">1</span>
-                                <span className="leading-relaxed text-neutral-700">
-                                  <strong className="text-neutral-900">Instala la app</strong> tocando el botón "Instalar" que aparece en la parte inferior (o menú ⋮ → "Agregar a pantalla de inicio").
-                                </span>
-                              </li>
-                              <li className="flex items-start gap-3">
-                                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-[11px] font-bold text-emerald-700">2</span>
-                                <span className="leading-relaxed text-neutral-700">
-                                  <strong className="text-neutral-900">Activa las notificaciones</strong> en el perfil del portal (pestaña "Notificaciones Push").
-                                </span>
-                              </li>
-                              <li className="flex items-start gap-3">
-                                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-[11px] font-bold text-emerald-700">3</span>
-                                <span className="leading-relaxed text-neutral-700">
-                                  <strong className="text-neutral-900">Excluye SaDeL del ahorro de batería:</strong> Ajustes del teléfono → Batería → Optimización de batería → busca SaDeL → "Sin restricciones". <em className="text-emerald-700 font-medium">Esto evita que el teléfono "mate" la app y retrase los pedidos.</em>
-                                </span>
-                              </li>
-                              <li className="flex items-start gap-3">
-                                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-[11px] font-bold text-emerald-700">4</span>
-                                <span className="leading-relaxed text-neutral-700">
-                                  <strong className="text-neutral-900">Ponle sonido de alarma:</strong> Ajustes → Notificaciones → SaDeL → Sonido → elige un tono fuerte (ej. "Alarma"). Así el "Nuevo pedido" se escucha aunque estés lejos del teléfono.
-                                </span>
-                              </li>
-                            </ol>
-                          </div>
-
-                          {/* iPhone / iOS */}
-                          <div className="rounded-[28px] border border-neutral-200/80 bg-white p-5 sm:p-6 flex flex-col shadow-[0_8px_24px_-12px_rgba(0,0,0,0.12)]">
-                            <div className="flex items-center gap-3">
-                              <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-neutral-900 text-white">
-                                <svg className="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8}>
-                                  <rect x="7" y="2.75" width="10" height="18.5" rx="2.75" />
-                                  <path strokeLinecap="round" d="M10.5 18.5h3" />
-                                </svg>
-                              </div>
-                              <div>
-                                <h4 className="text-base font-bold text-neutral-950">iPhone (iOS)</h4>
-                                <span className="text-xs font-semibold text-neutral-500">Requiere iOS 16.4 o superior</span>
-                              </div>
-                            </div>
-
-                            <ol className="mt-5 space-y-3 text-sm">
-                              <li className="flex items-start gap-3">
-                                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-neutral-100 text-[11px] font-bold text-neutral-700">1</span>
-                                <span className="leading-relaxed text-neutral-700">
-                                  <strong className="text-neutral-900">Instala a pantalla de inicio</strong> (obligatorio para recibir pedidos): botón Compartir → "Añadir a pantalla de inicio". Desde Safari normal <em className="font-medium text-neutral-500">no</em> llegan notificaciones.
-                                </span>
-                              </li>
-                              <li className="flex items-start gap-3">
-                                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-neutral-100 text-[11px] font-bold text-neutral-700">2</span>
-                                <span className="leading-relaxed text-neutral-700">
-                                  <strong className="text-neutral-900">Activa las notificaciones</strong> en el perfil del portal.
-                                </span>
-                              </li>
-                              <li className="flex items-start gap-3">
-                                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-neutral-100 text-[11px] font-bold text-neutral-700">3</span>
-                                <span className="leading-relaxed text-neutral-700">
-                                  <strong className="text-neutral-900">Revisa los ajustes del iPhone:</strong> Ajustes → Notificaciones → SaDeL → permitir notificaciones y sonido.
-                                </span>
-                              </li>
-                              <li className="flex items-start gap-3">
-                                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-neutral-100 text-[11px] font-bold text-neutral-700">4</span>
-                                <span className="leading-relaxed text-neutral-700">
-                                  <strong className="text-neutral-900">Evita "No molestar" o un "Foco" activo</strong> durante horario de servicio, o el iPhone retendrá las alertas.
-                                </span>
-                              </li>
-                            </ol>
-                          </div>
-                        </div>
-
-                        {/* Nota de cierre */}
-                        <div className="rounded-[24px] border border-sky-100 bg-sky-50/70 p-5 text-sm leading-relaxed text-sky-900">
-                          <p className="font-semibold">💡 ¿Quieres probar si tu teléfono está bien configurado?</p>
-                          <p className="mt-1 text-sky-800/90">
-                            Abre la pestaña <strong>Simulador de Pedidos</strong> y activa un pedido de prueba: si suena la
-                            alerta con la app cerrada, todo está listo. Si no llega, revisa los pasos de tu plataforma arriba.
-                          </p>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Tab 1: Simulator */}
-                    {activeHelpTab === 'simulator' && (
-                      <div className="space-y-6 animate-fade-in">
-                        <div>
-                          <h3 className="text-lg font-bold text-neutral-950">Simulador de Pedidos Entrantes</h3>
-                          <p className="mt-1 text-sm text-neutral-500 leading-relaxed font-medium">
-                            Usa esta herramienta para entrenar a tu personal en el uso del sistema. Al activar cualquiera de los pedidos de prueba, se simulará un pedido real con alerta de sonido y pantalla de confirmación.
-                          </p>
-                        </div>
-
-                        <div className="grid gap-5 sm:grid-cols-3">
-                          {/* CASH CARD */}
-                          <div className="rounded-[28px] border border-black/5 bg-white p-5 flex flex-col justify-between hover:shadow-[0_12px_30px_rgba(0,0,0,0.04)] hover:border-black/10 transition-all duration-300">
-                            <div>
-                              <div className="flex items-center justify-between">
-                                <span className="inline-flex rounded-xl bg-emerald-50 px-2.5 py-1 text-[10px] font-bold text-emerald-700 border border-emerald-100">
-                                  Efectivo
-                                </span>
-                                <div className="h-8 w-8 rounded-xl bg-emerald-50/50 flex items-center justify-center">
-                                  <svg className="h-5 w-5 text-emerald-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8}>
-                                    <rect x="2" y="6" width="20" height="12" rx="2" />
-                                    <circle cx="12" cy="12" r="3" />
-                                    <path d="M6 12h.01M18 12h.01" />
-                                  </svg>
-                                </div>
-                              </div>
-                              <h4 className="mt-4 text-base font-bold text-neutral-950">Cobro en Caja</h4>
-                              <p className="mt-1.5 text-xs text-neutral-500 leading-relaxed font-medium">
-                                Ideal para entrenar al personal en el flujo de cobranza física, cambio de efectivo y entrega en mostrador.
-                              </p>
-                            </div>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                simulateIncomingOrder('CASH');
-                                setShowHelpModal(false);
-                              }}
-                              className="mt-6 w-full rounded-2xl bg-neutral-950 hover:bg-sky-600 hover:shadow-lg hover:shadow-sky-600/10 text-white py-3 text-xs font-bold transition-all duration-200 active:scale-[0.98]"
-                            >
-                              Simular Pedido
-                            </button>
-                          </div>
-
-                          {/* TRANSFER CARD */}
-                          <div className="rounded-[28px] border border-black/5 bg-white p-5 flex flex-col justify-between hover:shadow-[0_12px_30px_rgba(0,0,0,0.04)] hover:border-black/10 transition-all duration-300">
-                            <div>
-                              <div className="flex items-center justify-between">
-                                <span className="inline-flex rounded-xl bg-blue-50 px-2.5 py-1 text-[10px] font-bold text-blue-700 border border-blue-100">
-                                  Transferencia
-                                </span>
-                                <div className="h-8 w-8 rounded-xl bg-blue-50/50 flex items-center justify-center">
-                                  <svg className="h-5 w-5 text-blue-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8}>
-                                    <path d="M3 21h18M3 10h18M5 6l7-3 7 3M4 10v11M20 10v11M8 14v3M12 14v3M16 14v3" />
-                                  </svg>
-                                </div>
-                              </div>
-                              <h4 className="mt-4 text-base font-bold text-neutral-950">Pago Offline</h4>
-                              <p className="mt-1.5 text-xs text-neutral-500 leading-relaxed font-medium">
-                                Simula un pago offline por transferencia. Útil para practicar la validación de capturas de pantalla de bancos.
-                              </p>
-                            </div>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                simulateIncomingOrder('TRANSFER');
-                                setShowHelpModal(false);
-                              }}
-                              className="mt-6 w-full rounded-2xl bg-neutral-950 hover:bg-sky-600 hover:shadow-lg hover:shadow-sky-600/10 text-white py-3 text-xs font-bold transition-all duration-200 active:scale-[0.98]"
-                            >
-                              Simular Pedido
-                            </button>
-                          </div>
-
-                          {/* CREDIT CARD */}
-                          <div className="rounded-[28px] border border-black/5 bg-white p-5 flex flex-col justify-between hover:shadow-[0_12px_30px_rgba(0,0,0,0.04)] hover:border-black/10 transition-all duration-300">
-                            <div>
-                              <div className="flex items-center justify-between">
-                                <span className="inline-flex rounded-xl bg-purple-50 px-2.5 py-1 text-[10px] font-bold text-purple-700 border border-purple-100">
-                                  Tarjeta
-                                </span>
-                                <div className="h-8 w-8 rounded-xl bg-purple-50/50 flex items-center justify-center">
-                                  <svg className="h-5 w-5 text-purple-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8}>
-                                    <rect x="2" y="5" width="20" height="14" rx="2" />
-                                    <line x1="2" y1="10" x2="22" y2="10" />
-                                    <rect x="6" y="14" width="4" height="2" rx="0.5" />
-                                  </svg>
-                                </div>
-                              </div>
-                              <h4 className="mt-4 text-base font-bold text-neutral-950">Pasarela Digital</h4>
-                              <p className="mt-1.5 text-xs text-neutral-500 leading-relaxed font-medium">
-                                Simula el flujo automatizado con tarjetas de crédito/débito. Aprobación inmediata sin validaciones manuales.
-                              </p>
-                            </div>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                simulateIncomingOrder('CREDIT_CARD');
-                                setShowHelpModal(false);
-                              }}
-                              className="mt-6 w-full rounded-2xl bg-neutral-950 hover:bg-sky-600 hover:shadow-lg hover:shadow-sky-600/10 text-white py-3 text-xs font-bold transition-all duration-200 active:scale-[0.98]"
-                            >
-                              Simular Pedido
-                            </button>
-                          </div>
-                        </div>
-
-                        <div className="rounded-[24px] bg-amber-50/60 border border-amber-200/50 p-4 text-xs text-amber-900 leading-relaxed font-medium flex gap-3">
-                          <span className="text-base">💡</span>
-                          <div>
-                            <span className="font-bold block mb-0.5">Nota para capacitación:</span>
-                            Una vez detonado el pedido, la campana de alerta sonará indefinidamente hasta que el cajero haga clic en &quot;Aceptar Pedido&quot; o &quot;Rechazar Pedido&quot;. Es la manera perfecta de simular el estrés real de una cocina en horas pico.
-                          </div>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Tab 2: FAQs */}
-                    {activeHelpTab === 'faqs' && (
-                      <div className="space-y-6 animate-fade-in">
-                        <div>
-                          <h3 className="text-lg font-bold text-neutral-950">Resolución de Crisis Comunes</h3>
-                          <p className="mt-1 text-sm text-neutral-500 font-medium">
-                            Manuales de respuesta rápida para emergencias operativas dentro del restaurante.
-                          </p>
-                        </div>
-
-                        <div className="space-y-4">
-                          <details className="group border border-neutral-200/70 rounded-[24px] bg-white p-5 [&_summary::-webkit-details-marker]:hidden open:border-sky-200 open:shadow-[0_8px_24px_rgba(99,102,241,0.04)] transition-all duration-300">
-                            <summary className="flex cursor-pointer items-center justify-between font-bold text-neutral-800 hover:text-neutral-950 text-sm sm:text-base outline-none">
-                              <span className="flex items-center gap-3">
-                                <div className="h-7 w-7 rounded-lg bg-neutral-50 flex items-center justify-center group-open:bg-sky-50 group-open:text-sky-600 transition-colors">
-                                  <svg className="h-4.5 w-4.5 text-neutral-500 group-open:text-sky-600 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8}>
-                                    <path d="M12 20h.01M8.5 16.5a5 5 0 0 1 7 0M5 13a10 10 0 0 1 14 0M1.5 9.5a15 15 0 0 1 21 0" />
-                                  </svg>
-                                </div>
-                                ¿Qué hago si se cae el Internet en la cocina?
-                              </span>
-                              <span className="transition duration-300 group-open:rotate-180 shrink-0 ml-2">
-                                <ChevronUp className="h-4.5 w-4.5 text-neutral-400" />
-                              </span>
-                            </summary>
-                            <div className="mt-4 text-xs sm:text-sm text-neutral-600 leading-relaxed border-t border-neutral-100 pt-4 font-medium pl-10">
-                              Nuestra plataforma cuenta con tolerancia sin conexión. Si pierdes señal temporalmente, los pedidos en curso se mantendrán guardados localmente. Te recomendamos revisar el indicador de conexión (punto verde/rojo) en la parte superior. Si persisten los problemas, puedes abrir el portal desde un teléfono celular usando datos móviles para no perder ventas.
-                            </div>
-                          </details>
-
-                          <details className="group border border-neutral-200/70 rounded-[24px] bg-white p-5 [&_summary::-webkit-details-marker]:hidden open:border-sky-200 open:shadow-[0_8px_24px_rgba(99,102,241,0.04)] transition-all duration-300">
-                            <summary className="flex cursor-pointer items-center justify-between font-bold text-neutral-800 hover:text-neutral-950 text-sm sm:text-base outline-none">
-                              <span className="flex items-center gap-3">
-                                <div className="h-7 w-7 rounded-lg bg-neutral-50 flex items-center justify-center group-open:bg-sky-50 group-open:text-sky-600 transition-colors">
-                                  <svg className="h-4.5 w-4.5 text-neutral-500 group-open:text-sky-600 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8}>
-                                    <circle cx="5" cy="18" r="3" />
-                                    <circle cx="19" cy="18" r="3" />
-                                    <path d="M12 18h4m-8 0h4m2 0V11m0 0H8.5a2.5 2.5 0 0 1-2.5-2.5V7m6 4h3.5a2.5 2.5 0 0 0 2.5-2.5V7" />
-                                  </svg>
-                                </div>
-                                ¿Cómo procedo si el repartidor asignado se demora demasiado?
-                              </span>
-                              <span className="transition duration-300 group-open:rotate-180 shrink-0 ml-2">
-                                <ChevronUp className="h-4.5 w-4.5 text-neutral-400" />
-                              </span>
-                            </summary>
-                            <div className="mt-4 text-xs sm:text-sm text-neutral-600 leading-relaxed border-t border-neutral-100 pt-4 font-medium pl-10">
-                              Si el repartidor tarda en llegar por el pedido ya preparado, puedes ver los datos de contacto del repartidor directamente en el ticket del pedido. Si no responde, comunícate de inmediato con Soporte SaDeL desde la pestaña &quot;Soporte&quot; para reasignar otro repartidor y evitar que la comida se enfríe.
-                            </div>
-                          </details>
-
-                          <details className="group border border-neutral-200/70 rounded-[24px] bg-white p-5 [&_summary::-webkit-details-marker]:hidden open:border-sky-200 open:shadow-[0_8px_24px_rgba(99,102,241,0.04)] transition-all duration-300">
-                            <summary className="flex cursor-pointer items-center justify-between font-bold text-neutral-800 hover:text-neutral-950 text-sm sm:text-base outline-none">
-                              <span className="flex items-center gap-3">
-                                <div className="h-7 w-7 rounded-lg bg-neutral-50 flex items-center justify-center group-open:bg-sky-50 group-open:text-sky-600 transition-colors">
-                                  <svg className="h-4.5 w-4.5 text-neutral-500 group-open:text-sky-600 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8}>
-                                    <path d="M9 12h6m-6 4h6m2 5H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5.586a1 1 0 0 1 .707.293l5.414 5.414a1 1 0 0 1 .293.707V19a2 2 0 0 1-2 2z" />
-                                  </svg>
-                                </div>
-                                ¿Qué hago ante una disputa sobre especificaciones de un platillo?
-                              </span>
-                              <span className="transition duration-300 group-open:rotate-180 shrink-0 ml-2">
-                                <ChevronUp className="h-4.5 w-4.5 text-neutral-400" />
-                              </span>
-                            </summary>
-                            <div className="mt-4 text-xs sm:text-sm text-neutral-600 leading-relaxed border-t border-neutral-100 pt-4 font-medium pl-10">
-                              Siempre verifica el apartado de &quot;Instrucciones especiales&quot; y las notas del ticket antes de cocinar. Si un cliente reclama que un ingrediente no debió incluirse pero no lo especificó en sus notas de pedido, puedes contactar al cliente mediante el chat integrado del pedido en el portal para aclarar la situación de manera profesional.
-                            </div>
-                          </details>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Tab 3: Transfers */}
-                    {activeHelpTab === 'transfers' && (
-                      <div className="space-y-6 animate-fade-in">
-                        <div>
-                          <h3 className="text-lg font-bold text-neutral-950">Guía de Seguridad para Transferencias</h3>
-                          <p className="mt-1.5 text-sm text-neutral-500 leading-relaxed font-medium">
-                            Las transferencias electrónicas sin conexión (offline) son cómodas pero propensas a fraudes con comprobantes falsificados. Sigue este protocolo para proteger tu negocio.
-                          </p>
-                        </div>
-
-                        <div className="space-y-4">
-                          <div className="flex gap-4 p-5 rounded-[24px] border border-black/5 bg-white hover:border-sky-100 transition-all duration-300 shadow-[0_4px_12px_rgba(0,0,0,0.01)]">
-                            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-gradient-to-tr from-sky-600 to-blue-500 text-white text-sm font-bold shadow-md shadow-blue-500/10">
-                              1
-                            </div>
-                            <div>
-                              <h4 className="text-sm font-bold text-neutral-950">Inspecciona el Comprobante Visualmente</h4>
-                              <p className="mt-1 text-xs sm:text-sm text-neutral-600 leading-relaxed font-medium">
-                                Haz clic en <span className="font-semibold text-neutral-900">Ver comprobante</span> en el ticket del pedido. Revisa con cuidado:
-                              </p>
-                              <ul className="mt-2.5 list-disc list-inside text-xs text-neutral-500 space-y-1 pl-1 font-medium">
-                                <li>Fecha y hora exactas del movimiento bancario.</li>
-                                <li>El monto total transferido coincide exactamente con el ticket del pedido.</li>
-                                <li>No hay señales de edición fotográfica o tipografías extrañas en los números.</li>
-                              </ul>
-                            </div>
-                          </div>
-
-                          <div className="flex gap-4 p-5 rounded-[24px] border border-black/5 bg-white hover:border-sky-100 transition-all duration-300 shadow-[0_4px_12px_rgba(0,0,0,0.01)]">
-                            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-gradient-to-tr from-sky-600 to-blue-500 text-white text-sm font-bold shadow-md shadow-blue-500/10">
-                              2
-                            </div>
-                            <div>
-                              <h4 className="text-sm font-bold text-neutral-950">Confirma en tu Aplicación Bancaria (Firme)</h4>
-                              <p className="mt-1 text-xs sm:text-sm text-neutral-600 leading-relaxed font-medium">
-                                <span className="font-bold text-red-600">Paso obligatorio:</span> Abre la aplicación móvil del banco receptor del restaurante. Confirma que el abono se haya procesado como &quot;Saldo Disponible&quot; o dinero firme. Nunca confíes únicamente en la captura de pantalla que envía el cliente.
-                              </p>
-                            </div>
-                          </div>
-
-                          <div className="flex gap-4 p-5 rounded-[24px] border border-black/5 bg-white hover:border-sky-100 transition-all duration-300 shadow-[0_4px_12px_rgba(0,0,0,0.01)]">
-                            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-gradient-to-tr from-sky-600 to-blue-500 text-white text-sm font-bold shadow-md shadow-blue-500/10">
-                              3
-                            </div>
-                            <div>
-                              <h4 className="text-sm font-bold text-neutral-950">Transiciona el Estado del Pedido</h4>
-                              <p className="mt-1 text-xs sm:text-sm text-neutral-600 leading-relaxed font-medium">
-                                Solo después de comprobar el saldo real en tu cuenta, haz clic en <span className="font-semibold text-emerald-600">Aceptar y Registrar Pago</span> en el portal. Esto autoriza al repartidor a salir con la comida y garantiza que el cobro esté asegurado.
-                              </p>
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="rounded-[24px] border border-rose-200 bg-rose-50/40 p-4 text-xs text-rose-950 flex gap-3 font-medium leading-relaxed">
-                          <AlertTriangle className="h-5 w-5 text-rose-600 shrink-0 mt-0.5" />
-                          <div>
-                            <span className="font-bold block text-rose-900">Alerta de Fraude Común (Transferencias Programadas):</span>
-                            Muchos estafadores programan transferencias para el día siguiente, le toman captura, y después las cancelan antes de que se ejecuten. Siempre valida que el dinero esté realmente abonado y disponible en tu app bancaria antes de entregar el producto.
-                          </div>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Tab 4: Support */}
-                    {activeHelpTab === 'support' && (
-                      <div className="space-y-6 animate-fade-in">
-                        <div>
-                          <h3 className="text-lg font-bold text-neutral-950">Canales de Soporte Técnico</h3>
-                          <p className="mt-1 text-sm text-neutral-500 font-medium">
-                            ¿Tienes algún problema con el sistema o el servicio? Estamos listos para ayudarte.
-                          </p>
-                        </div>
-
-                        {/* WhatsApp CTA - Official Color and Brand Icon */}
-                        <div className="rounded-[28px] border border-[#25D366]/20 bg-[#25D366]/5 p-5 flex flex-col sm:flex-row items-center justify-between gap-4 shadow-[0_8px_30px_rgba(37,211,102,0.03)] transition-all duration-300">
-                          <div className="flex items-center gap-4">
-                            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#25D366] text-white shadow-lg shadow-[#25D366]/20 shrink-0">
-                              <svg className="h-6 w-6" fill="currentColor" viewBox="0 0 24 24">
-                                <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.955c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.549 4.142 1.594 5.945L.057 23.957l6.23-1.636a11.83 11.83 0 005.765 1.472h.004c6.555 0 11.89-5.335 11.893-11.893a11.815 11.815 0 00-3.414-8.358z"/>
-                              </svg>
-                            </div>
-                            <div>
-                              <h4 className="text-base font-bold text-neutral-950">Chat Directo con Soporte</h4>
-                              <p className="mt-0.5 text-xs text-neutral-500 leading-relaxed font-medium">
-                                Escríbenos directamente por WhatsApp. Tiempo promedio de respuesta: menos de 5 minutos.
-                              </p>
-                            </div>
-                          </div>
-                          <a
-                            href="https://wa.me/525512345678?text=Hola%20Soporte%20SaDeL%2C%20necesito%20ayuda%20con%20mi%20portal%20de%20restaurante."
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="shrink-0 rounded-2xl bg-[#25D366] hover:bg-[#20ba5a] active:scale-[0.98] text-white px-6 py-3.5 text-xs font-bold shadow-md shadow-[#25D366]/10 hover:shadow-[#25D366]/20 transition-all duration-200 text-center flex items-center justify-center gap-2"
-                          >
-                            Abrir WhatsApp
-                          </a>
-                        </div>
-
-                        {/* Columns Container */}
-                        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 border-t border-black/5 pt-6">
-                          
-                          {/* Left Column: Form */}
-                          <div className="lg:col-span-6 space-y-4">
-                            <div>
-                              <h4 className="text-sm font-bold text-neutral-950 uppercase tracking-wider">Reportar una Incidencia</h4>
-                              <p className="mt-1 text-xs text-neutral-500 font-medium">
-                                Envía un boleto de reporte. Nuestro equipo técnico lo resolverá en segundo plano y te contactará.
-                              </p>
-                            </div>
-
-                            <form
-                              onSubmit={(e) => {
-                                e.preventDefault();
-                                if (!supportSubject.trim() || !supportMessage.trim()) {
-                                  pushToast('error', 'Campos incompletos', 'Por favor llena todos los datos del reporte.');
-                                  return;
-                                }
-
-                                const newTicket = {
-                                  id: `ticket-local-${Date.now()}`,
-                                  category: supportCategory,
-                                  subject: supportSubject,
-                                  description: supportMessage,
-                                  status: 'PENDING',
-                                  createdAt: new Date().toISOString(),
-                                };
-
-                                try {
-                                  const stored = localStorage.getItem('local_restaurant_tickets');
-                                  const tickets = stored ? JSON.parse(stored) : [];
-                                  const updatedTickets = [newTicket, ...tickets];
-                                  localStorage.setItem('local_restaurant_tickets', JSON.stringify(updatedTickets));
-                                  setRestaurantTickets(updatedTickets);
-
-                                  pushToast('success', 'Reporte Registrado', 'Tu reporte ha sido enviado exitosamente. Un administrador lo revisará.');
-                                  setSupportSubject('');
-                                  setSupportMessage('');
-                                } catch (err) {
-                                  console.error('Error saving support ticket:', err);
-                                  pushToast('error', 'Error al enviar', 'No se pudo guardar tu reporte.');
-                                }
-                              }}
-                              className="space-y-4 text-left"
-                            >
-                              <div>
-                                <label className="text-[11px] font-bold uppercase tracking-widest text-neutral-400">
-                                  Categoría del Problema
-                                </label>
-                                <select
-                                  value={supportCategory}
-                                  onChange={(e) => setSupportCategory(e.target.value)}
-                                  className="mt-2 w-full rounded-2xl border border-black/5 bg-white px-4 py-3.5 text-sm font-medium text-neutral-900 transition-colors focus:border-neutral-950 focus:outline-none focus:ring-1 focus:ring-neutral-950"
-                                >
-                                  <option value="SYSTEM">Falla del Sistema o Portal</option>
-                                  <option value="DRIVER">Problema con Repartidor / Pedido</option>
-                                  <option value="BILLING">Dudas de Facturación o Cortes</option>
-                                  <option value="OTHER">Otro problema administrativo</option>
-                                </select>
-                              </div>
-
-                              <div>
-                                <label className="text-[11px] font-bold uppercase tracking-widest text-neutral-400">
-                                  Asunto del Reporte
-                                </label>
-                                <input
-                                  type="text"
-                                  value={supportSubject}
-                                  onChange={(e) => setSupportSubject(e.target.value)}
-                                  placeholder="Ej. El sonido de alertas no suena"
-                                  className="mt-2 w-full rounded-2xl border border-black/5 bg-white px-4 py-3.5 text-sm font-medium text-neutral-900 transition-colors focus:border-neutral-950 focus:outline-none focus:ring-1 focus:ring-neutral-950 placeholder:text-neutral-300"
-                                />
-                              </div>
-
-                              <div>
-                                <label className="text-[11px] font-bold uppercase tracking-widest text-neutral-400">
-                                  Descripción detallada
-                                </label>
-                                <textarea
-                                  rows={4}
-                                  value={supportMessage}
-                                  onChange={(e) => setSupportMessage(e.target.value)}
-                                  placeholder="Describe detalladamente qué ocurrió, qué estabas haciendo y cualquier error visible..."
-                                  className="mt-2 w-full rounded-2xl border border-black/5 bg-white px-4 py-3.5 text-sm font-medium text-neutral-900 transition-colors focus:border-neutral-950 focus:outline-none focus:ring-1 focus:ring-neutral-950 placeholder:text-neutral-300 resize-none"
-                                />
-                              </div>
-
-                              <div className="flex justify-end pt-2">
-                                  <button
-                                    type="submit"
-                                    className="w-full sm:w-auto rounded-2xl bg-neutral-950 hover:bg-neutral-800 active:scale-[0.98] text-white px-6 py-3.5 text-xs font-bold transition-all duration-300 shadow-md shadow-neutral-950/10"
-                                  >
-                                    Enviar Reporte de Falla
-                                  </button>
-                              </div>
-                            </form>
-                          </div>
-
-                          {/* Right Column: History */}
-                          <div className="lg:col-span-6 space-y-4">
-                            <div className="flex items-center justify-between">
-                              <div>
-                                <h4 className="text-sm font-bold text-neutral-950 uppercase tracking-wider">Mis Reportes</h4>
-                                <p className="mt-1 text-xs text-neutral-500 font-medium">
-                                  Historial de tus solicitudes de soporte.
-                                </p>
-                              </div>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  try {
-                                    const stored = localStorage.getItem('local_restaurant_tickets');
-                                    if (stored) setRestaurantTickets(JSON.parse(stored));
-                                  } catch (e) {
-                                    console.error(e);
-                                  }
-                                }}
-                                className="text-xs font-bold text-neutral-500 hover:text-neutral-950 transition-colors flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-black/5 bg-white hover:bg-neutral-50 shadow-sm"
-                              >
-                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
-                                  <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" />
-                                </svg>
-                                Actualizar
-                              </button>
-                            </div>
-
-                            {/* Ticket List */}
-                            <div className="space-y-3 max-h-[380px] overflow-y-auto pr-1 no-scrollbar">
-                              {restaurantTickets.length === 0 ? (
-                                <div className="border border-dashed border-black/10 rounded-2xl p-8 text-center bg-white/50">
-                                  <p className="text-sm text-neutral-400 font-semibold">No tienes reportes registrados.</p>
-                                  <p className="text-xs text-neutral-400 mt-1">Usa el formulario de la izquierda para enviar uno.</p>
-                                </div>
-                              ) : (
-                                restaurantTickets.map((ticket) => (
-                                  <div key={ticket.id} className="border border-black/5 rounded-2xl p-4 bg-white hover:shadow-[0_8px_24px_rgba(0,0,0,0.02)] transition-all duration-300">
-                                    <div className="flex items-center justify-between mb-3">
-                                      <div className="flex items-center gap-2.5">
-                                        <span className="text-lg">
-                                          {ticket.category === 'SYSTEM' ? '💻' :
-                                           ticket.category === 'DRIVER' ? '🛵' :
-                                           ticket.category === 'BILLING' ? '💵' : '📂'}
-                                        </span>
-                                        <div>
-                                          <p className="text-xs font-bold text-neutral-800">
-                                            {ticket.category === 'SYSTEM' ? 'Sistema / Portal' :
-                                             ticket.category === 'DRIVER' ? 'Repartidor / Pedido' :
-                                             ticket.category === 'BILLING' ? 'Facturación / Cortes' : 'Otro / Administrativo'}
-                                          </p>
-                                          <p className="text-[10px] font-semibold text-neutral-400">
-                                            {new Date(ticket.createdAt).toLocaleString()}
-                                          </p>
-                                        </div>
-                                      </div>
-                                      
-                                      <span className={`text-[10px] px-2.5 py-0.5 rounded-full font-bold tracking-wide uppercase ${
-                                        ticket.status === 'PENDING' ? 'bg-sky-50 text-sky-700 border border-sky-200/50' :
-                                        ticket.status === 'IN_PROGRESS' ? 'bg-blue-50 text-blue-700 border border-blue-200/50' :
-                                        'bg-emerald-50 text-emerald-700 border border-emerald-200/50'
-                                      }`}>
-                                        {ticket.status === 'PENDING' ? 'Pendiente' :
-                                         ticket.status === 'IN_PROGRESS' ? 'En Proceso' : 'Resuelto'}
-                                      </span>
-                                    </div>
-                                    
-                                    <div className="text-xs text-neutral-700 font-medium space-y-1">
-                                      <p><span className="text-neutral-400 font-bold uppercase tracking-wider text-[9px] mr-1">Asunto:</span> {ticket.subject}</p>
-                                      <p className="text-neutral-600 text-xs mt-1.5 whitespace-pre-wrap">{ticket.description}</p>
-                                    </div>
-
-                                    {ticket.response && (
-                                      <div className="mt-3 bg-emerald-50/50 border border-emerald-100/50 rounded-xl p-3">
-                                        <div className="flex items-center gap-1.5 mb-1 text-emerald-800 font-bold text-xs">
-                                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
-                                            <path strokeLinecap="round" strokeLinejoin="round" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
-                                          </svg>
-                                          <span>Respuesta del Soporte:</span>
-                                        </div>
-                                        <p className="text-xs text-emerald-700 font-medium leading-relaxed whitespace-pre-wrap">{ticket.response}</p>
-                                        {ticket.respondedAt && (
-                                          <p className="text-[9px] text-emerald-500 font-semibold mt-1">
-                                            Respondido el: {new Date(ticket.respondedAt).toLocaleString()}
-                                          </p>
-                                        )}
-                                      </div>
-                                    )}
-                                  </div>
-                                ))
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-
-                  </div>
-
-                </div>
-
-              </div>
-            </div>
-          ) : null}
         </div>
       )}
 
@@ -13354,63 +12410,9 @@ function Panel({
 }
 
 function RestaurantNavIcon({ kind }: { kind: RestaurantPortalSection }) {
-  if (kind === 'dashboard') {
-    return (
-      <svg className="h-5 w-5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-        <rect x="4" y="5" width="7" height="6" rx="1.5" strokeWidth={1.7} />
-        <rect x="13" y="5" width="7" height="6" rx="1.5" strokeWidth={1.7} />
-        <rect x="4" y="13" width="7" height="6" rx="1.5" strokeWidth={1.7} />
-        <rect x="13" y="13" width="7" height="6" rx="1.5" strokeWidth={1.7} />
-      </svg>
-    );
-  }
-
-  if (kind === 'orders') {
-    return (
-      <svg className="h-5 w-5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M7 7h10M7 12h10M7 17h6" />
-        <rect x="4" y="4" width="16" height="16" rx="4" strokeWidth={1.6} />
-      </svg>
-    );
-  }
-
-  if (kind === 'store') {
-    return (
-      <svg className="h-5 w-5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M4 10h16v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-8Z" />
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M5 10V7l2-3h10l2 3v3" />
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M9 14h6" />
-      </svg>
-    );
-  }
-
-
-
-  if (kind === 'settings') {
-    return (
-      <svg className="h-5 w-5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-        <circle cx="12" cy="12" r="3" strokeWidth={1.7} />
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
-      </svg>
-    );
-  }
-
-  return (
-    <svg className="h-5 w-5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M12 4v3m0 10v3m8-8h-3M7 12H4" />
-      <circle cx="12" cy="12" r="4" strokeWidth={1.7} />
-    </svg>
-  );
-}
-
-function HelpCircleIcon() {
-  return (
-    <svg className="h-5 w-5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-      <circle cx="12" cy="12" r="8" strokeWidth={1.7} />
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M9.75 9.5a2.25 2.25 0 1 1 3.52 1.85c-.9.62-1.27 1.05-1.27 1.9" />
-      <circle cx="12" cy="16.8" r=".8" fill="currentColor" stroke="none" />
-    </svg>
-  );
+  const icons = { dashboard: HomeIcon, orders: ClipboardList, drivers: Bike, store: Store, campaigns: Megaphone, 'menu-content': Layers, customers: Users, loyalty: Award, inperson: ShoppingBag, support: MessageSquareText, settings: Settings };
+  const Icon = icons[kind];
+  return <Icon className="h-5 w-5 shrink-0" strokeWidth={1.8} aria-hidden="true" />;
 }
 
 function OpenStorefrontIcon() {
@@ -13653,7 +12655,7 @@ function EditableNumberInput({
 
   function commit() {
     const parsed = text.trim() ? Number(text) : NaN;
-    let next = Number.isFinite(parsed) ? parsed : value;
+    let next = Number.isFinite(parsed) ? parsed : 0;
     if (integer) next = Math.trunc(next);
     if (min !== undefined && next < min) next = min;
     setText(String(next));
@@ -13666,14 +12668,22 @@ function EditableNumberInput({
       inputMode={integer ? 'numeric' : 'decimal'}
       aria-label={ariaLabel}
       value={text}
+      onFocus={(event) => {
+        // Si muestra 0, lo seleccionamos para que escribir lo reemplace al instante.
+        if (text === '0' || text === '0.0' || text === '0.00') event.target.select();
+      }}
       onChange={(event) => {
+        const raw = event.target.value;
         const next = integer
-          ? (/^\d*$/.test(event.target.value) ? event.target.value : null)
-          : decimalInput(event.target.value);
+          ? (/^\d*$/.test(raw) ? raw : null)
+          : decimalInput(raw);
         if (next === null) return;
+        // Permitimos borrar hasta dejar el campo vacío.
         setText(next);
-        const parsed = next.trim() ? Number(next) : NaN;
-        if (Number.isFinite(parsed) && (min === undefined || parsed >= min)) onCommit(parsed);
+        if (next.trim()) {
+          const parsed = Number(next);
+          if (Number.isFinite(parsed) && (min === undefined || parsed >= min)) onCommit(parsed);
+        }
       }}
       onBlur={commit}
       onKeyDown={(e) => {
@@ -14059,9 +13069,6 @@ function getRestaurantActions(
   }
 
   if (status === 'IN_TRANSIT') {
-    if (hasOwnDelivery) {
-      return ['delivered'];
-    }
     return [];
   }
 

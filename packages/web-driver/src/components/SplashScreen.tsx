@@ -61,7 +61,7 @@ export default function SplashScreen() {
       <SaDelLogo
         className="sadel-loader-logo animate-sadel-breathe select-none pointer-events-none h-[68px] w-auto"
       />
-      <p className="sadel-splash-title mt-4 text-lg font-bold tracking-[-0.02em] text-neutral-800">SaDeL</p>
+      <p className="sadel-splash-title mt-4 text-lg font-bold tracking-[-0.02em] text-neutral-800">WingsLab</p>
       <div className="sadel-splash-track mt-4 h-1 w-16 overflow-hidden rounded-full bg-neutral-200">
         <div className="sadel-splash-fill h-full w-full rounded-full bg-sky-500 animate-pulse" />
       </div>

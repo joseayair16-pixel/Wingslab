@@ -1,7 +1,29 @@
 'use client';
-import { Clock } from 'lucide-react';
+import { CalendarDays, Clock, Clock3, Copy, Pause, Play, Power, PackageCheck, ReceiptText, Users } from 'lucide-react';
 
 import React, { useEffect, useMemo, useState } from 'react';
+import { requestJson } from '@sadel/shared';
+
+function useRestaurantReport(apiBase: string, token: string, query: string) {
+  const [result, setResult] = useState<{ data: any; query: string; apiBase: string; token: string } | null>(null);
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [attempt, setAttempt] = useState(0);
+  useEffect(() => {
+    let active = true;
+    let timer: ReturnType<typeof setTimeout>;
+    setLoading(true); setError('');
+    const deadline = new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error('La consulta tardó demasiado. Comprueba tu conexión e intenta de nuevo.')), 12000); });
+    const request = requestJson<{ success: boolean; data: any }>({ apiBase, path: `/restaurant-panel/reportes?${query}`, token, timeoutMs: 10000, retry: { attempts: 0 }, fallbackMessage: 'No se pudo cargar el reporte.' });
+    void Promise.race([request, deadline]).then(result => {
+      if (!result?.data?.sales || !result.data.customers || !result.data.operations || !Array.isArray(result.data.topProducts) || !Array.isArray(result.data.promotions)) throw new Error('El reporte recibido está incompleto. Intenta de nuevo.');
+      if (active) setResult({ data: result.data, query, apiBase, token });
+    }).catch(reason => { if (active) setError(reason instanceof Error ? reason.message : 'No se pudo cargar el reporte.'); }).finally(() => { clearTimeout(timer); if (active) setLoading(false); });
+    return () => { active = false; clearTimeout(timer); };
+  }, [apiBase, token, query, attempt]);
+  const currentResult = result?.apiBase === apiBase && result.token === token ? result : null;
+  return { data: currentResult?.query === query ? currentResult.data : null, error, loading: loading || (!!currentResult && currentResult.query !== query && !error), retry: () => setAttempt(value => value + 1) };
+}
 
 interface DashboardSectionProps {
   apiBase: string;
@@ -57,637 +79,86 @@ export const DashboardSection = React.memo(function DashboardSection({
   getRestaurantCollectionAmount,   getCustomerOrigin, formatWeekday, formatCalendarDate,
   Panel,
 }: DashboardSectionProps) {
-  const [reportDays, setReportDays] = useState(30);
-  const [report, setReport] = useState<any>(null);
-  const [reportError, setReportError] = useState('');
-  useEffect(() => {
-    let active = true;
-    void fetch(`${apiBase}/restaurant-panel/reportes?days=${reportDays}`, { headers: { Authorization: `Bearer ${token}` } })
-      .then(async r => { const json = await r.json(); if (!r.ok) throw Error(json.error?.message || 'No se pudo cargar el reporte.'); return json.data; })
-      .then(value => { if (active) { setReport(value); setReportError(''); } })
-      .catch(error => { if (active) setReportError(error.message); });
-    return () => { active = false; };
-  }, [apiBase, token, reportDays]);
-  const ProfileBadge = React.useCallback(function ProfileBadge({ tone, label, detail }: { tone: string; label: string; detail: string }) {
-    const colorMap: Record<string, string> = {
-      amber: 'bg-amber-50 text-amber-800 border-amber-200/50',
-      violet: 'bg-violet-50 text-violet-800 border-violet-200/50',
-      sky: 'bg-sky-50 text-sky-800 border-sky-200/50',
-      emerald: 'bg-emerald-50 text-emerald-800 border-emerald-200/50',
-    };
-    return (
-      <div className={`inline-flex items-center gap-2 rounded-xl border px-3 py-1.5 text-xs font-semibold ${colorMap[tone] || 'bg-neutral-50 text-neutral-700 border-black/5'}`}>
-        <span>{label}</span>
-        <span className="opacity-70">·</span>
-        <span>{detail}</span>
-      </div>
-    );
-  }, []);
-  const todayKey = new Date().toDateString();
-  const todayOrders = useMemo(() => {
-    return orders.filter((order: any) => !order.id.startsWith('mock-order-') && new Date(order.createdAt).toDateString() === todayKey);
-  }, [orders]);
-
-  const activeOrders = useMemo(() => {
-    return orders.filter((order: any) =>
-      ['PENDING', 'CONFIRMED', 'PREPARING', 'READY', 'PICKED_UP', 'IN_TRANSIT'].includes(order.status)
-    );
-  }, [orders]);
-
-  const PENDING_WARN_MS = 3 * 60 * 1000;
-
-  const stalePendingOrders = useMemo(() => activeOrders.filter((o: any) => {
-    if (o.status !== 'PENDING') return false;
-    return (kitchenClockNow - new Date(o.createdAt).getTime()) > PENDING_WARN_MS;
-  }), [activeOrders, kitchenClockNow]);
-
-  const overdueKitchenOrders = useMemo(() => activeOrders.filter((o: any) => {
-    if (!['CONFIRMED', 'PREPARING'].includes(o.status)) return false;
-    if (profile?.businessType && profile.businessType !== 'RESTAURANT') {
-      if (!o.estimatedDeliveryTime) return false;
-      return new Date(o.estimatedDeliveryTime).getTime() <= kitchenClockNow;
-    }
-    const ms = getPreparationRemainingMs(o, kitchenClockNow);
-    return typeof ms === 'number' && ms <= 0;
-  }), [activeOrders, kitchenClockNow, profile, getPreparationRemainingMs]);
-
-  const wasAutoPausedByInactivity = !isBusinessOpen && profile?.statusChangedBy === 'SYSTEM_ORDER_TIMEOUT_INACTIVITY';
-
-  const projectedRevenue = useMemo(() => {
-    const today = new Date();
-    const currentYear = today.getFullYear();
-    const currentMonth = today.getMonth();
-    const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
-    const elapsedDays = today.getDate();
-
-    const monthOrders = orders.filter((o: any) => {
-      if (o.id.startsWith('mock-order-')) return false;
-      if (['CANCELLED', 'REJECTED'].includes(o.status)) return false;
-      const d = new Date(o.createdAt);
-      return d.getMonth() === currentMonth && d.getFullYear() === currentYear;
+  const [weekOffset, setWeekOffset] = useState(0);
+  const mexicoToday = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Mexico_City', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(kitchenClockNow));
+  const [selectedDate, setSelectedDate] = useState('');
+  const selectedDay = selectedDate || mexicoToday;
+  const { data: report, error: reportError, loading: reportLoading, retry: retryReport } = useRestaurantReport(apiBase, token, `weekOffset=${weekOffset}`);
+  const { data: today, error: todayError, loading: todayLoading, retry: retryToday } = useRestaurantReport(apiBase, token, `date=${selectedDay}`);
+  const weekOptions = useMemo(() => {
+    const anchor = new Date(`${mexicoToday}T12:00:00Z`);
+    anchor.setUTCDate(anchor.getUTCDate() - (anchor.getUTCDay() + 6) % 7);
+    const format = new Intl.DateTimeFormat('es-MX', { timeZone: 'UTC', day: 'numeric', month: 'short' });
+    return Array.from({ length: 7 }, (_, offset) => {
+      const start = new Date(anchor); start.setUTCDate(start.getUTCDate() - offset * 7);
+      const end = new Date(start); end.setUTCDate(end.getUTCDate() + 6);
+      return { offset, label: `${offset === 0 ? 'Esta semana' : offset === 1 ? 'Semana pasada' : `Hace ${offset} semanas`} · ${format.format(start)} – ${format.format(end)}` };
     });
-
-    if (monthOrders.length === 0) return 0;
-
-    const revenueSoFar = monthOrders.reduce((sum: number, order: any) => {
-      const isHelper = profile?.id ? order.supportRestaurantId === profile.id : false;
-      if (isHelper) return sum + order.deliveryFee;
-      const deliveredByRestaurant = order.deliveredByRestaurant ?? false;
-      const hasOwnDelivery = order.restaurant?.hasOwnDelivery ?? profile?.hasOwnDelivery;
-      if (deliveredByRestaurant || hasOwnDelivery) return sum + order.totalAmount;
-      return sum + (order.totalAmount - (order.deliveryFee || 0));
-    }, 0);
-
-    const dailyAvg = revenueSoFar / Math.max(elapsedDays, 1);
-
-    return Math.round(dailyAvg * daysInMonth * 100) / 100;
-  }, [orders, profile]);
-
-  const todayRevenue = useMemo(() => {
-    return todayOrders
-      .filter((order: any) => !['CANCELLED', 'REJECTED'].includes(order.status))
-      .reduce((sum: number, order: any) => {
-        const isHelper = profile?.id ? order.supportRestaurantId === profile.id : false;
-        if (isHelper) return sum + order.deliveryFee;
-        const deliveredByRestaurant = order.deliveredByRestaurant ?? false;
-        const hasOwnDelivery = order.restaurant?.hasOwnDelivery ?? profile?.hasOwnDelivery;
-        if (deliveredByRestaurant || hasOwnDelivery) return sum + order.totalAmount;
-        return sum + (order.totalAmount - (order.deliveryFee || 0));
-      }, 0);
-  }, [todayOrders, profile]);
-
-  const todayNetRevenue = useMemo(() => {
-    return todayOrders
-      .filter((order: any) => !['CANCELLED', 'REJECTED'].includes(order.status))
-      .reduce((sum: number, order: any) => {
-        const isHelper = profile?.id ? order.supportRestaurantId === profile.id : false;
-        let orderGross = 0;
-        if (isHelper) {
-          orderGross = order.deliveryFee;
-        } else {
-          const deliveredByRestaurant = order.deliveredByRestaurant ?? false;
-          const hasOwnDelivery = order.restaurant?.hasOwnDelivery ?? profile?.hasOwnDelivery;
-          if (deliveredByRestaurant || hasOwnDelivery) {
-            orderGross = order.totalAmount;
-          } else {
-            orderGross = order.totalAmount - (order.deliveryFee || 0);
-          }
-        }
-        return sum + (orderGross - (order.serviceFee ?? 0) - (order.platformFee ?? 0));
-      }, 0);
-  }, [todayOrders, profile]);
-
-  const availableProductsCount = useMemo(() => products.filter((p: any) => p.isAvailable).length, [products]);
-
-  const dashboardMetrics = useMemo(() => [
-    {
-      label: 'Ingresos hoy',
-      value: formatCurrency(revenueMode === 'gross' ? todayRevenue : todayNetRevenue),
-      hint: revenueMode === 'gross' ? 'Ingresos brutos' : 'Ganancia neta real',
-      tone: 'emerald', icon: 'revenue' as const, isRevenue: true,
-    },
-    {
-      label: 'Proyeccion mensual',
-      value: formatCurrency(projectedRevenue),
-      hint: 'Proyeccion mensual basada en el promedio diario del mes.',
-      tone: 'sky', icon: 'revenue' as const,
-    },
-    {
-      label: 'Ordenes activas',
-      value: String(activeOrders.length),
-      hint: `${todayOrders.length} pedidos el día de hoy.`,
-      tone: 'sky', icon: 'orders' as const,
-      deliveredCount: todayOrders.filter((o: any) => ['DELIVERED', 'PICKED_UP', 'COMPLETED'].includes(o.status)).length,
-      rejectedCount: todayOrders.filter((o: any) => ['REJECTED', 'CANCELLED'].includes(o.status)).length,
-    },
-    {
-      label: 'Ticket promedio',
-      value: formatCurrency(
-        todayOrders.filter((o: any) => !['CANCELLED', 'REJECTED'].includes(o.status)).length > 0
-          ? todayOrders.filter((o: any) => !['CANCELLED', 'REJECTED'].includes(o.status))
-              .reduce((s: number, o: any) => s + o.totalAmount, 0) /
-            todayOrders.filter((o: any) => !['CANCELLED', 'REJECTED'].includes(o.status)).length
-          : 0
-      ),
-      hint: `Con ${availableProductsCount} productos activos.`,
-      tone: 'sky', icon: 'catalog' as const,
-    },
-  ], [todayRevenue, todayNetRevenue, revenueMode, projectedRevenue, activeOrders.length, todayOrders, formatCurrency, availableProductsCount]);
-
-  const weeklySeries = useMemo(() => Array.from({ length: 7 }, (_, index) => {
-    const today = new Date();
-    const currentDay = today.getDay();
-    const distanceToMonday = currentDay === 0 ? 6 : currentDay - 1;
-    const date = new Date(today);
-    date.setHours(0, 0, 0, 0);
-    date.setDate(today.getDate() - distanceToMonday - (selectedWeekOffset * 7) + index);
-    const dayKey = date.toDateString();
-    const dayOrders = orders.filter((order: any) => !order.id.startsWith('mock-order-') && new Date(order.createdAt).toDateString() === dayKey);
-    const validOrders = dayOrders.filter((order: any) => !['CANCELLED', 'REJECTED'].includes(order.status));
-    const dayRevenue = validOrders.reduce((sum: number, order: any) => sum + getRestaurantCollectionAmount(order, profile), 0);
-    return {
-      label: formatWeekday(date),
-      dateLabel: formatCalendarDate(date),
-      orders: validOrders.length,
-      deliveredOrders: dayOrders.filter((o: any) => o.status === 'DELIVERED').length,
-      rejectedOrders: dayOrders.filter((o: any) => ['CANCELLED', 'REJECTED'].includes(o.status)).length,
-      revenue: dayRevenue,
-    };
-  }), [orders, selectedWeekOffset, profile, getRestaurantCollectionAmount, formatWeekday, formatCalendarDate]);
-
-  const weeklyMaxOrders = useMemo(() => Math.max(...weeklySeries.map((item: any) => item.orders), 1), [weeklySeries]);
-  const weeklyMaxRevenue = useMemo(() => Math.max(...weeklySeries.map((item: any) => item.revenue), 1), [weeklySeries]);
-
-  const chartWidth = 420;
-  const chartHeight = 170;
-  const chartPaddingX = 18;
-  const chartPaddingTop = 35;
-  const chartUsableWidth = chartWidth - chartPaddingX * 2;
-  const chartUsableHeight = chartHeight - chartPaddingTop - 26;
-
-  const weeklyOrderPoints = useMemo(() => weeklySeries.map((item: any, index: number) => {
-    const x = chartPaddingX + (weeklySeries.length === 1 ? chartUsableWidth / 2 : (index / (weeklySeries.length - 1)) * chartUsableWidth);
-    const y = chartPaddingTop + chartUsableHeight - (item.orders / weeklyMaxOrders) * chartUsableHeight;
-    return { x, y, ...item };
-  }), [weeklySeries, weeklyMaxOrders]);
-
-  const weeklyOrdersPolyline = useMemo(() => weeklyOrderPoints.map((p: any) => `${p.x},${p.y}`).join(' '), [weeklyOrderPoints]);
-  const weeklyOrdersArea = useMemo(() => [
-    `${weeklyOrderPoints[0]?.x ?? chartPaddingX},${chartHeight - 26}`,
-    ...weeklyOrderPoints.map((p: any) => `${p.x},${p.y}`),
-    `${weeklyOrderPoints[weeklyOrderPoints.length - 1]?.x ?? chartWidth - chartPaddingX},${chartHeight - 26}`,
-  ].join(' '), [weeklyOrderPoints]);
-
-  const weeklyRevenuePoints = useMemo(() => weeklySeries.map((item: any, index: number) => {
-    const x = chartPaddingX + (weeklySeries.length === 1 ? chartUsableWidth / 2 : (index / (weeklySeries.length - 1)) * chartUsableWidth);
-    const y = chartPaddingTop + chartUsableHeight - (item.revenue / weeklyMaxRevenue) * chartUsableHeight;
-    return { x, y, ...item };
-  }), [weeklySeries, weeklyMaxRevenue]);
-
-  const weeklyRevenuePolyline = useMemo(() => weeklyRevenuePoints.map((p: any) => `${p.x},${p.y}`).join(' '), [weeklyRevenuePoints]);
-  const weeklyRevenueArea = useMemo(() => [
-    `${weeklyRevenuePoints[0]?.x ?? chartPaddingX},${chartHeight - 26}`,
-    ...weeklyRevenuePoints.map((p: any) => `${p.x},${p.y}`),
-    `${weeklyRevenuePoints[weeklyRevenuePoints.length - 1]?.x ?? chartWidth - chartPaddingX},${chartHeight - 26}`,
-  ].join(' '), [weeklyRevenuePoints]);
-
-  const realOrders = useMemo(() => orders.filter((o: any) => !o.id.startsWith('mock-order-')), [orders]);
-  const deliveredOrdersCount = useMemo(() => realOrders.filter((o: any) => o.status === 'DELIVERED').length, [realOrders]);
-  const rejectedOrdersCount = useMemo(() => realOrders.filter((o: any) => o.status === 'REJECTED').length, [realOrders]);
-  const cancelledOrdersCount = useMemo(() => realOrders.filter((o: any) => o.status === 'CANCELLED').length, [realOrders]);
-  const completedOrdersCount = deliveredOrdersCount;
-  const unresolvedOrdersCount = useMemo(() => realOrders.filter((o: any) =>
-    ['PENDING', 'CONFIRMED', 'PREPARING', 'READY', 'PICKED_UP', 'IN_TRANSIT'].includes(o.status)
-  ).length, [realOrders]);
-  const totalResolvedOrders = completedOrdersCount + rejectedOrdersCount + cancelledOrdersCount;
-  const acceptedOrdersCount = useMemo(() => realOrders.filter((o: any) => o.status !== 'REJECTED').length, [realOrders]);
-  const acceptanceRate = realOrders.length > 0 ? Math.round((acceptedOrdersCount / realOrders.length) * 100) : 0;
-  const completionRate = totalResolvedOrders > 0 ? Math.round((completedOrdersCount / totalResolvedOrders) * 100) : 0;
-  const averageProductsPerOrder = useMemo(() => realOrders.length
-    ? (realOrders.reduce((sum: number, order: any) => sum + (order.items?.reduce((itemSum: number, item: any) => itemSum + item.quantity, 0) || 0), 0) / realOrders.length).toFixed(1)
-    : '0.0', [realOrders]);
-
-  const servicePerformanceCards = useMemo(() => [
-    {
-      label: 'Aceptacion',
-      value: `${acceptanceRate}%`,
-      description: `${rejectedOrdersCount} pedidos rechazados del total recibido.`,
-      tone: acceptanceRate >= 85 ? 'border-emerald-200 bg-emerald-50 text-emerald-800' : 'border-black/5 bg-neutral-50 text-neutral-700',
-    },
-    {
-      label: 'Entregas completadas',
-      value: `${completionRate}%`,
-      description: `${completedOrdersCount} entregadas frente a ${totalResolvedOrders} ya resueltas.`,
-      tone: 'border-black/5 bg-neutral-50 text-neutral-700',
-    },
-    {
-      label: 'Carga activa',
-      value: String(unresolvedOrdersCount),
-      description: 'Pedidos que siguen dentro del flujo operativo.',
-      tone: unresolvedOrdersCount > 0 ? 'border-sky-200 bg-sky-50 text-sky-800' : 'border-black/5 bg-neutral-50 text-neutral-700',
-    },
-    {
-      label: 'Tamano por orden',
-      value: averageProductsPerOrder,
-      description: 'Promedio de productos por pedido capturado.',
-      tone: 'border-black/5 bg-neutral-50 text-neutral-700',
-    },
-  ], [acceptanceRate, rejectedOrdersCount, completionRate, completedOrdersCount, totalResolvedOrders, unresolvedOrdersCount, averageProductsPerOrder]);
-
-  const hasAlerts = stalePendingOrders.length > 0 || overdueKitchenOrders.length > 0;
-
+  }, [mexicoToday]);
+  const dayLabel = useMemo(() => {
+    if (selectedDay === mexicoToday) return 'Hoy';
+    const yesterday = new Date(`${mexicoToday}T12:00:00Z`);
+    yesterday.setUTCDate(yesterday.getUTCDate() - 1);
+    if (selectedDay === yesterday.toISOString().slice(0, 10)) return 'Ayer';
+    return new Intl.DateTimeFormat('es-MX', { timeZone: 'UTC', day: 'numeric', month: 'short' }).format(new Date(`${selectedDay}T12:00:00Z`));
+  }, [selectedDay, mexicoToday]);
+  const activeOrders = useMemo(() => orders.filter(order => ['PENDING', 'CONFIRMED', 'PREPARING', 'READY', 'PICKED_UP', 'IN_TRANSIT'].includes(order.status)), [orders]);
+  const stalePendingOrders = useMemo(() => activeOrders.filter(order => order.status === 'PENDING' && kitchenClockNow - new Date(order.createdAt).getTime() > 180000), [activeOrders, kitchenClockNow]);
+  const overdueKitchenOrders = useMemo(() => activeOrders.filter(order => {
+    if (!['CONFIRMED', 'PREPARING'].includes(order.status)) return false;
+    if (profile?.businessType && profile.businessType !== 'RESTAURANT') return !!order.estimatedDeliveryTime && new Date(order.estimatedDeliveryTime).getTime() <= kitchenClockNow;
+    const remaining = getPreparationRemainingMs(order, kitchenClockNow);
+    return typeof remaining === 'number' && remaining <= 0;
+  }), [activeOrders, kitchenClockNow, profile, getPreparationRemainingMs]);
+  const wasAutoPausedByInactivity = !isBusinessOpen && profile?.statusChangedBy === 'SYSTEM_ORDER_TIMEOUT_INACTIVITY';
+  const columns = [
+    { title: 'Por aceptar', dotClass: 'bg-amber-400', orders: activeOrders.filter(order => order.status === 'PENDING'), emptyText: 'Sin pedidos pendientes' },
+    { title: 'En cocina', dotClass: 'bg-red-500', orders: activeOrders.filter(order => ['CONFIRMED', 'PREPARING'].includes(order.status)), emptyText: 'Sin pedidos en cocina', kitchenColumn: true },
+    { title: 'Despacho', dotClass: 'bg-emerald-500', orders: activeOrders.filter(order => ['READY', 'PICKED_UP', 'IN_TRANSIT'].includes(order.status)), emptyText: 'Sin pedidos en despacho', isDispatch: true },
+  ];
   return (
-    <div className="space-y-3 md:space-y-5">
-      <section className="rounded-2xl border border-orange-100 bg-white p-4 shadow-sm md:p-5" aria-labelledby="business-report-title">
-        <div className="flex flex-wrap items-center justify-between gap-3"><div><p className="text-xs font-bold uppercase tracking-widest text-orange-700">Resultados del negocio</p><h2 id="business-report-title" className="text-lg font-bold">Ventas y operación</h2></div><label className="text-sm font-medium">Periodo <select value={reportDays} onChange={e=>setReportDays(Number(e.target.value))} className="ml-2 rounded-lg border px-3 py-2"><option value={1}>Hoy</option><option value={7}>7 días</option><option value={30}>30 días</option><option value={90}>90 días</option></select></label></div>
-        {reportError&&<p role="alert" className="mt-3 text-sm text-red-700">{reportError}</p>}
-        {report&&<><div className="mt-4 grid grid-cols-2 gap-2 md:grid-cols-4"><div className="rounded-xl bg-emerald-50 p-3"><p className="text-xs text-emerald-800">Ventas netas completadas</p><b className="text-lg">{formatCurrency(report.sales.net)}</b></div><div className="rounded-xl bg-sky-50 p-3"><p className="text-xs text-sky-800">Ticket promedio</p><b className="text-lg">{formatCurrency(report.sales.averageTicket)}</b></div><div className="rounded-xl bg-amber-50 p-3"><p className="text-xs text-amber-800">En preparación / listos</p><b className="text-lg">{report.orders.preparing} / {report.orders.ready}</b></div><div className="rounded-xl bg-rose-50 p-3"><p className="text-xs text-rose-800">Cancelados</p><b className="text-lg">{report.orders.cancelled}</b></div></div><div className="mt-4 grid gap-4 lg:grid-cols-2"><div><h3 className="text-sm font-bold">Más vendidos</h3>{report.topProducts.length?report.topProducts.slice(0,5).map((p:any)=><div key={p.productId} className="mt-2 flex justify-between gap-2 text-sm"><span className="truncate">{p.name}</span><b>{p.units} uds.</b></div>):<p className="mt-2 text-sm text-neutral-500">Sin ventas completadas en este periodo.</p>}</div><div><h3 className="text-sm font-bold">Clientes y servicio</h3><p className="mt-2 text-sm">Compradores: <b>{report.customers.uniqueBuyers}</b> · recurrentes: <b>{report.customers.repeatBuyers}</b> · nuevos (primera compra WingsLab): <b>{report.customers.newBuyers}</b></p><p className="mt-1 text-sm">Preparación media: <b>{report.operations.averagePreparationMinutes===null?'—':`${report.operations.averagePreparationMinutes} min`}</b> · entrega media: <b>{report.operations.averageDeliveryMinutes===null?'—':`${report.operations.averageDeliveryMinutes} min`}</b></p><p className="mt-1 text-sm">Pedidos: {report.orders.pending} pendientes · {report.orders.inTransit} en reparto · {report.orders.delivered} entregados/recogidos</p></div></div>{report.promotions.length>0&&<div className="mt-4 border-t pt-3"><h3 className="text-sm font-bold">Uso de cupones completados</h3><div className="mt-2 flex flex-wrap gap-2">{report.promotions.slice(0,6).map((p:any)=><span key={p.code} className="rounded-full bg-violet-50 px-3 py-1 text-xs text-violet-900">{p.code}: {p.uses} usos · {formatCurrency(p.discount)}</span>)}</div></div>}</>}
+    <div className="wl-dashboard">
+      <section className="wl-dash-hero" aria-labelledby="wl-dashboard-title">
+        <div><p className="wl-dash-eyebrow">Panel del restaurante</p><h1 id="wl-dashboard-title">{restaurantName}</h1><div className="wl-dash-status"><span className={`wl-dash-status-dot ${profile?.status === 'ACTIVE' && isBusinessOpen && isWithinHours && !isBusinessPaused ? 'is-open' : ''}`} />{operationalStatusLabel}{profile?.autoOpenEnabled && <span className="wl-dash-auto">· Apertura automática</span>}</div></div>
+        {profile?.status === 'ACTIVE' && <div className="wl-dash-actions"><button type="button" onClick={async () => { const origin = getCustomerOrigin(); if (!origin) { onPushToast('error', 'No configurado', 'No hay una URL de tienda configurada.'); return; } try { await navigator.clipboard.writeText(`${origin}/restaurantes/${profile.id}`); onPushToast('success', 'Enlace copiado', 'El enlace de tu tienda se copió al portapapeles.'); } catch { onPushToast('error', 'Error', 'No se pudo copiar el enlace.'); } }}><Copy aria-hidden="true" /> Copiar enlace</button><button type="button" onClick={onTogglePause} disabled={updatingOperationalStatus || !isBusinessOpen}>{isBusinessPaused ? <Play aria-hidden="true" /> : <Pause aria-hidden="true" />} {isBusinessPaused ? 'Reanudar pedidos' : 'Pausar pedidos'}</button><button type="button" className="wl-dash-action-strong" onClick={onToggleOperational} disabled={updatingOperationalStatus}><Power aria-hidden="true" /> {isBusinessOpen ? 'Cerrar negocio' : 'Abrir negocio'}</button></div>}
       </section>
-      {wasAutoPausedByInactivity && (
-        <div className="flex flex-col gap-3 rounded-[20px] border border-sky-200 bg-gradient-to-r from-sky-50 to-blue-50/60 px-5 py-4 shadow-[0_4px_16px_rgba(14,165,233,0.08)] sm:flex-row sm:items-center">
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-sky-100 text-xl text-sky-600">☕</span>
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-bold text-sky-900">Hicimos una pausa en tu negocio</p>
-            <p className="mt-0.5 text-xs leading-relaxed text-sky-700">
-              Un pedido no se respondió a tiempo y se canceló automáticamente, así que nadie más tendrá que esperar mientras estás fuera. Cuando estés listo, vuelve a abrir tu negocio.
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={onToggleOperational}
-            disabled={updatingOperationalStatus}
-            className="shrink-0 rounded-full bg-sky-600 px-4 py-2.5 text-sm font-semibold text-white shadow-[0_4px_14px_rgba(14,165,233,0.35)] transition-all duration-200 hover:bg-sky-700 active:scale-95 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            🚀 Reabrir ahora
-          </button>
+      {wasAutoPausedByInactivity && <div className="wl-dash-alert"><div><strong>El negocio se cerró por inactividad</strong><p>Un pedido no se respondió a tiempo. Cuando estés listo, vuelve a abrir tu negocio.</p></div><button type="button" disabled={updatingOperationalStatus} onClick={onToggleOperational}>Reabrir negocio</button></div>}
+      {stalePendingOrders.length > 0 && <button type="button" className="wl-dash-alert wl-dash-alert-button" onClick={() => onSelectOrderForTicket(stalePendingOrders[0])}><span><strong>{stalePendingOrders.length === 1 ? '1 pedido lleva más de 3 min sin respuesta' : `${stalePendingOrders.length} pedidos llevan más de 3 min sin respuesta`}</strong><small>Selecciona para atenderlo</small></span><span aria-hidden="true">›</span></button>}
+      {overdueKitchenOrders.length > 0 && <button type="button" className="wl-dash-alert wl-dash-alert-button" onClick={() => onSelectOrderForEtaExtension(overdueKitchenOrders[0])}><span><strong>{overdueKitchenOrders.length === 1 ? '1 pedido excedió su tiempo de preparación' : `${overdueKitchenOrders.length} pedidos excedieron su tiempo de preparación`}</strong><small>Selecciona para ajustar el tiempo</small></span><span aria-hidden="true">›</span></button>}
+      <section className="wl-dash-panel wl-dash-today" aria-labelledby="wl-today-title">
+        <div className="wl-dash-panel-heading">
+          <div><p className="wl-dash-eyebrow">Resumen diario</p><h2 id="wl-today-title">Ventas del día</h2><p>Pedidos creados en la fecha elegida y completados · Ciudad de México.</p></div>
+          <div className="wl-dash-date-controls"><label className="wl-dash-period"><CalendarDays aria-hidden="true" /> <span>{dayLabel}</span><input type="date" value={selectedDay} max={mexicoToday} aria-label="Fecha del resumen" onChange={event => setSelectedDate(event.target.value)} /></label>{selectedDay !== mexicoToday && <button type="button" onClick={() => setSelectedDate('')}>Ver hoy</button>}</div>
         </div>
-      )}
-
-      {hasAlerts && (
-        <div className="flex flex-col gap-2">
-          {stalePendingOrders.length > 0 && (
-            <button type="button" onClick={() => onSelectOrderForTicket(stalePendingOrders[0])}
-              className="group flex w-full items-center gap-3 rounded-[20px] border border-rose-200 bg-gradient-to-r from-rose-50 to-rose-50/60 px-5 py-3.5 text-left shadow-[0_4px_16px_rgba(225,29,72,0.10)] transition-all duration-200 hover:border-rose-300 hover:shadow-[0_8px_24px_rgba(225,29,72,0.15)] hover:-translate-y-0.5"
-            >
-              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-rose-500 text-white shadow-[0_4px_10px_rgba(225,29,72,0.35)]">
-                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.2} d="M12 9v3m0 3h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" /></svg>
-              </span>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-bold text-rose-900">
-                  {stalePendingOrders.length === 1 ? '1 pedido lleva más de 3 min sin respuesta' : `${stalePendingOrders.length} pedidos llevan más de 3 min sin respuesta`}
-                </p>
-                <p className="text-xs text-rose-600 mt-0.5">Toca para atender · El cliente está esperando</p>
-              </div>
-              <span className="relative flex h-2.5 w-2.5 shrink-0">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75" />
-                <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-rose-500" />
-              </span>
-            </button>
-          )}
-          {overdueKitchenOrders.length > 0 && (
-            <button type="button" onClick={() => onSelectOrderForEtaExtension(overdueKitchenOrders[0])}
-              className="group flex w-full items-center gap-3 rounded-[20px] border border-orange-200 bg-gradient-to-r from-orange-50 to-amber-50/60 px-5 py-3.5 text-left shadow-[0_4px_16px_rgba(251,146,60,0.10)] transition-all duration-200 hover:border-orange-300 hover:shadow-[0_8px_24px_rgba(251,146,60,0.15)] hover:-translate-y-0.5"
-            >
-              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-orange-500 text-white shadow-[0_4px_10px_rgba(251,146,60,0.35)]">
-                <Clock className="h-4 w-4" strokeWidth={2.2} />
-              </span>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-bold text-orange-900">
-                  {overdueKitchenOrders.length === 1 ? '1 pedido en cocina ha excedido su tiempo' : `${overdueKitchenOrders.length} pedidos en cocina han excedido su tiempo`}
-                </p>
-                <p className="text-xs text-orange-600 mt-0.5">Toca para extender el tiempo estimado</p>
-              </div>
-              <span className="relative flex h-2.5 w-2.5 shrink-0">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-orange-400 opacity-75" />
-                <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-orange-500" />
-              </span>
-            </button>
-          )}
-        </div>
-      )}
-
-      <section className="relative overflow-hidden rounded-[28px] border border-black/5 bg-white p-5 shadow-[0_16px_50px_rgba(15,15,15,0.06)] backdrop-blur md:p-6">
-        <div className="pointer-events-none absolute inset-0">
-          <div className="absolute left-[-5%] top-[-20%] h-36 w-36 rounded-full bg-sky-200/35 blur-3xl" />
-          <div className="absolute right-[-4%] bottom-[-20%] h-32 w-48 rounded-full bg-blue-200/25 blur-3xl" />
-        </div>
-        <div className="relative flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-          <div className="min-w-0">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.28em] text-neutral-400">Panel de Control</p>
-            <h1 className="mt-1.5 truncate text-[1.9rem] font-semibold tracking-[-0.05em] text-neutral-950 md:text-[2.2rem]">{restaurantName}</h1>
-            <div className="mt-1.5 flex flex-wrap items-center gap-2">
-              <span className="inline-flex items-center gap-1 rounded-full border border-sky-200 bg-sky-50 px-2.5 py-1 text-xs font-semibold text-sky-700">
-                ⭐ {profile?.stats?.rating ? profile.stats.rating.toFixed(1) : 'Nuevo'}
-                {(profile?.stats?.reviewCount ?? 0) > 0 && <span className="font-normal text-amber-600">({profile?.stats?.reviewCount})</span>}
-              </span>
-              <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold ${
-                profile?.status === 'ACTIVE' && isBusinessOpen && isWithinHours
-                  ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
-                  : isBusinessPaused
-                  ? 'border-sky-200 bg-sky-50 text-sky-700'
-                  : 'border-neutral-200 bg-neutral-100 text-neutral-600'
-              }`}>
-                {profile?.status === 'ACTIVE' && isBusinessOpen && isWithinHours && (
-                  <span className="relative flex h-1.5 w-1.5">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-                    <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-600" />
-                  </span>
-                )}
-                {operationalStatusLabel}
-              </span>
-              {profile?.autoOpenEnabled && (
-                <span className="inline-flex items-center gap-1 rounded-full border border-sky-200 bg-sky-50 px-2.5 py-1 text-xs font-semibold text-sky-700" title="Tu negocio se abre solo a la hora de apertura de cada día.">
-                  <Clock className="h-3 w-3" />
-                  Apertura automática
-                </span>
-              )}
-              {activeOrders.length > 0 && (
-                <span className="inline-flex items-center gap-1 rounded-full border border-sky-200 bg-sky-50 px-2.5 py-1 text-xs font-semibold text-sky-700">
-                  <span className="relative flex h-1.5 w-1.5">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-sky-400 opacity-75" />
-                    <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-sky-600" />
-                  </span>
-                  {activeOrders.length} activa{activeOrders.length !== 1 ? 's' : ''}
-                </span>
-              )}
-              {profile && (
-                <button type="button" onClick={async () => {
-                  const origin = getCustomerOrigin();
-                  if (!origin) {
-                    onPushToast('error', 'No configurado', 'Define NEXT_PUBLIC_CUSTOMER_URL en las variables de entorno para compartir tu tienda.');
-                    return;
-                  }
-                  const url = `${origin}/restaurantes/${profile.id}`;
-                  try {
-                    await navigator.clipboard.writeText(url);
-                    onPushToast('success', 'Enlace copiado', 'El enlace de tu tienda se copió al portapapeles.');
-                  } catch {
-                    onPushToast('error', 'Error', 'No se pudo copiar el enlace. Intenta de nuevo.');
-                  }
-                }} className="inline-flex items-center gap-1 rounded-full border border-black/10 bg-white px-2.5 py-1 text-xs font-semibold text-neutral-500 shadow-sm transition hover:bg-neutral-50 hover:text-neutral-800 active:scale-95" title="Copiar enlace de tu tienda">
-                  <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><path d="M7.217 10.907a2.25 2.25 0 100 2.186m0-2.186c.18.324.283.696.283 1.093s-.103.77-.283 1.093m0-2.186l9.566-5.314m-9.566 7.5l9.566 5.314m0 0a2.25 2.25 0 103.935 2.186 2.25 2.25 0 00-3.935-2.186zm0-12.814a2.25 2.25 0 103.933-2.185 2.25 2.25 0 00-3.933 2.185z" /></svg>
-                  Copiar link
-                </button>
-              )}
-            </div>
-          </div>
-          {profile && profile?.status === 'ACTIVE' ? (
-            <div className="flex flex-col sm:flex-row shrink-0 items-stretch sm:items-center gap-2">
-              <button type="button" onClick={onTogglePause} disabled={updatingOperationalStatus || !isBusinessOpen}
-                className={`w-full sm:w-auto rounded-full px-4 py-2.5 text-sm font-semibold transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-50 ${
-                  isBusinessPaused
-                    ? 'bg-amber-500 text-white shadow-[0_4px_14px_rgba(245,158,11,0.35)] hover:bg-amber-600'
-                    : 'border border-neutral-200 bg-white text-neutral-700 hover:bg-neutral-50'
-                }`}
-              >
-                {isBusinessPaused ? '▶ Reanudar' : '⏸ Pausar'}
-              </button>
-              <button type="button" onClick={onToggleOperational} disabled={updatingOperationalStatus}
-                className={`w-full sm:w-auto rounded-full px-4 py-2.5 text-sm font-semibold transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-50 ${
-                  isBusinessOpen
-                    ? 'bg-neutral-950 text-white hover:bg-neutral-800'
-                    : 'bg-sky-600 text-white shadow-[0_4px_14px_rgba(14,165,233,0.4)] hover:bg-sky-700'
-                }`}
-              >
-                {isBusinessOpen ? 'Cerrar Negocio' : '🚀 Abrir Negocio'}
-              </button>
-            </div>
-          ) : profile === null ? (
-            <div className="flex flex-col sm:flex-row shrink-0 items-stretch sm:items-center gap-2">
-              <div className="w-full sm:w-[120px] h-[42px] rounded-full bg-neutral-100 animate-pulse" />
-              <div className="w-full sm:w-[150px] h-[42px] rounded-full bg-neutral-100 animate-pulse" />
-            </div>
-          ) : null}
-        </div>
-        <div className="relative mt-4 flex flex-wrap gap-2 border-t border-black/5 pt-4">
-          {drivers.length > 0 && (
-            <ProfileBadge tone="emerald" label="Repartidores" detail={`${drivers.length} disponible${drivers.length !== 1 ? 's' : ''}`} />
-          )}
-        </div>
+        {todayError ? <div className="wl-dash-report-error" role="alert"><span>{todayError}</span><button type="button" onClick={retryToday}>Reintentar</button></div> : !today || todayLoading ? <p role="status" className="wl-dash-report-state">Cargando ventas del día…</p> : <><div className="wl-dash-today-grid"><article><span>Importe vendido</span><strong>{formatCurrency(today.sales.net)}</strong></article><article><span>Pedidos completados</span><strong>{today.sales.completedOrders}</strong></article><article><span>Ticket promedio</span><strong>{formatCurrency(today.sales.averageTicket)}</strong></article></div><p className="wl-dash-today-note">Total de pedidos completados; no descuenta costos ni representa ganancia.</p></>}
       </section>
-
-      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        {dashboardMetrics.map((metric: any, index: number) => (
-          <article key={metric.label} style={{ animationDelay: `${index * 60}ms` }}
-            className="group relative overflow-hidden rounded-[24px] border border-black/5 bg-white p-4 md:p-5 shadow-[0_8px_30px_rgba(15,15,15,0.04)] transition-all duration-300 hover:shadow-[0_16px_40px_rgba(15,15,15,0.08)] hover:-translate-y-0.5"
-          >
-            <div className={`absolute left-0 top-0 h-full w-1 rounded-l-[24px] ${
-              metric.tone === 'amber' ? 'bg-amber-400' :
-              metric.tone === 'emerald' ? 'bg-sky-500' :
-              metric.tone === 'sky' ? 'bg-sky-400' : 'bg-neutral-300'
-            }`} />
-            <div className="pl-2">
-              <div className="flex items-start justify-between gap-3">
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center justify-between gap-2">
-                    <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-neutral-400">{metric.label}</p>
-                    {metric.isRevenue && (
-                      <div className="inline-flex rounded-lg p-0.5 bg-neutral-100/80 border border-black/5 text-[10px] font-bold">
-                        <button type="button" onClick={(e) => { e.stopPropagation(); onSetRevenueMode('gross'); }}
-                          className={`px-2 py-0.5 rounded-md transition ${revenueMode === 'gross' ? 'bg-white text-neutral-900 shadow-sm' : 'text-neutral-500 hover:text-neutral-900'}`}>Bruto</button>
-                        <button type="button" onClick={(e) => { e.stopPropagation(); onSetRevenueMode('net'); }}
-                          className={`px-2 py-0.5 rounded-md transition ${revenueMode === 'net' ? 'bg-white text-neutral-900 shadow-sm' : 'text-neutral-500 hover:text-neutral-900'}`}>Neto</button>
-                      </div>
-                    )}
-                  </div>
-                  <p className="mt-2 text-2xl md:text-3xl font-bold tracking-[-0.04em] text-neutral-950">{metric.value}</p>
-                  <p className="mt-1 text-xs text-neutral-500 leading-normal">{metric.hint}</p>
-                  {metric.icon === 'orders' && metric.deliveredCount !== undefined && metric.rejectedCount !== undefined && (
-                    <div className="mt-3.5 flex items-center gap-3.5 border-t border-black/[0.04] pt-3">
-                      <div className="group/stat flex items-center gap-2 transition-opacity hover:opacity-80" title="Pedidos entregados exitosamente">
-                        <div className="relative flex h-5 w-5 items-center justify-center rounded-full bg-emerald-50 ring-1 ring-emerald-500/20">
-                          <div className="h-2 w-2 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.4)]" />
-                        </div>
-                        <span className="text-[12px] font-black text-neutral-800 leading-none">{metric.deliveredCount}</span>
-                      </div>
-                      <div className="h-3 w-px bg-black/[0.06]" />
-                      <div className="group/stat flex items-center gap-2 transition-opacity hover:opacity-80" title="Pedidos rechazados o cancelados">
-                        <div className="relative flex h-5 w-5 items-center justify-center rounded-full bg-rose-50 ring-1 ring-rose-500/20">
-                          <div className="h-2 w-2 rounded-full bg-rose-500 shadow-[0_0_8px_rgba(244,63,94,0.4)]" />
-                        </div>
-                        <span className="text-[12px] font-black text-neutral-800 leading-none">{metric.rejectedCount}</span>
-                      </div>
-                    </div>
-                  )}
-                </div>
-                <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] ${
-                  metric.tone === 'amber' ? 'border-sky-200 bg-sky-50 text-sky-700' :
-                  metric.tone === 'emerald' ? 'border-sky-200 bg-sky-50 text-sky-700' :
-                  metric.tone === 'sky' ? 'border-sky-200 bg-sky-50 text-sky-700' :
-                  'border-neutral-200 bg-neutral-50 text-neutral-600'
-                }`}>
-                  <MetricGlyph kind={metric.icon} />
-                </div>
-              </div>
-            </div>
-          </article>
-        ))}
+      <section className="wl-dash-panel" aria-labelledby="wl-live-title"><div className="wl-dash-panel-heading"><div><p className="wl-dash-eyebrow">Operación en vivo</p><h2 id="wl-live-title">Pedidos en curso</h2><p>Consulta y atiende los pedidos de cada etapa.</p></div><span className="wl-dash-live">{activeOrders.length} {activeOrders.length === 1 ? 'pedido activo' : 'pedidos activos'}</span></div><div className="wl-dash-columns">{columns.map(column => <OrderColumn key={column.title} {...column} onSelectOrder={onSelectOrderForTicket} onSelectOrderChat={(order: any) => { onSetActiveTicketTab('chat'); onSelectOrderForTicket(order); }} onPrintTicket={onPrintTicket} isPrintingTicket={isPrintingTicket} unreadMessagesMap={unreadMessagesMap} formatCurrency={formatCurrency} formatDate={formatDate} profile={profile} getRestaurantCollectionAmount={getRestaurantCollectionAmount} kitchenClockNow={kitchenClockNow} onSelectOrderForEtaExtension={onSelectOrderForEtaExtension} getPreparationRemainingMs={getPreparationRemainingMs} isPreparationTimeUrgent={isPreparationTimeUrgent} />)}</div></section>
+      <section className="wl-dash-results" aria-labelledby="business-report-title">
+        <div className="wl-dash-panel wl-dash-sales"><div className="wl-dash-panel-heading"><div><p className="wl-dash-eyebrow">Resultados del negocio</p><h2 id="business-report-title">Resumen de ventas</h2><p>Pedidos creados en la semana y completados · Ciudad de México.</p></div><label className="wl-dash-period">Semana<select value={weekOffset} onChange={event => setWeekOffset(Number(event.target.value))}>{weekOptions.map(option => <option key={option.offset} value={option.offset}>{option.label}</option>)}</select></label></div>
+          {reportError && <div role="alert" className="wl-dash-report-error"><span>{reportError}{report ? ' Se muestran los datos del periodo anterior.' : ''}</span><button type="button" onClick={retryReport}>Reintentar</button></div>}
+          {report && <p role="status" className="wl-dash-updating">{reportLoading ? 'Actualizando resultados; se muestran los datos del periodo anterior…' : ''}</p>}
+          {!report ? !reportError && <p role="status" className="wl-dash-report-state">Cargando resultados…</p> : <div className="wl-dash-sales-layout" aria-busy={reportLoading}><div className="wl-dash-sales-total"><span>Ventas completadas</span><strong>{formatCurrency(report.sales.net)}</strong><small>Importe total de pedidos completados; no es ganancia neta.</small></div><SalesTrend points={report.salesTrend} formatCurrency={formatCurrency} /></div>}
+        </div>
+        <div className="wl-dash-panel wl-dash-stats-panel" aria-busy={reportLoading}>{!report ? <p className="wl-dash-report-state">{reportError ? 'No se pudieron cargar los indicadores.' : 'Cargando indicadores…'}</p> : <div className="wl-dash-metrics"><article><PackageCheck aria-hidden="true" /><span>Pedidos completados</span><strong>{report.sales.completedOrders}</strong><small>Entregados o recogidos</small></article><article><ReceiptText aria-hidden="true" /><span>Ticket promedio</span><strong>{formatCurrency(report.sales.averageTicket)}</strong><small>Por pedido completado</small></article><article><Users aria-hidden="true" /><span>Compradores</span><strong>{report.customers.uniqueBuyers}</strong><small>Clientes con compras completadas</small></article><article><Clock3 aria-hidden="true" /><span>Inicio de preparación</span><strong>{report.operations.averagePreparationMinutes === null ? '—' : `${report.operations.averagePreparationMinutes} min`}</strong><small>Tiempo promedio desde el pedido</small></article></div>}</div>
       </section>
-
-      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        {servicePerformanceCards.map((card: any) => (
-          <div key={card.label} className={`rounded-[22px] border p-4 ${card.tone}`}>
-            <p className="text-[10px] font-semibold uppercase tracking-[0.2em] opacity-70">{card.label}</p>
-            <p className="mt-2 text-2xl font-bold tracking-tight">{card.value}</p>
-            <p className="mt-1 text-[11px] leading-4 opacity-60">{card.description}</p>
-          </div>
-        ))}
-      </section>
-
-      <Panel title="Semana" subtitle="Ventas y pedidos" tone="violet">
-        <div className="mb-3 flex items-center justify-between gap-2">
-          <div className="flex rounded-xl border border-black/8 bg-neutral-100/70 p-0.5">
-            <button type="button" onClick={() => onSetDashboardChartView('revenue')}
-              className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-all ${dashboardChartView === 'revenue' ? 'bg-white shadow-sm text-sky-700' : 'text-neutral-500 hover:text-neutral-700'}`}>Ingresos</button>
-            <button type="button" onClick={() => onSetDashboardChartView('orders')}
-              className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-all ${dashboardChartView === 'orders' ? 'bg-white shadow-sm text-sky-700' : 'text-neutral-500 hover:text-neutral-700'}`}>Pedidos</button>
-          </div>
-          <select value={selectedWeekOffset} onChange={(e) => onSetSelectedWeekOffset(Number(e.target.value))}
-            className="rounded-lg border border-neutral-200 bg-white px-2 py-1.5 text-xs font-semibold text-neutral-700 focus:outline-none focus:ring-1 focus:ring-sky-500"
-          >
-            <option value={0}>Esta semana</option>
-            <option value={1}>Hace 1 semana</option>
-            <option value={2}>Hace 2 semanas</option>
-            <option value={3}>Hace 3 semanas</option>
-          </select>
-        </div>
-        <div className="mb-3 flex items-baseline gap-2 flex-wrap">
-          <span className="text-2xl font-bold tracking-tight text-neutral-950">
-            {dashboardChartView === 'revenue'
-              ? formatCurrency(weeklySeries.reduce((s: number, d: any) => s + d.revenue, 0))
-              : `${weeklySeries.reduce((s: number, d: any) => s + d.orders, 0)} ped.`}
-          </span>
-          <span className="text-xs text-neutral-400">
-            {selectedWeekOffset === 0 ? 'esta semana' : selectedWeekOffset === 1 ? 'semana pasada' : `hace ${selectedWeekOffset} semanas`}
-          </span>
-          {dashboardChartView === 'orders' && (
-            <div className="ml-auto flex items-center gap-2 text-xs font-medium">
-              <span className="text-emerald-700 bg-emerald-50 border border-emerald-100 px-2 py-0.5 rounded-md">
-                {weeklySeries.reduce((s: number, d: any) => s + d.deliveredOrders, 0)} Entregados
-              </span>
-              <span className="text-rose-700 bg-rose-50 border border-rose-100 px-2 py-0.5 rounded-md">
-                {weeklySeries.reduce((s: number, d: any) => s + d.rejectedOrders, 0)} Rechazados
-              </span>
-            </div>
-          )}
-        </div>
-        <div className="relative h-[185px] w-full">
-          <svg className="h-full w-full" viewBox={`0 0 ${chartWidth} ${chartHeight}`}>
-            <defs>
-              <linearGradient id="dashGrad" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="#0ea5e9" stopOpacity="0.22" />
-                <stop offset="100%" stopColor="#0ea5e9" stopOpacity="0" />
-              </linearGradient>
-            </defs>
-            {[0.25, 0.5, 0.75].map((frac) => (
-              <line key={frac} x1={chartPaddingX} x2={chartWidth - chartPaddingX}
-                y1={chartPaddingTop + chartUsableHeight * (1 - frac)}
-                y2={chartPaddingTop + chartUsableHeight * (1 - frac)}
-                stroke="#e5e5e5" strokeWidth="1" strokeDasharray="4 3" />
-            ))}
-            <polygon points={dashboardChartView === 'revenue' ? weeklyRevenueArea : weeklyOrdersArea} fill="url(#dashGrad)" />
-            <polyline points={dashboardChartView === 'revenue' ? weeklyRevenuePolyline : weeklyOrdersPolyline}
-              fill="none" stroke="#0284c7" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-            {(dashboardChartView === 'revenue' ? weeklyRevenuePoints : weeklyOrderPoints).map((point: any, index: number) => (
-              <g key={`${point.x}-${point.y}-${index}`}>
-                <circle cx={point.x} cy={point.y} r="4" fill="white" stroke="#7c3aed" strokeWidth="2" />
-                <text x={point.x} y={point.y - 9} textAnchor="middle" fontSize="8" fill="#0369a1" fontWeight="700">
-                  {dashboardChartView === 'revenue' ? formatCurrency(point.revenue) : `${point.orders}`}
-                </text>
-              </g>
-            ))}
-            {weeklySeries.map((item: any, index: number) => {
-              const x = chartPaddingX + (index / (weeklySeries.length - 1)) * chartUsableWidth;
-              return (
-                <text key={`${item.label}-${index}`} x={x} y={chartHeight - 5} textAnchor="middle" fontSize="10" fill="#a3a3a3">
-                  {item.label}
-                </text>
-              );
-            })}
-          </svg>
-        </div>
-      </Panel>
-
-      <Panel title={profile?.businessType !== 'RESTAURANT' ? 'Monitor de Pedidos' : 'Monitor de Ordenes en Vivo'}
-        subtitle={profile?.businessType !== 'RESTAURANT' ? 'Flujo de surtido y despacho' : 'Flujo de cocina y despacho'} tone="violet"
-      >
-        <div className="grid gap-3 md:grid-cols-3">
-          <OrderColumn
-            title={profile?.businessType !== 'RESTAURANT' ? 'Por Surtir' : 'Por Aceptar'}
-            dotClass="bg-amber-400"
-            orders={activeOrders.filter((o: any) => o.status === 'PENDING')}
-            emptyText="Sin pendientes"
-            onSelectOrder={onSelectOrderForTicket}
-            onSelectOrderChat={(order: any) => { onSetActiveTicketTab('chat'); onSelectOrderForTicket(order); }}
-            onPrintTicket={onPrintTicket}
-            isPrintingTicket={isPrintingTicket}
-            unreadMessagesMap={unreadMessagesMap}
-            formatCurrency={formatCurrency}
-            formatDate={formatDate}
-            profile={profile}
-            getRestaurantCollectionAmount={getRestaurantCollectionAmount}
-          />
-          <OrderColumn
-            title={profile?.businessType !== 'RESTAURANT' ? 'En Surtido' : 'En Cocina'}
-            dotClass="bg-sky-500 animate-pulse"
-            orders={activeOrders.filter((o: any) => ['CONFIRMED', 'PREPARING'].includes(o.status))}
-            emptyText="Sin ordenes en cocina"
-            onSelectOrder={onSelectOrderForTicket}
-            onSelectOrderChat={(order: any) => { onSetActiveTicketTab('chat'); onSelectOrderForTicket(order); }}
-            onPrintTicket={onPrintTicket}
-            isPrintingTicket={isPrintingTicket}
-            unreadMessagesMap={unreadMessagesMap}
-            formatCurrency={formatCurrency}
-            formatDate={formatDate}
-            profile={profile}
-            getRestaurantCollectionAmount={getRestaurantCollectionAmount}
-            kitchenColumn
-            kitchenClockNow={kitchenClockNow}
-            onSelectOrderForEtaExtension={onSelectOrderForEtaExtension}
-            getPreparationRemainingMs={getPreparationRemainingMs}
-            isPreparationTimeUrgent={isPreparationTimeUrgent}
-          />
-          <OrderColumn
-            title="Despacho"
-            dotClass="bg-emerald-400"
-            orders={activeOrders.filter((o: any) => ['READY', 'PICKED_UP', 'IN_TRANSIT'].includes(o.status))}
-            emptyText="Sin entregas"
-            onSelectOrder={onSelectOrderForTicket}
-            onSelectOrderChat={(order: any) => { onSetActiveTicketTab('chat'); onSelectOrderForTicket(order); }}
-            onPrintTicket={onPrintTicket}
-            isPrintingTicket={isPrintingTicket}
-            unreadMessagesMap={unreadMessagesMap}
-            formatCurrency={formatCurrency}
-            formatDate={formatDate}
-            profile={profile}
-            getRestaurantCollectionAmount={getRestaurantCollectionAmount}
-            isDispatch
-          />
-        </div>
-      </Panel>
+      {report && <div className="wl-dash-insight-panels"><section className="wl-dash-panel wl-dash-insight"><h2>Productos más vendidos</h2>{report.topProducts.length ? <ol>{report.topProducts.slice(0,5).map((product: any) => { const image = products.find((item: any) => item.id === product.productId)?.image; return <li key={product.productId}>{image ? <img src={image} alt="" loading="lazy" /> : <span className="wl-dash-product-placeholder" aria-hidden="true">◈</span>}<span>{product.name}</span><b>{product.units} uds.</b></li>; })}</ol> : <p>Aún no hay ventas completadas en este periodo.</p>}</section><section className="wl-dash-panel wl-dash-insight"><h2>Clientes y servicio</h2><dl><div><dt>Clientes nuevos</dt><dd>{report.customers.newBuyers}</dd></div><div><dt>Clientes recurrentes</dt><dd>{report.customers.repeatBuyers}</dd></div><div><dt>Tiempo hasta iniciar preparación</dt><dd>{report.operations.averagePreparationMinutes === null ? '—' : `${report.operations.averagePreparationMinutes} min`}</dd></div><div><dt>Tiempo de entrega</dt><dd>{report.operations.averageDeliveryMinutes === null ? '—' : `${report.operations.averageDeliveryMinutes} min`}</dd></div></dl></section></div>}
+      {report?.promotions.length > 0 && <details className="wl-dash-panel wl-dash-promotions"><summary>Cupones utilizados</summary><ul>{report.promotions.map((promo: any) => <li key={promo.code}><span>{promo.code} · {promo.uses} usos</span><b>{formatCurrency(promo.discount)}</b></li>)}</ul></details>}
     </div>
   );
 });
+
+type SalesTrendPoint = { from: string; to: string; sales: number; completedOrders: number };
+function SalesTrend({ points, formatCurrency }: { points?: SalesTrendPoint[]; formatCurrency: (amount: number) => string }) {
+  if (!Array.isArray(points) || !points.length) return <p className="wl-dash-chart-empty">La evolución de ventas no está disponible.</p>;
+  const max = Math.max(0, ...points.map(point => point.sales));
+  const floor = 116, top = 18, left = 20, width = 380;
+  const coordinates = points.map((point, index) => ({ ...point, x: left + (index / Math.max(1, points.length - 1)) * width, y: max > 0 ? floor - (point.sales / max) * (floor - top) : floor }));
+  const line = coordinates.map(point => `${point.x},${point.y}`).join(' ');
+  const area = `${left},${floor} ${line} ${left + width},${floor}`;
+  const shortDate = (value: string) => new Date(value).toLocaleDateString('es-MX', { day:'numeric', month:'short' });
+  const fullDate = (value: string) => new Date(value).toLocaleString('es-MX', { day:'numeric', month:'short', hour:'2-digit', minute:'2-digit' });
+  return <div className="wl-dash-chart"><div className="wl-dash-chart-top"><span>Evolución por intervalo</span><span>{max > 0 ? `Máximo ${formatCurrency(max)}` : 'Sin ventas en el periodo'}</span></div><svg viewBox="0 0 420 132" role="img" aria-label="Evolución de importes de pedidos completados por intervalo"><defs><linearGradient id="wl-dashboard-sales-gradient" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#f20d12" stopOpacity=".22" /><stop offset="100%" stopColor="#f20d12" stopOpacity="0" /></linearGradient></defs>{[18,51,83,116].map(y=><line key={y} x1={left} x2={left+width} y1={y} y2={y} className="wl-dash-chart-grid" />)}<polygon points={area} fill="url(#wl-dashboard-sales-gradient)" /><polyline points={line} fill="none" stroke="#e10b11" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />{coordinates.map((point,index)=><circle key={point.from} cx={point.x} cy={point.y} r="4" fill="#e10b11" stroke="var(--wl-admin-surface)" strokeWidth="2"><title>{`Intervalo ${index+1}: ${formatCurrency(point.sales)}`}</title></circle>)}</svg><div className="wl-dash-chart-labels"><span>{shortDate(points[0].from)}</span><span>{shortDate(points[points.length-1].to)}</span></div><details className="wl-dash-chart-details"><summary>Ver datos de la gráfica</summary><div className="wl-dash-chart-table" role="table" aria-label="Ventas por intervalo">{points.map(point=><div key={point.from} role="row"><span role="cell">{fullDate(point.from)} – {fullDate(point.to)}</span><b role="cell">{formatCurrency(point.sales)} · {point.completedOrders} pedidos</b></div>)}</div></details></div>;
+}
 
 function MetricGlyph({ kind }: { kind: string }) {
   if (kind === 'revenue') {
@@ -726,7 +197,7 @@ const OrderColumn = React.memo(function OrderColumn({
   isDispatch,
 }: any) {
   return (
-    <div className="rounded-[20px] border border-black/5 bg-neutral-50/80 p-3">
+    <div className="wl-dashboard-column rounded-[20px] border border-black/5 bg-neutral-50/80 p-3">
       <div className="mb-3 flex items-center justify-between">
         <div className="flex items-center gap-1.5">
           <span className={`h-2 w-2 rounded-full ${dotClass}`} />
@@ -736,8 +207,8 @@ const OrderColumn = React.memo(function OrderColumn({
       </div>
       <div className="space-y-2">
         {orders.map((order: any) => (
-          <div key={order.id} onClick={() => onSelectOrder(order)}
-            className="cursor-pointer rounded-xl border border-black/5 bg-white p-3 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-sky-200 hover:shadow-md"
+          <div key={order.id} onClick={() => onSelectOrder(order)} role="button" tabIndex={0} onKeyDown={(event) => { if (event.target === event.currentTarget && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); onSelectOrder(order); } }}
+            className="wl-dashboard-order relative cursor-pointer rounded-xl border border-black/5 bg-white p-3 shadow-sm transition-all duration-200"
           >
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-1.5">
@@ -781,7 +252,6 @@ const OrderColumn = React.memo(function OrderColumn({
                   </button>
                 )}
                 {!kitchenColumn && !isDispatch && <span className="text-[10px] font-bold text-sky-600">Ver →</span>}
-                {kitchenColumn && <span className="text-[11px] font-bold text-neutral-900 bg-neutral-100 px-2 py-0.5 rounded-md">{formatCurrency(getRestaurantCollectionAmount(order, profile))}</span>}
               </div>
             </div>
           </div>

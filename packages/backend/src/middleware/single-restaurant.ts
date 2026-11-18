@@ -4,11 +4,11 @@ import { assertRestaurantId, businessPrincipalAllowed, RESTAURANT_ID } from '../
 import { AppError } from '../errors/app-error';
 
 export function marketplaceRouteBlocked(path: string): boolean {
-  return /^\/(admin(?:\/|$)|driver(?:-panel)?(?:\/|$)|restaurant\/featured(?:\/|$))/.test(path) ||
+  return /^\/(admin(?:\/|$)|restaurant\/featured(?:\/|$))/.test(path) ||
     ['/restaurantes', '/store-categories', '/public/solicitudes', '/public/featured', '/public/ofertas',
-      '/public/billboards', '/public/promotions', '/public/zonas-activas', '/auth/admin-login', '/auth/driver-login'].includes(path) ||
-    /^\/restaurant-panel\/(?:repartidores|facturacion|soporte-red|pedidos-apoyo)(?:\/|$)/.test(path) ||
-    /\/(?:solicitar-apoyo|aceptar-apoyo|rechazar-apoyo|asignar-repartidor|buscar-repartidor|notificar-repartidores|handover)$/.test(path);
+      '/public/billboards', '/public/promotions', '/public/zonas-activas', '/auth/admin-login'].includes(path) ||
+    /^\/restaurant-panel\/(?:facturacion|soporte-red|pedidos-apoyo)(?:\/|$)/.test(path) ||
+    /\/(?:solicitar-apoyo|aceptar-apoyo|rechazar-apoyo|asignar-repartidor|buscar-repartidor|notificar-repartidores)$/.test(path);
 }
 
 export function registerSingleRestaurantBoundary(app: FastifyInstance): void {
@@ -18,11 +18,13 @@ export function registerSingleRestaurantBoundary(app: FastifyInstance): void {
     if (path.startsWith('/restaurantes/')) assertRestaurantId((request.params as any)?.id);
     // Check before any handler uses a relation identifier. Missing ID is allowed:
     // the authoritative identity comes from server configuration.
+    const allowOwnDriverAssignment = path.startsWith('/restaurant-panel/pedidos/') && path.endsWith('/repartidor');
     const visit = async (value: any): Promise<void> => {
       if (!value || typeof value !== 'object') return;
       if (Array.isArray(value)) { for (const item of value) await visit(item); return; }
       if ('restaurantId' in value) assertRestaurantId(value.restaurantId);
-      if (value.hasOwnDelivery === false || value.supportsNetworkDelivery === true || value.supportRestaurantId || value.driverId) {
+      if (value.hasOwnDelivery === false || value.supportsNetworkDelivery === true || value.supportRestaurantId ||
+          (value.driverId && !allowOwnDriverAssignment)) {
         throw new AppError(403, 'OWN_DELIVERY_REQUIRED', 'Solo se admite reparto propio de WingsLab.');
       }
       for (const [key, val] of Object.entries(value)) {

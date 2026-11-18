@@ -263,24 +263,13 @@ export default function DeliveryTicketPage({ params }: PageProps) {
     }
   };
 
-  // Oscuridad SOLO local de esta página (estilos propios vía darkMode).
-  // NO se toca la clase "dark" del <html>: el resto de la app debe
-  // respetar la decisión de sesión (siempre claro por defecto).
+  // Use the same persisted preference as the customer experience.
   useEffect(() => {
-    if (typeof window === 'undefined') return;
-
-    const mq = window.matchMedia('(prefers-color-scheme: dark)');
-    const apply = (isDark: boolean) => {
-      setDarkMode(isDark);
-    };
-
-    apply(mq.matches);
-    const handler = (e: MediaQueryListEvent) => apply(e.matches);
-    mq.addEventListener('change', handler);
-
-    return () => {
-      mq.removeEventListener('change', handler);
-    };
+    const apply = () => setDarkMode(document.documentElement.classList.contains('dark'));
+    apply();
+    const observer = new MutationObserver(apply);
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+    return () => observer.disconnect();
   }, []);
 
   // Cargar tickets de localStorage y sincronizar el token actual de la URL
@@ -1296,7 +1285,7 @@ export default function DeliveryTicketPage({ params }: PageProps) {
   // ──────────────────────────
   // Clases reutilizables
   // ──────────────────────────
-  const bg = darkMode ? 'bg-[#09090b]' : 'bg-[#f6f6f4]';
+  const bg = darkMode ? 'bg-[#09090b]' : 'bg-white';
   const textPrimary = darkMode ? 'text-zinc-50' : 'text-neutral-900';
   const textSecondary = darkMode ? 'text-zinc-400' : 'text-neutral-500';
   const textTertiary = darkMode ? 'text-zinc-500' : 'text-neutral-400';
@@ -1309,7 +1298,7 @@ export default function DeliveryTicketPage({ params }: PageProps) {
   // ──────────────────────────
   if (!isMounted || loading) {
     return (
-      <div className="flex min-h-[100dvh] flex-col items-center justify-center px-4 text-center bg-[#f6f6f4] text-neutral-900">
+      <div className="flex min-h-[100dvh] flex-col items-center justify-center px-4 text-center bg-white text-neutral-900 dark:bg-[#101012] dark:text-neutral-100">
         <div className="h-10 w-10 animate-spin rounded-full border-[3px] border-black/10 border-t-sky-400" />
         <p className="mt-4 text-xs font-semibold tracking-wide text-neutral-500">Cargando ruta de entrega…</p>
       </div>

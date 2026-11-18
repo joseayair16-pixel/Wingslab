@@ -19,16 +19,37 @@ test('lifetime order counts identify repeat buyers with one recent order in the 
   const r = buildRestaurantInsights([{ id: 'recent', customerId: 'returning', status: 'DELIVERED', totalAmount: 40, createdAt: now }], 30, now, { returning: 4 });
   expect(r.customers).toEqual({ uniqueBuyers: 1, newBuyers: 0, repeatBuyers: 1 });
 });
-test('campaign audience only counts subscribed active users in the selected segment', () => {
-  const customers: any[] = [
-    { createdAt: now, marketingConsent: true, orders: [{ createdAt: now }], pushSubscriptions: [{}], fcmTokens: [] },
-    { createdAt: now, marketingConsent: true, orders: Array.from({ length: 3 }, (_, i) => ({ createdAt: new Date(+now - i * 86400000) })), pushSubscriptions: [], fcmTokens: [{}] },
-    { createdAt: now, marketingConsent: true, orders: [{ createdAt: new Date(+now - 60 * 86400000) }], pushSubscriptions: [{}], fcmTokens: [] },
-    { createdAt: now, marketingConsent: false, orders: [{ createdAt: now }], pushSubscriptions: [{}], fcmTokens: [{}] },
+test.each([1, 7, 30, 90])('sales trend uses completed orders and exact %i-day interval boundaries', days => {
+  const start = +now - days * 86400000;
+  const orders: any[] = [
+    { id:'first', customerId:'a', status:'DELIVERED', totalAmount:120.25, createdAt:new Date(start) },
+    { id:'last', customerId:'b', status:'COMPLETED', totalAmount:80.5, createdAt:now },
+    { id:'pending', customerId:'c', status:'PENDING', totalAmount:500, createdAt:now },
+    { id:'cancelled', customerId:'d', status:'CANCELLED', totalAmount:300, createdAt:now },
   ];
-  expect(filterCampaignAudience(customers, 'subscribed', now)).toHaveLength(3);
-  expect(filterCampaignAudience(customers, 'new', now)).toHaveLength(1);
+  const result = buildRestaurantInsights(orders, days, now);
+  expect(result.salesTrend[0]).toMatchObject({ from:new Date(start).toISOString(), sales:120.25, completedOrders:1 });
+  expect(result.salesTrend[result.salesTrend.length-1]).toMatchObject({ to:now.toISOString(), sales:80.5, completedOrders:1 });
+  expect(result.salesTrend.reduce((sum, bucket) => sum + bucket.sales, 0)).toBe(result.sales.net);
+  expect(result.salesTrend.reduce((sum, bucket) => sum + bucket.completedOrders, 0)).toBe(result.sales.completedOrders);
+});
+test('today report uses its supplied local-day start instead of a rolling 24 hours', () => {
+  const start = new Date('2026-11-01T06:00:00Z');
+  const orders: any[] = [{ id:'1', customerId:'a', status:'DELIVERED', totalAmount:50, createdAt:new Date('2026-11-01T07:00:00Z') }];
+  const report = buildRestaurantInsights(orders, 1, now, {}, start);
+  expect(report.period.from).toBe(start.toISOString());
+  expect(report.salesTrend.reduce((sum, bucket) => sum + bucket.sales, 0)).toBe(50);
+});
+test('campaign audience requires accepted notifications and respects segments', () => {
+  const customers: any[] = [
+    { createdAt: now, orders: [{ createdAt: now }], pushSubscriptions: [{}], fcmTokens: [] },
+    { createdAt: now, orders: Array.from({ length: 3 }, (_, i) => ({ createdAt: new Date(+now - i * 86400000) })), pushSubscriptions: [], fcmTokens: [{}] },
+    { createdAt: now, orders: [{ createdAt: new Date(+now - 60 * 86400000) }], pushSubscriptions: [{}], fcmTokens: [] },
+    { createdAt: now, orders: [{ createdAt: now }], pushSubscriptions: [{}], fcmTokens: [{}] },
+    { createdAt: now, orders: [{ createdAt: now }], pushSubscriptions: [], fcmTokens: [] },
+  ];
+  expect(filterCampaignAudience(customers, 'subscribed', now)).toHaveLength(4);
+  expect(filterCampaignAudience(customers, 'new', now)).toHaveLength(2);
   expect(filterCampaignAudience(customers, 'frequent', now)).toHaveLength(1);
   expect(filterCampaignAudience(customers, 'inactive', now)).toHaveLength(1);
-  expect(filterCampaignAudience(customers.map((customer, index) => index === 0 ? { ...customer, marketingConsent: false } : customer), 'subscribed', now)).toHaveLength(2);
 });

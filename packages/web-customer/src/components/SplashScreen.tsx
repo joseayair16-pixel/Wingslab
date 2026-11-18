@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { WingsLabLogo as SaDelLogo } from './WingsLabLogo';
+import redWordmark from '../assets/wingslab-wordmark-red.png';
 
 type Phase = 'visible' | 'fading' | 'gone';
 
@@ -74,7 +74,9 @@ export default function SplashScreen() {
       }`}
     >
       <div ref={logoWrapRef} className="w-auto">
-        <SaDelLogo
+        <img
+          src={redWordmark.src}
+          alt="WingsLab"
           className="sadel-loader-logo animate-sadel-breathe select-none pointer-events-none h-[68px] w-auto"
         />
       </div>
@@ -82,7 +84,7 @@ export default function SplashScreen() {
         className="sadel-splash-track mt-4 h-1 overflow-hidden rounded-full bg-neutral-200"
         style={barWidth ? { width: barWidth } : undefined}
       >
-        <div className="sadel-splash-fill h-full w-full rounded-full bg-sky-500 animate-pulse" />
+        <div className="sadel-splash-fill h-full w-full rounded-full bg-[#e10b11] animate-pulse" />
       </div>
     </div>
   );

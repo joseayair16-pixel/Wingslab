@@ -38,9 +38,20 @@ test('identity verification fails closed; only the configured restaurant owner i
   await expect(assertBusinessIdentity(db)).resolves.toBeUndefined();
   await expect(businessPrincipalAllowed(db, { sub: 'owner', role: 'RESTAURANT' })).resolves.toBe(true);
   await expect(businessPrincipalAllowed(db, { sub: 'other-owner', role: 'RESTAURANT' })).resolves.toBe(false);
-  for (const role of ['ADMIN', 'DRIVER']) await expect(businessPrincipalAllowed(db, { sub: 'owner', role })).resolves.toBe(false);
+  for (const role of ['ADMIN']) await expect(businessPrincipalAllowed(db, { sub: 'owner', role })).resolves.toBe(false);
+  db.driver = { findFirst: jest.fn().mockResolvedValue({ status: 'ACTIVE', user: { status: 'ACTIVE' } }) };
+  await expect(businessPrincipalAllowed(db, { sub: 'driver', role: 'DRIVER' })).resolves.toBe(true);
+  expect(db.driver.findFirst).toHaveBeenCalledWith({
+    where: { userId: 'driver', restaurantId: RESTAURANT_ID },
+    select: { status: true, user: { select: { status: true } } },
+  });
+  db.driver.findFirst.mockResolvedValue({ status: 'INACTIVE' });
+  await expect(businessPrincipalAllowed(db, { sub: 'inactive-driver', role: 'DRIVER' })).resolves.toBe(false);
+  db.driver.findFirst.mockResolvedValue({ status: 'ACTIVE', user: { status: 'SUSPENDED' } });
+  await expect(businessPrincipalAllowed(db, { sub: 'suspended-user', role: 'DRIVER' })).resolves.toBe(false);
 });
-test.each(['/restaurantes', '/admin/restaurantes', '/auth/driver-login', '/public/solicitudes', '/restaurant/featured/packages', '/restaurant-panel/pedidos-apoyo', '/restaurant-panel/repartidores/disponibles', '/restaurant-panel/pedidos/123/solicitar-apoyo'])('marketplace route disabled: %s', path => expect(marketplaceRouteBlocked(path)).toBe(true));
+test.each(['/restaurantes', '/admin/restaurantes', '/public/solicitudes', '/restaurant/featured/packages', '/restaurant-panel/pedidos-apoyo', '/restaurant-panel/pedidos/123/solicitar-apoyo'])('marketplace route disabled: %s', path => expect(marketplaceRouteBlocked(path)).toBe(true));
+test.each(['/auth/driver-login', '/driver-panel/perfil', '/restaurant-panel/repartidores', '/restaurant-panel/pedidos/123/handover'])('WingsLab own-driver route is not blocked: %s', path => expect(marketplaceRouteBlocked(path)).toBe(false));
 
 describe('HTTP boundary rejects tampering before handlers can write', () => {
   const app = Fastify();
@@ -51,6 +62,7 @@ describe('HTTP boundary rejects tampering before handlers can write', () => {
     app.setErrorHandler(errorHandler);
     app.post('/pedidos', handler);
     app.patch('/restaurant-panel/perfil', handler);
+    app.post('/restaurant-panel/pedidos/:id/repartidor', handler);
     app.get('/restaurantes/:id', handler);
     app.get('/admin/restaurantes', handler);
     app.get('/menu', handler);
@@ -72,6 +84,11 @@ describe('HTTP boundary rejects tampering before handlers can write', () => {
   ])('$method $url is denied', async ({ status, ...request }) => {
     const response = await app.inject(request as any);
     expect(response.statusCode).toBe(status); expect(handler).not.toHaveBeenCalled();
+  });
+  test('an own-driver assignment may carry a driverId to the ownership-checking service', async () => {
+    const response = await app.inject({ method: 'POST', url: '/restaurant-panel/pedidos/order-1/repartidor', payload: { driverId: 'driver-id' } });
+    expect(response.statusCode).toBe(200);
+    expect(handler).toHaveBeenCalledTimes(1);
   });
   test('a valid JWT of another restaurant cannot enter the panel', async () => {
     const token = app.jwt.sign({ sub: 'other-owner', role: 'RESTAURANT' });

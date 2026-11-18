@@ -173,14 +173,15 @@ export function play(name: SoundName, options?: { loop?: boolean }): PlayResult 
   const loop = options?.loop ?? false;
   if (!isBrowser()) return 'unsupported';
 
-  // Antes del primer gesto, Chromium (Chrome/PWA) bloquea el audio y no se
-  // intenta resume(): de lo contrario Chrome avisa en consola. Pero si el
-  // AudioContext ya está 'running', el entorno permite autoplay sin gesto
-  // (ej. WebView Capacitor con setMediaPlaybackRequiresUserGesture(false));
-  // en ese caso sí se reproduce para que la alarma suene en bucle.
-  const ctx = getOrCreateContext();
+  // Antes del primer gesto no se crea el AudioContext: crear uno 'suspended'
+  // provoca el aviso de Chrome en consola. Solo se reutiliza un contexto ya
+  // existente y en marcha (por ejemplo, un WebView con autoplay permitido).
+  if (!hasInteracted && (!audioContext || audioContext.state !== 'running')) {
+    return 'blocked';
+  }
 
-  if (!hasInteracted && (!ctx || ctx.state === 'suspended')) {
+  const ctx = getOrCreateContext();
+  if (!ctx || (!hasInteracted && ctx.state !== 'running')) {
     return 'blocked';
   }
 
