@@ -90,7 +90,8 @@ export function MenuPromotions({ apiBase, token, viewerId, allowModal }: {
       {banners.length ? <>
         <div ref={bannerTrack} className="wl-banner-track" tabIndex={0} aria-label="Banners promocionales, desliza para explorar" onPointerDown={() => { bannerPauseUntil.current = Date.now() + 13000; }} onScroll={event => { const track = event.currentTarget; setIndex(Math.round(track.scrollLeft / track.clientWidth)); }}>
           {banners.map((item, position) => <div key={item.id} className="wl-banner-slide" role="group" aria-roledescription="diapositiva" aria-label={`${position + 1} de ${banners.length}`}>
-            {safePath(item.targetUrl) ? <a href={item.targetUrl} aria-label={item.buttonLabel || item.title}><BannerImage src={image(item)} alt={item.title} eager={position === 0} />{item.buttonLabel && <span className="wl-banner-cta">{item.buttonLabel}<span aria-hidden="true">›</span></span>}</a> : <BannerImage src={image(item)} alt={item.title} eager={position === 0} />}
+            {/* Las imágenes promocionales son solo imágenes: sin enlaces ni botones. */}
+            <BannerImage src={image(item)} alt={item.title} eager={position === 0} />
           </div>)}
         </div>
         <div className="wl-banner-dots" aria-label="Elegir promoción">{banners.map((item, position) => <button key={item.id} type="button" aria-label={`Ver promoción ${position + 1}`} aria-current={index === position ? 'true' : undefined} onClick={() => bannerTrack.current?.scrollTo({ left: position * bannerTrack.current.clientWidth, behavior: 'smooth' })}><span /></button>)}</div>

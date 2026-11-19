@@ -25,7 +25,7 @@ function assertNoLegacyEnvFiles() {
 function assertLocalAuthorization(env = process.env) {
   assertNoLegacyEnvFiles();
   if (Object.keys(env).some(key =>
-    /^(FIREBASE_.*|GOOGLE_APPLICATION_CREDENTIALS|VAPID_.*|WHATSAPP_.*|SMS_.*|SMTP_.*|RESEND_.*|R2_.*|AWS_.*|CF_.*|PAYMENT_GATEWAY_.*|NEXT_PUBLIC_GOOGLE_MAPS_API_KEY)$/.test(key) && env[key])) {
+    /^(FIREBASE_.*|GOOGLE_APPLICATION_CREDENTIALS|VAPID_.*|WHATSAPP_.*|SMS_.*|SMTP_.*|RESEND_.*|AWS_.*|CF_.*|PAYMENT_GATEWAY_.*|NEXT_PUBLIC_GOOGLE_MAPS_API_KEY)$/.test(key) && env[key])) {
     throw new Error('[WingsLab] External service configuration is prohibited in Phase 1. Use a clean environment.');
   }
   if (env.WINGSLAB_ENVIRONMENT !== 'local' || env.WINGSLAB_RUNTIME_AUTHORIZED !== 'reviewed-phase-2b' ||
@@ -53,7 +53,7 @@ function frontendConfig(role) {
     async headers() {
       return [{ source: '/:path*', headers: [{
         key: 'Content-Security-Policy',
-        value: `default-src 'self'; connect-src 'self' ${api} ${socket.replace('http:', 'ws:')} https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://www.googleapis.com https://www.google.com https://www.recaptcha.net; img-src 'self' data: blob: ${api} https://www.gstatic.com https://www.google.com; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.gstatic.com https://www.google.com https://www.recaptcha.net; style-src 'self' 'unsafe-inline'; font-src 'self' data:; media-src 'self' blob:; worker-src 'self' blob:; frame-src https://www.google.com https://www.recaptcha.net; object-src 'none'; base-uri 'self'; form-action 'self'`,
+        value: `default-src 'self'; connect-src 'self' ${api} ${socket.replace('http:', 'ws:')} https://res.cloudinary.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://www.googleapis.com https://www.google.com https://www.recaptcha.net; img-src 'self' data: blob: ${api} https://res.cloudinary.com https://www.gstatic.com https://www.google.com; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.gstatic.com https://www.google.com https://www.recaptcha.net; style-src 'self' 'unsafe-inline'; font-src 'self' data:; media-src 'self' blob:; worker-src 'self' blob:; frame-src https://www.google.com https://www.recaptcha.net; object-src 'none'; base-uri 'self'; form-action 'self'`,
       }] }];
     },
   };
@@ -103,12 +103,28 @@ function processEnvironment(config, role, action) {
     NEXT_PUBLIC_CUSTOMER_URL: assertOrigin(config.origins?.customer, 'customer'),
     NEXT_PUBLIC_SITE_URL: assertOrigin(config.origins?.[role], role), NEXT_PUBLIC_WINGSLAB_ROLE: role,
   };
-  if (role === 'backend') Object.assign(env, {
-    WINGSLAB_INSTANCE_ID: config.instanceId || '', WINGSLAB_DATABASE_URL: config.backend?.databaseUrl || '',
-    WINGSLAB_REDIS_URL: config.backend?.redisUrl || '', WINGSLAB_JWT_SECRET: config.backend?.jwtSecret || '',
-    WINGSLAB_DATABASE_ENCRYPTION_KEY: config.backend?.encryptionKey || '', WINGSLAB_STORAGE_PROVIDER: 'memory',
-  });
   if (role === 'backend') {
+    Object.assign(env, {
+      WINGSLAB_INSTANCE_ID: config.instanceId || '', WINGSLAB_DATABASE_URL: config.backend?.databaseUrl || '',
+      WINGSLAB_REDIS_URL: config.backend?.redisUrl || '', WINGSLAB_JWT_SECRET: config.backend?.jwtSecret || '',
+      WINGSLAB_DATABASE_ENCRYPTION_KEY: config.backend?.encryptionKey || '',
+      WINGSLAB_STORAGE_PROVIDER: config.backend?.storageProvider === 'memory' ? 'memory' : 'cloudinary',
+    });
+    // Cloudinary solo se injecta desde la configuración explícita, nunca desde el entorno heredado.
+    const cloudinary = config.backend?.cloudinary || {};
+    for (const [field, name] of [
+      ['cloudName', 'CLOUDINARY_CLOUD_NAME'],
+      ['apiKey', 'CLOUDINARY_API_KEY'],
+      ['apiSecret', 'CLOUDINARY_API_SECRET'],
+      ['publicFolder', 'CLOUDINARY_PUBLIC_FOLDER'],
+      ['privateFolder', 'CLOUDINARY_PRIVATE_FOLDER'],
+    ]) {
+      if (typeof cloudinary[field] === 'string' && cloudinary[field].trim()) {
+        env[name] = cloudinary[field].trim();
+      }
+    }
+    // Separate Firebase Admin credential for SMS-token verification; do not
+    // inherit ambient FIREBASE_* or Google service-account variables.
     const firebaseAuth = config.backend?.firebaseAuth || {};
     for (const [field, name] of [
       ['projectId', 'WINGSLAB_FIREBASE_AUTH_PROJECT_ID'],

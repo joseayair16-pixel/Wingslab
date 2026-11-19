@@ -774,6 +774,46 @@ html.dark .wl-menu-manager-product:hover { background:var(--wl-admin-muted); }
 .wl-menu-action { display:inline-flex; align-items:center; justify-content:center; gap:5px; min-height:38px; padding:0 11px; border:1px solid var(--wl-admin-border); border-radius:10px; color:var(--wl-admin-text); font-size:11px; font-weight:750; }
 .wl-menu-action:hover:not(:disabled) { background:var(--wl-admin-muted); }
 .wl-menu-action.is-danger { color:#bb171a; }
+/* Editor de imágenes promocionales: una sola acción, sin campos ni CTA. */
+.wl-banner-editor { margin-top:18px; }
+.wl-banner-editor-head { display:flex; align-items:center; gap:12px; }
+.wl-banner-editor-head h2 { font-size:15px; font-weight:800; }
+.wl-banner-editor-head p { margin-top:3px; color:var(--wl-admin-secondary); font-size:12px; }
+.wl-banner-dropzone { position:relative; display:flex; width:100%; max-width:760px; min-height:260px; flex-direction:column; align-items:center; justify-content:center; gap:10px; margin:18px auto 0; overflow:hidden; border:2px dashed var(--wl-admin-border); border-radius:18px; background:var(--wl-admin-muted); text-align:center; cursor:pointer; transition:border-color .15s,background .15s; }
+.wl-banner-dropzone:hover, .wl-banner-dropzone.is-dragging { border-color:#c51b1d; background:#fff5f4; box-shadow:0 0 0 4px rgba(197,27,29,.08); }
+html.dark .wl-banner-dropzone:hover, html.dark .wl-banner-dropzone.is-dragging { background:#2a2020; }
+.wl-banner-dropzone input { position:absolute; inset:0; width:100%; height:100%; opacity:0; cursor:pointer; }
+.wl-banner-dropzone-icon { display:grid; place-items:center; width:52px; height:52px; border-radius:16px; background:#fcebea; color:#bd181c; }
+.wl-banner-dropzone-icon svg { width:26px; height:26px; }
+.wl-banner-dropzone strong { color:var(--wl-admin-text); font-size:14px; font-weight:800; }
+.wl-banner-dropzone > span:not(.wl-banner-dropzone-icon):not(.wl-banner-dropzone-change):not(.wl-banner-dropzone-chip):not(.wl-banner-dropzone-name):not(.wl-banner-dropzone-busy):not(.wl-banner-dropzone-error) { color:var(--wl-admin-secondary); font-size:11px; }
+.wl-banner-dropzone small { color:var(--wl-admin-secondary); font-size:11px; }
+.wl-banner-dropzone-chip { display:inline-flex; align-items:center; min-height:38px; padding:0 16px; border-radius:999px; background:#c51b1d; color:#fff; font-size:12px; font-weight:800; }
+.wl-banner-dropzone-name { position:absolute; top:12px; left:12px; max-width:calc(100% - 24px); overflow:hidden; padding:6px 10px; border-radius:999px; background:rgba(0,0,0,.62); color:#fff; font-size:11px; font-weight:700; text-overflow:ellipsis; white-space:nowrap; }
+.wl-banner-dropzone-error { position:absolute; right:12px; bottom:12px; left:12px; padding:9px 12px; border-radius:10px; background:#fdecec; color:#a51215; font-size:11px; font-weight:700; text-align:center; }
+html.dark .wl-banner-dropzone-error { background:#3a1d1d; color:#ffb4b4; }
+.wl-banner-dropzone-busy { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; gap:9px; background:rgba(0,0,0,.55); color:#fff; font-size:12px; font-weight:800; }
+.wl-banner-spinner { display:block; width:16px; height:16px; border:2px solid rgba(255,255,255,.35); border-top-color:#fff; border-radius:50%; animation:wl-banner-spin .8s linear infinite; }
+@keyframes wl-banner-spin { to { transform:rotate(360deg); } }
+@media(prefers-reduced-motion:reduce) { .wl-banner-spinner { animation-duration:2.4s; } }
+.wl-confirm-overlay { position:fixed; inset:0; z-index:12000; display:grid; place-items:center; padding:24px; background:rgba(8,8,10,.55); backdrop-filter:blur(4px); animation:wl-confirm-fade .18s ease-out; }
+.wl-confirm-card { display:flex; width:min(340px,100%); flex-direction:column; align-items:center; gap:10px; padding:30px 24px; border:1px solid var(--wl-admin-border); border-radius:22px; background:var(--wl-admin-surface); color:var(--wl-admin-text); box-shadow:0 22px 64px rgba(0,0,0,.32); text-align:center; animation:wl-confirm-pop .24s cubic-bezier(.2,.9,.3,1.2); }
+.wl-confirm-check { display:grid; place-items:center; width:58px; height:58px; border-radius:50%; background:#e6f7ec; color:#15803d; }
+.wl-confirm-check svg { width:30px; height:30px; stroke-width:2.6; }
+.wl-confirm-card strong { font-size:16px; font-weight:800; }
+.wl-confirm-card > span:last-child { color:var(--wl-admin-secondary); font-size:12px; line-height:1.5; }
+html.dark .wl-confirm-check { background:#123a24; color:#7ee2a8; }
+@keyframes wl-confirm-fade { from { opacity:0; } to { opacity:1; } }
+@keyframes wl-confirm-pop { from { opacity:0; transform:translateY(10px) scale(.96); } to { opacity:1; transform:none; } }
+@media(prefers-reduced-motion:reduce) { .wl-confirm-overlay, .wl-confirm-card { animation:none; } }
+.wl-banner-dropzone.has-image { min-height:0; aspect-ratio:16/9; border-style:solid; }
+.wl-banner-dropzone.has-image img { display:block; width:100%; height:100%; object-fit:contain; }
+.wl-banner-dropzone-change { position:absolute; right:12px; bottom:12px; display:inline-flex; align-items:center; gap:6px; padding:8px 12px; border-radius:999px; background:rgba(0,0,0,.72); color:#fff; font-size:11px; font-weight:750; }
+.wl-banner-dropzone-change svg { width:14px; height:14px; }
+.wl-banner-editor-foot { display:flex; align-items:flex-end; justify-content:space-between; flex-wrap:wrap; gap:12px; margin-top:16px; }
+.wl-banner-editor-foot p { max-width:520px; color:var(--wl-admin-secondary); font-size:11px; line-height:1.5; }
+.wl-banner-editor-foot .wl-menu-form-actions { margin-top:0; }
+@media(max-width:700px) { .wl-banner-dropzone { min-height:200px; } .wl-banner-editor-foot .wl-menu-form-actions { width:100%; } }
 .wl-menu-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:16px; margin-top:18px; }
 .wl-menu-grid:empty { display:none; }
 .wl-menu-item { min-width:0; overflow:hidden; border:1px solid var(--wl-admin-border); border-radius:18px; background:var(--wl-admin-surface); }
@@ -863,6 +903,25 @@ html.dark .wl-menu-manager-product:hover { background:var(--wl-admin-muted); }
 .wl-loyalty-preview .wl-loyalty-card-v2 { margin:0 auto; }
 @media(max-width:950px) { .wl-loyalty-workspace { grid-template-columns:1fr; } }
 @media(max-width:540px) { .wl-loyalty-editor, .wl-loyalty-preview { padding:17px; } }
+.wl-loyalty-summary { display:flex; align-items:center; margin:0 0 16px; padding:11px 14px; border:1px solid var(--wl-admin-border); border-radius:13px; background:var(--wl-admin-muted); color:var(--wl-admin-secondary); font-size:12px; font-weight:650; }
+.wl-loyalty-manager .wl-loyalty-enable { margin:0 0 16px; }
+.wl-loyalty-manager .wl-loyalty-preview .wl-campaign-preview-title { margin-bottom:18px; }
+@media(max-width:600px) {
+  .wl-loyalty-manager .wl-campaign-header { gap:12px; }
+  .wl-loyalty-manager .wl-campaign-header-icon { width:54px; height:54px; border-radius:17px; }
+  .wl-loyalty-manager .wl-menu-fields { grid-template-columns:1fr; }
+  .wl-loyalty-manager .wl-menu-wide { grid-column:auto; }
+  .wl-loyalty-summary { padding:10px 12px; font-size:11px; }
+  .wl-loyalty-manager .wl-campaign-actions .wl-campaign-button { width:100%; }
+}
+@media(max-width:768px) { .wl-loyalty-manager, .wl-customers-directory, .wl-menu-manager, .wl-settings-main { padding-bottom:110px; } }
+@media(max-width:540px) {
+  .wl-customers-heading { flex-wrap:wrap; gap:8px; }
+  .wl-customers-filters { margin-top:14px; gap:8px; }
+  .wl-customers-search { flex:1 1 100%; }
+  .wl-customers-pagination > div { width:100%; justify-content:space-between; }
+  .wl-menu-manager-hero button, .wl-menu-manager-toolbar > div:first-child { width:100%; min-width:0; }
+}
 @media(max-width:900px) {
   .wl-customers-table { display:grid; gap:12px; }
   .wl-customers-row { grid-template-columns:minmax(0,1fr) auto; gap:14px 10px; padding:16px; border:1px solid var(--wl-admin-border); border-radius:17px; background:var(--wl-admin-surface); }
@@ -1092,12 +1151,17 @@ html.dark .wl-dash-date-controls > button { color:#ffb5b5; border-color:#a64b4e;
 .wl-category-icon-picker { display:grid; gap:8px; }
 .wl-category-icon-label { color:var(--wl-admin-text); font-size:12px; font-weight:750; }
 .wl-category-icon-label span { display:block; margin-top:2px; color:var(--wl-admin-secondary); font-size:11px; font-weight:500; }
-.wl-category-icon-options { display:grid; grid-template-columns:repeat(6,minmax(0,1fr)); gap:7px; max-height:188px; overflow-y:auto; padding:4px; border:1px solid var(--wl-admin-border); border-radius:14px; background:var(--wl-admin-muted); }
-.wl-category-icon-options button { display:grid; place-items:center; min-height:46px; border:1px solid transparent; border-radius:11px; background:var(--wl-admin-surface); color:var(--wl-admin-secondary); transition:border-color .15s,background .15s,transform .15s; }
+.wl-category-icon-search { display:block; width:100%; min-height:42px; margin:4px 0 8px; padding:0 13px; border:1px solid var(--wl-admin-border); border-radius:12px; outline:0; background:var(--wl-admin-surface); color:var(--wl-admin-text); font-size:12px; }
+.wl-category-icon-search:focus { border-color:#cd3538; box-shadow:0 0 0 3px rgba(197,27,29,.1); }
+.wl-category-icon-options { display:grid; grid-template-columns:repeat(8,minmax(0,1fr)); gap:6px; max-height:232px; overflow-y:auto; overscroll-behavior:contain; padding:5px; border:1px solid var(--wl-admin-border); border-radius:14px; background:var(--wl-admin-muted); }
+.wl-category-icon-options button { display:grid; place-items:center; min-height:44px; border:1px solid transparent; border-radius:11px; background:var(--wl-admin-surface); color:var(--wl-admin-secondary); transition:border-color .15s,background .15s,transform .15s; }
 .wl-category-icon-options button:hover { transform:translateY(-1px); border-color:#e5a9a8; }
 .wl-category-icon-options button.is-selected { border-color:#bb0a0e; background:#fff0ef; box-shadow:0 0 0 1px #bb0a0e; }
-.wl-category-icon-options button svg, .wl-category-icon-options button img { width:24px; height:24px; object-fit:contain; }
+.wl-category-icon-options button svg, .wl-category-icon-options button img { width:22px; height:22px; object-fit:contain; }
+.wl-category-emoji { font-size:22px; line-height:1; }
+.wl-category-icon-empty { padding:10px; color:var(--wl-admin-secondary); font-size:11px; text-align:center; }
 html.dark .wl-category-icon-options button.is-selected { background:#432528; border-color:#a64b4e; box-shadow:0 0 0 1px #a64b4e; }
+@media(max-width:480px) { .wl-category-icon-options { grid-template-columns:repeat(6,minmax(0,1fr)); } }
 
 /* Resumen de órdenes: 2x2 en móvil, etiquetas de una sola línea e iconos claros. */
 @media(max-width:700px) {

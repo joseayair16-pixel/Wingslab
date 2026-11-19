@@ -1,6 +1,7 @@
 import sharp from 'sharp';
 import { prisma } from '../config/database';
 import { readMenuContent, saveMenuContent, saveMenuImage } from './menu-content.service';
+import * as storage from './storage.service';
 
 describe('Local marketing persistence', () => {
   afterEach(() => jest.restoreAllMocks());
@@ -26,16 +27,19 @@ describe('Local marketing persistence', () => {
       await expect(saveMenuImage(value)).rejects.toMatchObject({ statusCode: 400 });
     }
   });
-  it('normalizes uploaded raster images to bounded local WebP', async () => {
+  it('normaliza el raster y persiste la URL del proveedor de medios', async () => {
     const tx = { $queryRawUnsafe: jest.fn(), systemSetting: { count: jest.fn().mockResolvedValue(0), create: jest.fn() } };
     jest.spyOn(prisma, '$transaction').mockImplementation((async (fn: any) => fn(tx)) as any);
+    const cloudinaryUrl = 'https://res.cloudinary.com/demo/image/upload/v1/menu/x.webp';
+    jest.spyOn(storage, 'uploadImage').mockResolvedValue({
+      url: cloudinaryUrl, publicId: 'menu/x', provider: 'cloudinary', deliveryType: 'upload',
+    });
     const png = await sharp({ create: { width: 10, height: 10, channels: 3, background: '#ff6600' } }).png().toBuffer();
     const result = await saveMenuImage(`data:image/png;base64,${png.toString('base64')}`);
     expect(result.id).toMatch(/^[a-f0-9-]{36}$/);
     const stored = tx.systemSetting.create.mock.calls[0][0].data;
     expect(stored.key).toBe('wingslab.restaurant.menu-image.' + result.id);
-    const metadata = await sharp(Buffer.from(stored.value, 'base64')).metadata();
-    expect(metadata.format).toBe('webp');
+    expect(stored.value).toBe(cloudinaryUrl);
     tx.systemSetting.count.mockResolvedValue(100);
     await expect(saveMenuImage(`data:image/png;base64,${png.toString('base64')}`)).rejects.toMatchObject({ statusCode: 409 });
     expect(tx.systemSetting.create).toHaveBeenCalledTimes(1);

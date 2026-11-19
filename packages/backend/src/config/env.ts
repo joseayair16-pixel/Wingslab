@@ -2,11 +2,19 @@ import { assertConnection, assertOrigin } from '@sadel/shared';
 
 export type BackendConfiguration = Readonly<{
   profile: 'host' | 'container'; instanceId: string; databaseUrl: string; redisUrl: string;
-  jwtSecret: string; encryptionKey: string; storageProvider: 'memory';
+  jwtSecret: string; encryptionKey: string; storageProvider: 'memory' | 'cloudinary';
   firebaseAuth: Readonly<{ projectId: string; clientEmail: string; privateKey: string }> | null;
 }>;
 let configuration: BackendConfiguration | undefined;
 let identityVerified = false;
+const LOCAL_FRONTEND_PORTS = [3100, 3102, 3103, 3104];
+
+export function getLocalCorsOrigins(): string[] {
+  return LOCAL_FRONTEND_PORTS.flatMap((port) => [
+    `http://127.0.0.1:${port}`,
+    `http://localhost:${port}`,
+  ]);
+}
 
 export function isHermeticTest(): boolean {
   return process.env.WINGSLAB_MODE === 'test';
@@ -24,7 +32,10 @@ export function parseBackendConfiguration(env: Record<string, string | undefined
   const encryptionKey = env.WINGSLAB_DATABASE_ENCRYPTION_KEY || '';
   if (jwtSecret.length < 32 || encryptionKey.length < 32 || jwtSecret === encryptionKey ||
       /replace|sample|changeme/i.test(jwtSecret + encryptionKey)) throw new Error('[WingsLab] New independent keys required.');
-  if (env.WINGSLAB_STORAGE_PROVIDER !== 'memory') throw new Error('[WingsLab] Only simulated storage is authorized.');
+  const storageProvider = env.WINGSLAB_STORAGE_PROVIDER || 'cloudinary';
+  if (storageProvider !== 'memory' && storageProvider !== 'cloudinary') {
+    throw new Error('[WingsLab] Invalid storage provider. Use "memory" or "cloudinary".');
+  }
   const firebaseProjectId = env.WINGSLAB_FIREBASE_AUTH_PROJECT_ID?.trim() || '';
   const firebaseClientEmail = env.WINGSLAB_FIREBASE_AUTH_CLIENT_EMAIL?.trim() || '';
   const firebasePrivateKey = env.WINGSLAB_FIREBASE_AUTH_PRIVATE_KEY?.replace(/\\n/g, '\n').trim() || '';
@@ -32,7 +43,7 @@ export function parseBackendConfiguration(env: Record<string, string | undefined
   if (firebaseAuthValues.some(Boolean) && !firebaseAuthValues.every(Boolean)) {
     throw new Error('[WingsLab] Firebase Auth requires project ID, client email, and private key together.');
   }
-  return Object.freeze({ profile, instanceId, jwtSecret, encryptionKey, storageProvider: 'memory',
+  return Object.freeze({ profile, instanceId, jwtSecret, encryptionKey, storageProvider,
     firebaseAuth: firebaseAuthValues.every(Boolean)
       ? Object.freeze({ projectId: firebaseProjectId, clientEmail: firebaseClientEmail, privateKey: firebasePrivateKey })
       : null,
@@ -49,7 +60,7 @@ export function loadEnvironment(): void {
   const policy = require('../../../../config/wingslab.cjs');
   policy.assertLocalAuthorization();
   const inherited = Object.keys(process.env).filter((key) =>
-    /^(DATABASE_URL|REDIS_URL|JWT_SECRET|DATABASE_ENCRYPTION_KEYS?|FIREBASE_.*|GOOGLE_APPLICATION_CREDENTIALS|VAPID_.*|WHATSAPP_.*|SMS_.*|SMTP_.*|RESEND_.*|R2_.*|AWS_.*|CF_.*|PAYMENT_GATEWAY_.*)$/.test(key) && process.env[key]
+    /^(DATABASE_URL|REDIS_URL|JWT_SECRET|DATABASE_ENCRYPTION_KEYS?|FIREBASE_.*|GOOGLE_APPLICATION_CREDENTIALS|VAPID_.*|WHATSAPP_.*|SMS_.*|SMTP_.*|RESEND_.*|AWS_.*|CF_.*|PAYMENT_GATEWAY_.*)$/.test(key) && process.env[key]
   );
   if (inherited.length) throw new Error('[WingsLab] Legacy service variables present; use a clean process environment.');
   configuration = parseBackendConfiguration(process.env);
@@ -58,7 +69,7 @@ export function loadEnvironment(): void {
   process.env.JWT_SECRET = configuration.jwtSecret;
   process.env.DATABASE_ENCRYPTION_KEY = configuration.encryptionKey;
   process.env.PORT = '3101';
-  process.env.CORS_ORIGIN = [3100, 3102, 3103, 3104].map(port => `http://127.0.0.1:${port}`).join(',');
+  process.env.CORS_ORIGIN = getLocalCorsOrigins().join(',');
 
   process.env.RESTAURANT_PANEL_URL = assertOrigin('http://127.0.0.1:3102', 'restaurant');
   process.env.DRIVER_APP_URL = assertOrigin('http://127.0.0.1:3104', 'driver');

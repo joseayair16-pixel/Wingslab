@@ -1,10 +1,10 @@
 import { prisma } from './database';
-import { parseBackendConfiguration } from './env';
+import { getLocalCorsOrigins, parseBackendConfiguration } from './env';
+import { externalServicesEnabled, assertExternalOperationAllowed } from './isolation';
 
 const wingslabPolicy = require('../../../../config/wingslab.cjs') as {
   processEnvironment: (config: Record<string, unknown>, role: string, action: 'build' | 'start') => Record<string, string>;
 };
-import { externalServicesEnabled, assertExternalOperationAllowed } from './isolation';
 
 test('logic imports have no real database; unmocked access fails closed', async () => {
   expect(() => prisma.user.findMany()).toThrow('Unmocked database');
@@ -16,6 +16,10 @@ test('configuration parsing is pure and missing configuration is rejected', () =
   const before = process.env.PORT;
   expect(() => parseBackendConfiguration({})).toThrow();
   expect(process.env.PORT).toBe(before);
+});
+test('local CORS accepts both loopback hostnames for the web frontends', () => {
+  expect(getLocalCorsOrigins()).toContain('http://localhost:3103');
+  expect(getLocalCorsOrigins()).toContain('http://127.0.0.1:3103');
 });
 test('external capabilities remain unavailable', () => {
   expect(externalServicesEnabled()).toBe(false);

@@ -1,9 +1,9 @@
 'use client';
 import { getWingslabApiUrl, getWingslabSocketUrl, getWingslabCustomerUrl, wingslabExternalServicesEnabled, WINGSLAB_BUSINESS,
   AUTOMATIC_ORDER_DECISIONS_ENABLED, restaurantOrderActionAllowed,
-  restaurantOrderTargetStatus } from '@sadel/shared';
+  restaurantOrderTargetStatus, CATEGORY_ICON_LIBRARY, CATEGORY_ICON_GROUPS, filterCategoryIcons } from '@sadel/shared';
 import { createOrderSyncGate, createOrderActionFlight, mergeConfirmedOrder, reconcileOrders } from '../lib/order-sync';
-import { Activity, AlertTriangle, ArrowRight, Award, Bike, Check, ChefHat, ChevronUp, ClipboardList, Clock, Home as HomeIcon, Info, Layers, Loader2, Lock, Mail, MapPin, Megaphone, MessageCircle, MessageSquareText, Minus, Moon, Package, Pencil, Phone, Plus, RefreshCw, Settings, ShoppingBag, Sparkles, Store, Tag, Trash2, User, Users, Wand2, X } from 'lucide-react';
+import { Activity, AlertTriangle, ArrowRight, Award, Bike, Check, ChefHat, ChevronUp, ClipboardList, Clock, Home as HomeIcon, Info, Layers, Loader2, Lock, Mail, MapPin, Megaphone, MessageCircle, MessageSquareText, Minus, Moon, Package, Pencil, Phone, Plus, RefreshCw, Settings, ShoppingBag, Sparkles, Store, Tag, Trash2, User, Users, X } from 'lucide-react';
 import redWordmark from '../assets/wingslab-wordmark-red.png';
 import whiteWordmark from '../assets/wingslab-wordmark-white.png';
 import { CategoryIcon } from '../components/CategoryIcon';
@@ -355,24 +355,6 @@ type CategoryItem = {
   order: number;
 };
 
-const CATEGORY_ICON_CHOICES: Array<{ value: string; label: string }> = [
-  { value: 'fluent-emoji-flat:poultry-leg', label: 'Pollo' },
-  { value: 'fluent-emoji-flat:hamburger', label: 'Hamburguesa' },
-  { value: 'fluent-emoji-flat:pizza', label: 'Pizza' },
-  { value: 'fluent-emoji-flat:sushi', label: 'Sushi' },
-  { value: 'fluent-emoji-flat:taco', label: 'Tacos' },
-  { value: 'fluent-emoji-flat:green-salad', label: 'Ensalada' },
-  { value: 'fluent-emoji-flat:bubble-tea', label: 'Bebidas' },
-  { value: 'fluent-emoji-flat:birthday-cake', label: 'Postres' },
-  { value: 'fluent-emoji-flat:cut-of-meat', label: 'Carnes' },
-  { value: 'fluent-emoji-flat:sandwich', label: 'Sándwiches' },
-  { value: 'fluent-emoji-flat:shallow-pan-of-food', label: 'Sopas' },
-  { value: 'fluent-emoji-flat:french-fries', label: 'Botanas' },
-  { value: 'fluent-emoji-flat:ice-cream', label: 'Helados' },
-  { value: 'fluent-emoji-flat:coffee', label: 'Café' },
-  { value: 'fluent-emoji-flat:wrapped-gift', label: 'Promos' },
-  { value: 'fluent-emoji-flat:takeout-box', label: 'Otros' },
-];
 
 type DriverItem = {
   id: string;
@@ -1080,6 +1062,9 @@ export default function Home() {
   const [categories, setCategories] = useState<CategoryItem[]>([]);
   const [categoryOrderDraft, setCategoryOrderDraft] = useState<CategoryItem[] | null>(null);
   const [savingCategoryOrder, setSavingCategoryOrder] = useState(false);
+  const [editingCategory, setEditingCategory] = useState<CategoryItem | null>(null);
+  const [categoryNameDraft, setCategoryNameDraft] = useState('');
+  const [savingCategoryName, setSavingCategoryName] = useState(false);
   const [drivers, setDrivers] = useState<DriverItem[]>([]);
   const [driverArrivedOrders, setDriverArrivedOrders] = useState<Record<string, boolean>>({});
   const [driverContactOpen, setDriverContactOpen] = useState<Record<string, boolean>>({});
@@ -1294,12 +1279,12 @@ export default function Home() {
   const [creatingCategory, setCreatingCategory] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState('');
   const [newCategoryIcon, setNewCategoryIcon] = useState('');
+  const [categoryIconSearch, setCategoryIconSearch] = useState('');
 
   const [isProductModalOpen, setIsProductModalOpen] = useState(false);
   const [creatingProduct, setCreatingProduct] = useState(false);
   const [savingProductChanges, setSavingProductChanges] = useState(false);
   const [processingProductImage, setProcessingProductImage] = useState(false);
-  const [generatingProductImage, setGeneratingProductImage] = useState(false);
   const [productImageValidationError, setProductImageValidationError] = useState('');
   const [activeAvailabilityProductId, setActiveAvailabilityProductId] = useState<string | null>(null);
   const [continueAfterSave, setContinueAfterSave] = useState(false);
@@ -4428,6 +4413,44 @@ export default function Home() {
     }
   }
 
+  function openCategoryEditor(category: CategoryItem) {
+    setEditingCategory(category);
+    setCategoryNameDraft(category.name);
+    setError('');
+  }
+
+  async function saveCategoryName() {
+    if (!token || !editingCategory || savingCategoryName) return;
+    const name = categoryNameDraft.trim();
+    if (!name || name === editingCategory.name) {
+      setEditingCategory(null);
+      return;
+    }
+    const actionKey = `category:${editingCategory.id}:rename`;
+    setSavingCategoryName(true);
+    setActiveActionKey(actionKey);
+    setError('');
+    try {
+      await requestJson<void>({
+        apiBase,
+        path: `/restaurant-panel/categorias/${editingCategory.id}`,
+        token,
+        options: { method: 'PATCH', body: JSON.stringify({ name }) },
+        fallbackMessage: 'No se pudo actualizar la categoria.',
+      });
+      await loadDashboard();
+      setEditingCategory(null);
+      pushToast('success', 'Categoría actualizada', `"${name}" ya aparece en tu menú.`);
+    } catch (requestError) {
+      const message = getRequestErrorMessage(requestError, 'No se pudo actualizar la categoria.');
+      setError(message);
+      pushToast('error', 'Categoría no actualizada', message);
+    } finally {
+      setActiveActionKey((current) => (current === actionKey ? null : current));
+      setSavingCategoryName(false);
+    }
+  }
+
   function openProductModal(categoryId?: string) {
     setProductImageValidationError('');
     const template = lastProductConfigRef.current || undefined;
@@ -4981,51 +5004,6 @@ export default function Home() {
     } finally {
       setProcessingProductImage(false);
       event.target.value = '';
-    }
-  }
-
-  async function handleGenerateProductImage() {
-    const productName = productDraft.name.trim();
-    const productDescription = productDraft.description.trim();
-    if (!token || generatingProductImage || productName.length < 2 || productDescription.length < 4) {
-      return;
-    }
-
-    setGeneratingProductImage(true);
-    setError('');
-    setProductImageValidationError('');
-
-    try {
-      const response = await requestJson<SuccessResponse<{ url: string }>>({
-        apiBase,
-        path: '/restaurant-panel/productos/generar-imagen',
-        token,
-        options: {
-          method: 'POST',
-          body: JSON.stringify({
-            name: productName,
-            description: productDescription,
-            category: categories.find((category) => category.id === productDraft.categoryId)?.name || undefined,
-          }),
-        },
-        fallbackMessage: 'No se pudo generar la imagen con IA.',
-      });
-
-      const generatedUrl = response.data.url;
-
-      setProductDraft((current) => ({
-        ...current,
-        image: generatedUrl,
-        images: current.images.length > 0 ? [generatedUrl, ...current.images] : [generatedUrl],
-      }));
-
-      pushToast('success', 'Imagen generada', 'La imagen con IA ya esta lista para guardarse.');
-    } catch (requestError) {
-      const message = getRequestErrorMessage(requestError, 'No se pudo generar la imagen con IA.');
-      setError(message);
-      pushToast('error', 'Imagen no generada', message);
-    } finally {
-      setGeneratingProductImage(false);
     }
   }
 
@@ -5882,67 +5860,6 @@ export default function Home() {
       pushToast('success', 'Productos eliminados', `${deletedCount} producto${deletedCount === 1 ? '' : 's'} eliminado${deletedCount === 1 ? '' : 's'}.`);
     } catch (requestError) {
       const message = getRequestErrorMessage(requestError, 'No se pudo eliminar los productos.');
-      setError(message);
-      pushToast('error', 'Error', message);
-    } finally {
-      setBulkActionLoading(false);
-    }
-  }
-
-  async function handleBulkGenerateMissingImages() {
-    if (!token || bulkActionLoading) {
-      return;
-    }
-
-    const missingCount = products.filter((product) => !product.image?.trim()).length;
-
-    if (missingCount === 0) {
-      pushToast('info', 'Nada que generar', 'Todos tus productos ya tienen imagen.');
-      return;
-    }
-
-    const confirmed = window.confirm(
-      `Se generaran imagenes con IA para ${missingCount} producto${missingCount === 1 ? '' : 's'} sin foto. Puede tardar un par de minutos y respeta el limite diario. \u00bfContinuar?`
-    );
-    if (!confirmed) {
-      return;
-    }
-
-    setBulkActionLoading(true);
-    setError('');
-    try {
-      const response = await requestJson<SuccessResponse<{
-        generadas: number;
-        fallidas: number;
-        pendientes: number;
-        limiteDiario: number;
-      }>>({
-        apiBase,
-        path: '/restaurant-panel/productos/generar-imagenes-faltantes',
-        token,
-        options: {
-          method: 'POST',
-          body: JSON.stringify({}),
-        },
-        fallbackMessage: 'No se pudieron generar las imagenes.',
-      });
-
-      await loadDashboard();
-
-      const { generadas, fallidas, pendientes, limiteDiario } = response.data;
-      pushToast(
-        'success',
-        'Imagenes generadas',
-        `${generadas} imagen${generadas === 1 ? '' : 'es'} creada${generadas === 1 ? '' : 's'}${
-          fallidas > 0 ? `, ${fallidas} fallida${fallidas === 1 ? '' : 's'}` : ''
-        }${
-          pendientes > 0
-            ? `, ${pendientes} pendiente${pendientes === 1 ? '' : 's'} (limite diario ${limiteDiario})`
-            : ''
-        }.`
-      );
-    } catch (requestError) {
-      const message = getRequestErrorMessage(requestError, 'No se pudieron generar las imagenes.');
       setError(message);
       pushToast('error', 'Error', message);
     } finally {
@@ -7315,7 +7232,14 @@ export default function Home() {
                 placeholder="Tacos, Bebidas, Postres..."
               />
               <div className="wl-category-icon-picker">
-                <p className="wl-category-icon-label">Icono <span>Opcional · elige cómo se verá en el menú</span></p>
+                <p className="wl-category-icon-label">Icono <span>Opcional · {CATEGORY_ICON_LIBRARY.length} iconos en {CATEGORY_ICON_GROUPS.length} categorías</span></p>
+                <input
+                  type="search"
+                  className="wl-category-icon-search"
+                  placeholder="Buscar: pizza, café, helado…"
+                  value={categoryIconSearch}
+                  onChange={(event) => setCategoryIconSearch(event.target.value)}
+                />
                 <div className="wl-category-icon-options">
                   <button
                     type="button"
@@ -7326,19 +7250,20 @@ export default function Home() {
                   >
                     <Sparkles aria-hidden="true" />
                   </button>
-                  {CATEGORY_ICON_CHOICES.map((choice) => (
+                  {filterCategoryIcons(categoryIconSearch).map((choice) => (
                     <button
-                      key={choice.value}
+                      key={choice.id}
                       type="button"
-                      aria-pressed={newCategoryIcon === choice.value}
-                      onClick={() => setNewCategoryIcon(choice.value)}
-                      className={newCategoryIcon === choice.value ? 'is-selected' : ''}
-                      title={choice.label}
+                      aria-pressed={newCategoryIcon === choice.id}
+                      onClick={() => setNewCategoryIcon(choice.id)}
+                      className={newCategoryIcon === choice.id ? 'is-selected' : ''}
+                      title={`${choice.label} · ${choice.group}`}
                     >
-                      <CategoryIcon name={choice.value} />
+                      <CategoryIcon name={choice.id} />
                     </button>
                   ))}
                 </div>
+                {filterCategoryIcons(categoryIconSearch).length === 0 && <p className="wl-category-icon-empty">No hay iconos para “{categoryIconSearch}”.</p>}
               </div>
             </div>
 
@@ -7922,36 +7847,6 @@ export default function Home() {
                               </button>
                             </div>
 
-                            <div className="flex flex-wrap items-center gap-3 rounded-xl border border-sky-100 bg-sky-50/70 p-3.5 transition-colors">
-                              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-sky-100 text-sky-600 shadow-sm">
-                                <Wand2 className="h-5 w-5" />
-                              </div>
-                              <div className="min-w-[140px] flex-1">
-                                <p className="text-sm font-bold text-sky-900">Generar con IA</p>
-                                <p className="text-xs leading-4 text-sky-800/75">
-                                  Usa el nombre y la descripción. Completa ambos campos para habilitarla.
-                                </p>
-                              </div>
-                              <button
-                                type="button"
-                                onClick={() => void handleGenerateProductImage()}
-                                disabled={
-                                  generatingProductImage ||
-                                  productDraft.name.trim().length < 2 ||
-                                  productDraft.description.trim().length < 4
-                                }
-                                className="min-h-11 w-full shrink-0 rounded-xl bg-sky-700 px-4 py-2 text-sm font-semibold text-white transition hover:bg-sky-800 disabled:cursor-not-allowed disabled:bg-sky-300 sm:w-auto"
-                                title={
-                                  productDraft.name.trim().length < 2
-                                    ? 'Escribe el nombre del producto para poder generar la imagen.'
-                                    : productDraft.description.trim().length < 4
-                                      ? 'Escribe la descripcion del producto para que la imagen coincida con lo que se ofrece.'
-                                      : 'Generar una imagen con IA para este producto'
-                                }
-                              >
-                                {generatingProductImage ? 'Creando...' : 'Generar'}
-                              </button>
-                            </div>
                           </div>
                           
                           {/* Crop Preview */}
@@ -10321,7 +10216,7 @@ export default function Home() {
 
                 {activeSection === 'store' && profile ? (
                     <div className={`wl-menu-manager w-full space-y-4 sm:space-y-6 ${isSelectionMode ? 'pb-32' : ''}`}>
-                      <header className="wl-menu-manager-hero"><div><p>Catálogo WingsLab</p><h1>Gestiona tu menú</h1><span>Organiza categorías, productos y disponibilidad en un solo lugar.</span></div><button type="button" onClick={() => setShowMenuPreview(true)}><Store aria-hidden="true" />Ver menú como cliente</button></header>
+                      <header className="wl-menu-manager-hero"><div><p>WingsLab</p><h1>Menú</h1></div><button type="button" onClick={() => setShowMenuPreview(true)}><Store aria-hidden="true" />Ver menú como cliente</button></header>
 
                       <div className="wl-menu-manager-toolbar">
                         <div className="relative min-w-0 flex-1 sm:max-w-md">
@@ -10332,7 +10227,7 @@ export default function Home() {
                             autoComplete="off"
                             value={storeSearchQuery}
                             onChange={(event) => setStoreSearchQuery(event.target.value)}
-                            placeholder="Buscar en tu menú..."
+                            placeholder="Buscar"
                             className="h-12 w-full rounded-xl border border-neutral-200 bg-neutral-50 pl-11 pr-10 text-base font-medium text-neutral-900 outline-none transition placeholder:text-neutral-400 focus:border-sky-500 focus:bg-white focus:ring-4 focus:ring-sky-500/15 sm:text-sm"
                           />
                           {storeSearchQuery ? (
@@ -10372,7 +10267,6 @@ export default function Home() {
                         <div className="mb-3 flex items-center justify-between gap-3 px-4 sm:px-5">
                           <div>
                             <h2 className="text-sm font-bold text-neutral-950">Categorías del menú</h2>
-                            <p className="mt-1 text-xs leading-4 text-neutral-500">Solo puedes eliminar categorías sin productos.</p>
                           </div>
                           {!categoryOrderDraft && categories.length > 1 && (
                             <button type="button" onClick={() => setCategoryOrderDraft([...categories])} className="min-h-11 shrink-0 rounded-xl bg-neutral-100 px-3 text-xs font-bold text-neutral-800 transition hover:bg-neutral-200 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-sky-500/20">
@@ -10410,7 +10304,7 @@ export default function Home() {
                               return (
                                 <div
                                   key={category.id}
-                                  className={`inline-flex min-h-12 items-center gap-2.5 rounded-2xl border border-neutral-200/80 bg-neutral-50 pl-4 text-sm font-semibold text-neutral-800 ${cannotDelete ? 'pr-3' : 'pr-1'}`}
+                                  className="inline-flex min-h-12 items-center gap-2.5 rounded-2xl border border-neutral-200/80 bg-neutral-50 pl-4 pr-1 text-sm font-semibold text-neutral-800"
                                 >
                                   <span className="max-w-[180px] truncate">{category.name}</span>
                                   <span
@@ -10420,6 +10314,16 @@ export default function Home() {
                                   >
                                     {productCount}
                                   </span>
+                                  <button
+                                    type="button"
+                                    onClick={() => openCategoryEditor(category)}
+                                    disabled={Boolean(activeActionKey) || savingCategoryOrder}
+                                    className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-neutral-500 transition hover:bg-neutral-200 hover:text-neutral-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 disabled:cursor-not-allowed disabled:opacity-40"
+                                    aria-label={`Editar categoría ${category.name}`}
+                                    title={`Editar categoría ${category.name}`}
+                                  >
+                                    <Pencil className="h-4 w-4" strokeWidth={1.9} aria-hidden="true" />
+                                  </button>
                                   {!cannotDelete && <button
                                     type="button"
                                     onClick={() =>
@@ -10443,7 +10347,7 @@ export default function Home() {
                               <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-white/15 text-white">
                                 <Plus className="h-4 w-4" strokeWidth={2.5} aria-hidden="true" />
                               </span>
-                              Agregar categoría
+                              Agregar
                             </button>
                           </div>
                         </CategoryScroller>
@@ -10464,7 +10368,7 @@ export default function Home() {
                           </span>
                           <span className="min-w-0">
                             <span className="block text-[13px] font-bold leading-5 text-neutral-900">Importar menú</span>
-                            <span className="block truncate text-[11px] leading-4 text-neutral-500">Desde Excel o Google Sheets</span>
+                            <span className="block truncate text-[11px] leading-4 text-neutral-500">Excel / Sheets</span>
                           </span>
                         </button>
                       </div>
@@ -12340,6 +12244,49 @@ export default function Home() {
                 className="w-full rounded-2xl bg-neutral-950 py-3.5 text-sm font-bold text-white transition hover:bg-neutral-800 active:scale-95 shadow-sm"
               >
                 ¡Entendido!
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {editingCategory && (
+        <div
+          className="fixed inset-0 z-[120] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="edit-category-title"
+          onMouseDown={(event) => { if (event.target === event.currentTarget) setEditingCategory(null); }}
+        >
+          <div className="w-full max-w-md rounded-3xl border border-neutral-200 bg-white p-6 shadow-2xl dark:border-zinc-700 dark:bg-zinc-900">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-red-600">Menú WingsLab</p>
+                <h2 id="edit-category-title" className="mt-1 text-xl font-bold text-neutral-950 dark:text-white">Editar categoría</h2>
+                <p className="mt-1 text-xs text-neutral-500">El nombre aparecerá en el menú de tus clientes.</p>
+              </div>
+              <button type="button" onClick={() => setEditingCategory(null)} aria-label="Cerrar" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-neutral-500 transition hover:bg-neutral-100 dark:hover:bg-zinc-800">
+                <X className="h-4 w-4" strokeWidth={2.4} />
+              </button>
+            </div>
+            <label className="mt-6 block text-[13px] font-semibold text-neutral-800 dark:text-neutral-200">
+              Nombre de la categoría
+              <input
+                autoFocus
+                maxLength={40}
+                value={categoryNameDraft}
+                onChange={(event) => setCategoryNameDraft(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') void saveCategoryName();
+                  if (event.key === 'Escape') setEditingCategory(null);
+                }}
+                className="mt-2 min-h-12 w-full rounded-2xl border border-neutral-200 bg-neutral-50 px-4 text-sm font-semibold text-neutral-900 outline-none transition focus:border-red-400 focus:ring-4 focus:ring-red-100 dark:border-zinc-700 dark:bg-zinc-800 dark:text-white"
+              />
+            </label>
+            <div className="mt-6 flex gap-3">
+              <button type="button" onClick={() => setEditingCategory(null)} className="min-h-12 flex-1 rounded-2xl border border-neutral-200 text-sm font-bold text-neutral-700 transition hover:bg-neutral-50 dark:border-zinc-700 dark:text-neutral-200 dark:hover:bg-zinc-800">Cancelar</button>
+              <button type="button" disabled={!categoryNameDraft.trim() || categoryNameDraft.trim() === editingCategory.name || savingCategoryName} onClick={() => void saveCategoryName()} className="min-h-12 flex-[1.4] rounded-2xl bg-red-600 text-sm font-bold text-white shadow-sm transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50">
+                {savingCategoryName ? 'Guardando…' : 'Guardar cambios'}
               </button>
             </div>
           </div>

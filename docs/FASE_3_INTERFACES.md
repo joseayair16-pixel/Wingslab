@@ -196,7 +196,7 @@ python3 scripts/wingslab-verify-network.py --running-customer
 - Marca SaDeL en assets/textos sigue presente por instrucción de no rediseñar;
   no implica conexión a sus servicios. No hubo cambios de DB, seeds o esquema.
 - Backend y sus guardas de proveedores/jobs no se cambiaron. No se habilitaron
-  Firebase, WhatsApp, SMS, correo, R2, Web Push, pagos ni trabajos automáticos.
+  Firebase, WhatsApp, SMS, correo, Web Push, pagos ni trabajos automáticos; Cloudinary requiere credenciales explícitas.
 
 ### Comandos cliente desde la raíz
 

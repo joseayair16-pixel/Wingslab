@@ -29,7 +29,7 @@ heredados se conservan; no se usan como fuente de configuración ni se copian.
 - **Crítico:** el arranque backend activaba trabajos con cambios en datos,
   facturación, mensajes, notificaciones y limpieza de archivos.
 - **Crítico:** el arranque Railway aplicaba migraciones automáticamente; existían
-  scripts de reset, borrado R2 y publicación APK con capacidad de escritura.
+  scripts de reset, borrado de imágenes y publicación APK con capacidad de escritura.
 - **Alto:** Android usaba dominios, proyecto Firebase e identidades de SaDeL y
   tenía acceso a firmas heredadas.
 - **Alto:** variables heredadas, enlaces `.env.local`, configuraciones Vercel y
@@ -82,8 +82,9 @@ no son prueba de aislamiento ni deben reutilizarse.
 - Backend escucha solo en loopback y fija CORS a los cuatro orígenes locales.
 - Trabajos desactivados por defecto; solicitarlos explícitamente produce error.
 - Firebase se bloquea ANTES de abrir cuentas de servicio o inicializar Admin SDK.
-- WhatsApp, SMS, correo, FCM, VAPID, R2 e IA permanecen cerrados en código;
-  una variable de entorno no permite habilitarlos en esta fase.
+- WhatsApp, SMS, correo, FCM, VAPID e IA permanecen cerrados en código.
+  Cloudinary solo se activa con credenciales explícitas en la configuración;
+  por defecto el almacenamiento es simulado (`memory`).
 - Comandos de pruebas quedan bloqueados hasta revisar suites y entorno.
 
 ### Administración, despliegue y Docker
@@ -141,7 +142,7 @@ Recursos pendientes, siempre exclusivos y con permisos mínimos:
 3. Repositorio GitHub independiente tras escaneo integral del historial.
 4. Proyectos Railway/Vercel separados, sin conexión automática al original.
 5. Firebase y registros Android nuevos, cuentas de servicio mínimas y firmas nuevas.
-6. R2/bucket y permisos nuevos; WhatsApp/número/webhook de pruebas, correo/SMS
+6. Credenciales propias de Cloudinary; WhatsApp/número/webhook de pruebas, correo/SMS
    sandbox, VAPID y Google Maps propios, solo cuando se aprueben individualmente.
 
 ## 4. Límites y riesgos pendientes
@@ -178,7 +179,7 @@ Tras autorización separada, y primero sin red externa:
 2. Casos negativos: destinos SaDeL, hosts externos, localhost ambiguo, credenciales
    heredadas, placeholders, URLs malformadas y configuración ausente.
 3. Verificar que `enableJobs: true`, proveedores con credenciales presentes,
-   migraciones, reset `--confirm`, borrado R2 y publicación APK siguen bloqueados.
+   migraciones, reset `--confirm`, borrado de medios y publicación APK siguen bloqueados.
 4. Captura de red que demuestre cero tráfico a SaDeL y a proveedores no aprobados.
 5. Crear y verificar identidad de servicios desechables exclusivos; comprobar
    puertos, procesos, volúmenes, usuarios, bases y ausencia de túneles.
@@ -256,11 +257,8 @@ packages/backend/src/index.ts
 packages/backend/src/scripts/add-store-categories.ts
 packages/backend/src/scripts/check-db.ts
 packages/backend/src/scripts/check_db.ts
-packages/backend/src/scripts/clear-r2-bucket.ts
 packages/backend/src/scripts/create-admin.ts
 packages/backend/src/scripts/create-test-customer.ts
-packages/backend/src/scripts/release-customer-app.ts
-packages/backend/src/scripts/release-restaurant-app.ts
 packages/backend/src/scripts/reset-production-data.ts
 packages/backend/src/scripts/seed-platform-categories.ts
 packages/backend/src/scripts/seed-store-categories.ts
@@ -319,7 +317,7 @@ hasta completar la separación Android y retirar el bloqueo mediante revisión.
   cero errores sintácticos. `bash -n` del script de arranque también pasó.
 - Invariantes estáticas: proxies centralizados; preflight en los cuatro frontends;
   sin hosts productivos heredados en código operativo web/Capacitor examinado;
-  scripts administrativos versionados protegidos; reset/R2 bloqueados al inicio;
+  scripts administrativos versionados protegidos; reset y proveedores externos bloqueados al inicio;
   Gradle y los cinco jobs GitHub bloqueados.
 
 Esto NO acredita compilación, corrección de tipos, ejecución de guards ni aislamiento
@@ -377,11 +375,11 @@ restaurantes, clientes y repartidores, con proveedores separados:
   devuelve una data URL WebP y no usa disco ni red. Su eliminación es idempotente
   y no lanza errores: no existen objetos externos que eliminar. Quitar la referencia
   en la base es suficiente en esta simulación.
-- **R2:** se conserva la implementación anterior detrás de un proveedor explícito,
-  pero su guard sigue rechazando cualquier operación. Ninguna variable permite
-  seleccionarlo en 2A.
+- **Cloudinary:** implementación lista detrás de `WINGSLAB_STORAGE_PROVIDER=cloudinary`.
+  Requiere `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY` y `CLOUDINARY_API_SECRET`
+  en `config/wingslab.local.json`; sin credenciales se usa `memory`.
 
-Esto elimina el error inducido por R2 después de persistir cambios en productos,
+Esto elimina el error inducido por un proveedor externo después de persistir cambios en productos,
 restaurantes o perfiles, y permite eliminar productos con referencias de imagen
 sin intentar borrar recursos heredados. Importar una imagen HTTP no disponible
 se rechaza antes de devolver un asset al llamador; no se descarga remotamente.
@@ -591,7 +589,7 @@ docs/AISLAMIENTO_WINGSLAB.md
     pedidos manuales, Socket.IO y geolocalización ficticia. Jobs y proveedores cloud
     permanecen cerrados. Revisar límites de tamaño/errores y escrituras confirmadas.
 
-Firebase, R2, mensajería, despliegues y Android NO son requisitos para desarrollar
+Firebase, Cloudinary, mensajería, despliegues y Android NO son requisitos para desarrollar
 los flujos web locales. Siguen pendientes de proyectos/identidades propios y otra
 autorización. Git e historial requieren escaneo de secretos antes de publicación.
 No iniciar transformación funcional hasta demostrar aislamiento en 2B.

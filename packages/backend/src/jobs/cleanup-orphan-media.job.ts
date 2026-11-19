@@ -4,7 +4,7 @@ import { prisma } from '../config/database';
 import { urlToKey, deleteImages } from '../services/storage.service';
 import { logger } from '../utils/logger';
 
-// GC de medios huérfanos: repurga de R2 los blobs de restaurantes ya eliminados (soft-delete)
+// GC de medios huérfanos: purga en el proveedor de imágenes configurado los blobs de restaurantes ya eliminados (soft-delete)
 // y nulifica las referencias para que las ejecuciones siguientes sean no-ops idempotentes.
 async function purgeDeletedRestaurantMedia(): Promise<number> {
   const deleted = await prisma.restaurant.findMany({
@@ -38,7 +38,7 @@ async function purgeDeletedRestaurantMedia(): Promise<number> {
         await deleteImages(keys);
         purged += keys.length;
       } catch (err) {
-        logger.error(`[OrphanMedia] Fallo al purgar R2 para restaurante ${r.id}:`, err);
+        logger.error(`[OrphanMedia] Fallo al purgar imágenes para restaurante ${r.id}:`, err);
       }
     }
 

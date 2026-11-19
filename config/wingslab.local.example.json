@@ -2,7 +2,11 @@
   "version": 1,
   "profile": "container",
   "instanceId": "",
-  "authorization": { "build": false, "runtime": false, "networkVerified": false },
+  "authorization": {
+    "build": false,
+    "runtime": false,
+    "networkVerified": false
+  },
   "origins": {
     "backend": "http://127.0.0.1:3101",
     "admin": "http://127.0.0.1:3100",
@@ -21,10 +25,18 @@
     "redisUrl": "",
     "jwtSecret": "",
     "encryptionKey": "",
+    "storageProvider": "cloudinary",
     "firebaseAuth": {
       "projectId": "",
       "clientEmail": "",
       "privateKey": ""
+    },
+    "cloudinary": {
+      "cloudName": "",
+      "apiKey": "",
+      "apiSecret": "",
+      "publicFolder": "wingslab/public",
+      "privateFolder": "wingslab/private"
     }
   }
 }

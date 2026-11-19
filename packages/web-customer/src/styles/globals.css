@@ -709,7 +709,8 @@ html.dark .wl-section-heading > button { color:#ff999b; }
 .wl-reference-categories [class*='min-w-max'] { margin:0; gap:8px; }
 .wl-menu-nav.wl-reference-categories [data-category-id] { display:flex; align-items:center; justify-content:center; flex-direction:column; gap:4px; min-width:60px; min-height:54px; padding:5px 8px; border-radius:16px; background:#f0e8df; color:#202124; font-size:11px; font-weight:650; box-shadow:none; }
 .wl-menu-nav.wl-reference-categories [data-category-id] svg { width:26px; height:26px; stroke-width:1.6; }
-.wl-menu-nav.wl-reference-categories [data-category-id] .wl-cat-icon { width:28px; height:28px; }
+.wl-menu-nav.wl-reference-categories [data-category-id] .wl-cat-icon { display:inline-flex; width:28px; height:28px; align-items:center; justify-content:center; font-size:22px; line-height:1; }
+.wl-menu-nav.wl-reference-categories [data-category-id] .wl-cat-icon svg { width:24px; height:24px; stroke-width:1.8; }
 .wl-menu-nav.wl-reference-categories [data-category-id][aria-current] { background:#bb0a0e !important; color:white !important; }
 html.dark .wl-menu-nav.wl-reference-categories [data-category-id] { background:#29292d; color:#fff; }
 .wl-products-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; }
@@ -1297,3 +1298,27 @@ html.dark .wl-loyalty-history-status.is-redeemed { background:#1f3a2b; color:#8f
 /* Título del menú: breve y liviano, sin repetir la marca del header. */
 .wl-menu-title { margin:0 0 12px; padding:0 4px; color:var(--wl-text-muted); font-size:17px; font-weight:650; letter-spacing:-.01em; }
 html.dark .wl-menu-title { color:var(--wl-text-muted); }
+
+/* Header oficial: tres columnas que nunca se enciman, incluso en móviles compactos. */
+.wl-official-header-inner { display:grid; grid-template-columns:minmax(0,1fr) auto minmax(0,1fr); align-items:center; gap:6px; }
+.wl-official-header .wl-header-status { position:static; justify-self:start; min-width:0; overflow:hidden; }
+.wl-official-header .wl-header-actions-right { position:static; justify-self:end; min-width:0; }
+.wl-official-header .wl-official-logo { justify-self:center; }
+@media(max-width:420px) {
+  .wl-header-status { gap:5px; padding:0 7px 0 6px; font-size:10px; }
+  .wl-header-actions-right { gap:5px; }
+  .wl-header-profile, .wl-header-cart.wl-official-cart { width:40px; height:40px; min-height:40px; padding:8px; border-radius:14px; }
+  .wl-official-header .wl-official-logo, .wl-official-header .wl-official-logo img { width:150px; }
+  .wl-official-logo img { max-width:100%; }
+}
+@media(max-width:360px) {
+  .wl-official-header .wl-official-logo, .wl-official-header .wl-official-logo img { width:124px; }
+  .wl-header-status-arrow { display:none; }
+  .wl-header-status { padding:0 6px; letter-spacing:0; }
+  .wl-header-profile, .wl-header-cart.wl-official-cart { width:38px; height:38px; min-height:38px; padding:7px; }
+}
+@media(max-width:340px) {
+  .wl-official-header .wl-official-logo, .wl-official-header .wl-official-logo img { width:112px; }
+  .wl-header-actions-right { gap:4px; }
+  .wl-header-profile, .wl-header-cart.wl-official-cart { width:36px; height:36px; min-height:36px; padding:6px; }
+}

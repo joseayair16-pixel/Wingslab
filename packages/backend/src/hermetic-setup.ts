@@ -9,6 +9,9 @@ process.env.TMPDIR = '/tmp';
 process.env.JEST_WORKER_ID = '1';
 process.env.WINGSLAB_MODE = 'test';
 process.env.NODE_ENV = 'test';
+// Las pruebas herméticas usan el proveedor simulado explícitamente; producción
+// siempre usa Cloudinary (valor por defecto en config/env.ts).
+process.env.WINGSLAB_STORAGE_PROVIDER = 'memory';
 const blocked = (): never => { throw new Error('[WingsLab] Network access forbidden in hermetic tests.'); };
 jest.spyOn(net.Socket.prototype, 'connect').mockImplementation(blocked);
 jest.spyOn(net.Server.prototype, 'listen').mockImplementation(blocked);

@@ -31,7 +31,8 @@ export class InMemoryRedis {
     return entry;
   }
 
-  private setWithArgs(key: string, value: string, args: unknown[]): 'OK' {
+  private setWithArgs(key: string, value: string, args: unknown[]): 'OK' | null {
+    if (args.includes('NX') && this.getEntry(key)) return null;
     let expiresAt: number | null = null;
     for (let i = 0; i < args.length; i += 1) {
       const arg = args[i];
@@ -50,7 +51,7 @@ export class InMemoryRedis {
     return entry ? entry.value : null;
   }
 
-  async set(key: string, value: string, ...args: unknown[]): Promise<'OK'> {
+  async set(key: string, value: string, ...args: unknown[]): Promise<'OK' | null> {
     return this.setWithArgs(key, value, args);
   }
 

@@ -607,7 +607,7 @@ export const SettingsSection = React.memo(function SettingsSection({
   const showSaveBar = activeSettingsTab !== 'preferencias' && activeSettingsTab !== 'cupones';
 
   const saveBarCopy: Record<string, { title: string; subtitle: string }> = {
-    perfil: { title: 'Perfil público', subtitle: 'Guarda los cambios de esta sección' },
+    perfil: { title: 'Perfil público', subtitle: '' },
     ubicacion: { title: 'Ubicación', subtitle: 'Dirección y mapa' },
     entrega: { title: 'Entrega', subtitle: 'Modalidad, tiempos y tarifas' },
     horarios: { title: 'Horarios', subtitle: 'Días y turnos de servicio' },
@@ -687,7 +687,7 @@ export const SettingsSection = React.memo(function SettingsSection({
         <header className="wl-settings-header">
           <span className="wl-settings-header-icon"><Settings2 aria-hidden="true" /></span>
           <div>
-            <p>WingsLab · {businessTypeLabel(profile?.businessType)}</p>
+            <p>WingsLab</p>
             <h2>Configuración</h2>
           </div>
         </header>
@@ -760,7 +760,7 @@ export const SettingsSection = React.memo(function SettingsSection({
                 />
                 <div className="md:col-span-2">
                   <div className="wl-settings-group-heading">
-                    <div><h4>Redes sociales <span>Opcional</span></h4></div>
+                    <div><h4>Redes</h4></div>
                   </div>
                 </div>
                 <Field
@@ -792,7 +792,7 @@ export const SettingsSection = React.memo(function SettingsSection({
                   </div>
                 )}
                 <div className="md:col-span-2">
-                  <div className="wl-settings-group-heading"><div><h4>Sobre tu negocio</h4></div></div>
+                  <div className="wl-settings-group-heading"><div><h4>Negocio</h4></div></div>
                   <TextAreaField
                     label="Descripción"
                     value={storeDraft.description}
@@ -803,10 +803,7 @@ export const SettingsSection = React.memo(function SettingsSection({
                 <div className="md:col-span-2">
                   <div className="wl-settings-group-heading">
                     <div>
-                      <h4>Metadatos para buscadores <span>Opcional</span></h4>
-                      <p className="mt-1 text-xs font-medium leading-relaxed text-neutral-500">
-                        Controla cómo aparece tu menú en Google y al compartirlo. Si los dejas vacíos, se generan automáticamente desde el nombre, la descripción y el tipo de servicio de tu negocio.
-                      </p>
+                      <h4>SEO</h4>
                     </div>
                   </div>
                   <div className="grid min-w-0 grid-cols-1 gap-4">
@@ -902,7 +899,7 @@ export const SettingsSection = React.memo(function SettingsSection({
 
                 }
                 <div className="wl-settings-status md:col-span-2">
-                  <span className="font-semibold text-neutral-900">Estado actual: </span>
+                  <span className="font-semibold text-neutral-900">Estado: </span>
                   {(profile as RestaurantProfile | null)?.status === 'ACTIVE'
                     ? (profile as RestaurantProfile | null)?.isAcceptingOrders ? '🟢 Abierto y aceptando pedidos' : '🟡 Cerrado temporalmente'
                     : (profile as RestaurantProfile | null)?.status === 'DELETED' ? '🔴 Cuenta eliminada' : '🟠 Cuenta suspendida'}

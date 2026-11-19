@@ -2,6 +2,7 @@ import crypto from 'node:crypto';
 import sharp from 'sharp';
 import { prisma } from '../config/database';
 import { menuContentSchema, type MenuContent } from './menu-content-policy';
+import { uploadImage } from './storage.service';
 
 const KEY = 'wingslab.restaurant.menu-content.v1';
 const IMAGE_KEY = 'wingslab.restaurant.menu-image.';
@@ -38,17 +39,31 @@ export async function saveMenuImage(source: string) {
       .resize({ width: 1600, height: 1600, fit: 'inside', withoutEnlargement: true }).webp({ quality: 80 }).toBuffer();
   } catch { throw failure(400, 'No se pudo leer esta imagen. Usa PNG, JPG o WebP.'); }
   if (image.length > 400_000) throw failure(400, 'La imagen optimizada es demasiado grande. Reduce su tamaño.');
+
   const id = crypto.randomUUID(), key = IMAGE_KEY + id;
+  // El proveedor de medios es la fuente de verdad; la BD solo guarda la
+  // referencia (URL de Cloudinary), nunca los bytes ni un respaldo silencioso.
+  const asset = await uploadImage({
+    source: `data:image/webp;base64,${image.toString('base64')}`,
+    kind: 'menu-image',
+    fileName: `menu-${id}.webp`,
+  });
+
   await prisma.$transaction(async tx => {
     await tx.$queryRawUnsafe('SELECT pg_advisory_xact_lock(hashtext($1))::text', IMAGE_KEY);
-    // Bound local storage, including abandoned editor uploads. No external provider.
+    // Acota las referencias huérfanas del editor, incluidas las subidas abandonadas.
     if (await tx.systemSetting.count({ where: { key: { startsWith: IMAGE_KEY } } }) >= 100) throw failure(409, 'Límite local de 100 imágenes alcanzado.');
-    await tx.systemSetting.create({ data: { key, value: image.toString('base64') } });
+    await tx.systemSetting.create({ data: { key, value: asset.url } });
   });
   return { id };
 }
 
-export async function readMenuImage(id: string) {
+export async function readMenuImage(id: string): Promise<string | Buffer | null> {
   const row = await prisma.systemSetting.findUnique({ where: { key: IMAGE_KEY + id } });
-  return row ? Buffer.from(row.value, 'base64') : null;
+  if (!row) return null;
+  // Compatibilidad con referencias legadas guardadas como bytes en base64.
+  if (row.value.startsWith('data:') || !row.value.startsWith('https://')) {
+    try { return Buffer.from(row.value, 'base64'); } catch { return null; }
+  }
+  return row.value;
 }

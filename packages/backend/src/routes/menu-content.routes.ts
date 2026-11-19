@@ -24,6 +24,23 @@ export async function registerMenuContentRoutes(app: FastifyInstance) {
     if (!parsed.success) return reply.code(404).send();
     const image = await readMenuImage(parsed.data.id);
     if (!image) return reply.code(404).send();
+    if (typeof image === 'string') {
+      // El binario vive en Cloudinary, pero se sirve desde este mismo origen:
+      // evita redirecciones cross-origin, CORP/CSP y service workers.
+      try {
+        const upstream = await fetch(image, { signal: AbortSignal.timeout(8000) });
+        if (!upstream.ok) throw new Error(`Upstream ${upstream.status}`);
+        const bytes = Buffer.from(await upstream.arrayBuffer());
+        const contentType = upstream.headers.get('content-type') || 'image/webp';
+        return reply
+          .header('Cache-Control', 'public, max-age=86400, immutable')
+          .header('X-Content-Type-Options', 'nosniff')
+          .type(contentType)
+          .send(bytes);
+      } catch {
+        return reply.code(502).send({ success: false, error: { message: 'No se pudo obtener la imagen promocional.' } });
+      }
+    }
     return reply.header('Cache-Control', 'public, max-age=86400, immutable')
       .header('X-Content-Type-Options', 'nosniff').type('image/webp').send(image);
   });

@@ -85,7 +85,7 @@ export type UploadAssetResponse = {
     width?: number;
     height?: number;
     bytes?: number;
-    provider: 'r2' | 'memory';
+    provider: 'cloudinary' | 'memory';
     deliveryType: 'upload' | 'authenticated';
   };
 };
@@ -941,7 +941,7 @@ export async function uploadMediaAsset(params: {
 }): Promise<{
   url: string;
   publicId: string;
-  provider: 'r2' | 'memory' | 'inline';
+  provider: 'cloudinary' | 'memory' | 'inline';
   deliveryType?: 'upload' | 'authenticated';
 }> {
   try {

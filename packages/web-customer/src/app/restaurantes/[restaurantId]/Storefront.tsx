@@ -2573,6 +2573,16 @@ function ProductImage({
     return () => observer.disconnect();
   }, [restaurant, menuTab, productSearchQuery]);
 
+  function goHome() {
+    setMenuTab('home');
+    setProductSearchQuery('');
+    setActiveCategory(null);
+    if (window.location.hash) {
+      window.history.replaceState(null, '', window.location.pathname + window.location.search);
+    }
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
   function scrollToCategory(categoryId: string) {
     setActiveCategory(categoryId);
     const target = categorySectionRefs.current[categoryId];
@@ -3382,7 +3392,7 @@ function ProductImage({
       <header suppressHydrationWarning className={`wl-header wl-official-header sticky top-0 z-40 pt-[env(safe-area-inset-top)] ${headerIsPinned ? 'wl-header-pinned' : ''}`}>
         <div className="wl-official-header-inner">
           <button type="button" className="wl-header-status" aria-label={`${restaurant ? (restaurant.isOpen ? 'Restaurante abierto' : 'Restaurante cerrado') : 'Consultando estado del restaurante'}. Ver información del restaurante`} aria-haspopup="dialog" onClick={() => window.dispatchEvent(new Event('wingslab:restaurant-info'))}><span className={`wl-header-status-dot ${restaurant ? (restaurant.isOpen ? 'is-open' : 'is-closed') : ''}`} aria-hidden="true" /><span>{restaurant ? (restaurant.isOpen ? 'Abierto' : 'Cerrado') : 'Consultando'}</span><ChevronRight className="wl-header-status-arrow" aria-hidden="true" /></button>
-          <button type="button" onClick={() => { setMenuTab('home'); window.scrollTo({ top: 0, behavior: 'smooth' }); }} className="wl-official-logo" aria-label="WingsLab, inicio">
+          <button type="button" onClick={goHome} className="wl-official-logo" aria-label="WingsLab, ir al inicio">
             <img src={officialWordmark.src} width={783} height={229} alt="WingsLab" fetchPriority="high" />
           </button>
           <div className="wl-header-actions-right">
@@ -3409,7 +3419,7 @@ function ProductImage({
           </div>
         </div>
       </header>
-      <CustomerNavigation active="inicio" onHome={() => { setMenuTab('home'); setProductSearchQuery(''); window.scrollTo({ top: 0, behavior: 'smooth' }); }} onAuthenticated={handleLoginSuccess} onLogout={handleLogout} />
+      <CustomerNavigation active="inicio" onHome={goHome} onAuthenticated={handleLoginSuccess} onLogout={handleLogout} />
 
     {activeOrderListItems.length > 0 ? (
         <div className="border-b border-black/5 bg-white dark:border-zinc-800 dark:bg-neutral-900">

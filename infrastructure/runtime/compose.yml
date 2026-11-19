@@ -151,7 +151,9 @@ services:
     networks:
       wingslab:
         ipv4_address: 172.30.240.21
-      # Firebase Admin verifies ID tokens using Google's signing certificates.
+      # Salida a servicios externos requeridos (Cloudinary, Firebase Auth y
+      # certificados de Google) sin publicar puertos ni
+      # exponer el backend. PostgreSQL y Redis permanecen solo en `wingslab`.
       edge_bridge:
         ipv4_address: 172.31.240.21
 

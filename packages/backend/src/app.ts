@@ -106,6 +106,9 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
 
   registerSingleRestaurantBoundary(fastify);
   await fastify.register(fastifyHelmet, {
+    // Los frontends (3102/3103/3104) cargan imágenes y media desde este origen.
+    // `same-origin` bloquearía los <img> cross-origin con NotSameOrigin.
+    crossOriginResourcePolicy: { policy: 'cross-origin' },
     contentSecurityPolicy: {
       directives: {
         defaultSrc: ["'self'"],

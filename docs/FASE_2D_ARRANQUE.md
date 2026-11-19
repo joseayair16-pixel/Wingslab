@@ -50,7 +50,7 @@ con los controles de red y sondas negativas. Logs y respuestas muestreados no
 contienen secretos configurados ni registros ERROR. No se observaron errores críticos.
 
 Socket.IO y subscribers internos se registran; no habilitan proveedores externos.
-Firebase, WhatsApp, SMS, correo, R2, Web Push y pagos externos siguen bloqueados
+Firebase, WhatsApp, SMS, correo, Web Push y pagos externos siguen bloqueados; Cloudinary requiere credenciales explícitas
 por las capacidades compiladas y el entorno limpio; todos los jobs deshabilitados.
 No se probaron POST, login ni operaciones de negocio.
 

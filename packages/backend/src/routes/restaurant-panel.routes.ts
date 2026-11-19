@@ -8,7 +8,6 @@ import { authenticate, authorize, getAuthenticatedUser } from '../middleware/aut
 import { isAppError } from '../errors/app-error';
 import { encrypt, decrypt } from '../utils/crypto';
 import { urlToKey, deleteImages, uploadImage } from '../services/storage.service';
-import { isAiImageConfigured, assertAiImageQuota, getAiImageDailyCap, generateFoodImage } from '../services/ai-image.service';
 import { invalidateCachePattern } from '../services/cache.service';
 import { buildRestaurantInsights } from '../services/restaurant-insights';
 import { calendarReportRange } from '../services/report-calendar';
@@ -60,12 +59,6 @@ const restaurantProfileSchema = z.object({
 });
 
 const MAX_SHIFTS_PER_DAY = 2;
-
-const generateImageSchema = z.object({
-  name: z.string().min(2, 'El nombre debe tener al menos 2 caracteres.').max(80, 'El nombre es demasiado largo.'),
-  description: z.string().max(300, 'La descripcion es demasiado larga.').optional().or(z.literal('')),
-  category: z.string().max(100, 'La categoria es demasiado larga.').optional(),
-});
 
 const operatingHoursSchema = z
   .array(
@@ -1118,163 +1111,6 @@ export async function registerRestaurantPanelRoutes(fastify: FastifyInstance): P
       return reply.send({
         success: true,
         data: items,
-      });
-    });
-
-    restaurant.post('/restaurant-panel/productos/generar-imagen', async (request, reply) => {
-      if (!isAiImageConfigured()) {
-        return reply.status(503).send({
-          success: false,
-          error: {
-            code: 'AI_IMAGE_NOT_CONFIGURED',
-            message: 'La generacion de imagenes con IA no esta configurada.',
-          },
-        });
-      }
-
-      const parsed = parseBody(generateImageSchema.safeParse(request.body));
-
-      if ('error' in parsed) {
-        return reply.status(400).send(parsed.error);
-      }
-
-      const user = getAuthenticatedUser(request);
-      const ownedRestaurant = await getOwnedRestaurant(user.sub);
-
-      if (!ownedRestaurant) {
-        return reply.status(404).send({
-          success: false,
-          error: {
-            code: 'RESTAURANT_NOT_FOUND',
-            message: 'No se encontro el restaurante asociado a este usuario.',
-          },
-        });
-      }
-
-      await assertAiImageQuota(ownedRestaurant.id);
-
-      const imageBase64 = await generateFoodImage({
-        foodName: parsed.data.name,
-        description: parsed.data.description || undefined,
-        category: parsed.data.category,
-        restaurantName: ownedRestaurant.name,
-      });
-
-      const uploaded = await uploadImage({
-        source: `data:image/jpeg;base64,${imageBase64}`,
-        kind: 'product-image',
-        actorId: ownedRestaurant.id,
-      });
-
-      return reply.send({
-        success: true,
-        data: { url: uploaded.url },
-      });
-    });
-
-    restaurant.post('/restaurant-panel/productos/generar-imagenes-faltantes', async (request, reply) => {
-      const quota = getAiImageDailyCap();
-
-      if (!isAiImageConfigured()) {
-        return reply.status(503).send({
-          success: false,
-          error: {
-            code: 'AI_IMAGE_NOT_CONFIGURED',
-            message: 'La generacion de imagenes con IA no esta configurada.',
-          },
-        });
-      }
-
-      const user = getAuthenticatedUser(request);
-      const ownedRestaurant = await getOwnedRestaurant(user.sub);
-
-      if (!ownedRestaurant) {
-        return reply.status(404).send({
-          success: false,
-          error: {
-            code: 'RESTAURANT_NOT_FOUND',
-            message: 'No se encontro el restaurante asociado a este usuario.',
-          },
-        });
-      }
-
-      const missingProducts = await prisma.product.findMany({
-        where: {
-          restaurantId: ownedRestaurant.id,
-          OR: [{ image: null }, { image: '' }],
-        },
-        select: {
-          id: true,
-          name: true,
-          description: true,
-          category: { select: { name: true } },
-        },
-        take: 200,
-      });
-
-      const results = {
-        generadas: 0,
-        fallidas: 0,
-        pendientes: missingProducts.length,
-      };
-
-      for (const product of missingProducts) {
-        try {
-          await assertAiImageQuota(ownedRestaurant.id);
-        } catch (error) {
-          // Al llegar al limite diario dejamos de generar y reportamos lo pendiente.
-          if (isAppError(error) && error.code === 'AI_IMAGE_QUOTA_EXCEEDED') break;
-          throw error;
-        }
-
-        try {
-          const imageBase64 = await generateFoodImage({
-            foodName: product.name,
-            description: product.description || undefined,
-            category: product.category?.name,
-            restaurantName: ownedRestaurant.name,
-          });
-
-          const uploaded = await uploadImage({
-            source: `data:image/jpeg;base64,${imageBase64}`,
-            kind: 'product-image',
-            actorId: ownedRestaurant.id,
-          });
-
-          await prisma.product.update({
-            where: { id: product.id },
-            data: {
-              image: uploaded.url,
-              images: [uploaded.url],
-            },
-          });
-
-          results.generadas += 1;
-        } catch (error) {
-          if (isAppError(error) && error.code === 'AI_IMAGE_QUOTA_EXCEEDED') break;
-          results.fallidas += 1;
-        }
-
-        // Pequeña pausa para no saturar el free tier de Workers AI.
-        await new Promise((resolve) => setTimeout(resolve, 1500));
-      }
-
-      results.pendientes = Math.max(0, results.pendientes - results.generadas - results.fallidas);
-
-      // El monto maximo por lote ya viene acotado al tope diario, pero protegemos
-      // el caso limite en que el lote entero quepa en la cuota.
-      if (results.generadas > 0) {
-        await invalidateCachePattern('restaurants*');
-      }
-
-      return reply.send({
-        success: true,
-        data: {
-          generadas: results.generadas,
-          fallidas: results.fallidas,
-          pendientes: results.pendientes,
-          limiteDiario: quota,
-        },
       });
     });
 

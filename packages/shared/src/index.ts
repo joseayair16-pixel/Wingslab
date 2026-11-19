@@ -9,3 +9,4 @@ export * from './wingslab-policy';
 export * from './wingslab-order-policy';
 export * from './wingslab-business';
 export * from './wingslab-seo';
+export * from './category-icons';

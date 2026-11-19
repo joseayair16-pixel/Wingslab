@@ -1026,25 +1026,6 @@ describe('http integration contracts', () => {
       role: UserRole.RESTAURANT,
     });
 
-    const originalEnv = {
-      accountId: process.env.R2_ACCOUNT_ID,
-      accessKeyId: process.env.R2_ACCESS_KEY_ID,
-      secretAccessKey: process.env.R2_SECRET_ACCESS_KEY,
-      bucketName: process.env.R2_BUCKET_NAME,
-      publicUrl: process.env.R2_PUBLIC_URL,
-    };
-
-    process.env.R2_ACCOUNT_ID = 'demo-account';
-    process.env.R2_ACCESS_KEY_ID = 'demo-key';
-    process.env.R2_SECRET_ACCESS_KEY = 'demo-secret';
-    process.env.R2_BUCKET_NAME = 'sadel-images';
-    process.env.R2_PUBLIC_URL = 'https://images.sadel.mx';
-
-    const s3SendSpy = jest.spyOn(require('@aws-sdk/client-s3').S3Client.prototype, 'send').mockResolvedValue({
-      $metadata: { httpStatusCode: 200 },
-      ETag: '"abc123"',
-    });
-
     const response = await app.inject({
       method: 'POST',
       url: '/uploads/images',
@@ -1058,12 +1039,6 @@ describe('http integration contracts', () => {
       },
     });
 
-    process.env.R2_ACCOUNT_ID = originalEnv.accountId;
-    process.env.R2_ACCESS_KEY_ID = originalEnv.accessKeyId;
-    process.env.R2_SECRET_ACCESS_KEY = originalEnv.secretAccessKey;
-    process.env.R2_BUCKET_NAME = originalEnv.bucketName;
-    process.env.R2_PUBLIC_URL = originalEnv.publicUrl;
-
     const body = parseJson<{
       success: boolean;
       data: { url: string; publicId: string; provider: string };
@@ -1071,9 +1046,8 @@ describe('http integration contracts', () => {
 
     expect(response.statusCode).toBe(200);
     expect(body.success).toBe(true);
-    expect(body.data.url).toContain('images.sadel.mx');
-    expect(body.data.provider).toBe('r2');
-    expect(s3SendSpy).toHaveBeenCalled();
+    expect(body.data.url).toMatch(/^data:image\/webp;base64,/);
+    expect(body.data.provider).toBe('memory');
   });
 
 
