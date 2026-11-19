@@ -59,16 +59,20 @@ const NODE_ENV = process.env.NODE_ENV || 'development';
 
 // Fail-fast: sin JWT_SECRET la firma de tokens es predecible = toma de cuentas total.
 function jwtSecret(): string {
-  if (!process.env.JWT_SECRET) {
+  // La configuración local inyecta WINGSLAB_JWT_SECRET; aceptamos ambos nombres
+  // para que el secreto sea estable entre reinicios. Si no, los tokens de
+  // registro y sesión se invalidarían en cada despliegue del backend.
+  const configured = process.env.JWT_SECRET || process.env.WINGSLAB_JWT_SECRET;
+  if (!configured) {
     if (NODE_ENV === 'production') {
       throw new Error('FATAL: JWT_SECRET is required in production.');
     }
     console.warn('[AUTH] JWT_SECRET no configurado — generando secreto efimero de desarrollo. Las sesiones se invalidan al reiniciar.');
   }
 
-// Nunca usar un secreto hardcodeado. En desarrollo, si falta JWT_SECRET, se
-// genera uno aleatorio por proceso (sesiones efímeras, seguro por defecto).
-  return process.env.JWT_SECRET || crypto.randomBytes(32).toString('hex');
+  // Nunca usar un secreto hardcodeado. En desarrollo, si falta, se genera uno
+  // aleatorio por proceso (sesiones efímeras, seguro por defecto).
+  return configured || crypto.randomBytes(32).toString('hex');
 }
 
 export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyInstance> {

@@ -101,26 +101,18 @@ html.dark:not(.pure-dark) .sadel-logo-dark {
   filter: invert(1) hue-rotate(180deg) saturate(1.54) !important;
 }
 
-/* Splash a pantalla completa: modo oscuro autocontenido.
-   El invert global del <html> no alcanza de forma fiable a los elementos
-   position:fixed en Safari/iOS, así que el splash se oscurece por sí mismo
-   y contra-invierte cuando el truco global está activo. */
-html.dark .sadel-splash {
-  background-color: #09090a;
-  color: #fafaf9;
-}
-html.dark .sadel-splash .sadel-splash-title {
-  color: #fafaf9;
-}
-html.dark .sadel-splash .sadel-splash-track {
-  background-color: rgba(255, 255, 255, 0.14);
-}
-html.dark:not(.pure-dark) .sadel-splash {
-  filter: invert(1) hue-rotate(180deg) saturate(1.54);
-}
-html.dark:not(.pure-dark) .sadel-splash .sadel-loader-logo {
-  filter: invert(1) hue-rotate(180deg) saturate(1.54) !important;
-}
+/* Pantalla de carga oficial: siempre roja, sin importar el modo del sistema. */
+html.wl-booting, html.wl-booting body { background:#f20d12 !important; }
+.wl-splash { position:fixed; inset:0; z-index:10000; display:flex; align-items:center; justify-content:center; padding:calc(24px + env(safe-area-inset-top)) 24px calc(24px + env(safe-area-inset-bottom)); background:#f20d12; color:#fff; opacity:1; transition:opacity 200ms ease-out; }
+html.dark .wl-splash { background:#f20d12 !important; color:#fff !important; }
+html.dark:not(.pure-dark) .wl-splash { filter:invert(1) hue-rotate(180deg) saturate(1.54) !important; }
+.wl-splash.is-fading { opacity:0; pointer-events:none; }
+.wl-splash-inner { display:flex; flex-direction:column; align-items:center; gap:clamp(28px,7vh,64px); width:100%; }
+.wl-splash-logo { display:block; width:min(72vw,560px); height:auto; max-width:100%; user-select:none; pointer-events:none; filter:none !important; }
+html:not(.dark) .wl-splash-logo, html.dark:not(.pure-dark) .wl-splash-logo { filter:none !important; }
+.wl-splash-spinner { display:block; width:clamp(34px,8vw,52px); height:clamp(34px,8vw,52px); box-sizing:border-box; border-radius:50%; border:2px solid rgba(255,255,255,.28); border-top-color:#fff; animation:wl-splash-spin .8s linear infinite; }
+@keyframes wl-splash-spin { to { transform:rotate(360deg); } }
+@media(prefers-reduced-motion:reduce) { .wl-splash-spinner { animation-duration:2.4s; } .wl-splash { transition-duration:120ms; } }
 
 /* Extra pop for brand identity colors (Sky Blue accents) */
 html.dark:not(.pure-dark) [class*="accent-"],

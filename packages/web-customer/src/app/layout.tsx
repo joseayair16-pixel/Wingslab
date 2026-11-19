@@ -49,7 +49,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="es-MX" suppressHydrationWarning>
+    <html lang="es-MX" className="wl-booting" suppressHydrationWarning>
       <head>
         <script
           dangerouslySetInnerHTML={{
@@ -85,7 +85,8 @@ export default function RootLayout({
           }}
         />
         <meta name="color-scheme" content="light dark" />
-        <meta name="theme-color" content="#ffffff" />
+        <meta name="theme-color" content="#f20d12" />
+        <style>{`html.wl-booting,html.wl-booting body{background-color:#f20d12!important}`}</style>
       </head>
       <body>
         {wingslabExternalServicesEnabled() && process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY ? (
@@ -98,7 +99,7 @@ export default function RootLayout({
         <ClientOnly><InstallAppButton /></ClientOnly>
         <ClientOnly><AppUpdateBanner /></ClientOnly>
         <SplashScreen />
-        <ClientOnly fallback={<div className="flex min-h-[100dvh] items-center justify-center bg-white" aria-hidden="true" />}>{children}</ClientOnly>
+        <ClientOnly>{children}</ClientOnly>
         <ClientOnly><DriverArrivalModal /></ClientOnly>
       </body>
     </html>

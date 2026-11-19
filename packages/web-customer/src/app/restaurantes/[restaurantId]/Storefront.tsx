@@ -1207,6 +1207,9 @@ export default function RestaurantPage({
       } finally {
         if (!cancelled) {
           setLoadingRestaurant(false);
+          // La pantalla de carga espera a que el menú esté listo (o a que falle,
+          // para mostrar el estado de error existente con su reintento).
+          window.dispatchEvent(new Event('wingslab:app-ready'));
         }
       }
     }

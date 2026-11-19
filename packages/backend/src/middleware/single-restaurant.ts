@@ -38,7 +38,10 @@ export function registerSingleRestaurantBoundary(app: FastifyInstance): void {
     };
     await visit(request.query);
     await visit(request.body);
-    if (request.headers.authorization) {
+    // Los endpoints de autenticación usan tokens de flujo (register_confirm,
+    // password_reset) que no representan un principal de WingsLab todavía: se
+    // validan en su propio handler. Aplicar el scope aquí bloquearía el registro.
+    if (request.headers.authorization && !path.startsWith('/auth/')) {
       let auth: { sub: string; role: string } | undefined;
       try { auth = await request.jwtVerify<{ sub: string; role: string }>(); } catch { return; } // Existing authentication handles invalid credentials.
       if (auth && !await businessPrincipalAllowed(prisma, auth)) throw new AppError(403, 'BUSINESS_SCOPE_VIOLATION', 'Sesión no autorizada para WingsLab.');

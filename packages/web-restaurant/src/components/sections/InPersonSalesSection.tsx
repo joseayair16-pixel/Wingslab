@@ -144,12 +144,12 @@ export function InPersonSalesSection({ apiBase, token }: { apiBase: string; toke
   }, [showScanner, stopScanner]);
 
   return <section className="wl-campaigns wl-inperson" aria-labelledby="inperson-title">
-    <header className="wl-campaign-header"><span className="wl-campaign-header-icon"><Award aria-hidden="true" /></span><div><p className="wl-campaign-eyebrow">Fidelidad en persona</p><h1 id="inperson-title">Ventas en el local</h1><p>Registra productos, pago y sello en la misma operación.</p></div></header>
+    <header className="wl-campaign-header"><span className="wl-campaign-header-icon"><Award aria-hidden="true" /></span><div><p className="wl-campaign-eyebrow">Fidelidad en persona</p><h1 id="inperson-title">Ventas en el local</h1></div></header>
     {error && <p role="alert" className="wl-campaign-feedback is-error">{error}</p>}
     {notice && <p role="status" className="wl-campaign-feedback">{notice}</p>}
     <div className="wl-inperson-grid">
       <div className="wl-campaign-card wl-inperson-main">
-        <h2>Registrar venta</h2><p className="wl-loyalty-help">Escanea o escribe el código temporal del cliente. Verificar no registra ni cobra nada.</p>
+        <h2>Registrar venta</h2>
         <div className="wl-inperson-code"><input value={code} disabled={busy} onChange={event => { setPreview(null); setQuote(null); setApplyReward(false); setCode(event.target.value.trim()); }} placeholder="Código del cliente" aria-label="Código de fidelidad" /><button type="button" className="wl-menu-action" disabled={busy} onClick={() => setShowScanner(value => !value)}><ScanLine aria-hidden="true" />{showScanner ? 'Cerrar cámara' : 'Escanear'}</button><button type="button" className="wl-campaign-button is-primary" disabled={busy || !code.trim()} onClick={() => void verify()}>Verificar</button></div>
         {showScanner && <video ref={videoRef} className="wl-inperson-scanner" playsInline muted />}
         {catalogError && <p role="alert" className="wl-inperson-warn"><CircleAlert aria-hidden="true" />{catalogError}</p>}
@@ -174,7 +174,7 @@ export function InPersonSalesSection({ apiBase, token }: { apiBase: string; toke
           </div>}
         </div>}
       </div>
-      <aside className="wl-campaign-card wl-inperson-guide"><div className="wl-campaign-preview-title"><ShieldCheck aria-hidden="true" /><div><h2>Venta segura</h2><p>Los precios y promociones se validan en servidor.</p></div></div><ol><li>Verifica al cliente con su QR vigente.</li><li>Agrega los productos y opciones; el sistema calcula el subtotal desde el menú.</li><li>Un descuento de producto o promoción impide aplicar el premio en la misma venta, pero sí suma sello.</li><li>Confirma el medio de pago recibido para guardar venta, sello, recompensa y existencias controladas en una sola operación.</li><li>El registro se puede anular por quien lo creó durante 5 minutos. El reembolso del dinero, si corresponde, se hace por el medio de pago.</li></ol><p className="wl-loyalty-help">Las existencias solo cambian para productos con control de stock activado. Los productos sin inventario nunca se bloquean por stock.</p></aside>
+      <aside className="wl-campaign-card wl-inperson-guide"><div className="wl-campaign-preview-title"><ShieldCheck aria-hidden="true" /><div><h2>Venta segura</h2></div></div><ol><li>Verifica el código del cliente.</li><li>Agrega productos y confirma el cobro.</li><li>Se guardan venta, sello y recompensa.</li></ol><p className="wl-loyalty-help">Puedes anular la venta durante 5 minutos.</p></aside>
     </div>
     <div className="wl-campaign-card wl-inperson-history"><h2>Últimas ventas</h2>{!visits.length ? <p className="wl-campaign-empty">Todavía no hay ventas presenciales.</p> : <div className="wl-inperson-list">{visits.map(visit => <article key={visit.id} className={visit.voidedAt ? 'is-voided' : ''}><div><strong>{visit.customerName}</strong><small>{new Date(visit.createdAt).toLocaleString('es-MX', { dateStyle: 'medium', timeStyle: 'short' })} · {visit.items?.map(item => `${item.quantity}× ${item.name}`).join(', ') || 'Venta histórica'} · Total {money(visit.totalCents ?? visit.amountCents - visit.rewardAppliedCents)}{visit.paymentMethod ? ` · ${visit.paymentMethod}` : ''}</small></div><span>{visit.voidedAt ? 'Anulada' : visit.rewardDescription || 'Solo sello'}</span><button type="button" className="wl-menu-action" disabled={busy || !!visit.voidedAt} onClick={() => void voidVisit(visit.id)}><X aria-hidden="true" />Anular</button></article>)}</div>}</div>
   </section>;
