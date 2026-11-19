@@ -3,6 +3,7 @@ import { assertConnection, assertOrigin } from '@sadel/shared';
 export type BackendConfiguration = Readonly<{
   profile: 'host' | 'container'; instanceId: string; databaseUrl: string; redisUrl: string;
   jwtSecret: string; encryptionKey: string; storageProvider: 'memory';
+  firebaseAuth: Readonly<{ projectId: string; clientEmail: string; privateKey: string }> | null;
 }>;
 let configuration: BackendConfiguration | undefined;
 let identityVerified = false;
@@ -24,7 +25,17 @@ export function parseBackendConfiguration(env: Record<string, string | undefined
   if (jwtSecret.length < 32 || encryptionKey.length < 32 || jwtSecret === encryptionKey ||
       /replace|sample|changeme/i.test(jwtSecret + encryptionKey)) throw new Error('[WingsLab] New independent keys required.');
   if (env.WINGSLAB_STORAGE_PROVIDER !== 'memory') throw new Error('[WingsLab] Only simulated storage is authorized.');
+  const firebaseProjectId = env.WINGSLAB_FIREBASE_AUTH_PROJECT_ID?.trim() || '';
+  const firebaseClientEmail = env.WINGSLAB_FIREBASE_AUTH_CLIENT_EMAIL?.trim() || '';
+  const firebasePrivateKey = env.WINGSLAB_FIREBASE_AUTH_PRIVATE_KEY?.replace(/\\n/g, '\n').trim() || '';
+  const firebaseAuthValues = [firebaseProjectId, firebaseClientEmail, firebasePrivateKey];
+  if (firebaseAuthValues.some(Boolean) && !firebaseAuthValues.every(Boolean)) {
+    throw new Error('[WingsLab] Firebase Auth requires project ID, client email, and private key together.');
+  }
   return Object.freeze({ profile, instanceId, jwtSecret, encryptionKey, storageProvider: 'memory',
+    firebaseAuth: firebaseAuthValues.every(Boolean)
+      ? Object.freeze({ projectId: firebaseProjectId, clientEmail: firebaseClientEmail, privateKey: firebasePrivateKey })
+      : null,
     databaseUrl: assertConnection(env.WINGSLAB_DATABASE_URL, 'postgres', profile),
     redisUrl: assertConnection(env.WINGSLAB_REDIS_URL, 'redis', profile),
   });

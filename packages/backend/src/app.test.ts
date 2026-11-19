@@ -4,6 +4,18 @@ import bcryptjs from 'bcryptjs';
 import { buildApp } from './app';
 import { prisma } from './config/database';
 import { UserRole } from '@prisma/client';
+import { isFirebaseAuthConfigured, verifyFirebasePhoneToken } from './services/firebase-auth.service';
+
+jest.mock('./services/firebase-auth.service', () => {
+  return {
+    FirebaseAuthNotConfiguredError: class FirebaseAuthNotConfiguredError extends Error {},
+    isFirebaseAuthConfigured: jest.fn(),
+    verifyFirebasePhoneToken: jest.fn(),
+  };
+});
+
+const mockIsFirebaseAuthConfigured = jest.mocked(isFirebaseAuthConfigured);
+const mockVerifyFirebasePhoneToken = jest.mocked(verifyFirebasePhoneToken);
 
 function parseJson<T>(payload: string): T {
   return JSON.parse(payload) as T;
@@ -44,6 +56,8 @@ describe('app integration', () => {
     // estado del usuario en BD, así que concedemos estado ACTIVE por defecto.
     jest.spyOn(prisma.user, 'findUnique').mockResolvedValue({ status: 'ACTIVE' } as never);
     jest.spyOn(prisma, '$queryRaw').mockResolvedValue([{ x: 1 }] as never);
+    mockIsFirebaseAuthConfigured.mockReturnValue(true);
+    mockVerifyFirebasePhoneToken.mockReset();
   });
 
   afterAll(async () => {
@@ -96,11 +110,11 @@ describe('app integration', () => {
     expect(response.body).toBe('');
   });
 
-  it('envía código OTP por correo en modo de prueba', async () => {
+  it('prepara registro para confirmar el teléfono por Firebase SMS', async () => {
     jest.spyOn(prisma.user, 'findFirst').mockResolvedValue(null);
     const response = await app.inject({
       method: 'POST',
-      url: '/auth/email-otp/iniciar',
+      url: '/auth/sms-otp/iniciar',
       payload: {
         phone: '5512345678',
         intent: 'register',
@@ -111,23 +125,39 @@ describe('app integration', () => {
       },
     });
 
-    const body = parseJson<{
-      success: boolean;
-      data: { challengeId: string; maskedEmail: string; expiresInSeconds: number; mockCode?: string };
-    }>(response.body);
+    const body = parseJson<{ success: boolean; data: { verificationToken: string; expiresInSeconds: number } }>(response.body);
 
     expect(response.statusCode).toBe(200);
     expect(body.success).toBe(true);
-    expect(body.data.challengeId).toMatch(/^[A-Za-z0-9_-]{43}$/);
-    expect(body.data.maskedEmail).toBe('cl•••••@example.com');
+    expect(typeof body.data.verificationToken).toBe('string');
     expect(body.data.expiresInSeconds).toBe(300);
-    expect(body.data.mockCode).toMatch(/^\d{6}$/);
+    expect(body.data).not.toHaveProperty('mockCode');
   });
 
-  it('rechaza iniciar el registro por correo si la persona tiene menos de 12 años', async () => {
+  it('falla cerrado si no está configurado Firebase Auth', async () => {
+    mockIsFirebaseAuthConfigured.mockReturnValue(false);
     const response = await app.inject({
       method: 'POST',
-      url: '/auth/email-otp/iniciar',
+      url: '/auth/sms-otp/iniciar',
+      payload: {
+        phone: '5512345678',
+        intent: 'register',
+        email: 'cliente@example.com',
+        name: 'Cliente',
+        lastName: 'Prueba',
+        dateOfBirth: '1990-01-01',
+      },
+    });
+    const body = parseJson<{ error: { code: string } }>(response.body);
+
+    expect(response.statusCode).toBe(503);
+    expect(body.error.code).toBe('SMS_VERIFICATION_UNAVAILABLE');
+  });
+
+  it('rechaza iniciar el registro por SMS si la persona tiene menos de 12 años', async () => {
+    const response = await app.inject({
+      method: 'POST',
+      url: '/auth/sms-otp/iniciar',
       payload: {
         phone: '5512345678',
         intent: 'register',
@@ -144,11 +174,11 @@ describe('app integration', () => {
     expect(body.error.code).toBe('INVALID_DATE_OF_BIRTH');
   });
 
-  it('permite iniciar el registro por correo al cumplir exactamente 12 años', async () => {
+  it('permite iniciar el registro por SMS al cumplir exactamente 12 años', async () => {
     jest.spyOn(prisma.user, 'findFirst').mockResolvedValue(null);
     const response = await app.inject({
       method: 'POST',
-      url: '/auth/email-otp/iniciar',
+      url: '/auth/sms-otp/iniciar',
       payload: {
         phone: '5512345678',
         intent: 'register',
@@ -162,24 +192,22 @@ describe('app integration', () => {
     expect(response.statusCode).toBe(200);
   });
 
-  it('rechaza iniciar el registro por WhatsApp si la persona tiene menos de 12 años', async () => {
-    const response = await app.inject({
-      method: 'POST',
-      url: '/auth/whatsapp/iniciar',
-      payload: {
-        phone: '5512345678',
-        intent: 'register',
-        email: 'cliente@example.com',
-        name: 'Cliente',
-        lastName: 'Prueba',
-        dateOfBirth: dateOfBirthForAge(11),
-      },
-    });
-    const body = parseJson<{ success: boolean; error: { code: string } }>(response.body);
+  it('retira todas las rutas de OTP por correo y WhatsApp', async () => {
+    const paths = [
+      '/auth/email-otp/iniciar',
+      '/auth/email-otp/confirmar',
+      '/auth/whatsapp/iniciar',
+      '/auth/whatsapp/estado',
+      '/auth/whatsapp/confirmar',
+    ];
+    const responses = await Promise.all(paths.map((url) => app.inject({ method: 'POST', url, payload: {} })));
 
-    expect(response.statusCode).toBe(400);
-    expect(body.success).toBe(false);
-    expect(body.error.code).toBe('INVALID_DATE_OF_BIRTH');
+    expect(responses.map((response) => response.statusCode)).toEqual(paths.map(() => 410));
+    for (const response of responses) {
+      const body = parseJson<{ success: boolean; error: { code: string } }>(response.body);
+      expect(body.success).toBe(false);
+      expect(body.error.code).toBe('AUTH_SMS_REQUIRED');
+    }
   });
 
   it('vuelve a validar la edad al completar el registro', async () => {
@@ -189,7 +217,7 @@ describe('app integration', () => {
       name: 'Cliente',
       lastName: 'Prueba',
       dateOfBirth: dateOfBirthForAge(11),
-      verification: 'email',
+      verification: 'firebase_sms',
       intent: 'register_confirm',
     }, { expiresIn: '15m' });
 
@@ -206,7 +234,13 @@ describe('app integration', () => {
     expect(body.error.code).toBe('INVALID_DATE_OF_BIRTH');
   });
 
-  it('verifica OTP por correo y crea la cuenta del cliente', async () => {
+  it('verifica el token Firebase SMS y crea la cuenta del cliente', async () => {
+    mockVerifyFirebasePhoneToken.mockResolvedValue({
+      uid: 'firebase-customer-1',
+      phoneNumber: '+525512345678',
+      authTime: Math.floor(Date.now() / 1000),
+      expiresAt: Math.floor(Date.now() / 1000) + 3600,
+    });
     jest.spyOn(prisma.user, 'findFirst').mockResolvedValue(null);
     jest.spyOn(prisma.user, 'create').mockResolvedValue({
       id: 'user-1',
@@ -257,7 +291,7 @@ describe('app integration', () => {
 
     const sendResponse = await app.inject({
       method: 'POST',
-      url: '/auth/email-otp/iniciar',
+      url: '/auth/sms-otp/iniciar',
       payload: {
         phone: '5512345678',
         intent: 'register',
@@ -267,16 +301,14 @@ describe('app integration', () => {
         dateOfBirth: '1990-01-01',
       },
     });
-    const sendBody = parseJson<{ success: boolean; data: { challengeId: string; mockCode?: string } }>(
-      sendResponse.body
-    );
+    const sendBody = parseJson<{ success: boolean; data: { verificationToken: string } }>(sendResponse.body);
 
     const verifyResponse = await app.inject({
       method: 'POST',
-      url: '/auth/email-otp/confirmar',
+      url: '/auth/sms-otp/confirmar',
       payload: {
-        challengeId: sendBody.data.challengeId,
-        code: sendBody.data.mockCode ?? '000000',
+        verificationToken: sendBody.data.verificationToken,
+        firebaseIdToken: 'firebase-id-token',
       },
     });
     const verifyBody = parseJson<{ success: boolean; data: { registerToken: string } }>(verifyResponse.body);
@@ -303,6 +335,73 @@ describe('app integration', () => {
     }));
   });
 
+  it('rechaza volver a intercambiar el mismo token verificado de Firebase', async () => {
+    const authTime = Math.floor(Date.now() / 1000);
+    mockVerifyFirebasePhoneToken.mockResolvedValue({
+      uid: 'firebase-replay-proof',
+      phoneNumber: '+525512345678',
+      authTime,
+      expiresAt: authTime + 3600,
+    });
+    jest.spyOn(prisma.user, 'findFirst').mockResolvedValue(null);
+
+    const startResponse = await app.inject({
+      method: 'POST',
+      url: '/auth/sms-otp/iniciar',
+      payload: {
+        phone: '5512345678', intent: 'register', email: 'replay@example.com',
+        name: 'Cliente', lastName: 'Prueba', dateOfBirth: '1990-01-01',
+      },
+    });
+    const startBody = parseJson<{ data: { verificationToken: string } }>(startResponse.body);
+    const verify = () => app.inject({
+      method: 'POST',
+      url: '/auth/sms-otp/confirmar',
+      payload: { verificationToken: startBody.data.verificationToken, firebaseIdToken: 'same-firebase-id-token' },
+    });
+
+    const firstResponse = await verify();
+    const replayResponse = await verify();
+    const replayBody = parseJson<{ error: { code: string } }>(replayResponse.body);
+
+    expect(firstResponse.statusCode).toBe(200);
+    expect(replayResponse.statusCode).toBe(409);
+    expect(replayBody.error.code).toBe('SMS_VERIFICATION_ALREADY_USED');
+  });
+
+  it('rechaza un ID token Firebase verificado para otro teléfono', async () => {
+    const authTime = Math.floor(Date.now() / 1000);
+    mockVerifyFirebasePhoneToken.mockResolvedValue({
+      uid: 'firebase-other-phone',
+      phoneNumber: '+525512345679',
+      authTime,
+      expiresAt: authTime + 3600,
+    });
+    jest.spyOn(prisma.user, 'findFirst').mockResolvedValue(null);
+
+    const startResponse = await app.inject({
+      method: 'POST',
+      url: '/auth/sms-otp/iniciar',
+      payload: {
+        phone: '5512345678', intent: 'register', email: 'different-phone@example.com',
+        name: 'Cliente', lastName: 'Prueba', dateOfBirth: '1990-01-01',
+      },
+    });
+    const startBody = parseJson<{ data: { verificationToken: string } }>(startResponse.body);
+    const response = await app.inject({
+      method: 'POST',
+      url: '/auth/sms-otp/confirmar',
+      payload: {
+        verificationToken: startBody.data.verificationToken,
+        firebaseIdToken: 'firebase-other-phone-id-token',
+      },
+    });
+    const body = parseJson<{ error: { code: string } }>(response.body);
+
+    expect(response.statusCode).toBe(401);
+    expect(body.error.code).toBe('INVALID_FIREBASE_TOKEN');
+  });
+
   it('rechaza correos ya registrados sin distinguir mayúsculas', async () => {
     jest.spyOn(prisma.user, 'findFirst')
       .mockResolvedValueOnce(null)
@@ -310,7 +409,7 @@ describe('app integration', () => {
 
     const response = await app.inject({
       method: 'POST',
-      url: '/auth/email-otp/iniciar',
+      url: '/auth/sms-otp/iniciar',
       payload: {
         phone: '5512345678',
         intent: 'register',
@@ -339,7 +438,7 @@ describe('app integration', () => {
       name: 'Cliente',
       lastName: 'Prueba',
       dateOfBirth: '1990-01-01',
-      verification: 'email',
+      verification: 'firebase_sms',
       intent: 'register_confirm',
     }, { expiresIn: '15m' });
 
@@ -359,29 +458,36 @@ describe('app integration', () => {
     }));
   });
 
-  it('permite recuperar la contraseña con un código enviado al correo', async () => {
+  it('permite recuperar la contraseña tras verificar el teléfono por SMS', async () => {
+    mockVerifyFirebasePhoneToken.mockResolvedValue({
+      uid: 'firebase-customer-recovery',
+      phoneNumber: '+525512345680',
+      authTime: Math.floor(Date.now() / 1000),
+      expiresAt: Math.floor(Date.now() / 1000) + 3600,
+    });
     const user = {
-      id: 'customer-user-email-recovery',
-      phone: '5512345678',
-      phoneNormalized: '5512345678',
+      id: 'customer-user-sms-recovery',
+      phone: '5512345680',
+      phoneNormalized: '5512345680',
       email: 'cliente@example.com',
       role: 'CUSTOMER',
     };
     jest.spyOn(prisma.user, 'findFirst').mockResolvedValue(user as never);
     jest.spyOn(prisma.user, 'findUnique').mockResolvedValue(user as never);
     const updateUser = jest.spyOn(prisma.user, 'update').mockResolvedValue(user as never);
+    jest.spyOn(prisma.refreshToken, 'updateMany').mockResolvedValue({ count: 0 } as never);
 
     const sendResponse = await app.inject({
       method: 'POST',
-      url: '/auth/email-otp/iniciar',
+      url: '/auth/sms-otp/iniciar',
       payload: { phone: user.phone, intent: 'recovery' },
     });
-    const sendBody = parseJson<{ data: { challengeId: string; mockCode?: string } }>(sendResponse.body);
+    const sendBody = parseJson<{ data: { verificationToken: string } }>(sendResponse.body);
 
     const verifyResponse = await app.inject({
       method: 'POST',
-      url: '/auth/email-otp/confirmar',
-      payload: { challengeId: sendBody.data.challengeId, code: sendBody.data.mockCode },
+      url: '/auth/sms-otp/confirmar',
+      payload: { verificationToken: sendBody.data.verificationToken, firebaseIdToken: 'firebase-recovery-id-token' },
     });
     const verifyBody = parseJson<{ data: { resetToken: string } }>(verifyResponse.body);
 
@@ -409,7 +515,7 @@ describe('app integration', () => {
 
     const response = await app.inject({
       method: 'POST',
-      url: '/auth/email-otp/iniciar',
+      url: '/auth/sms-otp/iniciar',
       payload: {
         phone: '5512345678',
         intent: 'register',

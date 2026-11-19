@@ -151,6 +151,9 @@ services:
     networks:
       wingslab:
         ipv4_address: 172.30.240.21
+      # Firebase Admin verifies ID tokens using Google's signing certificates.
+      edge_bridge:
+        ipv4_address: 172.31.240.21
 
   customer:
     <<: *application

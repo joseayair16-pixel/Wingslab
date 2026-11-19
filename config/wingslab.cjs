@@ -53,7 +53,7 @@ function frontendConfig(role) {
     async headers() {
       return [{ source: '/:path*', headers: [{
         key: 'Content-Security-Policy',
-        value: `default-src 'self'; connect-src 'self' ${api} ${socket.replace('http:', 'ws:')}; img-src 'self' data: blob: ${api}; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; media-src 'self' blob:; worker-src 'self' blob:; frame-src 'none'; object-src 'none'; base-uri 'self'; form-action 'self'`,
+        value: `default-src 'self'; connect-src 'self' ${api} ${socket.replace('http:', 'ws:')} https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://www.googleapis.com https://www.google.com https://www.recaptcha.net; img-src 'self' data: blob: ${api} https://www.gstatic.com https://www.google.com; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.gstatic.com https://www.google.com https://www.recaptcha.net; style-src 'self' 'unsafe-inline'; font-src 'self' data:; media-src 'self' blob:; worker-src 'self' blob:; frame-src https://www.google.com https://www.recaptcha.net; object-src 'none'; base-uri 'self'; form-action 'self'`,
       }] }];
     },
   };
@@ -108,6 +108,40 @@ function processEnvironment(config, role, action) {
     WINGSLAB_REDIS_URL: config.backend?.redisUrl || '', WINGSLAB_JWT_SECRET: config.backend?.jwtSecret || '',
     WINGSLAB_DATABASE_ENCRYPTION_KEY: config.backend?.encryptionKey || '', WINGSLAB_STORAGE_PROVIDER: 'memory',
   });
+  if (role === 'backend') {
+    const firebaseAuth = config.backend?.firebaseAuth || {};
+    for (const [field, name] of [
+      ['projectId', 'WINGSLAB_FIREBASE_AUTH_PROJECT_ID'],
+      ['clientEmail', 'WINGSLAB_FIREBASE_AUTH_CLIENT_EMAIL'],
+      ['privateKey', 'WINGSLAB_FIREBASE_AUTH_PRIVATE_KEY'],
+    ]) {
+      if (typeof firebaseAuth[field] === 'string' && firebaseAuth[field].trim()) {
+        env[name] = firebaseAuth[field].trim();
+      }
+    }
+  }
+  if (role === 'customer') {
+    const firebase = config.firebase || {};
+    for (const [field, name] of [
+      ['apiKey', 'WINGSLAB_FIREBASE_WEB_API_KEY'],
+      ['authDomain', 'WINGSLAB_FIREBASE_WEB_AUTH_DOMAIN'],
+      ['projectId', 'WINGSLAB_FIREBASE_WEB_PROJECT_ID'],
+      ['appId', 'WINGSLAB_FIREBASE_WEB_APP_ID'],
+    ]) {
+      env[name] = typeof firebase[field] === 'string' ? firebase[field].trim() : '';
+    }
+    const phoneAuthTest = firebase.phoneAuthTest || {};
+    if (action === 'start' && phoneAuthTest.enabled === true) {
+      const testPhoneNumber = typeof phoneAuthTest.phoneNumber === 'string'
+        ? phoneAuthTest.phoneNumber.trim()
+        : '';
+      if (config.profile !== 'container' || !/^\+52\d{10}$/.test(testPhoneNumber)) {
+        throw new Error('[WingsLab] Local Firebase phone test mode requires one explicit Mexican test number.');
+      }
+      env.WINGSLAB_FIREBASE_PHONE_AUTH_TEST_MODE = 'true';
+      env.WINGSLAB_FIREBASE_TEST_PHONE_NUMBER = testPhoneNumber;
+    }
+  }
   return env;
 }
 

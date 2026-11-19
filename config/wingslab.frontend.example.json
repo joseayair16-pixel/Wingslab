@@ -8,5 +8,11 @@
     "restaurant": "http://127.0.0.1:3102",
     "customer": "http://127.0.0.1:3103",
     "driver": "http://127.0.0.1:3104"
+  },
+  "firebase": {
+    "apiKey": "",
+    "authDomain": "",
+    "projectId": "",
+    "appId": ""
   }
 }

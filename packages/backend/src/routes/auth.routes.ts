@@ -14,13 +14,19 @@ import {
   revokeAllUserRefreshTokens,
   validateAndRotateRefreshToken,
 } from '../services/refresh-token.service';
-import { isMexicanLocalPhone, toWhatsAppLinkNumber } from '../utils/mexican-phone';
+import { isMexicanLocalPhone, normalizeStoredMexicanPhone, toWhatsAppLinkNumber } from '../utils/mexican-phone';
+import {
+  FirebaseAuthNotConfiguredError,
+  isFirebaseAuthConfigured,
+  verifyFirebasePhoneToken,
+} from '../services/firebase-auth.service';
 
 const WHATSAPP_AUTH_TTL_SECONDS = 300;
 const WHATSAPP_AUTH_STARTS_PER_HOUR = 5;
 const EMAIL_OTP_TTL_SECONDS = 300;
 const EMAIL_OTP_MAX_ATTEMPTS = 5;
 const EMAIL_OTP_STARTS_PER_HOUR = 5;
+const SMS_OTP_STARTS_PER_HOUR = 5;
 const EMAIL_OTP_HMAC_SECRET = process.env.JWT_SECRET || crypto.randomBytes(32).toString('hex');
 const CUSTOMER_MINIMUM_AGE = 12;
 
@@ -127,6 +133,11 @@ function getEmailOtpStartsKey(phone: string): string {
   return `email_otp:starts:${hash}`;
 }
 
+function getSmsOtpStartsKey(phone: string): string {
+  const hash = crypto.createHash('sha256').update(phone).digest('hex');
+  return `firebase_sms:starts:${hash}`;
+}
+
 function hashEmailOtp(challengeId: string, code: string): string {
   return crypto.createHmac('sha256', EMAIL_OTP_HMAC_SECRET).update(`${challengeId}:${code}`).digest('hex');
 }
@@ -229,6 +240,273 @@ function createCustomerProfile(userId: string) {
 }
 
 export async function registerAuthRoutes(fastify: FastifyInstance): Promise<void> {
+  const retiredVerificationPaths = new Set([
+    '/auth/email-otp/iniciar',
+    '/auth/email-otp/confirmar',
+    '/auth/whatsapp/iniciar',
+    '/auth/whatsapp/estado',
+    '/auth/whatsapp/confirmar',
+  ]);
+  fastify.addHook('preHandler', async (request, reply) => {
+    const path = request.raw.url?.split('?')[0];
+    if (request.method !== 'POST' || !path || !retiredVerificationPaths.has(path)) return;
+    return reply.status(410).send({
+      success: false,
+      error: {
+        code: 'AUTH_SMS_REQUIRED',
+        message: 'La verificación por correo y WhatsApp ya no está disponible. Usa SMS.',
+      },
+    });
+  });
+
+  const smsOtpStartSchema = z.object({
+    phone: z.string().refine(isMexicanLocalPhone, 'Ingresa un teléfono mexicano de 10 dígitos.'),
+    intent: z.enum(['register', 'recovery']),
+    email: z.string().email('Correo inválido.').optional(),
+    name: z.string().trim().min(2, 'El nombre debe tener al menos 2 caracteres.').optional(),
+    lastName: z.string().trim().min(2, 'Los apellidos deben tener al menos 2 caracteres.').optional(),
+    dateOfBirth: z.string().refine((value) => parseCalendarDate(value) !== null, 'Fecha de nacimiento inválida.').optional(),
+  });
+
+  fastify.post(
+    '/auth/sms-otp/iniciar',
+    { config: { rateLimit: { max: 5, timeWindow: '15 minutes' } } },
+    async (request, reply) => {
+      const parsed = smsOtpStartSchema.safeParse(request.body);
+      if (!parsed.success) {
+        return reply.status(400).send({
+          success: false,
+          error: { code: 'INVALID_PAYLOAD', message: parsed.error.issues[0]?.message || 'Datos inválidos.' },
+        });
+      }
+      if (!isFirebaseAuthConfigured()) {
+        return reply.status(503).send({
+          success: false,
+          error: { code: 'SMS_VERIFICATION_UNAVAILABLE', message: 'La verificación por SMS no está configurada.' },
+        });
+      }
+
+      const phone = parsed.data.phone;
+      const email = parsed.data.email ? normalizeEmail(parsed.data.email) : undefined;
+      let userId: string | undefined;
+      if (parsed.data.intent === 'register') {
+        if (!parsed.data.name?.trim() || !parsed.data.lastName?.trim() || !parsed.data.dateOfBirth) {
+          return reply.status(400).send({
+            success: false,
+            error: { code: 'INVALID_PAYLOAD', message: 'Completa tus datos de registro antes de verificar el teléfono.' },
+          });
+        }
+        if (!isEligibleCustomerBirthDate(parsed.data.dateOfBirth)) return invalidBirthDate(reply);
+
+        const existingPhone = await prisma.user.findFirst({
+          where: { phoneNormalized: phone, role: UserRole.CUSTOMER },
+          select: { id: true },
+        });
+        if (existingPhone) {
+          return reply.status(409).send({
+            success: false,
+            error: { code: 'PHONE_ALREADY_REGISTERED', message: 'Este teléfono ya tiene una cuenta. Inicia sesión o recupera tu contraseña.' },
+          });
+        }
+        if (email) {
+          const existingEmail = await prisma.user.findFirst({
+            where: { email: { equals: email, mode: 'insensitive' } },
+            select: { id: true },
+          });
+          if (existingEmail) {
+            return reply.status(409).send({
+              success: false,
+              error: { code: 'EMAIL_ALREADY_REGISTERED', message: 'Este correo ya tiene una cuenta registrada.' },
+            });
+          }
+        }
+      } else {
+        const existingUser = await prisma.user.findFirst({
+          where: { phoneNormalized: phone, role: UserRole.CUSTOMER },
+          select: { id: true },
+        });
+        if (!existingUser) {
+          return reply.status(404).send({
+            success: false,
+            error: { code: 'USER_NOT_FOUND', message: 'No existe una cuenta con ese teléfono.' },
+          });
+        }
+        userId = existingUser.id;
+      }
+
+      const redis = getRedis();
+      const startsKey = getSmsOtpStartsKey(phone);
+      const starts = await redis.incr(startsKey);
+      if (starts === 1) await redis.expire(startsKey, 60 * 60);
+      if (starts > SMS_OTP_STARTS_PER_HOUR) {
+        await redis.decr(startsKey);
+        return reply.status(429).send({
+          success: false,
+          error: { code: 'SMS_OTP_LIMIT', message: 'Alcanzaste el límite de códigos. Intenta de nuevo más tarde.' },
+        });
+      }
+
+      const verificationToken = await reply.jwtSign({
+        purpose: 'firebase_sms_start',
+        intent: parsed.data.intent,
+        phone,
+        ...(parsed.data.intent === 'register'
+          ? {
+              email,
+              name: parsed.data.name?.trim(),
+              lastName: parsed.data.lastName?.trim(),
+              dateOfBirth: parsed.data.dateOfBirth,
+            }
+          : { userId }),
+      }, { expiresIn: '10m' });
+
+      return reply.send({
+        success: true,
+        data: { verificationToken, expiresInSeconds: 300 },
+      });
+    },
+  );
+
+  fastify.post(
+    '/auth/sms-otp/confirmar',
+    { config: { rateLimit: { max: 10, timeWindow: '15 minutes' } } },
+    async (request, reply) => {
+      const parsed = z.object({
+        verificationToken: z.string().min(1).max(8192),
+        firebaseIdToken: z.string().min(1).max(8192),
+      }).safeParse(request.body);
+      if (!parsed.success) {
+        return reply.status(400).send({
+          success: false,
+          error: { code: 'INVALID_PAYLOAD', message: 'La verificación SMS es inválida. Iníciala de nuevo.' },
+        });
+      }
+
+      type SmsStartClaims = {
+        purpose?: string;
+        intent?: 'register' | 'recovery';
+        phone?: string;
+        email?: string;
+        name?: string;
+        lastName?: string;
+        dateOfBirth?: string;
+        userId?: string;
+      };
+      let claims: SmsStartClaims;
+      try {
+        claims = fastify.jwt.verify<SmsStartClaims>(parsed.data.verificationToken);
+      } catch {
+        return reply.status(401).send({
+          success: false,
+          error: { code: 'SMS_VERIFICATION_EXPIRED', message: 'La verificación venció. Inicia de nuevo.' },
+        });
+      }
+      if (
+        claims.purpose !== 'firebase_sms_start' ||
+        (claims.intent !== 'register' && claims.intent !== 'recovery') ||
+        !claims.phone ||
+        !isMexicanLocalPhone(claims.phone)
+      ) {
+        return reply.status(401).send({
+          success: false,
+          error: { code: 'SMS_VERIFICATION_INVALID', message: 'La verificación SMS es inválida.' },
+        });
+      }
+
+      let firebaseIdentity;
+      try {
+        firebaseIdentity = await verifyFirebasePhoneToken(parsed.data.firebaseIdToken);
+      } catch (error) {
+        if (error instanceof FirebaseAuthNotConfiguredError) {
+          return reply.status(503).send({
+            success: false,
+            error: { code: 'SMS_VERIFICATION_UNAVAILABLE', message: 'La verificación por SMS no está configurada.' },
+          });
+        }
+        return reply.status(503).send({
+          success: false,
+          error: { code: 'SMS_VERIFICATION_PROVIDER_ERROR', message: 'No se pudo confirmar el código SMS. Intenta de nuevo.' },
+        });
+      }
+
+      const now = Math.floor(Date.now() / 1000);
+      const verifiedPhone = firebaseIdentity ? normalizeStoredMexicanPhone(firebaseIdentity.phoneNumber) : null;
+      if (
+        !firebaseIdentity ||
+        verifiedPhone !== claims.phone ||
+        firebaseIdentity.authTime > now + 60 ||
+        now - firebaseIdentity.authTime > 5 * 60 ||
+        firebaseIdentity.expiresAt <= now
+      ) {
+        return reply.status(401).send({
+          success: false,
+          error: { code: 'INVALID_FIREBASE_TOKEN', message: 'El código SMS es inválido o venció.' },
+        });
+      }
+
+      let grantToken: string;
+      if (claims.intent === 'register') {
+        if (!claims.name || !claims.lastName || !isEligibleCustomerBirthDate(claims.dateOfBirth)) {
+          return reply.status(400).send({
+            success: false,
+            error: { code: 'INVALID_REGISTRATION_DATA', message: 'Los datos de registro son inválidos. Inicia de nuevo.' },
+          });
+        }
+        const existingUser = await prisma.user.findFirst({
+          where: { phoneNormalized: claims.phone, role: UserRole.CUSTOMER },
+          select: { id: true },
+        });
+        if (existingUser) {
+          return reply.status(409).send({
+            success: false,
+            error: { code: 'PHONE_ALREADY_REGISTERED', message: 'Este teléfono ya tiene una cuenta. Inicia sesión o recupera tu contraseña.' },
+          });
+        }
+        grantToken = await reply.jwtSign({
+          phone: claims.phone,
+          email: claims.email ? normalizeEmail(claims.email) : undefined,
+          name: claims.name,
+          lastName: claims.lastName,
+          dateOfBirth: claims.dateOfBirth,
+          verification: 'firebase_sms',
+          intent: 'register_confirm',
+        }, { expiresIn: '15m' });
+      } else {
+        const existingUser = await prisma.user.findFirst({
+          where: { phoneNormalized: claims.phone, role: UserRole.CUSTOMER },
+          select: { id: true, phone: true },
+        });
+        if (!existingUser || (claims.userId && claims.userId !== existingUser.id)) {
+          return reply.status(404).send({
+            success: false,
+            error: { code: 'USER_NOT_FOUND', message: 'No existe una cuenta recuperable con ese teléfono.' },
+          });
+        }
+        grantToken = await reply.jwtSign({
+          sub: existingUser.id,
+          phone: existingUser.phone,
+          verification: 'firebase_sms',
+          intent: 'password_reset',
+        }, { expiresIn: '15m' });
+      }
+
+      const proofHash = crypto.createHash('sha256').update(parsed.data.firebaseIdToken).digest('hex');
+      const proofTtl = Math.max(1, Math.min(5 * 60, firebaseIdentity.authTime + 5 * 60 - now));
+      const firstUse = await getRedis().set(`firebase_sms:proof:${proofHash}`, '1', 'EX', proofTtl, 'NX');
+      if (!firstUse) {
+        return reply.status(409).send({
+          success: false,
+          error: { code: 'SMS_VERIFICATION_ALREADY_USED', message: 'Este código ya se utilizó. Solicita uno nuevo.' },
+        });
+      }
+
+      return reply.send({
+        success: true,
+        data: claims.intent === 'register' ? { registerToken: grantToken } : { resetToken: grantToken },
+      });
+    },
+  );
+
   const emailOtpStartSchema = z.object({
     phone: z.string().refine(isMexicanLocalPhone, 'Ingresa un teléfono de 10 dígitos.'),
     intent: z.enum(['register', 'recovery']),
@@ -761,8 +1039,8 @@ export async function registerAuthRoutes(fastify: FastifyInstance): Promise<void
     reply.status(410).send({
       success: false,
       error: {
-        code: 'AUTH_VERIFICATION_UPDATE_REQUIRED',
-        message: 'Actualiza la aplicación para elegir la verificación por correo o WhatsApp.',
+        code: 'AUTH_SMS_REQUIRED',
+        message: 'Actualiza la aplicación para verificar tu teléfono por SMS.',
       },
     });
   fastify.post('/auth/enviar-codigo', retiredOtpResponse);
@@ -1056,7 +1334,7 @@ export async function registerAuthRoutes(fastify: FastifyInstance): Promise<void
 
       if (
         decoded.intent !== 'password_reset' ||
-        (decoded.verification !== 'whatsapp' && decoded.verification !== 'email')
+        decoded.verification !== 'firebase_sms'
       ) {
         throw new Error('Invalid intent');
       }
@@ -1118,9 +1396,8 @@ export async function registerAuthRoutes(fastify: FastifyInstance): Promise<void
 
       if (
         decoded.intent !== 'register_confirm' ||
-        (decoded.verification !== 'whatsapp' && decoded.verification !== 'email') ||
-        !isMexicanLocalPhone(decoded.phone) ||
-        (decoded.verification === 'email' && !isRealEmail(decoded.email))
+        decoded.verification !== 'firebase_sms' ||
+        !isMexicanLocalPhone(decoded.phone)
       ) {
         throw new Error('Invalid intent');
       }
@@ -1148,7 +1425,7 @@ export async function registerAuthRoutes(fastify: FastifyInstance): Promise<void
 
       const email = isRealEmail(decoded.email)
         ? normalizeEmail(decoded.email!)
-        : `${decoded.phone}@sadel.local`;
+        : `${decoded.phone}@phone.wingslab.invalid`;
 
       if (isRealEmail(email)) {
         const emailExists = await prisma.user.findFirst({

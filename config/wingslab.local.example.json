@@ -10,5 +10,21 @@
     "customer": "http://127.0.0.1:3103",
     "driver": "http://127.0.0.1:3104"
   },
-  "backend": { "databaseUrl": "", "redisUrl": "", "jwtSecret": "", "encryptionKey": "" }
+  "firebase": {
+    "apiKey": "",
+    "authDomain": "",
+    "projectId": "",
+    "appId": ""
+  },
+  "backend": {
+    "databaseUrl": "",
+    "redisUrl": "",
+    "jwtSecret": "",
+    "encryptionKey": "",
+    "firebaseAuth": {
+      "projectId": "",
+      "clientEmail": "",
+      "privateKey": ""
+    }
+  }
 }
