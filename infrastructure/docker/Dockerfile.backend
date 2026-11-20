@@ -39,7 +39,7 @@ RUN apk add --no-cache dumb-init tini
 COPY package.json package-lock.json ./
 COPY --from=builder /app/config ./config
 COPY --from=builder /app/scripts ./scripts
-COPY --from=builder /app/packages/shared/src/wingslab-policy.js ./packages/shared/src/wingslab-policy.js
+COPY --from=builder /app/packages/shared/src/wingslab-policy.cjs ./packages/shared/src/wingslab-policy.cjs
 
 # Copy built artifacts
 COPY --from=builder /app/packages/shared/dist ./packages/shared/dist

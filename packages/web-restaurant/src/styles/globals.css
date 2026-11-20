@@ -538,7 +538,8 @@ html.dark .wl-dash-chart-details summary { color:#ff9295; }
 
 /* Estructura del panel WingsLab: marca, navegación y estado en una sola barra lateral. */
 .wl-admin-header { background:var(--wl-admin-surface); border-color:var(--wl-admin-border); }
-.wl-admin-header-logo { width:104px; height:auto; }
+.wl-admin-header-logo { width:140px; max-width:100%; height:auto; }
+.wl-admin-header-subtitle { color:var(--wl-admin-secondary); font-size:10px; font-weight:700; letter-spacing:.14em; line-height:1.2; text-transform:uppercase; }
 .wl-admin-logo-dark { display:none; }
 html.dark .wl-admin-logo-light { display:none; }
 html.dark .wl-admin-logo-dark { display:block; }
@@ -570,7 +571,16 @@ html.dark .wl-admin-nav .wl-admin-nav-item[aria-current='page'] { background:#48
 .wl-admin-sidebar-footer button:not(.wl-admin-theme-toggle) { min-height:48px; border-color:var(--wl-admin-border); background:var(--wl-admin-surface); color:var(--wl-admin-text); border-radius:14px; font-size:12px; }
 .wl-admin-sidebar-footer button:not(.wl-admin-theme-toggle):hover { background:var(--wl-admin-muted); }
 @media(min-width:1024px) { .wl-admin-header { display:none; } .wl-admin-sidebar { top:0; height:100dvh; z-index:40; } .wl-admin-layout { min-height:100dvh; } }
-.wl-admin-sidebar-top { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:20px; }
+/* En tamaños de tablet, la cabecera no debe depender del tipo de puntero:
+   una funda con trackpad o el emulador pueden cambiar esa característica. */
+@media(min-width:1024px) and (max-width:1366px) {
+  .wl-admin-header { display:block; position:sticky; top:0; z-index:50; }
+  .wl-admin-header > div { height:68px; box-sizing:border-box; }
+  .wl-admin-sidebar { top:68px; height:calc(100dvh - 68px); }
+  .wl-admin-layout { min-height:calc(100dvh - 68px); }
+}
+.wl-admin-sidebar-top { display:flex; align-items:center; gap:8px; }
+.wl-admin-sidebar-top .wl-admin-business { flex:1; min-width:0; }
 .wl-admin-sidebar-top .wl-admin-side-logo { margin:0; min-width:0; }
 .wl-admin-sidebar-toggle { display:grid; place-items:center; flex:none; width:38px; height:38px; border:1px solid var(--wl-admin-border); border-radius:11px; color:var(--wl-admin-secondary); background:var(--wl-admin-surface); }
 .wl-admin-sidebar-toggle:hover { color:var(--wl-admin-text); background:var(--wl-admin-muted); }
@@ -585,7 +595,7 @@ html.dark .wl-admin-logo-compact { color:#ff9295; }
   .wl-admin-layout--collapsed .wl-admin-main { margin-left:80px; }
   .wl-admin-layout--collapsed .wl-admin-sidebar > div:first-child { padding-left:12px; padding-right:12px; }
   .wl-admin-layout--collapsed .wl-admin-sidebar-top { position:relative; justify-content:center; min-height:44px; }
-  .wl-admin-layout--collapsed .wl-admin-sidebar-toggle { position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); opacity:0; transition:opacity .15s ease; }
+  .wl-admin-layout--collapsed .wl-admin-sidebar-toggle { position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); }
   .wl-admin-layout--collapsed .wl-admin-sidebar-top:hover .wl-admin-sidebar-toggle, .wl-admin-layout--collapsed .wl-admin-sidebar-toggle:focus-visible { opacity:1; }
   .wl-admin-layout--collapsed .wl-admin-sidebar-top:hover .wl-admin-logo-compact, .wl-admin-layout--collapsed .wl-admin-sidebar-top:focus-within .wl-admin-logo-compact { visibility:hidden; }
   .wl-admin-layout--collapsed .wl-admin-sidebar .wl-admin-side-logo img { display:none; }

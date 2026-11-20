@@ -1,4 +1,5 @@
 /* Pure policy shared by Node, Next configuration and browser code. No IO/env reads. */
+/* NOTE: keeps the same logic as wingslab-policy.ts. Update both together. */
 const browserOrigins = Object.freeze({
   backend: 'http://127.0.0.1:3101',
   restaurant: 'http://127.0.0.1:3102',

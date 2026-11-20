@@ -14,5 +14,9 @@
     "authDomain": "",
     "projectId": "",
     "appId": ""
+  },
+  "googleMaps": {
+    "enabled": false,
+    "apiKey": ""
   }
 }

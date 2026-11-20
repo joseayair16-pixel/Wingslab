@@ -1,6 +1,9 @@
-const AUTOMATIC_ORDER_DECISIONS_ENABLED = false;
-const SIMULATED_ORDERS_ENABLED = false;
-const RESTAURANT_ORDER_ACTIONS = Object.freeze({
+export const AUTOMATIC_ORDER_DECISIONS_ENABLED = false;
+export const SIMULATED_ORDERS_ENABLED = false;
+
+type ActionRule = Readonly<{ from: ReadonlyArray<string>; to: string }>;
+
+export const RESTAURANT_ORDER_ACTIONS: Readonly<Record<string, ActionRule>> = Object.freeze({
   accept: Object.freeze({ from: Object.freeze(['PENDING']), to: 'CONFIRMED' }),
   reject: Object.freeze({ from: Object.freeze(['PENDING']), to: 'REJECTED' }),
   preparing: Object.freeze({ from: Object.freeze(['CONFIRMED']), to: 'PREPARING' }),
@@ -14,16 +17,15 @@ const RESTAURANT_ORDER_ACTIONS = Object.freeze({
   marcarRecogido: Object.freeze({ from: Object.freeze(['READY']), to: 'COMPLETED' }),
   iniciarEntrega: Object.freeze({ from: Object.freeze(['READY']), to: 'IN_TRANSIT' }),
 });
-/** @param {string} status */
-function restaurantOrderActionsForStatus(status) {
+
+export function restaurantOrderActionsForStatus(status: string): string[] {
   return Object.keys(RESTAURANT_ORDER_ACTIONS).filter(key => RESTAURANT_ORDER_ACTIONS[key].from.includes(status));
 }
-/** @param {string} action */
-function restaurantOrderActionAllowed(status, action) {
+
+export function restaurantOrderActionAllowed(status: string, action: string): boolean {
   return RESTAURANT_ORDER_ACTIONS[action]?.from.includes(status) === true;
 }
-/** @param {string} action */
-function restaurantOrderTargetStatus(action) { return RESTAURANT_ORDER_ACTIONS[action]?.to; }
-module.exports = { AUTOMATIC_ORDER_DECISIONS_ENABLED, SIMULATED_ORDERS_ENABLED,
-  RESTAURANT_ORDER_ACTIONS, restaurantOrderActionsForStatus,
-  restaurantOrderActionAllowed, restaurantOrderTargetStatus };
+
+export function restaurantOrderTargetStatus(action: string): string | undefined {
+  return RESTAURANT_ORDER_ACTIONS[action]?.to;
+}

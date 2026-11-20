@@ -10,8 +10,8 @@ import { CustomerNavigation } from '../../components/CustomerNavigation';
 import { CustomerSupport } from '../../components/CustomerSupport';
 import { PageHeader } from '../../components/PageHeader';
 import { LoyaltyQrPanel } from '../../components/LoyaltyQrPanel';
-import { createPlacesSource } from '../../lib/places';
-import { waitForGoogleMaps } from '../../lib/googleMaps';
+import { createPlacesSource, fetchSelectedPlaceFields, type PlacesSuggestion } from '../../lib/places';
+import { ensureGoogleMapsScript } from '../../lib/googleMaps';
 import officialLogo from '../../assets/wingslab-wordmark.png';
 import { LoyaltyCard } from '../../../../shared/src/loyalty-card';
 
@@ -54,11 +54,61 @@ function addressLabel(address: any): string {
 function addressDetail(address: any): string {
   return [address.neighborhood, address.city, address.state, address.zipCode].filter(Boolean).join(', ');
 }
+
+function AddressPinMap({ latitude, longitude, onChange }: { latitude: number; longitude: number; onChange: (latitude: number, longitude: number) => void }) {
+  const elementRef = useRef<HTMLDivElement>(null);
+  const mapRef = useRef<any>(null);
+  const markerRef = useRef<any>(null);
+  const onChangeRef = useRef(onChange);
+  const positionRef = useRef({ lat: latitude, lng: longitude });
+  const [unavailable, setUnavailable] = useState(false);
+  onChangeRef.current = onChange;
+  positionRef.current = { lat: latitude, lng: longitude };
+
+  useEffect(() => {
+    let active = true;
+    let listeners: any[] = [];
+    void ensureGoogleMapsScript().then(google => {
+      if (!active) return;
+      if (!google?.maps || !elementRef.current) { setUnavailable(true); return; }
+      const map = new google.maps.Map(elementRef.current, { center: positionRef.current, zoom: 17, streetViewControl: false, mapTypeControl: false, fullscreenControl: false });
+      const marker = new google.maps.Marker({ map, position: positionRef.current, draggable: true, title: 'Ubicación de entrega' });
+      mapRef.current = map;
+      markerRef.current = marker;
+      const update = (position: any) => {
+        if (position) onChangeRef.current(position.lat(), position.lng());
+      };
+      listeners = [map.addListener('click', (event: any) => update(event.latLng)), marker.addListener('dragend', (event: any) => update(event.latLng))];
+    }).catch(() => { if (active) setUnavailable(true); });
+    return () => {
+      active = false;
+      listeners.forEach(listener => listener.remove());
+      markerRef.current?.setMap(null);
+      markerRef.current = null;
+      mapRef.current = null;
+    };
+  }, []);
+
+  useEffect(() => {
+    const position = { lat: latitude, lng: longitude };
+    markerRef.current?.setPosition(position);
+    mapRef.current?.panTo(position);
+  }, [latitude, longitude]);
+
+  return <div className="wl-addr-map-section">
+    <span className="wl-addr-map-label">Ubicación de entrega</span>
+    <div ref={elementRef} role="region" aria-label="Mapa para fijar la ubicación de entrega" className="wl-addr-map" />
+    <p className="wl-addr-map-hint">{unavailable ? 'No se pudo cargar el mapa. Intenta de nuevo.' : 'Arrastra el pin o toca el mapa para ajustar la ubicación exacta.'}</p>
+  </div>;
+}
+
 export default function CustomerAccount() {
   const [token, setToken] = useState('');
   const [user, setUser] = useState<AuthUser | null>(null);
   const [authOpen, setAuthOpen] = useState(false);
   const [orders, setOrders] = useState<any[]>([]);
+  const [ordersLoading, setOrdersLoading] = useState(true);
+  const [ordersLoadFailed, setOrdersLoadFailed] = useState(false);
   const [addresses, setAddresses] = useState<any[]>([]);
   const [loyalty, setLoyalty] = useState<any>(null);
   const [customerStats, setCustomerStats] = useState<{ totalOrders: number } | null>(null);
@@ -74,11 +124,16 @@ export default function CustomerAccount() {
   const [section, setSection] = useState<'pedidos' | 'fidelidad' | 'perfil' | 'soporte'>('perfil');
   const [addressModalOpen, setAddressModalOpen] = useState(false);
   const [addressQuery, setAddressQuery] = useState('');
-  const [addressSuggestions, setAddressSuggestions] = useState<any[]>([]);
+  const [addressSuggestions, setAddressSuggestions] = useState<PlacesSuggestion[]>([]);
   const [addressBusy, setAddressBusy] = useState(false);
+  const [addressSelecting, setAddressSelecting] = useState(false);
+  const [pinStatus, setPinStatus] = useState<'idle' | 'loading' | 'failed'>('idle');
+  const [addressViewport, setAddressViewport] = useState<{ top: number; height: number } | null>(null);
   const [addressForm, setAddressForm] = useState({ ...emptyAddressForm });
   const [savingAddress, setSavingAddress] = useState(false);
   const [deletingAddressId, setDeletingAddressId] = useState<string | null>(null);
+  const [addressToDelete, setAddressToDelete] = useState<{ id: string; label: string } | null>(null);
+  const [deleteAddressError, setDeleteAddressError] = useState('');
   const [addressError, setAddressError] = useState('');
   const [loyaltyError, setLoyaltyError] = useState(false);
   const apiBase = getWingslabApiUrl();
@@ -122,14 +177,18 @@ export default function CustomerAccount() {
   useEffect(() => {
     if (!token) return;
     let active = true;
+    let requestSequence = 0;
     const load = async () => {
+      const sequence = ++requestSequence;
+      // Orders must not wait for the independent address request.
+      void requestJson<any>({ apiBase, path: '/customer/addresses', token })
+        .then(result => { if (active && sequence === requestSequence) setAddresses(result.data); })
+        .catch(() => { if (active && sequence === requestSequence) setError('No se pudieron consultar tus direcciones.'); });
       try {
-        const [result, addressResult] = await Promise.all([
-          requestJson<any>({ apiBase, path: '/me/pedidos?limit=100', token }),
-          requestJson<any>({ apiBase, path: '/customer/addresses', token }),
-        ]);
-        if (active) { setOrders(result.data.items || result.data.orders || result.data); setAddresses(addressResult.data); setError(''); }
-      } catch { if (active) setError('No se pudo consultar tu cuenta. Intenta actualizar.'); }
+        const result = await requestJson<any>({ apiBase, path: '/me/pedidos?limit=100', token });
+        if (active && sequence === requestSequence) { setOrders(result.data.items || result.data.orders || result.data); setOrdersLoadFailed(false); }
+      } catch { if (active && sequence === requestSequence) setOrdersLoadFailed(true); }
+      finally { if (active && sequence === requestSequence) setOrdersLoading(false); }
     };
     void load();
     const socket = io(getWingslabSocketUrl(), { auth: { token }, transports: ['websocket', 'polling'] });
@@ -153,10 +212,35 @@ export default function CustomerAccount() {
   }, [apiBase, token, selected, detailOpen, orders]);
 
   const placesSourceRef = useRef<ReturnType<typeof createPlacesSource> | null>(null);
-  useEffect(() => () => placesSourceRef.current?.cancel(), []);
+  const addressSelectionRef = useRef(0);
+  const pinTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const numberEditedRef = useRef(false);
+  useEffect(() => () => { placesSourceRef.current?.cancel(); if (pinTimerRef.current) clearTimeout(pinTimerRef.current); addressSelectionRef.current += 1; }, []);
+  useEffect(() => {
+    if (!addressModalOpen || !window.visualViewport) return;
+    const viewport = window.visualViewport;
+    const update = () => setAddressViewport({ top: viewport.offsetTop, height: viewport.height });
+    update();
+    viewport.addEventListener('resize', update);
+    viewport.addEventListener('scroll', update);
+    return () => { viewport.removeEventListener('resize', update); viewport.removeEventListener('scroll', update); };
+  }, [addressModalOpen]);
+
+  const cancelPinLookup = () => {
+    if (pinTimerRef.current) clearTimeout(pinTimerRef.current);
+    pinTimerRef.current = null;
+    setPinStatus('idle');
+  };
 
   const searchAddresses = (query: string) => {
+    addressSelectionRef.current += 1;
+    cancelPinLookup();
+    numberEditedRef.current = false;
+    setAddressSelecting(false);
     setAddressQuery(query);
+    setAddressForm(current => ({ ...emptyAddressForm, reference: current.reference }));
+    setAddressSuggestions([]);
+    setAddressError('');
     if (!placesSourceRef.current) placesSourceRef.current = createPlacesSource();
     placesSourceRef.current.search(query, {
       onResults: setAddressSuggestions,
@@ -164,41 +248,84 @@ export default function CustomerAccount() {
     });
   };
 
-  const selectAddressSuggestion = async (suggestion: any) => {
-    const google = await waitForGoogleMaps();
-    if (!google?.maps?.places || !suggestion.place_id) {
-      setAddressError('No se pudo consultar el lugar. Intenta de nuevo.');
-      return;
-    }
-    const service = new google.maps.places.PlacesService(document.createElement('div'));
-    service.getDetails({
-      placeId: suggestion.place_id,
-      fields: ['address_components', 'geometry', 'formatted_address'],
-    }, (place: any, status: any) => {
-      if (status !== google.maps.places.PlacesServiceStatus.OK || !place?.geometry?.location) {
-        setAddressError('No se pudo obtener la dirección. Intenta con otra.');
-        return;
-      }
-      const component = (types: string[]) => place.address_components?.find((c: any) => c.types.some((t: string) => types.includes(t)))?.long_name || '';
+  const selectAddressSuggestion = async (suggestion: PlacesSuggestion) => {
+    const selection = ++addressSelectionRef.current;
+    cancelPinLookup();
+    numberEditedRef.current = false;
+    placesSourceRef.current?.cancel();
+    setAddressBusy(false);
+    setAddressSelecting(true);
+    setAddressSuggestions([]);
+    try {
+      const place = await fetchSelectedPlaceFields(suggestion, ['addressComponents', 'location', 'formattedAddress']);
+      if (selection !== addressSelectionRef.current) return;
+      if (!place.location) throw new Error('Place has no location');
+      const component = (types: string[]) => place.addressComponents?.find((c: any) => c.types?.some((t: string) => types.includes(t)))?.longText || '';
       setAddressForm((current) => ({
         ...current,
-        street: component(['route']) || suggestion.description || suggestion.name || '',
+        street: component(['route']) || place.formattedAddress || suggestion.name || '',
         number: component(['street_number']),
         neighborhood: component(['sublocality', 'neighborhood']),
         city: component(['locality']),
         state: component(['administrative_area_level_1']),
         zipCode: component(['postal_code']),
         country: component(['country']) || 'México',
-        latitude: String(place.geometry.location.lat()),
-        longitude: String(place.geometry.location.lng()),
+        latitude: String(place.location.lat()),
+        longitude: String(place.location.lng()),
       }));
-      setAddressQuery(suggestion.description || suggestion.name || '');
+      setAddressQuery(place.formattedAddress || suggestion.name || '');
       setAddressSuggestions([]);
       setAddressError('');
-    });
+    } catch {
+      if (selection === addressSelectionRef.current) setAddressError('No se pudo obtener la dirección. Intenta con otra.');
+    } finally {
+      if (selection === addressSelectionRef.current) setAddressSelecting(false);
+    }
+  };
+
+  const moveAddressPin = (latitude: number, longitude: number) => {
+    const selection = ++addressSelectionRef.current;
+    if (pinTimerRef.current) clearTimeout(pinTimerRef.current);
+    setAddressForm(current => ({ ...current, latitude: String(latitude), longitude: String(longitude) }));
+    setAddressError('');
+    setPinStatus('loading');
+    pinTimerRef.current = setTimeout(async () => {
+      pinTimerRef.current = null;
+      try {
+        const google = await ensureGoogleMapsScript();
+        if (!google?.maps?.Geocoder) throw new Error('Geocoder unavailable');
+        const result = await new google.maps.Geocoder().geocode({ location: { lat: latitude, lng: longitude } });
+        if (selection !== addressSelectionRef.current) return;
+        const address = result.results?.find((item: any) => item.address_components?.some((component: any) => component.types?.includes('route')));
+        if (!address?.formatted_address) throw new Error('No street address found');
+        const component = (types: string[]) => address.address_components?.find((item: any) => item.types?.some((type: string) => types.includes(type)))?.long_name || '';
+        setAddressForm(current => ({ ...current, street: component(['route']),
+          number: numberEditedRef.current ? current.number : component(['street_number']),
+          neighborhood: component(['sublocality', 'neighborhood']), city: component(['locality']),
+          state: component(['administrative_area_level_1']), zipCode: component(['postal_code']),
+          country: component(['country']) || 'México' }));
+        setAddressQuery(address.formatted_address);
+        setPinStatus('idle');
+      } catch {
+        if (selection === addressSelectionRef.current) setPinStatus('failed');
+      }
+    }, 700);
+  };
+
+  const closeAddressModal = () => {
+    addressSelectionRef.current += 1;
+    cancelPinLookup();
+    placesSourceRef.current?.cancel();
+    setAddressModalOpen(false);
   };
 
   const openAddressModal = () => {
+    addressSelectionRef.current += 1;
+    cancelPinLookup();
+    numberEditedRef.current = false;
+    placesSourceRef.current?.cancel();
+    setAddressBusy(false);
+    setAddressSelecting(false);
     setAddressForm({ ...emptyAddressForm });
     setAddressQuery('');
     setAddressSuggestions([]);
@@ -208,8 +335,16 @@ export default function CustomerAccount() {
 
   const saveAddress = async () => {
     if (!token || savingAddress) return;
-    if (!addressForm.street.trim() || !addressForm.number.trim() || !addressForm.latitude || !addressForm.longitude) {
-      setAddressError('Busca y selecciona una dirección en el mapa.');
+    if (pinStatus !== 'idle') {
+      setAddressError(pinStatus === 'loading' ? 'Espera a que se actualice la dirección.' : 'Selecciona otra dirección o ajusta el pin para intentar de nuevo.');
+      return;
+    }
+    if (!addressForm.street.trim() || !addressForm.latitude || !addressForm.longitude) {
+      setAddressError('Busca y selecciona una dirección de las sugerencias.');
+      return;
+    }
+    if (!addressForm.number.trim()) {
+      setAddressError('Escribe el número de domicilio o S/N si no tiene número.');
       return;
     }
     setSavingAddress(true);
@@ -233,7 +368,7 @@ export default function CustomerAccount() {
         fallbackMessage: 'No se pudo guardar la dirección.',
       });
       setAddresses((current: any[]) => [result.data, ...current]);
-      setAddressModalOpen(false);
+      closeAddressModal();
     } catch (e) {
       setAddressError(e instanceof Error ? e.message : 'No se pudo guardar la dirección.');
     } finally {
@@ -247,8 +382,9 @@ export default function CustomerAccount() {
     try {
       await requestJson<any>({ apiBase, path: `/customer/addresses/${id}`, token, options: { method: 'DELETE' }, fallbackMessage: 'No se pudo eliminar la dirección.' });
       setAddresses((current: any[]) => current.filter((address) => address.id !== id));
+      setAddressToDelete(null);
     } catch {
-      setError('No se pudo eliminar la dirección. Intenta de nuevo.');
+      setDeleteAddressError('No se pudo eliminar la dirección. Intenta de nuevo.');
     } finally {
       setDeletingAddressId(null);
     }
@@ -454,7 +590,7 @@ export default function CustomerAccount() {
                         <p className="wl-profile-address-title">{addressLabel(address)}</p>
                         <p className="wl-profile-address-detail">{addressDetail(address)}</p>
                       </div>
-                      <button type="button" className="wl-profile-icon-button" onClick={() => void removeAddress(address.id)} disabled={deletingAddressId === address.id} aria-label="Eliminar dirección">
+                      <button type="button" className="wl-profile-icon-button wl-profile-icon-button--delete" onClick={() => { setDeleteAddressError(''); setAddressToDelete({ id: address.id, label: addressLabel(address) }); }} disabled={!!deletingAddressId} aria-label="Eliminar dirección">
                         {deletingAddressId === address.id ? <Loader2 className="animate-spin" aria-hidden="true" /> : <Trash2 aria-hidden="true" />}
                       </button>
                     </div>
@@ -489,49 +625,62 @@ export default function CustomerAccount() {
               <div><span>Completados</span><strong>{orderSummary.completed}</strong></div>
             </div>
           </section>
-          <div id="pedidos"><OrdersView sortedOrders={orders} visibleOrdersCount={100} setSelectedOrderId={setSelected} setIsDetailModalOpen={setDetailOpen} formatCurrency={money} formatDate={s => new Intl.DateTimeFormat('es-MX', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'America/Mexico_City' }).format(new Date(s))} StatusBadge={({ status }) => <span className="rounded-full bg-orange-50 px-3 py-1 text-xs font-semibold text-orange-800">{getOrderStatusLabel(status)}</span>} showLoadMore={false} loadMoreOrders={() => {}} /></div>
+          <div id="pedidos">{ordersLoading ? <p role="status" className="wl-fidelity-message">Cargando tus pedidos…</p> : ordersLoadFailed && orders.length === 0 ? <p role="alert" className="wl-fidelity-message">No se pudieron cargar tus pedidos. Revisa tu conexión; volveremos a intentarlo.</p> : <>{ordersLoadFailed && <p role="status" className="wl-fidelity-message">No se pudieron actualizar tus pedidos. Comprueba tu conexión.</p>}<OrdersView sortedOrders={orders} visibleOrdersCount={100} setSelectedOrderId={setSelected} setIsDetailModalOpen={setDetailOpen} formatCurrency={money} formatDate={s => new Intl.DateTimeFormat('es-MX', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'America/Mexico_City' }).format(new Date(s))} StatusBadge={({ status }) => <span className="rounded-full bg-orange-50 px-3 py-1 text-xs font-semibold text-orange-800">{getOrderStatusLabel(status)}</span>} showLoadMore={false} loadMoreOrders={() => {}} /></>}</div>
         </>}
       </>}
     </div>
     {!authOpen && !detailOpen && <CustomerNavigation active={section} onAuthenticated={(nextToken, nextUser) => { setToken(nextToken); setUser(nextUser); }} onLogout={logout} />}
+    {addressToDelete && <div className="wl-auth wl-address-delete-overlay" role="dialog" aria-modal="true" aria-labelledby="delete-address-title" aria-describedby="delete-address-description" onClick={() => { if (!deletingAddressId) setAddressToDelete(null); }} onKeyDown={(event) => { if (event.key === 'Escape' && !deletingAddressId) setAddressToDelete(null); }}>
+      <section className="wl-auth-sheet wl-address-delete-sheet" onClick={(event) => event.stopPropagation()}>
+        <span className="wl-address-delete-icon"><Trash2 aria-hidden="true" /></span>
+        <h2 id="delete-address-title">¿Eliminar dirección?</h2>
+        <p id="delete-address-description">Se eliminará <strong>{addressToDelete.label}</strong> de tus direcciones guardadas.</p>
+        {deleteAddressError && <p role="alert" className="wl-auth-error">{deleteAddressError}</p>}
+        <div className="wl-address-delete-actions">
+          <button type="button" className="wl-addr-cancel" autoFocus disabled={!!deletingAddressId} onClick={() => setAddressToDelete(null)}>Cancelar</button>
+          <button type="button" className="wl-addr-save" disabled={!!deletingAddressId} onClick={() => void removeAddress(addressToDelete.id)}>{deletingAddressId ? 'Eliminando…' : 'Sí, eliminar'}</button>
+        </div>
+      </section>
+    </div>}
     {detailOpen && <div className="fixed inset-0 z-50 overflow-y-auto bg-black/50 p-4"><section role="dialog" aria-modal="true" aria-label="Detalle de pedido" className="mx-auto my-8 max-w-lg space-y-4 rounded-2xl bg-white p-6"><button onClick={() => setDetailOpen(false)} className="float-right">Cerrar</button><h2 className="text-xl font-bold">Tu pedido WingsLab</h2>{detail ? <><p>{getOrderStatusLabel(detail.status)}</p><p>{money(detail.totalAmount)}</p>{detail.items?.map((item: any) => <p key={item.id}>{item.quantity} × {item.product?.name || item.productName}</p>)}{detail.tracking?.map((t: any) => <p key={t.id} className="text-sm text-neutral-600">{getOrderStatusLabel(t.status)}</p>)}<p className="text-xs text-neutral-500">{detail.orderReference}</p></> : <p>Cargando pedido…</p>}</section></div>}
     {addressModalOpen && (
-      <div className="wl-auth fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-md p-4 animate-[fadeIn_0.2s_ease-out]" role="dialog" aria-modal="true" aria-label="Agregar dirección" onClick={() => setAddressModalOpen(false)}>
+      <div className="wl-auth wl-addr-overlay fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-md p-4 animate-[fadeIn_0.2s_ease-out]" style={addressViewport ? { top: addressViewport.top, height: addressViewport.height, bottom: 'auto' } : undefined} role="dialog" aria-modal="true" aria-labelledby="address-modal-title" onClick={closeAddressModal}>
         <section className="wl-auth-sheet relative flex max-h-[92dvh] w-full max-w-md flex-col overflow-hidden" onClick={(event) => event.stopPropagation()}>
-          <button type="button" onClick={() => setAddressModalOpen(false)} className="absolute right-4 top-4 z-10 flex h-10 w-10 items-center justify-center rounded-full bg-neutral-100 text-neutral-600 transition active:scale-95" aria-label="Cerrar"><X className="h-5 w-5" strokeWidth={2.5} /></button>
+          <button type="button" onClick={closeAddressModal} className="wl-addr-close absolute right-4 top-4 z-10 flex h-10 w-10 items-center justify-center rounded-full bg-neutral-100 text-neutral-600 transition active:scale-95" aria-label="Cerrar"><X className="h-5 w-5" strokeWidth={2.5} /></button>
           <div className="wl-auth-scroll overflow-y-auto overflow-x-hidden flex-1">
             <div className="wl-auth-body wl-addr-body">
-              <div className="wl-auth-intro"><h3>Nueva dirección</h3><p>Busca tu calle para agregarla a tus direcciones.</p></div>
+              <div className="wl-auth-intro"><h3 id="address-modal-title">Nueva dirección</h3><p>Encuentra tu dirección para recibir tus pedidos.</p></div>
               <div className="wl-addr-fields">
-                <label className="wl-auth-field grid gap-1.5">
-                  <span>Buscar dirección</span>
+                <div className="wl-auth-field grid gap-1.5">
+                  <label htmlFor="account-address-search">Buscar dirección</label>
                   <div className="relative">
                     <span className="wl-auth-field-icon" aria-hidden="true"><Search /></span>
-                    <input type="search" value={addressQuery} onChange={(event) => searchAddresses(event.target.value)} placeholder="Calle, número, colonia…" autoComplete="off" />
+                    <input id="account-address-search" type="search" value={addressQuery} onChange={(event) => searchAddresses(event.target.value)} placeholder="Calle, número, colonia…" autoComplete="off" aria-expanded={addressSuggestions.length > 0} aria-controls="account-address-suggestions" aria-autocomplete="list" />
                   </div>
-                  {addressBusy && <small>Buscando…</small>}
+                  {(addressBusy || addressSelecting) && <small className="wl-addr-search-status" role="status">{addressSelecting ? 'Ubicando dirección…' : 'Buscando direcciones…'}</small>}
                   {addressSuggestions.length > 0 && (
-                    <div className="wl-profile-suggestions">
-                      {addressSuggestions.map((suggestion: any) => (
-                        <button type="button" key={suggestion.place_id || suggestion.id} onClick={() => void selectAddressSuggestion(suggestion)}>
-                          <MapPin aria-hidden="true" /><span>{suggestion.description || suggestion.name}</span>
+                    <div id="account-address-suggestions" className="wl-profile-suggestions wl-addr-suggestions">
+                      {addressSuggestions.map((suggestion) => (
+                        <button type="button" key={suggestion.place_id} onClick={() => void selectAddressSuggestion(suggestion)}>
+                          <MapPin aria-hidden="true" /><span>{suggestion.name}</span>
                         </button>
                       ))}
                     </div>
                   )}
-                </label>
-                <div className="wl-addr-row">
-                  <label className="wl-auth-field grid gap-1.5"><span>Calle</span><div className="relative"><span className="wl-auth-field-icon" aria-hidden="true"><MapPin /></span><input value={addressForm.street} onChange={(e) => setAddressForm({ ...addressForm, street: e.target.value })} placeholder="Calle" /></div></label>
-                  <label className="wl-auth-field grid gap-1.5"><span>Número</span><div className="relative"><span className="wl-auth-field-icon" aria-hidden="true"><MapPin /></span><input value={addressForm.number} onChange={(e) => setAddressForm({ ...addressForm, number: e.target.value })} placeholder="123" /></div></label>
                 </div>
-                <label className="wl-auth-field grid gap-1.5"><span>Colonia <small>(se completa al buscar)</small></span><div className="relative"><span className="wl-auth-field-icon" aria-hidden="true"><MapPin /></span><input value={addressForm.neighborhood} onChange={(e) => setAddressForm({ ...addressForm, neighborhood: e.target.value })} placeholder="Colonia" /></div></label>
-                <label className="wl-auth-field grid gap-1.5"><span>Referencia <small>(opcional)</small></span><div className="relative"><span className="wl-auth-field-icon" aria-hidden="true"><MapPin /></span><input value={addressForm.reference} onChange={(e) => setAddressForm({ ...addressForm, reference: e.target.value })} placeholder="Ej. Casa azul, portón negro, entre calles…" /></div></label>
+                <label className="wl-auth-field grid gap-1.5"><span>Número de domicilio</span><div className="relative"><span className="wl-auth-field-icon" aria-hidden="true"><MapPin /></span><input value={addressForm.number} onChange={(event) => { numberEditedRef.current = true; setAddressForm(current => ({ ...current, number: event.target.value })); setAddressError(''); }} placeholder="Ej. 226 o S/N" autoComplete="off" /></div></label>
+                {addressForm.latitude && addressForm.longitude ? (
+                  <AddressPinMap latitude={Number(addressForm.latitude)} longitude={Number(addressForm.longitude)} onChange={moveAddressPin} />
+                ) : null}
+                {pinStatus === 'loading' && <p className="wl-addr-map-hint" role="status">Actualizando dirección…</p>}
+                {pinStatus === 'failed' && <p className="wl-auth-error" role="alert">No pudimos obtener la dirección del pin. Muévelo de nuevo o selecciona otra dirección.</p>}
+                {pinStatus === 'idle' && numberEditedRef.current && addressForm.latitude && <p className="wl-addr-map-hint">Conservamos el número que escribiste. Confirma que corresponda al pin.</p>}
+                <label className="wl-auth-field grid gap-1.5"><span>Referencias <small>(opcional)</small></span><div className="relative"><span className="wl-auth-field-icon" aria-hidden="true"><MapPin /></span><input value={addressForm.reference} onChange={(e) => setAddressForm(current => ({ ...current, reference: e.target.value }))} placeholder="Ej. Casa azul, portón negro…" /></div></label>
               </div>
-              <p className="wl-auth-hint">Selecciona una sugerencia para completar calle, número, colonia y ubicación.</p>
               {addressError && <p role="alert" className="wl-auth-error">{addressError}</p>}
               <div className="wl-addr-actions">
-                <button type="button" onClick={() => setAddressModalOpen(false)} className="wl-addr-cancel">Cancelar</button>
-                <button type="button" onClick={() => void saveAddress()} disabled={savingAddress} className="wl-addr-save">{savingAddress ? <Loader2 className="mx-auto animate-spin" aria-hidden="true" /> : null}{savingAddress ? 'Guardando…' : 'Guardar dirección'}</button>
+                <button type="button" onClick={closeAddressModal} className="wl-addr-cancel">Cancelar</button>
+                <button type="button" onClick={() => void saveAddress()} disabled={savingAddress || addressSelecting || pinStatus !== 'idle'} className="wl-addr-save">{savingAddress ? <Loader2 className="mx-auto animate-spin" aria-hidden="true" /> : null}{savingAddress ? 'Guardando…' : 'Guardar dirección'}</button>
               </div>
             </div>
           </div>

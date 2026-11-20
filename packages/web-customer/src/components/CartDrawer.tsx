@@ -64,6 +64,7 @@ type CartDrawerProps = {
   onFulfillmentTypeChange: (type: 'DELIVERY' | 'PICKUP') => void;
   isRestaurantOpen?: boolean;
   overrideDeliveryFee?: number;
+  deliveryFeePending?: boolean;
   overrideServiceFee?: number;
   pickupOnly?: boolean;
   freeDeliveryThreshold?: number | null;
@@ -78,6 +79,7 @@ export default memo(function CartDrawer({
   onFulfillmentTypeChange,
   isRestaurantOpen = true,
   overrideDeliveryFee,
+  deliveryFeePending = false,
   overrideServiceFee,
   pickupOnly = false,
   freeDeliveryThreshold,
@@ -123,6 +125,7 @@ export default memo(function CartDrawer({
   );
 
   const effectiveDeliveryFee =
+    overrideDeliveryFee === undefined &&
     fulfillmentType !== 'PICKUP' &&
     !pickupOnly &&
     freeDeliveryThreshold &&
@@ -132,6 +135,9 @@ export default memo(function CartDrawer({
       : deliveryFee;
 
   const orderTotal = Math.max(0, cartSubtotal + serviceFee + (fulfillmentType === 'PICKUP' ? 0 : effectiveDeliveryFee));
+  const showDelivery = fulfillmentType !== 'PICKUP' && !pickupOnly;
+  const showBreakdown = showDelivery || serviceFee > 0 || savingsTotal > 0;
+  const freeDelivery = showDelivery && !deliveryFeePending && effectiveDeliveryFee === 0;
 
   const fulfillmentControl = pickupOnly ? (
     <div className="flex min-h-11 items-center justify-center gap-2 rounded-xl border border-orange-200 bg-orange-50 px-3 text-xs font-semibold text-orange-800">
@@ -277,28 +283,28 @@ export default memo(function CartDrawer({
                         </div>
                       </div>
 
-                      <div className="mt-3.5 flex items-center gap-2">
+                      <div className="wl-cart-item-controls mt-3.5 flex items-center gap-2">
                           <div className="wl-cart-quantity flex shrink-0 items-center gap-0.5 rounded-full border border-black/[0.06] bg-neutral-50 p-0.5">
                           <button
                             type="button"
                             onClick={() => updateCartItem(item.cartItemId, { quantity: item.quantity - 1 })}
-                            className="flex h-7 w-7 items-center justify-center rounded-full text-neutral-500 transition-all hover:bg-white hover:text-neutral-800 hover:shadow-sm active:scale-90"
+                            className="flex items-center justify-center rounded-full transition-colors active:scale-90"
                             aria-label={`Quitar una unidad de ${item.name}`}
                           >
                             {item.quantity === 1 ? (
-                              <Trash2 className="h-3 w-3 text-red-500" />
+                              <Trash2 className="h-4 w-4 text-red-500" />
                             ) : (
-                              <Minus className="h-3 w-3" strokeWidth={2.5} />
+                              <Minus className="h-4 w-4" strokeWidth={2.5} />
                             )}
                           </button>
-                          <span className="flex h-7 w-7 items-center justify-center text-xs font-bold text-neutral-900">{item.quantity}</span>
+                          <span className="wl-cart-quantity-value" aria-label={`Cantidad: ${item.quantity}`}>{item.quantity}</span>
                           <button
                             type="button"
                             onClick={() => updateCartItem(item.cartItemId, { quantity: item.quantity + 1 })}
-                            className="flex h-7 w-7 items-center justify-center rounded-full text-neutral-500 transition-all hover:bg-white hover:text-neutral-800 hover:shadow-sm active:scale-90"
+                            className="flex items-center justify-center rounded-full transition-colors active:scale-90"
                             aria-label={`Agregar una unidad de ${item.name}`}
                           >
-                            <Plus className="h-3 w-3" strokeWidth={2.5} />
+                            <Plus className="h-4 w-4" strokeWidth={2.5} />
                           </button>
                         </div>
 
@@ -348,19 +354,21 @@ export default memo(function CartDrawer({
                       <span className="font-semibold">-{formatCurrency(savingsTotal)}</span>
                     </div>
                   )}
-                  <div className="flex items-center justify-between text-neutral-500">
+                  {showBreakdown && <div className="flex items-center justify-between text-neutral-500">
                     <span className="flex items-center gap-1.5">
                       <DollarSign className="h-4 w-4" strokeWidth={1.7} /> Subtotal
                     </span>
                     <span className="font-medium text-neutral-700">{formatCurrency(cartSubtotal)}</span>
-                  </div>
-                  {fulfillmentType !== 'PICKUP' && !pickupOnly && (
+                  </div>}
+                  {showDelivery && (
                     <div className="flex items-center justify-between text-neutral-500">
                       <span className="flex items-center gap-1.5">
                         <Bike className="h-4 w-4" strokeWidth={1.7} /> Envío
                       </span>
-                      {freeDeliveryThreshold && deliveryFee > 0 && cartSubtotal >= freeDeliveryThreshold ? (
-                        <span className="font-semibold text-emerald-700">Gratis</span>
+                      {deliveryFeePending ? (
+                        <span className="font-medium text-neutral-700">Se calcula con tu dirección</span>
+                      ) : freeDelivery ? (
+                        <span className="wl-cart-free-delivery">¡Gratis!</span>
                       ) : (
                         <span className="font-medium text-neutral-700">{formatCurrency(deliveryFee)}</span>
                       )}
@@ -372,17 +380,17 @@ export default memo(function CartDrawer({
                       <span className="shrink-0 font-semibold">Faltan {formatCurrency(freeDeliveryThreshold - cartSubtotal)}</span>
                     </div>
                   )}
-                  <div className="flex items-center justify-between text-neutral-500">
+                  {serviceFee > 0 && <div className="flex items-center justify-between text-neutral-500">
                     <span className="flex items-center gap-1.5">
                       <Receipt className="h-4 w-4" strokeWidth={1.7} /> Servicio
                     </span>
                     <span className="font-medium text-neutral-700">{formatCurrency(serviceFee)}</span>
-                  </div>
+                  </div>}
                 </div>
-                <div className="mt-2 flex items-center justify-between border-t border-black/[0.07] pt-2.5">
+                <div className={`flex items-center justify-between ${showBreakdown ? 'mt-2 border-t border-black/[0.07] pt-2.5' : ''}`}>
                   <span className="flex items-center gap-1.5 text-sm font-semibold text-neutral-700">
                     <Wallet className="h-4 w-4" strokeWidth={1.7} />
-                    Total a pagar
+                    {showDelivery && deliveryFeePending ? 'Total estimado' : 'Total a pagar'}
                   </span>
                   <span className="text-xl font-extrabold tracking-tight text-neutral-950">{formatCurrency(orderTotal)}</span>
                 </div>

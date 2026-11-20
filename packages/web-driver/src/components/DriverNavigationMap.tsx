@@ -94,6 +94,9 @@ export default memo(function DriverNavigationMap({
   const lastRouteOriginRef = useRef<Point | null>(null);
   const lastRouteDestinationIdRef = useRef<string>('');
   const pendingRouteTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const routeInFlightRef = useRef(false);
+  const routeQueuedRef = useRef(false);
+  const requestRouteRef = useRef<() => void>(() => {});
   const [mapReady, setMapReady] = useState(false);
   const [routeInfo, setRouteInfo] = useState<{ distanceM: number; durationMin: number } | null>(null);
   const [loadError, setLoadError] = useState(false);
@@ -231,6 +234,12 @@ export default memo(function DriverNavigationMap({
       return;
     }
 
+    if (routeInFlightRef.current) {
+      routeQueuedRef.current = true;
+      return;
+    }
+
+    routeInFlightRef.current = true;
     const directions = new google.maps.DirectionsService();
 
     directions.route(
@@ -241,6 +250,7 @@ export default memo(function DriverNavigationMap({
         optimizeWaypoints: false,
       },
       (result: any, status: string) => {
+        routeInFlightRef.current = false;
         if (status === 'OK' && result) {
           lastRouteOriginRef.current = originPoint;
           lastRouteDestinationIdRef.current = dest.id;
@@ -294,9 +304,14 @@ export default memo(function DriverNavigationMap({
 
           fitRouteBounds();
         }
+        if (routeQueuedRef.current) {
+          routeQueuedRef.current = false;
+          requestRouteRef.current();
+        }
       }
     );
   };
+  requestRouteRef.current = requestRoute;
 
   const fitRouteBounds = () => {
     const google = getGoogleMaps();

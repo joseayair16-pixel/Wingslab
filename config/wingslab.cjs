@@ -2,7 +2,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const root = path.resolve(__dirname, '..');
-const { assertOrigin, browserOrigins } = require('../packages/shared/src/wingslab-policy.js');
+const { assertOrigin, browserOrigins } = require('../packages/shared/src/wingslab-policy.cjs');
 
 function assertNoLegacyEnvFiles() {
   const directories = [root, path.join(root, 'packages/backend'),
@@ -53,7 +53,7 @@ function frontendConfig(role) {
     async headers() {
       return [{ source: '/:path*', headers: [{
         key: 'Content-Security-Policy',
-        value: `default-src 'self'; connect-src 'self' ${api} ${socket.replace('http:', 'ws:')} https://res.cloudinary.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://www.googleapis.com https://www.google.com https://www.recaptcha.net; img-src 'self' data: blob: ${api} https://res.cloudinary.com https://www.gstatic.com https://www.google.com; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.gstatic.com https://www.google.com https://www.recaptcha.net; style-src 'self' 'unsafe-inline'; font-src 'self' data:; media-src 'self' blob:; worker-src 'self' blob:; frame-src https://www.google.com https://www.recaptcha.net; object-src 'none'; base-uri 'self'; form-action 'self'`,
+        value: `default-src 'self'; connect-src 'self' ${api} ${socket.replace('http:', 'ws:')} https://res.cloudinary.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://www.googleapis.com https://www.google.com https://www.recaptcha.net https://maps.googleapis.com https://maps.gstatic.com https://*.googleapis.com; img-src 'self' data: blob: ${api} https://res.cloudinary.com https://www.gstatic.com https://www.google.com https://maps.googleapis.com https://maps.gstatic.com https://*.googleapis.com https://*.gstatic.com; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.gstatic.com https://www.google.com https://www.recaptcha.net https://maps.googleapis.com https://maps.gstatic.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; media-src 'self' blob:; worker-src 'self' blob:; frame-src https://www.google.com https://www.recaptcha.net https://maps.google.com; object-src 'none'; base-uri 'self'; form-action 'self'`,
       }] }];
     },
   };
@@ -135,6 +135,27 @@ function processEnvironment(config, role, action) {
         env[name] = firebaseAuth[field].trim();
       }
     }
+    // Web Push is the only external capability explicitly opt-in for local
+    // PWA/browser delivery. It remains isolated from Firebase, WhatsApp, SMS,
+    // email and every other provider.
+    const webPush = config.backend?.webPush || {};
+    if (webPush.enabled === true) {
+      const publicKey = typeof webPush.publicKey === 'string' ? webPush.publicKey.trim() : '';
+      const privateKey = typeof webPush.privateKey === 'string' ? webPush.privateKey.trim() : '';
+      const contact = typeof webPush.contact === 'string' ? webPush.contact.trim() : '';
+      if (!publicKey || !privateKey || !/^mailto:.+@.+\..+$/.test(contact)) {
+        throw new Error('[WingsLab] Web Push requires its own VAPID key pair and mailto contact in local config.');
+      }
+      if (action === 'start') {
+        Object.assign(env, {
+          WINGSLAB_WEB_PUSH_ENABLED: 'true',
+          WINGSLAB_WEB_PUSH_RETRY_JOB_ENABLED: webPush.retryJobEnabled === true ? 'true' : 'false',
+          WINGSLAB_WEB_PUSH_PUBLIC_KEY: publicKey,
+          WINGSLAB_WEB_PUSH_PRIVATE_KEY: privateKey,
+          WINGSLAB_WEB_PUSH_CONTACT: contact,
+        });
+      }
+    }
   }
   if (role === 'customer') {
     const firebase = config.firebase || {};
@@ -157,6 +178,15 @@ function processEnvironment(config, role, action) {
       env.WINGSLAB_FIREBASE_PHONE_AUTH_TEST_MODE = 'true';
       env.WINGSLAB_FIREBASE_TEST_PHONE_NUMBER = testPhoneNumber;
     }
+  }
+  if (role === 'customer' || role === 'restaurant' || role === 'driver') {
+    const maps = config.googleMaps || {};
+    const apiKey = typeof maps.apiKey === 'string' ? maps.apiKey.trim() : '';
+    if (maps.enabled === true && !apiKey) {
+      throw new Error('[WingsLab] Google Maps cannot be enabled without an API key in local role configuration.');
+    }
+    env.WINGSLAB_GOOGLE_MAPS_ENABLED = maps.enabled === true && apiKey ? 'true' : 'false';
+    if (env.WINGSLAB_GOOGLE_MAPS_ENABLED === 'true') env.WINGSLAB_GOOGLE_MAPS_API_KEY = apiKey;
   }
   return env;
 }

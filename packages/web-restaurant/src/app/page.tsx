@@ -46,7 +46,6 @@ import {
 import { useForegroundPolling } from '../hooks/useForegroundPolling';
 import { printHtmlString, NativePrintError } from '../utils/printHelper';
 import { generateTicketHtml } from '../utils/ticketGenerator';
-import { WingsLabLogo as SaDelLogo } from '../components/WingsLabLogo';
 import { SaDelLoader } from '../components/SaDelLoader';
 import { DashboardSection } from '../components/sections/DashboardSection';
 import { CampaignsSection } from '../components/sections/CampaignsSection';
@@ -65,6 +64,7 @@ import {
   checkNativePushPermission,
   requestNativePushPermission,
   registerNativePush,
+  onNativePushReceived,
   onNativeNotificationTap,
   nativeGeoWatch,
   nativeKeepAwake,
@@ -134,6 +134,7 @@ type RestaurantProfile = {
   email: string;
   logo?: string | null;
   coverImage?: string | null;
+  serviceFee?: number | null;
   deliveryFee?: number | null;
   deliveryRadius?: number | null;
   deliveryPricingModel?: string | null;
@@ -420,6 +421,7 @@ type StoreProfileDraft = {
   minDeliveryTime: string;
   maxDeliveryTime: string;
   deliveryFee: string;
+  serviceFee: string;
   deliveryRadius: string;
   deliveryPricingModel: 'fixed' | 'distance';
   deliveryBaseRate: string;
@@ -991,9 +993,9 @@ export default function Home() {
   const [checkingAuth, setCheckingAuth] = useState(true);
   const settingsMapRef = useRef<any>(null);
   const settingsMarkerRef = useRef<any>(null);
+  const settingsGeocodeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const settingsGeocodeSeqRef = useRef(0);
   const ignoreAddressSearchRef = useRef(false);
-  const autocompleteSessionTokenRef = useRef<any>(null);
-  const placesServiceRef = useRef<any>(null);
   const addressSearchSourceRef = useRef<ReturnType<typeof createPlacesSource> | null>(null);
   const [addressSuggestions, setAddressSuggestions] = useState<any[]>([]);
   const [isSearchingAddress, setIsSearchingAddress] = useState(false);
@@ -1227,6 +1229,7 @@ export default function Home() {
     deliveryFee: '',
     deliveryRadius: '',
     deliveryPricingModel: 'fixed',
+    serviceFee: '0',
     deliveryBaseRate: '',
     deliveryPerKmRate: '',
     deliveryMinFee: '',
@@ -2051,16 +2054,24 @@ export default function Home() {
         marker.addListener('dragend', async () => {
           const position = marker.getPosition();
           if (!position) return;
+          const location = { lat: position.lat(), lng: position.lng() };
           
           setStoreDraft((current) => ({
             ...current,
-            latitude: String(position.lat()),
-            longitude: String(position.lng()),
+            latitude: String(location.lat),
+            longitude: String(location.lng),
           }));
 
-          try {
-            const geocoder = new google.maps.Geocoder();
-            geocoder.geocode({ location: { lat: position.lat(), lng: position.lng() } }, (results: any, status: any) => {
+          // Debounce repeated marker adjustments; only the final position is geocoded.
+          if (settingsGeocodeTimerRef.current) clearTimeout(settingsGeocodeTimerRef.current);
+          const requestSeq = ++settingsGeocodeSeqRef.current;
+          settingsGeocodeTimerRef.current = setTimeout(() => {
+            settingsGeocodeTimerRef.current = null;
+
+            try {
+              const geocoder = new google.maps.Geocoder();
+              geocoder.geocode({ location }, (results: any, status: any) => {
+              if (requestSeq !== settingsGeocodeSeqRef.current) return;
               if (status === "OK" && results && results[0]) {
                 const address = results[0].formatted_address;
                 let houseNumber = '';
@@ -2074,9 +2085,10 @@ export default function Home() {
                 }));
               }
             });
-          } catch (err) {
-            console.error('Error in reverse geocoding:', err);
-          }
+            } catch (err) {
+              if (requestSeq === settingsGeocodeSeqRef.current) console.error('Error in reverse geocoding:', err);
+            }
+          }, 500);
         });
       } else {
         const pos = { lat, lng };
@@ -2119,7 +2131,11 @@ export default function Home() {
     }
 
     addressSearchSourceRef.current.search(storeDraft.address, {
-      onResults: (suggestions) => setAddressSuggestions(suggestions.map((s) => ({ display_name: s.name, place_id: s.place_id }))),
+      onResults: (suggestions) => setAddressSuggestions(suggestions.map((s) => ({
+        display_name: s.name,
+        place_id: s.place_id,
+        placePrediction: s.placePrediction,
+      }))),
       onBusy: setIsSearchingAddress,
     });
 
@@ -2210,7 +2226,6 @@ export default function Home() {
     | { ok: true }
     | { ok: false; reason: 'DENIED' | 'BLOCKED' | 'INSECURE' | 'NOT_SUPPORTED' | 'VAPID_NOT_CONFIGURED' | 'SUBSCRIBE_FAILED' | 'UNKNOWN' }
   > => {
-    if (!wingslabExternalServicesEnabled()) return { ok: false, reason: 'BLOCKED' };
     if (typeof window === 'undefined') {
       return { ok: false, reason: 'NOT_SUPPORTED' };
     }
@@ -2218,6 +2233,9 @@ export default function Home() {
     // App nativa (WebView Capacitor): no hay serviceWorker ni Notification web,
     // se usa FCM con el permiso y el token del plugin.
     if (isNativePlatform()) {
+      // La activación local actual es exclusivamente Web Push; FCM de la APK
+      // continúa bloqueado de forma deliberada.
+      if (!wingslabExternalServicesEnabled()) return { ok: false, reason: 'BLOCKED' };
       const permission = await requestNativePushPermission();
       if (permission !== 'granted') {
         return { ok: false, reason: permission === 'unavailable' ? 'NOT_SUPPORTED' : 'DENIED' };
@@ -2487,6 +2505,7 @@ export default function Home() {
       deliveryFee: '',
       deliveryRadius: '',
       deliveryPricingModel: 'fixed',
+      serviceFee: '0',
       deliveryBaseRate: '',
       deliveryPerKmRate: '',
       deliveryMinFee: '',
@@ -2945,6 +2964,7 @@ export default function Home() {
         minDeliveryTime: String(profileData.data.minDeliveryTime || ''),
         maxDeliveryTime: String(profileData.data.maxDeliveryTime || ''),
         deliveryFee: profileData.data.deliveryFee?.toString() || '',
+        serviceFee: String(profileData.data.serviceFee ?? 0),
         deliveryRadius: profileData.data.deliveryRadius?.toString() || '',
         deliveryPricingModel: profileData.data.deliveryPricingModel === 'distance' ? 'distance' : 'fixed',
         deliveryBaseRate: profileData.data.deliveryBaseRate != null ? String(profileData.data.deliveryBaseRate) : '',
@@ -3041,6 +3061,18 @@ export default function Home() {
     ordersLoadFlightRef.current = sharedRequest;
     return sharedRequest;
   }, [apiBase, token, fetchOrders]);
+
+  // En primer plano, FCM también actúa como ruta de recuperación si Socket.IO
+  // perdió el evento. Consultamos el estado autoritativo; no confiamos en el
+  // payload parcial ni generamos una segunda alerta por el mismo pedido.
+  useEffect(() => {
+    if (!token || sessionUser?.role !== 'RESTAURANT' || !isNativePlatform()) return;
+    return onNativePushReceived((message) => {
+      if (message.data?.orderId || /pedido/i.test(message.title || '')) {
+        void loadOrdersOnly();
+      }
+    });
+  }, [token, sessionUser?.role, loadOrdersOnly]);
 
   const refreshOrders = useCallback(async () => {
     if (refreshOrdersFlightRef.current) return;
@@ -3281,15 +3313,6 @@ export default function Home() {
       return;
     }
 
-    // Reuse existing connection to prevent connection storms and Fast Refresh disconnects
-    if (socketRef.current && socketRef.current.connected) {
-      if (process.env.NODE_ENV !== 'production') {
-        debugLog('[Socket] Reutilizando conexión activa:', socketRef.current.id);
-      }
-      socketRef.current.emit('join-room', sessionUser.id, 'RESTAURANT');
-      return;
-    }
-
     // Always disconnect stale socket on re-mount (handles Fast Refresh)
     if (socketRef.current) {
       if (process.env.NODE_ENV !== 'production') {
@@ -3312,10 +3335,6 @@ export default function Home() {
       auth: { token: getSocketToken() },
     });
 
-    socket.on('reconnect_attempt', () => {
-      socket.auth = { token: getSocketToken() };
-    });
-
     socketRef.current = socket;
 
     socket.on('connect', () => {
@@ -3324,10 +3343,12 @@ export default function Home() {
       }
     });
 
-    socket.io.on('reconnect_attempt', (attempt) => {
+    const handleReconnectAttempt = (attempt: number) => {
+      socket.auth = { token: getSocketToken() };
       setSocketStatus('reconnecting');
       setSocketAttempts(attempt);
-    });
+    };
+    socket.io.on('reconnect_attempt', handleReconnectAttempt);
 
     socket.on('disconnect', (reason) => {
       if (reason !== 'io client disconnect') {
@@ -3451,16 +3472,11 @@ export default function Home() {
     return () => {
       clearInterval(healthCheckInterval);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
-      socket.off('order_chat:message_received');
-      // Disconnect socket ONLY when token or sessionUser.id/role changes, not on hot reload re-renders
-      if (!token || !sessionUser || sessionUser.role !== 'RESTAURANT') {
-        socket.emit('leave-room', sessionUser.id, 'RESTAURANT');
-        socket.disconnect();
-        if (socketRef.current === socket) {
-          socketRef.current = null;
-        }
-        setSocketStatus('idle');
-        setSocketAttempts(0);
+      socket.io.off('reconnect_attempt', handleReconnectAttempt);
+      socket.removeAllListeners();
+      socket.disconnect();
+      if (socketRef.current === socket) {
+        socketRef.current = null;
       }
     };
   }, [apiBase, token, sessionUser?.id, sessionUser?.role]);
@@ -4179,6 +4195,11 @@ export default function Home() {
     }
 
     if (section === 'entrega') {
+      const serviceFeeText = storeDraft.serviceFee.trim();
+      if (!/^\d+(?:\.\d{1,2})?$/.test(serviceFeeText) || Number(serviceFeeText) > 10000) {
+        throw new Error('Ingresa una tarifa de servicio entre $0 y $10,000, con hasta dos decimales.');
+      }
+      body.serviceFee = Number(serviceFeeText);
       const minT = num(storeDraft.minDeliveryTime);
       const maxT = num(storeDraft.maxDeliveryTime);
       body.pickupOnly = storeDraft.pickupOnly ?? false;
@@ -4251,6 +4272,10 @@ export default function Home() {
         },
       });
 
+      if (section === 'entrega' && payload.data.serviceFee !== payloadBody.serviceFee) {
+        throw new Error('No se pudo confirmar la tarifa de servicio. Revisa la configuración e intenta de nuevo.');
+      }
+
       setProfile(payload.data);
       const savedDraft = {
         name: payload.data.name || '',
@@ -4274,6 +4299,7 @@ export default function Home() {
         minDeliveryTime: String(payload.data.minDeliveryTime || ''),
         maxDeliveryTime: String(payload.data.maxDeliveryTime || ''),
         deliveryFee: typeof payload.data.deliveryFee === 'number' ? String(payload.data.deliveryFee) : '',
+        serviceFee: String(payload.data.serviceFee ?? 0),
         deliveryRadius: typeof payload.data.deliveryRadius === 'number' ? String(payload.data.deliveryRadius) : '',
         deliveryPricingModel: payload.data.deliveryPricingModel === 'distance' ? 'distance' : 'fixed',
         deliveryBaseRate: payload.data.deliveryBaseRate != null ? String(payload.data.deliveryBaseRate) : '',
@@ -4295,7 +4321,7 @@ export default function Home() {
       const sectionFields: Record<SettingsSectionKey, (keyof typeof savedDraft)[]> = {
         perfil: ['name', 'description', 'seoTitle', 'seoDescription', 'contactPhone', 'email', 'instagram', 'facebook', 'tiktok', 'storeCategories'],
         ubicacion: ['address', 'houseNumber', 'latitude', 'longitude'],
-        entrega: ['pickupOnly', 'hasOwnDelivery', 'supportsNetworkDelivery', 'minDeliveryTime', 'maxDeliveryTime', 'deliveryFee', 'deliveryRadius', 'deliveryPricingModel', 'deliveryBaseRate', 'deliveryPerKmRate', 'deliveryMinFee', 'deliveryMaxFee', 'promoFreeDeliveryThreshold', 'promoMinOrderAmount', 'promoMinOrderPercent'],
+        entrega: ['pickupOnly', 'hasOwnDelivery', 'supportsNetworkDelivery', 'minDeliveryTime', 'maxDeliveryTime', 'deliveryFee', 'serviceFee', 'deliveryRadius', 'deliveryPricingModel', 'deliveryBaseRate', 'deliveryPerKmRate', 'deliveryMinFee', 'deliveryMaxFee', 'promoFreeDeliveryThreshold', 'promoMinOrderAmount', 'promoMinOrderPercent'],
         pagos: ['maxCashOrder', 'acceptsCash'],
       };
       setStoreDraft((current) => {
@@ -5905,7 +5931,7 @@ export default function Home() {
   return (
     <main className="wl-admin min-h-[100dvh] text-neutral-900">
       <PushEnableBanner
-        visible={Boolean(token) && wingslabExternalServicesEnabled()}
+        visible={Boolean(token) && (!isNativePlatform() || wingslabExternalServicesEnabled())}
         onEnable={() => subscribeToPush(token || '')}
       />
 
@@ -7171,23 +7197,24 @@ export default function Home() {
         </div>
       ) : null}
       {showCloseConfirmModal ? (
-        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/45 px-4 py-6">
+        <div className="fixed inset-0 z-[70] flex items-end justify-center bg-black/50 px-3 pb-3 pt-6 backdrop-blur-sm sm:items-center sm:p-4">
           <div className="absolute inset-0" onClick={() => setShowCloseConfirmModal(false)} />
-          <div className="relative w-full max-w-[420px] rounded-[32px] bg-white p-6 shadow-[0_28px_90px_rgba(15,15,15,0.34)] border border-black/5">
-            <div className="text-center">
-              <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-neutral-100 text-neutral-500">
-                <Minus className="h-7 w-7" strokeWidth={1.8} />
+          <div role="dialog" aria-modal="true" aria-labelledby="close-business-title" aria-describedby="close-business-description" className="relative w-full max-w-[420px] rounded-[28px] border border-black/5 bg-white p-5 shadow-[0_28px_90px_rgba(15,15,15,0.34)] sm:p-6">
+            <div className="flex items-center gap-4">
+              <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-red-50 text-red-700">
+                <Minus className="h-7 w-7" strokeWidth={2.2} aria-hidden="true" />
               </div>
-              <h3 className="mt-4 text-xl font-bold tracking-tight text-neutral-900">¿Cerrar negocio?</h3>
-              <p className="mt-2 text-sm leading-relaxed text-neutral-500">
-                Al cerrar el negocio dejarás de recibir nuevos pedidos. Los pedidos en curso no se verán afectados.
-              </p>
+              <div><p className="text-[11px] font-bold uppercase tracking-[0.12em] text-neutral-500">Estado del negocio</p><h3 id="close-business-title" className="mt-1 text-xl font-extrabold tracking-tight text-neutral-950">¿Cerrar negocio?</h3></div>
             </div>
-            <div className="mt-6 flex items-center gap-3">
+            <div id="close-business-description" className="mt-5 rounded-2xl bg-neutral-50 px-4 py-3.5 text-sm leading-relaxed text-neutral-700">
+              <p className="font-bold text-neutral-900">Dejarás de recibir pedidos nuevos.</p>
+              <p className="mt-1">Los pedidos en curso continúan.</p>
+            </div>
+            <div className="mt-5 flex flex-col-reverse gap-2.5 sm:flex-row">
               <button
                 type="button"
                 onClick={() => setShowCloseConfirmModal(false)}
-                className="flex-1 rounded-full border border-neutral-200 bg-white px-5 py-3 text-sm font-semibold text-neutral-700 transition hover:bg-neutral-50 active:scale-[0.98]"
+                className="min-h-12 flex-1 rounded-2xl border border-neutral-200 bg-white px-4 py-3 text-sm font-bold text-neutral-700 transition hover:bg-neutral-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-400"
               >
                 Cancelar
               </button>
@@ -7197,9 +7224,9 @@ export default function Home() {
                   setShowCloseConfirmModal(false);
                   await performStatusUpdate(false);
                 }}
-                className="flex-1 rounded-full bg-neutral-950 px-5 py-3 text-sm font-semibold text-white transition hover:bg-neutral-800 active:scale-[0.98]"
+                className="min-h-12 flex-1 rounded-2xl bg-red-700 px-4 py-3 text-sm font-bold text-white transition hover:bg-red-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-600 focus-visible:ring-offset-2"
               >
-                Cerrar ahora
+                Cerrar negocio
               </button>
             </div>
           </div>
@@ -9005,7 +9032,7 @@ export default function Home() {
       ) : (
         <div className="min-h-[100dvh] bg-white">
           <header className="wl-admin-header sticky top-0 z-40 w-full border-b border-black/5 bg-white">
-            <div className="grid grid-cols-[56px_1fr_56px] items-center px-3 py-4 md:px-6 lg:grid-cols-[220px_1fr_220px]">
+              <div className="grid grid-cols-[56px_1fr_56px] items-center px-3 py-2 md:px-6 lg:grid-cols-[220px_1fr_220px]">
               <div className="mx-auto w-full max-w-[1540px] contents">
                 <div className="flex items-center">
                   <button
@@ -9030,13 +9057,13 @@ export default function Home() {
                       </span>
                     )}
                   </button>
-                  <SaDelLogo className="hidden h-9 w-auto object-contain lg:block" />
                 </div>
                 <div className="px-3 text-center flex flex-col items-center gap-0">
                   <img className="wl-admin-logo-light wl-admin-header-logo" src={redWordmark.src} alt="WingsLab" /><img className="wl-admin-logo-dark wl-admin-header-logo" src={whiteWordmark.src} alt="" aria-hidden="true" />
+                  <span className="wl-admin-header-subtitle">Panel de administración</span>
                 </div>
                 <div className="flex items-center justify-end">
-                  <span className="hidden rounded-full bg-sky-100 px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.18em] text-sky-700 lg:inline-flex">
+                  <span className="hidden rounded-full bg-sky-100 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-sky-700 lg:inline-flex">
                     {businessTypeLabel(profile?.businessType)}
                   </span>
                 </div>
@@ -9046,12 +9073,13 @@ export default function Home() {
 
           <div className={`wl-admin-layout flex min-h-[calc(100dvh-5rem)] w-full bg-transparent ${sidebarCollapsed ? 'wl-admin-layout--collapsed' : ''}`}>
             <aside className="wl-admin-sidebar fixed left-0 top-[5rem] hidden h-[calc(100dvh-5rem)] w-[260px] border-r border-black/5 bg-white lg:flex lg:flex-col">
-              <div className="flex-1 overflow-y-auto px-4 py-6">
-                <div className="wl-admin-sidebar-top"><div className="wl-admin-side-logo"><img className="wl-admin-logo-light" src={redWordmark.src} alt="WingsLab" /><img className="wl-admin-logo-dark" src={whiteWordmark.src} alt="" aria-hidden="true" /><span className="wl-admin-logo-compact" aria-label="WingsLab">WL</span></div><button type="button" className="wl-admin-sidebar-toggle" onClick={toggleSidebar} aria-label={sidebarCollapsed ? 'Expandir menú lateral' : 'Contraer menú lateral'} aria-expanded={!sidebarCollapsed} title={sidebarCollapsed ? 'Expandir menú lateral' : 'Contraer menú lateral'}><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="M9 4v16"/><path d={sidebarCollapsed ? 'm13 9 3 3-3 3' : 'm16 9-3 3 3 3'}/></svg></button></div>
+              <div className="flex-1 overflow-y-auto px-4 pb-6 pt-4">
+                <div className="wl-admin-sidebar-top">
                 <div className="wl-admin-business">
-                  <p className="wl-admin-business-label">Operación</p>
                   <p className="wl-admin-business-name">{restaurantName}</p>
                   <p className="wl-admin-business-status"><span className={isBusinessOpen && isWithinHours && !isBusinessPaused ? 'is-open' : ''} aria-hidden="true" />{operationalStatusLabel}</p>
+                </div>
+                <button type="button" className="wl-admin-sidebar-toggle" onClick={toggleSidebar} aria-label={sidebarCollapsed ? 'Expandir menú lateral' : 'Contraer menú lateral'} aria-expanded={!sidebarCollapsed} title={sidebarCollapsed ? 'Expandir menú lateral' : 'Contraer menú lateral'}><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="M9 4v16"/><path d={sidebarCollapsed ? 'm13 9 3 3-3 3' : 'm16 9-3 3 3 3'}/></svg></button>
                 </div>
 
                 <nav className="wl-admin-nav mt-6 grid gap-2" aria-label="Navegación del restaurante">
@@ -10722,8 +10750,6 @@ export default function Home() {
                     isSearchingAddress={isSearchingAddress}
                     addressSuggestions={addressSuggestions}
                     setAddressSuggestions={setAddressSuggestions}
-                    placesServiceRef={placesServiceRef}
-                    autocompleteSessionTokenRef={autocompleteSessionTokenRef}
                     ignoreAddressSearchRef={ignoreAddressSearchRef}
                     settingsMapRef={settingsMapRef}
                     settingsMarkerRef={settingsMarkerRef}

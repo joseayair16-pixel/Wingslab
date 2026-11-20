@@ -14,6 +14,8 @@ const withSharedAlias = (config) => {
 module.exports = (phase) => {
   const config = withSharedAlias({
     ...frontendConfig('restaurant'),
+    allowedDevOrigins: ['127.0.0.1', 'localhost'],
+    devIndicators: false,
     reactStrictMode: true,
     distDir: phase === PHASE_DEVELOPMENT_SERVER ? '.next-dev' : '.next',
     images: {

@@ -1095,8 +1095,8 @@ model NotificationRetry {
   id           String   @id @default(cuid())
   userId       String
 
-  // Clave de dedupe `<orderId>:<evento>` para no acumular reintentos del
-  // mismo evento de un pedido. Null cuando no hay orderId identificable.
+  // Clave de dedupe `<userId>:<orderId>:<evento>`: el mismo evento se deduplica
+  // por destinatario sin suprimir avisos de los demás usuarios. Null sin orderId.
   dedupeKey    String?  @unique
 
   payload      String // JSON de NotificationPayload (title/body/data/sound/...)

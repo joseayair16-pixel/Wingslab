@@ -1,0 +1,63 @@
+# Optional restaurant-only development overlay.
+services:
+  restaurant:
+    command: ["node", "scripts/wingslab-restaurant-dev.cjs"]
+    tmpfs: !override
+      - /tmp:rw,nosuid,nodev,size=256m,uid=1000,gid=1000
+      - /app/packages/web-restaurant:rw,nosuid,nodev,size=384m,uid=1000,gid=1000
+    volumes:
+      - type: bind
+        source: ../../scripts/wingslab-restaurant-dev.cjs
+        target: /app/scripts/wingslab-restaurant-dev.cjs
+        read_only: true
+        bind: { create_host_path: false }
+      - type: bind
+        source: ../../config/wingslab.cjs
+        target: /app/config/wingslab.cjs
+        read_only: true
+        bind: { create_host_path: false }
+      - type: bind
+        source: ../../tsconfig.json
+        target: /app/tsconfig.json
+        read_only: true
+        bind: { create_host_path: false }
+      - type: bind
+        source: ../../packages/web-restaurant/src
+        target: /app/packages/web-restaurant/src
+        read_only: true
+        bind: { create_host_path: false }
+      - type: bind
+        source: ../../packages/web-restaurant/public
+        target: /app/packages/web-restaurant/public
+        read_only: true
+        bind: { create_host_path: false }
+      - type: bind
+        source: ../../packages/web-restaurant/package.json
+        target: /app/packages/web-restaurant/package.json
+        read_only: true
+        bind: { create_host_path: false }
+      - type: bind
+        source: ../../packages/web-restaurant/next.config.js
+        target: /app/packages/web-restaurant/next.config.js
+        read_only: true
+        bind: { create_host_path: false }
+      - type: bind
+        source: ../../packages/web-restaurant/tsconfig.json
+        target: /app/packages/web-restaurant/tsconfig.json
+        read_only: true
+        bind: { create_host_path: false }
+      - type: bind
+        source: ../../packages/web-restaurant/postcss.config.js
+        target: /app/packages/web-restaurant/postcss.config.js
+        read_only: true
+        bind: { create_host_path: false }
+      - type: bind
+        source: ../../packages/web-restaurant/tailwind.config.ts
+        target: /app/packages/web-restaurant/tailwind.config.ts
+        read_only: true
+        bind: { create_host_path: false }
+      - type: bind
+        source: ../../packages/shared/src
+        target: /app/packages/shared/src
+        read_only: true
+        bind: { create_host_path: false }

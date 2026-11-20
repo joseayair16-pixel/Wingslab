@@ -1,6 +1,5 @@
-import { getWingslabSiteUrl, wingslabExternalServicesEnabled } from '@sadel/shared';
+import { getWingslabSiteUrl } from '@sadel/shared';
 import type { Metadata } from 'next';
-import Script from 'next/script';
 import '../styles/globals.css';
 import ServiceWorkerRegister from './ServiceWorkerRegister';
 import InstallAppButton from '../components/InstallAppButton';
@@ -89,12 +88,6 @@ export default function RootLayout({
         <style>{`html.wl-booting,html.wl-booting body{background-color:#f20d12!important}`}</style>
       </head>
       <body>
-        {wingslabExternalServicesEnabled() && process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY ? (
-          <Script
-            src={`https://maps.googleapis.com/maps/api/js?key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}&libraries=places&loading=async`}
-            strategy="lazyOnload"
-          />
-        ) : null}
         <ServiceWorkerRegister />
         <ClientOnly><InstallAppButton /></ClientOnly>
         <ClientOnly><AppUpdateBanner /></ClientOnly>

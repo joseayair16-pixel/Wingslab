@@ -1,11 +1,11 @@
-const CACHE_NAME = 'sadel-restaurant-v4';
+const CACHE_NAME = 'wingslab-restaurant-v5';
 const PRECACHE_URLS = [
   '/',
   '/sounds/notifica.wav',
   '/sounds/mensaje.wav',
   '/sounds/llegue.wav',
   '/sounds/rezagado.wav',
-  '/SaDeL.png',
+  '/WingsLab.png',
   '/app-icon-192.png',
   '/app-icon-512.png',
   '/badge.png',
@@ -50,7 +50,7 @@ self.addEventListener('push', function (event) {
     data = {};
   }
 
-  const title = data.title || 'Nuevo Pedido';
+  const title = data.title || 'Nuevo pedido · wingslab';
   const options = {
     body: data.body || 'Tienes un nuevo pedido pendiente.',
     icon: data.icon || '/app-icon-192.png',
@@ -59,7 +59,7 @@ self.addEventListener('push', function (event) {
     sound: data.sound || undefined,
     requireInteraction: data.requireInteraction !== undefined ? data.requireInteraction : true,
     data: data.data || {},
-    tag: data.tag || 'sadel-restaurant-order',
+    tag: data.tag || 'wingslab-restaurant-order',
   };
 
   event.waitUntil(

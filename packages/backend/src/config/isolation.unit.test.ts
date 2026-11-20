@@ -1,6 +1,6 @@
 import { prisma } from './database';
 import { getLocalCorsOrigins, parseBackendConfiguration } from './env';
-import { externalServicesEnabled, assertExternalOperationAllowed } from './isolation';
+import { externalServicesEnabled, webPushEnabled, webPushRetryJobEnabled, assertExternalOperationAllowed } from './isolation';
 
 const wingslabPolicy = require('../../../../config/wingslab.cjs') as {
   processEnvironment: (config: Record<string, unknown>, role: string, action: 'build' | 'start') => Record<string, string>;
@@ -24,6 +24,42 @@ test('local CORS accepts both loopback hostnames for the web frontends', () => {
 test('external capabilities remain unavailable', () => {
   expect(externalServicesEnabled()).toBe(false);
   expect(assertExternalOperationAllowed).toThrow();
+});
+
+test('Web Push requires its complete explicit local opt-in and leaves generic providers blocked', () => {
+  const prior = {
+    enabled: process.env.WINGSLAB_WEB_PUSH_ENABLED,
+    configured: process.env.WINGSLAB_CONFIGURED,
+    authorized: process.env.WINGSLAB_RUNTIME_AUTHORIZED,
+    attested: process.env.WINGSLAB_NETWORK_ATTESTED,
+    publicKey: process.env.WINGSLAB_WEB_PUSH_PUBLIC_KEY,
+    privateKey: process.env.WINGSLAB_WEB_PUSH_PRIVATE_KEY,
+    contact: process.env.WINGSLAB_WEB_PUSH_CONTACT,
+    retryEnabled: process.env.WINGSLAB_WEB_PUSH_RETRY_JOB_ENABLED,
+  };
+  try {
+    Object.assign(process.env, {
+      WINGSLAB_WEB_PUSH_ENABLED: 'true', WINGSLAB_CONFIGURED: 'yes',
+      WINGSLAB_RUNTIME_AUTHORIZED: 'reviewed-phase-2b', WINGSLAB_NETWORK_ATTESTED: 'yes',
+      WINGSLAB_WEB_PUSH_PUBLIC_KEY: 'public', WINGSLAB_WEB_PUSH_PRIVATE_KEY: 'private',
+      WINGSLAB_WEB_PUSH_CONTACT: 'mailto:notifications@wingslab.local',
+    });
+    expect(webPushEnabled()).toBe(true);
+    expect(webPushRetryJobEnabled()).toBe(false);
+    expect(externalServicesEnabled()).toBe(false);
+    delete process.env.WINGSLAB_WEB_PUSH_CONTACT;
+    expect(webPushEnabled()).toBe(false);
+  } finally {
+    for (const [key, value] of Object.entries({
+      WINGSLAB_WEB_PUSH_ENABLED: prior.enabled, WINGSLAB_CONFIGURED: prior.configured,
+      WINGSLAB_RUNTIME_AUTHORIZED: prior.authorized, WINGSLAB_NETWORK_ATTESTED: prior.attested,
+      WINGSLAB_WEB_PUSH_PUBLIC_KEY: prior.publicKey, WINGSLAB_WEB_PUSH_PRIVATE_KEY: prior.privateKey,
+      WINGSLAB_WEB_PUSH_CONTACT: prior.contact,
+      WINGSLAB_WEB_PUSH_RETRY_JOB_ENABLED: prior.retryEnabled,
+    })) {
+      if (value === undefined) delete process.env[key]; else process.env[key] = value;
+    }
+  }
 });
 
 test('explicit container configuration validates without initializing anything', () => {
@@ -107,4 +143,59 @@ test('Firebase public config reaches only the customer process; Admin secrets re
   expect(customerEnv.WINGSLAB_FIREBASE_AUTH_PRIVATE_KEY).toBeUndefined();
   expect(backendEnv.WINGSLAB_FIREBASE_AUTH_PRIVATE_KEY).toBe('private-key-material');
   expect(backendEnv.WINGSLAB_FIREBASE_WEB_API_KEY).toBeUndefined();
+});
+
+test('Maps is opt-in per frontend and never enables unrelated external providers', () => {
+  const base = {
+    version: 1,
+    profile: 'container',
+    authorization: { build: true, runtime: false, networkVerified: false },
+    origins: {
+      backend: 'http://127.0.0.1:3101', admin: 'http://127.0.0.1:3100',
+      restaurant: 'http://127.0.0.1:3102', customer: 'http://127.0.0.1:3103',
+      driver: 'http://127.0.0.1:3104',
+    },
+    googleMaps: { enabled: true, apiKey: 'browser-key' },
+  };
+  const customer = wingslabPolicy.processEnvironment(base, 'customer', 'build');
+  const restaurant = wingslabPolicy.processEnvironment(base, 'restaurant', 'build');
+  const driver = wingslabPolicy.processEnvironment(base, 'driver', 'build');
+  const backend = wingslabPolicy.processEnvironment(base, 'backend', 'build');
+  const disabled = wingslabPolicy.processEnvironment({
+    ...base, googleMaps: { enabled: false, apiKey: 'browser-key' },
+  }, 'customer', 'build');
+
+  for (const env of [customer, restaurant, driver]) {
+    expect(env.WINGSLAB_GOOGLE_MAPS_ENABLED).toBe('true');
+    expect(env.WINGSLAB_GOOGLE_MAPS_API_KEY).toBe('browser-key');
+  }
+  expect(backend.WINGSLAB_GOOGLE_MAPS_API_KEY).toBeUndefined();
+  expect(disabled.WINGSLAB_GOOGLE_MAPS_ENABLED).toBe('false');
+  expect(disabled.WINGSLAB_GOOGLE_MAPS_API_KEY).toBeUndefined();
+  expect(() => wingslabPolicy.processEnvironment({
+    ...base, googleMaps: { enabled: true, apiKey: '' },
+  }, 'customer', 'build')).toThrow('Google Maps cannot be enabled without an API key');
+  expect(externalServicesEnabled()).toBe(false);
+});
+
+test('VAPID private key is injected only into backend runtime, never a frontend', () => {
+  const config = {
+    version: 1,
+    profile: 'container',
+    authorization: { build: true, runtime: true, networkVerified: true },
+    origins: {
+      backend: 'http://127.0.0.1:3101', admin: 'http://127.0.0.1:3100',
+      restaurant: 'http://127.0.0.1:3102', customer: 'http://127.0.0.1:3103', driver: 'http://127.0.0.1:3104',
+    },
+    backend: { webPush: { enabled: true, publicKey: 'public-key', privateKey: 'private-key', contact: 'mailto:notifications@wingslab.local' } },
+  };
+  const backend = wingslabPolicy.processEnvironment(config, 'backend', 'start');
+  const restaurant = wingslabPolicy.processEnvironment(config, 'restaurant', 'start');
+  const customer = wingslabPolicy.processEnvironment(config, 'customer', 'start');
+  expect(backend.WINGSLAB_WEB_PUSH_ENABLED).toBe('true');
+  expect(backend.WINGSLAB_WEB_PUSH_PRIVATE_KEY).toBe('private-key');
+  for (const frontend of [restaurant, customer]) {
+    expect(frontend.WINGSLAB_WEB_PUSH_PRIVATE_KEY).toBeUndefined();
+    expect(frontend.WINGSLAB_WEB_PUSH_PUBLIC_KEY).toBeUndefined();
+  }
 });

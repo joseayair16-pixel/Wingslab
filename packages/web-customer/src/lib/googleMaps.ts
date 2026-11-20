@@ -15,8 +15,18 @@
 
 const MAPS_POLL_INTERVAL_MS = 150;
 const MAPS_TIMEOUT_MS = 15_000;
+const MAPS_LOAD_TIMEOUT_MS = 12_000;
 
 type GoogleMaps = any;
+
+// Si Google rechaza la clave (InvalidKeyMapError / gm_authfailure) o el script
+// nunca inicializa, recordamos el estado para no reintentar en bucle y para que
+// la UI pueda degradar a un enlace externo en lugar de mostrar un mapa roto.
+let mapsKnownUnavailable = false;
+
+export function isGoogleMapsUnavailable(): boolean {
+  return mapsKnownUnavailable;
+}
 
 function hasMapConstructor(): boolean {
   if (typeof window === 'undefined') return false;
@@ -79,6 +89,7 @@ export function ensureGoogleMapsScript(apiKey?: string): Promise<GoogleMaps | nu
 
   const existing = getGoogleMaps();
   if (existing) return Promise.resolve(existing);
+  if (mapsKnownUnavailable) return Promise.resolve(null);
   if (mapsScriptPromise) return mapsScriptPromise;
 
   const existingScript = document.querySelector('script[src*="maps.googleapis.com/maps/api/js"]');
@@ -87,25 +98,59 @@ export function ensureGoogleMapsScript(apiKey?: string): Promise<GoogleMaps | nu
     return mapsScriptPromise;
   }
 
-  const key = apiKey || process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || '';
-  mapsScriptPromise = new Promise<GoogleMaps | null>((resolve) => {
-    const previousCallback = (window as any).__onSadelMapsLoaded;
-    (window as any).__onSadelMapsLoaded = () => {
-      if (typeof previousCallback === 'function') previousCallback();
-      resolve(getGoogleMaps());
-    };
+  mapsScriptPromise = (async () => {
+    let key = apiKey?.trim() || '';
+    if (!key) {
+      try {
+        const response = await fetch('/wingslab-google-maps-config', { cache: 'no-store' });
+        if (!response.ok) return null;
+        const config = await response.json();
+        if (config.enabled !== true || typeof config.apiKey !== 'string') return null;
+        key = config.apiKey.trim();
+      } catch {
+        return null;
+      }
+    }
+    if (!key) {
+      mapsKnownUnavailable = true;
+      return null;
+    }
+    return new Promise<GoogleMaps | null>((resolve) => {
+      let settled = false;
+      let timer: number | undefined;
+      const finish = (value: GoogleMaps | null, unavailable = false) => {
+        if (settled) return;
+        settled = true;
+        if (timer !== undefined) window.clearTimeout(timer);
+        if (unavailable) mapsKnownUnavailable = true;
+        if (!value) mapsScriptPromise = null;
+        resolve(value);
+      };
 
-    const script = document.createElement('script');
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${key}&callback=__onSadelMapsLoaded&loading=async`;
-    script.async = true;
-    script.defer = true;
-    script.dataset.sadelMaps = '1';
-    script.onerror = () => {
-      mapsScriptPromise = null;
-      resolve(null);
-    };
-    document.head.appendChild(script);
-  });
+      const previousCallback = (window as any).__onSadelMapsLoaded;
+      (window as any).__onSadelMapsLoaded = () => {
+        if (typeof previousCallback === 'function') previousCallback();
+        finish(getGoogleMaps());
+      };
+
+      // Google llama a gm_authfailure cuando la clave es inválida o tiene
+      // restricciones de referente (p. ej. falta 127.0.0.1 en desarrollo).
+      const previousAuthFailure = (window as any).gm_authfailure;
+      (window as any).gm_authfailure = () => {
+        if (typeof previousAuthFailure === 'function') previousAuthFailure();
+        finish(null, true);
+      };
+
+      const script = document.createElement('script');
+      script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(key)}&callback=__onSadelMapsLoaded&loading=async`;
+      script.async = true;
+      script.defer = true;
+      script.dataset.sadelMaps = '1';
+      script.onerror = () => finish(null, true);
+      timer = window.setTimeout(() => finish(null, true), MAPS_LOAD_TIMEOUT_MS);
+      document.head.appendChild(script);
+    });
+  })();
 
   return mapsScriptPromise;
 }

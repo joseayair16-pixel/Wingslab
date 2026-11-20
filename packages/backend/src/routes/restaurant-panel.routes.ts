@@ -31,6 +31,7 @@ const restaurantProfileSchema = z.object({
   supportsNetworkDelivery: z.boolean().optional(),
   pickupOnly: z.boolean().optional(),
   autoOpenEnabled: z.boolean().optional(),
+  serviceFee: z.number().finite().min(0).max(10000).refine(value => Math.abs(value * 100 - Math.round(value * 100)) < 0.000001, 'La tarifa admite máximo dos decimales.').optional(),
   deliveryFee: z.number().nonnegative().nullable().optional(),
   deliveryRadius: z.number().nonnegative().optional(),
   deliveryPricingModel: z.enum(['fixed', 'distance']).optional(),

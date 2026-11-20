@@ -3,6 +3,7 @@ import {
   persistNativeFcmToken,
   clearNativeFcmToken,
   cancelDeliveredNativeNotifications,
+  onNativePushReceived,
 } from './native';
 
 describe('Restaurant Native FCM & Notification Cleanup', () => {
@@ -64,5 +65,30 @@ describe('Restaurant Native FCM & Notification Cleanup', () => {
 
     cancelDeliveredNativeNotifications();
     expect(removeMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('reenvía al cliente eventos FCM recibidos con la app en primer plano y limpia listener', () => {
+    let receive: ((message: any) => void) | undefined;
+    const remove = jest.fn();
+    (window as any).Capacitor = {
+      isNativePlatform: () => true,
+      Plugins: {
+        PushNotifications: {
+          addListener: jest.fn((name: string, callback: (message: any) => void) => {
+            expect(name).toBe('pushNotificationReceived');
+            receive = callback;
+            return { remove };
+          }),
+        },
+      },
+    };
+    const handler = jest.fn();
+    const cleanup = onNativePushReceived(handler);
+
+    receive?.({ data: { orderId: 'order-1' }, title: 'Nuevo pedido' });
+
+    expect(handler).toHaveBeenCalledWith({ data: { orderId: 'order-1' }, title: 'Nuevo pedido', body: undefined });
+    cleanup();
+    expect(remove).toHaveBeenCalledTimes(1);
   });
 });

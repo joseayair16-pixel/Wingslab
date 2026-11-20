@@ -1,0 +1,32 @@
+# Optional backend-only development overlay. Uses host-compiled dist.
+services:
+  backend:
+    command: ["node", "scripts/wingslab-backend-dev.cjs"]
+    tmpfs: !override
+      - /tmp:rw,nosuid,nodev,size=256m,uid=1000,gid=1000
+    volumes:
+      - type: bind
+        source: ../../scripts/wingslab-backend-dev.cjs
+        target: /app/scripts/wingslab-backend-dev.cjs
+        read_only: true
+        bind: { create_host_path: false }
+      - type: bind
+        source: ../../config/wingslab.cjs
+        target: /app/config/wingslab.cjs
+        read_only: true
+        bind: { create_host_path: false }
+      - type: bind
+        source: ../../packages/shared/src/wingslab-policy.cjs
+        target: /app/packages/shared/src/wingslab-policy.cjs
+        read_only: true
+        bind: { create_host_path: false }
+      - type: bind
+        source: ../../packages/shared/dist
+        target: /app/packages/shared/dist
+        read_only: true
+        bind: { create_host_path: false }
+      - type: bind
+        source: ../../packages/backend/dist
+        target: /app/packages/backend/dist
+        read_only: true
+        bind: { create_host_path: false }

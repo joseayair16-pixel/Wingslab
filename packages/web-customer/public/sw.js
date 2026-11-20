@@ -1,4 +1,4 @@
-const CACHE_NAME = 'sadel-customer-v11';
+const CACHE_NAME = 'wingslab-customer-v14';
 
 // App shell mínimo para que la PWA instalada abra aunque no haya red
 // (la navegación sigue siendo network-first; esto solo garantiza un arranque offline).
@@ -31,7 +31,7 @@ self.addEventListener('activate', function (event) {
       caches.keys().then(function (cacheNames) {
         return Promise.all(
           cacheNames.map(function (cacheName) {
-            if (cacheName !== CACHE_NAME) {
+            if (cacheName.startsWith('sadel-customer-') && cacheName !== CACHE_NAME) {
               return caches.delete(cacheName);
             }
           })
@@ -49,7 +49,7 @@ self.addEventListener('push', function (event) {
     data = {};
   }
 
-  const title = data.title || 'Nueva notificación de SaDeL';
+  const title = data.title || 'Notificación de wingslab';
   const options = {
     body: data.body || 'Tienes un nuevo mensaje sobre tu pedido.',
     icon: data.icon || '/app-icon-192.png',
@@ -273,34 +273,16 @@ self.addEventListener('fetch', function (event) {
   var requestUrl = new URL(event.request.url);
 
   if (event.request.method !== 'GET' || !requestUrl.protocol.startsWith('http')) return;
+  // External assets (including Maps and Places) must use the browser's normal
+  // network path, not the worker's CSP or an offline copy of a Google script.
+  if (requestUrl.origin !== self.location.origin) return;
   if (requestUrl.pathname.includes('socket.io')) return;
-
-  // API reads (same-origin /api/... proxied by Next): network-first, no stale cache.
-  // NUNCA se sirve una respuesta vieja si hay red: el estado del pedido debe ser
-  // siempre el real. La caché solo respalda cuando no hay conexión (offline).
-  if (requestUrl.origin === self.location.origin && requestUrl.pathname.startsWith('/api/')) {
-    event.respondWith(
-      fetch(event.request)
-        .then(function (networkResponse) {
-          if (networkResponse && networkResponse.ok) {
-            var responseToCache = networkResponse.clone();
-            caches.open(CACHE_NAME).then(function (cache) {
-              cache.put(event.request, responseToCache);
-            });
-          }
-          return networkResponse;
-        })
-        .catch(function () {
-          return caches.match(event.request).then(function (cached) {
-            return cached || new Response(JSON.stringify({ success: false, data: null }), {
-              status: 503,
-              headers: { 'content-type': 'application/json' },
-            });
-          });
-        })
-    );
-    return;
-  }
+  // Never cache authenticated/private API responses. Offline requests fail
+  // explicitly rather than exposing a previous account's orders on this device.
+  if (requestUrl.pathname.startsWith('/api/')) return;
+  // Next dev assets use a changing ?v= timestamp and disappear on restart.
+  // Leave them to the browser rather than caching or serving a mismatched copy.
+  if (requestUrl.pathname.startsWith('/_next/static/') && requestUrl.searchParams.has('v')) return;
 
   // Navigation (HTML pages): network-first, fallback to cache
   if (event.request.mode === 'navigate') {
@@ -310,7 +292,7 @@ self.addEventListener('fetch', function (event) {
       }).catch(function () {
         return caches.match(event.request).then(function (cached) {
           if (cached) return cached;
-          return caches.match('/');
+          return caches.match('/').then(function (fallback) { return fallback || Response.error(); });
         });
       })
     );
@@ -329,7 +311,7 @@ self.addEventListener('fetch', function (event) {
         }
         return networkResponse;
       }).catch(function () {
-        return caches.match(event.request);
+        return caches.match(event.request).then(function (cached) { return cached || Response.error(); });
       })
     );
     return;

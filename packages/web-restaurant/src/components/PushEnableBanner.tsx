@@ -3,7 +3,7 @@ import { X } from 'lucide-react';
 
 import { useEffect, useState } from 'react';
 
-import { getNativePushPermissionState, isNativePlatform, nativeOpenBatterySettings } from '../lib/native';
+import { getNativePushPermissionState, isNativePlatform, nativeOpenBatterySettings, readNativeFcmToken } from '../lib/native';
 
 type EnableStatus = 'DENIED' | 'BLOCKED' | 'INSECURE' | 'NOT_SUPPORTED' | 'VAPID_NOT_CONFIGURED' | 'SUBSCRIBE_FAILED' | 'UNKNOWN';
 
@@ -33,14 +33,14 @@ function getIosTooOld(): boolean {
   return !(major > 16 || (major === 16 && minor >= 4));
 }
 
-const STORAGE_KEY = 'sadel-push-banner-dismissed';
+const STORAGE_KEY = 'wingslab-push-banner-dismissed';
 
 const REASON_MESSAGES: Record<EnableStatus, string> = {
   DENIED: 'Rechazaste el permiso de notificaciones. Actívalo en los ajustes del navegador para no perder pedidos.',
   BLOCKED: 'Notificaciones bloqueadas en este sitio. Actívalas en los ajustes del navegador.',
   INSECURE: 'Estás entrando por HTTP. Abre el panel con https:// para poder activar las notificaciones.',
   NOT_SUPPORTED: 'Este navegador no soporta notificaciones push.',
-  VAPID_NOT_CONFIGURED: 'Las notificaciones del servidor no están configuradas. Contacta al soporte de SaDeL.',
+  VAPID_NOT_CONFIGURED: 'Las notificaciones del servidor no están configuradas. Contacta al soporte de wingslab.',
   SUBSCRIBE_FAILED: 'No se pudo completar la suscripción. Inténtalo de nuevo en unos segundos.',
   UNKNOWN: 'Ocurrió un error al activar las notificaciones. Inténtalo de nuevo.',
 };
@@ -65,9 +65,14 @@ export default function PushEnableBanner({ visible, onEnable }: Props) {
       if (isNativePlatform()) {
         void getNativePushPermissionState()
           .then((state) => {
-            if (state === 'granted') {
+            if (state === 'granted' && !!readNativeFcmToken()) {
               setPermission('granted');
               setSubscribed(true);
+            } else if (state === 'granted') {
+              // El permiso de Android no prueba que FCM esté registrado en el
+              // servidor. Mantén visible la activación hasta tener token local.
+              setPermission('granted');
+              setSubscribed(false);
             } else if (state === 'prompt') {
               setPermission('default');
               setSubscribed(false);
@@ -77,7 +82,9 @@ export default function PushEnableBanner({ visible, onEnable }: Props) {
             }
           })
           .catch(() => {
-            setPermission('denied');
+            // Fallo temporal del bridge no equivale a permiso denegado: deja
+            // una acción recuperable en vez de mandar al usuario a Settings.
+            setPermission('default');
             setSubscribed(false);
           })
           .finally(() => setInitialized(true));
@@ -152,7 +159,7 @@ export default function PushEnableBanner({ visible, onEnable }: Props) {
         <div className="mx-auto flex max-w-5xl items-center justify-center gap-2">
           <p className="flex-1">
             {isNativePlatform()
-              ? 'Notificaciones bloqueadas en la app. Actívalas en: Ajustes → Aplicaciones → SaDeL → Notificaciones.'
+              ? 'Notificaciones bloqueadas en la app. Actívalas en: Ajustes → Aplicaciones → wingslab → Notificaciones.'
               : 'Notificaciones bloqueadas. Para activarlas: toca el ícono 🔒 (o ℹ️) junto a la URL y habilita «Notificaciones» en Chrome / «Permisos → Notificaciones» en Safari.'}
           </p>
           <button
@@ -213,7 +220,7 @@ export default function PushEnableBanner({ visible, onEnable }: Props) {
                     } else if (isNativePlatform() && result.reason === 'DENIED') {
                       // En la APK el diálogo del sistema ya no apareció (denegado
                       // permanente): la única vía es Ajustes del sistema.
-                      setErrorMessage('El permiso quedó bloqueado. Actívalo en: Ajustes → Aplicaciones → SaDeL → Notificaciones, y vuelve a entrar.');
+                       setErrorMessage('El permiso quedó bloqueado. Actívalo en: Ajustes → Aplicaciones → wingslab → Notificaciones, y vuelve a entrar.');
                     } else {
                       setErrorMessage(REASON_MESSAGES[result.reason]);
                     }

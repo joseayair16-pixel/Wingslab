@@ -1,4 +1,5 @@
 import React from 'react';
+import { useRouter } from 'next/navigation';
 import { useStore } from '../store';
 import { ReceiptText, ChevronRight } from 'lucide-react';
 import logo from '../assets/wingslab-wordmark.png';
@@ -34,6 +35,7 @@ export function OrdersView({
   showLoadMore,
   loadMoreOrders
 }: OrdersViewProps) {
+  const router = useRouter();
   const setActiveSection = useStore(state => state.setActiveSection);
 
   return (
@@ -49,7 +51,7 @@ export function OrdersView({
           </p>
           <button
             type="button"
-            onClick={() => { window.location.href = '/'; }}
+            onClick={() => router.push('/')}
             className="rounded-full bg-neutral-900 px-6 py-2.5 text-sm font-semibold text-white hover:bg-neutral-800 transition"
           >
             Ver menú WingsLab

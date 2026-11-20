@@ -1,6 +1,7 @@
 import { prisma } from '../config/database';
 import { logger } from '../utils/logger';
 import type { NotificationPayload } from './notification-types';
+import { notificationRetryDedupeKey } from './notification-retry-key';
 
 // TTL por tipo de evento: cuánto tiempo tiene sentido reintentar un aviso.
 // Un pedido nuevo/repartidor llegó es urgente por horas; un chat, menos; y
@@ -24,15 +25,6 @@ const DEFAULT_TTL_MS = 3 * 60 * 60 * 1000; // 3h por defecto
 export const MAX_RETRY_ATTEMPTS = 12;
 
 /** Clave de dedupe: el mismo evento del mismo pedido no se encola dos veces. */
-function dedupeKey(payload: NotificationPayload): string | null {
-  const event = typeof payload.data?.event === 'string' ? payload.data.event : '';
-  const type = typeof payload.data?.type === 'string' ? payload.data.type : '';
-  const orderId = typeof payload.data?.orderId === 'string' ? payload.data.orderId : '';
-  const key = event || type;
-  if (!key || !orderId) return null;
-  return `${orderId}:${key}`;
-}
-
 export function computeRetryTtlMs(payload: NotificationPayload): number {
   const event = typeof payload.data?.event === 'string' ? payload.data.event : '';
   const type = typeof payload.data?.type === 'string' ? payload.data.type : '';
@@ -51,7 +43,7 @@ export async function enqueueNotificationRetry(
 ): Promise<void> {
   try {
     const expiresAt = new Date(Date.now() + computeRetryTtlMs(payload));
-    const key = dedupeKey(payload);
+    const key = notificationRetryDedupeKey(userId, payload);
 
     await prisma.notificationRetry.upsert({
       where: { dedupeKey: key ?? `uid-${userId}-${Date.now()}` },

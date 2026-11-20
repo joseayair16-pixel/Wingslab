@@ -32,7 +32,7 @@ COPY --from=build --chown=1000:1000 /app/config/wingslab.cjs ./config/wingslab.c
 COPY --from=build --chown=1000:1000 /app/scripts/wingslab-run.cjs /app/scripts/blocked-operation.cjs ./scripts/
 COPY --from=build --chown=1000:1000 /app/packages/shared/package.json ./packages/shared/package.json
 COPY --from=build --chown=1000:1000 /app/packages/shared/dist ./packages/shared/dist
-COPY --from=build --chown=1000:1000 /app/packages/shared/src/wingslab-policy.js ./packages/shared/src/wingslab-policy.js
+COPY --from=build --chown=1000:1000 /app/packages/shared/src/wingslab-policy.cjs ./packages/shared/src/wingslab-policy.cjs
 COPY --from=build --chown=1000:1000 /app/packages/backend/package.json ./packages/backend/package.json
 COPY --from=build --chown=1000:1000 /app/packages/backend/dist ./packages/backend/dist
 USER 1000:1000

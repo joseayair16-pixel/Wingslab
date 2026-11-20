@@ -187,6 +187,21 @@ export function registerNativePush(
   });
 }
 
+/** Foreground FCM is the recovery channel when the realtime socket is down. */
+export function onNativePushReceived(handler: (message: { data?: Record<string, string>; title?: string; body?: string }) => void): () => void {
+  const PN = plugin('PushNotifications');
+  if (!PN || typeof PN.addListener !== 'function') return () => undefined;
+  try {
+    const listener = PN.addListener('pushNotificationReceived', (message: any) => {
+      const data = message?.data && typeof message.data === 'object' ? message.data : {};
+      handler({ data, title: message?.title, body: message?.body });
+    });
+    return () => { try { listener?.then ? void listener.then((h: any) => h?.remove?.()) : listener?.remove?.(); } catch { /* noop */ } };
+  } catch {
+    return () => undefined;
+  }
+}
+
 /**
  * Clave local del token FCM para el restaurante.
  */

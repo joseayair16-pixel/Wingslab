@@ -1,5 +1,5 @@
 'use client';
-import { CalendarDays, Clock, Clock3, Copy, Pause, Play, Power, PackageCheck, ReceiptText, Users } from 'lucide-react';
+import { CalendarDays, Check, Clock, Clock3, Copy, Pause, Play, Power, PackageCheck, ReceiptText, Users } from 'lucide-react';
 
 import React, { useEffect, useMemo, useState } from 'react';
 import { requestJson } from '@sadel/shared';
@@ -80,6 +80,12 @@ export const DashboardSection = React.memo(function DashboardSection({
   Panel,
 }: DashboardSectionProps) {
   const [weekOffset, setWeekOffset] = useState(0);
+  const [copyCount, setCopyCount] = useState(0);
+  useEffect(() => {
+    if (!copyCount) return;
+    const timer = window.setTimeout(() => setCopyCount(0), 2000);
+    return () => window.clearTimeout(timer);
+  }, [copyCount]);
   const mexicoToday = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Mexico_City', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(kitchenClockNow));
   const [selectedDate, setSelectedDate] = useState('');
   const selectedDay = selectedDate || mexicoToday;
@@ -120,7 +126,7 @@ export const DashboardSection = React.memo(function DashboardSection({
     <div className="wl-dashboard">
       <section className="wl-dash-hero" aria-labelledby="wl-dashboard-title">
         <div><p className="wl-dash-eyebrow">Panel del restaurante</p><h1 id="wl-dashboard-title">{restaurantName}</h1><div className="wl-dash-status"><span className={`wl-dash-status-dot ${profile?.status === 'ACTIVE' && isBusinessOpen && isWithinHours && !isBusinessPaused ? 'is-open' : ''}`} />{operationalStatusLabel}{profile?.autoOpenEnabled && <span className="wl-dash-auto">· Apertura automática</span>}</div></div>
-        {profile?.status === 'ACTIVE' && <div className="wl-dash-actions"><button type="button" onClick={async () => { const origin = getCustomerOrigin(); if (!origin) { onPushToast('error', 'No configurado', 'No hay una URL de tienda configurada.'); return; } try { await navigator.clipboard.writeText(`${origin}/restaurantes/${profile.id}`); onPushToast('success', 'Enlace copiado', 'El enlace de tu tienda se copió al portapapeles.'); } catch { onPushToast('error', 'Error', 'No se pudo copiar el enlace.'); } }}><Copy aria-hidden="true" /> Copiar enlace</button><button type="button" onClick={onTogglePause} disabled={updatingOperationalStatus || !isBusinessOpen}>{isBusinessPaused ? <Play aria-hidden="true" /> : <Pause aria-hidden="true" />} {isBusinessPaused ? 'Reanudar pedidos' : 'Pausar pedidos'}</button><button type="button" className="wl-dash-action-strong" onClick={onToggleOperational} disabled={updatingOperationalStatus}><Power aria-hidden="true" /> {isBusinessOpen ? 'Cerrar negocio' : 'Abrir negocio'}</button></div>}
+        {profile?.status === 'ACTIVE' && <div className="wl-dash-actions"><button type="button" onClick={async () => { const origin = getCustomerOrigin(); if (!origin) { onPushToast('error', 'No configurado', 'No hay una URL de tienda configurada.'); return; } try { await navigator.clipboard.writeText(`${origin}/restaurantes/${profile.id}`); setCopyCount(count => count + 1); } catch { setCopyCount(0); onPushToast('error', 'Error', 'No se pudo copiar el enlace.'); } }}>{copyCount ? <Check aria-hidden="true" /> : <Copy aria-hidden="true" />} <span aria-live="polite">{copyCount ? 'Copiado' : 'Copiar enlace'}</span></button><button type="button" onClick={onTogglePause} disabled={updatingOperationalStatus || !isBusinessOpen}>{isBusinessPaused ? <Play aria-hidden="true" /> : <Pause aria-hidden="true" />} {isBusinessPaused ? 'Reanudar pedidos' : 'Pausar pedidos'}</button><button type="button" className="wl-dash-action-strong" onClick={onToggleOperational} disabled={updatingOperationalStatus}><Power aria-hidden="true" /> {isBusinessOpen ? 'Cerrar negocio' : 'Abrir negocio'}</button></div>}
       </section>
       {wasAutoPausedByInactivity && <div className="wl-dash-alert"><div><strong>El negocio se cerró por inactividad</strong><p>Un pedido no se respondió a tiempo. Cuando estés listo, vuelve a abrir tu negocio.</p></div><button type="button" disabled={updatingOperationalStatus} onClick={onToggleOperational}>Reabrir negocio</button></div>}
       {stalePendingOrders.length > 0 && <button type="button" className="wl-dash-alert wl-dash-alert-button" onClick={() => onSelectOrderForTicket(stalePendingOrders[0])}><span><strong>{stalePendingOrders.length === 1 ? '1 pedido lleva más de 3 min sin respuesta' : `${stalePendingOrders.length} pedidos llevan más de 3 min sin respuesta`}</strong><small>Selecciona para atenderlo</small></span><span aria-hidden="true">›</span></button>}

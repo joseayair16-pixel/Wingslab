@@ -11,6 +11,7 @@ import { isRingPayload } from '../services/fcm.service';
  * nativa lo descarta por vencido y el aviso no llegaría de ninguna forma.
  */
 const RING_RETRY_WINDOW_MS = 2 * 60 * 1000;
+const RETRY_CLAIM_LEASE_MS = 2 * 60 * 1000;
 
 /**
  * Reenvía notificaciones críticas que fallaron en su primer intento y quedaron
@@ -54,11 +55,24 @@ export async function processNotificationRetries(batchSize = 50): Promise<number
 
   let delivered = 0;
   for (const retry of due) {
+    // Atomic lease: multiple backend instances/overlapping cron ticks can read
+    // the same row, but only one claims this exact due timestamp + attempt.
+    const claim = await prisma.notificationRetry.updateMany({
+      where: {
+        id: retry.id,
+        nextAttemptAt: { lte: now },
+        attempts: retry.attempts,
+        expiresAt: { gt: now },
+      },
+      data: { nextAttemptAt: new Date(Date.now() + RETRY_CLAIM_LEASE_MS) },
+    }).catch(() => ({ count: 0 }));
+    if (claim.count !== 1) continue;
+
     let payload: NotificationPayload;
     try {
       payload = JSON.parse(retry.payload) as NotificationPayload;
     } catch {
-      await prisma.notificationRetry.delete({ where: { id: retry.id } }).catch(() => undefined);
+      await prisma.notificationRetry.deleteMany({ where: { id: retry.id } }).catch(() => undefined);
       continue;
     }
 

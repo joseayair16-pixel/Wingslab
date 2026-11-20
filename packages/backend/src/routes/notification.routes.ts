@@ -4,10 +4,21 @@ import { prisma } from '../config/database';
 import { sendPushNotification, isVapidConfigured } from '../services/notification.service';
 
 const subscribeSchema = z.object({
-  endpoint: z.string().url(),
+  endpoint: z.string().url().max(2048).refine((value) => {
+    try {
+      const host = new URL(value).hostname.toLowerCase();
+      return value.startsWith('https://') && (
+        host === 'fcm.googleapis.com' || host.endsWith('.fcm.googleapis.com') ||
+        host === 'push.services.mozilla.com' || host.endsWith('.push.services.mozilla.com') || host === 'web.push.apple.com' ||
+        host.endsWith('.push.apple.com') || host === 'wns.windows.com'
+      );
+    } catch {
+      return false;
+    }
+  }, 'Push endpoint provider is not supported.'),
   keys: z.object({
-    p256dh: z.string(),
-    auth: z.string(),
+    p256dh: z.string().regex(/^[A-Za-z0-9_-]{80,100}$/),
+    auth: z.string().regex(/^[A-Za-z0-9_-]{16,32}$/),
   }),
 });
 
@@ -28,6 +39,9 @@ const subscriptionRevokeSchema = z.object({
 
 export async function registerNotificationRoutes(fastify: FastifyInstance): Promise<void> {
   fastify.post('/notifications/subscribe', async (request, reply) => {
+    if (!isVapidConfigured()) {
+      return reply.status(503).send({ success: false, error: { code: 'WEB_PUSH_DISABLED', message: 'Web Push no está habilitado en este servidor.' } });
+    }
     try {
       await request.jwtVerify();
     } catch {
@@ -335,7 +349,7 @@ export async function registerNotificationRoutes(fastify: FastifyInstance): Prom
     return reply.send({
       success: true,
       configured: true,
-      publicKey: process.env.VAPID_PUBLIC_KEY,
+      publicKey: process.env.WINGSLAB_WEB_PUSH_PUBLIC_KEY,
     });
   });
 

@@ -4,6 +4,7 @@ import { Info, Settings2, Tag } from 'lucide-react';
 import React, { useEffect, useState } from 'react';
 import { requestJson } from '@sadel/shared';
 import { getGoogleMaps } from '../../lib/googleMaps';
+import { fetchSelectedPlaceFields } from '../../lib/places';
 import { hasNativeOrderAlarm, isNativePlatform } from '../../lib/native';
 import { CategoryIcon } from '../CategoryIcon';
 
@@ -108,8 +109,6 @@ interface SettingsSectionProps {
   isSearchingAddress: boolean;
   addressSuggestions: any[];
   setAddressSuggestions: (suggestions: any[]) => void;
-  placesServiceRef: React.MutableRefObject<any>;
-  autocompleteSessionTokenRef: React.MutableRefObject<any>;
   ignoreAddressSearchRef: React.MutableRefObject<boolean>;
   settingsMapRef: React.MutableRefObject<any>;
   settingsMarkerRef: React.MutableRefObject<any>;
@@ -166,8 +165,6 @@ export const SettingsSection = React.memo(function SettingsSection({
   isSearchingAddress,
   addressSuggestions,
   setAddressSuggestions,
-  placesServiceRef,
-  autocompleteSessionTokenRef,
   ignoreAddressSearchRef,
   settingsMapRef,
   settingsMarkerRef,
@@ -929,43 +926,29 @@ export const SettingsSection = React.memo(function SettingsSection({
                         <button
                           key={suggestion.place_id}
                           type="button"
-                          onClick={() => {
-                            const google = getGoogleMaps();
-                            if (!google || !google.maps || !google.maps.places) return;
-
-                            if (!placesServiceRef.current) {
-                              const mapEl = document.createElement('div');
-                              placesServiceRef.current = new google.maps.places.PlacesService(mapEl);
-                            }
-
-                            placesServiceRef.current.getDetails({
-                              placeId: suggestion.place_id,
-                              sessionToken: autocompleteSessionTokenRef.current,
-                              fields: ['geometry', 'formatted_address']
-                            }, (place: any, status: any) => {
-                              autocompleteSessionTokenRef.current = new google.maps.places.AutocompleteSessionToken();
-
-                              if (status !== google.maps.places.PlacesServiceStatus.OK || !place || !place.geometry || !place.geometry.location) {
-                                return;
-                              }
-
-                              const lat = place.geometry.location.lat();
-                              const lng = place.geometry.location.lng();
-
+                          onClick={async () => {
+                            if (!suggestion.place_id) return;
+                            try {
+                              const place = await fetchSelectedPlaceFields(suggestion, ['location', 'formattedAddress']);
+                              if (!place.location) return;
+                              const google = getGoogleMaps();
+                              const lat = place.location.lat();
+                              const lng = place.location.lng();
                               ignoreAddressSearchRef.current = true;
                               setStoreDraft((c: any) => ({
                                 ...c,
-                                address: suggestion.display_name,
+                                address: place.formattedAddress || suggestion.display_name,
                                 latitude: String(lat),
                                 longitude: String(lng),
                               }));
                               setAddressSuggestions([]);
-
                               if (settingsMapRef.current) {
                                 settingsMapRef.current.setCenter({ lat, lng });
                                 settingsMarkerRef.current.setPosition({ lat, lng });
                               }
-                            });
+                            } catch {
+                              setAddressSuggestions([]);
+                            }
                           }}
                           className="w-full px-4 py-2.5 text-left text-sm hover:bg-neutral-50 transition border-b last:border-0 border-black/5 text-neutral-800 break-words"
                         >
@@ -1006,6 +989,8 @@ export const SettingsSection = React.memo(function SettingsSection({
             {/* ─── ENTREGA ─── */}
             {activeSettingsTab === 'entrega' && (
               <div className="wl-settings-form grid min-w-0 grid-cols-1 gap-4 md:grid-cols-2">
+                <div className="wl-settings-group-heading md:col-span-2"><div><h4>Tarifa de servicio</h4><p>Monto fijo por pedido, adicional al envío. Aplica también al recoger en tienda; usa $0 para no cobrarla.</p></div></div>
+                <Field label="Tarifa de servicio por pedido ($)" value={storeDraft.serviceFee} onChange={(value: string) => setStoreDraft((c: any) => ({ ...c, serviceFee: value }))} placeholder="0.00" type="number" />
                 <div className="wl-settings-group-heading md:col-span-2"><div><h4>Modalidad de servicio</h4></div></div>
                 <div className="md:col-span-2">
                   <ToggleField

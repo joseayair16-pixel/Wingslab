@@ -20,6 +20,10 @@
     "projectId": "",
     "appId": ""
   },
+  "googleMaps": {
+    "enabled": false,
+    "apiKey": ""
+  },
   "backend": {
     "databaseUrl": "",
     "redisUrl": "",
@@ -30,6 +34,13 @@
       "projectId": "",
       "clientEmail": "",
       "privateKey": ""
+    },
+    "webPush": {
+      "enabled": false,
+      "retryJobEnabled": false,
+      "publicKey": "",
+      "privateKey": "",
+      "contact": "mailto:notifications@wingslab.local"
     },
     "cloudinary": {
       "cloudName": "",

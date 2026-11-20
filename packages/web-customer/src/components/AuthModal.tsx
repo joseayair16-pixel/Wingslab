@@ -29,7 +29,6 @@ export const AuthModal = memo(function AuthModal({ isOpen, onClose, onSuccess, a
   const [authMode, setAuthMode] = useState<AuthMode>('login');
   const [authStep, setAuthStep] = useState<AuthStep>('welcome');
   const [phone, setPhone] = useState('');
-  const [email, setEmail] = useState('');
   const [name, setName] = useState('');
   const [lastName, setLastName] = useState('');
   const [dobDay, setDobDay] = useState(() => getLatestAllowedBirthDate().day);
@@ -77,7 +76,6 @@ export const AuthModal = memo(function AuthModal({ isOpen, onClose, onSuccess, a
       setAuthMode('login');
       setAuthStep('welcome');
       setPhone('');
-      setEmail('');
       setName('');
       setLastName('');
       const latestAllowedBirthDate = getLatestAllowedBirthDate();
@@ -186,7 +184,6 @@ export const AuthModal = memo(function AuthModal({ isOpen, onClose, onSuccess, a
     try {
       if (phone.length !== 10) throw new Error('Ingresa un teléfono de 10 dígitos.');
       if (authMode === 'register') {
-        if (!isValidEmail(email)) throw new Error('Ingresa un correo electrónico válido.');
         if (!name.trim() || !lastName.trim()) throw new Error('Completa tu nombre y apellidos.');
         if (!isEligibleBirthDate(dobDay, dobMonth, dobYear)) {
           throw new Error('Para crear una cuenta necesitas tener al menos 12 años.');
@@ -204,7 +201,6 @@ export const AuthModal = memo(function AuthModal({ isOpen, onClose, onSuccess, a
             intent: authMode === 'recovery' ? 'recovery' : 'register',
             ...(authMode === 'register'
               ? {
-                  email: email.trim(),
                   name: name.trim(),
                   lastName: lastName.trim(),
                   dateOfBirth: `${dobYear}-${String(dobMonth).padStart(2, '0')}-${String(dobDay).padStart(2, '0')}`,
@@ -596,14 +592,6 @@ export const AuthModal = memo(function AuthModal({ isOpen, onClose, onSuccess, a
                       ) : authStep === 'contact' ? (
                         <div className="space-y-4">
                           <Field
-                            label="Correo electrónico"
-                            value={email}
-                            onChange={(value) => { setEmail(value); setError(''); }}
-                            placeholder="tucorreo@ejemplo.com"
-                            type="email"
-                            autoComplete="email"
-                          />
-                          <Field
                             label="Teléfono (10 dígitos)"
                             value={phone}
                             onChange={handlePhoneChange}
@@ -615,7 +603,7 @@ export const AuthModal = memo(function AuthModal({ isOpen, onClose, onSuccess, a
                             <button
                               type="button"
                               onClick={startSmsVerification}
-                              disabled={startingVerification || !isValidEmail(email) || phone.length !== 10}
+                              disabled={startingVerification || phone.length !== 10}
                               className="inline-flex min-h-[52px] w-full items-center justify-center gap-2.5 rounded-2xl bg-neutral-950 px-4 py-3 text-sm font-semibold text-white shadow-[0_6px_18px_rgba(10,10,10,0.14)] transition-all duration-200 hover:bg-neutral-800 hover:shadow-[0_8px_22px_rgba(10,10,10,0.2)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900 focus-visible:ring-offset-2 active:scale-[0.98] disabled:cursor-not-allowed disabled:bg-neutral-100 disabled:text-neutral-400 disabled:shadow-none"
                             >
                               <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-white/10">
@@ -735,10 +723,6 @@ function formatPhoneNumber(value: string) {
   if (digits.length <= 2) return digits;
   if (digits.length <= 6) return `(${digits.slice(0, 2)}) ${digits.slice(2)}`;
   return `(${digits.slice(0, 2)}) ${digits.slice(2, 6)}-${digits.slice(6, 10)}`;
-}
-
-function isValidEmail(value: string): boolean {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
 }
 
 function PasswordSetupForm({

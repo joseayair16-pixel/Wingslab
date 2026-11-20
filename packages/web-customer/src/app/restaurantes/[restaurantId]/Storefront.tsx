@@ -18,13 +18,13 @@ import { CompactActiveOrderBanner, computeDelayState, formatEstimatedArrivalMinu
 import { buildWeekSchedule, formatHour12, formatNextOpen, getCurrentShiftClose } from '../../../lib/operatingHours';
 import { completeOrderIntent, resolveOrderIntentKey } from '../../../lib/orderIntentKey';
 import { buildOrderAcceptedNotice, buildOrderReadyNotice } from '../../../lib/orderStatusNotices';
-import { ensureGoogleMapsScript, getGoogleMaps } from '../../../lib/googleMaps';
+import { ensureGoogleMapsScript, getGoogleMaps, isGoogleMapsUnavailable } from '../../../lib/googleMaps';
 import RatingModal from '../../../components/RatingModal';
 import { useForegroundPolling } from '../../../hooks/useForegroundPolling';
 import { SaDelLoader } from '../../../components/SaDelLoader';
 import CartDrawer from '../../../components/CartDrawer';
 import ImageZoomLightbox from '../../../components/ImageZoomLightbox';
-import { createPlacesSource } from '../../../lib/places';
+import { createPlacesSource, fetchSelectedPlaceFields } from '../../../lib/places';
 import type { ProductOptionGroup, PublicRestaurantDetail } from '../../../lib/public-menu-types';
 
 function weightInputGrams(input: string, unit: 'g' | 'kg'): number | null {
@@ -432,7 +432,7 @@ export default function RestaurantPage({
         ]
       : processedCategories;
 
-    return { ...rawRestaurant, categories };
+    return { ...rawRestaurant, name: rawRestaurant.id === WINGSLAB_BUSINESS.restaurantId ? WINGSLAB_BUSINESS.name : rawRestaurant.name, categories };
   }, [rawRestaurant, sessionUser?.dateOfBirth]);
 
   const [productSearchQuery, setProductSearchQuery] = useState('');
@@ -695,7 +695,8 @@ export default function RestaurantPage({
   const [creatingOrder, setCreatingOrder] = useState(false);
   const [isPreConfirmOpen, setIsPreConfirmOpen] = useState(false);
   const [isHoursModalOpen, setIsHoursModalOpen] = useState(false);
-  const [preConfirmCountdown, setPreConfirmCountdown] = useState(3);
+  const [preConfirmCountdown, setPreConfirmCountdown] = useState(4);
+  const preConfirmPhaseRef = useRef<'idle' | 'countdown' | 'committed'>('idle');
   const preConfirmTimerRef = useRef<number | null>(null);
   const preConfirmCommitTimerRef = useRef<number | null>(null);
   useEffect(() => () => {
@@ -736,6 +737,8 @@ export default function RestaurantPage({
   const [error, setError] = useState('');
   const [menuReloadKey, setMenuReloadKey] = useState(0);
   const [deliveryErrorModal, setDeliveryErrorModal] = useState('');
+  const [locationNotice, setLocationNotice] = useState(false);
+  const locationNoticeRef = useRef<HTMLDialogElement>(null);
   const [fulfillmentType, setFulfillmentType] = useState<'DELIVERY' | 'PICKUP'>(
     urlSearchParams?.fulfillment === 'PICKUP' ? 'PICKUP' : 'DELIVERY'
   );
@@ -831,12 +834,19 @@ export default function RestaurantPage({
   const [isSearchingAddress, setIsSearchingAddress] = useState(false);
   const [locatingAddress, setLocatingAddress] = useState(false);
   const checkoutRef = useRef<HTMLDivElement | null>(null);
+  const checkoutLayerRef = useRef<HTMLDivElement | null>(null);
   const checkoutMapRef = useRef<any>(null);
   const checkoutMarkerRef = useRef<any>(null);
+  const [checkoutMapUnavailable, setCheckoutMapUnavailable] = useState(false);
+  const markerGeocodeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const markerGeocodeSeqRef = useRef(0);
   // Libera la instancia del mapa del checkout sin tocar el DOM (el div
   // #map-checkout lo gestiona Google Maps y React no debe desmontarlo).
   // Evita listeners duplicados (dragend) y fugas al mostrar/ocultar el mapa.
   const teardownCheckoutMap = useCallback(() => {
+    if (markerGeocodeTimerRef.current) clearTimeout(markerGeocodeTimerRef.current);
+    markerGeocodeTimerRef.current = null;
+    markerGeocodeSeqRef.current += 1;
     try {
       const mapsEvent = (window as any)?.google?.maps?.event;
       if (mapsEvent) {
@@ -1420,9 +1430,10 @@ export default function RestaurantPage({
       auth: { token: getSocketToken() },
     });
 
-    socket.on('reconnect_attempt', () => {
+    const handleReconnectAttempt = () => {
       socket.auth = { token: getSocketToken() };
-    });
+    };
+    socket.io.on('reconnect_attempt', handleReconnectAttempt);
 
     socket.on('connect', () => {
       socket.emit('join-room', sessionUser.id, 'CUSTOMER');
@@ -1782,6 +1793,7 @@ export default function RestaurantPage({
     });
 
     return () => {
+      socket.io.off('reconnect_attempt', handleReconnectAttempt);
       for (const eventName of liveEvents) {
         socket.off(eventName);
       }
@@ -1793,7 +1805,14 @@ export default function RestaurantPage({
   }, [apiBase, sessionUser?.id, token]);
 
   useEffect(() => {
-    if (!isCheckoutOpen || showMaxCashModal || showGpsCashModal || deliveryErrorModal || isPushReminderModalOpen) {
+    const layer = checkoutLayerRef.current;
+    if (!layer) return;
+    if (isCheckoutOpen) layer.removeAttribute('inert');
+    else layer.setAttribute('inert', '');
+  }, [isCheckoutOpen]);
+
+  useEffect(() => {
+    if (!isCheckoutOpen || showMaxCashModal || showGpsCashModal || deliveryErrorModal || locationNotice || isPushReminderModalOpen) {
       return;
     }
 
@@ -1807,7 +1826,13 @@ export default function RestaurantPage({
     return () => {
       document.removeEventListener('mousedown', handlePointerDown);
     };
-  }, [isCheckoutOpen, showMaxCashModal, showGpsCashModal, deliveryErrorModal, isPushReminderModalOpen]);
+  }, [isCheckoutOpen, showMaxCashModal, showGpsCashModal, deliveryErrorModal, locationNotice, isPushReminderModalOpen]);
+
+  useEffect(() => {
+    if (locationNotice && locationNoticeRef.current && !locationNoticeRef.current.open) {
+      locationNoticeRef.current.showModal();
+    }
+  }, [locationNotice]);
 
   useEffect(() => {
     if (!isCheckoutOpen || (isAddingNewAddress && newAddressStep === 'search') || (!showMapForAddress && !isAddingNewAddress)) {
@@ -1865,16 +1890,24 @@ export default function RestaurantPage({
         checkoutMarkerRef.current.addListener('dragend', async () => {
           const position = checkoutMarkerRef.current.getPosition();
           if (!position) return;
+          const location = { lat: position.lat(), lng: position.lng() };
           
           setCheckoutForm((current) => ({
             ...current,
-            latitude: String(position.lat()),
-            longitude: String(position.lng()),
+            latitude: String(location.lat),
+            longitude: String(location.lng),
           }));
 
-          try {
-            const geocoder = new google.maps.Geocoder();
-            geocoder.geocode({ location: { lat: position.lat(), lng: position.lng() } }, (results: any, status: any) => {
+          // Collapse quick successive drags into one billable reverse-geocode request.
+          if (markerGeocodeTimerRef.current) clearTimeout(markerGeocodeTimerRef.current);
+          const requestSeq = ++markerGeocodeSeqRef.current;
+          markerGeocodeTimerRef.current = setTimeout(() => {
+            markerGeocodeTimerRef.current = null;
+
+            try {
+              const geocoder = new google.maps.Geocoder();
+              geocoder.geocode({ location }, (results: any, status: any) => {
+              if (requestSeq !== markerGeocodeSeqRef.current) return;
               if (status === "OK" && results && results[0]) {
                 const data = results[0];
                 let houseNumber = '';
@@ -1915,15 +1948,21 @@ export default function RestaurantPage({
                 }
               }
             });
-          } catch (err) {
-            console.error('Error reverse geocoding on checkout marker drag:', err);
-          }
+            } catch (err) {
+              if (requestSeq === markerGeocodeSeqRef.current) console.error('Error reverse geocoding on checkout marker drag:', err);
+            }
+          }, 500);
         });
       }
     };
 
     void ensureGoogleMapsScript().then((google) => {
-      if (cancelled || !google) return;
+      if (cancelled) return;
+      if (!google || isGoogleMapsUnavailable()) {
+        setCheckoutMapUnavailable(true);
+        return;
+      }
+      setCheckoutMapUnavailable(false);
       initCheckoutMap(google);
     });
 
@@ -2298,20 +2337,23 @@ export default function RestaurantPage({
   const [loyaltyQuote, setLoyaltyQuote] = useState<{ source: string; eligible: boolean; cardId?: string; discountCents?: number; gift?: { id: string; name: string } | null; rewardDescription?: string; reason?: string } | null>(null);
   const [useLoyalty, setUseLoyalty] = useState(true);
   const [loyaltyLoading, setLoyaltyLoading] = useState(false);
+  const [loyaltyQuoteFailed, setLoyaltyQuoteFailed] = useState(false);
   const loyaltyKey = JSON.stringify({ subtotalCents: Math.round(effectiveSubtotal * 100), productIds: cart.map(item => item.productId), otherPromotion: couponDiscount > 0 || minOrderDiscount > 0 || discountAmount > 0 || (fulfillmentType !== 'PICKUP' && restaurant?.promoFreeDeliveryThreshold != null && effectiveSubtotal >= restaurant.promoFreeDeliveryThreshold) });
   useEffect(() => {
-    if (!token || !isCheckoutOpen || !cart.length) { setLoyaltyQuote(null); return; }
+    if (!token || !isCheckoutOpen || !cart.length) { setLoyaltyQuote(null); setLoyaltyLoading(false); setLoyaltyQuoteFailed(false); return; }
     let active = true;
     setLoyaltyLoading(true);
+    setLoyaltyQuoteFailed(false);
     const timer = window.setTimeout(() => {
       void requestJson<{ data: { eligible: boolean; cardId?: string; discountCents?: number; gift?: { id: string; name: string } | null; rewardDescription?: string; reason?: string } }>({ apiBase, token, path: '/customer/lealtad/cotizar', options: { method: 'POST', body: loyaltyKey }, retry: { attempts: 0 } })
         .then(result => { if (active) setLoyaltyQuote({ ...result.data, source: loyaltyKey }); })
-        .catch(() => { if (active) setLoyaltyQuote({ source: loyaltyKey, eligible: false, reason: 'No se pudo consultar tu recompensa. Puedes comprar sin usarla; tu progreso se conserva.' }); })
+        .catch(() => { if (active) { setLoyaltyQuote({ source: loyaltyKey, eligible: false }); setLoyaltyQuoteFailed(true); } })
         .finally(() => { if (active) setLoyaltyLoading(false); });
     }, 250);
     return () => { active = false; window.clearTimeout(timer); };
   }, [apiBase, token, isCheckoutOpen, loyaltyKey]);
-  const loyaltyApplied = useLoyalty && !loyaltyLoading && loyaltyQuote?.source === loyaltyKey && loyaltyQuote.eligible;
+  const loyaltyAvailable = !loyaltyLoading && loyaltyQuote?.source === loyaltyKey && loyaltyQuote.eligible;
+  const loyaltyApplied = useLoyalty && loyaltyAvailable;
   const loyaltyDiscount = loyaltyApplied ? (loyaltyQuote?.discountCents || 0) / 100 : 0;
   const orderTotal = Math.max(0, effectiveSubtotal - couponDiscount - minOrderDiscount - loyaltyDiscount + serviceFee + (fulfillmentType === 'PICKUP' ? 0 : deliveryFee));
   const checkoutValidationMessage = useMemo(() => {
@@ -2680,8 +2722,9 @@ function ProductImage({
   }
 
   async function fillCheckoutWithCurrentLocation() {
+    if (locatingAddress) return;
     if (typeof window === 'undefined' || !navigator.geolocation) {
-      setError('La geolocalización no está soportada por tu navegador.');
+      setLocationNotice(true);
       return;
     }
 
@@ -2702,7 +2745,7 @@ function ProductImage({
             if (!google) throw new Error("Google Maps not loaded");
 
             const geocoder = new google.maps.Geocoder();
-            geocoder.geocode({ location: { lat: latitude, lng: longitude } }, (results: any, status: any) => {
+            await new Promise<void>((resolve, reject) => geocoder.geocode({ location: { lat: latitude, lng: longitude } }, (results: any, status: any) => {
               if (status === "OK" && results && results[0]) {
                 const data = results[0];
                 let houseNumber = '';
@@ -2741,10 +2784,11 @@ function ProductImage({
                 
                 setAddressSearchQuery(data.formatted_address || 'Ubicación GPS');
                 setNewAddressStep('details');
+                resolve();
               } else {
-                  throw new Error("No results");
+                  reject(new Error('No reverse-geocoding result'));
               }
-            });
+            }));
         } catch (err) {
           console.error('Error reverse geocoding current location:', err);
           setCheckoutForm((current) => ({
@@ -2765,7 +2809,7 @@ function ProductImage({
       (err) => {
         console.error('Error getting geolocation:', err);
         setLocatingAddress(false);
-        setError('No pudimos acceder a tu ubicación. Por favor busca tu dirección manualmente.');
+        setLocationNotice(true);
       },
       { enableHighAccuracy: true, timeout: 10000 }
     );
@@ -2894,37 +2938,33 @@ function ProductImage({
   }
 
   function clearPreConfirm() {
+    if (preConfirmPhaseRef.current !== 'countdown') return;
+    preConfirmPhaseRef.current = 'idle';
     stopPreConfirmTimers();
     setIsPreConfirmOpen(false);
-    setPreConfirmCountdown(3);
+    setPreConfirmCountdown(4);
   }
 
   function commitPreOrder() {
+    if (preConfirmPhaseRef.current !== 'countdown') return;
+    preConfirmPhaseRef.current = 'committed';
     stopPreConfirmTimers();
     setIsPreConfirmOpen(false);
-    setPreConfirmCountdown(3);
+    setPreConfirmCountdown(4);
     void createOrder();
   }
 
   function openPreConfirm() {
-    if (isPreConfirmOpen) return;
-    setPreConfirmCountdown(3);
+    if (preConfirmPhaseRef.current === 'countdown' || creatingOrderRef.current) return;
+    preConfirmPhaseRef.current = 'countdown';
+    setPreConfirmCountdown(4);
     setIsPreConfirmOpen(true);
+    const deadline = Date.now() + 4000;
     preConfirmTimerRef.current = window.setInterval(() => {
-      setPreConfirmCountdown((prev) => {
-        const next = prev - 1;
-        if (next <= 0) {
-          window.clearInterval(preConfirmTimerRef.current!);
-          preConfirmTimerRef.current = null;
-          // El pedido se envía al terminar los tres segundos de cuenta regresiva.
-          preConfirmCommitTimerRef.current = window.setTimeout(() => {
-            commitPreOrder();
-          }, 0);
-          return 0;
-        }
-        return next;
-      });
-    }, 1000);
+      const remaining = Math.max(0, Math.ceil((deadline - Date.now()) / 1000));
+      setPreConfirmCountdown(remaining);
+      if (remaining === 0) commitPreOrder();
+    }, 100);
   }
 
   async function createOrder() {
@@ -2947,6 +2987,7 @@ function ProductImage({
     setCreatingOrder(true);
     setError('');
 
+    let orderRequestStarted = false;
     try {
       const normalizedCheckoutForm = applyDeliveryPreset(checkoutForm, deliveryPreset);
       let currentLocation: Awaited<ReturnType<typeof getCurrentOrderLocation>> | null = null;
@@ -3125,6 +3166,7 @@ function ProductImage({
         userId: sessionUser?.id || '',
       });
 
+      orderRequestStarted = true;
       const payload = await requestJson<{ success: true; data: { id: string; orderReference: string }; isDuplicate?: boolean }>({
         apiBase,
         path: '/pedidos',
@@ -3236,7 +3278,9 @@ function ProductImage({
         setOrderCreatedPulse(false);
       }, 1600);
     } catch (requestError) {
-      if (requestError instanceof ApiRequestError && requestError.code === 'PROMO_CODE_EXHAUSTED') {
+      if (orderRequestStarted && (!(requestError instanceof ApiRequestError) || !requestError.status || requestError.status >= 500)) {
+        setError('No pudimos confirmar si el pedido fue recibido. Revisa tus pedidos antes de volver a comprar; no cambies el carrito ni repitas el pedido hasta comprobarlo.');
+      } else if (requestError instanceof ApiRequestError && requestError.code === 'PROMO_CODE_EXHAUSTED') {
         setPromoCodeState('invalid');
         setPromoCodeInfo(null);
         setCheckoutForm((prev) => ({ ...prev, promoCode: '' }));
@@ -3396,23 +3440,16 @@ function ProductImage({
             <img src={officialWordmark.src} width={783} height={229} alt="WingsLab" fetchPriority="high" />
           </button>
           <div className="wl-header-actions-right">
-            <button
-              type="button"
-              className="wl-header-profile"
-              aria-label={sessionUser ? 'Ir a mi cuenta' : 'Iniciar sesión o crear cuenta'}
-              onClick={() => {
-                if (sessionUser) router.push('/cuenta#perfil');
-                else setShowAuthModal(true);
-              }}
-            >
-              {sessionUser?.profilePhoto ? (
-                <img src={sessionUser.profilePhoto} alt="" />
-              ) : sessionUser ? (
-                <span>{(sessionUser.name || 'C').trim().charAt(0).toUpperCase()}</span>
-              ) : (
+            {!sessionUser && (
+              <button
+                type="button"
+                className="wl-header-profile"
+                aria-label="Iniciar sesión o crear cuenta"
+                onClick={() => setShowAuthModal(true)}
+              >
                 <User aria-hidden="true" />
-              )}
-            </button>
+              </button>
+            )}
             <button ref={cartButtonRef} type="button" onClick={() => setIsCartOpen(true)} className="wl-header-cart wl-official-cart" aria-label={`Abrir carrito de compra, ${displayCartCount} ${displayCartCount === 1 ? 'producto' : 'productos'}`}>
               <CartIcon strokeWidth={1.8} /><span className="wl-cart-count">{displayCartCount}</span>
             </button>
@@ -4187,43 +4224,44 @@ function ProductImage({
         isRestaurantOpen={restaurant?.isOpen}
         overrideServiceFee={serviceFee}
         overrideDeliveryFee={deliveryFee}
+        deliveryFeePending={!restaurant || (restaurant.pricingModel === 'distance' && distanceKm === null && !(restaurant.promoFreeDeliveryThreshold && cartSubtotal - discountAmount >= restaurant.promoFreeDeliveryThreshold))}
         pickupOnly={restaurant?.pickupOnly === true}
         freeDeliveryThreshold={restaurant?.promoFreeDeliveryThreshold ?? null}
       />
 
-      <div className={`fixed inset-0 z-50 transition-opacity duration-300 ${isCheckoutOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
+      <div ref={checkoutLayerRef} aria-hidden={!isCheckoutOpen} className={`wl-checkout-layer fixed inset-0 z-50 transition-opacity duration-300 ${isCheckoutOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
         <div className="absolute inset-0 bg-black/50 backdrop-blur-[2px]" onClick={() => setIsCheckoutOpen(false)} />
         <div
           ref={checkoutRef}
-          className={`wl-checkout absolute right-0 top-0 flex h-full w-full max-w-[580px] flex-col overflow-hidden bg-white dark:bg-[#0c0c0e] shadow-[0_0_0_1px_rgba(0,0,0,0.04),0_40px_100px_rgba(15,15,15,0.25)] sm:rounded-l-[36px] transition-all duration-[350ms] ease-[cubic-bezier(0.16,1,0.3,1)] lg:bottom-auto lg:right-auto lg:left-1/2 lg:top-1/2 lg:h-auto lg:max-h-[92vh] lg:w-full lg:max-w-4xl lg:rounded-[32px] ${isCheckoutOpen ? 'translate-x-0 opacity-100 lg:-translate-x-1/2 lg:-translate-y-1/2 lg:scale-100' : 'translate-x-full opacity-100 lg:-translate-x-1/2 lg:-translate-y-1/2 lg:scale-95 lg:opacity-0'}`}
+          className={`wl-checkout absolute right-0 top-0 flex h-full w-full max-w-[580px] flex-col overflow-hidden bg-white dark:bg-[#0c0c0e] shadow-[0_0_0_1px_rgba(0,0,0,0.04),0_40px_100px_rgba(15,15,15,0.25)] sm:rounded-l-[36px] transition-[transform,opacity] duration-[350ms] ease-[cubic-bezier(0.16,1,0.3,1)] lg:bottom-auto lg:right-auto lg:left-1/2 lg:top-1/2 lg:h-auto lg:max-h-[92vh] lg:w-full lg:max-w-4xl lg:rounded-[32px] ${isCheckoutOpen ? 'translate-x-0 opacity-100 lg:-translate-x-1/2 lg:-translate-y-1/2 lg:scale-100' : 'translate-x-full opacity-100 lg:-translate-x-1/2 lg:-translate-y-1/2 lg:scale-95 lg:opacity-0'}`}
         >
             <section className="flex h-full flex-col lg:h-auto lg:max-h-[92vh]">
               {/* ── Header ── */}
-              <div className="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-black/[0.04] dark:border-white/10 bg-white dark:bg-neutral-950 px-5 py-4 sm:px-6">
-                <div className="flex items-center gap-3.5">
+              <div className="wl-checkout-heading sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-black/[0.04] dark:border-white/10 bg-white dark:bg-neutral-950 px-5 py-4 sm:px-6">
+                <div className="flex min-w-0 items-center gap-3.5">
                   <div className="relative flex h-12 w-12 items-center justify-center rounded-[18px] bg-gradient-to-br from-[var(--accent)] to-[var(--accent-strong)] text-white shadow-lg shadow-accent/25">
                     <ClipboardCheck className="h-5 w-5" strokeWidth={1.8} />
-                    {totalProducts > 0 && !isCheckoutOpen && (
+                    {totalProducts > 0 && isCheckoutOpen && (
                       <span className="absolute -right-1.5 -top-1.5 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-neutral-900 px-1 text-[10px] font-bold text-white shadow-md">
                         {totalProducts}
                       </span>
                     )}
                   </div>
-                  <div>
+                  <div className="min-w-0">
                     <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-neutral-400">Finalizar</p>
-                    <div className="flex items-center gap-2">
+                    <div className="wl-checkout-title-line">
                       <h2 className="text-lg font-bold tracking-[-0.03em] text-neutral-950 dark:text-neutral-50">Confirmar pedido</h2>
                       {isPickupOnly ? (
-                        <span className="rounded-full bg-[var(--accent-soft-strong)] px-2.5 py-0.5 text-[10px] font-bold text-[var(--accent-strong)] ring-1 ring-[var(--accent-soft-strong)]">
-                          <ShoppingBag className="h-3 w-3 inline-block align-text-bottom" strokeWidth={1.5} /> Solo recoger
+                        <span className="wl-checkout-fulfillment wl-checkout-fulfillment--pickup">
+                          <ShoppingBag aria-hidden="true" /> Solo recoger
                         </span>
                       ) : fulfillmentType === 'PICKUP' ? (
-                        <span className="rounded-full bg-[var(--accent-soft-strong)] px-2.5 py-0.5 text-[10px] font-bold text-[var(--accent-strong)] ring-1 ring-[var(--accent-soft-strong)]">
-                          <Store className="h-3 w-3 inline-block align-text-bottom" strokeWidth={1.5} /> Recoger
+                        <span className="wl-checkout-fulfillment wl-checkout-fulfillment--pickup">
+                          <Store aria-hidden="true" /> Recoger en tienda
                         </span>
                       ) : (
-                        <span className="rounded-full bg-amber-100 px-2.5 py-0.5 text-[10px] font-bold text-amber-700 ring-1 ring-amber-300/50">
-                          <Bike className="h-3 w-3 inline-block align-text-bottom" strokeWidth={1.5} /> Envío
+                        <span className="wl-checkout-fulfillment wl-checkout-fulfillment--delivery">
+                          <Bike aria-hidden="true" /> Envío a domicilio
                         </span>
                       )}
                     </div>
@@ -4232,14 +4270,14 @@ function ProductImage({
                 <button
                   type="button"
                   onClick={() => setIsCheckoutOpen(false)}
-                  className="flex h-10 w-10 items-center justify-center rounded-full bg-neutral-100 text-neutral-500 transition-all hover:bg-neutral-200 hover:text-neutral-700 active:scale-90 dark:bg-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-700 dark:hover:text-zinc-200"
-                  aria-label="Cerrar checkout"
+                  className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-neutral-100 text-neutral-500 transition-colors hover:bg-neutral-200 hover:text-neutral-700 active:scale-90 dark:bg-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-700 dark:hover:text-zinc-200"
+                  aria-label="Cerrar confirmación del pedido"
                 >
                   <X className="h-5 w-5" />
                 </button>
               </div>
 
-              <div className="flex-1 min-h-0 overflow-y-auto px-4 pb-8 pt-5 sm:px-5 lg:px-6">
+              <div className="wl-checkout-content flex-1 min-h-0 overflow-y-auto px-4 pb-8 pt-5 sm:px-5 lg:px-6">
                 {/* Desktop: formulario (izq.) + pago (der.). Móvil: columna única. */}
                 <div className="space-y-4 lg:grid lg:grid-cols-2 lg:items-start lg:gap-5 lg:space-y-0 xl:gap-6">
                   <div className="space-y-4">
@@ -4638,8 +4676,25 @@ function ProductImage({
                     <div className="relative mt-4">
                       <div
                         id="map-checkout"
-                        className={`relative h-48 w-full rounded-2xl border border-black/5 overflow-hidden shadow-inner no-invert transition-opacity duration-300 ${(showMapForAddress || (isAddingNewAddress && newAddressStep !== 'search')) ? '' : 'hidden'}`}
+                        className={`relative h-48 w-full rounded-2xl border border-black/5 overflow-hidden shadow-inner no-invert transition-opacity duration-300 ${checkoutMapUnavailable ? 'hidden' : (showMapForAddress || (isAddingNewAddress && newAddressStep !== 'search')) ? '' : 'hidden'}`}
                       />
+                      {checkoutMapUnavailable && (showMapForAddress || (isAddingNewAddress && newAddressStep !== 'search')) && (
+                        <div className="flex h-48 flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-black/10 bg-neutral-50 px-5 text-center dark:border-white/10 dark:bg-zinc-900">
+                          <MapPin className="h-6 w-6 text-[var(--accent-strong)]" aria-hidden="true" />
+                          <p className="text-[13px] font-bold text-neutral-800 dark:text-neutral-100">Mapa no disponible</p>
+                          <p className="text-[11px] leading-snug text-neutral-500 dark:text-zinc-400">
+                            {[checkoutForm.street, checkoutForm.number, checkoutForm.neighborhood, checkoutForm.city].filter(Boolean).join(', ') || 'Tu ubicación'}
+                          </p>
+                          <a
+                            href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${checkoutForm.street} ${checkoutForm.number}, ${checkoutForm.neighborhood}, ${checkoutForm.city}, ${checkoutForm.state}`.trim() || `${checkoutForm.latitude},${checkoutForm.longitude}`)}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="mt-1 inline-flex items-center gap-1.5 rounded-full bg-[var(--accent)] px-3.5 py-2 text-[11px] font-bold text-white shadow-sm"
+                          >
+                            <Map className="h-3.5 w-3.5" aria-hidden="true" /> Abrir en Google Maps
+                          </a>
+                        </div>
+                      )}
                       {showMapForAddress && !isAddingNewAddress && (
                         <button
                           type="button"
@@ -4689,10 +4744,15 @@ function ProductImage({
                     )}
                   </div>
 
-                  <section className="wl-checkout-loyalty" aria-label="Recompensa de fidelidad">
-                    <h3>Tu fidelidad WingsLab</h3>
-                    {loyaltyLoading ? <p role="status">Consultando tu recompensa…</p> : loyaltyQuote?.eligible && loyaltyQuote.source === loyaltyKey ? <><label><input type="checkbox" checked={useLoyalty} onChange={event => setUseLoyalty(event.target.checked)}/><span><strong>{loyaltyQuote.rewardDescription}</strong><small>{loyaltyQuote.gift ? `${loyaltyQuote.gift.name} se agregará automáticamente sin costo.` : `Descuento de ${formatCurrency((loyaltyQuote.discountCents || 0) / 100)} en esta compra.`}</small></span></label><p>El beneficio se reserva al confirmar. Si el pedido se cancela o rechaza, vuelve a estar disponible. No se combina con promociones.</p></> : <p>{loyaltyQuote?.reason || 'Tus compras completadas suman sellos para tu próxima recompensa.'}</p>}
-                  </section>
+                  {loyaltyQuoteFailed && loyaltyQuote?.source === loyaltyKey && <p role="status" className="wl-checkout-loyalty-error">No se pudo consultar tu recompensa. Puedes continuar sin usarla.</p>}
+                  {loyaltyAvailable && loyaltyQuote && (
+                    <section className="wl-checkout-loyalty" aria-label="Tarjeta de fidelidad">
+                      <h3>Tarjeta de fidelidad</h3>
+                      <p>¡Tienes una recompensa disponible!</p>
+                      <label><input type="checkbox" checked={useLoyalty} onChange={event => setUseLoyalty(event.target.checked)} /><span><strong>{loyaltyQuote.rewardDescription || 'Aplicar recompensa'}</strong><small>{loyaltyQuote.gift ? `${loyaltyQuote.gift.name} se agregará sin costo.` : `Descuento de ${formatCurrency((loyaltyQuote.discountCents || 0) / 100)} en esta compra.`}</small></span></label>
+                      <p>Se reserva al confirmar y vuelve a estar disponible si el pedido se cancela. No se combina con promociones.</p>
+                    </section>
+                  )}
                   {/* ── PASO 2.5: CUPÓN (opcional, colapsable) ── */}
                   <div className="rounded-[22px] border border-black/[0.04] dark:border-white/10 bg-white dark:bg-neutral-900 p-4 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
                     <button
@@ -5177,7 +5237,7 @@ function ProductImage({
                       cx="28" cy="28" r="24" fill="none"
                       stroke="var(--accent)" strokeWidth="4" strokeLinecap="round"
                       strokeDasharray={`${2 * Math.PI * 24}`}
-                      strokeDashoffset={`${2 * Math.PI * 24 * (1 - preConfirmCountdown / 3)}`}
+                      strokeDashoffset={`${2 * Math.PI * 24 * (1 - preConfirmCountdown / 4)}`}
                       className="transition-[stroke-dashoffset] duration-1000 ease-linear"
                     />
                   </svg>
@@ -5244,6 +5304,7 @@ function ProductImage({
                 <div className="space-y-2">
                   {cart.map((item) => (
                     <div key={item.cartItemId} className="flex min-w-0 items-start gap-2.5 text-[12px] leading-snug">
+                      {item.image ? <img src={item.image} alt="" className="h-12 w-12 shrink-0 rounded-xl object-cover bg-neutral-100 dark:bg-zinc-800" /> : <span aria-hidden="true" className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-neutral-100 text-neutral-400 dark:bg-zinc-800"><ShoppingBag className="h-5 w-5" /></span>}
                       <span className="min-w-8 rounded-md bg-neutral-100 px-1.5 py-1 text-center text-[10px] font-bold tabular-nums text-neutral-700 dark:bg-white/10 dark:text-zinc-200">
                         {item.sellBy === 'WEIGHT' && item.weightG
                           ? `${(item.weightG / 1000).toFixed(2)} kg`
@@ -5578,6 +5639,14 @@ function ProductImage({
       )}
 
       {/* Delivery Error Modal */}
+      {locationNotice && (
+        <dialog ref={locationNoticeRef} className="wl-location-notice" aria-labelledby="wl-location-notice-title" aria-describedby="wl-location-notice-description" onClose={() => setLocationNotice(false)}>
+          <span className="wl-location-notice-icon"><MapPin aria-hidden="true" /></span>
+          <h2 id="wl-location-notice-title">Ubicación no disponible</h2>
+          <p id="wl-location-notice-description">Busca tu dirección para continuar.</p>
+          <button type="button" autoFocus onClick={() => locationNoticeRef.current?.close()}>Aceptar</button>
+        </dialog>
+      )}
       {deliveryErrorModal && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity" onClick={() => setDeliveryErrorModal('')}></div>
@@ -5629,7 +5698,7 @@ function ProductImage({
           <div className="wl-menu">
             <MenuPromotions apiBase={apiBase} token={token} viewerId={sessionUser?.id} allowModal={!isCheckoutOpen && !isCartOpen && !showAuthModal} />
             <div className="space-y-0">
-              <h1 className="wl-menu-title">Menú</h1>
+              <h1 className="wl-menu-title">Menú de {restaurant.name}</h1>
               <section className="wl-restaurant-info" hidden={!showRestaurantInfo}>
                 <div className="wl-hero-details relative px-4 pb-2 pt-0 text-sm text-neutral-600 md:px-6 md:pb-3 lg:px-7 lg:pt-5">
                   <div className="-mx-4 mt-3 flex min-w-0 flex-col gap-1.5 bg-[var(--menu-surface)] p-1.5 md:-mx-6 lg:mx-0 lg:flex-row lg:items-stretch lg:gap-0 lg:divide-x lg:divide-black/[0.06] lg:rounded-2xl lg:border lg:border-black/[0.06] lg:shadow-[0_6px_24px_rgba(15,23,42,0.06)] dark:divide-zinc-700 lg:dark:border-zinc-700/70 dark:bg-[var(--menu-surface-dark)]">
@@ -6398,7 +6467,7 @@ function ProductImage({
         {restaurant && (
           <div className="border-t border-black/5 pt-8 pb-4 mt-8">
             <p className="text-center text-sm font-semibold text-neutral-500 mb-4">
-              Sigue a {restaurant.name} en redes sociales
+              Síguenos en redes sociales
             </p>
             <div className="flex items-center justify-center gap-4 min-h-[48px]">
               {restaurant.instagram && (
@@ -6662,10 +6731,10 @@ function ProductImage({
                       <p>Costo de envío</p>
                       <p className="font-medium text-neutral-900">{formatCurrency(activeOrderDetailsMap[selectedOrderId].deliveryFee)}</p>
                     </div>
-                    <div className="flex justify-between text-neutral-600">
+                    {Number(activeOrderDetailsMap[selectedOrderId].serviceFee || 0) > 0 && <div className="flex justify-between text-neutral-600">
                       <p>Tarifa de servicio</p>
                       <p className="font-medium text-neutral-900">{formatCurrency(activeOrderDetailsMap[selectedOrderId].serviceFee)}</p>
-                    </div>
+                    </div>}
                     {Number(activeOrderDetailsMap[selectedOrderId].promoDiscountAmount || 0) > 0 && (
                       <div className="flex justify-between text-sky-700">
                         <p>Descuento{activeOrderDetailsMap[selectedOrderId].promoCode ? ` (${activeOrderDetailsMap[selectedOrderId].promoCode})` : ''}</p>
@@ -7596,8 +7665,6 @@ function calculateHaversineDistance(lat1: number, lon1: number, lat2: number, lo
   return R * c;
 }
 
-let autocompleteSessionToken: any = null;
-let placesService: any = null;
 let addressSearchSource: ReturnType<typeof createPlacesSource> | null = null;
 
 function searchAddress(query: string, setAddressSuggestions: (val: any[]) => void, setIsSearchingAddress: (val: boolean) => void) {
@@ -7610,59 +7677,28 @@ function searchAddress(query: string, setAddressSuggestions: (val: any[]) => voi
   });
 }
 
-function handleSelectSuggestion(
+async function handleSelectSuggestion(
   suggestion: any,
   setCheckoutForm: any,
   setAddressSearchQuery: any,
   setAddressSuggestions: any,
   setNewAddressStep: any
 ) {
-  const google = getGoogleMaps();
-  if (!google || !google.maps || !google.maps.places || !suggestion.place_id) return;
+  if (!suggestion.place_id) return;
 
-  if (!placesService) {
-    const mapEl = document.createElement('div');
-    placesService = new google.maps.places.PlacesService(mapEl);
-  }
-
-  placesService.getDetails({
-    placeId: suggestion.place_id,
-    sessionToken: autocompleteSessionToken,
-    fields: ['address_components', 'geometry', 'formatted_address']
-  }, (place: any, status: any) => {
-    autocompleteSessionToken = new google.maps.places.AutocompleteSessionToken();
-    
-    if (status !== google.maps.places.PlacesServiceStatus.OK || !place || !place.geometry || !place.geometry.location) {
-      console.error('Failed to get place details');
-      return;
-    }
-
-    let houseNumber = '';
-    const houseComponent = place.address_components.find((c: any) => c.types.includes('street_number'));
-    if (houseComponent) houseNumber = houseComponent.long_name;
-    
-    let street = '';
-    const routeComponent = place.address_components.find((c: any) => c.types.includes('route'));
-    if (routeComponent) street = routeComponent.long_name;
-    
-    let neighborhood = '';
-    const sublocComponent = place.address_components.find((c: any) => c.types.includes('sublocality') || c.types.includes('neighborhood'));
-    if (sublocComponent) neighborhood = sublocComponent.long_name;
-    
-    let city = '';
-    const locComponent = place.address_components.find((c: any) => c.types.includes('locality'));
-    if (locComponent) city = locComponent.long_name;
-    
-    let state = '';
-    const adminComponent = place.address_components.find((c: any) => c.types.includes('administrative_area_level_1'));
-    if (adminComponent) state = adminComponent.long_name;
-    
-    let zipCode = '';
-    const zipComponent = place.address_components.find((c: any) => c.types.includes('postal_code'));
-    if (zipComponent) zipCode = zipComponent.long_name;
-
-    const lat = place.geometry.location.lat();
-    const lng = place.geometry.location.lng();
+  try {
+    const place = await fetchSelectedPlaceFields(suggestion, ['addressComponents', 'location', 'formattedAddress']);
+    if (!place.location) throw new Error('Place has no location');
+    const components = place.addressComponents || [];
+    const getComponent = (type: string) => components.find((c: any) => c.types?.includes(type))?.longText || '';
+    const houseNumber = getComponent('street_number');
+    const street = getComponent('route');
+    const neighborhood = getComponent('sublocality') || getComponent('neighborhood');
+    const city = getComponent('locality');
+    const state = getComponent('administrative_area_level_1');
+    const zipCode = getComponent('postal_code');
+    const lat = place.location.lat();
+    const lng = place.location.lng();
 
     setCheckoutForm((current: any) => ({
       ...current,
@@ -7676,10 +7712,12 @@ function handleSelectSuggestion(
       longitude: String(lng),
     }));
     
-    setAddressSearchQuery(suggestion.name);
+    setAddressSearchQuery(place.formattedAddress || suggestion.name);
     setAddressSuggestions([]);
     setNewAddressStep('details');
-  });
+  } catch {
+    console.error('Could not load selected Places result.');
+  }
 }
 
 function buildRestaurantInitials(name: string) {

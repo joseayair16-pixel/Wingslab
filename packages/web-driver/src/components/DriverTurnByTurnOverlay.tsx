@@ -146,7 +146,10 @@ export default function DriverTurnByTurnOverlay({
   const driverMarkerRef = useRef<any>(null);
   const destMarkerRef = useRef<any>(null);
   const routeOriginRef = useRef<Point | null>(null);
+  const routeDestinationRef = useRef<Point | null>(null);
   const routeInFlightRef = useRef(false);
+  const routeQueuedRef = useRef(false);
+  const requestRouteRef = useRef<() => void>(() => {});
   // Ruta proyectada: puntos del overview + longitud acumulada (1 solo Directions).
   const pathPointsRef = useRef<Point[]>([]);
   const pathCumLenRef = useRef<number[]>([]);
@@ -339,13 +342,18 @@ export default function DriverTurnByTurnOverlay({
     const lastOrigin = routeOriginRef.current;
     const movedFromRouteOrigin =
       !lastOrigin || haversineMeters(lastOrigin, originPoint) >= ROUTE_RECALC_DISTANCE_M;
+    const lastDestination = routeDestinationRef.current;
+    const destinationChanged = !lastDestination || haversineMeters(lastDestination, dest) >= 5;
 
-    if (routeRef.current && !movedFromRouteOrigin) {
+    if (routeRef.current && !movedFromRouteOrigin && !destinationChanged) {
       return;
     }
 
     // Anti-concurrencia: no lanzar otra Directions si una sigue en vuelo.
-    if (routeInFlightRef.current) return;
+    if (routeInFlightRef.current) {
+      routeQueuedRef.current = true;
+      return;
+    }
 
     // Ahorro de datos real: con la pantalla oculta no tiene sentido gastar la
     // llamada de Directions (API de pago). Se recalcula al volver al frente.
@@ -363,12 +371,16 @@ export default function DriverTurnByTurnOverlay({
       },
       (result: any, status: string) => {
         routeInFlightRef.current = false;
+        const queued = routeQueuedRef.current;
+        routeQueuedRef.current = false;
         if (status !== 'OK' || !result) {
           // Antes esto era silencioso: el overlay quedaba en loading infinito.
           setRouteError(true);
+          if (queued) requestRouteRef.current();
           return;
         }
         routeOriginRef.current = originPoint;
+        routeDestinationRef.current = { lat: dest.lat, lng: dest.lng };
 
         if (routeRef.current) {
           routeRef.current.setMap(null);
@@ -439,9 +451,22 @@ export default function DriverTurnByTurnOverlay({
         // Fuerza el recálculo de nav aunque el conductor no se haya movido:
         // si no, un repartidor estacionario quedaba en "Calculando…" infinito.
         setRouteVersion((v) => v + 1);
+        if (queued) requestRouteRef.current();
       }
     );
   };
+  requestRouteRef.current = requestRoute;
+
+  useEffect(() => {
+    const dest = destinationRef.current;
+    if (!mapReady || !dest) return;
+    if (destMarkerRef.current) {
+      destMarkerRef.current.setPosition({ lat: dest.lat, lng: dest.lng });
+      destMarkerRef.current.setTitle(dest.label);
+    }
+    requestRoute();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [destination.lat, destination.lng, mapReady]);
 
   // Seguir la posición del repartidor con watchPosition propio.
   useEffect(() => {

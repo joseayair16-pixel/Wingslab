@@ -61,7 +61,11 @@ function getOrCreateContext(): AudioContext | null {
   if (audioContext) return audioContext;
   const Ctx = getAudioContextClass();
   if (!Ctx) return null;
-  audioContext = new Ctx();
+  try {
+    audioContext = new Ctx();
+  } catch {
+    return null;
+  }
   return audioContext;
 }
 
@@ -181,17 +185,23 @@ export function play(name: SoundName, options?: { loop?: boolean }): PlayResult 
   }
 
   const ctx = getOrCreateContext();
-  if (!ctx || (!hasInteracted && ctx.state !== 'running')) {
-    return 'blocked';
-  }
-
   if (!ctx) {
-    // Sin Web Audio API: último recurso con <audio>.
+    // WebViews/dispositivos sin Web Audio todavía pueden usar el elemento de
+    // audio tras un gesto del usuario. No intentar autoplay antes de ese gesto.
+    if (!hasInteracted) return 'blocked';
     const el = findAudioElement(SOUNDS[name].src);
     if (!el) return 'unsupported';
-    const audioHandle = playAudioElement(el, loop);
-    activeHandles.add(audioHandle);
-    return 'played';
+    try {
+      const audioHandle = playAudioElement(el, loop);
+      activeHandles.add(audioHandle);
+      return 'played';
+    } catch {
+      return 'blocked';
+    }
+  }
+
+  if (!hasInteracted && ctx.state !== 'running') {
+    return 'blocked';
   }
 
   if (ctx.state === 'suspended') {

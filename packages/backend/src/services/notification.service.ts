@@ -1,8 +1,8 @@
 import webpush from 'web-push';
-import { externalServicesEnabled } from '../config/isolation';
+import { webPushEnabled } from '../config/isolation';
 import { prisma } from '../config/database';
 import { logger } from '../utils/logger';
-import { sendFcmNotification } from './fcm.service';
+import { isFcmConfigured, sendFcmNotification } from './fcm.service';
 import { enqueueNotificationRetry } from './notification-retry.service';
 import type { NotificationPayload, PushOptions } from './notification-types';
 
@@ -11,10 +11,10 @@ export type { NotificationPayload, PushOptions };
 let vapidConfigured = false;
 
 function initVapid(): void {
-  if (!externalServicesEnabled()) return;
-  const vapidPublicKey = process.env.VAPID_PUBLIC_KEY;
-  const vapidPrivateKey = process.env.VAPID_PRIVATE_KEY;
-  const vapidEmail = process.env.VAPID_EMAIL || 'mailto:support@sadel.app';
+  if (!webPushEnabled()) return;
+  const vapidPublicKey = process.env.WINGSLAB_WEB_PUSH_PUBLIC_KEY;
+  const vapidPrivateKey = process.env.WINGSLAB_WEB_PUSH_PRIVATE_KEY;
+  const vapidEmail = process.env.WINGSLAB_WEB_PUSH_CONTACT!;
 
   if (vapidPublicKey && vapidPrivateKey) {
     webpush.setVapidDetails(vapidEmail, vapidPublicKey, vapidPrivateKey);
@@ -22,7 +22,7 @@ function initVapid(): void {
     logger.info('[PushService] VAPID configurado correctamente');
   } else {
     vapidConfigured = false;
-    logger.error('[PushService] VAPID no configurado — las notificaciones push NO funcionarán. Agrega VAPID_PUBLIC_KEY y VAPID_PRIVATE_KEY en .env.local');
+    logger.error('[PushService] Web Push opt-in activo pero su configuración VAPID está incompleta.');
   }
 }
 
@@ -116,7 +116,7 @@ async function sendWithRetry(
 
     if (isTransientError(error) && attempt < RETRY_CONFIG.maxAttempts) {
       const delay = RETRY_CONFIG.baseDelayMs * Math.pow(2, attempt - 1);
-      logger.warn(`[PushService] Reintento ${attempt}/${RETRY_CONFIG.maxAttempts} en ${delay}ms — ${error.message}`);
+      logger.warn(`[PushService] Reintento ${attempt}/${RETRY_CONFIG.maxAttempts} en ${delay}ms — HTTP ${error?.statusCode || 'sin estado'}`);
       await new Promise(resolve => setTimeout(resolve, delay));
       return sendWithRetry(subscription, payloadString, options, attempt + 1);
     }
@@ -130,21 +130,28 @@ export const sendPushNotification = async (
   payload: NotificationPayload,
   options?: PushOptions
 ) => {
+  // No crear ruido en la cola cuando ningún proveedor de push está autorizado.
+  // La ruta existente sigue siendo el único punto de envío cuando Web Push se opta.
+  if (!vapidConfigured && !isFcmConfigured()) {
+    return { success: false, reason: 'WEB_PUSH_DISABLED', totalSent: 0, totalAttempted: 0 };
+  }
+
   const [subscriptions, fcmTokens] = await Promise.all([
     prisma.pushSubscription.findMany({ where: { userId } }),
     prisma.fcmToken.findMany({ where: { userId } }),
   ]);
 
   const webPushEnabled = vapidConfigured && subscriptions.length > 0;
-  const fcmEnabled = fcmTokens.length > 0;
-
+  // Preserve the existing FCM dispatcher for the APK, but don't activate it
+  // here: FCM stays governed by its independent provider capability/config.
+  const fcmEnabled = isFcmConfigured() && fcmTokens.length > 0;
   if (!webPushEnabled && !fcmEnabled) {
-    if (vapidConfigured) {
-      logger.info(`[PushService] Sin suscripciones push ni tokens FCM para usuario ${userId}`);
-    } else {
-      logger.error(`[PushService] Intento de enviar push sin VAPID configurado (userId=${userId}, title="${payload.title}")`);
-    }
-    return { success: false, reason: vapidConfigured ? 'NO_SUBSCRIPTIONS' : 'VAPID_NOT_CONFIGURED' };
+    return {
+      success: false,
+      reason: vapidConfigured ? 'NO_SUBSCRIPTIONS' : 'WEB_PUSH_DISABLED',
+      totalSent: 0,
+      totalAttempted: 0,
+    };
   }
 
   let webPushResult: { success: boolean; totalSent: number; totalAttempted: number } | null = null;
@@ -169,7 +176,6 @@ export const sendPushNotification = async (
           // Privacidad: nunca loguear el endpoint completo (contiene el token
           // de empuje). El id de suscripción basta para depurar.
           logger.error(`[PushService] Fallo definitivo al enviar push (suscripción ${sub.id})`, {
-            error: error.message,
             statusCode: error.statusCode,
             title: payload.title,
             userId,

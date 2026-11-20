@@ -1,0 +1,64 @@
+# Optional customer-only development overlay. Source is read-only from the
+# host; Next's generated files live in a container tmpfs. The image is reused.
+services:
+  customer:
+    command: ["node", "scripts/wingslab-customer-dev.cjs"]
+    tmpfs: !override
+      - /tmp:rw,nosuid,nodev,size=256m,uid=1000,gid=1000
+      - /app/packages/web-customer:rw,nosuid,nodev,size=384m,uid=1000,gid=1000
+    volumes:
+      - type: bind
+        source: ../../scripts/wingslab-customer-dev.cjs
+        target: /app/scripts/wingslab-customer-dev.cjs
+        read_only: true
+        bind: { create_host_path: false }
+      - type: bind
+        source: ../../config/wingslab.cjs
+        target: /app/config/wingslab.cjs
+        read_only: true
+        bind: { create_host_path: false }
+      - type: bind
+        source: ../../tsconfig.json
+        target: /app/tsconfig.json
+        read_only: true
+        bind: { create_host_path: false }
+      - type: bind
+        source: ../../packages/web-customer/src
+        target: /app/packages/web-customer/src
+        read_only: true
+        bind: { create_host_path: false }
+      - type: bind
+        source: ../../packages/web-customer/public
+        target: /app/packages/web-customer/public
+        read_only: true
+        bind: { create_host_path: false }
+      - type: bind
+        source: ../../packages/web-customer/package.json
+        target: /app/packages/web-customer/package.json
+        read_only: true
+        bind: { create_host_path: false }
+      - type: bind
+        source: ../../packages/web-customer/next.config.js
+        target: /app/packages/web-customer/next.config.js
+        read_only: true
+        bind: { create_host_path: false }
+      - type: bind
+        source: ../../packages/web-customer/tsconfig.json
+        target: /app/packages/web-customer/tsconfig.json
+        read_only: true
+        bind: { create_host_path: false }
+      - type: bind
+        source: ../../packages/web-customer/postcss.config.js
+        target: /app/packages/web-customer/postcss.config.js
+        read_only: true
+        bind: { create_host_path: false }
+      - type: bind
+        source: ../../packages/web-customer/tailwind.config.ts
+        target: /app/packages/web-customer/tailwind.config.ts
+        read_only: true
+        bind: { create_host_path: false }
+      - type: bind
+        source: ../../packages/shared/src
+        target: /app/packages/shared/src
+        read_only: true
+        bind: { create_host_path: false }

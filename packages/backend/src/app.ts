@@ -11,7 +11,7 @@ import { createAdapter } from '@socket.io/redis-adapter';
 
 import './config/env';
 import { validateEnvironment } from './config/env';
-import { assertJobsDisabled } from './config/isolation';
+import { assertJobsDisabled, webPushRetryJobEnabled } from './config/isolation';
 import { assertServiceIdentityVerified, isHermeticTest } from './config/env';
 import { JobSelection, startSelectedJobs, validateJobSelection } from './jobs/policy';
 import { prisma } from './config/database';
@@ -78,7 +78,8 @@ function jwtSecret(): string {
 export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyInstance> {
   const { enableRateLimit = true, enableSocketIO = true, enableJobs = false } = options;
   assertJobsDisabled(enableJobs);
-  validateJobSelection(options.jobs);
+  const requestedJobs = options.jobs || (webPushRetryJobEnabled() ? { notificationRetry: true } : {});
+  validateJobSelection(requestedJobs);
   assertServiceIdentityVerified();
   if (!isHermeticTest()) validateEnvironment();
   const JWT_SECRET = jwtSecret();
@@ -240,7 +241,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
 
   await setupRoutes(fastify);
 
-  startSelectedJobs(options.jobs || {}, {
+  startSelectedJobs(requestedJobs, {
     paymentReminders: () => startPaymentRemindersJob(), thankYouMessages: () => startThankYouMessagesJob(),
     orderTimeout: () => startOrderTimeoutJob(fastify), restaurantHours: () => startRestaurantHoursJob(fastify),
     driverPickupAlert: () => startDriverPickupAlertJob(fastify),

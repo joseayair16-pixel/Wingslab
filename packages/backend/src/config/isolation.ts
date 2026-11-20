@@ -3,6 +3,20 @@ export function externalServicesEnabled(): boolean {
   return false;
 }
 
+/** Web Push is a narrowly scoped opt-in; other external integrations stay blocked. */
+export function webPushEnabled(): boolean {
+  return process.env.WINGSLAB_WEB_PUSH_ENABLED === 'true' &&
+    process.env.WINGSLAB_CONFIGURED === 'yes' &&
+    process.env.WINGSLAB_RUNTIME_AUTHORIZED === 'reviewed-phase-2b' &&
+    process.env.WINGSLAB_NETWORK_ATTESTED === 'yes' &&
+    Boolean(process.env.WINGSLAB_WEB_PUSH_PUBLIC_KEY && process.env.WINGSLAB_WEB_PUSH_PRIVATE_KEY && process.env.WINGSLAB_WEB_PUSH_CONTACT);
+}
+
+/** Retry delivery is separately opt-in to avoid replaying an existing queue on startup. */
+export function webPushRetryJobEnabled(): boolean {
+  return webPushEnabled() && process.env.WINGSLAB_WEB_PUSH_RETRY_JOB_ENABLED === 'true';
+}
+
 export function assertExternalOperationAllowed(): void {
   throw new Error('[WingsLab] External operations are blocked in Phase 2A.');
 }
