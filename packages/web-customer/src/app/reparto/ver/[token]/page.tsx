@@ -8,7 +8,7 @@
 /* eslint-disable react-hooks/exhaustive-deps */
 
 import { useEffect, useRef, useState, use } from 'react';
-import { Banknote, Check, CreditCard, MapPin, Route, Store } from 'lucide-react';
+import { Banknote, Check, Clock, CreditCard, MapPin, Package, Route, Store } from 'lucide-react';
 import DeliveryRouteMap from '../../../../components/DeliveryRouteMap';
 import DriverTurnByTurnOverlay from '../../../../components/DriverTurnByTurnOverlay';
 import { Html5Qrcode } from 'html5-qrcode';
@@ -170,6 +170,7 @@ export default function DeliveryTicketPage({ params }: PageProps) {
   const [waitingHandoverTokens, setWaitingHandoverTokens] = useState<string[]>([]);
   // Posición GPS actual del repartidor (para el mapa de navegación en la app).
   const [driverPos, setDriverPos] = useState<{ lat: number; lng: number } | null>(null);
+  const [driverPositionAt, setDriverPositionAt] = useState<number | null>(null);
   // Navegación turn-by-turn in-app: destino 'pickup' (restaurante) o 'delivery' (domicilio).
   const [navOpenFor, setNavOpenFor] = useState<'pickup' | 'delivery' | null>(null);
   // Mapa embebido (abajo en la card de domicilio): por defecto NO se carga para
@@ -306,19 +307,34 @@ export default function DeliveryTicketPage({ params }: PageProps) {
 
       let fetchedTicket: DeliveryTicketData | null = null;
       let fetchErrMessage = '';
+      let invalidToken = false;
 
       if (token) {
         try {
-          const response = await fetch(`${apiBase}/public/delivery-ticket/${token}`);
-          const data = await response.json();
+          const url = `${apiBase}/public/delivery-ticket/${encodeURIComponent(token)}`;
+          const fetchTicket = () => {
+            const controller = new AbortController();
+            const timeout = window.setTimeout(() => controller.abort(), 8000);
+            return fetch(url, { cache: 'no-store', signal: controller.signal })
+              .finally(() => window.clearTimeout(timeout));
+          };
+          let response = await fetchTicket().catch(() => null);
+          if (!response || response.status >= 500) {
+            await new Promise(resolve => setTimeout(resolve, 750));
+            response = await fetchTicket();
+          }
+          const data = await response.json().catch(() => null);
 
-          if (response.ok && data.success) {
+          if (response.ok && data?.success && data.data) {
             fetchedTicket = data.data as DeliveryTicketData;
           } else {
-            fetchErrMessage = data.error?.message || 'No se pudo cargar la información de reparto del pedido escaneado.';
+            invalidToken = (response.status === 404 || response.status === 410) && data?.success === false;
+            fetchErrMessage = invalidToken
+              ? data.error?.message || 'Este enlace de reparto ya no está activo.'
+              : 'No pudimos consultar el reparto en este momento. Intenta de nuevo.';
           }
-        } catch (err: any) {
-          fetchErrMessage = err.message || 'Error de conexión al cargar el pedido.';
+        } catch {
+          fetchErrMessage = 'No pudimos conectar con el servicio de reparto. Intenta de nuevo.';
         }
       }
 
@@ -371,16 +387,14 @@ export default function DeliveryTicketPage({ params }: PageProps) {
         // El token de la URL ya no existe en el backend (expiró, fue regenerado
         // o la orden se eliminó). Si había una entrada obsoleta con ese token,
         // eliminarla para que no quede atrapada en la ruta.
-        const hasStaleEntry = currentList.some(item => item.token === token);
+        const hasStaleEntry = invalidToken && currentList.some(item => item.token === token);
         if (hasStaleEntry) {
           currentList = currentList.filter(item => item.token !== token);
           if (typeof window !== 'undefined') {
             localStorage.setItem('sadel_scanned_deliveries', JSON.stringify(currentList));
           }
         }
-        if (currentList.length === 0) {
-          throw new Error(fetchErrMessage);
-        }
+        setError(fetchErrMessage);
       }
 
       setDeliveries(currentList);
@@ -391,7 +405,7 @@ export default function DeliveryTicketPage({ params }: PageProps) {
       const waitingHandoverForToken =
         typeof window !== 'undefined' &&
         localStorage.getItem(`sadel_pickupwaiting_${token || ''}`) === 'true';
-      if (token && (waitingHandoverForToken || fetchedTicket?.isOwnDelivery)) {
+      if (token && fetchedTicket && (waitingHandoverForToken || fetchedTicket.isOwnDelivery)) {
         setSelectedToken(token);
       } else {
         setSelectedToken(null);
@@ -635,6 +649,7 @@ export default function DeliveryTicketPage({ params }: PageProps) {
       const lng = parseFloat(position.coords.longitude.toFixed(6));
       const now = Date.now();
       setDriverPos({ lat, lng });
+      setDriverPositionAt(position.timestamp);
       for (const t of tokens) {
         const sent = lastSent.get(t);
         if (pending.has(t) || now - (lastAttempt.get(t) || 0) < 10000) continue;
@@ -1321,7 +1336,7 @@ export default function DeliveryTicketPage({ params }: PageProps) {
           {error}
         </p>
         <button
-          onClick={() => { triggerHaptic([30]); window.location.reload(); }}
+          onClick={() => { triggerHaptic([30]); void loadAndSyncTicket(); }}
           className="mt-5 rounded-xl bg-sky-400 px-5 py-2.5 text-xs font-bold text-white transition active:scale-95 active-scale"
         >
           Reintentar
@@ -1372,7 +1387,13 @@ export default function DeliveryTicketPage({ params }: PageProps) {
     const nextStop = activeList.length > 0 ? activeList[0] : null;
 
     return (
-      <div className={`min-h-[100dvh] font-sans antialiased pb-12 transition-colors duration-300 ${bg} ${textPrimary}`}>
+      <div className={`min-h-[100dvh] font-sans antialiased pb-12 transition-colors duration-300 ${darkMode ? 'bg-[#09090b]' : 'bg-[#f7f7f8]'} ${textPrimary}`}>
+        {error && (
+          <div className="mx-auto flex max-w-lg items-center justify-between gap-3 px-4 py-3 text-sm">
+            <p role="status">{error}</p>
+            <button type="button" onClick={() => void loadAndSyncTicket()} className="min-h-11 shrink-0 font-bold underline">Reintentar</button>
+          </div>
+        )}
         
         {/* ── HEADER CON "AGREGAR ENTREGA" ── */}
         <header className={`sticky top-0 z-50 border-b transition-all duration-300 pt-[env(safe-area-inset-top)] ${
@@ -1382,23 +1403,19 @@ export default function DeliveryTicketPage({ params }: PageProps) {
         }`}>
           <div className="mx-auto flex max-w-lg items-center justify-between px-4 py-3">
             <div className="flex items-center gap-2">
-              <span className={`flex h-7 w-7 items-center justify-center rounded-xl shadow-sm ${
-                darkMode ? 'bg-sky-400/10 text-sky-300' : 'bg-sky-50 text-sky-500'
-              }`}>
+              <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-neutral-950 text-white shadow-md shadow-neutral-900/15">
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 18.75a1.5 1.5 0 0 1-3 0 1.5 1.5 0 0 1 3 0ZM18.75 18.75a1.5 1.5 0 0 1-3 0 1.5 1.5 0 0 1 3 0ZM6.75 18.75h10.5m-10.5-6h7.5L18 18.75m-6.75-6V8.25h5.25L18.75 12" />
                 </svg>
               </span>
-              <span className={`text-[12px] font-extrabold uppercase tracking-widest ${
-                darkMode ? 'text-zinc-200' : 'text-neutral-800'
-              }`}>SaDeL Express</span>
+              <div><p className={`text-sm font-black tracking-tight ${textPrimary}`}>WingsLab</p><p className={`text-[10px] font-medium ${textSecondary}`}>Reparto</p></div>
             </div>
 
             <div className="flex items-center gap-2">
               <button
                 type="button"
                 onClick={openAddModal}
-                className="flex min-h-11 items-center gap-1.5 rounded-xl bg-sky-700 px-3.5 text-xs font-bold text-white transition hover:bg-sky-800 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-offset-2"
+                className="flex min-h-11 items-center gap-1.5 rounded-full bg-gradient-to-b from-red-500 to-red-700 px-4 text-xs font-bold text-white shadow-md shadow-red-200/60 transition hover:from-red-600 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-2"
               >
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="3" stroke="currentColor" className="w-3.5 h-3.5">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
@@ -1412,48 +1429,50 @@ export default function DeliveryTicketPage({ params }: PageProps) {
         <main className="mx-auto max-w-lg px-4 pb-20">
 
           {/* ── PANEL "MI JORNADA" (Métricas reales del turno) ── */}
-          <div className={`mt-4 rounded-2xl border p-5 shadow-[0_1px_0_rgba(0,0,0,0.02),0_8px_24px_rgba(0,0,0,0.04)] transition-all ${
+          <div className={`mt-4 overflow-hidden rounded-[28px] border p-5 shadow-[0_8px_24px_rgba(0,0,0,0.06)] transition-all ${
             darkMode 
-              ? 'bg-zinc-900 border-zinc-800' 
-              : 'bg-white border-black/[0.06]'
+              ? 'bg-gradient-to-br from-zinc-900 via-zinc-900 to-red-950/30 border-zinc-800' 
+              : 'bg-gradient-to-br from-white via-white to-red-50 border-black/[0.06]'
           }`}>
             <div className="flex items-start justify-between">
-              <div>
-                <p className={`text-xs font-medium ${textSecondary}`}>
+              <div className="flex items-center gap-3">
+                <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-red-500 to-red-700 text-white shadow-lg shadow-red-600/20"><Route className="h-6 w-6" strokeWidth={1.8} aria-hidden="true" /></span>
+                <div>
+                <p className={`text-[10px] font-bold uppercase tracking-widest ${darkMode ? 'text-red-400' : 'text-red-600'}`}>
                   Mi jornada
                 </p>
-                <h2 className={`text-lg font-semibold tracking-tight mt-1 ${textPrimary}`}>
-                  Resumen de ruta
+                <h2 className={`text-xl font-extrabold tracking-tight mt-1 ${textPrimary}`}>
+                  Tu jornada
                 </h2>
+                </div>
               </div>
               <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider ${
                 darkMode 
-                  ? 'border-emerald-500/20 bg-emerald-500/5 text-emerald-400' 
-                  : 'border-emerald-200/60 bg-emerald-50 text-emerald-700'
+                  ? 'border-zinc-700 bg-zinc-800/70 text-zinc-200' 
+                  : 'border-neutral-200 bg-white text-neutral-700'
               }`}>
-                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                <span className={`h-1.5 w-1.5 rounded-full ${activeList.length > 0 ? 'bg-emerald-500' : 'bg-neutral-400'}`} />
                 {activeList.length > 0 ? 'En curso' : 'Sin pendientes'}
               </span>
             </div>
 
-            <div className="mt-5 grid grid-cols-2 gap-x-4 gap-y-4 border-t border-neutral-100 pt-4 dark:border-zinc-800 sm:grid-cols-4">
-              <div>
-                <p className={`text-xs ${textSecondary}`}>Turno</p>
-                <p className={`text-sm font-semibold tracking-tight mt-1 tabular-nums ${textPrimary}`}>{shiftTimeLabel}</p>
-              </div>
-              <div>
-                <p className={`text-xs ${textSecondary}`}>Km</p>
-                <p className={`text-sm font-semibold tracking-tight mt-1 tabular-nums ${textPrimary}`}>{kmDriven.toFixed(1)}</p>
-              </div>
-              <div>
-                <p className={`text-xs ${textSecondary}`}>Pendientes</p>
-                <p className={`text-sm font-semibold tracking-tight mt-1 tabular-nums ${textPrimary}`}>{activeList.length}</p>
-              </div>
-              <div>
-                <p className={`text-xs ${textSecondary}`}>Entregados</p>
-                <p className={`text-sm font-semibold tracking-tight mt-1 tabular-nums ${textPrimary}`}>{completedList.length}</p>
-              </div>
+            <div className="mt-5 grid grid-cols-2 gap-2.5">
+              {[
+                { label: 'Tiempo de turno', value: shiftTimeLabel, Icon: Clock },
+                { label: 'Kilómetros recorridos', value: kmDriven.toFixed(1), Icon: Route },
+                { label: 'Por entregar', value: activeList.length, Icon: Package },
+                { label: 'Entregas completadas', value: completedList.length, Icon: Check },
+              ].map(({ label, value, Icon }) => (
+                <div key={label} className={`min-w-0 rounded-[18px] border p-3.5 ${darkMode ? 'border-white/5 bg-white/[0.03]' : 'border-black/[0.04] bg-white/80'}`}>
+                  <div className="flex items-center justify-between gap-2">
+                    <Icon className={`h-4 w-4 shrink-0 ${darkMode ? 'text-red-400' : 'text-red-600'}`} strokeWidth={1.8} aria-hidden="true" />
+                    <p className={`text-xl font-extrabold tracking-tight tabular-nums ${textPrimary}`}>{value}</p>
+                  </div>
+                  <p className={`mt-2 text-[11px] leading-snug ${textSecondary}`}>{label}</p>
+                </div>
+              ))}
             </div>
+            {activeList.length === 0 && <p className={`mt-4 text-xs leading-relaxed ${textSecondary}`}>{completedList.length > 0 ? 'Todo entregado. Puedes agregar otra entrega cuando estés listo.' : 'Tu próxima entrega empieza aquí. Agrega un pedido para comenzar.'}</p>}
 
             {/* Total generado de envíos entregados (informativo) */}
             {totalDeliveredAmount > 0 && (
@@ -1478,7 +1497,7 @@ export default function DeliveryTicketPage({ params }: PageProps) {
                 </div>
                 <div className={`h-1 w-full overflow-hidden rounded-full ${darkMode ? 'bg-zinc-800' : 'bg-neutral-100'}`}>
                   <div 
-                    className="h-full rounded-full bg-emerald-500 transition-all duration-500"
+                    className="h-full rounded-full bg-red-500 transition-all duration-500"
                     style={{ width: `${(completedList.length / deliveries.length) * 100}%` }}
                   />
                 </div>
@@ -1497,7 +1516,7 @@ export default function DeliveryTicketPage({ params }: PageProps) {
                 }`}
               >
                 <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[11px] font-semibold ${
-                  darkMode ? 'bg-sky-400/10 text-sky-300' : 'bg-sky-50 text-sky-600'
+                  darkMode ? 'bg-red-400/10 text-red-300' : 'bg-red-50 text-red-600'
                 }`}>1</span>
                 <span className="min-w-0 flex-1">
                   <span className={`block text-[10px] font-medium uppercase tracking-wider ${textTertiary}`}>Siguiente parada</span>
@@ -1579,7 +1598,7 @@ export default function DeliveryTicketPage({ params }: PageProps) {
                 >
                   <div className="flex items-center gap-3 min-w-0">
                     <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-xl text-base ${
-                      darkMode ? 'bg-sky-400/10 text-sky-300' : 'bg-sky-50 text-sky-500'
+                      darkMode ? 'bg-red-400/10 text-red-300' : 'bg-red-50 text-red-500'
                     }`}><Route className="h-4 w-4" aria-hidden="true" /></span>
                     <div className="min-w-0">
                       <p className={`text-xs font-black uppercase tracking-wider ${textPrimary}`}>
@@ -1618,7 +1637,7 @@ export default function DeliveryTicketPage({ params }: PageProps) {
                 <button
                   type="button"
                   onClick={openAddModal}
-                  className="mt-4 rounded-2xl bg-sky-600 px-5 py-3 text-xs font-black uppercase tracking-wider text-white hover:bg-sky-500 transition active:scale-95 active-scale shadow-[0_4px_14px_rgba(14,165,233,0.3)]"
+                  className="mt-4 rounded-2xl bg-red-600 px-5 py-3 text-xs font-black uppercase tracking-wider text-white hover:bg-red-500 transition active:scale-95 active-scale shadow-[0_4px_14px_rgba(220,38,38,0.3)]"
                 >
                   + Agregar entrega
                 </button>
@@ -1638,7 +1657,7 @@ export default function DeliveryTicketPage({ params }: PageProps) {
                   return (
                     <div
                       key={deliv.token}
-                      className={`group relative rounded-2xl border p-4 sm:p-5 shadow-sm ${cardBg} ${cardBorder}`}
+                      className={`group relative rounded-[24px] border p-4 sm:p-5 shadow-[0_6px_22px_rgba(0,0,0,0.05)] ${cardBg} ${cardBorder}`}
                     >
                       {/* Botón Quitar de Ruta (Trash) */}
                       <button
@@ -1664,14 +1683,14 @@ export default function DeliveryTicketPage({ params }: PageProps) {
                         role="button"
                         tabIndex={0}
                         aria-label={`Ver entrega de ${fullCustomerName(deliv.data.customer)}`}
-                        className="cursor-pointer rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500"
+                        className="cursor-pointer rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500"
                       >
                         {/* Fila superior: Índice y Pago */}
                         <div className="flex items-center gap-3 pr-12">
                           <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-black shadow-sm ${
                             index === 0
-                              ? (darkMode ? 'bg-emerald-400/20 text-emerald-300' : 'bg-emerald-500 text-white')
-                              : (darkMode ? 'bg-sky-400/10 text-sky-300' : 'bg-sky-50 text-sky-500')
+                              ? (darkMode ? 'bg-red-400/20 text-red-300' : 'bg-red-600 text-white')
+                              : (darkMode ? 'bg-red-400/10 text-red-300' : 'bg-red-50 text-red-500')
                           }`}>
                             {index + 1}
                           </span>
@@ -1742,7 +1761,7 @@ export default function DeliveryTicketPage({ params }: PageProps) {
                             <span className={`h-1.5 w-1.5 rounded-full ${deliv.arrived ? 'bg-emerald-400' : 'bg-zinc-400'}`} />
                             {deliv.data.isSupportDelivery && !deliv.pickedUp
                               ? 'En recogida'
-                              : deliv.arrived ? 'En destino' : 'En camino'}
+                              : deliv.data.isOwnDelivery && deliv.data.status === 'READY' ? 'Listo para recoger' : deliv.arrived ? 'En destino' : 'En camino'}
                           </span>
                         </div>
                       </div>
@@ -1792,7 +1811,7 @@ export default function DeliveryTicketPage({ params }: PageProps) {
 
                         {/* WhatsApp */}
                         <a
-                          href={`https://wa.me/52${deliv.data.customer.phone.replace(/\D/g, '')}?text=${encodeURIComponent(`Hola ${deliv.data.customer.name}, soy tu repartidor de SaDeL Express. Voy en camino con tu pedido.`)}`}
+                          href={`https://wa.me/52${deliv.data.customer.phone.replace(/\D/g, '')}?text=${encodeURIComponent(`Hola ${deliv.data.customer.name}, soy tu repartidor de ${deliv.data.isOwnDelivery ? 'WingsLab' : 'SaDeL Express'}.${deliv.data.isOwnDelivery && deliv.data.status === 'READY' ? ' Estoy por recoger tu pedido.' : ' Voy en camino con tu pedido.'}`)}`}
                           target="_blank"
                           rel="noopener noreferrer"
                           onClick={(e) => { e.stopPropagation(); triggerHaptic([30]); }}
@@ -1825,7 +1844,11 @@ export default function DeliveryTicketPage({ params }: PageProps) {
                         <div className="flex-1" />
 
                         {/* Acción Principal: Llegué o Entregar */}
-                        {deliv.data.isSupportDelivery && !deliv.pickedUp ? (
+                        {deliv.data.isOwnDelivery && deliv.data.status === 'READY' ? (
+                          <button type="button" onClick={(e) => { e.stopPropagation(); setSelectedToken(deliv.token); }} className="flex items-center justify-center gap-1.5 rounded-2xl bg-red-600 px-4 py-2.5 text-xs font-bold text-white shadow-sm transition hover:bg-red-500 active:scale-95">
+                            <Store className="h-4 w-4" aria-hidden="true" /> Recoger pedido
+                          </button>
+                        ) : deliv.data.isSupportDelivery && !deliv.pickedUp ? (
                           isWaitingHandover(deliv.token) ? (
                             <button
                               type="button"
@@ -1846,12 +1869,12 @@ export default function DeliveryTicketPage({ params }: PageProps) {
                             onClick={(e) => { e.stopPropagation(); void handleLlegueRestauranteForToken(deliv.token); }}
                             className={`flex items-center justify-center gap-1.5 rounded-2xl py-2.5 px-4 text-xs font-bold transition-all active:scale-95 active-scale disabled:opacity-50 border shadow-sm ${
                               darkMode 
-                                ? 'bg-sky-400/10 text-sky-300 border-sky-400/20 hover:bg-sky-400/20' 
-                                : 'bg-sky-50 text-sky-500 border-sky-200 hover:bg-sky-100'
+                                ? 'bg-red-400/10 text-red-300 border-red-400/20 hover:bg-red-400/20' 
+                                : 'bg-red-50 text-red-500 border-red-200 hover:bg-red-100'
                             }`}
                           >
                             {notifying ? (
-                              <div className={`h-3.5 w-3.5 animate-spin rounded-full border-2 ${darkMode ? 'border-sky-300/40 border-t-sky-300' : 'border-sky-400/30 border-t-sky-500'}`} />
+                              <div className={`h-3.5 w-3.5 animate-spin rounded-full border-2 ${darkMode ? 'border-red-300/40 border-t-red-300' : 'border-red-400/30 border-t-red-500'}`} />
                             ) : (
                               <Store className="h-4 w-4" aria-hidden="true" />
                             )}
@@ -1883,12 +1906,12 @@ export default function DeliveryTicketPage({ params }: PageProps) {
                             onClick={(e) => { e.stopPropagation(); void handleLlegueForToken(deliv.token); }}
                             className={`flex items-center justify-center gap-1.5 rounded-2xl py-2.5 px-4 text-xs font-bold transition-all active:scale-95 active-scale disabled:opacity-50 border shadow-sm ${
                               darkMode 
-                                ? 'bg-sky-400/10 text-sky-300 border-sky-400/20 hover:bg-sky-400/20' 
-                                : 'bg-sky-50 text-sky-500 border-sky-200 hover:bg-sky-100'
+                                ? 'bg-red-400/10 text-red-300 border-red-400/20 hover:bg-red-400/20' 
+                                : 'bg-red-50 text-red-500 border-red-200 hover:bg-red-100'
                             }`}
                           >
                             {notifying ? (
-                              <div className={`h-3.5 w-3.5 animate-spin rounded-full border-2 ${darkMode ? 'border-sky-300/40 border-t-sky-300' : 'border-sky-400/30 border-t-sky-500'}`} />
+                              <div className={`h-3.5 w-3.5 animate-spin rounded-full border-2 ${darkMode ? 'border-red-300/40 border-t-red-300' : 'border-red-400/30 border-t-red-500'}`} />
                             ) : (
                               <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="2.5" stroke="currentColor" className="w-4 h-4">
                                 <path strokeLinecap="round" strokeLinejoin="round" d="M14.857 17.082a23.848 23.848 0 0 0 5.454-1.31A8.967 8.967 0 0 1 18 9.75V9A6 6 0 0 0 6 9v.75a8.967 8.967 0 0 1-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 0 1-5.714 0m5.714 0a3 3 0 1 1-5.714 0" />
@@ -1899,8 +1922,8 @@ export default function DeliveryTicketPage({ params }: PageProps) {
                         ) : (
                           <button
                             type="button"
-                            onClick={(e) => { e.stopPropagation(); handleDeliverDirectly(deliv.token); }}
-                            className="flex items-center justify-center gap-1.5 rounded-2xl py-2.5 px-5 text-xs font-black uppercase tracking-wider transition-all active:scale-[0.97] active-scale bg-sky-600 text-white hover:bg-sky-500 shadow-[0_4px_14px_0_rgba(14,165,233,0.3)]"
+                            onClick={(e) => { e.stopPropagation(); if (deliv.data.isOwnDelivery && deliv.data.paymentMethod !== 'CASH') setSelectedToken(deliv.token); else handleDeliverDirectly(deliv.token); }}
+                            className="flex items-center justify-center gap-1.5 rounded-2xl py-2.5 px-5 text-xs font-black uppercase tracking-wider transition-all active:scale-[0.97] active-scale bg-red-600 text-white hover:bg-red-500 shadow-[0_4px_14px_0_rgba(220,38,38,0.3)]"
                           >
                             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="3" stroke="currentColor" className="w-4 h-4">
                               <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75 6 6 9-13.5" />
@@ -2006,7 +2029,7 @@ export default function DeliveryTicketPage({ params }: PageProps) {
                   onClick={() => switchAddMode('qr')}
                   className={`flex items-center justify-center gap-1.5 rounded-xl py-2.5 text-xs font-bold transition ${
                     addMode === 'qr'
-                      ? 'bg-sky-600 text-white shadow-sm'
+                      ? 'bg-red-600 text-white shadow-sm'
                       : darkMode ? 'text-zinc-400' : 'text-neutral-500'
                   }`}
                 >
@@ -2017,7 +2040,7 @@ export default function DeliveryTicketPage({ params }: PageProps) {
                   onClick={() => switchAddMode('link')}
                   className={`flex items-center justify-center gap-1.5 rounded-xl py-2.5 text-xs font-bold transition ${
                     addMode === 'link'
-                      ? 'bg-sky-600 text-white shadow-sm'
+                      ? 'bg-red-600 text-white shadow-sm'
                       : darkMode ? 'text-zinc-400' : 'text-neutral-500'
                   }`}
                 >
@@ -2045,7 +2068,7 @@ export default function DeliveryTicketPage({ params }: PageProps) {
                     value={linkInput}
                     onChange={(e) => setLinkInput(e.target.value)}
                     placeholder="Pega aquí el enlace del QR…"
-                    className={`w-full rounded-2xl border px-4 py-3.5 text-sm focus:outline-none focus:ring-2 focus:ring-sky-400/50 transition-all ${
+                    className={`w-full rounded-2xl border px-4 py-3.5 text-sm focus:outline-none focus:ring-2 focus:ring-red-400/50 transition-all ${
                       darkMode
                         ? 'border-zinc-800 bg-[#0a0a0a] text-white placeholder:text-zinc-700'
                         : 'border-neutral-200 bg-neutral-50 text-neutral-900 placeholder:text-neutral-400'
@@ -2055,7 +2078,7 @@ export default function DeliveryTicketPage({ params }: PageProps) {
                     type="button"
                     disabled={adding || !linkInput.trim()}
                     onClick={handleAddByLink}
-                    className="mt-3 w-full rounded-2xl bg-sky-600 py-3.5 text-xs font-black uppercase tracking-wider text-white hover:bg-sky-500 transition active:scale-[0.98] active-scale disabled:opacity-40 shadow-[0_4px_14px_0_rgba(14,165,233,0.3)]"
+                    className="mt-3 w-full rounded-2xl bg-red-600 py-3.5 text-xs font-black uppercase tracking-wider text-white hover:bg-red-500 transition active:scale-[0.98] active-scale disabled:opacity-40 shadow-[0_4px_14px_0_rgba(220,38,38,0.3)]"
                   >
                     {adding ? 'Agregando…' : 'Agregar a la ruta'}
                   </button>
@@ -2110,12 +2133,14 @@ export default function DeliveryTicketPage({ params }: PageProps) {
   const addressText = `${addressObj.street} ${addressObj.number}, ${addressObj.neighborhood}, ${addressObj.city}`;
   const googleMapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(addressText)}`;
 
-  // Distancia aproximada del recorrido (en línea recta) restaurante → domicilio.
+  // Solo mostrar distancia con un GPS reciente del repartidor, nunca del restaurante.
+  const hasFreshDriverPosition = driverPos && driverPositionAt !== null &&
+    deliveryClock - driverPositionAt <= 120000 && driverPositionAt <= deliveryClock + 10000;
   const deliveryDistanceKm =
-    currentTicket.restaurant.latitude && currentTicket.restaurant.longitude && addressObj.latitude && addressObj.longitude
+    hasFreshDriverPosition && driverPos && Number.isFinite(addressObj.latitude) && Number.isFinite(addressObj.longitude)
       ? haversineKm(
-          currentTicket.restaurant.latitude,
-          currentTicket.restaurant.longitude,
+          driverPos.lat,
+          driverPos.lng,
           addressObj.latitude,
           addressObj.longitude
         )
@@ -2123,6 +2148,7 @@ export default function DeliveryTicketPage({ params }: PageProps) {
 
   const isCash = currentTicket.paymentMethod === 'CASH';
   const isTransfer = currentTicket.paymentMethod === 'TRANSFER';
+  const ownDeliveryAwaitingPickup = !!currentTicket.isOwnDelivery && currentTicket.status === 'READY';
 
   // ══════════════════════════════════════
   // VISTA: ENTREGA COMPLETADA
@@ -2158,7 +2184,7 @@ export default function DeliveryTicketPage({ params }: PageProps) {
         {/* Botones de contacto de emergencia post-entrega */}
         <div className="mt-3 flex gap-2.5 w-full max-w-[280px] justify-center">
           <a
-            href={`https://wa.me/52${currentTicket.customer.phone.replace(/\D/g, '')}?text=${encodeURIComponent(`Hola ${currentTicket.customer.name}, soy tu repartidor de SaDeL Express.`)}`}
+            href={`https://wa.me/52${currentTicket.customer.phone.replace(/\D/g, '')}?text=${encodeURIComponent(`Hola ${currentTicket.customer.name}, soy tu repartidor de ${currentTicket.isOwnDelivery ? 'WingsLab' : 'SaDeL Express'}.`)}`}
             target="_blank"
             rel="noopener noreferrer"
             onClick={() => triggerHaptic([30])}
@@ -2205,27 +2231,6 @@ export default function DeliveryTicketPage({ params }: PageProps) {
   // ══════════════════════════════════════
   // FASE 1 (SOLO APOYO A RED): DIRÍGETE AL RESTAURANTE ORIGEN A RECOGER
   // ══════════════════════════════════════
-  if (currentTicket.isOwnDelivery && currentTicket.status === 'READY') {
-    return (
-      <main className="min-h-screen bg-slate-50 px-4 py-8 text-slate-900">
-        <section className="mx-auto max-w-lg rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-          <p className="text-xs font-bold uppercase tracking-widest text-orange-600">WingsLab · reparto propio</p>
-          <h1 className="mt-3 text-2xl font-bold">Recoger pedido #{currentTicket.dailyCounter || currentTicket.orderReference}</h1>
-          <p className="mt-4 font-semibold">{currentTicket.restaurant.name}</p>
-          <p className="mt-1 text-sm text-slate-600">{currentTicket.restaurant.address}</p>
-          <p className="mt-5 text-sm">Para {fullCustomerName(currentTicket.customer)} · ${currentTicket.totalAmount.toFixed(2)}</p>
-          <p className="mt-2 text-sm text-slate-600">Confirma cuando tengas el pedido contigo. Todavía no se ha iniciado el reparto.</p>
-          {llegueError && <p role="alert" className="mt-4 text-sm text-red-700">{llegueError}</p>}
-          <button type="button" disabled={notifying} onClick={() => void handleLlegueRestaurante()}
-            className="mt-6 w-full rounded-2xl bg-orange-600 px-5 py-4 font-semibold text-white disabled:opacity-50">
-            {notifying ? 'Confirmando…' : 'Recoger e iniciar reparto'}
-          </button>
-          <p className="mt-4 text-xs text-slate-500">Entorno ficticio local. Sin cargos ni notificaciones externas.</p>
-        </section>
-      </main>
-    );
-  }
-
   if (currentTicket.isSupportDelivery && !currentPickedUp && !currentSupportStarted) {
     const pickupName = currentTicket.restaurant.name;
     const pickupAddress = currentTicket.restaurant.address || 'Restaurante origen';
@@ -2519,7 +2524,7 @@ export default function DeliveryTicketPage({ params }: PageProps) {
   // VISTA 2: DETALLE DEL PEDIDO (ACCIÓN)
   // ══════════════════════════════════════
   return (
-    <div className={`min-h-[100dvh] font-sans antialiased pb-12 transition-colors duration-300 ${bg} ${textPrimary}`}>
+    <div className={`min-h-[100dvh] font-sans antialiased pb-12 transition-colors duration-300 ${darkMode ? 'bg-[#09090b]' : 'bg-[#f7f7f8]'} ${textPrimary}`}>
       
       {/* ── HEADER DE DETALLE PREMIUM ── */}
       <header className={`sticky top-0 z-50 border-b backdrop-blur-md transition-all duration-300 pt-[env(safe-area-inset-top)] ${
@@ -2543,32 +2548,46 @@ export default function DeliveryTicketPage({ params }: PageProps) {
               </svg>
               <span>Volver</span>
             </button>
+            <div className="hidden min-[360px]:block"><p className={`text-xs font-black tracking-tight ${textPrimary}`}>WingsLab</p><p className={`text-[10px] ${textSecondary}`}>Reparto</p></div>
           </div>
 
           <div className={`flex items-center gap-1.5 rounded-full px-3 py-1 text-[11px] font-bold shadow-[0_2px_8px_rgba(0,0,0,0.02)] ${
             darkMode ? 'bg-zinc-900 text-zinc-300 border border-zinc-800' : 'bg-neutral-900 text-white'
           }`}>
             <span className="relative flex h-1.5 w-1.5">
-              <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75 animate-ping" />
-              <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-400" />
+              <span className="absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75 motion-safe:animate-ping" />
+              <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-red-400" />
             </span>
-            <span>En tránsito</span>
+            <span>{ownDeliveryAwaitingPickup ? 'Listo para recoger' : 'En tránsito'}</span>
           </div>
         </div>
       </header>
 
       <main className="mx-auto max-w-lg px-4 pb-20">
 
+        {ownDeliveryAwaitingPickup && (
+          <div className={`mt-4 rounded-[24px] border p-5 shadow-[0_8px_24px_rgba(0,0,0,0.04)] ${darkMode ? 'border-red-900/30 bg-gradient-to-br from-zinc-900 to-red-950/30' : 'border-red-100 bg-gradient-to-br from-white to-red-50'}`}>
+            <p className={`text-[10px] font-black uppercase tracking-widest ${darkMode ? 'text-red-300' : 'text-red-600'}`}>Recoger pedido #{currentTicket.dailyCounter || currentTicket.orderReference}</p>
+            <p className={`mt-2 text-base font-extrabold ${textPrimary}`}>{currentTicket.restaurant.name}</p>
+            <p className={`mt-1 text-xs leading-relaxed ${textSecondary}`}>{currentTicket.restaurant.address}</p>
+            <p className={`mt-3 text-xs leading-relaxed ${textSecondary}`}>Confirma cuando tengas el pedido contigo. El reparto aún no ha comenzado.</p>
+            {llegueError && <p role="alert" className="mt-3 text-xs font-semibold text-red-600">{llegueError}</p>}
+            <button type="button" disabled={notifying} onClick={() => void handleLlegueRestaurante()} className="mt-4 min-h-[52px] w-full rounded-2xl bg-gradient-to-b from-red-500 to-red-700 px-4 py-4 text-sm font-bold text-white shadow-lg shadow-red-500/20 transition hover:from-red-600 active:scale-[0.98] disabled:opacity-50">
+              {notifying ? 'Confirmando…' : 'Recoger e iniciar reparto'}
+            </button>
+          </div>
+        )}
+
         {/* ── CLIENTE + CONTACTO ── */}
         <div className={`mt-4 rounded-[28px] border p-5 shadow-[0_4px_24px_rgba(0,0,0,0.015)] ${cardBg} ${cardBorder}`}>
           <div className="flex items-center justify-between gap-3">
             <div className="min-w-0">
-              <p className={`text-[10px] font-black uppercase tracking-widest ${darkMode ? 'text-sky-300' : 'text-sky-500'}`}>Entregar a</p>
-              <h1 className={`text-xl font-black tracking-tight mt-1 truncate ${textPrimary}`}>{currentTicket.customer.name}</h1>
+              <p className={`text-[10px] font-black uppercase tracking-widest ${darkMode ? 'text-red-300' : 'text-red-500'}`}>Entregar a</p>
+              <h1 className={`text-xl font-black tracking-tight mt-1 truncate ${textPrimary}`}>{fullCustomerName(currentTicket.customer)}</h1>
             </div>
             <div className="flex items-center gap-2.5 shrink-0">
               <a
-                href={`https://wa.me/52${currentTicket.customer.phone.replace(/\D/g, '')}?text=${encodeURIComponent(`Hola ${currentTicket.customer.name}, soy tu repartidor de SaDeL Express. Voy en camino con tu pedido.`)}`}
+                href={`https://wa.me/52${currentTicket.customer.phone.replace(/\D/g, '')}?text=${encodeURIComponent(`Hola ${currentTicket.customer.name}, soy tu repartidor de ${currentTicket.isOwnDelivery ? 'WingsLab' : 'SaDeL Express'}.${ownDeliveryAwaitingPickup ? ' Estoy por recoger tu pedido.' : ' Voy en camino con tu pedido.'}`)}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 onClick={() => triggerHaptic([30])}
@@ -2613,11 +2632,12 @@ export default function DeliveryTicketPage({ params }: PageProps) {
               <p className={`text-xs mt-1 ${textSecondary}`}>{addressObj.neighborhood}, {addressObj.city}</p>
               {deliveryDistanceKm !== null && (
                 <span className={`mt-2 inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-extrabold tracking-wide uppercase ${
-                  darkMode ? 'bg-sky-500/10 text-sky-400' : 'bg-sky-50 text-sky-600'
+                  darkMode ? 'bg-red-500/10 text-red-400' : 'bg-red-50 text-red-600'
                 }`}>
-                  Aprox. {deliveryDistanceKm < 1 ? `${Math.round(deliveryDistanceKm * 1000)} m` : `${deliveryDistanceKm.toFixed(1)} km`} en línea recta
+                  A tu destino: aprox. {deliveryDistanceKm < 1 ? `${Math.round(deliveryDistanceKm * 1000)} m` : `${deliveryDistanceKm.toFixed(1)} km`} en línea recta
                 </span>
               )}
+              {deliveryDistanceKm === null && <p className={`mt-2 text-[11px] ${textSecondary}`}>{driverPositionAt === null ? 'Distancia disponible al iniciar el reparto y recibir GPS.' : 'GPS desactualizado · Esperando ubicación para calcular la distancia.'}</p>}
             </div>
           </div>
 
@@ -2638,7 +2658,7 @@ export default function DeliveryTicketPage({ params }: PageProps) {
               <button
                 type="button"
                 onClick={() => { triggerHaptic([40]); setNavOpenFor('delivery'); }}
-                className="w-full mb-2.5 flex items-center justify-center gap-2 rounded-2xl bg-sky-500 py-3.5 text-sm font-black text-white shadow-lg shadow-sky-500/30 transition active:scale-[0.97] hover:bg-sky-400"
+                className="w-full mb-2.5 flex items-center justify-center gap-2 rounded-2xl bg-red-500 py-3.5 text-sm font-black text-white shadow-lg shadow-red-500/30 transition active:scale-[0.97] hover:bg-red-400"
               >
                 <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z" />
@@ -2699,7 +2719,7 @@ export default function DeliveryTicketPage({ params }: PageProps) {
                 onClick={toggleMap}
                 className="flex w-full flex-col items-center gap-2 px-5 py-6 text-center transition active:scale-[0.99]"
               >
-                <span className={`flex h-11 w-11 items-center justify-center rounded-2xl ${darkMode ? 'bg-sky-500/10 text-sky-400' : 'bg-sky-50 text-sky-600'}`}>
+                <span className={`flex h-11 w-11 items-center justify-center rounded-2xl ${darkMode ? 'bg-red-500/10 text-red-400' : 'bg-red-50 text-red-600'}`}>
                   <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor" className="w-5 h-5">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M9 6.75 3 9v11.25l6-2.25m0-11.25 6 2.25m-6-2.25V20.25m6-11.25 6-2.25V18l-6 2.25m0-11.25V20.25" />
                   </svg>
@@ -2775,7 +2795,7 @@ export default function DeliveryTicketPage({ params }: PageProps) {
         </div>
 
         {/* ── BOTÓN LLEGUÉ ── */}
-        <div className={`mt-3 rounded-[28px] border p-5 shadow-[0_4px_24px_rgba(0,0,0,0.015)] ${cardBg} ${cardBorder}`}>
+        {!ownDeliveryAwaitingPickup && <div className={`mt-3 rounded-[28px] border p-5 shadow-[0_4px_24px_rgba(0,0,0,0.015)] ${cardBg} ${cardBorder}`}>
           {llegueError && (
             <div className={`rounded-xl px-4 py-3 mb-3 text-xs font-semibold flex items-center gap-2 border ${
               darkMode ? 'bg-red-950/20 border-red-900/30 text-red-400' : 'bg-red-50 border-red-200/50 text-red-600'
@@ -2826,13 +2846,13 @@ export default function DeliveryTicketPage({ params }: PageProps) {
               onClick={handleLlegue}
               className={`w-full flex items-center justify-center gap-2 rounded-2xl py-3.5 text-xs font-bold transition-all active:scale-95 active-scale disabled:opacity-50 border shadow-sm ${
                 darkMode 
-                  ? 'bg-sky-400/10 text-sky-300 border border-sky-400/20 hover:bg-sky-400/20' 
-                  : 'bg-sky-50 text-sky-500 border border-sky-200 hover:bg-sky-100'
+                  ? 'bg-red-400/10 text-red-300 border border-red-400/20 hover:bg-red-400/20' 
+                  : 'bg-red-50 text-red-500 border border-red-200 hover:bg-red-100'
               }`}
             >
               {notifying ? (
                 <>
-                  <div className={`h-4 w-4 animate-spin rounded-full border-2 ${darkMode ? 'border-sky-300/40 border-t-sky-300' : 'border-sky-400/30 border-t-sky-500'}`} />
+                  <div className={`h-4 w-4 animate-spin rounded-full border-2 ${darkMode ? 'border-red-300/40 border-t-red-300' : 'border-red-400/30 border-t-red-500'}`} />
                   <span>Notificando llegada…</span>
                 </>
               ) : (
@@ -2845,12 +2865,12 @@ export default function DeliveryTicketPage({ params }: PageProps) {
               )}
             </button>
           )}
-        </div>
+        </div>}
 
         {/* ── CONFIRMAR ENTREGA + PIN ── */}
-        <div className={`mt-3 rounded-[28px] border p-5 shadow-[0_4px_24px_rgba(0,0,0,0.015)] ${cardBg} ${cardBorder}`}>
+        {!ownDeliveryAwaitingPickup && <div className={`mt-3 rounded-[28px] border p-5 shadow-[0_4px_24px_rgba(0,0,0,0.015)] ${cardBg} ${cardBorder}`}>
           <form onSubmit={handleDeliver} className="space-y-4">
-            {!isCash && currentTicket.handoverPin && (
+            {!isCash && (currentTicket.isOwnDelivery || currentTicket.handoverPin) && (
               <div>
                 <label htmlFor="pin-input" className={`block text-[10px] font-black uppercase tracking-widest mb-2 ${textTertiary}`}>
                   PIN de Seguridad (4 dígitos)
@@ -2866,7 +2886,7 @@ export default function DeliveryTicketPage({ params }: PageProps) {
                     if (cleanValue.length === 4) triggerHaptic([20]);
                   }}
                   placeholder="• • • •"
-                  className={`w-full rounded-2xl border px-4 py-3.5 text-center text-2xl font-black tracking-[0.6em] focus:outline-none focus:ring-2 focus:ring-sky-400/50 transition-all ${
+                  className={`w-full rounded-2xl border px-4 py-3.5 text-center text-2xl font-black tracking-[0.6em] focus:outline-none focus:ring-2 focus:ring-red-400/50 transition-all ${
                     darkMode
                       ? 'border-zinc-800 bg-[#0a0a0a] text-white placeholder:text-zinc-800'
                       : 'border-neutral-200 bg-neutral-50 text-neutral-900 placeholder:text-neutral-300'
@@ -2891,8 +2911,8 @@ export default function DeliveryTicketPage({ params }: PageProps) {
 
             <button
               type="submit"
-              disabled={submitting || (!isCash && !!currentTicket.handoverPin && pin.length !== 4)}
-              className="relative w-full flex items-center justify-center gap-2.5 rounded-2xl py-4 transition-all active:scale-[0.97] active-scale disabled:opacity-40 disabled:cursor-not-allowed shadow-[0_4px_14px_0_rgba(14,165,233,0.39)] hover:shadow-[0_6px_20px_rgba(14,165,233,0.23)] hover:bg-sky-500 bg-sky-600 text-white"
+              disabled={submitting || (!isCash && (!!currentTicket.isOwnDelivery || !!currentTicket.handoverPin) && pin.length !== 4)}
+              className="relative w-full flex items-center justify-center gap-2.5 rounded-2xl py-4 transition-all active:scale-[0.97] active-scale disabled:opacity-40 disabled:cursor-not-allowed shadow-[0_4px_14px_0_rgba(220,38,38,0.39)] hover:shadow-[0_6px_20px_rgba(220,38,38,0.23)] hover:bg-red-500 bg-red-600 text-white"
             >
               {submitting ? (
                 <>
@@ -2909,7 +2929,7 @@ export default function DeliveryTicketPage({ params }: PageProps) {
               )}
             </button>
           </form>
-        </div>
+        </div>}
 
         {/* ── ESPERA SIN CONTACTO: LUGAR SEGURO / CLIENTE NO SALIÓ ── */}
         {(() => {
@@ -2927,7 +2947,7 @@ export default function DeliveryTicketPage({ params }: PageProps) {
           const showTimer = (isCash || isTransfer) && arrivalTime > 0 &&
             (isTransfer ? remainingSafe <= LAST_MINUTE_MS : remainingNoShow <= LAST_MINUTE_MS);
 
-          if (!showTimer || currentDelivered) return null;
+          if (!showTimer || currentDelivered || currentTicket.isOwnDelivery) return null;
 
           return (
             <div className={`mt-3 rounded-[28px] border p-5 space-y-4 ${
@@ -3094,7 +3114,7 @@ export default function DeliveryTicketPage({ params }: PageProps) {
                   type="button"
                   disabled={submitting}
                   onClick={executeDeliver}
-                  className="relative w-full flex items-center justify-center gap-2.5 rounded-2xl py-4 text-xs font-black uppercase tracking-wider transition-all active:scale-[0.97] active-scale bg-sky-600 text-white hover:bg-sky-500 disabled:opacity-40 disabled:cursor-not-allowed shadow-[0_4px_14px_0_rgba(14,165,233,0.3)]"
+                  className="relative w-full flex items-center justify-center gap-2.5 rounded-2xl py-4 text-xs font-black uppercase tracking-wider transition-all active:scale-[0.97] active-scale bg-red-600 text-white hover:bg-red-500 disabled:opacity-40 disabled:cursor-not-allowed shadow-[0_4px_14px_0_rgba(220,38,38,0.3)]"
                 >
                   {submitting ? (
                     <>
@@ -3164,10 +3184,10 @@ export default function DeliveryTicketPage({ params }: PageProps) {
                 </p>
                 <div className="w-full text-left mt-4 space-y-2.5">
                   <div className={`rounded-2xl border px-4 py-3 ${
-                    darkMode ? 'border-sky-900/30 bg-zinc-900' : 'border-sky-200 bg-sky-50'
+                    darkMode ? 'border-red-900/30 bg-zinc-900' : 'border-red-200 bg-red-50'
                   }`}>
                     <p className={`text-[10px] font-bold uppercase tracking-widest mb-1 ${
-                      darkMode ? 'text-sky-400' : 'text-sky-600'
+                      darkMode ? 'text-red-400' : 'text-red-600'
                     }`}>Para el cliente</p>
                     <p className={`text-xs leading-relaxed ${darkMode ? 'text-zinc-300' : 'text-muted'}`}>
                       El cliente <strong className={darkMode ? 'text-zinc-200' : 'text-foreground'}>ya pagó por transferencia</strong>. Deja el pedido donde pueda recogerlo; el pago ya está cubierto.

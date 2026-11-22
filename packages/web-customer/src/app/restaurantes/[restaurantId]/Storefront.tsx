@@ -493,7 +493,8 @@ export default function RestaurantPage({
   const [toastMsg, setToastMsg] = useState('');
   const [toastType, setToastType] = useState<'success' | 'error'>('success');
   const [isTrackingEnabled, setIsTrackingEnabled] = useState(false);
-  const [driverLocation, setDriverLocation] = useState<{ lat: number; lng: number; updatedAt?: string | null } | null>(null);
+  const [driverLocation, setDriverLocation] = useState<{ orderId: string; lat: number; lng: number; updatedAt?: string | null } | null>(null);
+  const trackingOrderIdRef = useRef<string | null>(null);
   const [showAuthModal, setShowAuthModal] = useState(false);
   const handleLogout = useCallback(() => {
     clearStoredSession(storageKey);
@@ -609,6 +610,7 @@ export default function RestaurantPage({
     if (!item) return null;
     return activeOrderDetailsMap[item.id] || null;
   }, [activeOrderListItems, activeOrderDetailsMap, carouselIndex]);
+  trackingOrderIdRef.current = activeOrder?.id ?? null;
 
   useEffect(() => {
     if (carouselIndex >= activeOrderListItems.length && activeOrderListItems.length > 0) {
@@ -620,15 +622,20 @@ export default function RestaurantPage({
   // repartidor ya va en ruta, el mapa arranca en su última posición conocida
   // en BD sin esperar el siguiente ping de la APK.
   useEffect(() => {
-    if (driverLocation || !isTrackingEnabled) return;
+    if (!isTrackingEnabled) return;
     if (!activeOrder) return;
     const lat = activeOrder.lastDriverLatitude;
     const lng = activeOrder.lastDriverLongitude;
     if (lat == null || lng == null) return;
     const routeStatuses = ['PICKED_UP', 'IN_TRANSIT', 'DRIVER_ARRIVED'];
     if (!routeStatuses.includes(activeOrder.status)) return;
-    setDriverLocation({ lat, lng, updatedAt: activeOrder.lastDriverLocationAt });
-  }, [activeOrder, driverLocation, isTrackingEnabled]);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng) || Math.abs(lat) > 90 || Math.abs(lng) > 180) return;
+    const incomingTime = Date.parse(activeOrder.lastDriverLocationAt || '');
+    setDriverLocation(previous => {
+      if (previous?.orderId === activeOrder.id && (!Number.isFinite(incomingTime) || incomingTime <= Date.parse(previous.updatedAt || ''))) return previous;
+      return { orderId: activeOrder.id, lat, lng, updatedAt: activeOrder.lastDriverLocationAt };
+    });
+  }, [activeOrder, isTrackingEnabled]);
 
   const cartRestaurantId = useCartStore(state => state.restaurantId);
   const cartItems = useCartStore(state => state.items);
@@ -1496,8 +1503,11 @@ export default function RestaurantPage({
         }
 
         if (eventName === 'order:driver-location') {
-          if (recentCreatedOrderRef.current?.id === payload.orderId || activeOrderListItems.some((o) => o.id === payload.orderId)) {
-            setDriverLocation({ lat: payload.latitude, lng: payload.longitude, updatedAt: new Date().toISOString() });
+          if (trackingOrderIdRef.current === payload.orderId && Number.isFinite(payload.latitude) && Number.isFinite(payload.longitude) && Math.abs(payload.latitude) <= 90 && Math.abs(payload.longitude) <= 180) {
+            const updatedAt = payload.locationUpdatedAt || payload.updatedAt;
+            const incomingTime = Date.parse(updatedAt || '');
+            if (!Number.isFinite(incomingTime)) return;
+            setDriverLocation(previous => previous && previous.orderId === payload.orderId && Date.parse(previous.updatedAt || '') >= incomingTime ? previous : { orderId: payload.orderId, lat: payload.latitude, lng: payload.longitude, updatedAt });
           }
         }
         
@@ -3495,7 +3505,7 @@ function ProductImage({
                       if (!val) setDriverLocation(null);
                       setIsTrackingEnabled(val);
                     }}
-                    driverLocation={driverLocation}
+                    driverLocation={driverLocation?.orderId === activeOrder?.id ? driverLocation : null}
                   />
                 )}
               </div>
@@ -6510,15 +6520,16 @@ function ProductImage({
 
       {/* Modal de Detalle de Pedido */}
       {isDetailModalOpen && selectedOrderId && activeOrderDetailsMap[selectedOrderId] && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4 py-6">
-          <div className="relative w-full max-w-[480px] rounded-[32px] bg-[#f9fafb] shadow-[0_30px_100px_rgba(0,0,0,0.2)] h-fit max-h-[90vh] overflow-y-auto no-scrollbar dark:bg-[#0c0c0e]">
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-neutral-950/60 backdrop-blur-sm px-2 sm:px-4 pt-4 pb-2 sm:py-6">
+          <div role="dialog" aria-modal="true" aria-labelledby="order-detail-title" className="relative w-full max-w-[480px] rounded-[28px] bg-[#faf9f8] shadow-[0_30px_100px_rgba(0,0,0,0.25)] h-fit max-h-[90dvh] overflow-y-auto no-scrollbar">
             {/* Encabezado Fijo con Botón de Cierre */}
-            <div className="sticky top-0 z-10 flex items-center justify-between bg-[#f9fafb]/90 backdrop-blur-md px-6 py-5 border-b border-black/5 dark:bg-[#0c0c0e]/90 dark:border-white/10">
-              <h3 className="text-lg font-bold tracking-tight text-neutral-900">Detalles del pedido</h3>
+            <div className="sticky top-0 z-10 flex items-center justify-between bg-[#faf9f8]/95 backdrop-blur-md px-5 sm:px-6 py-4 border-b border-black/5">
+              <div><p className="text-[10px] font-bold uppercase tracking-[0.16em] text-red-600">Tu pedido</p><h3 id="order-detail-title" className="text-lg font-bold tracking-tight text-neutral-950">Detalles del pedido</h3></div>
               <button
                 type="button"
                 onClick={() => setIsDetailModalOpen(false)}
-                className="flex h-8 w-8 items-center justify-center rounded-full bg-neutral-200/60 text-neutral-600 transition hover:bg-neutral-300 hover:text-neutral-900 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700 dark:hover:text-zinc-100"
+                aria-label="Cerrar detalles del pedido"
+                className="flex h-10 w-10 items-center justify-center rounded-full bg-white text-neutral-600 shadow-sm ring-1 ring-black/5 transition hover:bg-red-50 hover:text-red-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-red-500"
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M18 6 6 18"/><path d="m6 6 12 12"/>
@@ -6526,23 +6537,24 @@ function ProductImage({
               </button>
             </div>
 
-            <div className="px-6 py-6 space-y-6">
-              <div className="space-y-6">
+            <div className="px-4 sm:px-6 py-5 space-y-4">
+              <div className="space-y-4">
                 {/* Header del Restaurante */}
-                <div className="flex flex-col items-center text-center">
-                  <div className="flex h-20 w-20 items-center justify-center rounded-3xl bg-white dark:bg-zinc-800 shadow-[0_8px_24px_rgba(0,0,0,0.04)] mb-4 border border-black/[0.03] dark:border-white/10">
-                    <span className="text-2xl font-black tracking-tight text-neutral-800">
+                <div className="flex items-center gap-4 rounded-[22px] border border-white bg-gradient-to-r from-red-50/80 to-white p-4 shadow-[0_4px_18px_rgba(0,0,0,0.04)]">
+                  <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-neutral-950 shadow-lg shadow-neutral-900/10">
+                    <span className="text-lg font-black tracking-tight text-white">
                       {activeOrderDetailsMap[selectedOrderId].restaurant.name.substring(0, 2).toUpperCase()}
                     </span>
                   </div>
-                  <h2 className="text-2xl font-bold tracking-tight text-neutral-900">{activeOrderDetailsMap[selectedOrderId].restaurant.name}</h2>
-                  <p className="mt-1 flex items-center gap-2 text-sm text-neutral-500">
+                  <div className="min-w-0 flex-1"><h2 className="truncate text-lg font-bold tracking-tight text-neutral-950">{activeOrderDetailsMap[selectedOrderId].restaurant.name}</h2>
+                  <p className="mt-1 flex flex-wrap items-center gap-2 text-xs text-neutral-500">
                     {formatDate(activeOrderDetailsMap[selectedOrderId].createdAt)} 
                     <span className="h-1 w-1 rounded-full bg-neutral-300"></span> 
                     Ref #{(activeOrderDetailsMap[selectedOrderId] as any).dailyCounter || '...'}
                   </p>
-                  <div className="mt-4">
+                  <div className="mt-2">
                     <StatusBadge status={activeOrderDetailsMap[selectedOrderId].status} businessType={activeOrderDetailsMap[selectedOrderId].restaurant?.businessType} />
+                  </div>
                   </div>
                 </div>
 
@@ -6627,15 +6639,15 @@ function ProductImage({
                   const delayState = computeDelayState(orderDetail, Date.now());
                   if (delayState.isDelayed && delayState.referenceTime) {
                     return (
-                      <div className="flex items-start gap-3 p-4 rounded-2xl border border-red-200 bg-red-50/70 shadow-sm">
-                        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-red-500 text-white">
+                      <div className="flex items-start gap-3 p-4 rounded-[20px] border border-orange-100 bg-gradient-to-r from-orange-50 to-red-50">
+                        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-orange-100 text-red-600">
                           <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                             <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
                           </svg>
                         </div>
                         <div className="min-w-0 flex-1">
                           <p className="text-[10px] font-bold uppercase tracking-widest text-red-600">Va con retraso</p>
-                          <p className="text-sm font-bold text-neutral-900">
+                          <p className="text-sm font-bold text-red-800">
                             Lleva {formatOverdueMinutes(delayState.minutesOverdue)} de retraso
                           </p>
                           <p className="text-xs text-neutral-600 mt-1 leading-snug">
@@ -6661,7 +6673,7 @@ function ProductImage({
                               setIsDetailModalOpen(false);
                               void loadChatMessages(selectedOrderId);
                             }}
-                            className="mt-3 w-full flex items-center justify-center gap-2 rounded-full bg-red-500 hover:bg-red-600 py-2.5 text-xs font-bold text-white shadow-sm transition-all active:scale-[0.97]"
+                            className="mt-3 inline-flex items-center justify-center gap-2 rounded-full bg-gradient-to-b from-red-500 to-red-700 px-4 py-2.5 text-xs font-bold text-white shadow-md shadow-red-200 transition-all hover:from-red-600 active:scale-[0.97]"
                           >
                             <MessageCircle className="w-3.5 h-3.5" />
                             Contactar al negocio
@@ -6695,14 +6707,14 @@ function ProductImage({
                 })()}
 
                 {/* Ticket unificado */}
-                <div className="bg-white rounded-3xl border border-black/5 shadow-sm p-6 space-y-6 dark:bg-neutral-900 dark:border-white/10">
+                <div className="bg-white rounded-[22px] border border-neutral-100 shadow-[0_4px_18px_rgba(0,0,0,0.04)] p-5 space-y-5">
                   <div className="space-y-4">
-                    <p className="text-[11px] font-bold uppercase tracking-widest text-neutral-400">Resumen</p>
+                    <p className="text-sm font-bold text-neutral-950">Resumen del pedido</p>
                     <div className="space-y-4">
                       {activeOrderDetailsMap[selectedOrderId].items.map((item) => (
                         <div key={item.id} className="text-sm">
                           <div className="flex gap-3">
-                            <span className="font-bold text-neutral-900 bg-neutral-100 rounded-lg px-2 py-0.5 h-fit">{item.quantity}</span>
+                            <span className="flex h-8 min-w-8 items-center justify-center rounded-xl bg-red-50 px-2 text-xs font-bold text-red-700">{item.quantity}×</span>
                             <div>
                               <p className="font-medium text-neutral-900">{item.product.name}</p>
                               {item.sellBy === 'WEIGHT' && item.weightG && (
@@ -6741,17 +6753,17 @@ function ProductImage({
                         <p className="font-bold text-sky-700">-{formatCurrency(Number(activeOrderDetailsMap[selectedOrderId].promoDiscountAmount))}</p>
                       </div>
                     )}
-                    <div className="flex justify-between font-bold text-neutral-900 text-lg pt-4 border-t border-dashed border-neutral-200 mt-4 dark:border-zinc-700 dark:text-neutral-50">
+                    <div className="flex justify-between font-bold text-neutral-950 text-lg pt-4 border-t border-dashed border-neutral-200 mt-4">
                       <p>Total a pagar</p>
-                      <p>{formatCurrency(activeOrderDetailsMap[selectedOrderId].totalAmount)}</p>
+                      <p className="text-red-700">{formatCurrency(activeOrderDetailsMap[selectedOrderId].totalAmount)}</p>
                     </div>
                   </div>
                 </div>
 
                 {activeOrderDetailsMap[selectedOrderId].fulfillmentType === 'PICKUP' ? (
                   /* Datos de Recolección */
-                  <div className="bg-white rounded-3xl border border-black/5 shadow-sm p-6 space-y-4 dark:bg-neutral-900 dark:border-white/10">
-                    <p className="text-[11px] font-bold uppercase tracking-widest text-neutral-400">Recolección</p>
+                  <div className="bg-white rounded-[22px] border border-neutral-100 shadow-[0_4px_18px_rgba(0,0,0,0.04)] p-5 space-y-4">
+                    <p className="text-sm font-bold text-neutral-950">Recolección y pago</p>
                     <div className="flex items-start gap-3">
                       <div className="mt-0.5 flex h-8 w-8 items-center justify-center rounded-full bg-emerald-100 text-emerald-600 shrink-0">
                         <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/><path strokeLinecap="round" strokeLinejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
@@ -6767,16 +6779,16 @@ function ProductImage({
                       </div>
                       <div className="text-sm">
                         <p className="font-medium text-neutral-900">{activeOrderDetailsMap[selectedOrderId].paymentMethod === 'CASH' ? 'Efectivo' : 'Transferencia'}</p>
-                        <p className="text-xs text-neutral-500 uppercase">{activeOrderDetailsMap[selectedOrderId].paymentStatus}</p>
+                        <p className="text-xs text-neutral-500">{activeOrderDetailsMap[selectedOrderId].paymentStatus === 'PENDING' ? 'Pago pendiente' : activeOrderDetailsMap[selectedOrderId].paymentStatus === 'PAID' ? 'Pagado' : activeOrderDetailsMap[selectedOrderId].paymentStatus}</p>
                       </div>
                     </div>
                   </div>
                 ) : (
                   /* Datos de Entrega */
-                  <div className="bg-white rounded-3xl border border-black/5 shadow-sm p-6 space-y-4 dark:bg-neutral-900 dark:border-white/10">
-                    <p className="text-[11px] font-bold uppercase tracking-widest text-neutral-400">Entrega</p>
+                  <div className="bg-white rounded-[22px] border border-neutral-100 shadow-[0_4px_18px_rgba(0,0,0,0.04)] p-5 space-y-4">
+                    <p className="text-sm font-bold text-neutral-950">Entrega y pago</p>
                     <div className="flex items-start gap-3">
-                      <div className="mt-0.5 flex h-8 w-8 items-center justify-center rounded-full bg-neutral-100 text-neutral-600 shrink-0">
+                      <div className="mt-0.5 flex h-9 w-9 items-center justify-center rounded-xl bg-red-50 text-red-600 shrink-0">
                         <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/><path strokeLinecap="round" strokeLinejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
                       </div>
                       <div className="text-sm">
@@ -6789,7 +6801,7 @@ function ProductImage({
                       </div>
                       <div className="text-sm">
                         <p className="font-medium text-neutral-900">{activeOrderDetailsMap[selectedOrderId].paymentMethod === 'CASH' ? 'Efectivo' : 'Transferencia'}</p>
-                        <p className="text-xs text-neutral-500 uppercase">{activeOrderDetailsMap[selectedOrderId].paymentStatus}</p>
+                        <p className="text-xs text-neutral-500">{activeOrderDetailsMap[selectedOrderId].paymentStatus === 'PENDING' ? 'Pago pendiente' : activeOrderDetailsMap[selectedOrderId].paymentStatus === 'PAID' ? 'Pagado' : activeOrderDetailsMap[selectedOrderId].paymentStatus}</p>
                       </div>
                     </div>
                   </div>
@@ -6983,13 +6995,14 @@ function ProductImage({
                 <button
                   type="submit"
                   disabled={!chatInput.trim() || sendingChatMessage}
+                  aria-label="Enviar mensaje"
                   className="flex h-[44px] w-[44px] shrink-0 items-center justify-center rounded-xl bg-[var(--accent)] text-white transition hover:bg-[var(--accent)] active:scale-95 active-scale disabled:opacity-50 disabled:cursor-not-allowed shadow-md shadow-sky-200"
                 >
                   {sendingChatMessage ? (
                     <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
                   ) : (
-                    <svg className="w-5 h-5 translate-x-px -translate-y-px" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M22 2 11 13m11-11-7 20-4-9-9-4Z" />
                     </svg>
                   )}
                 </button>

@@ -230,24 +230,27 @@ export default function DriverArrivalModal() {
   const isTransfer = arrivedOrder.paymentMethod === 'TRANSFER';
 
   return (
-    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/70 backdrop-blur-sm px-4 py-6">
+    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-neutral-950/60 backdrop-blur-sm px-4 py-6">
       <div
-        className="bg-white rounded-3xl border border-black/[0.03] shadow-[0_20px_50px_rgba(0,0,0,0.15)] p-7 w-full max-w-md h-fit max-h-[90vh] overflow-y-auto relative transition-all"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="driver-arrival-title"
+        aria-describedby="driver-arrival-description"
+        className="w-full max-w-md max-h-[90dvh] overflow-y-auto rounded-[28px] border border-white bg-white p-5 sm:p-7 shadow-[0_24px_80px_rgba(0,0,0,0.2)]"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-sky-1000/10 to-transparent rounded-full blur-3xl pointer-events-none"></div>
-
-        <div className="text-center mb-6">
-          <div className="w-20 h-20 bg-sky-200 rounded-full flex items-center justify-center mx-auto mb-4 border-4 border-sky-100 shadow-inner">
-            <span className="text-4xl animate-bounce">🛵</span>
+        <div className="text-center mb-5">
+          <div className="mx-auto mb-4 flex h-28 w-36 items-center justify-center overflow-hidden rounded-[24px] bg-gradient-to-br from-red-50 to-orange-50">
+            <img src="/seguimiento-moto.webp" alt="" aria-hidden="true" className="h-full w-full object-contain mix-blend-multiply" />
           </div>
-          <h3 className="text-2xl font-black text-neutral-950 tracking-tight">¡Tu repartidor ha llegado!</h3>
-          <p className="text-sm text-neutral-500 mt-1">El repartidor ya está afuera de tu domicilio con tu pedido.</p>
+          <p className="mb-2 inline-flex items-center gap-2 rounded-full bg-red-50 px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-red-700"><span className="h-2 w-2 rounded-full bg-red-500" /> Pedido en tu domicilio</p>
+          <h3 id="driver-arrival-title" className="text-2xl font-black text-neutral-950 tracking-tight">¡Tu repartidor ha llegado!</h3>
+          <p id="driver-arrival-description" className="text-sm leading-relaxed text-neutral-500 mt-2">El repartidor ya está afuera de tu domicilio con tu pedido.</p>
         </div>
 
         <div className="space-y-4">
-          <div className="p-5 rounded-2xl bg-amber-50/40 border border-amber-100/50">
-            <div className="flex justify-between items-center">
+          <div className="p-4 sm:p-5 rounded-[20px] bg-gradient-to-r from-orange-50 to-red-50 border border-orange-100">
+            <div className="flex flex-wrap gap-3 justify-between items-center">
               <div>
                 <p className="text-[10px] font-semibold text-neutral-500 uppercase tracking-wider">
                   {arrivedOrder.paymentMethod === 'CASH' ? 'Total a pagar' : 'Total del pedido'}
@@ -261,7 +264,7 @@ export default function DriverArrivalModal() {
                   arrivedOrder.paymentMethod === 'CASH'
                     ? 'bg-amber-100 text-amber-800 border border-amber-200'
                     : isTransfer
-                      ? 'bg-sky-100 text-sky-800 border border-sky-200'
+                      ? 'bg-white text-neutral-700 border border-neutral-200'
                       : 'bg-green-100 text-green-800 border border-green-200'
                 }`}>
                   {arrivedOrder.paymentMethod === 'CASH' ? '💵 Efectivo' : isTransfer ? '🏦 Transferencia' : '💳 Pago Online'}
@@ -274,9 +277,9 @@ export default function DriverArrivalModal() {
           </div>
 
           {isTransfer && (arrivedOrder.deliveryPin || arrivedOrder.handoverPin) && (
-            <div className="p-5 rounded-2xl bg-indigo-50/50 border border-indigo-100/50 text-center">
-              <p className="text-[10px] font-semibold text-indigo-600 uppercase tracking-widest">Código de entrega</p>
-              <p className="text-4xl font-extrabold tracking-[0.25em] text-indigo-950 font-mono mt-2 mb-1.5 pl-[0.25em]">
+            <div className="p-5 rounded-[20px] bg-neutral-50 border border-neutral-100 text-center">
+              <p className="text-[10px] font-bold text-red-700 uppercase tracking-widest">Código de entrega</p>
+              <p className="text-4xl font-extrabold tracking-[0.25em] text-neutral-950 font-mono mt-2 mb-1.5 pl-[0.25em]">
                 {arrivedOrder.deliveryPin || arrivedOrder.handoverPin}
               </p>
               <p className="text-[11px] text-neutral-500 leading-relaxed">
@@ -290,7 +293,7 @@ export default function DriverArrivalModal() {
           <button
             type="button"
             onClick={ackAndClose}
-            className="flex-1 rounded-full bg-neutral-950 text-white py-3.5 text-sm font-bold shadow-md transition hover:bg-neutral-800 active:scale-95"
+            className="flex-1 rounded-full bg-gradient-to-b from-red-500 to-red-700 text-white py-4 text-sm font-bold shadow-lg shadow-red-200 transition hover:from-red-600 active:scale-[0.98] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-600"
           >
             Entendido
           </button>

@@ -23,7 +23,7 @@ PORT = int(sys.argv[4])
 PROFILE = sys.argv[5]
 MODE = sys.argv[6] if len(sys.argv) > 6 else 'deploy'
 
-assert ROLE in ['restaurant', 'customer', 'driver'], 'Only WingsLab frontends may be deployed'
+assert ROLE in ['restaurant', 'customer'], 'Only WingsLab frontends may be deployed'
 assert MODE in ['build-only', 'deploy'], 'Mode must be build-only or deploy'
 CTX = WORK / (ROLE + '-context-' + TAG.split('-')[-1])
 SOURCE = WORK / (ROLE + '-source-' + TAG.split('-')[-1])

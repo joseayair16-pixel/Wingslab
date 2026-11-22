@@ -1,4 +1,8 @@
-import { OrderStatus, UserRole, DriverAvailability } from '@prisma/client';
+import { OrderStatus, Prisma, UserRole, DriverAvailability } from '@prisma/client';
+import {
+  ACTIVE_ORDER_STATUSES as ACTIVE_ORDER_STATUS_NAMES,
+  isActiveOrderStatus as isActiveOrderStatusName,
+} from '@sadel/shared';
 import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 
@@ -26,6 +30,7 @@ import {
   computeInTransitEta,
 } from '../services/order-workflow.service';
 import { restaurantOrderListSelect } from '../services/order-selects';
+import { getOrCreateDeliveryToken } from '../services/delivery-token.service';
 import { getOrCreateRequestContext } from '../utils/request-context';
 import { isRestaurant, getBusinessRef, getBusinessArticleCapitalized } from '../utils/restaurant';
 import { buildCustomerDeliveryUrl } from '../utils/customer-web';
@@ -33,6 +38,13 @@ import { buildCustomerDeliveryUrl } from '../utils/customer-web';
 const listOrdersQuerySchema = z.object({
   status: z.nativeEnum(OrderStatus).optional(),
 });
+
+// Los pedidos en curso se consultan aparte del historial para que nunca queden
+// fuera del límite de 50 por ser antiguos: el restaurante debe poder cerrarlos.
+// La lista se comparte con el frontend para evitar que ambas se desincronicen.
+const ACTIVE_ORDER_STATUSES = ACTIVE_ORDER_STATUS_NAMES.map(
+  (status) => status as OrderStatus
+);
 
 const assignDriverSchema = z.object({
   driverId: z.string().min(1, 'El repartidor es obligatorio.'),
@@ -75,18 +87,43 @@ export async function registerRestaurantOrderRoutes(fastify: FastifyInstance): P
       const user = getAuthenticatedUser(request);
       const myRestaurant = await prisma.restaurant.findUnique({ where: { userId: user.sub } });
 
-      const items = await prisma.order.findMany({
-        where: {
-          OR: [
-            { restaurant: { userId: user.sub } },
-            ...(myRestaurant ? [{ supportRestaurantId: myRestaurant.id }] : []),
-          ],
-          ...(parsed.data.status ? { status: parsed.data.status } : {}),
-        },
-        select: restaurantOrderListSelect,
-        orderBy: { createdAt: 'desc' },
-        take: 50,
-      });
+      const scope = {
+        OR: [
+          { restaurant: { userId: user.sub } },
+          ...(myRestaurant ? [{ supportRestaurantId: myRestaurant.id }] : []),
+        ],
+      };
+
+      let items: Prisma.OrderGetPayload<{ select: typeof restaurantOrderListSelect }>[];
+      if (parsed.data.status) {
+        // Un filtro por estado activo tampoco puede truncar pedidos en curso.
+        items = await prisma.order.findMany({
+          where: { ...scope, status: parsed.data.status },
+          select: restaurantOrderListSelect,
+          orderBy: { createdAt: 'desc' },
+          ...(isActiveOrderStatusName(parsed.data.status) ? {} : { take: 50 }),
+        });
+      } else {
+        // Historial reciente + todos los pedidos en curso, sin importar su fecha
+        // ni un límite que pueda ocultar un pedido antiguo todavía activo.
+        const [active, history] = await Promise.all([
+          prisma.order.findMany({
+            where: { ...scope, status: { in: ACTIVE_ORDER_STATUSES } },
+            select: restaurantOrderListSelect,
+            orderBy: { createdAt: 'desc' },
+          }),
+          prisma.order.findMany({
+            where: { ...scope, status: { notIn: ACTIVE_ORDER_STATUSES } },
+            select: restaurantOrderListSelect,
+            orderBy: { createdAt: 'desc' },
+            take: 50,
+          }),
+        ]);
+        const byId = new Map([...active, ...history].map((order) => [order.id, order]));
+        items = [...byId.values()].sort(
+          (left, right) => right.createdAt.getTime() - left.createdAt.getTime()
+        );
+      }
 
       return reply.send({
         success: true,
@@ -126,7 +163,30 @@ export async function registerRestaurantOrderRoutes(fastify: FastifyInstance): P
       });
     });
 
+    // Explicit renewal, never a side effect of opening the QR (GET).
+    restaurantOrders.post('/restaurant-panel/pedidos/:id/delivery-token/renew', async (request, reply) => {
+      const params = z.object({ id: z.string().min(1) }).parse(request.params);
+      const user = getAuthenticatedUser(request);
+      try {
+        const ticket = await prisma.$transaction(async tx => {
+          await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`own-delivery:${params.id}`}))`;
+          const order = await tx.order.findFirst({ where: { id: params.id, restaurant: { userId: user.sub } } });
+          if (!order || !order.deliveredByRestaurant || !['READY', 'IN_TRANSIT'].includes(order.status)) return null;
+          const token = await getOrCreateDeliveryToken(tx, order.id);
+          return { ...token, orderReference: order.orderReference };
+        });
+        if (!ticket) return reply.status(409).send({ success: false, error: { code: 'DELIVERY_NOT_PREPARED', message: 'No hay un reparto propio activo autorizado para renovar.' } });
+        return reply.header('Cache-Control', 'no-store').send({ success: true, data: {
+          token: ticket.tokenStr,
+          expiresAt: ticket.expiresAt,
+          orderReference: ticket.orderReference,
+          url: buildCustomerDeliveryUrl(ticket.tokenStr),
+        } });
+      } catch (error) { return sendAppError(reply, error); }
+    });
+
     restaurantOrders.get('/restaurant-panel/pedidos/:id/delivery-token', async (request, reply) => {
+      reply.header('Cache-Control', 'no-store');
       const params = z.object({ id: z.string().min(1) }).safeParse(request.params);
 
       if (!params.success) {
@@ -174,7 +234,7 @@ export async function registerRestaurantOrderRoutes(fastify: FastifyInstance): P
         }
         const { readDeliveryToken } = require('../services/delivery-token.service');
         const ticket = await readDeliveryToken(prisma, order.id);
-        if (!ticket) return reply.status(410).send({ success: false, error: { code: 'TOKEN_EXPIRED', message: 'Genera un nuevo enlace desde el pedido listo.' } });
+        if (!ticket) return reply.status(410).send({ success: false, error: { code: 'TOKEN_EXPIRED', message: 'El QR venció. Renueva el enlace desde este pedido; el enlace anterior dejará de funcionar.' } });
         const { tokenStr, expiresAt: tokenExpiresAt } = ticket;
 
         return reply.send({
@@ -1304,7 +1364,7 @@ export async function registerRestaurantOrderRoutes(fastify: FastifyInstance): P
 
     restaurantOrders.patch('/restaurant-panel/pedidos/:id/entregado', async (request, reply) => {
       const params = z.object({ id: z.string().min(1) }).safeParse(request.params);
-      const body = z.object({ pin: z.string().optional(), cashReceived: z.boolean().optional() }).safeParse(request.body ?? {});
+      const body = z.object({ pin: z.string().optional(), cashReceived: z.boolean().optional(), emergency: z.boolean().optional(), reason: z.string().trim().max(500).optional() }).safeParse(request.body ?? {});
 
       if (!params.success || !body.success) {
         return reply.status(400).send({

@@ -82,9 +82,9 @@ async function main(): Promise<void> {
   });
   const restaurant = await prisma.restaurant.upsert({
     where: { userId: restaurantUser.id },
-    update: {},
+    update: { name: 'WingsLab' },
     create: {
-      userId: restaurantUser.id, name: 'WingsLab Comedor de Prueba',
+      userId: restaurantUser.id, name: 'WingsLab',
       description: 'Restaurante ficticio para desarrollo local.', address: 'Calle Ficticia 100, WingsLab',
       latitude: 19.4326, longitude: -99.1332, region: region.code, status: 'ACTIVE',
       isAcceptingOrders: true, isPaused: false, autoOpenEnabled: true, serviceFee: 8,
@@ -143,24 +143,6 @@ async function main(): Promise<void> {
     },
   });
 
-  const driverUser = await prisma.user.upsert({
-    where: { email: 'repartidor@wingslab.local' },
-    update: {},
-    create: {
-      email: 'repartidor@wingslab.local', password: passwordHash, phone: '5500000020', phoneNormalized: '5500000020',
-      name: 'Repartidor', lastName: 'Ficticio', role: 'DRIVER', region: region.code, status: 'ACTIVE',
-    },
-  });
-  const driver = await prisma.driver.upsert({
-    where: { userId: driverUser.id },
-    update: {},
-    create: {
-      userId: driverUser.id, region: region.code, status: 'ACTIVE', availability: 'AVAILABLE', rating: 5,
-      totalDeliveries: 0, documentNumber: 'FICT-0001', documentType: 'CURP', platformFeePerOrder: 5,
-      currentLatitude: 19.4328, currentLongitude: -99.1335,
-    },
-  });
-
   const orders = [
     { id: 'wl_order_pendiente', status: 'PENDING' as const, productId: 'wl_prod_alitas_6', quantity: 1, dailyCounter: 1 },
     { id: 'wl_order_preparando', status: 'PREPARING' as const, productId: 'wl_prod_alitas_12', quantity: 2, dailyCounter: 2 },
@@ -175,8 +157,8 @@ async function main(): Promise<void> {
       update: {},
       create: {
         id: seed.id, orderReference: `WINGS-TEST-${String(seed.dailyCounter).padStart(3, '0')}`, dailyCounter: seed.dailyCounter,
-        restaurantId: restaurant.id, customerId: customer.id, driverId: seed.status === 'DELIVERED' ? driver.id : null,
-        isAcceptedByDriver: seed.status === 'DELIVERED', isSupportRequested: false, supportCount: 0,
+        restaurantId: restaurant.id, customerId: customer.id, driverId: null,
+        isAcceptedByDriver: false, isSupportRequested: false, supportCount: 0,
         supportRejectionCount: 0, supportAttempts: 0, noDriversAvailable: false, fulfillmentType: 'DELIVERY',
         addressId: address.id, latitude: 19.4330, longitude: -99.1340, subtotal, taxAmount: 0,
         serviceFee: 8, platformFee: 5, driverPlatformFee: 5, whatsappFee: 0, deliveryFee: 35,

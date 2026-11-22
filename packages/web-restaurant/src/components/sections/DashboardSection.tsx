@@ -2,7 +2,7 @@
 import { CalendarDays, Check, Clock, Clock3, Copy, Pause, Play, Power, PackageCheck, ReceiptText, Users } from 'lucide-react';
 
 import React, { useEffect, useMemo, useState } from 'react';
-import { requestJson } from '@sadel/shared';
+import { isActiveOrderStatus, requestJson } from '@sadel/shared';
 
 function useRestaurantReport(apiBase: string, token: string, query: string) {
   const [result, setResult] = useState<{ data: any; query: string; apiBase: string; token: string } | null>(null);
@@ -31,7 +31,6 @@ interface DashboardSectionProps {
   orders: any[];
   profile: any;
   products: any[];
-  drivers: any[];
   kitchenClockNow: number;
   sessionOpenedAt: number | null;
   selectedWeekOffset: number;
@@ -68,7 +67,7 @@ interface DashboardSectionProps {
 }
 
 export const DashboardSection = React.memo(function DashboardSection({
-  apiBase, token, orders, profile, products, drivers, kitchenClockNow,
+  apiBase, token, orders, profile, products, kitchenClockNow,
   selectedWeekOffset, dashboardChartView, revenueMode, isPrintingTicket,
   unreadMessagesMap, updatingOperationalStatus, isBusinessOpen, isBusinessPaused,
   isWithinHours, operationalStatusLabel, restaurantName,
@@ -108,7 +107,7 @@ export const DashboardSection = React.memo(function DashboardSection({
     if (selectedDay === yesterday.toISOString().slice(0, 10)) return 'Ayer';
     return new Intl.DateTimeFormat('es-MX', { timeZone: 'UTC', day: 'numeric', month: 'short' }).format(new Date(`${selectedDay}T12:00:00Z`));
   }, [selectedDay, mexicoToday]);
-  const activeOrders = useMemo(() => orders.filter(order => ['PENDING', 'CONFIRMED', 'PREPARING', 'READY', 'PICKED_UP', 'IN_TRANSIT'].includes(order.status)), [orders]);
+  const activeOrders = useMemo(() => orders.filter(order => isActiveOrderStatus(order.status)), [orders]);
   const stalePendingOrders = useMemo(() => activeOrders.filter(order => order.status === 'PENDING' && kitchenClockNow - new Date(order.createdAt).getTime() > 180000), [activeOrders, kitchenClockNow]);
   const overdueKitchenOrders = useMemo(() => activeOrders.filter(order => {
     if (!['CONFIRMED', 'PREPARING'].includes(order.status)) return false;

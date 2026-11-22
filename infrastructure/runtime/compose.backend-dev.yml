@@ -1,6 +1,7 @@
 # Optional backend-only development overlay. Uses host-compiled dist.
 services:
   backend:
+    restart: unless-stopped
     command: ["node", "scripts/wingslab-backend-dev.cjs"]
     tmpfs: !override
       - /tmp:rw,nosuid,nodev,size=256m,uid=1000,gid=1000

@@ -4,7 +4,9 @@ import { assertRestaurantId, businessPrincipalAllowed, RESTAURANT_ID } from '../
 import { AppError } from '../errors/app-error';
 
 export function marketplaceRouteBlocked(path: string): boolean {
-  return /^\/(admin(?:\/|$)|restaurant\/featured(?:\/|$))/.test(path) ||
+  return /^\/(admin(?:\/|$)|driver-panel(?:\/|$)|restaurant\/featured(?:\/|$))/.test(path) ||
+    path === '/auth/driver-login' || /^\/restaurant-panel\/repartidores(?:\/|$)/.test(path) ||
+    /^\/restaurant-panel\/pedidos\/[^/]+\/repartidor$/.test(path) ||
     ['/restaurantes', '/store-categories', '/public/solicitudes', '/public/featured', '/public/ofertas',
       '/public/billboards', '/public/promotions', '/public/zonas-activas', '/auth/admin-login'].includes(path) ||
     /^\/restaurant-panel\/(?:facturacion|soporte-red|pedidos-apoyo)(?:\/|$)/.test(path) ||
@@ -18,13 +20,12 @@ export function registerSingleRestaurantBoundary(app: FastifyInstance): void {
     if (path.startsWith('/restaurantes/')) assertRestaurantId((request.params as any)?.id);
     // Check before any handler uses a relation identifier. Missing ID is allowed:
     // the authoritative identity comes from server configuration.
-    const allowOwnDriverAssignment = path.startsWith('/restaurant-panel/pedidos/') && path.endsWith('/repartidor');
     const visit = async (value: any): Promise<void> => {
       if (!value || typeof value !== 'object') return;
       if (Array.isArray(value)) { for (const item of value) await visit(item); return; }
       if ('restaurantId' in value) assertRestaurantId(value.restaurantId);
       if (value.hasOwnDelivery === false || value.supportsNetworkDelivery === true || value.supportRestaurantId ||
-          (value.driverId && !allowOwnDriverAssignment)) {
+          value.driverId) {
         throw new AppError(403, 'OWN_DELIVERY_REQUIRED', 'Solo se admite reparto propio de WingsLab.');
       }
       for (const [key, val] of Object.entries(value)) {

@@ -2,6 +2,8 @@
 # host; Next's generated files live in a container tmpfs. The image is reused.
 services:
   customer:
+    # Un OOM en dev no debe dejar el servicio caído permanentemente.
+    restart: unless-stopped
     command: ["node", "scripts/wingslab-customer-dev.cjs"]
     tmpfs: !override
       - /tmp:rw,nosuid,nodev,size=256m,uid=1000,gid=1000

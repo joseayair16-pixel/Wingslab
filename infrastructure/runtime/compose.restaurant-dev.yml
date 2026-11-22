@@ -1,6 +1,7 @@
 # Optional restaurant-only development overlay.
 services:
   restaurant:
+    restart: unless-stopped
     command: ["node", "scripts/wingslab-restaurant-dev.cjs"]
     tmpfs: !override
       - /tmp:rw,nosuid,nodev,size=256m,uid=1000,gid=1000

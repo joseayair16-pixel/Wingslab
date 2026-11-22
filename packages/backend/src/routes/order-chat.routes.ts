@@ -1,4 +1,5 @@
 import { UserRole } from '@prisma/client';
+import { isActiveOrderStatus } from '@sadel/shared';
 import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 
@@ -12,7 +13,7 @@ const sendMessageSchema = z.object({
   content: z.string().min(1, 'El mensaje no puede estar vacío.').max(1000, 'El mensaje es demasiado largo.'),
 });
 export function isChatOrderActive(status: string): boolean {
-  return ['PENDING', 'CONFIRMED', 'PREPARING', 'READY', 'PICKED_UP', 'IN_TRANSIT'].includes(status);
+  return isActiveOrderStatus(status);
 }
 
 export async function registerOrderChatRoutes(fastify: FastifyInstance): Promise<void> {

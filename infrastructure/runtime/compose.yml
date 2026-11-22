@@ -118,7 +118,6 @@ services:
       - "127.0.0.1:3101:3101"
       - "127.0.0.1:3103:3103"
       - "127.0.0.1:3102:3102"
-      - "127.0.0.1:3104:3104"
       - "127.0.0.1:15432:15432" # PostgreSQL (host tooling only)
       - "127.0.0.1:16379:16379" # Redis (host tooling only)
     networks:
@@ -207,25 +206,6 @@ services:
       wingslab:
         ipv4_address: 172.30.240.23
 
-  driver:
-    <<: *application
-    image: ${WINGSLAB_DRIVER_IMAGE:-wingslab-driver:pending-phase-3c}
-    profiles: [approved-driver]
-    command: ["node", "scripts/wingslab-run.cjs", "driver", "start"]
-    tmpfs:
-      - /tmp:rw,nosuid,nodev,size=256m,uid=1000,gid=1000
-      - /app/packages/web-driver/.next/cache:rw,nosuid,nodev,size=128m,uid=1000,gid=1000
-    volumes:
-      - type: bind
-        source: ../../config/wingslab.frontend.local.json
-        target: /app/config/wingslab.local.json
-        read_only: true
-        bind: { create_host_path: false }
-    depends_on:
-      backend: { condition: service_started }
-    networks:
-      wingslab:
-        ipv4_address: 172.30.240.24
 
 secrets:
   postgres_owner: { file: ./secrets/postgres-owner.txt }

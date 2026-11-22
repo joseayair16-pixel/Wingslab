@@ -1,7 +1,9 @@
 'use client';
+import { computeDrivingRoute } from '../lib/routes';
 
 import { useEffect, useRef, useState } from 'react';
 import { ensureGoogleMapsScript, getGoogleMaps } from '../lib/googleMaps';
+import { buildDriverMapIcon } from '../lib/driver-map-icon';
 
 type Point = { lat: number; lng: number };
 
@@ -19,53 +21,12 @@ type Props = {
   dark?: boolean;
 };
 
-const LIGHT_STYLES: unknown[] = [
-  { elementType: 'geometry', stylers: [{ color: '#f7f3ea' }] },
-  { elementType: 'labels.text.fill', stylers: [{ color: '#8a8577' }] },
-  { elementType: 'labels.text.stroke', stylers: [{ color: '#f7f3ea' }] },
-  { featureType: 'administrative', elementType: 'geometry.stroke', stylers: [{ color: '#dcd6c8' }] },
-  { featureType: 'poi', stylers: [{ visibility: 'off' }] },
-  { featureType: 'road', elementType: 'geometry', stylers: [{ color: '#ffffff' }] },
-  { featureType: 'road.arterial', elementType: 'labels.text.fill', stylers: [{ color: '#a89f8a' }] },
-  { featureType: 'road.local', elementType: 'labels.text.fill', stylers: [{ color: '#a89f8a' }] },
-  { featureType: 'transit', stylers: [{ visibility: 'off' }] },
-  { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#d3e0f0' }] },
-  { featureType: 'water', elementType: 'labels.text.fill', stylers: [{ color: '#a3b4c9' }] },
-];
-
-const DARK_STYLES: unknown[] = [
-  { elementType: 'geometry', stylers: [{ color: '#17181c' }] },
-  { elementType: 'labels.text.fill', stylers: [{ color: '#6b7280' }] },
-  { elementType: 'labels.text.stroke', stylers: [{ color: '#17181c' }] },
-  { featureType: 'administrative', elementType: 'geometry.stroke', stylers: [{ color: '#27272a' }] },
-  { featureType: 'poi', stylers: [{ visibility: 'off' }] },
-  { featureType: 'road', elementType: 'geometry', stylers: [{ color: '#26272c' }] },
-  { featureType: 'road.highway', elementType: 'geometry', stylers: [{ color: '#2d2f36' }] },
-  { featureType: 'road.arterial', elementType: 'labels.text.fill', stylers: [{ color: '#71717a' }] },
-  { featureType: 'road.local', elementType: 'labels.text.fill', stylers: [{ color: '#71717a' }] },
-  { featureType: 'transit', stylers: [{ visibility: 'off' }] },
-  { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#1b2027' }] },
-  { featureType: 'water', elementType: 'labels.text.fill', stylers: [{ color: '#3f4a59' }] },
-];
-
 function buildPinIcon(google: any, emoji: string, bg: string) {
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="40" height="48" viewBox="0 0 40 48"><path d="M20 1C11.7 1 5 7.7 5 16c0 9 15 31 15 31s15-22 15-31C35 7.7 28.3 1 20 1Z" fill="${bg}" stroke="#ffffff" stroke-width="2"/><circle cx="20" cy="15.5" r="10.5" fill="#ffffff"/><text x="20" y="19.5" font-size="12" text-anchor="middle">${emoji}</text></svg>`;
   return {
     url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(svg),
     scaledSize: new google.maps.Size(40, 48),
     anchor: new google.maps.Point(20, 44),
-  };
-}
-
-function buildDriverIcon(google: any) {
-  return {
-    url:
-      'data:image/svg+xml;charset=UTF-8,' +
-      encodeURIComponent(
-        '<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32"><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" font-size="28" filter="drop-shadow(0px 2px 6px rgba(0,0,0,0.4))">🛵</text></svg>'
-      ),
-    scaledSize: new google.maps.Size(36, 36),
-    anchor: new google.maps.Point(18, 18),
   };
 }
 
@@ -84,6 +45,17 @@ function haversineMeters(a: Point, b: Point): number {
 // desvía demasiado del origen del trayecto. Cada giro/ETA se deriva de esa
 // misma respuesta, sin llamadas adicionales.
 const ROUTE_RECALC_DISTANCE_M = 800;
+const NAV_ZOOM = 18;
+const ROUTE_HEADING_MAX_DISTANCE_M = 25;
+const NAV_MAP_ID = '86f22b91c6f03bf9c5c59d9d';
+
+function bearingBetween(a: Point, b: Point): number {
+  const rad = Math.PI / 180;
+  const dLng = (b.lng - a.lng) * rad;
+  const y = Math.sin(dLng) * Math.cos(b.lat * rad);
+  const x = Math.cos(a.lat * rad) * Math.sin(b.lat * rad) - Math.sin(a.lat * rad) * Math.cos(b.lat * rad) * Math.cos(dLng);
+  return (Math.atan2(y, x) / rad + 360) % 360;
+}
 
 const MANEUVER_EMOJI: Record<string, string> = {
   'turn-slight-left': '↖️',
@@ -144,6 +116,9 @@ export default function DriverTurnByTurnOverlay({
   const destinationRef = useRef<TurnByTurnDestination>(destination);
   const watchIdRef = useRef<number | null>(null);
   const manualPanRef = useRef(false);
+  const headingRef = useRef<number | null>(null);
+  const headingPositionRef = useRef<Point | null>(null);
+  const lastFixTimeRef = useRef(0);
 
   const [mapReady, setMapReady] = useState(false);
   const [loadError, setLoadError] = useState(false);
@@ -151,6 +126,7 @@ export default function DriverTurnByTurnOverlay({
   const [routeError, setRouteError] = useState(false);
   const [routeVersion, setRouteVersion] = useState(0);
   const [driverPos, setDriverPos] = useState<Point | null>(initialDriverPos || null);
+  const driverPosRef = useRef<Point | null>(initialDriverPos || null);
   const [nav, setNav] = useState<{
     emoji: string;
     text: string;
@@ -163,11 +139,7 @@ export default function DriverTurnByTurnOverlay({
 
   destinationRef.current = destination;
 
-  useEffect(() => {
-    const map = mapRef.current;
-    if (map) {
-      map.setMap(null);
-    }
+  useEffect(() => () => {
     if (routeRef.current) {
       routeRef.current.setMap(null);
       routeRef.current = null;
@@ -210,10 +182,14 @@ export default function DriverTurnByTurnOverlay({
     setGpsError(false);
     navigator.geolocation.getCurrentPosition(
       (pos) => {
-        setDriverPos({
+        if (pos.timestamp < lastFixTimeRef.current) return;
+        lastFixTimeRef.current = pos.timestamp;
+        const point = {
           lat: parseFloat(pos.coords.latitude.toFixed(6)),
           lng: parseFloat(pos.coords.longitude.toFixed(6)),
-        });
+        };
+        driverPosRef.current = point;
+        setDriverPos(point);
       },
       () => setGpsError(true),
       { enableHighAccuracy: true, timeout: 15000, maximumAge: 5000 }
@@ -235,21 +211,28 @@ export default function DriverTurnByTurnOverlay({
 
     let bestDist = Infinity;
     let bestAlong = 0;
+    let bestSegment = 0;
     for (let i = 0; i < pts.length - 1; i++) {
       const a = pts[i];
       const b = pts[i + 1];
       const segLen = cum[i + 1] - cum[i];
       if (segLen === 0) continue;
-      const t = Math.max(0, Math.min(1, ((p.lat - a.lat) * (b.lat - a.lat) + (p.lng - a.lng) * (b.lng - a.lng)) / (segLen * segLen)));
+      const lngScale = Math.cos(p.lat * Math.PI / 180);
+      const dx = (b.lng - a.lng) * lngScale;
+      const dy = b.lat - a.lat;
+      const denominator = dx * dx + dy * dy;
+      if (!denominator) continue;
+      const t = Math.max(0, Math.min(1, (((p.lng - a.lng) * lngScale) * dx + (p.lat - a.lat) * dy) / denominator));
       const projLat = a.lat + t * (b.lat - a.lat);
       const projLng = a.lng + t * (b.lng - a.lng);
       const d = haversineMeters(p, { lat: projLat, lng: projLng });
       if (d < bestDist) {
         bestDist = d;
         bestAlong = cum[i] + segLen * t;
+        bestSegment = i;
       }
     }
-    return { distanceToPathM: bestDist, along: bestAlong, remainingM: Math.max(0, total - bestAlong) };
+    return { distanceToPathM: bestDist, along: bestAlong, remainingM: Math.max(0, total - bestAlong), segment: bestSegment };
   };
 
   // Inicializar el mapa.
@@ -264,9 +247,11 @@ export default function DriverTurnByTurnOverlay({
 
       const dest = destinationRef.current;
       const map = new google.maps.Map(mapEl, {
-        center: { lat: dest.lat, lng: dest.lng },
-        zoom: 15,
-        styles: dark ? DARK_STYLES : LIGHT_STYLES,
+        center: driverPosRef.current || { lat: dest.lat, lng: dest.lng },
+        zoom: NAV_ZOOM,
+        mapId: NAV_MAP_ID,
+        renderingType: google.maps.RenderingType.VECTOR,
+        colorScheme: dark ? 'DARK' : 'LIGHT',
         disableDefaultUI: true,
         mapTypeControl: false,
         streetViewControl: false,
@@ -279,10 +264,14 @@ export default function DriverTurnByTurnOverlay({
         clickableIcons: false,
       });
       mapRef.current = map;
+      if (driverPosRef.current) followPosition(map, driverPosRef.current);
 
       // Si el repartidor toca el mapa, detiene el auto-follow (como Uber).
       google.maps.event.addListener(map, 'dragstart', () => {
         manualPanRef.current = true;
+      });
+      google.maps.event.addListener(map, 'renderingtype_changed', () => {
+        if (!manualPanRef.current && driverPosRef.current) followPosition(map, driverPosRef.current);
       });
 
       destMarkerRef.current = new google.maps.Marker({
@@ -297,7 +286,7 @@ export default function DriverTurnByTurnOverlay({
         if (mapRef.current) google.maps.event.trigger(mapRef.current, 'resize');
       }, 250);
 
-      requestRoute();
+      requestRouteRef.current();
     };
 
     void ensureGoogleMapsScript().then((google) => {
@@ -317,7 +306,7 @@ export default function DriverTurnByTurnOverlay({
     const dest = destinationRef.current;
     if (!google?.maps || !map || !dest) return;
 
-    const originPoint = driverPos;
+    const originPoint = driverPosRef.current;
     if (!originPoint) return;
 
     // Cache: no recalcular si el destino no cambió y no nos desviamos >800m.
@@ -344,18 +333,12 @@ export default function DriverTurnByTurnOverlay({
 
     setRouteError(false);
     routeInFlightRef.current = true;
-    const directions = new google.maps.DirectionsService();
-    directions.route(
-      {
-        origin: { lat: originPoint.lat, lng: originPoint.lng },
-        destination: { lat: dest.lat, lng: dest.lng },
-        travelMode: google.maps.TravelMode.DRIVING,
-        optimizeWaypoints: false,
-      },
-      (result: any, status: string) => {
+    const handleRoute = (result: any, status: string) => {
         routeInFlightRef.current = false;
         const queued = routeQueuedRef.current;
         routeQueuedRef.current = false;
+        // Ignore a late response after closing or replacing this map.
+        if (mapRef.current !== map) return;
         if (status !== 'OK' || !result) {
           // Antes esto era silencioso: el overlay quedaba en loading infinito.
           setRouteError(true);
@@ -369,26 +352,22 @@ export default function DriverTurnByTurnOverlay({
           routeRef.current.setMap(null);
           routeRef.current = null;
         }
-        routeRef.current = new google.maps.DirectionsRenderer({
+        routeRef.current = new google.maps.Polyline({
           map,
-          directions: result,
-          suppressMarkers: true,
-          polylineOptions: {
+          path: result.path,
             strokeColor: dark ? '#38bdf8' : '#0ea5e9',
             strokeOpacity: 0.9,
             strokeWeight: 6,
-          },
-          preserveViewport: true,
         });
 
-        const leg = result.routes?.[0]?.legs?.[0];
+        const leg = result;
         if (leg?.distance?.value != null && leg?.duration?.value != null) {
           stepTotalDistRef.current = leg.distance.value;
           stepDurationMinRef.current = Math.round(leg.duration.value / 60);
         }
 
         // Curva proyectada del trayecto (mismo Directions, 0 coste extra).
-        const overview = result.routes?.[0]?.overview_path || [];
+        const overview = result.path || [];
         const pts: Point[] = overview.map((ll: any) => ({ lat: ll.lat(), lng: ll.lng() }));
         pathPointsRef.current = pts;
         pathCumLenRef.current = [0];
@@ -406,37 +385,35 @@ export default function DriverTurnByTurnOverlay({
         let stepsCum = 0;
         for (let i = 0; i < steps.length; i++) {
           if (i > 0) {
-            const prev = steps[i - 1]?.start_location;
-            const cur = steps[i]?.start_location;
-            if (prev && cur) stepsCum += haversineMeters({ lat: prev.lat(), lng: prev.lng() }, { lat: cur.lat(), lng: cur.lng() });
+            stepsCum += steps[i - 1]?.distance?.value || 0;
           }
           stepDist.push(stepsCum);
         }
-        stepDistAlongRef.current = stepDist;
+        const routeDistance = leg.distance?.value;
+        stepDistAlongRef.current = routeDistance > 0
+          ? stepDist.map(distance => distance * acc / routeDistance)
+          : stepDist;
 
         if (!driverMarkerRef.current) {
           driverMarkerRef.current = new google.maps.Marker({
             position: { lat: originPoint.lat, lng: originPoint.lng },
             map,
-            icon: buildDriverIcon(google),
+            icon: buildDriverMapIcon(google),
             zIndex: 3,
           });
         }
 
-        // Encajar el mapa a la ruta completa al abrir (una sola vez).
-        const bounds = new google.maps.LatLngBounds();
-        bounds.extend({ lat: originPoint.lat, lng: originPoint.lng });
-        bounds.extend({ lat: dest.lat, lng: dest.lng });
-        map.fitBounds(bounds, 70);
-        if (map.getZoom() > 16) map.setZoom(16);
-        manualPanRef.current = false;
+        // No interrumpir la exploración manual al llegar una ruta nueva.
+        if (!manualPanRef.current) followPosition(map, driverPosRef.current || originPoint);
 
         // Fuerza el recálculo de nav aunque el conductor no se haya movido:
         // si no, un repartidor estacionario quedaba en "Calculando…" infinito.
         setRouteVersion((v) => v + 1);
         if (queued) requestRouteRef.current();
-      }
-    );
+      };
+    void computeDrivingRoute(google, originPoint, dest, true)
+      .then(result => handleRoute(result, 'OK'))
+      .catch(() => handleRoute(null, 'ERROR'));
   };
   requestRouteRef.current = requestRoute;
 
@@ -459,9 +436,26 @@ export default function DriverTurnByTurnOverlay({
       (pos) => {
         // Ahorro: con la app oculta no actualizamos estado (ni mapa ni ruta).
         if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
+        if (pos.timestamp < lastFixTimeRef.current) return;
+        lastFixTimeRef.current = pos.timestamp;
         hasValidFix = true;
         const lat = parseFloat(pos.coords.latitude.toFixed(6));
         const lng = parseFloat(pos.coords.longitude.toFixed(6));
+        const point = { lat, lng };
+        driverPosRef.current = point;
+        const gpsHeading = pos.coords.heading;
+        if (gpsHeading != null && Number.isFinite(gpsHeading) && (pos.coords.speed == null || pos.coords.speed >= 1)) {
+          headingRef.current = gpsHeading;
+        } else if (headingPositionRef.current && haversineMeters(headingPositionRef.current, point) >= Math.max(15, pos.coords.accuracy || 0)) {
+          headingRef.current = bearingBetween(headingPositionRef.current, point);
+        }
+        if (!headingPositionRef.current || haversineMeters(headingPositionRef.current, point) >= Math.max(15, pos.coords.accuracy || 0)) {
+          headingPositionRef.current = point;
+        }
+        if (mapRef.current && !manualPanRef.current) {
+          driverMarkerRef.current?.setPosition(point);
+          followPosition(mapRef.current, point);
+        }
         setDriverPos((prev) => {
           if (prev && haversineMeters(prev, { lat, lng }) < 8) return prev;
           return { lat, lng };
@@ -481,7 +475,27 @@ export default function DriverTurnByTurnOverlay({
         watchIdRef.current = null;
       }
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const followPosition = (map: any, point: Point, resetZoom = false) => {
+    if (resetZoom) map.setZoom(NAV_ZOOM);
+    // Los mapas ráster no admiten la perspectiva de navegación vectorial.
+    if (map.getRenderingType?.() === 'VECTOR') {
+      const projection = projectOnPath(point);
+      let heading = headingRef.current;
+      if (projection && projection.distanceToPathM <= ROUTE_HEADING_MAX_DISTANCE_M) {
+        const path = pathPointsRef.current;
+        const streetHeading = bearingBetween(path[projection.segment], path[projection.segment + 1]);
+        const difference = heading == null ? 0 : Math.abs(((streetHeading - heading + 540) % 360) - 180);
+        // Alinea la calle sin girar hacia el sentido contrario al movimiento real.
+        if (difference <= 45) heading = streetHeading;
+      }
+      if (heading != null) map.setHeading(heading);
+    }
+    // setCenter no depende de una animación que el cambio de zoom pueda cancelar.
+    map.setCenter(point);
+  };
 
   // Auto-follow: mover marcador y centrar el mapa con el repartidor.
   useEffect(() => {
@@ -494,13 +508,13 @@ export default function DriverTurnByTurnOverlay({
       driverMarkerRef.current = new google.maps.Marker({
         position: { lat: driverPos.lat, lng: driverPos.lng },
         map: mapRef.current,
-        icon: buildDriverIcon(google),
+        icon: buildDriverMapIcon(google),
         zIndex: 3,
       });
     }
 
     if (mapRef.current && !manualPanRef.current) {
-      mapRef.current.panTo({ lat: driverPos.lat, lng: driverPos.lng });
+      followPosition(mapRef.current, driverPos);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [driverPos]);
@@ -513,8 +527,7 @@ export default function DriverTurnByTurnOverlay({
     const proj = projectOnPath(driverPos);
     if (!proj) return;
 
-    const arrived =
-      proj.remainingM < 60 || haversineMeters(driverPos, dest) < 60;
+    const arrived = haversineMeters(driverPos, dest) < 60;
 
     // Paso actual: último paso cuyo inicio ya pasamos a lo largo del trayecto.
     const steps = stepsRef.current;
@@ -527,14 +540,14 @@ export default function DriverTurnByTurnOverlay({
       }
     }
     // Instrucción: el giro a ejecutar es el paso actual (o el próximo si ya lo iniciamos).
-    const showIdx = Math.min(currentIdx + 1, steps.length - 1);
+    const showIdx = currentIdx + 1;
     const step = steps[showIdx];
 
-    let distToTurn = 0;
+    let distToTurn = proj.remainingM;
     if (step) {
       const turnAt = showIdx < steps.length ? steps[showIdx]?.start_location : null;
       if (turnAt) {
-        distToTurn = haversineMeters(driverPos, { lat: turnAt.lat(), lng: turnAt.lng() });
+        distToTurn = Math.max(0, (stepDistAlongRef.current[showIdx] ?? proj.along) - proj.along);
       } else {
         distToTurn = proj.remainingM;
       }
@@ -553,7 +566,7 @@ export default function DriverTurnByTurnOverlay({
         ? 'Llegaste a tu destino'
         : step
           ? stripHtml(step.instructions || 'Continúa por la calle')
-          : 'Dirígete al destino',
+          : 'Continúa hacia tu destino',
       distToTurnM: arrived ? 0 : Math.round(distToTurn),
       remainingM: Math.round(proj.remainingM),
       remainingMin,
@@ -644,18 +657,20 @@ export default function DriverTurnByTurnOverlay({
         </div>
       </div>
 
-      {/* Botón re-centrar cuando el repartidor movió el mapa */}
-      {manualPanRef.current && (
+      {/* Bottom card: indicación turn-by-turn */}
+      <div className="absolute inset-x-0 bottom-0 z-[5] p-4 pb-[max(1rem,env(safe-area-inset-bottom))] pointer-events-none">
+      {/* Permite volver a la ubicación incluso sin haber arrastrado el mapa. */}
+      {driverPos && mapReady && (
         <button
           type="button"
           onClick={() => {
             manualPanRef.current = false;
-            if (driverPos && mapRef.current) {
-              mapRef.current.panTo({ lat: driverPos.lat, lng: driverPos.lng });
-              mapRef.current.setZoom(16);
+            if (driverPosRef.current && mapRef.current) {
+              driverMarkerRef.current?.setPosition(driverPosRef.current);
+              followPosition(mapRef.current, driverPosRef.current, true);
             }
           }}
-          className={`absolute right-4 bottom-44 z-[5] flex items-center gap-1.5 rounded-xl border px-3 py-2 text-[11px] font-bold shadow-lg backdrop-blur transition active:scale-95 ${
+          className={`pointer-events-auto mb-3 ml-auto flex min-h-11 items-center gap-1.5 rounded-xl border px-3 py-2 text-[11px] font-bold shadow-lg backdrop-blur transition active:scale-95 ${
             dark ? 'border-white/10 bg-zinc-900/90 text-white' : 'border-black/[0.06] bg-white/95 text-neutral-800'
           }`}
         >
@@ -667,9 +682,7 @@ export default function DriverTurnByTurnOverlay({
         </button>
       )}
 
-      {/* Bottom card: indicación turn-by-turn */}
-      <div className="absolute inset-x-0 bottom-0 z-[5] p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
-        <div className={`rounded-[24px] border p-4 shadow-2xl ${dark ? 'border-white/10 bg-zinc-900/95' : 'border-black/[0.06] bg-white/95'}`}>
+        <div className={`pointer-events-auto rounded-[24px] border p-4 shadow-2xl ${dark ? 'border-white/10 bg-zinc-900/95' : 'border-black/[0.06] bg-white/95'}`}>
           {loadError ? (
             <div className="space-y-2">
               <p className={`text-sm font-bold ${dark ? 'text-white' : 'text-neutral-900'}`}>

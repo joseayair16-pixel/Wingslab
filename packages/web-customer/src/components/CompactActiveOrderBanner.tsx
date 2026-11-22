@@ -1,5 +1,4 @@
-import { MessageCircle } from 'lucide-react';
-import { Icon } from '@iconify/react';
+import { AlertTriangle, Bike, Check, ChevronRight, CookingPot, MapPin, MessageCircle, PackageCheck, Radio, ShoppingBag, Timer, X } from 'lucide-react';
 import { memo, useEffect, useState } from 'react';
 import { getBusinessArticleCapitalized, getBusinessRef, getOrderStatusLabel } from '@sadel/shared';
 import LiveTrackingMap from './LiveTrackingMap';
@@ -53,27 +52,6 @@ export function formatOverdueMinutes(minutes: number): string {
   const m = minutes % 60;
   return m > 0 ? `+${h} h ${m} min` : `+${h} h`;
 }
-
-const DELAY_PILL_STYLES: Record<number, { wrap: string; icon: string; text: string; iconPath: string }> = {
-  1: {
-    wrap: 'bg-amber-50 border-amber-200',
-    icon: 'text-amber-600',
-    text: 'text-amber-900',
-    iconPath: 'M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z',
-  },
-  2: {
-    wrap: 'bg-red-50 border-red-200',
-    icon: 'text-red-600',
-    text: 'text-red-900',
-    iconPath: 'M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z',
-  },
-  3: {
-    wrap: 'bg-red-50 border-red-300',
-    icon: 'text-red-600',
-    text: 'text-red-900',
-    iconPath: 'M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z',
-  },
-};
 
 export function getEtaWindowMinutes(status: string) {  if (status === 'PENDING') {
     return { early: 5, late: 5 };
@@ -311,35 +289,29 @@ export const CompactActiveOrderBanner = memo(function CompactActiveOrderBanner({
   const delayState = computeDelayState(currentOrder, currentTimestamp);
   const showTrackingWidget = ['PENDING', 'CONFIRMED', 'PREPARING', 'READY', 'PICKED_UP', 'IN_TRANSIT', 'DRIVER_ARRIVED'].includes(activeStatus);
 
-  // Calcular el progreso de la barra
-  const doneCount = compactSteps.filter((s) => s.state === 'done').length;
-  const activeCount = compactSteps.filter((s) => s.state === 'active').length;
-  const rawProgress = Math.max(0, Math.min(100, ((doneCount + activeCount - 1) / (compactSteps.length - 1)) * 100));
-  // Piso visual: en la primera etapa la barra nunca inicia en 0% (se ve rota);
-  // un pequeño avance comunica "en curso" sin mentir el progreso real.
-  const progressPercent = rawProgress === 0 && activeCount > 0 ? 14 : rawProgress;
+  const lastReachedStep = compactSteps.reduce((last, step, index) => step.state !== 'pending' ? index : last, 0);
+  const progressPercent = compactSteps.length > 1 ? (lastReachedStep / (compactSteps.length - 1)) * 100 : 0;
 
   // Paso activo actual
   const activeStep = compactSteps.find((s) => s.state === 'active') || compactSteps[compactSteps.length - 1];
 
   return (
-    <section className="rounded-[20px] border border-black/[0.04] bg-white px-4 py-3.5 shadow-[0_2px_12px_rgba(0,0,0,0.06)]">
+    <section className="rounded-[24px] border border-white bg-white dark:border-zinc-800 dark:bg-zinc-900 p-4 shadow-[0_8px_30px_rgba(30,30,40,0.10)] sm:p-6">
       {/* Fila principal: estado + tiempo + acciones */}
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-3 min-w-0 flex-1">
           {/* Indicador animado */}
           <div className="relative shrink-0">
-            <div className="w-10 h-10 rounded-2xl bg-neutral-950 flex items-center justify-center">
+            <div className="relative w-12 h-12 sm:w-14 sm:h-14 overflow-hidden rounded-2xl bg-gradient-to-br from-neutral-800 to-neutral-950 flex items-center justify-center shadow-lg shadow-neutral-900/15">
+              <span className="absolute inset-x-2 bottom-1 h-2 rounded-full bg-red-500/20 blur-sm" aria-hidden="true" />
               {(() => {
-                // Iconografía Fluent coherente con el resto de la app (Iconify).
-                const stageIcon =
-                  activeStatus === 'DELIVERED' ? 'fluent-emoji-flat:check-mark-button' :
-                  activeStatus === 'DRIVER_ARRIVED' ? 'fluent-emoji-flat:round-pushpin' :
-                  activeStatus === 'READY' ? 'fluent-emoji-flat:package' :
-                  activeStatus === 'PICKED_UP' || activeStatus === 'IN_TRANSIT' ? 'fluent-emoji-flat:motor-scooter' :
-                  currentOrder.restaurant?.businessType && currentOrder.restaurant.businessType !== 'RESTAURANT' ? 'fluent-emoji-flat:package' :
-                  'fluent-emoji-flat:cooking';
-                return <Icon icon={stageIcon} className="h-6 w-6" aria-hidden="true" />;
+                const StageIcon = activeStatus === 'DELIVERED' ? Check :
+                  activeStatus === 'DRIVER_ARRIVED' ? MapPin :
+                  activeStatus === 'READY' ? PackageCheck :
+                  activeStatus === 'PICKED_UP' || activeStatus === 'IN_TRANSIT' ? Bike :
+                  currentOrder.restaurant?.businessType && currentOrder.restaurant.businessType !== 'RESTAURANT' ? ShoppingBag :
+                  CookingPot;
+                return <StageIcon className="relative h-6 w-6 text-white motion-safe:animate-[pulse_3s_ease-in-out_infinite] sm:h-7 sm:w-7" strokeWidth={1.7} aria-hidden="true" />;
               })()}
             </div>
             {!['DELIVERED', 'CANCELLED', 'REJECTED'].includes(activeStatus) && (
@@ -361,7 +333,8 @@ export const CompactActiveOrderBanner = memo(function CompactActiveOrderBanner({
 
           {/* Info condensada */}
           <div className="min-w-0">
-            <p className="text-sm font-bold text-neutral-900 truncate">{activeStep?.label || 'Procesando'}</p>
+            <p className="text-base sm:text-xl font-bold text-neutral-950 dark:text-zinc-50 truncate">{activeStep?.label || 'Procesando'}</p>
+            {restaurantName && <p className="text-xs sm:text-sm text-neutral-500 dark:text-zinc-400 truncate">{restaurantName}</p>}
             {currentOrder.noDriversAvailable && !delayState.isDelayed && activeStatus === 'READY' ? (
               <div className="mt-1 inline-flex max-w-full items-center gap-1.5 rounded-full border border-amber-300 bg-amber-50 px-2.5 py-1">
                 <span className="relative flex h-2 w-2 shrink-0">
@@ -371,14 +344,7 @@ export const CompactActiveOrderBanner = memo(function CompactActiveOrderBanner({
                 <span className="text-[11px] font-bold text-amber-900 truncate">Buscando repartidor disponible…</span>
               </div>
             ) : delayState.isDelayed && delayState.referenceTime ? (
-              <div className={`mt-1 inline-flex max-w-full items-center gap-1.5 rounded-full border px-2.5 py-1 ${DELAY_PILL_STYLES[delayState.level].wrap}`}>
-                <svg className={`w-3 h-3 shrink-0 ${DELAY_PILL_STYLES[delayState.level].icon}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={DELAY_PILL_STYLES[delayState.level].iconPath} />
-                </svg>
-                <span className={`text-[11px] font-bold truncate ${DELAY_PILL_STYLES[delayState.level].text}`}>
-                  Va con retraso · {formatOverdueMinutes(delayState.minutesOverdue)}
-                </span>
-              </div>
+              null
             ) : order?.scheduledDeliveryAt && !order?.scheduledDeliveryCustomerAcceptedAt ? (
               <div className="mt-1 inline-flex max-w-full items-center gap-1.5 rounded-full bg-amber-50 border border-amber-200 px-2.5 py-1">
                 <svg className="w-3 h-3 text-amber-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -404,16 +370,16 @@ export const CompactActiveOrderBanner = memo(function CompactActiveOrderBanner({
                 </span>
               </div>
             ) : dynamicRemainingText ? (
-              <p className="text-xs text-neutral-500 mt-0.5 truncate">{dynamicRemainingText}</p>
+              <p className="text-xs text-neutral-500 dark:text-zinc-400 mt-0.5 truncate">{dynamicRemainingText}</p>
             ) : activeStatus === 'PENDING' ? (
-              <p className="text-xs text-neutral-500 mt-0.5 truncate">
+              <p className="text-xs text-neutral-500 dark:text-zinc-400 mt-0.5 truncate">
                 Esperando confirmación del {getBusinessRef(currentOrder.restaurant?.businessType)}…
               </p>
             ) : (
-              <p className="text-xs text-neutral-500 mt-0.5 truncate">{restaurantName}</p>
+              null
             )}
             {isPickup && currentOrder.dailyCounter && (
-              <span className="inline-flex items-center gap-1 mt-1.5 px-2.5 py-1 rounded-full bg-neutral-100 border border-neutral-200 text-[11px] font-bold text-neutral-600">
+              <span className="inline-flex items-center gap-1 mt-1.5 px-2.5 py-1 rounded-full bg-neutral-100 border border-neutral-200 text-[11px] font-bold text-neutral-600 dark:text-zinc-400">
                 Pedido #{currentOrder.dailyCounter}
               </span>
             )}
@@ -431,11 +397,8 @@ export const CompactActiveOrderBanner = memo(function CompactActiveOrderBanner({
             type="button"
             onClick={onOpenChat}
             title="Chat"
-            className={`relative flex items-center justify-center w-9 h-9 rounded-full text-white shadow-sm transition-all active:scale-95 ${
-              delayState.isDelayed
-                ? 'bg-red-500 hover:bg-red-600 animate-order-delay-attention'
-                : 'bg-sky-500 hover:bg-sky-600'
-            }`}
+            aria-label="Abrir chat"
+            className="relative flex items-center justify-center w-10 h-10 sm:w-12 sm:h-12 rounded-2xl bg-neutral-100 text-neutral-950 dark:bg-zinc-800 dark:text-zinc-100 shadow-sm transition-all hover:bg-neutral-200 dark:hover:bg-zinc-700 active:scale-95"
           >
             <MessageCircle className="w-4 h-4" />
             {unreadCount > 0 && (
@@ -448,25 +411,24 @@ export const CompactActiveOrderBanner = memo(function CompactActiveOrderBanner({
           <button
             type="button"
             onClick={onOpenHistory}
-            className="rounded-full bg-neutral-100 hover:bg-neutral-200 px-3.5 py-2 text-xs font-semibold text-neutral-800 transition-colors active:scale-[0.97]"
+            className="inline-flex items-center gap-1 rounded-full bg-red-50 hover:bg-red-100 dark:bg-red-950/40 dark:hover:bg-red-950/60 px-3 py-2.5 sm:px-5 text-xs sm:text-sm font-bold text-red-700 dark:text-red-300 transition-colors active:scale-[0.97]"
           >
-            Detalle
+            Detalle <ChevronRight className="h-4 w-4" />
           </button>
         </div>
       </div>
 
       {/* Estado de retraso: reaseguro (el chat se resalta en la esquina) */}
       {delayState.isDelayed && delayState.referenceTime && (
-        <div className="mt-3 rounded-2xl border border-amber-200 bg-amber-50/70 px-3.5 py-3">
-          <div className="flex items-start gap-2.5">
-            <svg className={`w-4 h-4 shrink-0 mt-0.5 ${DELAY_PILL_STYLES[delayState.level].icon}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={DELAY_PILL_STYLES[delayState.level].iconPath} />
-            </svg>
-            <div className="min-w-0">
-              <p className="text-xs font-bold text-neutral-900">
+        <div className="mt-5 rounded-[20px] border border-orange-100 dark:border-orange-900/40 bg-gradient-to-r from-orange-50 to-red-50 dark:from-orange-950/30 dark:to-red-950/30 px-4 py-4 sm:px-5">
+          <div className="flex items-center gap-3 sm:gap-4">
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-orange-100 text-red-600 dark:bg-orange-900/40 dark:text-red-400 sm:h-14 sm:w-14"><AlertTriangle className="h-6 w-6" /></div>
+            <div className="min-w-0 flex-1 border-l border-orange-200 dark:border-orange-900/40 pl-3 sm:pl-4">
+              <p className="text-sm sm:text-lg font-bold text-red-700 dark:text-red-300">Va con retraso · {formatOverdueMinutes(delayState.minutesOverdue)}</p>
+              <p className="mt-1 text-xs sm:text-sm text-neutral-700 dark:text-zinc-300">
                 Tu pedido va con retraso {delayState.level === 3 ? 'mayor al esperado' : ''}
               </p>
-              <p className="text-[11px] text-neutral-600 mt-0.5 leading-snug">
+              <p className="text-xs sm:text-sm text-neutral-600 dark:text-zinc-400 mt-0.5 leading-snug">
                 {delayState.level === 3
                   ? 'Lo sentimos mucho. Estamos trabajando para que llegue lo antes posible.'
                   : 'Estamos trabajando en tu pedido. Gracias por tu paciencia.'}
@@ -478,6 +440,7 @@ export const CompactActiveOrderBanner = memo(function CompactActiveOrderBanner({
                 </p>
               )}
             </div>
+            <Timer aria-hidden="true" className="hidden h-12 w-12 shrink-0 text-red-500 sm:block" />
           </div>
         </div>
       )}
@@ -514,70 +477,73 @@ export const CompactActiveOrderBanner = memo(function CompactActiveOrderBanner({
         </div>
       )}
 
-      {/* Barra de progreso minimal */}
-      <div className="mt-3 mb-1">
-        <div className="h-1 w-full bg-neutral-100 rounded-full overflow-hidden">
-          <div
-            className={`h-full rounded-full transition-all duration-700 ease-out ${
-              delayState.isDelayed ? (delayState.level === 1 ? 'bg-amber-500' : 'bg-red-500') : 'bg-neutral-900'
-            }`}
-            style={{ width: `${progressPercent}%` }}
-          />
-        </div>
-        <div className="flex justify-between mt-1.5">
+      {/* Etapas del pedido */}
+      <div className="mt-6 mb-2">
+        <div className="relative flex">
+          <div className="absolute top-3 h-1 rounded-full bg-neutral-200 dark:bg-zinc-700" style={{ left: `${50 / compactSteps.length}%`, right: `${50 / compactSteps.length}%` }}>
+            <div className="h-full rounded-full bg-red-500 transition-all duration-700" style={{ width: `${progressPercent}%` }} />
+          </div>
           {compactSteps.map((step) => {
             const isDone = step.state === 'done';
             const isActive = step.state === 'active';
             return (
-              <span
-                key={step.key}
-                className={`text-[9px] font-medium ${
-                  isActive ? 'text-neutral-900 font-bold' :
-                  isDone ? 'text-neutral-500' : 'text-neutral-300'
-                }`}
-              >
-                {step.label}
-              </span>
+              <div key={step.key} className="relative flex min-w-0 flex-1 flex-col items-center gap-2 text-center">
+                <span className={`flex h-7 w-7 items-center justify-center rounded-full border-2 ${isDone ? 'border-red-500 bg-red-500 text-white' : isActive ? 'border-red-500 bg-white dark:bg-zinc-900' : 'border-neutral-300 bg-white dark:border-zinc-600 dark:bg-zinc-900'}`}>
+                  {isDone ? <Check className="h-4 w-4" strokeWidth={3} /> : isActive ? <span className="h-4 w-4 rounded-full bg-red-500" /> : null}
+                </span>
+                <span className={`max-w-full rounded-full px-1.5 py-1 text-[10px] leading-tight sm:px-3 sm:text-xs ${isActive ? 'bg-red-50 font-bold text-red-800 dark:bg-red-950/50 dark:text-red-300' : 'font-medium text-neutral-500 dark:text-zinc-400'}`}>{step.label}</span>
+              </div>
             );
           })}
         </div>
       </div>
 
       {!isPickup && showTrackingWidget && (
-        <div className="border-t border-black/[0.05] mt-4 pt-3">
+        <div className="mt-5">
           {isTrackingEnabled ? (
-            <div className="space-y-2">
+            <div className="overflow-hidden rounded-[20px] border border-neutral-100 dark:border-zinc-800 bg-gradient-to-br from-red-50/70 via-neutral-50 to-white dark:from-red-950/25 dark:via-zinc-900 dark:to-zinc-900 p-3 shadow-[0_4px_20px_rgba(0,0,0,0.06)] sm:p-4">
+              <div className="flex items-center justify-between gap-3 pb-3 sm:pb-4">
+                <div className="flex min-w-0 items-center gap-3">
+                  <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-red-100 text-red-600 dark:bg-red-950/50 dark:text-red-400"><MapPin className="h-5 w-5" aria-hidden="true" /></span>
+                  <div className="min-w-0">
+                    <p className="flex items-center gap-1.5 text-sm sm:text-base font-bold text-neutral-950 dark:text-zinc-50">Seguimiento en Vivo <Radio className="h-4 w-4 shrink-0 text-red-600" /></p>
+                    <p className="mt-0.5 text-[11px] sm:text-xs leading-snug text-neutral-500 dark:text-zinc-400">Sigue la ubicación de tu repartidor en tiempo real</p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsTrackingEnabled?.(false);
+                    setDriverLocation?.(null);
+                  }}
+                  aria-label="Cerrar mapa y ahorrar datos"
+                  title="Cerrar mapa y ahorrar datos"
+                  className="inline-flex shrink-0 items-center gap-1 rounded-full bg-white dark:bg-zinc-800 px-3 py-2.5 text-xs font-bold text-red-700 dark:text-red-300 shadow-sm ring-1 ring-red-100 dark:ring-red-900/40 transition-colors hover:bg-red-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-500"
+                >
+                  <X className="h-4 w-4" /> <span className="hidden sm:inline">Cerrar</span>
+                </button>
+              </div>
               {order ? (
                 <LiveTrackingMap order={order} driverLocation={driverLocation || null} />
               ) : (
                 <div className="h-52 w-full rounded-2xl border border-black/[0.05] bg-neutral-50 z-0 animate-scale-up no-invert md:h-64" />
               )}
-              <button
-                type="button"
-                onClick={() => {
-                  setIsTrackingEnabled?.(false);
-                  setDriverLocation?.(null);
-                }}
-                className="w-full text-xs font-semibold py-2 px-3 rounded-lg border border-black/10 hover:bg-neutral-50 text-neutral-600 flex items-center justify-center gap-1.5 transition-all active:scale-[0.98]"
-              >
-                <span>📴 Desactivar mapa (Ahorrar datos)</span>
-              </button>
             </div>
           ) : (
             <button
               type="button"
               onClick={() => setIsTrackingEnabled?.(true)}
-              className="w-full py-2 px-3 rounded-xl border border-dashed border-neutral-300 hover:border-neutral-400 bg-neutral-50/50 flex items-center justify-between text-left hover:bg-neutral-50 transition-all active:scale-[0.98] group"
+              className="w-full rounded-[20px] border border-neutral-100 dark:border-zinc-800 bg-gradient-to-r from-red-50/70 to-neutral-50 dark:from-red-950/25 dark:to-zinc-900 p-3 sm:p-4 flex items-center gap-3 text-left shadow-[0_4px_16px_rgba(0,0,0,0.05)] hover:from-red-50 transition-all active:scale-[0.98] group"
             >
-              <div className="flex items-center gap-2.5">
-                <span className="text-base group-hover:scale-110 transition-transform">🛵</span>
-                <div>
-                  <p className="text-xs font-bold text-neutral-900">Seguimiento en Vivo</p>
-                  <p className="text-[10px] text-neutral-500">Sigue la ubicación de tu repartidor en tiempo real</p>
+              <div className="flex min-w-0 flex-1 items-center gap-3">
+                <img src="/seguimiento-moto.webp" alt="" aria-hidden="true" className="h-14 w-16 shrink-0 object-contain mix-blend-multiply dark:mix-blend-normal dark:rounded-xl transition-transform group-hover:scale-105 sm:h-20 sm:w-24" />
+                <div className="min-w-0 border-l border-red-100 dark:border-red-900/40 pl-3">
+                  <p className="flex items-center gap-1.5 text-sm sm:text-base font-bold text-neutral-950 dark:text-zinc-50">Seguimiento en Vivo <Radio className="h-4 w-4 shrink-0 text-red-600" /></p>
+                  <p className="mt-0.5 text-[11px] sm:text-xs leading-snug text-neutral-500 dark:text-zinc-400">Sigue la ubicación de tu repartidor en tiempo real</p>
                 </div>
               </div>
-              <span className="text-[10px] font-bold text-indigo-600 bg-indigo-50 py-1 px-2.5 rounded-full group-hover:bg-indigo-100 transition-colors">
-                Seguir
+              <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-gradient-to-b from-red-500 to-red-700 px-3 py-2.5 sm:px-5 text-xs sm:text-sm font-bold text-white shadow-md shadow-red-200 dark:shadow-none">
+                <MapPin className="h-4 w-4" /> Seguir
               </span>
             </button>
           )}

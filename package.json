@@ -15,7 +15,7 @@
     "format": "prettier --write \"**/*.{ts,tsx,json,md}\"",
     "type-check": "tsc --noEmit",
     "test": "npm run test:unit -w @sadel/backend",
-    "verify:web": "npm run lint --workspace @sadel/web-customer && npm run lint --workspace @sadel/web-restaurant && npm run lint --workspace @sadel/web-driver && npm run type-check --workspace @sadel/web-customer && npm run type-check --workspace @sadel/web-restaurant && npm run type-check --workspace @sadel/web-driver && npm run build --workspace @sadel/web-customer && npm run build --workspace @sadel/web-restaurant && npm run build --workspace @sadel/web-driver",
+    "verify:web": "npm run lint --workspace @sadel/web-customer && npm run lint --workspace @sadel/web-restaurant && npm run type-check --workspace @sadel/web-customer && npm run type-check --workspace @sadel/web-restaurant && npm run build --workspace @sadel/web-customer && npm run build --workspace @sadel/web-restaurant",
     "verify:flow": "npm run test:flow --workspace @sadel/backend",
     "verify:backend": "npm run test:http --workspace @sadel/backend && npm run test:failures --workspace @sadel/backend",
     "db:migrate": "cd packages/backend && npm run db:migrate",

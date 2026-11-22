@@ -1,6 +1,20 @@
 export const AUTOMATIC_ORDER_DECISIONS_ENABLED = false;
 export const SIMULATED_ORDERS_ENABLED = false;
 
+// Pedidos que siguen en curso y, por tanto, nunca deben ocultarse por fecha.
+export const ACTIVE_ORDER_STATUSES = Object.freeze([
+  'PENDING',
+  'CONFIRMED',
+  'PREPARING',
+  'READY',
+  'PICKED_UP',
+  'IN_TRANSIT',
+] as const);
+
+export function isActiveOrderStatus(status: string): boolean {
+  return (ACTIVE_ORDER_STATUSES as readonly string[]).includes(status);
+}
+
 type ActionRule = Readonly<{ from: ReadonlyArray<string>; to: string }>;
 
 export const RESTAURANT_ORDER_ACTIONS: Readonly<Record<string, ActionRule>> = Object.freeze({

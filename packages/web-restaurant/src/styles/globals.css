@@ -271,31 +271,44 @@ input, select, textarea {
 .wl-order-disclosure[open] .wl-order-expand svg { transform:none; }
 .wl-order-details { padding:18px 20px 20px; border-top:1px solid var(--wl-admin-border); }
 .wl-comanda-overlay { position:fixed; inset:0; z-index:50; display:flex; align-items:center; justify-content:center; padding:16px; background:rgba(20,17,15,.62); }
-.wl-comanda-modal { width:min(100%,560px); max-height:min(92dvh,1000px); overflow:auto; overscroll-behavior:contain; border-radius:24px; background:var(--wl-admin-surface); color:var(--wl-admin-text); box-shadow:0 28px 90px #0005; }
-.wl-comanda-heading { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; padding:24px 24px 15px; }
+.wl-comanda-modal { width:min(100%,560px); max-height:min(92dvh,1000px); overflow:auto; overscroll-behavior:contain; border:1px solid var(--wl-admin-border); border-radius:28px; background:var(--wl-admin-surface); color:var(--wl-admin-text); box-shadow:0 28px 90px #0005; }
+.wl-comanda-heading { position:sticky; top:0; z-index:10; display:flex; align-items:flex-start; justify-content:space-between; gap:12px; padding:22px 24px 18px; background:var(--wl-admin-surface); border-bottom:1px solid var(--wl-admin-border); }
+.wl-comanda-heading-info { display:flex; align-items:center; gap:14px; min-width:0; }
+.wl-comanda-heading-icon { display:grid; place-items:center; flex:none; width:52px; height:52px; border-radius:16px; background:linear-gradient(135deg,#292929,#101010); color:#fff; box-shadow:0 6px 16px #17171726; }
+.wl-comanda-heading-icon svg { width:24px; height:24px; }
+.wl-comanda-eyebrow { display:block; margin-bottom:5px; color:#bd2026; font-size:10px; font-weight:800; letter-spacing:.12em; text-transform:uppercase; }
 .wl-comanda-title { display:flex; align-items:center; flex-wrap:wrap; gap:12px; }
-.wl-comanda-title h2 { font-size:32px; line-height:1; font-weight:900; }
-.wl-comanda-heading p { margin-top:9px; color:var(--wl-admin-secondary); font-size:13px; }
-.wl-comanda-heading > button { display:grid; place-items:center; width:38px; height:38px; border-radius:12px; color:var(--wl-admin-text); }
+.wl-comanda-title h2 { font-size:24px; line-height:1; font-weight:900; }
+.wl-comanda-heading p { margin-top:7px; color:var(--wl-admin-secondary); font-size:12px; }
+.wl-comanda-heading > button { display:grid; place-items:center; flex:none; width:40px; height:40px; border-radius:14px; background:var(--wl-admin-muted); color:var(--wl-admin-text); }
 .wl-comanda-heading > button:hover { background:var(--wl-admin-muted); }
-.wl-comanda-content { padding:0 24px 24px; }
-.wl-comanda-customer,.wl-comanda-note { display:grid; gap:9px; padding:15px; border:1px solid var(--wl-admin-border); border-radius:16px; background:var(--wl-admin-muted); font-size:13px; }
+.wl-comanda-content { padding:20px 24px 24px; }
+.wl-comanda-customer,.wl-comanda-note { display:grid; gap:12px; padding:17px; border:1px solid var(--wl-admin-border); border-radius:20px; background:var(--wl-admin-muted); font-size:13px; }
 .wl-comanda-customer p { display:flex; align-items:flex-start; gap:10px; }
-.wl-comanda-customer svg { width:17px; height:17px; flex:none; color:var(--wl-admin-secondary); }
-.wl-comanda-progress { display:flex; justify-content:space-between; gap:4px; padding:20px 0; border-bottom:1px solid var(--wl-admin-border); }
-.wl-comanda-progress div { display:grid; justify-items:center; gap:6px; flex:1; color:var(--wl-admin-secondary); text-align:center; }
-.wl-comanda-progress div span { display:grid; place-items:center; width:32px; height:32px; border-radius:50%; background:var(--wl-admin-muted); font-weight:800; }
-.wl-comanda-progress div.is-current { color:#bb0a0e; font-weight:800; }
-.wl-comanda-progress div.is-current span { background:#bb0a0e; color:white; }
-.wl-comanda-progress small { font-size:11px; }
-.wl-comanda-products { padding:18px 0; }
+.wl-comanda-customer svg { width:18px; height:18px; flex:none; color:#c22025; }
+.wl-comanda-customer a { color:#b61d23; font-weight:700; text-decoration:underline; text-underline-offset:3px; }
+.wl-comanda-progress { display:flex; padding:24px 0 20px; border-bottom:1px solid var(--wl-admin-border); }
+.wl-comanda-progress div { position:relative; display:grid; justify-items:center; align-content:start; gap:8px; flex:1; min-width:0; color:var(--wl-admin-secondary); text-align:center; }
+.wl-comanda-progress div:not(:last-child)::after { content:''; position:absolute; top:14px; left:50%; width:100%; height:4px; background:var(--wl-admin-border); }
+.wl-comanda-progress div.is-done::after { background:#ef3340; }
+.wl-comanda-progress div span { position:relative; z-index:1; display:grid; place-items:center; width:32px; height:32px; border:2px solid var(--wl-admin-border); border-radius:50%; background:var(--wl-admin-surface); }
+.wl-comanda-progress div.is-done span { border-color:#ef3340; background:#ef3340; color:white; }
+.wl-comanda-progress div.is-done svg { width:17px; height:17px; stroke-width:3; }
+.wl-comanda-progress div.is-current span { border-color:#ef3340; }
+.wl-comanda-progress div.is-current i { width:16px; height:16px; border-radius:50%; background:#ef3340; }
+.wl-comanda-progress small { max-width:100%; padding:4px 6px; border-radius:999px; font-size:11px; line-height:1.2; }
+.wl-comanda-progress .is-current small { background:#fcebea; color:#a80c10; font-weight:800; }
+.wl-comanda-products { padding:20px 0; }
 .wl-comanda-products h3 { margin-bottom:12px; font-size:17px; font-weight:850; }
 .wl-comanda-product { display:grid; grid-template-columns:51px minmax(0,1fr) auto auto; align-items:center; gap:12px; padding:8px 0; font-size:13px; }
 .wl-comanda-product p { margin-top:3px; color:var(--wl-admin-secondary); font-size:12px; }
-.wl-comanda-total { display:flex; justify-content:space-between; gap:12px; padding:15px; border-radius:14px; background:#fcebea; color:#a80c10; font-size:17px; font-weight:800; }
+.wl-comanda-total { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:16px 18px; border:1px solid #f9d9d9; border-radius:18px; background:linear-gradient(110deg,#fff5ef,#fcebea); color:#a80c10; font-size:15px; font-weight:800; }
+.wl-comanda-total strong { font-size:21px; }
 .wl-comanda-note { margin-top:16px; }
 .wl-comanda-note p { color:var(--wl-admin-secondary); }
 .wl-comanda-modal .wl-order-details { margin-top:18px; padding:18px 0 0; }
+html.dark .wl-comanda-total,html.dark .wl-comanda-progress .is-current small { background:#482428; border-color:#643b3c; color:#ffaaa8; }
+@media(max-width:480px) { .wl-comanda-overlay { align-items:flex-end; padding:8px; } .wl-comanda-heading { padding:18px 16px; } .wl-comanda-content { padding:16px; } .wl-comanda-heading-icon { width:46px; height:46px; } .wl-comanda-product { grid-template-columns:42px minmax(0,1fr) auto auto; gap:8px; } }
 html.dark .wl-order-fulfillment { background:#482428; color:#ffaaa8; }
 html.dark .wl-order-fulfillment.is-pickup { background:#493823; color:#f1c478; }
 @media(max-width:1250px) { .wl-order-summary { grid-template-columns:minmax(85px,1fr) minmax(125px,1.4fr) auto 34px; gap:12px; } .wl-order-summary-products { grid-column:2; grid-row:2; } .wl-order-summary-total { grid-column:1; grid-row:2; } .wl-order-summary-status { grid-column:3; grid-row:1 / 3; } .wl-order-expand { grid-column:4; grid-row:1 / 3; } }
@@ -574,9 +587,9 @@ html.dark .wl-admin-nav .wl-admin-nav-item[aria-current='page'] { background:#48
 /* En tamaños de tablet, la cabecera no debe depender del tipo de puntero:
    una funda con trackpad o el emulador pueden cambiar esa característica. */
 @media(min-width:1024px) and (max-width:1366px) {
-  .wl-admin-header { display:block; position:sticky; top:0; z-index:50; }
+  .wl-admin-header { display:block; position:sticky; top:0; z-index:30; }
   .wl-admin-header > div { height:68px; box-sizing:border-box; }
-  .wl-admin-sidebar { top:68px; height:calc(100dvh - 68px); }
+  .wl-admin-sidebar { top:0; height:100dvh; z-index:40; }
   .wl-admin-layout { min-height:calc(100dvh - 68px); }
 }
 .wl-admin-sidebar-top { display:flex; align-items:center; gap:8px; }

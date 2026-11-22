@@ -2312,7 +2312,7 @@ export async function autoAssignDriver(
                   { id: orderId, ...newOrderData, batchId: null, status: '' },
                 ];
                 if (allOrders.length >= 2) {
-                  const { createOrJoinBatch } = await import('../services/batch.service');
+                  const { createOrJoinBatch } = await import('../services/batch.service.js');
                   const batchOrders = sameRestaurantOrders
                     .filter((o) => o.latitude != null && o.longitude != null)
                     .map((o) => ({

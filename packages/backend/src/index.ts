@@ -18,7 +18,7 @@ async function startServer() {
     await initializeDatabase(config);
     await initializeRedis(config);
     markServiceIdentityVerified();
-    const { buildApp } = await import('./app');
+    const { buildApp } = await import('./app.js');
     fastify = await buildApp();
 
     await fastify.listen({ port: 3101, host: config.profile === 'container' ? '0.0.0.0' : '127.0.0.1' });

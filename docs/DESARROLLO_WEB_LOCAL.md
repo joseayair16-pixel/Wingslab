@@ -7,13 +7,19 @@ proyectos no se modifican.
 ## Iniciar
 
 ```sh
-bash scripts/wingslab-dev.sh customer start     # http://127.0.0.1:3103
-bash scripts/wingslab-dev.sh restaurant start   # http://127.0.0.1:3102
-bash scripts/wingslab-dev.sh backend start      # API en 127.0.0.1:3101
+bash scripts/wingslab-dev.sh all start
+# Equivale a: backend (3101), restaurante (3102), comensal (3103).
+# El comando también levanta postgres, redis y edge si están detenidos.
 ```
 
-Cada app se inicia por separado y **cliente y restaurante pueden estar activos a la vez**
-(con el heap limitado a 640 MB). Para ver logs: `bash scripts/wingslab-dev.sh customer logs`.
+Cada app se inicia por separado y **cliente y restaurante pueden estar activos a la vez**.
+Ambos tienen el heap de Node limitado a 1024 MB para coexistir con backend, PostgreSQL,
+Redis y `edge` dentro de la VM Docker; los servicios de app se reinician automáticamente
+si el proceso muere. El comando `start` también levanta `postgres`, `redis` y `edge` si
+están detenidos: `edge` es el único que publica los puertos 3101-3103, así que sin él
+las apps responden «Ready» pero el navegador no puede conectarse.
+
+Para ver logs: `bash scripts/wingslab-dev.sh customer logs`.
 
 Si el equipo tiene poca memoria libre, detén el que no estés usando:
 `bash scripts/wingslab-dev.sh restaurant prod`.
@@ -39,6 +45,28 @@ bash scripts/wingslab-dev.sh backend prod
 ```
 
 Esto restaura la versión estable fijada en `infrastructure/runtime/runtime.env`.
+
+**No usar `prod` para desarrollar.** El modo `prod` existe solo para ejecutar una
+versión estable o hacer una demo; no tiene recarga automática y cada cambio exige
+reconstruir la imagen. Los mensajes `[Violation]` de Chrome y el aviso de React
+DevTools son ruido exclusivo de desarrollo: son inofensivos y no deben motivar un
+cambio de modo. `[HMR] connected` ya está filtrado en el código.
+
+## Reglas para agentes de código
+
+1. El flujo normal es **desarrollo**: `bash scripts/wingslab-dev.sh all start`,
+   editar `src/`, guardar y recargar. Para backend, `backend compile`.
+2. **No** pasar a `prod`, reconstruir imágenes ni tocar `runtime.env` para cambios
+   de código. Eso es despliegue, no desarrollo.
+3. **No** intentar «arreglar» los `[Violation]` de Chrome ni el aviso de React
+   DevTools cambiando de modo. Son avisos de desarrollo, no errores.
+4. **No** hacer commit, push ni limpieza de imágenes salvo que el usuario lo pida
+   explícitamente.
+5. No tocar archivos ajenos a la tarea; el repositorio puede tener cambios locales
+   del usuario sin commitear.
+6. `config/wingslab.local.json` está ignorado y con permisos `600`: nunca mostrar
+   su contenido ni reutilizar credenciales de otro proyecto.
+7. No crear pedidos reales ni enviar notificaciones de prueba sin autorización.
 
 ## Notas
 

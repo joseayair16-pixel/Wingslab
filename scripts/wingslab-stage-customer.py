@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Stage one reviewed frontend/shared and SRI-verified packages; never download.
 
-Usage: python3 scripts/wingslab-stage-customer.py NEW_CONTEXT SWC_DOWNLOAD_DIR [customer|restaurant|driver]
+Usage: python3 scripts/wingslab-stage-customer.py NEW_CONTEXT SWC_DOWNLOAD_DIR [customer|restaurant]
 """
 import ast
 import base64
@@ -19,8 +19,8 @@ LOCK = json.loads((ROOT / 'package-lock.json').read_text())['packages']
 DEST = Path(sys.argv[1]).resolve()
 DOWNLOADS = Path(sys.argv[2]).resolve()
 ROLE = sys.argv[3] if len(sys.argv) > 3 else 'customer'
-if ROLE not in ['customer', 'restaurant', 'driver']:
-    raise SystemExit('Only reviewed customer/restaurant/driver roles supported')
+if ROLE not in ['customer', 'restaurant']:
+    raise SystemExit('Only reviewed customer/restaurant roles supported')
 if DEST.exists():
     raise SystemExit('Destination must be new')
 
@@ -103,21 +103,6 @@ for filename in ['tsconfig.json', 'config/wingslab.cjs', 'scripts/wingslab-run.c
                  'packages/web-customer/next.config.js', 'packages/web-customer/next-env.d.ts',
                  'packages/web-customer/postcss.config.js', 'packages/web-customer/tailwind.config.ts']:
     copy_file(filename.replace('web-customer', f'web-{ROLE}'))
-
-# The driver panel ships its own service worker, icons and manifest; the
-# customer role does not carry them, so they are copied explicitly here.
-if ROLE == 'driver':
-    for relative in ['packages/web-driver/public']:
-        for directory, dirs, files in os.walk(ROOT / relative, followlinks=False):
-            dirs[:] = [d for d in dirs if not (Path(directory) / d).is_symlink() and
-                       d not in ['node_modules', '.next', '.git', 'data']]
-            for name in files:
-                source = Path(directory) / name
-                if (source.is_symlink() or name.startswith('.env') or
-                        re.search(r'\.(test|spec)\.|\.bak$|\.map$', name) or
-                        re.search(r'firebase-adminsdk|\.(pem|key|p12|jks|dump|apk)$', name, re.I)):
-                    continue
-                copy_file(str(source.relative_to(ROOT)))
 
 for relative in ['packages/shared/src', f'packages/web-{ROLE}/src', f'packages/web-{ROLE}/public']:
     for directory, dirs, files in os.walk(ROOT / relative, followlinks=False):

@@ -159,13 +159,13 @@ test('Maps is opt-in per frontend and never enables unrelated external providers
   };
   const customer = wingslabPolicy.processEnvironment(base, 'customer', 'build');
   const restaurant = wingslabPolicy.processEnvironment(base, 'restaurant', 'build');
-  const driver = wingslabPolicy.processEnvironment(base, 'driver', 'build');
+  expect(() => wingslabPolicy.processEnvironment(base, 'driver', 'build')).toThrow('Unknown process');
   const backend = wingslabPolicy.processEnvironment(base, 'backend', 'build');
   const disabled = wingslabPolicy.processEnvironment({
     ...base, googleMaps: { enabled: false, apiKey: 'browser-key' },
   }, 'customer', 'build');
 
-  for (const env of [customer, restaurant, driver]) {
+  for (const env of [customer, restaurant]) {
     expect(env.WINGSLAB_GOOGLE_MAPS_ENABLED).toBe('true');
     expect(env.WINGSLAB_GOOGLE_MAPS_API_KEY).toBe('browser-key');
   }

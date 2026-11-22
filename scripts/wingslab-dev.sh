@@ -6,8 +6,13 @@ BASE="infrastructure/runtime"
 APP="${1:-}"
 ACTION="${2:-}"
 if [[ -z "$APP" || -z "$ACTION" ]]; then
-  echo "Usage: $0 {customer|restaurant|backend} {start|logs|prod|compile}"
+  echo "Usage: $0 {all|customer|restaurant|backend} {start|logs|prod|compile}"
   exit 2
+fi
+if [[ "$APP" == "all" && "$ACTION" == "start" ]]; then
+  for app in backend customer restaurant; do "$0" "$app" start; done
+  echo "Desarrollo listo: 3101 / 3102 / 3103. Edita y recarga."
+  exit 0
 fi
 if [[ "$APP" == "backend" && "$ACTION" == "compile" ]]; then
   ./node_modules/.bin/tsc -p packages/shared/tsconfig.json
@@ -30,6 +35,18 @@ COMMON_ARGS=(
 )
 case "$ACTION" in
   start)
+    # Host ports (3101-3103) are published only by `edge`, and `--no-deps`
+    # below skips postgres/redis/edge. Start the shared services explicitly so
+    # the stack is reachable even after Docker or the whole stack was stopped.
+    docker "${COMMON_ARGS[@]}" up -d --pull never postgres redis edge
+    for _ in $(seq 1 30); do
+      not_ready=$(docker --context desktop-linux inspect \
+        --format '{{.State.Health.Status}}' \
+        wingslab-2b-postgres-1 wingslab-2b-redis-1 2>/dev/null \
+        | grep -cv '^healthy$' || true)
+      [[ "$not_ready" == "0" ]] && break
+      sleep 1
+    done
     # Both web dev servers can stay active with the capped heap below.
     docker "${COMMON_ARGS[@]}" up -d --no-deps --pull never --force-recreate "$APP"
     echo "$APP development started — edit source and reload."

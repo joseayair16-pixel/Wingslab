@@ -6,7 +6,7 @@ const { assertOrigin, browserOrigins } = require('../packages/shared/src/wingsla
 
 function assertNoLegacyEnvFiles() {
   const directories = [root, path.join(root, 'packages/backend'),
-    ...['restaurant', 'customer', 'driver'].map(role => path.join(root, `packages/web-${role}`))];
+    ...['restaurant', 'customer'].map(role => path.join(root, `packages/web-${role}`))];
   for (const dir of directories) {
     if (!fs.existsSync(dir)) continue;
     if (fs.lstatSync(dir).isSymbolicLink()) throw new Error('[WingsLab] Linked configuration directory prohibited.');
@@ -53,7 +53,7 @@ function frontendConfig(role) {
     async headers() {
       return [{ source: '/:path*', headers: [{
         key: 'Content-Security-Policy',
-        value: `default-src 'self'; connect-src 'self' ${api} ${socket.replace('http:', 'ws:')} https://res.cloudinary.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://www.googleapis.com https://www.google.com https://www.recaptcha.net https://maps.googleapis.com https://maps.gstatic.com https://*.googleapis.com; img-src 'self' data: blob: ${api} https://res.cloudinary.com https://www.gstatic.com https://www.google.com https://maps.googleapis.com https://maps.gstatic.com https://*.googleapis.com https://*.gstatic.com; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.gstatic.com https://www.google.com https://www.recaptcha.net https://maps.googleapis.com https://maps.gstatic.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; media-src 'self' blob:; worker-src 'self' blob:; frame-src https://www.google.com https://www.recaptcha.net https://maps.google.com; object-src 'none'; base-uri 'self'; form-action 'self'`,
+        value: `default-src 'self'; connect-src 'self' ${api} ${socket.replace('http:', 'ws:')} https://res.cloudinary.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://www.googleapis.com https://www.google.com https://www.recaptcha.net https://maps.googleapis.com https://maps.gstatic.com https://*.googleapis.com${role === 'customer' ? ' https://www.gstatic.com data:' : ''}; img-src 'self' data: blob: ${api} https://res.cloudinary.com https://www.gstatic.com https://www.google.com https://maps.googleapis.com https://maps.gstatic.com https://*.googleapis.com https://*.gstatic.com; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.gstatic.com https://www.google.com https://www.recaptcha.net https://maps.googleapis.com https://maps.gstatic.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; media-src 'self' blob:; worker-src 'self' blob:; frame-src https://www.google.com https://www.recaptcha.net https://maps.google.com; object-src 'none'; base-uri 'self'; form-action 'self'`,
       }] }];
     },
   };
@@ -87,7 +87,7 @@ function processEnvironment(config, role, action) {
     (config.authorization?.runtime !== true || config.authorization?.networkVerified !== true)) {
     throw new Error('[WingsLab] This operation has not been authorized.');
   }
-  if (!['backend', 'restaurant', 'customer', 'driver'].includes(role)) throw new Error('[WingsLab] Unknown process.');
+  if (!['backend', 'restaurant', 'customer'].includes(role)) throw new Error('[WingsLab] Unknown process.');
   if (config.role && config.role !== role) throw new Error('[WingsLab] Configuration is authorized for a different role.');
   // Closed allowlist. Never spread process.env or arbitrary config properties.
   const env = {
@@ -179,7 +179,7 @@ function processEnvironment(config, role, action) {
       env.WINGSLAB_FIREBASE_TEST_PHONE_NUMBER = testPhoneNumber;
     }
   }
-  if (role === 'customer' || role === 'restaurant' || role === 'driver') {
+  if (role === 'customer' || role === 'restaurant') {
     const maps = config.googleMaps || {};
     const apiKey = typeof maps.apiKey === 'string' ? maps.apiKey.trim() : '';
     if (maps.enabled === true && !apiKey) {

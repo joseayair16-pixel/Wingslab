@@ -126,6 +126,9 @@ export function hasUserInteracted(): boolean {
  */
 export async function warmup(): Promise<boolean> {
   if (!isBrowser()) return false;
+  // Never ask the browser to unlock audio from timers, HMR or synthetic events.
+  // Touch activation may only become available on click (not touchstart).
+  if (navigator.userActivation && !navigator.userActivation.isActive && audioContext?.state !== 'running') return false;
   const Ctx = getAudioContextClass();
   if (!Ctx) return false;
   const ctx = getOrCreateContext();
@@ -337,13 +340,16 @@ export function getAudioState(): 'ready' | 'needs-gesture' | 'unsupported' {
 /** Registra un listener global que llama warmup() en el primer gesto real. */
 export function installWarmupListeners(): () => void {
   if (!isBrowser()) return () => undefined;
-  const onGesture = () => {
+  const onGesture = (event: Event) => {
+    if (!event.isTrusted) return;
     warmup().catch(() => undefined);
   };
+  window.addEventListener('click', onGesture, { passive: true });
   window.addEventListener('pointerdown', onGesture, { passive: true, once: true });
   window.addEventListener('keydown', onGesture, { passive: true, once: true });
   window.addEventListener('touchstart', onGesture, { passive: true, once: true });
   return () => {
+    window.removeEventListener('click', onGesture);
     window.removeEventListener('pointerdown', onGesture);
     window.removeEventListener('keydown', onGesture);
     window.removeEventListener('touchstart', onGesture);
@@ -354,7 +360,7 @@ export function installWarmupListeners(): () => void {
 export function installVisibilityResumeListener(): () => void {
   if (!isBrowser()) return () => undefined;
   const onVisibility = () => {
-    if (document.visibilityState === 'visible' && hasInteracted && audioContext) {
+    if (document.visibilityState === 'visible' && hasInteracted && audioContext && navigator.userActivation?.isActive) {
       if (audioContext.state === 'suspended') {
         audioContext.resume().catch(() => undefined);
       }

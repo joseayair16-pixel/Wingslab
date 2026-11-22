@@ -73,7 +73,6 @@ async function checkPanel(name, url, origin, prepare) {
         `localStorage.setItem('sadel.restaurant.apiBase','http://127.0.0.1:3101');`,
     });
   });
-  await checkPanel('driver', 'http://127.0.0.1:3104/', 'http://127.0.0.1:3104');
 })().catch(error => {
   console.error(error);
   process.exitCode = 1;

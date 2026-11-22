@@ -22,7 +22,7 @@ TAG = sys.argv[3]
 PORT = int(sys.argv[4])
 PROFILE = sys.argv[5]
 
-assert ROLE in ['restaurant', 'customer', 'driver'], 'Only WingsLab frontends may be deployed'
+assert ROLE in ['restaurant', 'customer'], 'Only WingsLab frontends may be deployed'
 CTX = WORK / (ROLE + '-context-' + TAG.split('-')[-1])
 SOURCE = WORK / (ROLE + '-source-' + TAG.split('-')[-1])
 OUT = WORK / (ROLE + '-out-' + TAG.split('-')[-1])

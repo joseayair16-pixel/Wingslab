@@ -916,8 +916,7 @@ export async function registerPublicDeliveryRoutes(fastify: FastifyInstance): Pr
     const params = z.object({ token: z.string().min(1) }).safeParse(request.params);
     const bodySchema = z.object({
       coords: z
-        .array(z.number())
-        .length(2, 'Las coordenadas deben contener exactamente [latitud, longitud]'),
+        .tuple([z.number().finite().min(-90).max(90), z.number().finite().min(-180).max(180)]),
     });
     const body = bodySchema.safeParse(request.body);
 

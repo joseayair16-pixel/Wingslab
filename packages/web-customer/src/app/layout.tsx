@@ -83,6 +83,8 @@ export default function RootLayout({
 }}catch(e){}})();`,
           }}
         />
+        {/* Next emite este log de HMR desde su cliente de desarrollo; no es un error de la app. */}
+        <script dangerouslySetInnerHTML={{ __html: `(function(){var log=console.log;console.log=function(){if(arguments.length===1&&arguments[0]==='[HMR] connected')return;return log.apply(this,arguments)}})();` }} />
         <meta name="color-scheme" content="light dark" />
         <meta name="theme-color" content="#f20d12" />
         <style>{`html.wl-booting,html.wl-booting body{background-color:#f20d12!important}`}</style>

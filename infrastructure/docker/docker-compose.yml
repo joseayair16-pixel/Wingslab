@@ -110,27 +110,6 @@ services:
     networks:
       - sadel-network
 
-  web-driver:
-    profiles: [legacy-blocked]
-    entrypoint: ["node", "-e", "throw new Error('WingsLab: legacy service blocked')"]
-    build:
-      context: ../..
-      dockerfile: infrastructure/docker/Dockerfile.web
-      args:
-        APP: web-driver
-        PORT: 3004
-    container_name: wingslab-quarantined-web-driver
-    environment:
-      NODE_ENV: ${NODE_ENV:-development}
-      NEXT_PUBLIC_API_URL: http://localhost:3001
-    ports:
-      - "3004:3004"
-    depends_on:
-      - backend
-    restart: unless-stopped
-    networks:
-      - sadel-network
-
 volumes:
   postgres_data:
   redis_data:

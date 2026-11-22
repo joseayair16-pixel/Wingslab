@@ -1,11 +1,10 @@
-const CACHE_NAME = 'wingslab-restaurant-v5';
+const CACHE_NAME = 'wingslab-restaurant-v6';
 const PRECACHE_URLS = [
   '/',
   '/sounds/notifica.wav',
   '/sounds/mensaje.wav',
   '/sounds/llegue.wav',
   '/sounds/rezagado.wav',
-  '/WingsLab.png',
   '/app-icon-192.png',
   '/app-icon-512.png',
   '/badge.png',

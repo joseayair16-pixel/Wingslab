@@ -18,7 +18,9 @@ if (!fs.existsSync('/.dockerenv') || !fs.existsSync(path.join(root, 'wingslab-bu
 env.NODE_ENV = 'development';
 env.CHOKIDAR_USEPOLLING = 'true';
 env.WATCHPACK_POLLING = 'true';
-env.NODE_OPTIONS = '--max-old-space-size=2048';
+// El heap del comensal debe coexistir con restaurante, backend, postgres y redis
+// dentro de la VM Docker. 2048 MB provocó OOM al compilar el panel en dev.
+env.NODE_OPTIONS = '--max-old-space-size=1024';
 const child = spawn(process.execPath, [path.join(root, 'node_modules/next/dist/bin/next'),
   'dev', '--webpack', '-H', '0.0.0.0', '-p', new URL(env.NEXT_PUBLIC_SITE_URL).port], {
   cwd: path.join(root, 'packages/web-customer'), env, stdio: 'inherit', shell: false,

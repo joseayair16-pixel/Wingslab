@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useCallback, useEffect } from 'react';
 import {
   preload,
   preloadAll,
@@ -34,37 +34,31 @@ export function useCustomerSounds() {
   }, []);
 
   /** Alerta general (rechazos y cancelaciones). Usa el pop de mensaje. */
-  const playAlert = (): void => {
+  const playAlert = useCallback((): void => {
     if (!isSoundEnabled()) return;
-    void warmup().finally(() => {
-      play('mensaje');
-      vibrate([200, 100, 200]);
-    });
-  };
+    play('mensaje');
+    vibrate([200, 100, 200]);
+  }, []);
 
   /** Sonido de llegada del repartidor / pedido listo. */
-  const playLlegue = (): void => {
+  const playLlegue = useCallback((): void => {
     if (!isSoundEnabled()) return;
-    void warmup().finally(() => {
-      play('llegue');
-      vibrate([800, 400, 800, 400, 800]);
-    });
-  };
+    play('llegue');
+    vibrate([800, 400, 800, 400, 800]);
+  }, []);
 
   /** Pop de mensaje del chat. */
-  const playChat = (): void => {
+  const playChat = useCallback((): void => {
     if (!isSoundEnabled()) return;
-    void warmup().finally(() => {
-      play('mensaje');
-    });
-  };
+    play('mensaje');
+  }, []);
 
   /** Reproductor mínimo para desbloquear el audio al activar el toggle. */
-  const unlock = (): void => {
+  const unlock = useCallback((): void => {
     void warmup().finally(() => {
       play('mensaje');
     });
-  };
+  }, []);
 
   return { playAlert, playLlegue, playChat, unlock };
 }

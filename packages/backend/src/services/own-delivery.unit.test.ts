@@ -1,4 +1,4 @@
-import { prepareOwnDelivery, ownDeliveryAction, resolveOwnTicket } from './own-delivery.service';
+import { completeUnassignedOwnDeliveryByRestaurant, prepareOwnDelivery, ownDeliveryAction, resolveOwnTicket } from './own-delivery.service';
 import { getOrCreateDeliveryToken, readDeliveryToken } from './delivery-token.service';
 import { hashToken } from '../utils/crypto';
 
@@ -27,6 +27,7 @@ function fixture(status = 'READY', orderId = ID) {
       findUnique: jest.fn(async ({ where }) => row && (where.orderId === row.orderId || where.token === row.token) ? { ...structuredClone(row), order: structuredClone(order) } : null),
       create: jest.fn(async ({ data }) => { row = data; return data; }),
       delete: jest.fn(async () => { row = null; }),
+      deleteMany: jest.fn(async () => { row = null; }),
     },
   };
   db.$transaction = async (fn: any) => {
@@ -42,6 +43,15 @@ test('QR assignment refuses wrong owner and unready orders', async () => {
   await expect(prepareOwnDelivery(f.db, 'other-owner', ID)).rejects.toMatchObject({ code: 'ORDER_NOT_FOUND' });
   expect(f.db.order.update).not.toHaveBeenCalled();
 });
+test('emergency completion requires a reason and explicit cash confirmation, without driver arrival', async () => {
+  const f = fixture('IN_TRANSIT');
+  await expect(completeUnassignedOwnDeliveryByRestaurant(f.db, 'owner', ID, { emergency: true, reason: 'corto' })).rejects.toMatchObject({ code: 'EMERGENCY_REASON_REQUIRED' });
+  await expect(completeUnassignedOwnDeliveryByRestaurant(f.db, 'owner', ID, { emergency: true, reason: 'Teléfono sin batería' })).rejects.toMatchObject({ code: 'CASH_CONFIRMATION_REQUIRED' });
+  const order = await completeUnassignedOwnDeliveryByRestaurant(f.db, 'owner', ID, { emergency: true, reason: 'Teléfono sin batería', cashReceived: true });
+  expect(order.status).toBe('DELIVERED');
+  expect(f.history[0].notes).toContain('Teléfono sin batería');
+  expect(f.db.deliveryToken.deleteMany).toHaveBeenCalled();
+});
 test('a real restaurant-owned ready order can use the QR flow without a test-ID allowlist', async () => {
   const f = fixture('READY', 'wl_order_ready');
   f.setToken(null);
@@ -49,6 +59,21 @@ test('a real restaurant-owned ready order can use the QR flow without a test-ID 
   const result = await prepareOwnDelivery(f.db, 'owner', 'wl_order_ready');
   expect(result.order.status).toBe('READY');
   expect(result.order.deliveredByRestaurant).toBe(true);
+});
+test('own-delivery projections are passed to Prisma as select, never as include', async () => {
+  const f = fixture();
+  f.setToken(null);
+  await prepareOwnDelivery(f.db, 'owner', ID);
+
+  for (const call of f.db.order.findFirst.mock.calls) {
+    expect(call[0]).toHaveProperty('select');
+    expect(call[0]).not.toHaveProperty('include');
+    expect(call[0].select.restaurant.select.hasOwnDelivery).toBe(true);
+  }
+  for (const call of f.db.order.findUniqueOrThrow.mock.calls) {
+    expect(call[0]).toHaveProperty('select');
+    expect(call[0]).not.toHaveProperty('include');
+  }
 });
 test('tokens reuse a valid QR, rotate after expiry and GET never creates', async () => {
   const f = fixture(); f.setToken(null);

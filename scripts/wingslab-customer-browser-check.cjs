@@ -75,14 +75,14 @@ async function evidence(name) {
   // Fixture-only browser storage: no production profile, account or actual GPS.
   await evaluate(`localStorage.removeItem('locationSource');sessionStorage.setItem('userLocation',JSON.stringify({latitude:19.4326,longitude:-99.1332,ts:Date.now(),address:'Ciudad de Pruebas'}));sessionStorage.setItem('locationSource','manual');`);
   await send('Page.reload'); await sleep(4500); const home = await evidence('home-fixture-location');
-  assert(home.text.includes('WingsLab Comedor de Prueba'), 'Fixture catalog not loaded');
+  assert(home.text.includes('WingsLab'), 'Fixture catalog not loaded');
   // Exercise the existing card's Next router navigation, not a synthetic success.
-  const point = await evaluate(`(()=>{const e=[...document.querySelectorAll('h2,h3,h4')].find(e=>e.textContent.trim()==='WingsLab Comedor de Prueba');if(!e)return null;e.scrollIntoView({block:'center'});const r=e.getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2}})()`);
+  const point = await evaluate(`(()=>{const e=[...document.querySelectorAll('h2,h3,h4')].find(e=>e.textContent.trim()==='WingsLab');if(!e)return null;e.scrollIntoView({block:'center'});const r=e.getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2}})()`);
   assert(point, 'Restaurant card not found');
   await send('Input.dispatchMouseEvent', { type: 'mousePressed', button: 'left', clickCount: 1, ...point });
   await send('Input.dispatchMouseEvent', { type: 'mouseReleased', button: 'left', clickCount: 1, ...point });
   await sleep(4500); const detail = await evidence('restaurant');
-  assert(detail.text.includes('WingsLab Comedor de Prueba'), 'Restaurant name not visible');
+  assert(detail.text.includes('WingsLab'), 'Restaurant name not visible');
   assert(detail.text.includes('Alitas ficticias x6'), 'Fixture product not visible');
   console.log('PRODUCT_PREVIEW_CONTROL', await evaluate(`(()=>{const e=document.getElementById('wl_prod_alitas_6')?.querySelector('.cursor-pointer');if(e)e.click();return !!e})()`));
   await sleep(700); await evidence('product-detail');

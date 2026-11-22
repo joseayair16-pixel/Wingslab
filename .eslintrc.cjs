@@ -28,7 +28,6 @@ module.exports = {
       './packages/shared/tsconfig.json',
       './packages/web-restaurant/tsconfig.json',
       './packages/web-customer/tsconfig.json',
-      './packages/web-driver/tsconfig.json',
     ],
     tsconfigRootDir: __dirname,
     ecmaFeatures: {
@@ -46,7 +45,6 @@ module.exports = {
       files: [
         'packages/web-restaurant/**/*.{ts,tsx}',
         'packages/web-customer/**/*.{ts,tsx}',
-        'packages/web-driver/**/*.{ts,tsx}',
       ],
       extends: ['next/core-web-vitals'],
       rules: {

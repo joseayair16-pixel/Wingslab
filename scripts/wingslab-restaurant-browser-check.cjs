@@ -112,7 +112,7 @@ async function clickText(text) {
   assert(await evaluate(`(()=>{const b=[...document.querySelectorAll('button')].find(b=>b.innerText.trim().startsWith('Ordenes'));if(b)b.click();return !!b})()`));
   failOrders=true;assert(await clickText('Actualizar'));await sleep(4000);await evidence('orders-network-error');
   failOrders=false;assert(await clickText('Actualizar'));await sleep(2500);const recovered=await evidence('recovered');
-  assert(recovered.text.includes('WingsLab Comedor de Prueba'));
+  assert(recovered.text.includes('WingsLab'));
   await sleep(11000);
   console.log('SOCKET', JSON.stringify(socket));
   assert(socket.opened&&socket.authenticated&&socket.joined&&socket.pingPong,'Authenticated Socket.IO/heartbeat not verified');

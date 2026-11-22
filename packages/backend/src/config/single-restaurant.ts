@@ -67,12 +67,5 @@ export async function businessPrincipalAllowed(db: any, auth: { sub: string; rol
     const row = await db.restaurant.findUnique({ where: { id: RESTAURANT_ID }, select: { userId: true } });
     return row?.userId === auth.sub;
   }
-  if (auth.role === 'DRIVER') {
-    const driver = await db.driver.findFirst({
-      where: { userId: auth.sub, restaurantId: RESTAURANT_ID },
-      select: { status: true, user: { select: { status: true } } },
-    });
-    return driver?.status === 'ACTIVE' && driver.user.status === 'ACTIVE';
-  }
   return false;
 }

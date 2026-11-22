@@ -1,4 +1,5 @@
 'use client';
+import { computeDrivingRoute } from '../lib/routes';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
@@ -7,6 +8,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { ensureGoogleMapsScript, getGoogleMaps } from '../lib/googleMaps';
+import { buildDriverMapIcon } from '../lib/driver-map-icon';
 
 export type MapPoint = {
   lat: number;
@@ -104,27 +106,12 @@ export default function DeliveryRouteMap({ origin, destination, userPos, height 
     bounds.extend({ lat: destination.lat, lng: destination.lng });
 
     let directionsRenderer: any = null;
+    let cancelled = false;
     if (origin) {
-      const directionsService = new google.maps.DirectionsService();
-      directionsRenderer = new google.maps.DirectionsRenderer({
-        map,
-        suppressMarkers: true,
-        polylineOptions: { strokeColor: '#0ea5e9', strokeWeight: 5, strokeOpacity: 0.9 },
-      });
-      directionsService.route(
-        {
-          origin: { lat: origin.lat, lng: origin.lng },
-          destination: { lat: destination.lat, lng: destination.lng },
-          travelMode: google.maps.TravelMode.DRIVING,
-        },
-        (result: any, status: string) => {
-          if (status === google.maps.DirectionsStatus.OK && result && directionsRenderer) {
-            directionsRenderer.setDirections(result);
-          } else {
-            map.fitBounds(bounds);
-          }
-        }
-      );
+      void computeDrivingRoute(google, origin, destination).then(result => {
+        if (cancelled) return;
+        directionsRenderer = new google.maps.Polyline({ map, path: result.path, strokeColor: '#0ea5e9', strokeWeight: 5, strokeOpacity: 0.9 });
+      }).catch(() => { if (!cancelled) map.fitBounds(bounds); });
     }
 
     let userMarker: any = null;
@@ -132,7 +119,7 @@ export default function DeliveryRouteMap({ origin, destination, userPos, height 
       userMarker = new google.maps.Marker({
         position: { lat: userPos.lat, lng: userPos.lng },
         map,
-        icon: buildPinIcon(google, '🛵', '#0ea5e9'),
+        icon: buildDriverMapIcon(google),
         title: 'Tu posición',
       });
       userMarkerRef.current = userMarker;
@@ -147,6 +134,7 @@ export default function DeliveryRouteMap({ origin, destination, userPos, height 
     }
 
     return () => {
+      cancelled = true;
       if (userMarkerRef.current) {
         userMarkerRef.current.setMap(null);
         userMarkerRef.current = null;
@@ -174,7 +162,7 @@ export default function DeliveryRouteMap({ origin, destination, userPos, height 
       userMarkerRef.current = new google.maps.Marker({
         position: { lat: userPos.lat, lng: userPos.lng },
         map: mapInstanceRef.current,
-        icon: buildPinIcon(google, '🛵', '#0ea5e9'),
+        icon: buildDriverMapIcon(google),
         title: 'Tu posición',
       });
     } else {

@@ -46,19 +46,44 @@ import {
 import { useForegroundPolling } from '../hooks/useForegroundPolling';
 import { printHtmlString, NativePrintError } from '../utils/printHelper';
 import { generateTicketHtml } from '../utils/ticketGenerator';
+import dynamic from 'next/dynamic';
 import { SaDelLoader } from '../components/SaDelLoader';
 import { DashboardSection } from '../components/sections/DashboardSection';
-import { CampaignsSection } from '../components/sections/CampaignsSection';
-import { MenuContentSection } from '../components/sections/MenuContentSection';
-import { CustomersSection } from '../components/sections/CustomersSection';
-import { LoyaltySection } from '../components/sections/LoyaltySection';
-import { InPersonSalesSection } from '../components/sections/InPersonSalesSection';
-import { SupportSection } from '../components/sections/SupportSection';
-import { RestaurantDriversSection } from '../components/RestaurantDriversSection';
-import { SettingsSection } from '../components/sections/SettingsSection';
+
+// Las secciones pesadas se cargan al abrirlas. El dashboard inicial no se toca.
+const CampaignsSection = dynamic(
+  () => import('../components/sections/CampaignsSection').then((module) => module.CampaignsSection),
+  { ssr: false }
+);
+const MenuContentSection = dynamic(
+  () => import('../components/sections/MenuContentSection').then((module) => module.MenuContentSection),
+  { ssr: false }
+);
+const CustomersSection = dynamic(
+  () => import('../components/sections/CustomersSection').then((module) => module.CustomersSection),
+  { ssr: false }
+);
+const LoyaltySection = dynamic(
+  () => import('../components/sections/LoyaltySection').then((module) => module.LoyaltySection),
+  { ssr: false }
+);
+const InPersonSalesSection = dynamic(
+  () => import('../components/sections/InPersonSalesSection').then((module) => module.InPersonSalesSection),
+  { ssr: false }
+);
+const SupportSection = dynamic(
+  () => import('../components/sections/SupportSection').then((module) => module.SupportSection),
+  { ssr: false }
+);
+const SettingsSection = dynamic(
+  () => import('../components/sections/SettingsSection').then((module) => module.SettingsSection),
+  { ssr: false }
+);
 import PushEnableBanner from '../components/PushEnableBanner';
 import { createPlacesSource } from '../lib/places';
 import { ensureGoogleMapsScript } from '../lib/googleMaps';
+import { isActiveOrderStatus, isOrderInPeriod, mexicoDayKey } from '../lib/order-visibility';
+import { customerPhoneHref, formatCustomerAddress, formatCustomerName, formatCustomerPhone } from '../lib/order-contact';
 import {
   isNativePlatform,
   checkNativePushPermission,
@@ -66,7 +91,6 @@ import {
   registerNativePush,
   onNativePushReceived,
   onNativeNotificationTap,
-  nativeGeoWatch,
   nativeKeepAwake,
   nativeAllowSleep,
   nativeHaptic,
@@ -229,11 +253,16 @@ type OrderItem = {
   deliverySequence?: number | null;
   deliveredByRestaurant?: boolean;
   address?: {
-    street: string;
-    number: string;
-    neighborhood: string;
+    street?: string | null;
+    number?: string | null;
+    apartment?: string | null;
+    neighborhood?: string | null;
+    city?: string | null;
+    state?: string | null;
+    zipCode?: string | null;
+    country?: string | null;
     reference?: string | null;
-  };
+  } | null;
   items?: Array<{
     id: string;
     quantity: number;
@@ -357,23 +386,6 @@ type CategoryItem = {
 };
 
 
-type DriverItem = {
-  id: string;
-  status: 'ACTIVE' | 'INACTIVE' | 'SUSPENDED';
-  availability: 'AVAILABLE' | 'BUSY' | 'OFFLINE';
-  totalDeliveries: number;
-  deliveryCompensation: number;
-  balance: { pending: number; pendingDeliveries: number; paid: number; payouts: number };
-  user: {
-    id: string;
-    name: string;
-    phone: string;
-    lastName?: string | null;
-    profilePhoto?: string | null;
-  };
-};
-
-
 type SuccessResponse<T> = {
   success: true;
   data: T;
@@ -392,15 +404,9 @@ type RestaurantRetryAction =
     orderId: string;
     actionKey: keyof typeof restaurantActionMap;
     label: string;
-  }
-  | {
-    kind: 'assign-driver';
-    orderId: string;
-    driverId: string;
-    label: string;
   };
 
-type RestaurantPortalSection = 'dashboard' | 'orders' | 'store' | 'settings' | 'campaigns' | 'customers' | 'loyalty' | 'inperson' | 'menu-content' | 'support' | 'drivers';
+type RestaurantPortalSection = 'dashboard' | 'orders' | 'store' | 'settings' | 'campaigns' | 'customers' | 'loyalty' | 'inperson' | 'menu-content' | 'support';
 type PreparationPresetMinutes = 10 | 15 | 20 | 30 | 45 | 60;
 type StoreProfileDraft = {
   name: string;
@@ -975,17 +981,6 @@ function getRestaurantCollectionAmount(
   return order.totalAmount - (order.deliveryFee || 0);
 }
 
-// Clave de día en horario de Ciudad de México, para filtrar pedidos por fecha
-// sin depender de la zona horaria del dispositivo.
-function mexicoDayKey(value: string | Date): string {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return '';
-  return new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'America/Mexico_City',
-    year: 'numeric', month: '2-digit', day: '2-digit',
-  }).format(date);
-}
-
 export default function Home() {
   const [apiBase, setApiBase] = useState(defaultApiBase);
   const [token, setToken] = useState('');
@@ -1067,7 +1062,6 @@ export default function Home() {
   const [editingCategory, setEditingCategory] = useState<CategoryItem | null>(null);
   const [categoryNameDraft, setCategoryNameDraft] = useState('');
   const [savingCategoryName, setSavingCategoryName] = useState(false);
-  const [drivers, setDrivers] = useState<DriverItem[]>([]);
   const [driverArrivedOrders, setDriverArrivedOrders] = useState<Record<string, boolean>>({});
   const [driverContactOpen, setDriverContactOpen] = useState<Record<string, boolean>>({});
 
@@ -1077,7 +1071,6 @@ export default function Home() {
   const [ordersSearch, setOrdersSearch] = useState('');
   const [ordersFulfillment, setOrdersFulfillment] = useState<'ALL' | 'DELIVERY' | 'PICKUP'>('ALL');
   const [ordersPeriod, setOrdersPeriod] = useState<'today' | 'week' | 'month'>('today');
-  const [selectedDriverByOrder, setSelectedDriverByOrder] = useState<Record<string, string>>({});
   const [activeActionKey, setActiveActionKey] = useState<string | null>(null);
   const [showLogoutWarningModal, setShowLogoutWarningModal] = useState(false);
   const [activeSection, setActiveSection] = useState<RestaurantPortalSection>('dashboard');
@@ -1179,6 +1172,8 @@ export default function Home() {
   const [zoomedImageUrl, setZoomedImageUrl] = useState<string | null>(null);
   const [paymentDetailOrder, setPaymentDetailOrder] = useState<typeof selectedOrderForTicket | null>(null);
   const [emergencyDeliveryOrderId, setEmergencyDeliveryOrderId] = useState<string | null>(null);
+  const [emergencyReason, setEmergencyReason] = useState('');
+  const [emergencyConfirmed, setEmergencyConfirmed] = useState(false);
   const [unassignConfirmOrderId, setUnassignConfirmOrderId] = useState<string | null>(null);
   const [activeQrCodeData, setActiveQrCodeData] = useState<{ token: string; orderReference: string; id: string; url?: string } | null>(null);
   const [incomingOrderQueue, setIncomingOrderQueue] = useState<string[]>([]);
@@ -1388,241 +1383,7 @@ export default function Home() {
   // cuando el navegador rota/expira la suscripción (PUSH_SUBSCRIPTION_CHANGED).
   const subscribeToPushRef = useRef<((token: string) => Promise<unknown>) | null>(null);
 
-  // ============================================================
-  // Tracking GPS del reparto propio / apoyo (reparto a cargo del
-  // restaurante). Se activa solo cuando el restaurante va en camino
-  // a entregar un pedido (deliveredByRestaurant o ApoyoId en IN_TRANSIT).
-  // ============================================================
-  const gpsRescheduleRef = useRef<(() => void) | null>(null);
-
-  const hasActiveOwnDeliveries = useMemo(
-    () =>
-      orders.some(
-        (o) =>
-          o.fulfillmentType !== 'PICKUP' &&
-          ['PICKED_UP', 'IN_TRANSIT'].includes(o.status) &&
-          (o.deliveredByRestaurant === true ||
-            (typeof o.notes === 'string' && o.notes.includes('[ApoyoId:')))
-      ),
-    [orders]
-  );
-
-  useEffect(() => {
-    gpsRescheduleRef.current?.();
-  }, [hasActiveOwnDeliveries]);
-
-  useEffect(() => {
-    if (!token || !sessionUser || sessionUser.role !== 'RESTAURANT') {
-      return;
-    }
-
-    if (typeof window === 'undefined') {
-      return;
-    }
-
-    const GEO_PAUSE_KEY = 'sadel.restaurant.geoPausedUntil';
-
-    let watchId: number | null = null;
-    let nativeWatch: { clear: () => void } | null = null;
-    let cancelled = false;
-    let consecutiveFailures = 0;
-    let lastErrorLogAt = 0;
-    let lastPosition: { lat: number; lng: number } | null = null;
-    let lastPostAt = 0;
-    let locationPostPending = false;
-
-    const readPausedUntil = () => {
-      const raw = window.sessionStorage.getItem(GEO_PAUSE_KEY);
-      const parsed = raw ? Number(raw) : 0;
-      return Number.isFinite(parsed) ? parsed : 0;
-    };
-
-    const writePausedUntil = (until: number) => {
-      if (until > Date.now()) {
-        window.sessionStorage.setItem(GEO_PAUSE_KEY, String(until));
-      } else {
-        window.sessionStorage.removeItem(GEO_PAUSE_KEY);
-      }
-    };
-
-    // El restaurante solo comparte ubicación mientras tiene un reparto
-    // propio/apoyo EN TRÁNSITO (el panel no corre de fondo como el repartidor).
-    const getTrackingMode = () => {
-      const currentOrders = ordersRef.current;
-      const hasActive = currentOrders.some(
-        (o) =>
-          o.fulfillmentType !== 'PICKUP' &&
-          ['PICKED_UP', 'IN_TRANSIT'].includes(o.status) &&
-          (o.deliveredByRestaurant === true ||
-            (typeof o.notes === 'string' && o.notes.includes('[ApoyoId:')))
-      );
-      return { hasActive, shouldTrack: hasActive };
-    };
-
-    const shouldSend = (lat: number, lng: number) => {
-      if (!lastPosition) return true;
-      if (Date.now() - lastPostAt >= 60000) return true;
-      const deltaLat = Math.abs(lat - lastPosition.lat);
-      const deltaLng = Math.abs(lng - lastPosition.lng);
-      return !(deltaLat < 0.00006 && deltaLng < 0.00006);
-    };
-
-    const postLocation = async (lat: number, lng: number) => {
-      const now = Date.now();
-      // Limitar tráfico sin perder la siguiente posición que deba enviarse.
-      if (locationPostPending || now - lastPostAt < 10000) return;
-      lastPostAt = now;
-      locationPostPending = true;
-
-      try {
-        await requestJson({
-          apiBase,
-          path: '/restaurant-panel/ubicacion',
-          token,
-          options: {
-            method: 'POST',
-            body: JSON.stringify({ coords: [lat, lng] }),
-          },
-          fallbackMessage: 'No se pudo actualizar la ubicación.',
-        });
-        lastPosition = { lat, lng };
-      } catch {
-        // Error de red/backend: no es un fallo de GPS.
-      } finally {
-        locationPostPending = false;
-      }
-    };
-
-    const stopWatching = () => {
-      if (watchId !== null) {
-        navigator.geolocation.clearWatch(watchId);
-        watchId = null;
-      }
-      if (nativeWatch) {
-        nativeWatch.clear();
-        nativeWatch = null;
-      }
-    };
-
-    const maybeLogGeoError = (error: GeolocationPositionError) => {
-      if (error.code === 2 || error.code === 3) {
-        const now = Date.now();
-        if (now - lastErrorLogAt > 5 * 60 * 1000) {
-          lastErrorLogAt = now;
-          if (process.env.NODE_ENV !== 'production') {
-            console.debug('Geolocation unavailable (transient). Will retry later.');
-          }
-        }
-        return;
-      }
-      if (process.env.NODE_ENV !== 'production') {
-        console.warn('Geolocation permission denied.');
-      }
-    };
-
-    const onPositionSuccess = (position: GeolocationPosition) => {
-      if (cancelled) return;
-
-      consecutiveFailures = 0;
-      writePausedUntil(0);
-
-      const lat = parseFloat(position.coords.latitude.toFixed(6));
-      const lng = parseFloat(position.coords.longitude.toFixed(6));
-
-      if (document.visibilityState === 'hidden') return;
-      if (!shouldSend(lat, lng)) return;
-
-      void postLocation(lat, lng);
-    };
-
-    const onPositionError = (error: GeolocationPositionError) => {
-      if (cancelled) return;
-
-      consecutiveFailures += 1;
-      maybeLogGeoError(error);
-
-      if (error.code === 1) {
-        stopWatching();
-        return;
-      }
-
-      if (consecutiveFailures >= 3) {
-        const pauseMs = consecutiveFailures >= 5 ? 15 * 60 * 1000 : 5 * 60 * 1000;
-        writePausedUntil(Date.now() + pauseMs);
-      }
-    };
-
-    const startWatching = async () => {
-      stopWatching();
-      if (cancelled || document.visibilityState === 'hidden') return;
-
-      const { shouldTrack } = getTrackingMode();
-      if (!shouldTrack) return;
-
-      const pausedUntil = readPausedUntil();
-      if (Date.now() < pausedUntil) return;
-
-      if (isNativePlatform()) {
-        // En la app nativa se usa el GPS del plugin (con permiso runtime);
-        // si no hay plugin disponible, se cae al watch del navegador.
-        nativeWatch = await nativeGeoWatch(onPositionSuccess, onPositionError, {
-          enableHighAccuracy: true,
-          timeout: 20000,
-          maximumAge: 10000,
-        });
-        if (!nativeWatch) {
-          watchId = navigator.geolocation.watchPosition(
-            onPositionSuccess,
-            onPositionError,
-            {
-              enableHighAccuracy: true,
-              timeout: 20000,
-              maximumAge: 10000,
-            }
-          );
-        }
-        return;
-      }
-
-      // Alta precisión: rastreo activo solo al entregar.
-      watchId = navigator.geolocation.watchPosition(
-        onPositionSuccess,
-        onPositionError,
-        {
-          enableHighAccuracy: true,
-          timeout: 20000,
-          maximumAge: 10000,
-        }
-      );
-    };
-
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible') {
-        startWatching();
-      } else {
-        stopWatching();
-      }
-    };
-
-    const handleOnline = () => {
-      consecutiveFailures = 0;
-      writePausedUntil(0);
-      startWatching();
-    };
-
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    window.addEventListener('online', handleOnline);
-    gpsRescheduleRef.current = startWatching;
-    startWatching();
-
-    return () => {
-      cancelled = true;
-      gpsRescheduleRef.current = null;
-      stopWatching();
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-      window.removeEventListener('online', handleOnline);
-    };
-  }, [token, sessionUser, apiBase]);
+  // La ubicación en vivo solo se comparte desde la vista de reparto.
   const navigateToOrder = useCallback((orderId: string) => {
     if (!token || !sessionUser || sessionUser.role !== 'RESTAURANT') {
       return;
@@ -1703,8 +1464,6 @@ export default function Home() {
     };
 
     const onTouchStart = (e: TouchEvent) => {
-      // Desbloquear audio de notificaciones en el primer toque (iOS).
-      void warmup();
       if (reloading) return;
       if (!atTop()) return;
       const target = e.target as HTMLElement | null;
@@ -1826,7 +1585,7 @@ export default function Home() {
 
 
       const savedSection = window.localStorage.getItem('restaurantActiveSection');
-      if (savedSection && ['dashboard', 'orders', 'store', 'settings', 'campaigns', 'customers', 'loyalty', 'inperson', 'menu-content', 'support', 'drivers'].includes(savedSection)) {
+      if (savedSection && ['dashboard', 'orders', 'store', 'settings', 'campaigns', 'customers', 'loyalty', 'inperson', 'menu-content', 'support'].includes(savedSection)) {
         setActiveSection(savedSection as RestaurantPortalSection);
       }
 
@@ -2473,7 +2232,6 @@ export default function Home() {
     setOrderSyncError('');
     setProducts([]);
     setCategories([]);
-    setDrivers([]);
     setSocketStatus('idle');
     setSocketAttempts(0);
     setToasts([]);
@@ -2855,7 +2613,7 @@ export default function Home() {
     let dashboardOrdersFailed = false;
 
     try {
-      const [profileData, ordersData, productsData, categoriesData, driversData, storeCategoriesData] = await Promise.all([
+      const [profileData, ordersData, productsData, categoriesData, storeCategoriesData] = await Promise.all([
         apiRequest<SuccessResponse<RestaurantProfile>>({
           apiBase,
           path: '/restaurant-panel/perfil',
@@ -2901,13 +2659,6 @@ export default function Home() {
             backoffMs: 350,
           },
         }),
-        apiRequest<SuccessResponse<DriverItem[]>>({
-          apiBase,
-          path: '/restaurant-panel/repartidores',
-          token,
-          fallbackMessage: 'No se pudo cargar el equipo de reparto.',
-          retry: { attempts: 1, backoffMs: 300 },
-        }),
         Promise.resolve({ data: [] as StoreCategoryItem[] }),
       ]);
 
@@ -2935,7 +2686,6 @@ export default function Home() {
       }
       setProducts(productsData.data);
       setCategories(categoriesData.data);
-      setDrivers(driversData.data);
       setPlatformCategories(storeCategoriesData.data);
       setStoreDraft({
         name: profileData.data.name || '',
@@ -2984,17 +2734,7 @@ export default function Home() {
         promoMinOrderPercent: profileData.data.promoMinOrderPercent?.toString() || '',
       });
       setOperatingHoursDraft(normalizeOperatingHours(profileData.data.operatingHours));
-      setSelectedDriverByOrder((current) => {
-        const next = { ...current };
 
-        for (const order of ordersData.data) {
-          if (order.driver?.id) {
-            next[order.id] = order.driver.id;
-          }
-        }
-
-        return next;
-      });
     } catch (requestError) {
       setProfile(null);
       setProfileLoadState('error');
@@ -3003,8 +2743,7 @@ export default function Home() {
       }
       setProducts([]);
       setCategories([]);
-      setDrivers([]);
-      setOperatingHoursDraft(buildDefaultOperatingHours());
+        setOperatingHoursDraft(buildDefaultOperatingHours());
       setActiveSection('dashboard');
       const message = getRequestErrorMessage(requestError, 'No se pudo cargar el panel.');
       setError(message);
@@ -3431,7 +3170,7 @@ export default function Home() {
         const idleTime = Date.now() - lastEventTime;
         if (idleTime > 90000) {
         if (process.env.NODE_ENV !== 'production') {
-          console.warn('[Socket] Zombie detection: no events for 90s, reloading orders');
+          console.debug('[Socket] Sin eventos en 90s; recargando pedidos por seguridad.');
         }
           void loadOrdersOnly();
           lastEventTime = Date.now();
@@ -3745,6 +3484,8 @@ export default function Home() {
       preserveFailedAction?: boolean;
       silentSuccess?: boolean;
       pin?: string;
+      emergencyReason?: string;
+      cashReceived?: boolean;
     }
   ) {
     if (uncertainOrderIdsRef.current.has(orderId)) {
@@ -3886,6 +3627,8 @@ export default function Home() {
                 ...(scheduledDeliveryAt ? { scheduledDeliveryAt } : {}),
               }),
             }
+            : actionKey === 'delivered' && options?.emergencyReason
+            ? { body: JSON.stringify({ emergency: true, reason: options.emergencyReason, cashReceived: options.cashReceived }) }
             : actionKey === 'handover'
             ? {
               body: JSON.stringify({
@@ -3963,7 +3706,6 @@ export default function Home() {
             reject: ['REJECTED', 'CANCELLED'],
             delivered: ['DELIVERED'],
             handover: ['PICKED_UP', 'IN_TRANSIT'],
-            asumirReparto: ['READY'],
             quitarRepartidor: ['READY'],
             confirmarPagoEfectivo: ['DELIVERED', 'READY', 'IN_TRANSIT'],
             iniciarEntrega: ['IN_TRANSIT'],
@@ -4050,106 +3792,6 @@ export default function Home() {
     }
   }
 
-  async function assignDriver(orderId: string) {
-    const driverId = selectedDriverByOrder[orderId];
-    const targetOrder = ordersRef.current.find((o) => o.id === orderId);
-
-    if (targetOrder?.fulfillmentType === 'PICKUP') {
-      const message = 'Este pedido es de recoger en tienda; no requiere repartidor.';
-      pushToast('error', 'Pedido sin reparto', message);
-      return;
-    }
-
-    if (!driverId) {
-      const message = 'Selecciona un repartidor antes de asignarlo.';
-      setError(message);
-      pushToast('error', 'Asignacion incompleta', message);
-      return;
-    }
-
-    if (orderId.startsWith('mock-order-')) {
-      const selectedDriver = drivers.find((d) => d.id === driverId);
-      setOrders((current) =>
-        current.map((o) => {
-          if (o.id !== orderId) return o;
-          return {
-            ...o,
-            driver: selectedDriver
-              ? {
-                  id: selectedDriver.id,
-                  user: {
-                    name: selectedDriver.user?.name || 'Repartidor de prueba',
-                    phone: selectedDriver.user?.phone || '5544332211',
-                  },
-                }
-              : null,
-            status: 'IN_TRANSIT',
-          };
-        })
-      );
-
-      const message = 'Repartidor de prueba asignado. Pedido simulado en camino 🛵';
-      setAuthMessage(message);
-      pushToast('success', 'Simulación: Repartidor asignado', message);
-      setActiveActionKey(null);
-      return;
-    }
-
-    setActiveActionKey(`${orderId}:assign`);
-    setError('');
-    setAuthMessage('');
-
-    try {
-      const assignment = await requestJson<SuccessResponse<OrderItem & { deliveryToken?: { token: string; url: string } }>>({
-        apiBase,
-        path: `/restaurant-panel/pedidos/${orderId}/repartidor`,
-        token,
-        options: {
-          method: 'POST',
-          body: JSON.stringify({ driverId }),
-        },
-        fallbackMessage: 'No se pudo asignar el repartidor.',
-        retry: {
-          attempts: 1,
-          backoffMs: 400,
-        },
-      });
-
-      if (assignment.data.deliveryToken) {
-        setActiveQrCodeData({
-          token: assignment.data.deliveryToken.token,
-          orderReference: assignment.data.orderReference,
-          id: orderId,
-          url: assignment.data.deliveryToken.url,
-        });
-      }
-
-      await loadOrdersOnly();
-      const message = 'Repartidor asignado y tablero sincronizado.';
-      setAuthMessage(message);
-      setLastFailedAction(null);
-      pushToast('success', 'Repartidor asignado', message);
-    } catch (requestError) {
-      const message = getRequestErrorMessage(requestError, 'No se pudo asignar el repartidor.');
-      setError(message);
-      setLastFailedAction({
-        kind: 'assign-driver',
-        orderId,
-        driverId,
-        label: 'Asignar repartidor',
-      });
-      pushToast(
-        'error',
-        isTransientRequestError(requestError) ? 'Asignacion inestable' : 'Asignacion fallida',
-        isTransientRequestError(requestError)
-          ? `${message} Ya hubo un reintento automatico y puedes volver a intentarlo.`
-          : `${message} Puedes reintentar la asignacion.`
-      );
-    } finally {
-      setActiveActionKey(null);
-    }
-  }
-
   async function retryLastFailedAction() {
     if (!lastFailedAction) {
       return;
@@ -4160,11 +3802,7 @@ export default function Home() {
       return;
     }
 
-    setSelectedDriverByOrder((current) => ({
-      ...current,
-      [lastFailedAction.orderId]: lastFailedAction.driverId,
-    }));
-    await assignDriver(lastFailedAction.orderId);
+
   }
 
   type SettingsSectionKey = 'perfil' | 'ubicacion' | 'entrega' | 'pagos';
@@ -5350,12 +4988,16 @@ export default function Home() {
     anchor.setUTCDate(anchor.getUTCDate() - ((anchor.getUTCDay() + 6) % 7));
     return anchor.toISOString().slice(0, 10);
   }, [ordersPeriod, todayKey]);
+  // Los pedidos en curso se muestran siempre; el periodo solo filtra historial.
   const periodOrders = useMemo(
-    () => operationalOrders.filter((order) => {
-      const key = mexicoDayKey(order.createdAt);
-      return Boolean(key) && key >= periodStartKey && key <= todayKey;
-    }),
+    () => operationalOrders.filter((order) => isOrderInPeriod(order, periodStartKey, todayKey)),
     [operationalOrders, periodStartKey, todayKey]
+  );
+  const hasCarriedOverActiveOrders = useMemo(
+    () => periodOrders.some(
+      (order) => isActiveOrderStatus(order.status) && mexicoDayKey(order.createdAt) < periodStartKey
+    ),
+    [periodOrders, periodStartKey]
   );
   const statusOrders =
     selectedStatus === 'ACTIVE'
@@ -5375,11 +5017,10 @@ export default function Home() {
   const socketStatusLabel = socketStatusCopy[socketStatus];
   const isRestaurantSession = Boolean(sessionUser && sessionUser.role === 'RESTAURANT');
   const restaurantName = WINGSLAB_BUSINESS.name;
-  const activeOrders = useMemo(() => {
-    return operationalOrders.filter((order) =>
-      ['PENDING', 'CONFIRMED', 'PREPARING', 'READY', 'PICKED_UP', 'IN_TRANSIT'].includes(order.status)
-    );
-  }, [operationalOrders]);
+  const activeOrders = useMemo(
+    () => operationalOrders.filter((order) => isActiveOrderStatus(order.status)),
+    [operationalOrders]
+  );
 
   const handlePrintTicket = useCallback(async (order: any) => {
     if (!order) return;
@@ -5906,7 +5547,6 @@ export default function Home() {
   const navigationItems: Array<{ key: RestaurantPortalSection; label: string }> = [
     { key: 'dashboard', label: 'Dashboard' },
     { key: 'orders', label: 'Ordenes' },
-    { key: 'drivers', label: 'Repartidores' },
     { key: 'store', label: 'Menú WingsLab' },
     { key: 'campaigns', label: 'Campañas' },
     { key: 'menu-content', label: 'Contenido del menú' },
@@ -9169,7 +8809,7 @@ export default function Home() {
                     orders={operationalOrders}
                     profile={profile}
                     products={products}
-                    drivers={drivers}
+
                     kitchenClockNow={kitchenClockNow}
                     sessionOpenedAt={sessionOpenedAt}
                     selectedWeekOffset={selectedWeekOffset}
@@ -9212,7 +8852,6 @@ export default function Home() {
                 {activeSection === 'loyalty' ? <LoyaltySection apiBase={apiBase} token={token} /> : null}
                 {activeSection === 'inperson' ? <InPersonSalesSection apiBase={apiBase} token={token} /> : null}
                 {activeSection === 'support' ? <SupportSection apiBase={apiBase} token={token} /> : null}
-                {activeSection === 'drivers' ? <RestaurantDriversSection apiBase={apiBase} token={token} onDriversChange={setDrivers} /> : null}
 
 
 
@@ -9229,7 +8868,7 @@ export default function Home() {
                         <div className={`wl-orders-stat wl-orders-stat--${tone}`} key={label}><Icon aria-hidden="true" /><div><span>{label}</span><strong>{profileLoadState === 'ready' ? periodOrders.filter((order) => statuses.includes(order.status)).length : '—'}</strong></div></div>
                       ))}
                     </div>
-                    <p className="wl-orders-overview-note">Pedidos de {ordersPeriod === 'today' ? 'hoy' : ordersPeriod === 'week' ? 'esta semana' : 'este mes'} · zona Ciudad de México.</p>
+                    <p className="wl-orders-overview-note">Pedidos activos y de {ordersPeriod === 'today' ? 'hoy' : ordersPeriod === 'week' ? 'esta semana' : 'este mes'} · zona Ciudad de México.{hasCarriedOverActiveOrders ? ' Incluye pedidos activos de días anteriores.' : ''}</p>
                     {lastFailedAction ? (
                       <div className="mb-4 rounded-[28px] border border-rose-100 bg-rose-50 p-4">
                         <p className="text-sm font-semibold text-rose-800">Ultima accion fallida: {lastFailedAction.label}</p>
@@ -9313,14 +8952,6 @@ export default function Home() {
                                     : [])
                                 : getRestaurantActions(order, hasOwnDelivery, Boolean(driverArrivedOrders[order.id])));
                           const authorizedActionButtons = actionButtons;
-                          const selectedDriverId = selectedDriverByOrder[order.id] || '';
-                          const canAssignDriver =
-                            hasOwnDelivery &&
-                            order.fulfillmentType === 'DELIVERY' &&
-                            order.status === 'READY' &&
-                            !order.driver &&
-                            drivers.some(driver => driver.status === 'ACTIVE' && driver.availability !== 'OFFLINE');
-
                           return (
                             <article
                               key={order.id}
@@ -9346,12 +8977,12 @@ export default function Home() {
                                 {orderModalId === order.id && <div className="wl-comanda-overlay" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setOrderModalId(null); }}>
                                 <section className="wl-comanda-modal" role="dialog" aria-modal="true" aria-labelledby={`wl-comanda-${order.id}`}>
                                   <div className="wl-comanda-heading">
-                                    <div><div className="wl-comanda-title"><h2 id={`wl-comanda-${order.id}`}>{(order as any).dailyCounter ? `#${String((order as any).dailyCounter).padStart(2, '0')}` : order.orderReference}</h2><StatusBadge status={order.status} /></div><p>{order.createdAt ? formatDate(order.createdAt) : 'Fecha no disponible'} · {order.fulfillmentType === 'PICKUP' ? 'Para recoger' : 'A domicilio'}</p></div>
+                                    <div className="wl-comanda-heading-info"><span className="wl-comanda-heading-icon"><ClipboardList aria-hidden="true" /></span><div><span className="wl-comanda-eyebrow">Detalle del pedido</span><div className="wl-comanda-title"><h2 id={`wl-comanda-${order.id}`}>{(order as any).dailyCounter ? `#${String((order as any).dailyCounter).padStart(2, '0')}` : order.orderReference}</h2><StatusBadge status={order.status} /></div><p>{order.createdAt ? formatDate(order.createdAt) : 'Fecha no disponible'} · {order.fulfillmentType === 'PICKUP' ? 'Para recoger' : 'A domicilio'}</p></div></div>
                                     <button type="button" autoFocus onClick={() => setOrderModalId(null)} aria-label="Cerrar comanda"><X aria-hidden="true" /></button>
                                   </div>
                                   <div className="wl-comanda-content">
-                                    <div className="wl-comanda-customer"><p><User aria-hidden="true" /><strong>{getCustomerFullName(order.customer?.user) || 'Cliente'}</strong></p>{order.customer?.user?.phone && <p><Phone aria-hidden="true" /><a href={`tel:${order.customer.user.phone}`}>{order.customer.user.phone}</a></p>}{order.fulfillmentType === 'DELIVERY' && <p><MapPin aria-hidden="true" /><span>{formatAddress(order.address)}</span></p>}</div>
-                                    {!['CANCELLED', 'REJECTED'].includes(order.status) && <div className="wl-comanda-progress" aria-label="Progreso del pedido">{['Preparación', 'Lista', order.fulfillmentType === 'PICKUP' ? 'Recogida' : 'En entrega', 'Completada'].map((label, index) => { const current = ['PENDING', 'CONFIRMED', 'PREPARING'].includes(order.status) ? 0 : order.status === 'READY' ? 1 : ['PICKED_UP', 'IN_TRANSIT'].includes(order.status) ? 2 : 3; return <div key={label} className={index <= current ? 'is-current' : ''}><span>{index + 1}</span><small>{label}</small></div>; })}</div>}
+                                    <div className="wl-comanda-customer"><p><User aria-hidden="true" /><strong>{getCustomerFullName(order.customer?.user) || 'Cliente'}</strong></p><CustomerPhoneLine phone={order.customer?.user?.phone} />{order.fulfillmentType === 'DELIVERY' && <p><MapPin aria-hidden="true" /><span>{formatAddress(order.address)}</span></p>}</div>
+                                    {!['CANCELLED', 'REJECTED'].includes(order.status) && <div className="wl-comanda-progress" aria-label="Progreso del pedido">{['Preparación', 'Lista', order.fulfillmentType === 'PICKUP' ? 'Recogida' : 'En entrega', 'Completada'].map((label, index) => { const current = ['PENDING', 'CONFIRMED', 'PREPARING'].includes(order.status) ? 0 : order.status === 'READY' ? 1 : ['PICKED_UP', 'IN_TRANSIT'].includes(order.status) ? 2 : 3; return <div key={label} className={index < current ? 'is-done' : index === current ? 'is-current' : ''} aria-current={index === current ? 'step' : undefined}><span>{index < current ? <Check aria-hidden="true" /> : index === current ? <i aria-hidden="true" /> : null}</span><small>{label}</small></div>; })}</div>}
                                     <div className="wl-comanda-products"><h3>Productos ({order.items?.length || 0})</h3>{(order.items || []).map(item => <div className="wl-comanda-product" key={item.id}><span className="wl-order-thumb">{item.product?.image ? <img src={item.product.image} alt="" /> : <Package aria-hidden="true" />}</span><div><strong>{item.product?.name || 'Producto'}{item.weightG ? ` (${item.weightG} g)` : ''}</strong>{item.options?.length ? <p>{item.options.map(option => option.name).join(' · ')}</p> : null}{item.specialInstructions && <p>{item.specialInstructions}</p>}</div><b>×{item.quantity}</b>{item.unitPrice != null && <b>{formatCurrency(Number(item.unitPrice) * item.quantity)}</b>}</div>)}</div>
                                     <div className="wl-comanda-total"><span>Total del pedido</span><strong>{formatCurrency(order.totalAmount)}</strong></div>
                                     {parseStoreNotes(order.notes) && <div className="wl-comanda-note"><strong>Nota del cliente</strong><p>{parseStoreNotes(order.notes)}</p></div>}
@@ -9359,20 +8990,11 @@ export default function Home() {
                               {/* Fila 1: Cabecera */}
                               <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 mb-3">
                                 <div className="flex flex-wrap items-center gap-2 sm:gap-3 min-w-0">
-                                  <p className="text-lg font-bold text-neutral-950">
-                                    {(order as any).dailyCounter ? `#${String((order as any).dailyCounter).padStart(2, '0')}` : (
-                                      <>
-                                        <span className="text-neutral-600 font-medium">{order.orderReference.slice(0, -6)}</span>
-                                        {order.orderReference.slice(-6)}
-                                      </>
-                                    )}
-                                  </p>
                                   {order.id.startsWith('mock-order-') && (
                                     <span className="rounded bg-sky-100 px-2 py-0.5 text-xs font-bold text-sky-800 animate-pulse">
                                       SIMULACIÓN
                                     </span>
                                   )}
-                                  <StatusBadge status={order.status} />
                                   {(order as any).cancellationRequestedAt && !(order as any).cancelledBy && ['CONFIRMED', 'PREPARING'].includes(order.status) && (
                                     <span className="inline-flex items-center gap-1 rounded-full bg-sky-100 border border-sky-300 px-2.5 py-0.5 text-xs font-bold text-sky-700 shadow-sm">
                                       🧾 Cancelación solicitada
@@ -9475,28 +9097,6 @@ export default function Home() {
                                 
                                 {/* Fila 2: Cuerpo */}
                                 <div className="grid gap-2 text-sm text-neutral-600 mb-4">
-                                  <p className="flex items-center gap-2">
-                                    <User className="w-4 h-4 text-neutral-400 shrink-0" />
-                                    {getCustomerFullName(order.customer?.user) || 'Cliente SaDeL'}
-                                  </p>
-                                  <p className="flex items-center gap-2">
-                                    {(order as any).fulfillmentType === 'PICKUP' ? (
-                                      <>
-                                        <svg className="w-4 h-4 text-emerald-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
-                                        </svg>
-                                        <span className="font-semibold text-emerald-700">Recoger en sucursal</span>
-                                      </>
-                                    ) : (
-                                      <>
-                                        <svg className="w-4 h-4 text-neutral-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.828 0l-4.243-4.243a8 8 0 1111.314 0z" />
-                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                                        </svg>
-                                        {formatAddress(order.address)}
-                                      </>
-                                    )}
-                                  </p>
                                   {(order as any).fulfillmentType !== 'PICKUP' && (order.driver || order.supportRestaurant?.name || ['READY', 'PICKED_UP', 'IN_TRANSIT', 'DELIVERED'].includes(order.status)) && (
                                   <div className="flex items-center gap-2">
                                     <svg className="w-4 h-4 text-neutral-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -9954,11 +9554,21 @@ export default function Home() {
                                       type="button"
                                       onClick={async () => {
                                         try {
-                                          const response = await fetch(`${apiBase}/restaurant-panel/pedidos/${order.id}/delivery-token`, {
+                                          let response = await fetch(`${apiBase}/restaurant-panel/pedidos/${order.id}/delivery-token`, {
+                                            cache: 'no-store',
                                             headers: {
                                               Authorization: `Bearer ${token}`,
                                             },
                                           });
+                                          if (response.status === 410) {
+                                            if (!window.confirm('El QR venció. ¿Renovar el enlace de reparto? El enlace anterior no funcionará y deberás compartir el nuevo con el repartidor.')) return;
+                                            const renewal = await fetch(`${apiBase}/restaurant-panel/pedidos/${order.id}/delivery-token/renew`, { method: 'POST', headers: { Authorization: `Bearer ${token}` } });
+                                            if (!renewal.ok) {
+                                              pushToast('error', 'No se pudo renovar', 'Comprueba el estado del pedido y vuelve a intentarlo.');
+                                              return;
+                                            }
+                                             response = renewal;
+                                          }
                                           const res = await response.json();
                                           if (res.success && res.data) {
                                             setActiveQrCodeData({
@@ -10035,6 +9645,8 @@ export default function Home() {
                                               } else if (actionKey === 'handover') {
                                                 setHandoverPromptOrderId(order.id);
                                               } else if (actionKey === 'delivered') {
+                                                setEmergencyReason('');
+                                                setEmergencyConfirmed(false);
                                                 setEmergencyDeliveryOrderId(order.id);
                                               } else if (actionKey === 'reject' && order.paymentMethod === 'TRANSFER') {
                                                 setTransferRefundOrder(order);
@@ -10077,47 +9689,6 @@ export default function Home() {
 
                                 </div>
                               </div>
-
-                              {/* Asignar a un repartidor propio del restaurante */}
-                              {canAssignDriver ? (
-                                <div className="mt-3 grid gap-3 rounded-[24px] border border-[#eadfd3] bg-[#faf7f2] p-4 md:grid-cols-[1fr_auto] md:items-end" onClick={(e) => e.stopPropagation()}>
-                                  <label className="grid gap-2 text-sm text-[#51473f]">
-                                    <span className="font-semibold flex items-center gap-1.5">
-                                      <Bike className="h-4 w-4 text-[#bb0a0e]" /> Asignar repartidor WingsLab
-                                    </span>
-                                    <span className="text-xs font-normal text-[#70675f]">El pedido está listo. La tarifa vigente del acuerdo quedará fijada para esta entrega.</span>
-                                    <select
-                                      value={selectedDriverId}
-                                      onChange={(event) =>
-                                        setSelectedDriverByOrder((current) => ({
-                                          ...current,
-                                          [order.id]: event.target.value,
-                                        }))
-                                      }
-                                      className="rounded-2xl border border-[#e8ddd2] bg-white px-4 py-3 text-neutral-950 outline-none transition focus:border-[#bb0a0e]"
-                                    >
-                                      <option value="">
-                                        Selecciona un repartidor disponible
-                                      </option>
-                                      {drivers.filter(driver => driver.status === 'ACTIVE' && driver.availability !== 'OFFLINE').map((driver) => (
-                                        <option key={driver.id} value={driver.id}>
-                                          {driver.user.name || 'Repartidor'} · {driver.availability === 'BUSY' ? 'en entrega' : 'disponible'}
-                                        </option>
-                                      ))}
-                                    </select>
-                                  </label>
-                                  <button
-                                    type="button"
-                                    onClick={() => void assignDriver(order.id)}
-                                    disabled={activeActionKey === `${order.id}:assign` || !selectedDriverId}
-                                    className="rounded-full bg-[#bb0a0e] px-4 py-3 font-semibold text-white transition hover:bg-[#94070b] disabled:cursor-not-allowed disabled:bg-neutral-300"
-                                  >
-                                    {activeActionKey === `${order.id}:assign`
-                                      ? 'Asignando...'
-                                      : 'Asignar repartidor'}
-                                  </button>
-                                </div>
-                              ) : null}
 
                               {/* Pickup: Confirmar recolección */}
                               {((order as any).fulfillmentType === 'PICKUP' && order.status === 'READY') ? (
@@ -11699,14 +11270,19 @@ export default function Home() {
                       <Info className="h-5 w-5 text-rose-600 shrink-0 mt-0.5" />
                       <div className="text-xs text-rose-800 leading-relaxed space-y-1.5 font-medium">
                         <p>
-                          El flujo normal requiere que sea el <strong className="font-bold">repartidor asignado</strong> quien marque la entrega utilizando la geolocalización y el NIP correspondiente del comensal.
+                          Usa esta opción únicamente si verificaste que el cliente recibió el pedido y el repartidor no puede finalizarlo desde su enlace.
                         </p>
                         <p>
-                          Al forzar la entrega desde tu panel administrativo, el pedido se considerará completado de inmediato y se dará por finalizado.
+                          El pedido se cerrará y el enlace de reparto dejará de funcionar. El motivo quedará registrado.
                         </p>
                       </div>
                     </div>
                   </div>
+
+                  <label className="mt-4 block text-left text-xs font-bold text-neutral-700">Motivo de emergencia
+                    <textarea value={emergencyReason} onChange={event => setEmergencyReason(event.target.value)} maxLength={500} rows={3} placeholder="Describe qué ocurrió (mínimo 10 caracteres)" className="mt-2 w-full rounded-xl border border-neutral-300 p-3 text-sm text-neutral-900 focus:outline-none focus:ring-2 focus:ring-red-500" />
+                  </label>
+                  <label className="mt-3 flex items-start gap-2 text-left text-xs text-neutral-700"><input type="checkbox" checked={emergencyConfirmed} onChange={event => setEmergencyConfirmed(event.target.checked)} className="mt-0.5" /><span>Confirmo que el cliente recibió el pedido{orders.find(order => order.id === emergencyDeliveryOrderId)?.paymentMethod === 'CASH' ? ' y que se recibió el efectivo' : ''}.</span></label>
 
                   <div className="mt-6 flex flex-col gap-2.5">
                     <button
@@ -11714,9 +11290,10 @@ export default function Home() {
                       onClick={() => {
                         const orderId = emergencyDeliveryOrderId;
                         setEmergencyDeliveryOrderId(null);
-                        void runOrderAction(orderId, 'delivered');
+                        void runOrderAction(orderId, 'delivered', { emergencyReason: emergencyReason.trim(), cashReceived: true, preserveFailedAction: false });
                       }}
-                      className="w-full rounded-full bg-rose-600 hover:bg-rose-700 active:scale-[0.98] text-white py-3.5 text-sm font-bold shadow-md shadow-rose-600/10 hover:shadow-rose-600/25 transition"
+                      disabled={!emergencyConfirmed || emergencyReason.trim().length < 10}
+                      className="w-full rounded-full bg-rose-600 hover:bg-rose-700 active:scale-[0.98] text-white py-3.5 text-sm font-bold shadow-md shadow-rose-600/10 hover:shadow-rose-600/25 transition disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       Sí, marcar como entregado (Emergencia)
                     </button>
@@ -12383,7 +11960,7 @@ function Panel({
 }
 
 function RestaurantNavIcon({ kind }: { kind: RestaurantPortalSection }) {
-  const icons = { dashboard: HomeIcon, orders: ClipboardList, drivers: Bike, store: Store, campaigns: Megaphone, 'menu-content': Layers, customers: Users, loyalty: Award, inperson: ShoppingBag, support: MessageSquareText, settings: Settings };
+  const icons = { dashboard: HomeIcon, orders: ClipboardList, store: Store, campaigns: Megaphone, 'menu-content': Layers, customers: Users, loyalty: Award, inperson: ShoppingBag, support: MessageSquareText, settings: Settings };
   const Icon = icons[kind];
   return <Icon className="h-5 w-5 shrink-0" strokeWidth={1.8} aria-hidden="true" />;
 }
@@ -13042,19 +12619,20 @@ function getRestaurantActions(
   }
 
   if (status === 'IN_TRANSIT') {
-    return [];
+    return hasOwnDelivery && order.fulfillmentType === 'DELIVERY' && !order.driver && !order.supportRestaurantId ? ['delivered'] : [];
   }
 
   return [];
 }
 
 function formatAddress(address?: OrderItem['address']) {
-  if (!address) {
-    return 'Direccion no disponible.';
-  }
+  return formatCustomerAddress(address);
+}
 
-  const base = `${address.street} ${address.number}, ${address.neighborhood}`;
-  return address.reference ? `${base}. Ref: ${address.reference}` : base;
+function CustomerPhoneLine({ phone }: { phone?: string | null }) {
+  const href = customerPhoneHref(phone);
+  const label = formatCustomerPhone(phone);
+  return <p><Phone aria-hidden="true" />{href ? <a href={href}>{label}</a> : <span>{label}</span>}</p>;
 }
 
 function formatIncomingOrderAddress(address?: OrderItem['address']) {
@@ -13094,10 +12672,7 @@ type CustomerUser = {
 };
 
 function getCustomerFullName(user?: CustomerUser | null): string {
-  const name = user?.name?.trim();
-  if (!name) return '';
-  const surname = user?.lastName?.trim().split(/\s+/)[0];
-  return surname ? `${name} ${surname}` : name;
+  return formatCustomerName(user);
 }
 
 function getCustomerInitials(user?: CustomerUser | null): string {
