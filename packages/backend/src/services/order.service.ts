@@ -1,6 +1,7 @@
 import { OrderStatus, PaymentMethod, PaymentStatus, Prisma, PrismaClient } from '@prisma/client';
 import { AppError } from '../errors/app-error';
 import { assertRestaurantId, RESTAURANT_ID } from '../config/single-restaurant';
+import { ORDER_DECISION_ELIGIBLE } from './order-decision-window';
 
 export function validateOptionSelection(groups: Array<{ id: string; name: string; minSelection: number; maxSelection: number; options: Array<{ id: string; isAvailable: boolean }> }>, selectedIds: string[]) {
   if (new Set(selectedIds).size !== selectedIds.length) throw new AppError(400, 'INVALID_OPTION_SELECTION', 'No puedes seleccionar una misma opción más de una vez.');
@@ -1116,15 +1117,15 @@ export async function createOrderForCustomer({
             }),
           },
           tracking: {
-            create: {
+            create: [{
               status: OrderStatus.PENDING,
               latitude: latitude ?? restaurant.latitude,
               longitude: longitude ?? restaurant.longitude,
               notes:
                 input.paymentMethod === PaymentMethod.TRANSFER
                   ? 'Pedido creado pendiente de validacion de pago.'
-                  : 'Pedido creado correctamente.',
-            },
+                   : 'Pedido creado correctamente.',
+             }, { status: OrderStatus.PENDING, notes: ORDER_DECISION_ELIGIBLE }],
           },
         } as any,
         select: customerCreatedOrderSelect,

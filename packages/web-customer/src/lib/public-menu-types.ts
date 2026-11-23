@@ -54,8 +54,6 @@ export type PublicRestaurantDetail = {
   transferBeneficiaryName?: string | null;
   acceptsCash?: boolean | null;
   acceptedPaymentMethods?: string[];
-  rating?: number;
-  reviewCount?: number;
   promoFreeDeliveryThreshold?: number | null;
   promoMinOrderAmount?: number | null;
   promoMinOrderPercent?: number | null;

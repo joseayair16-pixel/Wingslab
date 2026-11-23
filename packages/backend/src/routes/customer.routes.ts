@@ -107,9 +107,16 @@ export async function registerCustomerRoutes(fastify: FastifyInstance): Promise<
       if (!customer) return reply.status(404).send({ success: false, error: { code: 'CUSTOMER_NOT_FOUND', message: 'No se encontró la cuenta.' } });
       const currentProgram = await getLoyaltyConfiguration();
       const live = currentProgram.redemptionReady ? await prisma.$transaction(tx => loyaltyState(tx, customer.id), { timeout: 30000 }) : null;
+      const rewardProgram = live?.program ?? currentProgram;
+      const rewardProductPromise = rewardProgram.rewardKind === 'PRODUCT' && rewardProgram.rewardProductId
+        ? prisma.product.findFirst({ where: { id: rewardProgram.rewardProductId, restaurantId: RESTAURANT_ID, deleted: false }, select: { image: true } })
+        : Promise.resolve(null);
       if (live) {
         const visual = live.open || live.next;
-        const brand = await prisma.restaurant.findUnique({ where: { id: RESTAURANT_ID }, select: { name: true, logo: true } });
+        const [brand, rewardProduct] = await Promise.all([
+          prisma.restaurant.findUnique({ where: { id: RESTAURANT_ID }, select: { name: true, logo: true } }),
+          rewardProductPromise,
+        ]);
         const completedCards = live.list
           .filter((card: any) => card.state === 'COMPLETED')
           .sort((a: any, b: any) => b.sequence - a.sequence);
@@ -136,6 +143,7 @@ export async function registerCustomerRoutes(fastify: FastifyInstance): Promise<
           rewardDescription: live.program.rewardDescription,
           rewardTerms: live.program.stampTerms,
           rewardKind: live.program.rewardKind,
+          rewardProductImage: rewardProduct?.image || null,
           rewardValue: live.program.rewardValue,
           stampTerms: live.program.stampTerms,
           availableRewards: live.available.length, reserved: live.reserved,
@@ -144,15 +152,16 @@ export async function registerCustomerRoutes(fastify: FastifyInstance): Promise<
           history,
         } });
       }
-      const [program, orders] = await Promise.all([
+      const [program, orders, rewardProduct] = await Promise.all([
         Promise.resolve(currentProgram),
         prisma.order.findMany({ where: { restaurantId: RESTAURANT_ID, customerId: customer.id, paymentStatus: 'COMPLETED', noShowReleasedAt: null, OR: [{ status: { in: ['DELIVERED', 'COMPLETED'] } }, { status: 'PICKED_UP', fulfillmentType: 'PICKUP' }] }, select: { id: true, totalAmount: true, createdAt: true }, orderBy: { createdAt: 'desc' } }),
+        rewardProductPromise,
       ]);
       const points = program.enabled ? Math.floor(orders.reduce((sum, order) => sum + order.totalAmount, 0) / 100 * program.pointsPer100) : 0;
       const stamps = program.enabled && program.stampStartsAt ? orders.filter(order => order.createdAt >= new Date(program.stampStartsAt)).length : 0;
       return reply.send({ success: true, data: { enabled: program.enabled, points, eligibleOrders: orders.length,
         nextRewardPoints: program.rewardPoints, rewardAmount: program.rewardAmount, redemptionEnabled: false,
-        stamps, stampGoal: program.stampGoal, rewardType: program.rewardType, rewardDescription: program.rewardDescription, stampTerms: program.stampTerms, stampStartsAt: program.stampStartsAt } });
+        stamps, stampGoal: program.stampGoal, rewardType: program.rewardType, rewardKind: program.rewardKind, rewardProductImage: rewardProduct?.image || null, rewardDescription: program.rewardDescription, stampTerms: program.stampTerms, stampStartsAt: program.stampStartsAt } });
     });
 
     customerPanel.post('/customer/lealtad/qr', {
@@ -932,10 +941,8 @@ export async function registerCustomerRoutes(fastify: FastifyInstance): Promise<
 
     // ============== Reviews Routes ==============
     const createReviewSchema = z.object({
-      rating: z.number().min(1).max(5),
-      comment: z.string().optional(),
-      driverRating: z.number().min(1).max(5).optional(),
-      driverComment: z.string().optional(),
+      rating: z.number().int().min(1).max(5),
+      comment: z.string().trim().max(500).optional(),
     });
 
     customerPanel.post('/customer/pedidos/:id/review', async (request, reply) => {
@@ -969,7 +976,7 @@ export async function registerCustomerRoutes(fastify: FastifyInstance): Promise<
 
       const order = await prisma.order.findUnique({
         where: { id: params.data.id },
-        select: { restaurantId: true, customerId: true, status: true, driverId: true },
+        select: { restaurantId: true, customerId: true, status: true },
       });
 
       if (!order) {
@@ -1022,65 +1029,10 @@ export async function registerCustomerRoutes(fastify: FastifyInstance): Promise<
               customerId: customer.id,
               restaurantId: order.restaurantId,
               orderId: params.data.id,
-              driverId: order.driverId,
               rating: parsed.data.rating,
-              comment: parsed.data.comment,
-              driverRating: parsed.data.driverRating,
-              driverComment: parsed.data.driverComment,
+              comment: parsed.data.comment || null,
             },
           });
-
-          const restaurantAgg = await tx.review.aggregate({
-            where: { restaurantId: order.restaurantId },
-            _avg: { rating: true },
-            _count: true,
-          });
-
-          const avgRating = restaurantAgg._avg.rating ?? 0;
-
-          await tx.restaurantStats.upsert({
-            where: { restaurantId: order.restaurantId },
-            update: {
-              rating: avgRating,
-              reviewCount: restaurantAgg._count,
-            },
-            create: {
-              restaurantId: order.restaurantId,
-              rating: avgRating,
-              reviewCount: restaurantAgg._count,
-            },
-          });
-
-          // Update driver rating if applicable
-          if (order.driverId && parsed.data.driverRating) {
-            const driverAgg = await tx.review.aggregate({
-              where: {
-                driverId: order.driverId,
-                driverRating: { not: null },
-              },
-              _avg: { driverRating: true },
-            });
-
-            const avgDriverRating = driverAgg._avg.driverRating;
-
-            if (avgDriverRating !== null) {
-              await tx.driverStats.upsert({
-                where: { driverId: order.driverId },
-                update: {
-                  rating: avgDriverRating,
-                },
-                create: {
-                  driverId: order.driverId,
-                  rating: avgDriverRating,
-                },
-              });
-
-              await tx.driver.update({
-                where: { id: order.driverId },
-                data: { rating: avgDriverRating },
-              });
-            }
-          }
 
           return { review: createdReview, alreadyExisting: false };
         });

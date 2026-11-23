@@ -24,11 +24,14 @@ export function mexicoDayKey(value: string | Date): string {
  * poder gestionarlo. El filtro de periodo solo aplica al historial.
  */
 export function isOrderInPeriod(
-  order: { status: string; createdAt: string | Date },
+  order: { status: string; createdAt: string | Date; deliveredAt?: string | Date | null; completedAt?: string | Date | null },
   periodStartKey: string,
   todayKey: string,
 ): boolean {
   if (isActiveOrderStatus(order.status)) return true;
-  const key = mexicoDayKey(order.createdAt);
+  // Los pedidos cerrados se agrupan por la fecha en que se entregaron/completaron,
+  // no por la de creación (pueden llevar días en preparación).
+  const closedAt = order.deliveredAt || order.completedAt || order.createdAt;
+  const key = mexicoDayKey(closedAt);
   return Boolean(key) && key >= periodStartKey && key <= todayKey;
 }

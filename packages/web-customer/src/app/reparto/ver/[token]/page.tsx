@@ -826,11 +826,14 @@ export default function DeliveryTicketPage({ params }: PageProps) {
   const handleDeliver = (e: React.FormEvent) => {
     e.preventDefault();
     triggerHaptic([30]);
+    setError('');
     setShowConfirmModal(true);
   };
 
   // Mostrar modal directamente desde la lista/dashboard
   const handleDeliverDirectly = (targetToken: string) => {
+    setPin('');
+    setError('');
     setSelectedToken(targetToken);
     setModalOpenedFromDashboard(true);
     triggerHaptic([30]);
@@ -849,6 +852,7 @@ export default function DeliveryTicketPage({ params }: PageProps) {
     const ticketData = targetDelivery.data;
 
     const isCash = ticketData.paymentMethod === 'CASH';
+    if (!isCash && (ticketData.isOwnDelivery || ticketData.handoverPin) && !/^\d{4}$/.test(pin)) return;
 
     try {
       setSubmitting(true);
@@ -887,19 +891,11 @@ export default function DeliveryTicketPage({ params }: PageProps) {
 
       setPin('');
       setShowConfirmModal(false);
-      if (modalOpenedFromDashboard) {
-        setSelectedToken(null);
-      }
       setModalOpenedFromDashboard(false);
       triggerHaptic([100, 50, 100, 50, 200]);
     } catch (err: any) {
       console.error(err);
       setError(err.message || 'No se pudo completar la entrega del pedido.');
-      setShowConfirmModal(false);
-      if (modalOpenedFromDashboard) {
-        setSelectedToken(null);
-      }
-      setModalOpenedFromDashboard(false);
       triggerHaptic([300, 100, 300]);
     } finally {
       setSubmitting(false);
@@ -1348,7 +1344,7 @@ export default function DeliveryTicketPage({ params }: PageProps) {
   // ══════════════════════════════════════
   // VISTA 1: DASHBOARD MULTI-PEDIDO
   // ══════════════════════════════════════
-  if (selectedToken === null) {
+  if (selectedToken === null || currentDelivered) {
     const activeList = getActiveOrdered();
     const completedList = deliveries
       .filter(d => d.delivered)
@@ -2107,6 +2103,27 @@ export default function DeliveryTicketPage({ params }: PageProps) {
             </div>
           </div>
         )}
+        {currentDelivered && currentTicket && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/55 px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-[max(1rem,env(safe-area-inset-top))] backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="delivery-completed-title">
+            <div className={`relative max-h-[calc(100dvh-2rem)] w-full max-w-sm overflow-y-auto rounded-[28px] border p-5 text-center shadow-2xl sm:p-6 ${cardBg} ${cardBorder}`}>
+              <div className={`mx-auto flex h-16 w-16 items-center justify-center rounded-full ${darkMode ? 'bg-emerald-950/50 text-emerald-400' : 'bg-emerald-50 text-emerald-600'}`}>
+                <svg aria-hidden="true" className="h-8 w-8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="m5 12 4.5 4.5L19 7" /></svg>
+              </div>
+              <h2 id="delivery-completed-title" className={`mt-4 text-xl font-extrabold tracking-tight ${textPrimary}`}>¡Entrega completada!</h2>
+              <p className={`mt-1.5 text-sm ${textSecondary}`}>Entregado a {fullCustomerName(currentTicket.customer)}</p>
+              <div className={`mt-5 rounded-2xl border p-4 text-left ${darkMode ? 'border-zinc-700 bg-zinc-800/60' : 'border-neutral-100 bg-neutral-50'}`}>
+                <div className="flex items-start justify-between gap-3 text-sm"><span className={textSecondary}>Pedido</span><span className={`break-all text-right font-semibold ${textPrimary}`}>{currentTicket.orderReference}</span></div>
+                <div className="mt-3 flex items-center justify-between gap-3 text-sm"><span className={textSecondary}>Pago</span><span className={`text-right font-semibold ${textPrimary}`}>{currentTicket.paymentMethod === 'CASH' ? 'Efectivo' : currentTicket.paymentMethod === 'TRANSFER' ? 'Transferencia' : 'En línea'}</span></div>
+                <div className={`mt-3 flex items-center justify-between border-t pt-3 text-sm ${divider}`}><span className={textSecondary}>Total</span><span className={`text-lg font-extrabold ${textPrimary}`}>${currentTicket.totalAmount.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</span></div>
+              </div>
+              {currentTicket.customer.phone && <div className="mt-4 flex gap-2">
+                <a href={`https://wa.me/52${currentTicket.customer.phone.replace(/\D/g, '')}?text=${encodeURIComponent(`Hola ${currentTicket.customer.name}, soy tu repartidor de ${currentTicket.isOwnDelivery ? 'WingsLab' : 'SaDeL Express'}.`)}`} target="_blank" rel="noopener noreferrer" className="flex min-h-12 flex-1 items-center justify-center rounded-2xl border border-emerald-500/25 bg-emerald-500/10 px-3 text-sm font-bold text-emerald-700 dark:text-emerald-400">WhatsApp</a>
+                <a href={`tel:${currentTicket.customer.phone}`} className={`flex min-h-12 flex-1 items-center justify-center rounded-2xl border px-3 text-sm font-bold ${cardBorder} ${textPrimary}`}>Llamar</a>
+              </div>}
+              <button type="button" onClick={() => { triggerHaptic([40, 20]); setSelectedToken(null); }} className="mt-4 min-h-12 w-full rounded-2xl bg-red-600 px-4 py-3 text-sm font-bold text-white transition hover:bg-red-700 active:scale-[0.98] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-600">{activeCount > 0 ? `Volver al tablero · ${activeCount} pendientes` : 'Volver al tablero'}</button>
+            </div>
+          </div>
+        )}
       </div>
     );
   }
@@ -2149,84 +2166,6 @@ export default function DeliveryTicketPage({ params }: PageProps) {
   const isCash = currentTicket.paymentMethod === 'CASH';
   const isTransfer = currentTicket.paymentMethod === 'TRANSFER';
   const ownDeliveryAwaitingPickup = !!currentTicket.isOwnDelivery && currentTicket.status === 'READY';
-
-  // ══════════════════════════════════════
-  // VISTA: ENTREGA COMPLETADA
-  // ══════════════════════════════════════
-  if (currentDelivered) {
-    return (
-      <div className={`flex min-h-[100dvh] flex-col items-center justify-center px-6 text-center ${bg}`}>
-        <div className={`flex h-16 w-16 items-center justify-center rounded-full ${darkMode ? 'bg-emerald-950/40 text-emerald-400' : 'bg-emerald-50 text-emerald-600'}`}>
-          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="3" stroke="currentColor" className="w-8 h-8">
-            <path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" />
-          </svg>
-        </div>
-        <h3 className={`mt-5 text-lg font-bold tracking-tight ${textPrimary}`}>¡Entrega completada!</h3>
-        <p className={`mt-1.5 text-xs max-w-[260px] leading-relaxed ${textSecondary}`}>
-          Pedido <strong className={textPrimary}>{currentTicket.orderReference}</strong> entregado a {fullCustomerName(currentTicket.customer)}.
-        </p>
-        
-        <div className={`mt-5 w-full max-w-[280px] rounded-xl border p-4 text-left ${cardBg} ${cardBorder}`}>
-          <div className="flex justify-between text-xs py-1">
-            <span className={textSecondary}>Cliente:</span>
-            <span className={`font-semibold ${textPrimary}`}>{currentTicket.customer.name}</span>
-          </div>
-          <div className="flex justify-between text-xs py-1">
-            <span className={textSecondary}>Pago:</span>
-            <span className={`font-semibold ${textPrimary}`}>{isCash ? 'Efectivo (Cobrado)' : isTransfer ? 'Transferencia' : 'En línea'}</span>
-          </div>
-          <div className={`flex justify-between text-xs py-1 border-t mt-1 pt-1.5 ${divider}`}>
-            <span className={textSecondary}>Total:</span>
-            <span className={`font-bold ${textPrimary}`}>${currentTicket.totalAmount.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</span>
-          </div>
-        </div>
-
-        {/* Botones de contacto de emergencia post-entrega */}
-        <div className="mt-3 flex gap-2.5 w-full max-w-[280px] justify-center">
-          <a
-            href={`https://wa.me/52${currentTicket.customer.phone.replace(/\D/g, '')}?text=${encodeURIComponent(`Hola ${currentTicket.customer.name}, soy tu repartidor de ${currentTicket.isOwnDelivery ? 'WingsLab' : 'SaDeL Express'}.`)}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            onClick={() => triggerHaptic([30])}
-            className="flex-1 flex items-center justify-center gap-1.5 rounded-2xl bg-[#25D366]/10 text-[#25D366] hover:bg-[#25D366]/20 transition-all py-3 text-[11px] font-bold border border-[#25D366]/25 shadow-sm"
-          >
-            WhatsApp
-          </a>
-          <a
-            href={`tel:${currentTicket.customer.phone}`}
-            onClick={() => triggerHaptic([30])}
-            className={`flex-1 flex items-center justify-center gap-1.5 rounded-2xl transition-all py-3 text-[11px] font-bold border shadow-sm ${
-              darkMode 
-                ? 'bg-zinc-800/40 border-zinc-700 text-zinc-300 hover:bg-zinc-800' 
-                : 'bg-white border-black/[0.06] text-neutral-700 hover:bg-neutral-50'
-            }`}
-          >
-            Llamar
-          </a>
-        </div>
-
-        <div className="mt-5 w-full max-w-[280px]">
-          {activeCount > 0 ? (
-            <button
-              onClick={() => { triggerHaptic([40, 20]); setSelectedToken(null); }}
-              className="w-full rounded-2xl bg-sky-400 py-3.5 text-xs font-bold text-white transition active:scale-95 active-scale shadow-[0_4px_14px_rgba(56,189,248,0.3)]"
-            >
-              Siguiente pedido ({activeCount} restantes)
-            </button>
-          ) : (
-            <button
-              onClick={() => { triggerHaptic([40, 20]); setSelectedToken(null); }}
-              className={`w-full rounded-2xl border py-3.5 text-xs font-bold transition active:scale-95 active-scale shadow-sm ${
-                darkMode ? 'border-zinc-800 text-zinc-300 hover:bg-zinc-800' : 'border-black/[0.06] text-neutral-700 hover:bg-neutral-50'
-              }`}
-            >
-              Volver al tablero
-            </button>
-          )}
-        </div>
-      </div>
-    );
-  }
 
   // ══════════════════════════════════════
   // FASE 1 (SOLO APOYO A RED): DIRÍGETE AL RESTAURANTE ORIGEN A RECOGER
@@ -2870,34 +2809,6 @@ export default function DeliveryTicketPage({ params }: PageProps) {
         {/* ── CONFIRMAR ENTREGA + PIN ── */}
         {!ownDeliveryAwaitingPickup && <div className={`mt-3 rounded-[28px] border p-5 shadow-[0_4px_24px_rgba(0,0,0,0.015)] ${cardBg} ${cardBorder}`}>
           <form onSubmit={handleDeliver} className="space-y-4">
-            {!isCash && (currentTicket.isOwnDelivery || currentTicket.handoverPin) && (
-              <div>
-                <label htmlFor="pin-input" className={`block text-[10px] font-black uppercase tracking-widest mb-2 ${textTertiary}`}>
-                  PIN de Seguridad (4 dígitos)
-                </label>
-                <input
-                  id="pin-input"
-                  type="tel"
-                  maxLength={4}
-                  value={pin}
-                  onChange={(e) => {
-                    const cleanValue = e.target.value.replace(/\D/g, '');
-                    setPin(cleanValue);
-                    if (cleanValue.length === 4) triggerHaptic([20]);
-                  }}
-                  placeholder="• • • •"
-                  className={`w-full rounded-2xl border px-4 py-3.5 text-center text-2xl font-black tracking-[0.6em] focus:outline-none focus:ring-2 focus:ring-red-400/50 transition-all ${
-                    darkMode
-                      ? 'border-zinc-800 bg-[#0a0a0a] text-white placeholder:text-zinc-800'
-                      : 'border-neutral-200 bg-neutral-50 text-neutral-900 placeholder:text-neutral-300'
-                  }`}
-                />
-                <p className={`text-[10px] mt-2 text-center leading-relaxed ${textTertiary}`}>
-                  Pídele el PIN de 4 dígitos al cliente para validar la entrega.
-                </p>
-              </div>
-            )}
-
             {error && (
               <div className={`rounded-xl px-4 py-3 text-xs font-semibold text-center flex items-center justify-center gap-2 border ${
                 darkMode ? 'bg-red-950/20 border-red-900/30 text-red-400' : 'bg-red-50 border-red-200/50 text-red-600'
@@ -2911,7 +2822,7 @@ export default function DeliveryTicketPage({ params }: PageProps) {
 
             <button
               type="submit"
-              disabled={submitting || (!isCash && (!!currentTicket.isOwnDelivery || !!currentTicket.handoverPin) && pin.length !== 4)}
+              disabled={submitting}
               className="relative w-full flex items-center justify-center gap-2.5 rounded-2xl py-4 transition-all active:scale-[0.97] active-scale disabled:opacity-40 disabled:cursor-not-allowed shadow-[0_4px_14px_0_rgba(220,38,38,0.39)] hover:shadow-[0_6px_20px_rgba(220,38,38,0.23)] hover:bg-red-500 bg-red-600 text-white"
             >
               {submitting ? (
@@ -3039,7 +2950,7 @@ export default function DeliveryTicketPage({ params }: PageProps) {
         
         {/* ── MODAL CONFIRMACIÓN DE ENTREGA / COBRO ── */}
         {showConfirmModal && (
-          <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-4">
+          <div className="fixed inset-0 z-[100] flex items-center justify-center px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-[max(1rem,env(safe-area-inset-top))]" role="dialog" aria-modal="true" aria-labelledby="delivery-confirm-title" aria-describedby="delivery-confirm-description">
             <style dangerouslySetInnerHTML={{ __html: `
               @keyframes modalFadeIn {
                 from { opacity: 0; }
@@ -3061,6 +2972,7 @@ export default function DeliveryTicketPage({ params }: PageProps) {
             <div 
               className="absolute inset-0 bg-black/45 backdrop-blur-[2px] animate-modal-fade-in"
               onClick={() => { 
+                if (submitting) return;
                 triggerHaptic([10]); 
                 setShowConfirmModal(false); 
                 if (modalOpenedFromDashboard) {
@@ -3072,22 +2984,25 @@ export default function DeliveryTicketPage({ params }: PageProps) {
             
             {/* Modal Card */}
             <div 
-              className={`relative w-full max-w-sm overflow-hidden rounded-[28px] border p-6 shadow-2xl animate-modal-scale-up ${cardBg} ${cardBorder}`}
+              className={`relative max-h-[calc(100dvh-2rem)] w-full max-w-sm overflow-y-auto rounded-[28px] border p-5 shadow-2xl motion-safe:animate-modal-scale-up sm:p-6 ${cardBg} ${cardBorder}`}
             >
               <div className="text-center">
-                <h3 className={`text-base font-extrabold tracking-tight ${textPrimary}`}>
-                  {isCash ? 'Confirmación de Cobro' : 'Confirmar Entrega'}
+                <div aria-hidden="true" className={`mx-auto flex h-12 w-12 items-center justify-center rounded-2xl ${darkMode ? 'bg-red-950/50 text-red-400' : 'bg-red-50 text-red-600'}`}>
+                  {isCash ? <svg className="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="7" width="18" height="11" rx="2" /><path d="M6 4h12M7 12h.01M17 12h.01" /><circle cx="12" cy="12.5" r="2" /></svg> : <svg className="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="5" width="18" height="14" rx="3" /><path d="M3 10h18M7 15h3" /></svg>}
+                </div>
+                <h3 id="delivery-confirm-title" className={`mt-3 text-xl font-extrabold tracking-tight ${textPrimary}`}>
+                  {isCash ? 'Confirmar entrega y cobro' : 'Confirmar entrega'}
                 </h3>
                 
-                <p className={`mt-1.5 text-xs ${textSecondary}`}>
+                <p id="delivery-confirm-description" className={`mt-1.5 text-sm leading-5 ${textSecondary}`}>
                   {isCash 
-                    ? 'Prueba local: confirma la entrega y el registro ficticio del efectivo. No mueve dinero real.'
-                    : 'Confirma que entregaste físicamente el pedido al cliente.'
+                    ? 'Confirma que entregaste el pedido y recibiste el efectivo.'
+                    : 'Confirma que entregaste el pedido al cliente.'
                   }
                 </p>
 
                 {/* Bloque de cobro integrado estilo alerta del reparto */}
-                <div className={`mt-4 rounded-2xl border px-4 py-3.5 ${
+                <div className={`mt-4 rounded-2xl border px-4 py-4 ${
                   isCash
                     ? (darkMode ? 'bg-amber-950/20 border-amber-900/30' : 'bg-amber-50 border-amber-200/50')
                     : (darkMode ? 'bg-emerald-950/20 border-emerald-900/30' : 'bg-emerald-50 border-emerald-200/50')
@@ -3097,9 +3012,9 @@ export default function DeliveryTicketPage({ params }: PageProps) {
                       ? (darkMode ? 'text-amber-400' : 'text-amber-700') 
                       : (darkMode ? 'text-emerald-400' : 'text-emerald-700')
                   }`}>
-                    {isCash ? 'Cobrar el monto de' : currentTicket.paymentMethod === 'TRANSFER' ? 'Pagado con transferencia' : 'Pagado en línea'}
+                    {isCash ? 'Monto en efectivo' : currentTicket.paymentMethod === 'TRANSFER' ? 'Pagado con transferencia' : 'Pagado en línea'}
                   </p>
-                  <p className={`text-2xl font-extrabold tracking-tight mt-0.5 ${
+                  <p className={`text-3xl font-extrabold tracking-tight mt-1 ${
                     isCash 
                       ? (darkMode ? 'text-amber-300' : 'text-amber-950') 
                       : (darkMode ? 'text-emerald-300' : 'text-emerald-950')
@@ -3107,14 +3022,23 @@ export default function DeliveryTicketPage({ params }: PageProps) {
                     ${currentTicket.totalAmount.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
                   </p>
                 </div>
+                {isCash && <p className={`mt-3 text-xs ${textSecondary}`}>Prueba local: el registro de efectivo es ficticio.</p>}
+                {!isCash && (currentTicket.isOwnDelivery || currentTicket.handoverPin) && (
+                  <div className="mt-4 text-left">
+                    <label htmlFor="delivery-confirm-pin" className={`block text-sm font-bold ${textPrimary}`}>PIN de entrega</label>
+                    <p className={`mt-1 text-xs ${textSecondary}`}>Pide al cliente su PIN de 4 dígitos.</p>
+                    <input id="delivery-confirm-pin" type="text" inputMode="numeric" autoComplete="one-time-code" maxLength={4} value={pin} onChange={(event) => { const value = event.target.value.replace(/\D/g, ''); setPin(value); if (value.length === 4) triggerHaptic([20]); }} placeholder="• • • •" className={`mt-2 w-full rounded-2xl border px-4 py-3 text-center text-2xl font-black tracking-[0.5em] focus:outline-none focus:ring-2 focus:ring-red-400/50 ${darkMode ? 'border-zinc-700 bg-zinc-950 text-white placeholder:text-zinc-600' : 'border-neutral-200 bg-neutral-50 text-neutral-900 placeholder:text-neutral-300'}`} />
+                  </div>
+                )}
+                {error && <p role="alert" className="mt-3 rounded-xl bg-red-50 px-3 py-2 text-sm font-medium text-red-700 dark:bg-red-950/30 dark:text-red-300">{error}</p>}
               </div>
 
               <div className="mt-5 flex flex-col gap-2">
                 <button
                   type="button"
-                  disabled={submitting}
+                  disabled={submitting || (!isCash && !!(currentTicket.isOwnDelivery || currentTicket.handoverPin) && !/^\d{4}$/.test(pin))}
                   onClick={executeDeliver}
-                  className="relative w-full flex items-center justify-center gap-2.5 rounded-2xl py-4 text-xs font-black uppercase tracking-wider transition-all active:scale-[0.97] active-scale bg-red-600 text-white hover:bg-red-500 disabled:opacity-40 disabled:cursor-not-allowed shadow-[0_4px_14px_0_rgba(220,38,38,0.3)]"
+                  className="relative flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-red-600 px-4 py-3 text-sm font-bold text-white shadow-lg shadow-red-600/20 transition hover:bg-red-700 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-600"
                 >
                   {submitting ? (
                     <>
@@ -3123,10 +3047,7 @@ export default function DeliveryTicketPage({ params }: PageProps) {
                     </>
                   ) : (
                     <>
-                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="3" stroke="currentColor" className="w-4 h-4">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75 6 6 9-13.5" />
-                      </svg>
-                      <span>{isCash ? 'Confirmar entrega y efectivo ficticio' : 'Confirmar Entrega'}</span>
+                      <span>{isCash ? 'Confirmar entrega y cobro' : 'Confirmar entrega'}</span>
                     </>
                   )}
                 </button>
@@ -3142,7 +3063,7 @@ export default function DeliveryTicketPage({ params }: PageProps) {
                       setModalOpenedFromDashboard(false);
                     }
                   }}
-                  className={`w-full rounded-2xl border py-3.5 text-xs font-bold transition active:scale-[0.97] active-scale ${
+                  className={`min-h-12 w-full rounded-2xl border px-4 py-3 text-sm font-bold transition active:scale-[0.98] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-600 ${
                     darkMode 
                       ? 'border-zinc-800 text-zinc-300 bg-zinc-900/40 hover:bg-zinc-800' 
                       : 'border-neutral-200 text-neutral-600 bg-neutral-50 hover:bg-neutral-100'

@@ -66,4 +66,13 @@ describe('WingsLab customer support and stamp card', () => {
     expect(r.statusCode).toBe(200);expect(r.json().data).toMatchObject({stamps:1,stampGoal:8,redemptionEnabled:false});
     expect(prisma.order.findMany).toHaveBeenCalledWith(expect.objectContaining({where:expect.objectContaining({OR:[{status:{in:['DELIVERED','COMPLETED']}},{status:'PICKED_UP',fulfillmentType:'PICKUP'}]})}));
   });
+  it('returns the configured product image only for the restaurant reward', async () => {
+    jest.spyOn(marketing, 'getLoyaltyConfiguration').mockResolvedValue({ enabled: true, pointsPer100: 1, stampGoal: 8, rewardKind: 'PRODUCT', rewardProductId: 'gift', rewardDescription: 'Regalo' });
+    jest.spyOn(prisma.order, 'findMany').mockResolvedValue([]);
+    const product = jest.spyOn(prisma.product, 'findFirst').mockResolvedValue({ image: 'https://example.com/gift.png' } as never);
+    const response = await app.inject({ url: '/customer/lealtad', headers: auth(UserRole.CUSTOMER) });
+    expect(response.statusCode).toBe(200);
+    expect(response.json().data).toMatchObject({ rewardKind: 'PRODUCT', rewardProductImage: 'https://example.com/gift.png' });
+    expect(product).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ id: 'gift', restaurantId: expect.any(String), deleted: false }), select: { image: true } }));
+  });
 });

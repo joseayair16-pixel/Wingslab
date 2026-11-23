@@ -8,6 +8,7 @@ import officialLogo from '../assets/wingslab-wordmark.png';
 import officialRedLogo from '../assets/wingslab-wordmark-red.png';
 import { AuthModal } from './AuthModal';
 import { haversineKm } from '../lib/route-optimizer';
+import { WingsLabLoading } from './WingsLabLoading';
 
 type PublicInfo = {
   name?: string; address?: string; contactPhone?: string | null; email?: string | null;
@@ -20,6 +21,7 @@ type Tab = 'inicio' | 'pedidos' | 'fidelidad' | 'perfil' | 'soporte';
 export function CustomerNavigation({ active, onHome, onAuthenticated, onLogout }: { active: Tab; onHome?: () => void; onAuthenticated: (token: string, user: AuthUser) => void; onLogout?: () => void }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
+  const [navigating, setNavigating] = useState(false);
   const [pendingTab, setPendingTab] = useState<Exclude<Tab, 'inicio'> | null>(null);
   const [dark, setDark] = useState(false);
   const [info, setInfo] = useState<PublicInfo | null>(null);
@@ -106,6 +108,13 @@ export function CustomerNavigation({ active, onHome, onAuthenticated, onLogout }
       setLocationStatus(error.code === 1 ? 'denied' : 'unavailable');
     }, { enableHighAccuracy: false, timeout: 10000, maximumAge: 60000 });
   }
+  useEffect(() => {
+    if (panel !== 'info' || !info) return;
+    requestDistance();
+    return () => { locationRequest.current += 1; };
+    // Solo se vuelve a consultar al abrir el panel o cambiar sus coordenadas.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [panel, info?.latitude, info?.longitude]);
   function toggleTheme() {
     const preference = dark ? 'light' : 'dark';
     try { localStorage.setItem('wingslab.theme', preference); } catch {}
@@ -117,7 +126,7 @@ export function CustomerNavigation({ active, onHome, onAuthenticated, onLogout }
     if (tab === 'inicio') { if (onHome) onHome(); else router.push('/'); }
     else if (!readStoredSession('sadel.customer').token) setPendingTab(tab);
     else if (active !== 'inicio') { window.location.hash = tab; }
-    else router.push(`/cuenta#${tab}`);
+    else { setNavigating(true); router.push(`/cuenta#${tab}`); }
   }
   // Preload only the other route on deliberate interaction; hash changes within
   // /cuenta already switch sections without navigating or reloading data.
@@ -130,6 +139,7 @@ export function CustomerNavigation({ active, onHome, onAuthenticated, onLogout }
   }
   const days = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'];
   return <>
+    {navigating && <WingsLabLoading><button type="button" onClick={() => setNavigating(false)} className="absolute bottom-[max(2rem,env(safe-area-inset-bottom))] min-h-11 rounded-xl px-4 text-sm font-semibold text-white underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-white">Volver</button></WingsLabLoading>}
     <nav className="wl-bottom-nav wl-capsule-nav wl-customer-nav" aria-label="Navegación principal">
       <button type="button" aria-current={active === 'inicio' ? 'page' : undefined} onPointerEnter={() => prefetchRoute('inicio')} onFocus={() => prefetchRoute('inicio')} onClick={() => navigate('inicio')}><Home aria-hidden="true" />Inicio</button>
       <button type="button" aria-current={active === 'pedidos' ? 'page' : undefined} onPointerEnter={() => prefetchRoute('pedidos')} onFocus={() => prefetchRoute('pedidos')} onClick={() => navigate('pedidos')}><ReceiptText aria-hidden="true" />Pedidos</button>
@@ -151,11 +161,11 @@ export function CustomerNavigation({ active, onHome, onAuthenticated, onLogout }
       if (destination) { if (active !== 'inicio') window.location.hash = destination; else router.push(`/cuenta#${destination}`); }
     }} />
     <dialog ref={dialog} className="wl-info-dialog wl-premium-dialog" aria-labelledby="wl-info-title" onClose={() => { locationRequest.current += 1; setDistance(null); setLocationStatus('idle'); setPanel(null); infoReturnFocus.current?.focus(); }} onClick={event => { if (event.target === event.currentTarget) dialog.current?.close(); }}>
-      <div className="wl-info-heading"><div><span className="wl-info-eyebrow">Conoce WingsLab</span><h2 id="wl-info-title">Información del restaurante</h2></div><button type="button" aria-label="Cerrar" onClick={() => dialog.current?.close()}><X /></button></div>
+      <div className="wl-info-heading"><div><h2 id="wl-info-title">Información del restaurante</h2></div><button type="button" aria-label="Cerrar" onClick={() => dialog.current?.close()}><X /></button></div>
       {infoFailed ? <p className="wl-info-message" role="alert">No se pudo cargar la información. Intenta de nuevo más tarde.</p> : !info ? <p className="wl-info-message" role="status">Cargando información…</p> : <div className="wl-info-content">
         <div className="wl-info-identity"><div><img className="wl-logo-on-light" src={officialRedLogo.src} alt="WingsLab" /><img className="wl-logo-on-dark" src={officialLogo.src} alt="" aria-hidden="true" />{info.name && info.name.toLowerCase() !== 'wingslab' && <p>{info.name}</p>}</div>{typeof info.isOpen === 'boolean' && <span className={`wl-info-status ${info.isOpen ? 'is-open' : 'is-closed'}`}><i aria-hidden="true" />{info.isOpen ? 'Abierto' : 'Cerrado'}</span>}</div>
         {info.address && <section className="wl-info-section"><span className="wl-info-icon"><MapPin /></span><div><h3>Ubicación</h3><p>{info.address}</p></div></section>}
-        {typeof info.latitude === 'number' && typeof info.longitude === 'number' && <section className="wl-info-section"><span className="wl-info-icon"><Navigation aria-hidden="true" /></span><div><h3>Distancia a ti</h3>{distance !== null ? <p><strong>{distance < 1 ? `${Math.round(distance * 1000)} m` : `${distance.toFixed(1)} km`}</strong> aproximadamente en línea recta; no es distancia de envío.</p> : <><p>Comparte tu ubicación para calcular la distancia aproximada.</p><button type="button" className="wl-info-location-button" disabled={locationStatus === 'loading'} onClick={requestDistance}>{locationStatus === 'loading' ? 'Consultando ubicación…' : 'Calcular distancia'}</button></>}{locationStatus === 'denied' && <p role="status">No se pudo acceder a tu ubicación. Revisa los permisos del navegador.</p>}{locationStatus === 'unavailable' && <p role="status">No pudimos obtener la ubicación. Inténtalo de nuevo.</p>}</div></section>}
+        {typeof info.latitude === 'number' && typeof info.longitude === 'number' && <section className="wl-info-section"><span className="wl-info-icon"><Navigation aria-hidden="true" /></span><div><h3>Distancia a ti</h3>{distance !== null ? <p><strong>{distance < 1 ? `${Math.round(distance * 1000)} m` : `${distance.toFixed(1)} km`}</strong> aproximadamente en línea recta; no es distancia de envío.</p> : <><p role="status">{locationStatus === 'loading' || locationStatus === 'idle' ? 'Calculando distancia…' : locationStatus === 'denied' ? 'Permite la ubicación en los ajustes del navegador.' : 'No pudimos obtener tu ubicación.'}</p>{(locationStatus === 'denied' || locationStatus === 'unavailable') && <button type="button" className="wl-info-location-button" onClick={requestDistance}>Reintentar</button>}</>}</div></section>}
         {!!info.operatingHours?.length && <section className="wl-info-section"><span className="wl-info-icon"><Clock3 /></span><div><h3>Horarios</h3><div className="wl-info-hours">{info.operatingHours.map((h, i) => <div key={i}><span>{days[h.dayOfWeek] || 'Horario'}</span><span>{h.isClosed ? 'Cerrado' : `${h.openTime} – ${h.closeTime}`}</span></div>)}</div></div></section>}
         {!!info.acceptedPaymentMethods?.length && <section className="wl-info-section"><span className="wl-info-icon"><CreditCard /></span><div><h3>Métodos de pago</h3><div className="wl-info-payments">{info.acceptedPaymentMethods.map(m => <span key={m}>{({ CASH:'Efectivo', TRANSFER:'Transferencia', CARD:'Tarjeta' } as Record<string,string>)[m] || m}</span>)}</div></div></section>}
         {(info.pickupOnly === true || info.hasOwnDelivery === true) && <section className="wl-info-section"><span className="wl-info-icon"><ShoppingBag /></span><div><h3>Servicio</h3><p>{info.pickupOnly ? 'Recogida en tienda' : 'Entrega y recogida en tienda'}</p></div></section>}

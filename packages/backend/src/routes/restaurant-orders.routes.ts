@@ -31,6 +31,7 @@ import {
 } from '../services/order-workflow.service';
 import { restaurantOrderListSelect } from '../services/order-selects';
 import { getOrCreateDeliveryToken } from '../services/delivery-token.service';
+import { ORDER_DECISION_ELIGIBLE, ORDER_DECISION_STARTED, ORDER_DECISION_WINDOW_MS } from '../services/order-decision-window';
 import { getOrCreateRequestContext } from '../utils/request-context';
 import { isRestaurant, getBusinessRef, getBusinessArticleCapitalized } from '../utils/restaurant';
 import { buildCustomerDeliveryUrl } from '../utils/customer-web';
@@ -129,6 +130,22 @@ export async function registerRestaurantOrderRoutes(fastify: FastifyInstance): P
         success: true,
         data: items,
       });
+    });
+
+    restaurantOrders.post('/restaurant-panel/pedidos/:id/iniciar-revision', async (request, reply) => {
+      const { id } = z.object({ id: z.string().min(1) }).parse(request.params);
+      const user = getAuthenticatedUser(request);
+      const started = await prisma.$transaction(async tx => {
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`order-review:${user.sub}`}))`;
+        const head = await tx.order.findFirst({ where: { status: 'PENDING', restaurant: { userId: user.sub } }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }], select: { id: true } });
+        if (head?.id !== id) return null;
+        if (!await tx.orderTracking.findFirst({ where: { orderId: id, notes: ORDER_DECISION_ELIGIBLE }, select: { id: true } })) return { createdAt: null };
+        const existing = await tx.orderTracking.findFirst({ where: { orderId: id, notes: ORDER_DECISION_STARTED, status: 'PENDING' }, orderBy: { createdAt: 'asc' }, select: { createdAt: true } });
+        return existing ?? tx.orderTracking.create({ data: { orderId: id, status: 'PENDING', notes: ORDER_DECISION_STARTED }, select: { createdAt: true } });
+      });
+      if (!started) return reply.status(409).send({ success: false, error: { code: 'NOT_QUEUE_HEAD', message: 'Este pedido ya no está al frente de la cola.' } });
+      const serverNow = Date.now();
+      return reply.send({ success: true, data: { expiresAt: started.createdAt ? started.createdAt.getTime() + ORDER_DECISION_WINDOW_MS : null, serverNow } });
     });
 
     restaurantOrders.get('/restaurant-panel/pedidos/:id', async (request, reply) => {

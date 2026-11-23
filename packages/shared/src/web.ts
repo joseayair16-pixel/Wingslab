@@ -746,8 +746,6 @@ export async function requestJson<T>(params: {
 export type SubmitReviewPayload = {
   rating: number;
   comment?: string;
-  driverRating?: number;
-  driverComment?: string;
 };
 
 export type SubmitReviewResult = {

@@ -373,6 +373,8 @@ export async function getRestaurantScopedOrder(
   });
 }
 
+import { ORDER_DECISION_STARTED, ORDER_DECISION_WINDOW_MS } from './order-decision-window';
+
 export async function updateOrderStatusByRestaurant({
   prisma,
   restaurantUserId,
@@ -416,22 +418,15 @@ export async function updateOrderStatusByRestaurant({
     }
 
     if (
-      order.paymentMethod === PaymentMethod.TRANSFER &&
       order.status === OrderStatus.PENDING &&
       nextStatus === OrderStatus.CONFIRMED
     ) {
-      // La ventana de 10 minutos para confirmar una transferencia se mide desde
-      // el momento en que el pedido quedó activo en la cola (activeSinceMs),
-      // no desde createdAt, para que coincida con el clock que usa el job de
-      // timeouts. Si nunca estuvo en cola, cae a createdAt.
-      const activeSinceMs = await getActiveSinceMs(order.id);
-      const effectiveStartMs = activeSinceMs ?? new Date(order.createdAt).getTime();
-      const elapsedMinutes = (Date.now() - effectiveStartMs) / 60000;
-      if (elapsedMinutes > 10) {
+      const started = await tx.orderTracking.findFirst({ where: { orderId, status: 'PENDING', notes: ORDER_DECISION_STARTED }, orderBy: { createdAt: 'asc' }, select: { createdAt: true } });
+      if (started && Date.now() >= started.createdAt.getTime() + ORDER_DECISION_WINDOW_MS) {
         throw createDomainError(
-          400,
-          'TRANSFER_TIMEOUT',
-          'El tiempo límite de 10 minutos para confirmar el pago por transferencia ha expirado. Favor de rechazar la orden.'
+          409,
+          'ORDER_DECISION_EXPIRED',
+          'El plazo para aceptar este pedido venció.'
         );
       }
     }

@@ -5,11 +5,10 @@ import { memo } from 'react';
 type RatingModalProps = {
   open: boolean;
   isPickup: boolean;
-  bizType?: string | null;
   restaurantRating: number;
   onRestaurantRatingChange: (value: number) => void;
-  driverRating: number;
-  onDriverRatingChange: (value: number) => void;
+  comment: string;
+  onCommentChange: (value: string) => void;
   submitting: boolean;
   onSkip: () => void;
   onSubmit: () => void;
@@ -17,14 +16,28 @@ type RatingModalProps = {
 
 const STAR_BASE = 'M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z';
 
+function RatingStars({ label, value, onChange, disabled }: { label: string; value: number; onChange: (value: number) => void; disabled: boolean }) {
+  return (
+    <div className="rounded-2xl border border-neutral-100 bg-neutral-50/80 px-3 py-3 dark:border-zinc-800 dark:bg-zinc-800/60">
+      <p className="text-center text-sm font-bold text-neutral-800 dark:text-zinc-100">{label}</p>
+      <div role="group" aria-label={label} className="mt-1 flex justify-center gap-0.5 sm:gap-2">
+        {[1, 2, 3, 4, 5].map((star) => (
+          <button key={star} type="button" aria-label={`${star} ${star === 1 ? 'estrella' : 'estrellas'}`} aria-pressed={value === star} disabled={disabled} onClick={() => onChange(star)} className={`flex h-11 w-11 items-center justify-center rounded-xl transition active:scale-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-600 disabled:opacity-60 ${value >= star ? 'text-amber-400' : 'text-neutral-300 dark:text-zinc-600'}`}>
+            <svg aria-hidden="true" className="h-8 w-8" fill="currentColor" viewBox="0 0 24 24"><path d={STAR_BASE} /></svg>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default memo(function RatingModal({
   open,
   isPickup,
-  bizType,
   restaurantRating,
   onRestaurantRatingChange,
-  driverRating,
-  onDriverRatingChange,
+  comment,
+  onCommentChange,
   submitting,
   onSkip,
   onSubmit,
@@ -32,76 +45,30 @@ export default memo(function RatingModal({
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 px-4 py-6" onClick={(e) => e.stopPropagation()}>
-      <div className="w-full max-w-md h-fit max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-        <div className="relative overflow-hidden rounded-3xl border border-neutral-100 bg-white shadow-[0_16px_60px_-16px_rgba(15,23,42,0.25),0_4px_16px_rgba(0,0,0,0.08)]">
-          {/* Encabezado limpio */}
-          <div className="px-6 pb-2 pt-8 text-center">
-            <div className="relative mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-emerald-50 ring-8 ring-emerald-50/40">
-              {isPickup ? (
-                <svg className="h-8 w-8 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15.75 10.5V6a3.75 3.75 0 10-7.5 0v4.5m11.356-1.993l1.263 12c.07.665-.45 1.243-1.119 1.243H4.25a1.125 1.125 0 01-1.12-1.243l1.264-12A1.125 1.125 0 015.513 7.5h12.974c.576 0 1.059.435 1.119 1.007zM8.625 10.5a.375.375 0 11-.75 0 .375.375 0 01.75 0zm7.5 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z" /></svg>
-              ) : (
-                <span className="text-3xl leading-none">🎉</span>
-              )}
-            </div>
-            <h3 className="mt-5 text-xl font-black tracking-tight text-neutral-950">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-[max(1rem,env(safe-area-inset-top))] backdrop-blur-sm" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-labelledby="rating-title" aria-describedby="rating-thanks">
+      <div className="max-h-[calc(100dvh-2rem)] w-full max-w-sm overflow-y-auto rounded-[28px] border border-neutral-100 bg-white p-5 shadow-2xl dark:border-zinc-800 dark:bg-zinc-900 sm:p-6" onClick={(e) => e.stopPropagation()}>
+          <div className="text-center">
+            <div aria-hidden="true" className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-red-50 text-2xl dark:bg-red-950/50">{isPickup ? '🛍️' : '🎉'}</div>
+            <h3 id="rating-title" className="mt-3 text-xl font-black tracking-tight text-neutral-950 dark:text-white">
               {isPickup ? '¡Pedido recogido!' : '¡Tu pedido ha llegado!'}
             </h3>
-            <p className="mx-auto mt-2 max-w-xs text-sm leading-relaxed text-neutral-500">
-              {isPickup ? 'Gracias por comprar con WingsLab. Tu opinión nos ayuda a mejorar.' : '¡Buen provecho! Gracias por pedir con WingsLab.'}
+            <p id="rating-thanks" className="mt-1.5 text-sm text-neutral-500 dark:text-zinc-400">
+              Gracias por elegir WingsLab ❤️
             </p>
           </div>
-
-          {/* Contenido */}
-          <div className="space-y-5 px-6 pb-6 pt-5">
-            <div className="rounded-2xl border border-neutral-100 bg-neutral-50/60 px-4 py-4">
-              <label className="text-sm font-bold text-neutral-800 block mb-2 text-center">
-                {bizType && bizType !== 'RESTAURANT' ? '¿Qué tal estuvo tu pedido?' : '¿Qué tal estuvo la comida?'}
-              </label>
-              <div className="flex gap-2 justify-center">
-                {[1, 2, 3, 4, 5].map((star) => (
-                  <button
-                    key={star}
-                    type="button"
-                    aria-label={`${star} estrellas`}
-                    onClick={() => onRestaurantRatingChange(star)}
-                    className={`transition-all duration-150 hover:scale-125 active:scale-95 ${
-                      restaurantRating >= star ? 'text-amber-400 drop-shadow-[0_2px_6px_rgba(251,191,36,0.5)]' : 'text-neutral-200 hover:text-amber-300'
-                    }`}
-                  >
-                    <svg className="h-8 w-8" fill="currentColor" viewBox="0 0 24 24"><path d={STAR_BASE} /></svg>
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {!isPickup && (
-              <div className="rounded-2xl border border-neutral-100 bg-neutral-50/60 px-4 py-4">
-                <label className="text-sm font-bold text-neutral-800 block mb-2 text-center">¿Qué tal el servicio de entrega?</label>
-                <div className="flex gap-2 justify-center">
-                  {[1, 2, 3, 4, 5].map((star) => (
-                    <button
-                      key={star}
-                      type="button"
-                      aria-label={`${star} estrellas`}
-                      onClick={() => onDriverRatingChange(star)}
-                      className={`transition-all duration-150 hover:scale-125 active:scale-95 ${
-                        driverRating >= star ? 'text-amber-400 drop-shadow-[0_2px_6px_rgba(251,191,36,0.5)]' : 'text-neutral-200 hover:text-amber-300'
-                      }`}
-                    >
-                      <svg className="h-8 w-8" fill="currentColor" viewBox="0 0 24 24"><path d={STAR_BASE} /></svg>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            <div className="flex gap-3">
+          <div className="mt-5 space-y-3">
+            <RatingStars label="¿Qué te pareció nuestro servicio?" value={restaurantRating} onChange={onRestaurantRatingChange} disabled={submitting} />
+            <label className="block text-sm font-semibold text-neutral-800 dark:text-zinc-100">
+              Comentario <span className="font-normal text-neutral-500 dark:text-zinc-400">(opcional)</span>
+              <textarea value={comment} onChange={e => onCommentChange(e.target.value)} disabled={submitting} maxLength={500} rows={3} className="mt-2 block w-full resize-y rounded-2xl border border-neutral-200 bg-neutral-50 px-3 py-2 text-base font-normal focus-visible:outline focus-visible:outline-2 focus-visible:outline-red-600 dark:border-zinc-700 dark:bg-zinc-800" />
+            </label>
+            <p className="text-xs text-neutral-500 dark:text-zinc-400">Solo el equipo de WingsLab verá tu reseña.</p>
+            <div className="flex gap-2 pt-1">
               <button
                 type="button"
                 onClick={onSkip}
                 disabled={submitting}
-                className="flex-1 rounded-full border border-neutral-200 bg-white text-sm font-bold text-neutral-600 py-3 transition hover:bg-neutral-50 hover:text-neutral-800 disabled:cursor-not-allowed disabled:opacity-60"
+                className="min-h-12 flex-1 rounded-2xl border border-neutral-200 bg-white px-3 text-sm font-bold text-neutral-600 transition hover:bg-neutral-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-600 disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200"
               >
                 Saltar
               </button>
@@ -109,16 +76,12 @@ export default memo(function RatingModal({
                 type="button"
                 onClick={onSubmit}
                 disabled={restaurantRating === 0 || submitting}
-                className="flex-1 rounded-full bg-gradient-to-r from-sky-500 to-blue-600 text-sm font-bold text-white py-3 shadow-[0_8px_20px_-6px_rgba(2,132,199,0.5)] transition hover:from-sky-600 hover:to-blue-700 hover:shadow-[0_10px_24px_-6px_rgba(2,132,199,0.6)] disabled:cursor-not-allowed disabled:from-neutral-200 disabled:to-neutral-200 disabled:shadow-none"
+                className="min-h-12 flex-[1.5] rounded-2xl bg-red-600 px-3 text-sm font-bold text-white transition hover:bg-red-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-600 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 {submitting ? 'Enviando...' : 'Enviar calificación'}
               </button>
             </div>
-            <p className="text-center text-[11px] font-medium text-neutral-400">
-              Tu calificación ayuda a mejorar WingsLab
-            </p>
           </div>
-        </div>
       </div>
     </div>
   );

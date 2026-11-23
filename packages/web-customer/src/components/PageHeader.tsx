@@ -1,10 +1,9 @@
 import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
 import officialWordmark from '../assets/wingslab-wordmark.png';
+import redWordmark from '../assets/wingslab-wordmark-red.png';
 
-/** Encabezado compartido de las páginas interiores del comensal.
- *  El degradado del cuerpo se aplica con `.wl-page-shell` para que la transición
- *  del rojo al fondo sea idéntica a la página de inicio. */
+/** Encabezado compartido de las páginas interiores del comensal. */
 export function PageHeader() {
   return (
     <header className="wl-page-header">
@@ -14,7 +13,8 @@ export function PageHeader() {
           <span>Ver menú</span>
         </Link>
         <Link href="/" aria-label="WingsLab, inicio" className="wl-page-brand">
-          <img src={officialWordmark.src} alt="WingsLab" />
+          <img className="wl-logo-on-light" src={redWordmark.src} alt="" />
+          <img className="wl-logo-on-dark" src={officialWordmark.src} alt="" />
         </Link>
         <span className="wl-page-header-spacer" aria-hidden="true" />
       </div>

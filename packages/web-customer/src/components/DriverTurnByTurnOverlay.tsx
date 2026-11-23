@@ -103,6 +103,7 @@ export default function DriverTurnByTurnOverlay({
   const routeOriginRef = useRef<Point | null>(null);
   const routeDestinationRef = useRef<Point | null>(null);
   const routeInFlightRef = useRef(false);
+  const initialRouteRequestedRef = useRef(false);
   const routeQueuedRef = useRef(false);
   const requestRouteRef = useRef<() => void>(() => {});
   // Ruta proyectada: puntos del overview + longitud acumulada (1 solo Directions).
@@ -162,7 +163,12 @@ export default function DriverTurnByTurnOverlay({
     ensureGoogleMapsScript()
       .then((g) => {
         if (!cancelled) {
-          if (g) setMapReady(true);
+          if (g) {
+            setMapReady(true);
+            // La biblioteca se prepara mientras el mapa y el GPS arrancan.
+            // Esto no calcula una ruta ni genera una solicitud de Routes.
+            void g.maps.importLibrary('routes').catch(() => {});
+          }
           else setLoadError(true);
         }
       });
@@ -190,6 +196,9 @@ export default function DriverTurnByTurnOverlay({
         };
         driverPosRef.current = point;
         setDriverPos(point);
+        if (mapRef.current && !initialRouteRequestedRef.current && !routeInFlightRef.current) {
+          requestRouteRef.current();
+        }
       },
       () => setGpsError(true),
       { enableHighAccuracy: true, timeout: 15000, maximumAge: 5000 }
@@ -332,6 +341,7 @@ export default function DriverTurnByTurnOverlay({
     if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
 
     setRouteError(false);
+    initialRouteRequestedRef.current = true;
     routeInFlightRef.current = true;
     const handleRoute = (result: any, status: string) => {
         routeInFlightRef.current = false;
@@ -443,6 +453,9 @@ export default function DriverTurnByTurnOverlay({
         const lng = parseFloat(pos.coords.longitude.toFixed(6));
         const point = { lat, lng };
         driverPosRef.current = point;
+        if (mapRef.current && !initialRouteRequestedRef.current && !routeInFlightRef.current) {
+          requestRouteRef.current();
+        }
         const gpsHeading = pos.coords.heading;
         if (gpsHeading != null && Number.isFinite(gpsHeading) && (pos.coords.speed == null || pos.coords.speed >= 1)) {
           headingRef.current = gpsHeading;

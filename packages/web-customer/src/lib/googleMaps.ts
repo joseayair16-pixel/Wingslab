@@ -35,7 +35,7 @@ function hasMapConstructor(): boolean {
 }
 
 export function getGoogleMaps(): GoogleMaps | null {
-  if (typeof window === 'undefined') return null;
+  if (typeof window === 'undefined' || mapsKnownUnavailable) return null;
   return hasMapConstructor() ? (window as any).google : null;
 }
 
@@ -60,7 +60,7 @@ export function waitForGoogleMaps(timeoutMs: number = MAPS_TIMEOUT_MS): Promise<
         resolve(google);
         return;
       }
-      if (Date.now() - start > timeoutMs) {
+      if (mapsKnownUnavailable || Date.now() - start > timeoutMs) {
         resolve(null);
         return;
       }
@@ -72,6 +72,7 @@ export function waitForGoogleMaps(timeoutMs: number = MAPS_TIMEOUT_MS): Promise<
 
   try {
     (window as any)[cacheKey] = promise;
+    void promise.then(() => { delete (window as any)[cacheKey]; });
   } catch {
     // sin acceso a window global (tests/SSR): no cachear
   }
@@ -94,7 +95,10 @@ export function ensureGoogleMapsScript(apiKey?: string): Promise<GoogleMaps | nu
 
   const existingScript = document.querySelector('script[src*="maps.googleapis.com/maps/api/js"]');
   if (existingScript) {
-    mapsScriptPromise = waitForGoogleMaps();
+    mapsScriptPromise = waitForGoogleMaps().then((google) => {
+      if (!google) mapsScriptPromise = null;
+      return google;
+    });
     return mapsScriptPromise;
   }
 
@@ -102,7 +106,7 @@ export function ensureGoogleMapsScript(apiKey?: string): Promise<GoogleMaps | nu
     let key = apiKey?.trim() || '';
     if (!key) {
       try {
-        const response = await fetch('/wingslab-google-maps-config', { cache: 'no-store' });
+        const response = await fetch('/wingslab-google-maps-config', { cache: 'no-store', signal: AbortSignal.timeout(5000) });
         if (!response.ok) return null;
         const config = await response.json();
         if (config.enabled !== true || typeof config.apiKey !== 'string') return null;
@@ -123,7 +127,10 @@ export function ensureGoogleMapsScript(apiKey?: string): Promise<GoogleMaps | nu
         settled = true;
         if (timer !== undefined) window.clearTimeout(timer);
         if (unavailable) mapsKnownUnavailable = true;
-        if (!value) mapsScriptPromise = null;
+        if (!value) script.remove();
+        script.onerror = null;
+        (window as any).__onSadelMapsLoaded = previousCallback;
+        if (!value) (window as any).gm_authfailure = previousAuthFailure;
         resolve(value);
       };
 
@@ -137,6 +144,7 @@ export function ensureGoogleMapsScript(apiKey?: string): Promise<GoogleMaps | nu
       // restricciones de referente (p. ej. falta 127.0.0.1 en desarrollo).
       const previousAuthFailure = (window as any).gm_authfailure;
       (window as any).gm_authfailure = () => {
+        mapsKnownUnavailable = true;
         if (typeof previousAuthFailure === 'function') previousAuthFailure();
         finish(null, true);
       };
@@ -146,11 +154,14 @@ export function ensureGoogleMapsScript(apiKey?: string): Promise<GoogleMaps | nu
       script.async = true;
       script.defer = true;
       script.dataset.sadelMaps = '1';
-      script.onerror = () => finish(null, true);
-      timer = window.setTimeout(() => finish(null, true), MAPS_LOAD_TIMEOUT_MS);
+      script.onerror = () => finish(null);
+      timer = window.setTimeout(() => finish(null), MAPS_LOAD_TIMEOUT_MS);
       document.head.appendChild(script);
     });
-  })();
+  })().then((google) => {
+    if (!google) mapsScriptPromise = null;
+    return google;
+  });
 
   return mapsScriptPromise;
 }

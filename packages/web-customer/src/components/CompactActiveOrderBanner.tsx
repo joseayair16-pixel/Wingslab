@@ -23,7 +23,7 @@ export function computeDelayState(order: CompactOrderDetail, now: number): Delay
   const hasDriverArrived =
     order.status === 'IN_TRANSIT' && order.tracking?.some((t) => t.notes === 'DRIVER_ARRIVED');
 
-  if (TERMINAL_STATUSES.includes(order.status) || hasDriverArrived) {
+  if (order.status === 'PENDING' || TERMINAL_STATUSES.includes(order.status) || hasDriverArrived) {
     return { isDelayed: false, level: 0, minutesOverdue: 0, referenceTime: null, isScheduled: false };
   }
 
@@ -161,9 +161,9 @@ export function buildFallbackTimelineSteps(
     return [
       {
         key: 'kitchen',
-        label: getOrderStatusLabel('PREPARING', businessType),
+        label: status === 'PENDING' ? 'Esperando confirmación' : getOrderStatusLabel('PREPARING', businessType),
         description: status === 'PENDING'
-          ? `${getBusinessArticleCapitalized(businessType)} ${getBusinessRef(businessType)} está revisando tu solicitud`
+          ? 'Esperando la confirmación del pedido'
           : 'Estamos preparando tu pedido',
         state: status === 'PENDING' || status === 'CONFIRMED' || status === 'PREPARING'
           ? 'active'
@@ -195,9 +195,9 @@ export function buildFallbackTimelineSteps(
   return [
     {
       key: 'kitchen',
-      label: getOrderStatusLabel('PREPARING', businessType),
+      label: status === 'PENDING' ? 'Esperando confirmación' : getOrderStatusLabel('PREPARING', businessType),
       description: status === 'PENDING'
-        ? `${getBusinessArticleCapitalized(businessType)} ${getBusinessRef(businessType)} está revisando tu solicitud`
+        ? 'Esperando la confirmación del pedido'
         : 'Estamos preparando tu pedido',
       state: status === 'PENDING' || status === 'CONFIRMED' || status === 'PREPARING'
         ? 'active'
@@ -305,7 +305,8 @@ export const CompactActiveOrderBanner = memo(function CompactActiveOrderBanner({
             <div className="relative w-12 h-12 sm:w-14 sm:h-14 overflow-hidden rounded-2xl bg-gradient-to-br from-neutral-800 to-neutral-950 flex items-center justify-center shadow-lg shadow-neutral-900/15">
               <span className="absolute inset-x-2 bottom-1 h-2 rounded-full bg-red-500/20 blur-sm" aria-hidden="true" />
               {(() => {
-                const StageIcon = activeStatus === 'DELIVERED' ? Check :
+                 const StageIcon = activeStatus === 'PENDING' ? Timer :
+                   activeStatus === 'DELIVERED' ? Check :
                   activeStatus === 'DRIVER_ARRIVED' ? MapPin :
                   activeStatus === 'READY' ? PackageCheck :
                   activeStatus === 'PICKED_UP' || activeStatus === 'IN_TRANSIT' ? Bike :
@@ -372,8 +373,9 @@ export const CompactActiveOrderBanner = memo(function CompactActiveOrderBanner({
             ) : dynamicRemainingText ? (
               <p className="text-xs text-neutral-500 dark:text-zinc-400 mt-0.5 truncate">{dynamicRemainingText}</p>
             ) : activeStatus === 'PENDING' ? (
-              <p className="text-xs text-neutral-500 dark:text-zinc-400 mt-0.5 truncate">
-                Esperando confirmación del {getBusinessRef(currentOrder.restaurant?.businessType)}…
+              <p role="status" className="mt-0.5 flex items-center gap-1.5 text-xs text-neutral-600 dark:text-zinc-300">
+                <span aria-hidden="true" className="size-3 shrink-0 rounded-full border-2 border-red-200 border-t-red-600 motion-safe:animate-spin dark:border-red-900 dark:border-t-red-400" />
+                 Esperando respuesta de {currentOrder.restaurant?.businessType && currentOrder.restaurant.businessType !== 'RESTAURANT' ? 'la tienda' : 'el restaurante'}…
               </p>
             ) : (
               null

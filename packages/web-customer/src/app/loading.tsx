@@ -1,5 +1,5 @@
-import { SaDelLoader } from '../components/SaDelLoader';
+import { WingsLabLoading } from '../components/WingsLabLoading';
 
 export default function Loading() {
-  return <SaDelLoader fullScreen className="bg-white dark:bg-[#101012]" />;
+  return <WingsLabLoading />;
 }

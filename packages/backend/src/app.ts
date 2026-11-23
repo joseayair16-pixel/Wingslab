@@ -23,7 +23,7 @@ import { setupSocketIO } from './services/socket.service';
 import { setupNotificationSubscribers } from './subscribers/notification.subscriber';
 import { buildRequestContext, getOrCreateRequestContext } from './utils/request-context';
 import { logger } from './utils/logger';
-import { startOrderTimeoutJob } from './jobs/order-timeout.job';
+import { registerOrderReviewTimeout, startOrderTimeoutJob } from './jobs/order-timeout.job';
 import { startRestaurantHoursJob } from './jobs/restaurant-hours.job';
 import { startDriverPickupAlertJob } from './jobs/driver-pickup-alert.job';
 import { startStuckOrderJob } from './jobs/stuck-order.job';
@@ -240,6 +240,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   });
 
   await setupRoutes(fastify);
+  if (process.env.WINGSLAB_RUNTIME_AUTHORIZED === 'reviewed-phase-2b') registerOrderReviewTimeout(fastify);
 
   startSelectedJobs(requestedJobs, {
     paymentReminders: () => startPaymentRemindersJob(), thankYouMessages: () => startThankYouMessagesJob(),

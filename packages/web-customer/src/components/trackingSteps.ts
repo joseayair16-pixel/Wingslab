@@ -54,9 +54,9 @@ export function buildTimelineSteps(order: CompactOrderDetail, activeStatusOverri
     return [
       {
         key: 'kitchen',
-        label: getOrderStatusLabel('PREPARING', order.restaurant?.businessType),
+        label: status === 'PENDING' ? 'Esperando confirmación' : getOrderStatusLabel('PREPARING', order.restaurant?.businessType),
         description: status === 'PENDING'
-          ? `${getBusinessArticleCapitalized(order.restaurant?.businessType)} ${getBusinessRef(order.restaurant?.businessType)} está revisando tu solicitud`
+          ? 'Esperando la confirmación del pedido'
           : 'Estamos preparando tu pedido',
         state: status === 'PENDING' || status === 'CONFIRMED' || status === 'PREPARING'
           ? 'active'
@@ -88,9 +88,9 @@ export function buildTimelineSteps(order: CompactOrderDetail, activeStatusOverri
   return [
     {
       key: 'kitchen',
-      label: getOrderStatusLabel('PREPARING', order.restaurant?.businessType),
+      label: status === 'PENDING' ? 'Esperando confirmación' : getOrderStatusLabel('PREPARING', order.restaurant?.businessType),
       description: status === 'PENDING'
-        ? `${getBusinessArticleCapitalized(order.restaurant?.businessType)} ${getBusinessRef(order.restaurant?.businessType)} está revisando tu solicitud`
+        ? 'Esperando la confirmación del pedido'
         : 'Estamos preparando tu pedido',
       state: status === 'PENDING' || status === 'CONFIRMED' || status === 'PREPARING'
         ? 'active'

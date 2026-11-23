@@ -3,12 +3,14 @@ import { getWingslabApiUrl, getWingslabSocketUrl, getWingslabCustomerUrl, wingsl
   AUTOMATIC_ORDER_DECISIONS_ENABLED, restaurantOrderActionAllowed,
   restaurantOrderTargetStatus, CATEGORY_ICON_LIBRARY, CATEGORY_ICON_GROUPS, filterCategoryIcons } from '@sadel/shared';
 import { createOrderSyncGate, createOrderActionFlight, mergeConfirmedOrder, reconcileOrders } from '../lib/order-sync';
+import { incomingOrderDisposition } from '../lib/incoming-order-policy';
 import { Activity, AlertTriangle, ArrowRight, Award, Bike, Check, ChefHat, ChevronUp, ClipboardList, Clock, Home as HomeIcon, Info, Layers, Loader2, Lock, Mail, MapPin, Megaphone, MessageCircle, MessageSquareText, Minus, Moon, Package, Pencil, Phone, Plus, RefreshCw, Settings, ShoppingBag, Sparkles, Store, Tag, Trash2, User, Users, X } from 'lucide-react';
 import redWordmark from '../assets/wingslab-wordmark-red.png';
 import whiteWordmark from '../assets/wingslab-wordmark-white.png';
 import { CategoryIcon } from '../components/CategoryIcon';
+import { IncomingRouteDistance } from '../components/IncomingRouteDistance';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { io } from 'socket.io-client';
 import { QRCodeSVG } from 'qrcode.react';
@@ -84,6 +86,7 @@ import { createPlacesSource } from '../lib/places';
 import { ensureGoogleMapsScript } from '../lib/googleMaps';
 import { isActiveOrderStatus, isOrderInPeriod, mexicoDayKey } from '../lib/order-visibility';
 import { customerPhoneHref, formatCustomerAddress, formatCustomerName, formatCustomerPhone } from '../lib/order-contact';
+import { useSharedClock } from '../lib/clock';
 import {
   isNativePlatform,
   checkNativePushPermission,
@@ -236,6 +239,8 @@ type OrderItem = {
   handoverPinAttempts?: number;
   handoverPinUpdatedAt?: string | null;
   createdAt: string;
+  deliveredAt?: string | null;
+  completedAt?: string | null;
   estimatedDeliveryTime?: string;
   scheduledDeliveryAt?: string;
   scheduledDeliveryCustomerAcceptedAt?: string | null;
@@ -253,6 +258,8 @@ type OrderItem = {
   deliverySequence?: number | null;
   deliveredByRestaurant?: boolean;
   address?: {
+    latitude?: number | null;
+    longitude?: number | null;
     street?: string | null;
     number?: string | null;
     apartment?: string | null;
@@ -683,8 +690,6 @@ function resolveCustomerOrigin(): string {
 }
 const storageKey = 'sadel.restaurant';
 const orderAlertSoundPreferenceKey = `${storageKey}.orderAlertSoundEnabled`;
-const newOrderDecisionWindowMs = 2 * 60 * 1000;
-const storeOrderDecisionWindowMs = 8 * 60 * 1000;
 const preparationTimePresets: Array<{
   value: PreparationPresetMinutes;
   label: string;
@@ -698,7 +703,7 @@ const preparationTimePresets: Array<{
     { value: 60, label: '1 h', description: 'Pico extremo de operaciones.' },
   ];
 const orderStatusOptions: Array<{ label: string; value: 'ACTIVE' | 'REJECTED' | 'CANCELLED' | 'DELIVERED' | 'COMPLETED' }> = [
-  { label: 'En preparacion', value: 'ACTIVE' },
+  { label: 'Activas', value: 'ACTIVE' },
   { label: 'Entregados / Recogidos', value: 'DELIVERED' },
   { label: 'Rechazados', value: 'REJECTED' },
   { label: 'Cancelados', value: 'CANCELLED' },
@@ -762,6 +767,7 @@ function stopWebRepeatAlarm(): void {
 const liveEvents = [
   'order:created',
   'order:accepted',
+  'order:rejected',
   'order:preparing',
   'order:ready',
   'order:delivery-assigned',
@@ -1075,15 +1081,8 @@ export default function Home() {
   const [showLogoutWarningModal, setShowLogoutWarningModal] = useState(false);
   const [activeSection, setActiveSection] = useState<RestaurantPortalSection>('dashboard');
   const [selectedOrderForTicket, setSelectedOrderForTicket] = useState<OrderItem | null>(null);
-  const [orderModalId, setOrderModalId] = useState<string | null>(null);
-  useEffect(() => {
-    if (!orderModalId) return;
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setOrderModalId(null);
-    };
-    document.addEventListener('keydown', onKeyDown);
-    return () => document.removeEventListener('keydown', onKeyDown);
-  }, [orderModalId]);
+  // Alias compartido con OrdersSection: solo existe un detalle de pedido.
+  const orderModalId = selectedOrderForTicket?.id;
   const [selectedOrderForEtaExtension, setSelectedOrderForEtaExtension] = useState<OrderItem | null>(null);
   const [rescheduleDate, setRescheduleDate] = useState('');
   const [rescheduleTime, setRescheduleTime] = useState('');
@@ -1120,7 +1119,7 @@ export default function Home() {
     return () => handle?.remove();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-  
+
   const [showClosePromptModal, setShowClosePromptModal] = useState(false);
   const [extendingHours, setExtendingHours] = useState(false);
   // Chat Real-Time State
@@ -1134,40 +1133,28 @@ export default function Home() {
 
   useEffect(() => { localStorage.setItem('sadel.restaurant.unread', JSON.stringify(unreadMessagesMap)); }, [unreadMessagesMap]);
 
-  useEffect(() => {
-    if (selectedOrderForTicket) {
-      setUnreadMessagesMap((prev) => {
-        if (!prev[selectedOrderForTicket.id]) return prev;
-        const copy = { ...prev };
-        delete copy[selectedOrderForTicket.id];
-        return copy;
-      });
-    }
-  }, [selectedOrderForTicket]);
   const [activeTicketTab, setActiveTicketTab] = useState<'comanda' | 'chat'>('comanda');
   const selectedOrderForTicketIdRef = useRef(selectedOrderForTicket?.id || '');
   const chatEndRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
-    selectedOrderForTicketIdRef.current = selectedOrderForTicket?.id || '';
-    if (selectedOrderForTicket?.id) {
+    selectedOrderForTicketIdRef.current = activeTicketTab === 'chat' ? selectedOrderForTicket?.id || '' : '';
+    if (activeTicketTab === 'chat' && selectedOrderForTicket?.id) {
       // Clear unread count for this order
       setUnreadMessagesMap((prev) => {
         const next = { ...prev };
         delete next[selectedOrderForTicket.id];
         return next;
       });
-      setActiveTicketTab('comanda'); // Reset tab to comanda on change
     }
-  }, [selectedOrderForTicket]);
+  }, [selectedOrderForTicket?.id, activeTicketTab]);
 
   useEffect(() => {
-    if (activeTicketTab === 'chat' && selectedOrderForTicket) {
-      setTimeout(() => {
-        chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-      }, 100);
-    }
-  }, [chatMessages, activeTicketTab, selectedOrderForTicket]);
+    if (activeTicketTab !== 'chat' || !selectedOrderForTicket) return;
+    const timer = window.setTimeout(() => chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
+    return () => window.clearTimeout(timer);
+  }, [chatMessages, activeTicketTab, selectedOrderForTicket?.id]);
+
 
   const [zoomedImageUrl, setZoomedImageUrl] = useState<string | null>(null);
   const [paymentDetailOrder, setPaymentDetailOrder] = useState<typeof selectedOrderForTicket | null>(null);
@@ -1197,6 +1184,7 @@ export default function Home() {
     onConfirm: () => void;
   } | null>(null);
   const [transferRefundOrder, setTransferRefundOrder] = useState<OrderItem | null>(null);
+  const [confirmIncomingRejectId, setConfirmIncomingRejectId] = useState<string | null>(null);
   const [selectedPreparationTime, setSelectedPreparationTime] = useState<PreparationPresetMinutes>(15);
   const [isSelectingPrepTime, setIsSelectingPrepTime] = useState(false);
   const [isScheduledMode, setIsScheduledMode] = useState(false);
@@ -1392,6 +1380,7 @@ export default function Home() {
     const order = currentOrders?.find?.((o: any) => o.id === orderId);
     if (order) {
       setActiveSection('orders');
+      setActiveTicketTab('comanda');
       setSelectedOrderForTicket(order);
       if (pendingEtaExtensionOrderIdRef.current === orderId) {
         setSelectedOrderForEtaExtension(order);
@@ -1540,7 +1529,7 @@ export default function Home() {
               const lastSeenImage = localStorage.getItem('sadel_restaurant_promo_image');
               const now = Date.now();
               const twentyFourHours = 24 * 60 * 60 * 1000;
-              
+
               let shouldShow = false;
               if (!lastSeenTimestamp || lastSeenImage !== data.data.restaurantPromoModalImage) {
                 shouldShow = true;
@@ -1769,6 +1758,7 @@ export default function Home() {
     if (!pendingId || orders.length === 0) return;
     const order = orders.find((o) => o.id === pendingId);
     if (order) {
+      setActiveTicketTab('comanda');
       setSelectedOrderForTicket(order);
       if (pendingEtaExtensionOrderIdRef.current === pendingId) {
         setSelectedOrderForEtaExtension(order);
@@ -1814,7 +1804,7 @@ export default function Home() {
           const position = marker.getPosition();
           if (!position) return;
           const location = { lat: position.lat(), lng: position.lng() };
-          
+
           setStoreDraft((current) => ({
             ...current,
             latitude: String(location.lat),
@@ -2342,20 +2332,16 @@ export default function Home() {
     }
 
     function handleKeyDown(event: KeyboardEvent) {
-      if (incomingOrderQueue.length > 0) {
-        return;
-      }
-
-      if (event.key === 'Escape') {
-        setSelectedOrderForTicket(null);
-      }
+      if (event.key !== 'Escape' || incomingOrderQueue.length > 0) return;
+      if (activeTicketTab === 'chat') setActiveTicketTab('comanda');
+      else setSelectedOrderForTicket(null);
     }
 
     window.addEventListener('keydown', handleKeyDown);
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [incomingOrderQueue.length, selectedOrderForTicket]);
+  }, [incomingOrderQueue.length, selectedOrderForTicket, activeTicketTab]);
 
   // Crop drag global listeners
   useEffect(() => {
@@ -2403,13 +2389,40 @@ export default function Home() {
 
   const pendingIncomingOrders = [...orders]
     .filter((order) => order.status === 'PENDING')
-    .sort((left, right) => new Date(left.createdAt).getTime() - new Date(right.createdAt).getTime());
+    .sort((left, right) => new Date(left.createdAt).getTime() - new Date(right.createdAt).getTime() || (left.id < right.id ? -1 : left.id > right.id ? 1 : 0));
   const pendingIncomingOrderMap = new Map(pendingIncomingOrders.map((order) => [order.id, order]));
   const queuedPendingOrderIds = incomingOrderQueue.filter((orderId) => pendingIncomingOrderMap.has(orderId));
   const queuedPendingOrders = queuedPendingOrderIds
     .map((orderId) => pendingIncomingOrderMap.get(orderId))
     .filter((order): order is OrderItem => Boolean(order));
   const activeIncomingOrder = queuedPendingOrders[0] || null;
+  useEffect(() => {
+    setConfirmIncomingRejectId(null);
+  }, [activeIncomingOrder?.id]);
+  const incomingId = activeIncomingOrder?.id;
+  const [reviewClock, setReviewClock] = useState<{ id: string; startedAt: string } | null>(null);
+  useEffect(() => {
+    if (!incomingId || !token) return;
+    let active = true;
+    let pending = false;
+    let synchronized = false;
+    const start = async () => {
+      if (pending || synchronized || document.visibilityState !== 'visible') return;
+      pending = true;
+      try {
+        const result = await requestJson<{ success: true; data: { expiresAt: number | null; serverNow: number } }>({ apiBase, token, options: { method: 'POST' }, path: `/restaurant-panel/pedidos/${incomingId}/iniciar-revision` });
+        if (!active) return;
+        synchronized = true;
+        const { expiresAt, serverNow } = result.data;
+        if (expiresAt !== null) setReviewClock({ id: incomingId, startedAt: new Date(Date.now() + expiresAt - serverNow - 300_000).toISOString() });
+      } catch { /* Retry while this order remains visible. */ }
+      finally { pending = false; }
+    };
+    void start();
+    const retry = window.setInterval(start, 5000);
+    document.addEventListener('visibilitychange', start);
+    return () => { active = false; window.clearInterval(retry); document.removeEventListener('visibilitychange', start); };
+  }, [apiBase, token, incomingId]);
   const waitingIncomingOrders = queuedPendingOrders.slice(1);
   const acceptancePromptOrder =
     (acceptancePromptOrderId ? orders.find((order) => order.id === acceptancePromptOrderId) : null) || null;
@@ -2830,23 +2843,24 @@ export default function Home() {
     return () => { window.clearInterval(timer); window.removeEventListener('online', retry); };
   }, [orderSyncError, token, sessionUser?.role, loadOrdersOnly]);
 
-  const loadChatMessages = useCallback(async (orderId: string) => {
+  const loadChatMessages = useCallback(async (orderId: string, signal: AbortSignal) => {
     if (!token) return;
     setLoadingChat(true);
     try {
       const response = await fetch(`${apiBase}/orders/${orderId}/messages`, {
+        signal,
         headers: {
           'Authorization': `Bearer ${token}`,
         },
       });
       const data = await response.json();
-      if (data.success) {
+      if (!signal.aborted && data.success) {
         setChatMessages(data.messages);
       }
     } catch (err) {
-      console.error('Error loading chat messages:', err);
+      if (!signal.aborted) console.error('Error loading chat messages:', err);
     } finally {
-      setLoadingChat(false);
+      if (!signal.aborted) setLoadingChat(false);
     }
   }, [apiBase, token]);
 
@@ -2893,8 +2907,11 @@ export default function Home() {
 
   // Cargar mensajes de chat en tiempo real cuando se abre un ticket o se cambia a la pestaña de chat
   useEffect(() => {
-    if (selectedOrderForTicket?.id) {
-      void loadChatMessages(selectedOrderForTicket.id);
+    if (activeTicketTab === 'chat' && selectedOrderForTicket?.id) {
+      const controller = new AbortController();
+      setChatMessages([]);
+      void loadChatMessages(selectedOrderForTicket.id, controller.signal);
+      return () => controller.abort();
     }
   }, [selectedOrderForTicket?.id, activeTicketTab, loadChatMessages]);
 
@@ -2961,7 +2978,7 @@ export default function Home() {
       if (first) seenLiveEventKeysRef.current.delete(first);
     }
 
-    if (['order:accepted', 'order:preparing', 'order:ready', 'order:delivery-assigned', 'order:in-transit', 'order:delivered', 'order:driver-arrived'].includes(eventName)) {
+    if (['order:accepted', 'order:rejected', 'order:preparing', 'order:ready', 'order:delivery-assigned', 'order:in-transit', 'order:delivered', 'order:driver-arrived'].includes(eventName)) {
       // Another tab of this restaurant committed the change: re-read the
       // authoritative list instead of trusting a partial payload.
       void loadOrdersOnly();
@@ -2974,6 +2991,12 @@ export default function Home() {
     if (eventName === 'order:created') {
       // Play sound DIRECTLY — no depende del reload de pedidos
       void playIncomingOrderAlert();
+      // Una consulta ya iniciada puede haber tomado su instantánea antes del
+      // pedido. Esperarla y volver a consultar evita perder el aviso hasta el
+      // siguiente sondeo de respaldo.
+      const inFlight = ordersLoadFlightRef.current;
+      if (inFlight) void inFlight.then(() => loadOrdersOnly());
+      else void loadOrdersOnly();
     }
 
     if (eventName === 'order:driver-arrived-restaurant' && payload.orderId) {
@@ -3270,7 +3293,7 @@ export default function Home() {
       .sort((left, right) => {
         const leftOrder = pendingIncomingOrderMap.get(left);
         const rightOrder = pendingIncomingOrderMap.get(right);
-        return new Date(leftOrder?.createdAt || 0).getTime() - new Date(rightOrder?.createdAt || 0).getTime();
+        return new Date(leftOrder?.createdAt || 0).getTime() - new Date(rightOrder?.createdAt || 0).getTime() || (left < right ? -1 : left > right ? 1 : 0);
       });
 
     if (sortedQueue.length !== incomingOrderQueue.length || sortedQueue.some((orderId, index) => orderId !== incomingOrderQueue[index])) {
@@ -3279,27 +3302,27 @@ export default function Home() {
   }, [incomingOrderQueue, pendingIncomingOrderMap, pendingIncomingOrders.length]);
 
   useEffect(() => {
-    if (!AUTOMATIC_ORDER_DECISIONS_ENABLED) return;
     if (!orders.length) {
       return;
     }
 
     const now = Date.now();
-    const pendingOrders = [...orders]
-      .filter((order) => order.status === 'PENDING')
-      .sort((left, right) => new Date(left.createdAt).getTime() - new Date(right.createdAt).getTime());
+    const pendingOrders = pendingIncomingOrders;
 
     for (const order of pendingOrders) {
-      if (resolvedIncomingOrderIdsRef.current.includes(order.id)) {
-        continue;
-      }
-
       const createdAtMs = new Date(order.createdAt).getTime();
       const isStoreOrder = profile?.businessType && profile.businessType !== 'RESTAURANT';
       const decisionWindow = order.paymentMethod === 'TRANSFER' ? 10 * 60 * 1000 : isStoreOrder ? 8 * 60 * 1000 : 2 * 60 * 1000;
       const expiresAtMs = createdAtMs + decisionWindow;
 
-      if (expiresAtMs <= now && AUTOMATIC_ORDER_DECISIONS_ENABLED) {
+      const disposition = incomingOrderDisposition({
+        resolved: resolvedIncomingOrderIdsRef.current.includes(order.id),
+        prompted: promptedIncomingOrderIdsRef.current.includes(order.id),
+        automaticDecisions: AUTOMATIC_ORDER_DECISIONS_ENABLED,
+        expiresAt: expiresAtMs,
+        now,
+      });
+      if (disposition === 'reject') {
         if (!autoRejectingOrderIdsRef.current.includes(order.id)) {
           autoRejectingOrderIdsRef.current = [...autoRejectingOrderIdsRef.current.slice(-29), order.id];
           resolvedIncomingOrderIdsRef.current = [...resolvedIncomingOrderIdsRef.current.slice(-79), order.id];
@@ -3309,9 +3332,7 @@ export default function Home() {
         continue;
       }
 
-      if (promptedIncomingOrderIdsRef.current.includes(order.id)) {
-        continue;
-      }
+      if (disposition === 'ignore') continue;
 
       promptedIncomingOrderIdsRef.current = [...promptedIncomingOrderIdsRef.current.slice(-79), order.id];
       setIncomingOrderQueue((current) => (current.includes(order.id) ? current : [...current, order.id]));
@@ -5616,72 +5637,68 @@ export default function Home() {
 
       {activeIncomingOrder ? (
         <div
-          className="fixed inset-0 z-[70] flex items-end justify-center bg-black/60 px-3 py-3 sm:items-center sm:px-4 sm:py-5"
+          className="fixed inset-0 z-[70] flex items-center justify-center bg-black/65 px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-[max(0.75rem,env(safe-area-inset-top))] backdrop-blur-sm sm:px-4 sm:pb-4 sm:pt-4"
           role="dialog"
           aria-modal="true"
           aria-labelledby="incoming-order-title"
         >
-          <div className="flex max-h-[min(92vh,960px)] w-full max-w-4xl flex-col overflow-hidden rounded-[30px] bg-white shadow-[0_32px_110px_rgba(15,15,15,0.35)] sm:rounded-[24px]">
+          <div className="flex max-h-full w-full max-w-md flex-col overflow-hidden rounded-[24px] bg-white shadow-[0_32px_110px_rgba(15,15,15,0.35)] sm:max-h-[min(calc(100dvh-2rem),850px)] sm:max-w-2xl sm:rounded-[28px]">
             {/* HEADER */}
-            <div className="border-b border-black/5 bg-neutral-50/50 px-5 py-4 sm:px-8">
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="shrink-0 border-b border-neutral-200 bg-white px-4 py-3 sm:px-6">
+              <div className="flex items-center justify-between gap-3">
                 <div className="min-w-0">
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                     <span className="relative flex h-2.5 w-2.5">
-                      <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-sky-400 opacity-75"></span>
-                      <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-sky-600"></span>
+                      <span className="absolute inline-flex h-full w-full motion-safe:animate-ping rounded-full bg-red-400 opacity-75"></span>
+                      <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-red-600"></span>
                     </span>
-                    <p className="text-sm font-semibold uppercase tracking-[0.2em] text-sky-600">
-                      Nuevo pedido entrante
+                    <p className="text-xs font-extrabold uppercase tracking-[0.12em] text-red-700">
+                      Nuevo pedido
                     </p>
-                  </div>
                   <h2
                     id="incoming-order-title"
-                    className="mt-1.5 text-xl font-bold tracking-[-0.04em] text-neutral-950 sm:text-2xl"
+                    className="text-lg font-black leading-tight tracking-tight text-neutral-950"
                   >
                     {(activeIncomingOrder as any).dailyCounter ? `#${String((activeIncomingOrder as any).dailyCounter).padStart(2, '0')}` : (
                       activeIncomingOrder.orderReference.slice(-6)
                     )}
                   </h2>
+                  </div>
                   {waitingIncomingOrders.length > 0 && (
-                    <p className="mt-1 text-sm font-medium text-amber-600">
-                      +{waitingIncomingOrders.length} pedido{waitingIncomingOrders.length > 1 ? 's' : ''} en cola
+                    <p className="mt-1 inline-flex rounded-full bg-red-50 px-2 py-0.5 text-xs font-bold text-red-700">
+                      {waitingIncomingOrders.length} pedido{waitingIncomingOrders.length > 1 ? 's' : ''} en espera
                     </p>
                   )}
                 </div>
 
                 {/* TIMER PILL (timer aislado para no re-renderizar la página) */}
-                <IncomingOrderCountdown
+                {reviewClock?.id === activeIncomingOrder.id && <IncomingOrderCountdown
                   key={activeIncomingOrder.id}
-                  createdAt={activeIncomingOrder.createdAt}
-                  windowMs={
-                    activeIncomingOrder.paymentMethod === 'TRANSFER'
-                      ? 10 * 60 * 1000
-                      : profile?.businessType && profile.businessType !== 'RESTAURANT'
-                        ? storeOrderDecisionWindowMs
-                        : newOrderDecisionWindowMs
-                  }
-                />
+                  createdAt={reviewClock.startedAt}
+                  windowMs={300_000}
+                />}
               </div>
             </div>
 
             {/* CONTENT */}
             {isSelectingPrepTime ? (
               <>
-              <div className="min-h-0 flex-1 overflow-y-auto px-5 py-8 sm:px-10 flex flex-col items-center text-center">
-                <div className="my-auto w-full max-w-sm space-y-6">
-                  <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-sky-100 ring-8 ring-sky-50">
-                    <Clock className="h-10 w-10 text-sky-600" />
-                  </div>
-                  <div>
-                    <h3 className="text-2xl font-black tracking-tight text-neutral-900">{profile?.businessType === 'RESTAURANT' ? 'Tiempo de preparación' : (isScheduledMode ? 'Programar entrega' : 'Tiempo estimado')}</h3>
-                    <p className="mt-2 text-sm text-neutral-500 leading-relaxed">
+              <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain bg-neutral-50/70 px-4 py-4 sm:px-6 sm:py-5">
+                <div className="mx-auto w-full max-w-md space-y-4">
+                  <div className="flex items-start gap-3">
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-red-50 text-red-700">
+                      <Clock aria-hidden="true" className="h-5 w-5" />
+                    </div>
+                    <div>
+                    <h3 className="text-lg font-extrabold leading-tight tracking-tight text-neutral-950">{profile?.businessType === 'RESTAURANT' ? 'Tiempo de preparación' : (isScheduledMode ? 'Programar entrega' : 'Tiempo estimado')}</h3>
+                    <p className="mt-1 text-sm leading-5 text-neutral-600">
                       {profile?.businessType === 'RESTAURANT'
                         ? 'Selecciona cuánto tiempo tomará preparar este pedido. El cliente y el repartidor recibirán esta estimación.'
                         : isScheduledMode
                           ? 'Elige la fecha y hora en que el pedido estará listo para entrega.'
                           : 'Selecciona cuánto tiempo tomará alistar este pedido. El cliente recibirá esta estimación.'}
                     </p>
+                    </div>
                   </div>
 
                   {profile?.businessType !== 'RESTAURANT' && (
@@ -5785,19 +5802,20 @@ export default function Home() {
                       })()}
                     </div>
                   ) : (
-                    <div className="grid grid-cols-3 gap-3 pt-2">
+                    <div role="group" aria-label="Tiempo de preparación estimado" className="grid grid-cols-3 gap-2">
                       {preparationTimePresets.map((preset) => (
                         <button
                           key={preset.value}
                           type="button"
                           onClick={() => setSelectedPreparationTime(preset.value)}
-                          className={`flex flex-col items-center justify-center rounded-2xl border-2 p-4 text-center transition ${selectedPreparationTime === preset.value
-                            ? 'border-sky-600 bg-sky-50 text-sky-700 shadow-sm'
-                            : 'border-neutral-100 bg-white text-neutral-700 hover:border-sky-300 hover:bg-sky-50/50'
+                          aria-pressed={selectedPreparationTime === preset.value}
+                          className={`flex min-h-14 items-baseline justify-center gap-1 rounded-xl border px-2 py-3 text-center transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-700 ${selectedPreparationTime === preset.value
+                            ? 'border-red-700 bg-red-50 text-red-800 ring-1 ring-red-700'
+                            : 'border-neutral-200 bg-white text-neutral-800 hover:border-red-200 hover:bg-red-50/50'
                             }`}
                         >
-                          <span className="text-2xl font-black">{preset.value}</span>
-                          <span className="text-[10px] font-bold uppercase tracking-widest opacity-70 mt-0.5">Minutos</span>
+                          <span className="text-lg font-extrabold tabular-nums">{preset.value}</span>
+                          <span className="text-xs font-semibold">min</span>
                         </button>
                       ))}
                     </div>
@@ -5805,8 +5823,8 @@ export default function Home() {
 
                   </div>
               </div>
-<div className="shrink-0 border-t border-black/5 bg-white px-5 py-4 sm:px-8 shadow-[0_-8px_30px_rgba(0,0,0,0.06)]">
-                <div className="flex flex-col-reverse gap-3 sm:flex-row sm:items-center">
+<div className="shrink-0 border-t border-neutral-200 bg-white px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-6 sm:py-4">
+                <div className="flex items-stretch gap-2.5">
                     <button
                       type="button"
                       onClick={() => {
@@ -5817,7 +5835,7 @@ export default function Home() {
                         setScheduledMeridiem('PM');
                       }}
                       disabled={Boolean(activeActionKey)}
-                      className="w-full rounded-full border border-neutral-200 bg-white px-6 py-3.5 text-sm font-bold text-neutral-600 transition hover:bg-neutral-50 hover:text-neutral-800 active:scale-[0.98] disabled:opacity-70 disabled:cursor-not-allowed sm:w-auto"
+                      className="min-h-12 flex-1 rounded-2xl border border-neutral-300 bg-white px-3 py-3 text-sm font-bold text-neutral-700 transition hover:bg-neutral-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-700 disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       Volver
                     </button>
@@ -5880,7 +5898,7 @@ export default function Home() {
                           return s !== null && s.getTime() > Date.now();
                         })())
                       }
-                      className="w-full rounded-full bg-sky-600 px-5 py-4 text-sm font-bold text-white shadow-[0_4px_12px_rgba(2,132,199,0.3)] transition hover:bg-sky-700 hover:shadow-[0_8px_20px_rgba(2,132,199,0.4)] active:scale-[0.98] disabled:opacity-70 disabled:cursor-not-allowed sm:flex-1"
+                      className="min-h-12 flex-[1.8] rounded-2xl bg-red-700 px-3 py-3 text-sm font-bold text-white transition hover:bg-red-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-700 disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       {activeActionKey === `${activeIncomingOrder.id}:accept`
                         ? 'Aceptando...'
@@ -5892,30 +5910,25 @@ export default function Home() {
               </div>
               </>
             ) : (
-              <><div className="min-h-0 flex-1 overflow-y-auto px-5 py-5 sm:px-8">
-              <div className="grid gap-6 lg:grid-cols-[minmax(0,1.5fr)_320px]">
+              <><div className="min-h-0 flex-1 overscroll-contain overflow-y-auto bg-neutral-50/70 px-4 py-3 sm:px-6">
+              <div className="flex flex-col gap-3">
 
                 {/* LEFT COLUMN: CHEF FOCUS (Items First!) */}
-                <div className="space-y-6">
+                <div className="order-2 space-y-3">
                   {/* COMANDA */}
-                  <div className="rounded-3xl border border-sky-100 bg-white p-5 shadow-[0_8px_30px_rgba(2,132,199,0.06)] relative overflow-hidden">
-                    <div className="absolute top-0 left-0 w-1.5 h-full bg-sky-600"></div>
-                    <div className="flex items-center justify-between border-b border-black/5 pb-3.5">
-                      <p className="text-sm font-bold uppercase tracking-[0.2em] text-neutral-800">{profile?.businessType === 'RESTAURANT' ? 'Comanda para Cocina' : 'Detalle del Pedido'}</p>
-                      <span className="rounded-full bg-sky-100 px-4 py-1.5 text-xs font-bold text-sky-700">
+                  <div className="relative overflow-hidden rounded-[20px] border border-neutral-200 bg-white p-3 shadow-sm sm:p-4">
+                    <div className="flex items-center justify-between gap-2 border-b border-neutral-100 pb-2">
+                      <p className="text-base font-extrabold tracking-tight text-neutral-950">{profile?.businessType === 'RESTAURANT' ? 'Comanda para cocina' : 'Detalle del pedido'}</p>
+                      <span className="shrink-0 rounded-full bg-red-50 px-2 py-1 text-xs font-bold text-red-700">
                         {countOrderProducts(activeIncomingOrder)} {countOrderProducts(activeIncomingOrder) === 1 ? 'Producto' : 'Productos'}
                       </span>
                     </div>
 
-                    <div className="divide-y divide-black/5 mt-2">
+                    <div className="divide-y divide-black/5">
                       {activeIncomingOrder.items && activeIncomingOrder.items.length > 0 ? (
                         activeIncomingOrder.items.map((item) => (
-                          <div key={item.id} className="grid grid-cols-[40px_40px_minmax(0,1fr)] gap-3.5 py-3 items-start">
-                            <div className={`flex h-10 w-10 items-center justify-center rounded-xl text-base font-extrabold shrink-0 select-none ${
-                              item.quantity > 1
-                                ? 'bg-amber-500 text-white shadow-sm shadow-amber-500/20'
-                                : 'bg-sky-50 text-sky-700'
-                            }`}>
+                          <div key={item.id} className="grid grid-cols-[32px_44px_minmax(0,1fr)] items-start gap-2 py-2">
+                            <div className="flex h-8 min-w-8 items-center justify-center rounded-lg bg-neutral-950 px-1 text-sm font-extrabold text-white shrink-0 select-none">
                               {item.quantity > 1 ? `x${item.quantity}` : '1'}
                             </div>
 
@@ -5923,18 +5936,17 @@ export default function Home() {
                               <img
                                 src={item.product.image}
                                 alt={item.product.name}
-                                className="h-10 w-10 rounded-xl object-cover border border-black/5 shrink-0 shadow-sm"
-                                loading="lazy"
+                                className="h-11 w-11 rounded-xl object-cover border border-black/5 shrink-0"
                                 decoding="async"
                               />
                             ) : (
-                              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-neutral-50 border border-black/5 text-base shadow-sm">
+                              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-neutral-50 border border-black/5 text-lg">
                                 {profile?.businessType === 'RESTAURANT' ? '🍽️' : '📦'}
                               </div>
                             )}
 
                             <div className="min-w-0">
-                              <p className="text-[15px] font-black leading-snug text-neutral-950 line-clamp-2">
+                              <p className="break-words text-base font-extrabold leading-snug text-neutral-950">
                                 {item.product?.name || 'Producto'}
                               </p>
                               {item.sellBy === 'WEIGHT' && item.weightG ? (
@@ -5947,20 +5959,17 @@ export default function Home() {
                                   {item.options.map((opt: any) => (
                                     <div
                                       key={opt.id}
-                                      className="inline-flex w-fit items-center rounded-lg bg-sky-50 px-2.5 py-1 text-[13px] font-bold text-sky-800 border border-sky-100/60 shadow-sm"
+                                      className="inline-flex w-fit items-center rounded-lg border border-neutral-200 bg-neutral-50 px-2.5 py-1 text-[13px] font-bold text-neutral-800"
                                     >
-                                      <span className="mr-1.5 text-sky-500">➕</span> {opt.name}
+                                      <span className="mr-1.5 text-red-600">+</span> {opt.name}
                                     </div>
                                   ))}
                                 </div>
                               )}
                               {item.specialInstructions && (
-                                <div className="mt-2.5 flex gap-2 rounded-xl bg-amber-50 border-l-4 border-amber-500 p-3 shadow-sm">
-                                  <span className="text-amber-500">⚠</span>
-                                  <p className="text-[14px] font-bold text-amber-900 leading-tight">
-                                    {item.specialInstructions}
-                                  </p>
-                                </div>
+                                <p className="mt-1.5 whitespace-pre-wrap break-words text-sm leading-snug text-neutral-600">
+                                  <span className="font-semibold text-neutral-700">Nota: </span>{item.specialInstructions}
+                                </p>
                               )}
                             </div>
                           </div>
@@ -5971,8 +5980,6 @@ export default function Home() {
                         </div>
                       )}
                     </div>
-                    {/* NEW: Global order notes right below the items! */}
-                    {/* NEW: Global order notes right below the items! */}
                     {parseStoreNotes(activeIncomingOrder.notes) && (
                       <div className="mt-6 rounded-2xl bg-rose-50 border-2 border-rose-200 p-5 shadow-sm">
                         <p className="text-xs font-black uppercase tracking-[0.2em] text-rose-600 mb-2 flex items-center gap-2">
@@ -5987,12 +5994,16 @@ export default function Home() {
                   </div>
                 </div>
                 {/* RIGHT COLUMN: ACTIONS & BILLING */}
-                <div className="space-y-4 lg:border-l lg:border-black/5 lg:pl-6">
-                  
+                <div className="order-1 space-y-3">
+
                   {/* COMPACT DELIVERY DATA FOR CASHIER */}
-                  <div className="rounded-2xl border border-neutral-100 bg-neutral-50/50 p-4">
-                    <div className="mb-3 flex items-center justify-between gap-2">
-                      <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-neutral-400">Resumen de Entrega</p>
+                  <div className="rounded-[20px] border border-neutral-200 bg-white p-3 shadow-sm sm:p-4">
+                    <div className="mb-2 flex items-center justify-between gap-2">
+                      <p className="text-base font-extrabold tracking-tight text-neutral-950">Entrega</p>
+                      <div className="flex flex-wrap justify-end gap-1.5">
+                      {activeIncomingOrder.paymentMethod === 'CASH' && (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-bold text-amber-800">💵 Efectivo</span>
+                      )}
                       <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-bold ${
                         (activeIncomingOrder as any).fulfillmentType === 'PICKUP'
                           ? 'bg-emerald-100 text-emerald-700'
@@ -6000,8 +6011,9 @@ export default function Home() {
                       }`}>
                         {(activeIncomingOrder as any).fulfillmentType === 'PICKUP' ? '🛍️ Recogida' : '🛵 Envío'}
                       </span>
+                      </div>
                     </div>
-                    <div className="flex flex-col gap-3">
+                    <div className="flex flex-col gap-2">
                       <div className="flex items-center gap-3">
                         {activeIncomingOrder.customer?.user?.profilePhoto ? (
                           <img
@@ -6015,10 +6027,10 @@ export default function Home() {
                           </div>
                         )}
                         <div className="min-w-0">
-                          <p className="text-sm font-bold text-neutral-900 truncate">
-                            {getCustomerFullName(activeIncomingOrder.customer?.user) || 'Cliente SaDeL'}
+                          <p className="break-words text-sm font-bold text-neutral-900">
+                            {getCustomerFullName(activeIncomingOrder.customer?.user) || 'Cliente'}
                           </p>
-                          <p className="text-[11px] font-medium text-neutral-500">
+                          <p className="mt-0.5 text-xs font-medium text-neutral-600">
                             {formatPhoneDigits(activeIncomingOrder.customer?.user?.phone) || 'Sin teléfono'}
                           </p>
                         </div>
@@ -6037,52 +6049,40 @@ export default function Home() {
 
                         </div>
                       ) : (
-                      <div className="rounded-xl bg-white p-3 shadow-sm border border-black/5">
-                        <p className="text-[10px] font-bold uppercase tracking-wider text-neutral-400 mb-0.5">Dirección</p>
-                        <p className="text-[13px] font-bold text-neutral-800 leading-snug">
+                      <div className="rounded-xl bg-neutral-50 p-2.5 border border-black/5">
+                        <p className="mb-1 text-xs font-bold text-neutral-500">Dirección</p>
+                        <p className="text-sm font-bold leading-snug text-neutral-900">
                           {formatIncomingOrderAddress(activeIncomingOrder.address)}
                         </p>
                         {activeIncomingOrder.address?.reference && (
-                          <div className="mt-2 text-[12px] text-amber-800 bg-amber-50 rounded-lg p-1.5 font-medium border border-amber-100/50">
+                          <div className="mt-1.5 text-[12px] text-amber-800 bg-amber-50 rounded-lg p-1.5 font-medium border border-amber-100/50">
                             <span className="font-bold">Ref:</span> {activeIncomingOrder.address.reference}
                           </div>
                         )}
+                        <IncomingRouteDistance key={activeIncomingOrder.id} originLatitude={profile?.latitude} originLongitude={profile?.longitude} destinationLatitude={activeIncomingOrder.address?.latitude} destinationLongitude={activeIncomingOrder.address?.longitude} />
                       </div>
                       )}
                     </div>
-                  </div>
-
-                  {/* TOTAL */}
-                  <div className="rounded-2xl bg-neutral-950 p-4 text-white shadow-lg">
-                    <div className="flex items-baseline justify-between gap-3">
-                      <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-neutral-400">Total del pedido</p>
-                      <p className="text-2xl font-bold tracking-[-0.04em]">
-                        {formatCurrency(getRestaurantCollectionAmount(activeIncomingOrder, profile))}
+                    <div className="mt-2.5 flex items-center justify-between gap-3 border-t border-neutral-100 pt-2">
+                      <div><p className="text-xs font-medium text-neutral-500">Total del pedido</p>{activeIncomingOrder.paymentMethod !== 'CASH' && <p className="mt-1 text-xs font-bold text-neutral-500">{activeIncomingOrder.paymentMethod === 'TRANSFER' ? 'Transferencia' : activeIncomingOrder.paymentMethod ? 'Pago en línea' : 'Pago no indicado'}</p>}</div>
+                      <p className="text-xl font-black tracking-tight text-neutral-950">
+                        {formatCurrency(activeIncomingOrder.totalAmount)}
                       </p>
                     </div>
                     {(activeIncomingOrder as any).fulfillmentType !== 'PICKUP' && (activeIncomingOrder.deliveryFee || 0) > 0 && (
-                      <p className="mt-1 text-[11px] font-medium text-neutral-400">
+                      <p className="mt-1 text-right text-xs font-medium text-neutral-500">
                         Incluye envío de {formatCurrency(activeIncomingOrder.deliveryFee || 0)}
                       </p>
                     )}
-                  </div>
 
                   {activeIncomingOrder.paymentMethod === 'CASH' && (
-                    <div className="rounded-2xl border border-amber-200 bg-gradient-to-br from-amber-50 to-yellow-50 p-4">
-                      <div className="flex items-center gap-2 mb-1.5">
-                        <span className="flex h-2 w-2 rounded-full bg-amber-500" />
-                        <span className="text-xs font-bold uppercase tracking-wider text-amber-700 bg-amber-100/50 px-2 py-0.5 rounded-md border border-amber-200/30">
-                          Pago en Efectivo
-                        </span>
-                      </div>
-                      <p className="text-xs text-amber-800 font-bold">
-                        💵 Cobra en efectivo al entregar: {formatCurrency(getRestaurantCollectionAmount(activeIncomingOrder, profile))}
-                      </p>
-                    </div>
+                    <p className="mt-1 text-right text-xs font-semibold text-neutral-600">
+                      Cobrar en efectivo: {formatCurrency(getRestaurantCollectionAmount(activeIncomingOrder, profile))}
+                    </p>
                   )}
 
                   {activeIncomingOrder.paymentMethod === 'TRANSFER' && (
-                    <div className="rounded-2xl border border-sky-100 bg-gradient-to-br from-sky-50 to-blue-50 p-4 animate-float-gentle">
+                    <div className="mt-3 rounded-2xl border border-sky-100 bg-sky-50 p-3">
                       <div className="flex items-center gap-2 mb-2">
                         <span className="flex h-2 w-2 rounded-full bg-sky-600 animate-pulse" />
                         <span className="text-xs font-bold uppercase tracking-wider text-sky-700 bg-sky-100/50 px-2 py-0.5 rounded-md border border-sky-200/30">
@@ -6113,70 +6113,39 @@ export default function Home() {
                   )}
 
                   {['CREDIT_CARD', 'DEBIT_CARD', 'DIGITAL_WALLET'].includes(activeIncomingOrder.paymentMethod || '') && (
-                    <div className="rounded-2xl border border-emerald-100 bg-gradient-to-br from-emerald-50 to-teal-50 p-4 shadow-[0_4px_20px_rgba(16,185,129,0.06)]">
+                    <div className={`mt-3 rounded-2xl border p-3 ${activeIncomingOrder.paymentStatus === 'COMPLETED' ? 'border-emerald-100 bg-emerald-50' : 'border-amber-200 bg-amber-50'}`}>
                       <div className="flex items-center gap-2 mb-1.5">
-                        <span className="flex h-2 w-2 rounded-full bg-emerald-500" />
-                        <span className="text-xs font-bold uppercase tracking-wider text-emerald-700 bg-emerald-100/50 px-2 py-0.5 rounded-md border border-emerald-200/30">
-                          Pago en Línea Autorizado
+                        <span className={`flex h-2 w-2 rounded-full ${activeIncomingOrder.paymentStatus === 'COMPLETED' ? 'bg-emerald-500' : 'bg-amber-500'}`} />
+                        <span className={`rounded-md px-2 py-0.5 text-xs font-bold ${activeIncomingOrder.paymentStatus === 'COMPLETED' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-800'}`}>
+                          {activeIncomingOrder.paymentStatus === 'COMPLETED' ? 'Pago en línea confirmado' : 'Pago en línea'}
                         </span>
                       </div>
-                      <p className="text-xs text-emerald-600 font-medium">
-                        ✓ Transacción validada por pasarela de pago.
+                        <p className={`text-xs font-medium ${activeIncomingOrder.paymentStatus === 'COMPLETED' ? 'text-emerald-700' : 'text-amber-800'}`}>
+                        {activeIncomingOrder.paymentStatus === 'COMPLETED' ? 'Pago confirmado.' : 'Consulta el estado del pago antes de continuar.'}
                       </p>
                     </div>
                   )}
-
-                  {/* PREPARATION TIME REMOVED FROM INCOMING MODAL AS REQUESTED */}
-
-                  {/* OLD NOTES SECTION REMOVED - MOVED TO LEFT COLUMN FOR KITCHEN */}
-
-                  {/* QUEUE INFO */}
-                  {waitingIncomingOrders.length > 0 && (
-                    <div className="rounded-xl border border-black/5 p-4 bg-neutral-50/50">
-                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-neutral-500 mb-2">
-                        Siguientes en cola ({waitingIncomingOrders.length})
-                      </p>
-                      <div className="space-y-2">
-                        {waitingIncomingOrders.slice(0, 2).map((order) => (
-                          <div key={order.id} className="text-sm text-neutral-700 flex justify-between">
-                            <span className="font-medium text-neutral-950">{order.orderReference}</span>
-                            <span className="text-neutral-500">{getCustomerFullName(order.customer?.user) || 'Cliente'}</span>
-                          </div>
-                        ))}
-                        {waitingIncomingOrders.length > 2 && (
-                          <p className="text-xs text-neutral-500 text-center mt-1">
-                            +{waitingIncomingOrders.length - 2} más esperando...
-                          </p>
-                        )}
-                      </div>
-                    </div>
-                  )}
+                  </div>
 
                 </div>
               </div>
             </div>
             {/* STICKY FOOTER WITH ACTIONS */}
-            <div className="shrink-0 border-t border-black/5 bg-white px-5 py-3 sm:px-8 shadow-[0_-8px_30px_rgba(0,0,0,0.06)]">
-              <div className="flex gap-3">
+            <div className="shrink-0 border-t border-neutral-200 bg-white px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] shadow-[0_-8px_24px_rgba(0,0,0,0.04)] sm:px-7 sm:py-4">
+              <div className="flex gap-2.5 sm:gap-3">
                 <button
                   type="button"
                   onClick={() => setIsSelectingPrepTime(true)}
                   disabled={Boolean(activeActionKey)}
-                  className="flex-1 rounded-full bg-sky-600 px-5 py-3.5 text-sm font-semibold text-white shadow-[0_4px_12px_rgba(2,132,199,0.3)] transition hover:bg-sky-700 disabled:cursor-not-allowed disabled:bg-sky-300"
+                  className="min-h-12 flex-[1.3] rounded-2xl bg-red-700 px-3 py-3 text-sm font-bold text-white transition hover:bg-red-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-700 disabled:cursor-not-allowed disabled:opacity-50 sm:px-5"
                 >
                   {activeActionKey === `${activeIncomingOrder.id}:accept` ? 'Aceptando...' : 'Aceptar Pedido'}
                 </button>
                 <button
                   type="button"
-                  onClick={() => {
-                    if (activeIncomingOrder.paymentMethod === 'TRANSFER') {
-                      setTransferRefundOrder(activeIncomingOrder);
-                    } else {
-                      void runOrderAction(activeIncomingOrder.id, 'reject');
-                    }
-                  }}
+                  onClick={() => setConfirmIncomingRejectId(activeIncomingOrder.id)}
                   disabled={Boolean(activeActionKey)}
-                  className="flex-1 rounded-full border border-rose-200 bg-white px-5 py-3.5 text-sm font-semibold text-rose-700 transition hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-60"
+                  className="min-h-12 flex-1 rounded-2xl border border-red-200 bg-white px-3 py-3 text-sm font-bold text-neutral-700 transition hover:bg-red-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-700 disabled:cursor-not-allowed disabled:opacity-50 sm:px-5"
                 >
                   {activeActionKey === `${activeIncomingOrder.id}:reject` ? 'Rechazando...' : 'Rechazar Pedido'}
                 </button>
@@ -6187,6 +6156,23 @@ export default function Home() {
           </div>
         </div>
       ) : null}
+
+      {activeIncomingOrder && confirmIncomingRejectId === activeIncomingOrder.id && (
+        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/60 px-4 py-5" role="dialog" aria-modal="true" aria-labelledby="confirm-incoming-reject-title" aria-describedby="confirm-incoming-reject-description">
+          <div className="w-full max-w-sm rounded-[24px] bg-white p-5 shadow-2xl sm:p-6">
+            <h2 id="confirm-incoming-reject-title" className="text-lg font-extrabold text-neutral-950">¿Rechazar este pedido?</h2>
+            <p id="confirm-incoming-reject-description" className="mt-2 text-sm leading-6 text-neutral-600">El cliente será informado del rechazo. Confirma si deseas continuar.</p>
+            <div className="mt-5 flex gap-2">
+              <button type="button" autoFocus onClick={() => setConfirmIncomingRejectId(null)} className="min-h-12 flex-1 rounded-2xl border border-neutral-300 px-3 text-sm font-bold text-neutral-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-700">Volver</button>
+              <button type="button" disabled={Boolean(activeActionKey)} onClick={() => {
+                setConfirmIncomingRejectId(null);
+                if (activeIncomingOrder.paymentMethod === 'TRANSFER') setTransferRefundOrder(activeIncomingOrder);
+                else void runOrderAction(activeIncomingOrder.id, 'reject');
+              }} className="min-h-12 flex-1 rounded-2xl bg-red-700 px-3 text-sm font-bold text-white hover:bg-red-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-700 disabled:opacity-50">Sí, rechazar</button>
+            </div>
+          </div>
+        </div>
+      )}
 
 
       {/* MODAL DE ADVERTENCIA AL CERRAR SESIÓN */}
@@ -6247,7 +6233,7 @@ export default function Home() {
       ) : null}
 
       {/* MODAL DE DESTACADOS (PIZZAS POWER) */}
-      
+
 
       {/* MODAL DE VISTA PREVIA DE COMPROBANTE */}
       {proofPreviewUrl ? (
@@ -6273,45 +6259,48 @@ export default function Home() {
 
         return (
           <div
-            className="fixed inset-0 z-[90] flex items-center justify-center bg-black/70 px-4 py-5 backdrop-blur-sm"
+            className="fixed inset-0 z-[90] flex items-end justify-center bg-black/60 pt-[max(1rem,env(safe-area-inset-top))] backdrop-blur-sm sm:items-center sm:px-4 sm:pb-4"
             role="dialog"
             aria-modal="true"
+            aria-labelledby="delivery-qr-title"
+            aria-describedby="delivery-qr-description"
           >
-            <div className="relative w-full max-w-md overflow-hidden rounded-[28px] border border-black/10 bg-white p-6 shadow-[0_32px_120px_rgba(0,0,0,0.4)] text-center">
+            <div className="relative max-h-[calc(100dvh-max(1rem,env(safe-area-inset-top)))] w-full max-w-md overflow-y-auto rounded-t-[28px] border border-black/5 bg-white px-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] pt-5 text-center shadow-2xl dark:border-white/10 dark:bg-zinc-900 sm:rounded-[28px] sm:p-6">
               <button
                 type="button"
                 onClick={() => setActiveQrCodeData(null)}
                 aria-label="Cerrar"
                 title="Cerrar"
-                className="absolute right-4 top-4 z-10 flex h-9 w-9 items-center justify-center rounded-full bg-neutral-950 text-white shadow-lg shadow-black/20 transition-all duration-200 hover:rotate-90 hover:bg-neutral-800 active:scale-90"
+                className="absolute right-4 top-4 z-10 flex h-11 w-11 items-center justify-center rounded-full bg-neutral-100 text-neutral-600 transition hover:bg-neutral-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-600 dark:bg-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-700"
               >
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M18 6L6 18M6 6l12 12" /></svg>
               </button>
               <div className="flex flex-col items-center">
-                <span className="inline-flex h-12 w-12 items-center justify-center rounded-full bg-amber-50 text-2xl">
+                <span aria-hidden="true" className="inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-red-50 text-2xl dark:bg-red-950/50">
                   🛵
                 </span>
-                <h3 className="mt-4 text-2xl font-bold tracking-tight text-neutral-900">
-                  Reparto WingsLab listo
+                <h3 id="delivery-qr-title" className="mt-3 text-xl font-bold tracking-tight text-neutral-950 dark:text-white">
+                  QR de reparto
                 </h3>
-                <p className="mt-1 text-xs font-semibold uppercase tracking-wider text-amber-600">
+                <p className="mt-1 break-all text-xs font-semibold text-neutral-500 dark:text-zinc-400">
                   Pedido {activeQrCodeData.orderReference}
                 </p>
-                <p className="mt-2 text-sm text-neutral-500 max-w-xs">
-                  Abre el enlace local o escanea el QR. El pedido saldrá cuando el repartidor confirme la recogida. No compartas el enlace fuera de tu equipo.
+                <p id="delivery-qr-description" className="mt-2 max-w-xs text-sm leading-5 text-neutral-600 dark:text-zinc-300">
+                  Pide al repartidor que escanee el código y confirme la recogida.
                 </p>
 
                 {/* Contenedor del QR Code */}
-                <div className="mt-6 rounded-2xl bg-neutral-50 border border-neutral-100 p-6">
-                  <QRCodeSVG value={deliveryUrl} size={200} level="M" includeMargin={false} />
+                <div className="mt-4 max-w-full rounded-3xl border border-neutral-200 bg-white p-3 shadow-sm">
+                  <QRCodeSVG value={deliveryUrl} size={208} level="M" includeMargin aria-label="Código QR para abrir el reparto" className="h-auto w-[min(208px,60vw)] max-w-full" />
                 </div>
+                <p className="mt-3 text-xs text-neutral-500 dark:text-zinc-400">Comparte este código solo con tu equipo.</p>
 
-                <div className="mt-6 w-full gap-2 flex flex-col">
+                <div className="mt-4 flex w-full flex-col gap-2">
                   <a href={deliveryUrl} target="_blank" rel="noopener noreferrer" referrerPolicy="no-referrer"
-                    className="block w-full rounded-xl bg-orange-600 py-3 text-sm font-semibold text-white hover:bg-orange-700">
-                    Abrir enlace de reparto
+                    className="flex min-h-12 w-full items-center justify-center rounded-2xl bg-red-600 px-4 text-sm font-bold text-white transition hover:bg-red-700 active:scale-[0.98] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-600">
+                    Abrir reparto en este dispositivo
                   </a>
-                  <button
+                  {wingslabExternalServicesEnabled() && <button
                     type="button"
                     disabled={!wingslabExternalServicesEnabled()}
                     onClick={() => {
@@ -6319,26 +6308,13 @@ export default function Home() {
                       const message = `Entrega WingsLab — Pedido ${activeQrCodeData.orderReference}\n${deliveryUrl}`;
                       window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, '_blank', 'noopener,noreferrer');
                     }}
-                    className="w-full rounded-xl bg-[#25D366] py-3 text-sm font-semibold text-white shadow-md shadow-emerald-600/20 hover:bg-[#1fb857] transition active:scale-[0.98]"
+                    className="flex min-h-12 w-full items-center justify-center rounded-2xl border border-neutral-200 bg-white px-4 text-sm font-bold text-neutral-800 transition hover:bg-neutral-50 active:scale-[0.98] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-600 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100 dark:hover:bg-zinc-700"
                   >
                     <span className="inline-flex items-center gap-2">
                       <svg className="h-4 w-4" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
                       Enviar por WhatsApp
                     </span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      window.open(deliveryUrl, '_blank', 'noopener,noreferrer');
-                    }}
-                    title="Abrir la ruta de entrega en el navegador de este teléfono"
-                    className="w-full rounded-xl bg-sky-600 py-3 text-sm font-semibold text-white shadow-md shadow-sky-600/20 hover:bg-sky-700 transition active:scale-[0.98]"
-                  >
-                    <span className="inline-flex items-center gap-2">
-                      <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="3 11 22 2 13 21 11 13 3 11" /></svg>
-                      Abrir reparto local
-                    </span>
-                  </button>
+                  </button>}
                 </div>
               </div>
             </div>
@@ -6360,8 +6336,8 @@ export default function Home() {
                 {handoverPromptOrder.paymentMethod === 'TRANSFER' ? 'Validar PIN de recolección' : 'Confirmar pago en efectivo'}
               </h3>
               <p className="mt-2 text-sm leading-6 text-neutral-600">
-                {handoverPromptOrder.paymentMethod === 'TRANSFER' 
-                  ? 'Ingresa el PIN de recolección que el repartidor debe proporcionarte para liberar el pedido.' 
+                {handoverPromptOrder.paymentMethod === 'TRANSFER'
+                  ? 'Ingresa el PIN de recolección que el repartidor debe proporcionarte para liberar el pedido.'
                   : 'Confirma que has recibido el dinero en efectivo correspondiente al costo de la comida.'}
               </p>
               {handoverPromptOrder.paymentMethod === 'TRANSFER' && (
@@ -7055,7 +7031,7 @@ export default function Home() {
             {/* Scrollable Content */}
             <div ref={productModalScrollRef} className="wl-pm-body relative min-h-0 flex-1 overflow-y-auto overscroll-contain" style={{ WebkitOverflowScrolling: 'touch' }}>
               <div className="space-y-6 sm:space-y-7">
-                
+
                 {/* 1. Información Básica */}
                 <section>
                   <div className="wl-pm-section-head"><span>1</span><h4>Información básica</h4></div>
@@ -7515,7 +7491,7 @@ export default function Home() {
                             </div>
 
                           </div>
-                          
+
                           {/* Crop Preview */}
                           {productDraft.image.trim() && !productImageValidationError ? (
                             <div className="mt-4 flex flex-col items-center gap-1 sm:mt-0">
@@ -7841,7 +7817,7 @@ export default function Home() {
                               <Trash2 className="h-4 w-4" />
                             </button>
                           </div>
-                          
+
                           <div className="p-5">
                             <div className="grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-12">
                               <div className="sm:col-span-6 min-w-0">
@@ -8825,7 +8801,7 @@ export default function Home() {
                     restaurantName={restaurantName}
                     onTogglePause={() => void togglePauseStatus()}
                     onToggleOperational={() => void toggleOperationalStatus()}
-                    onSelectOrderForTicket={setSelectedOrderForTicket}
+                    onSelectOrderForTicket={(order: OrderItem) => { setActiveSection('orders'); setSelectedOrderForTicket(order); }}
                     onSelectOrderForEtaExtension={setSelectedOrderForEtaExtension}
                     onSetActiveTicketTab={(tab: string) => setActiveTicketTab(tab as 'comanda' | 'chat')}
                     onPrintTicket={handlePrintTicket}
@@ -8855,957 +8831,232 @@ export default function Home() {
 
 
 
-                {activeSection === 'orders' ? (
-                   <section className="wl-orders" aria-labelledby="orders-title">
-                    <header className="wl-orders-heading"><span className="wl-orders-heading-icon"><ClipboardList aria-hidden="true" /></span><div><h1 id="orders-title">Órdenes</h1></div></header>
-                    <div className="wl-orders-overview" aria-label="Resumen de pedidos cargados">
-                      {[
-                        { label: 'Por preparar', statuses: ['PENDING', 'CONFIRMED', 'PREPARING'], Icon: ChefHat, tone: 'preparing' },
-                        { label: 'Listas', statuses: ['READY'], Icon: Package, tone: 'ready' },
-                        { label: 'En entrega', statuses: ['PICKED_UP', 'IN_TRANSIT'], Icon: Bike, tone: 'delivery' },
-                        { label: 'Entregadas', statuses: ['DELIVERED', 'COMPLETED'], Icon: Check, tone: 'done' },
-                      ].map(({ label, statuses, Icon, tone }) => (
-                        <div className={`wl-orders-stat wl-orders-stat--${tone}`} key={label}><Icon aria-hidden="true" /><div><span>{label}</span><strong>{profileLoadState === 'ready' ? periodOrders.filter((order) => statuses.includes(order.status)).length : '—'}</strong></div></div>
-                      ))}
-                    </div>
-                    <p className="wl-orders-overview-note">Pedidos activos y de {ordersPeriod === 'today' ? 'hoy' : ordersPeriod === 'week' ? 'esta semana' : 'este mes'} · zona Ciudad de México.{hasCarriedOverActiveOrders ? ' Incluye pedidos activos de días anteriores.' : ''}</p>
-                    {lastFailedAction ? (
-                      <div className="mb-4 rounded-[28px] border border-rose-100 bg-rose-50 p-4">
-                        <p className="text-sm font-semibold text-rose-800">Ultima accion fallida: {lastFailedAction.label}</p>
-                        <p className="mt-1 text-sm text-rose-700">
-                          Puedes reintentarlo sin recargar el tablero.
-                        </p>
-                        <button
-                          type="button"
-                          onClick={() => void retryLastFailedAction()}
-                          disabled={Boolean(activeActionKey)}
-                          className="mt-3 rounded-full bg-neutral-950 px-4 py-3 text-sm font-semibold text-white transition hover:bg-neutral-800 disabled:cursor-not-allowed disabled:bg-neutral-300"
-                        >
-                          Reintentar ultima accion
-                        </button>
-                      </div>
-                    ) : null}
-                    <div className="wl-orders-toolbar">
-                      <label className="wl-orders-search"><span className="sr-only">Buscar orden</span><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="7"/><path d="m16 16 4 4"/></svg><input type="search" placeholder="Buscar orden, cliente o producto..." value={ordersSearch} onChange={(event) => setOrdersSearch(event.target.value)} /></label>
-                      <label className="wl-orders-filter">
-                        <span>Estado</span>
-                        <select
-                          value={selectedStatus}
-                          onChange={(event) => setSelectedStatus(event.target.value as 'ACTIVE' | 'REJECTED' | 'CANCELLED' | 'DELIVERED' | 'COMPLETED')}
-                          className="rounded-2xl border border-black/10 bg-white px-4 py-3 text-neutral-950 outline-none transition focus:border-black/20"
-                        >
-                          {orderStatusOptions.map((option) => (
-                            <option key={option.value} value={option.value}>
-                              {option.label}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
-                      <label className="wl-orders-filter wl-orders-period"><span>Fecha</span><select value={ordersPeriod} onChange={(event) => setOrdersPeriod(event.target.value as 'today' | 'week' | 'month')}><option value="today">Hoy</option><option value="week">Esta semana</option><option value="month">Este mes</option></select></label>
-                      <label className="wl-orders-filter"><span>Tipo de entrega</span><select value={ordersFulfillment} onChange={(event) => setOrdersFulfillment(event.target.value as 'ALL' | 'DELIVERY' | 'PICKUP')}><option value="ALL">Todos los tipos</option><option value="DELIVERY">A domicilio</option><option value="PICKUP">Para recoger</option></select></label>
-
-                      <button
-                        type="button"
-                        onClick={() => void refreshOrders()}
-                        disabled={refreshingOrders || !sessionUser}
-                        className="wl-orders-refresh"
-                      >
-                        <svg className={`h-4 w-4 ${refreshingOrders ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.582m0 0a8.001 8.001 0 01-15.356-2m15.356 2H15" />
-                        </svg>
-                        <span>{refreshingOrders ? 'Sincronizando...' : 'Actualizar'}</span>
-                      </button>
-                      {selectedStatus !== 'ACTIVE' ? (
-                        <button
-                          type="button"
-                          onClick={() => setSelectedStatus('ACTIVE')}
-                          className="relative flex items-center gap-2 rounded-full bg-sky-500 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-sky-600 md:py-3 animate-heartbeat"
-                        >
-                          <span aria-hidden="true" className="pointer-events-none absolute -inset-1 -z-10 rounded-full bg-sky-400/40 animate-ping" />
-                          <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z" />
-                          </svg>
-                          Ver órdenes activas
-                        </button>
-                      ) : null}
-                    </div>
-                    {visibleOrders.length > 0 ? (
-                      <div className="wl-orders-list space-y-4">
-                        {visibleOrders.map((order) => {
-                          const isHelper = order.restaurantId !== profile?.id;
-                          const hasOwnDelivery = order.restaurant?.hasOwnDelivery ?? profile?.hasOwnDelivery ?? false;
-                          const isSupported = order.notes?.includes('[ApoyoId:');
-                          const supportNotifyHere = supportNotifyByOrder[order.id];
-                          const supportExhaustedHere =
-                            (supportNotifyHere?.exhausted ?? false) ||
-                            ((order.supportAttempts ?? 0) >= 2 && !order.supportRestaurantId && !order.isSupportRequested);
-                          const actionButtons = isHelper
-                            // Se conserva el flujo manual del apoyo (iniciar entrega / marcar entregado);
-                            // el QR de express es la vía principal que usa el repartidor aliado.
-                            ? (order.status === 'READY' ? ['iniciarEntrega'] : order.status === 'IN_TRANSIT' ? ['delivered'] : [])
-                            // Pedido de apoyo (restaurante origen): al llegar el repartidor aliado se
-                            // habilita confirmar la entrega (PIN en transferencia / efectivo), igual que
-                            // con un repartidor SaDeL.
-                            : (isSupported
-                                ? (order.status === 'READY' && driverArrivedOrders[order.id]
-                                    ? ['handover'] as Array<keyof typeof restaurantActionMap>
-                                    : [])
-                                : getRestaurantActions(order, hasOwnDelivery, Boolean(driverArrivedOrders[order.id])));
-                          const authorizedActionButtons = actionButtons;
-                          return (
-                            <article
-                              key={order.id}
-                              className={`wl-order-card rounded-xl border border-neutral-200 bg-white px-5 py-4 shadow-sm border-l-4 ${order.status === 'PENDING' ? 'border-l-amber-500' :
-                                order.status === 'CONFIRMED' ? 'border-l-sky-500' :
-                                  order.status === 'PREPARING' ? 'border-l-sky-500' :
-                                    order.status === 'READY' ? 'border-l-emerald-500' :
-                                      order.status === 'COMPLETED' ? 'border-l-teal-500' :
-                                        order.status === 'DELIVERED' ? 'border-l-neutral-400' :
-                                          order.status === 'REJECTED' || order.status === 'CANCELLED' ? 'border-l-rose-500' :
-                                            'border-l-neutral-300'
-                                }`}
-                            >
-                              <div className="wl-order-disclosure">
-                                <button type="button" className="wl-order-summary" aria-haspopup="dialog" onClick={() => setOrderModalId(order.id)}>
-                                  <span className="wl-order-summary-id"><strong>{(order as any).dailyCounter ? `#${String((order as any).dailyCounter).padStart(2, '0')}` : order.orderReference}</strong><span><Clock aria-hidden="true" />{order.createdAt ? formatDate(order.createdAt) : 'Fecha no disponible'}</span></span>
-                                  <span className="wl-order-summary-customer"><span><User aria-hidden="true" /><strong>{[order.customer?.user?.name, order.customer?.user?.lastName].filter(Boolean).join(' ') || 'Cliente'}</strong></span><span className={`wl-order-fulfillment ${order.fulfillmentType === 'PICKUP' ? 'is-pickup' : ''}`}>{order.fulfillmentType === 'PICKUP' ? 'Para recoger' : order.fulfillmentType === 'DELIVERY' ? 'A domicilio' : 'Tipo no disponible'}</span></span>
-                                  <span className="wl-order-summary-products" aria-label="Productos del pedido">{(order.items || []).slice(0, 2).map((item) => <span className="wl-order-thumb" key={item.id} title={item.product?.name || 'Producto'}>{item.product?.image ? <img src={item.product.image} alt={item.product.name || 'Producto'} loading="lazy" /> : <Package aria-label={item.product?.name || 'Producto sin imagen'} />}</span>)}{(order.items?.length || 0) > 2 && <span className="wl-order-more">+{(order.items?.length || 0) - 2}</span>}{!order.items?.length && <span className="wl-order-no-products">Sin productos</span>}</span>
-                                  <span className="wl-order-summary-total">{formatCurrency(order.totalAmount)}</span>
-                                  <span className="wl-order-summary-status"><StatusBadge status={order.status} />{['CONFIRMED', 'PREPARING'].includes(order.status) && (order.scheduledDeliveryAt ? new Date(order.scheduledDeliveryAt).getTime() - kitchenClockNow <= 0 : (getPreparationRemainingMs(order, kitchenClockNow) ?? 0) <= 0) && <span className="wl-order-summary-alert">Pedido rezagado</span>}{unreadMessagesMap[order.id] > 0 && <span className="wl-order-summary-alert">{unreadMessagesMap[order.id]} mensaje{unreadMessagesMap[order.id] === 1 ? '' : 's'} nuevo{unreadMessagesMap[order.id] === 1 ? '' : 's'}</span>}{(order as any).cancellationRequestedAt && !(order as any).cancelledBy && ['CONFIRMED', 'PREPARING'].includes(order.status) && <span className="wl-order-summary-alert">Cancelación solicitada</span>}</span>
-                                  <span className="wl-order-expand"><ArrowRight aria-hidden="true" /><span className="sr-only">Abrir comanda</span></span>
-                                </button>
-                                {orderModalId === order.id && <div className="wl-comanda-overlay" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setOrderModalId(null); }}>
-                                <section className="wl-comanda-modal" role="dialog" aria-modal="true" aria-labelledby={`wl-comanda-${order.id}`}>
-                                  <div className="wl-comanda-heading">
-                                    <div className="wl-comanda-heading-info"><span className="wl-comanda-heading-icon"><ClipboardList aria-hidden="true" /></span><div><span className="wl-comanda-eyebrow">Detalle del pedido</span><div className="wl-comanda-title"><h2 id={`wl-comanda-${order.id}`}>{(order as any).dailyCounter ? `#${String((order as any).dailyCounter).padStart(2, '0')}` : order.orderReference}</h2><StatusBadge status={order.status} /></div><p>{order.createdAt ? formatDate(order.createdAt) : 'Fecha no disponible'} · {order.fulfillmentType === 'PICKUP' ? 'Para recoger' : 'A domicilio'}</p></div></div>
-                                    <button type="button" autoFocus onClick={() => setOrderModalId(null)} aria-label="Cerrar comanda"><X aria-hidden="true" /></button>
-                                  </div>
-                                  <div className="wl-comanda-content">
-                                    <div className="wl-comanda-customer"><p><User aria-hidden="true" /><strong>{getCustomerFullName(order.customer?.user) || 'Cliente'}</strong></p><CustomerPhoneLine phone={order.customer?.user?.phone} />{order.fulfillmentType === 'DELIVERY' && <p><MapPin aria-hidden="true" /><span>{formatAddress(order.address)}</span></p>}</div>
-                                    {!['CANCELLED', 'REJECTED'].includes(order.status) && <div className="wl-comanda-progress" aria-label="Progreso del pedido">{['Preparación', 'Lista', order.fulfillmentType === 'PICKUP' ? 'Recogida' : 'En entrega', 'Completada'].map((label, index) => { const current = ['PENDING', 'CONFIRMED', 'PREPARING'].includes(order.status) ? 0 : order.status === 'READY' ? 1 : ['PICKED_UP', 'IN_TRANSIT'].includes(order.status) ? 2 : 3; return <div key={label} className={index < current ? 'is-done' : index === current ? 'is-current' : ''} aria-current={index === current ? 'step' : undefined}><span>{index < current ? <Check aria-hidden="true" /> : index === current ? <i aria-hidden="true" /> : null}</span><small>{label}</small></div>; })}</div>}
-                                    <div className="wl-comanda-products"><h3>Productos ({order.items?.length || 0})</h3>{(order.items || []).map(item => <div className="wl-comanda-product" key={item.id}><span className="wl-order-thumb">{item.product?.image ? <img src={item.product.image} alt="" /> : <Package aria-hidden="true" />}</span><div><strong>{item.product?.name || 'Producto'}{item.weightG ? ` (${item.weightG} g)` : ''}</strong>{item.options?.length ? <p>{item.options.map(option => option.name).join(' · ')}</p> : null}{item.specialInstructions && <p>{item.specialInstructions}</p>}</div><b>×{item.quantity}</b>{item.unitPrice != null && <b>{formatCurrency(Number(item.unitPrice) * item.quantity)}</b>}</div>)}</div>
-                                    <div className="wl-comanda-total"><span>Total del pedido</span><strong>{formatCurrency(order.totalAmount)}</strong></div>
-                                    {parseStoreNotes(order.notes) && <div className="wl-comanda-note"><strong>Nota del cliente</strong><p>{parseStoreNotes(order.notes)}</p></div>}
-                                <div className="wl-order-details">
-                              {/* Fila 1: Cabecera */}
-                              <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 mb-3">
-                                <div className="flex flex-wrap items-center gap-2 sm:gap-3 min-w-0">
-                                  {order.id.startsWith('mock-order-') && (
-                                    <span className="rounded bg-sky-100 px-2 py-0.5 text-xs font-bold text-sky-800 animate-pulse">
-                                      SIMULACIÓN
-                                    </span>
-                                  )}
-                                  {(order as any).cancellationRequestedAt && !(order as any).cancelledBy && ['CONFIRMED', 'PREPARING'].includes(order.status) && (
-                                    <span className="inline-flex items-center gap-1 rounded-full bg-sky-100 border border-sky-300 px-2.5 py-0.5 text-xs font-bold text-sky-700 shadow-sm">
-                                      🧾 Cancelación solicitada
-                                    </span>
-                                  )}
-                                  {(order as any).cancelledBy === 'RESTAURANT' && (
-                                    <span className="inline-flex items-center gap-1 rounded-full bg-rose-100 border border-rose-300 px-2.5 py-0.5 text-xs font-bold text-rose-700 shadow-sm">
-                                      Cancelado por ti
-                                    </span>
-                                  )}
-                                  {unreadMessagesMap[order.id] > 0 && (
-                                    <button
-                                      type="button"
-                                      onClick={(e) => { e.stopPropagation(); setSelectedOrderForTicket(order); setActiveTicketTab('chat'); }}
-                                      className="inline-flex items-center gap-1 rounded-full bg-rose-500 px-2 py-0.5 text-xs font-black text-white animate-pulse shadow-sm shadow-rose-200 transition hover:bg-rose-600 active:scale-95"
-                                    >
-                                      💬 {unreadMessagesMap[order.id]} mensaje{unreadMessagesMap[order.id] > 1 ? 's' : ''} nuevo{unreadMessagesMap[order.id] > 1 ? 's' : ''}
-                                    </button>
-                                  )}
-                                </div>
-                                  <div className="flex max-w-full min-w-0 flex-wrap items-center gap-2 sm:justify-end">
-                                    {(() => {
-                                      if (profile?.businessType === 'RESTAURANT') return null;
-                                      if (!order.scheduledDeliveryAt) return null;
-                                      const isCustomerPending = !order.scheduledDeliveryCustomerAcceptedAt && order.status === 'CONFIRMED';
-                                      const isCustomerAccepted = !!order.scheduledDeliveryCustomerAcceptedAt;
-                                      return (
-                                        <>
-                                          {isCustomerPending && (
-                                            <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 border border-amber-200 px-2.5 py-1 text-[10px] font-bold text-amber-700 shadow-sm shrink-0">
-                                              <span className="relative flex h-1.5 w-1.5">
-                                                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-amber-400 opacity-75"></span>
-                                                <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-amber-600"></span>
-                                              </span>
-                                              Pendiente de confirmación
-                                            </span>
-                                          )}
-                                          {isCustomerAccepted && (
-                                            <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 border border-emerald-200 px-2.5 py-1 text-[10px] font-bold text-emerald-700 shadow-sm shrink-0">
-                                              ✅ Cliente confirmó fecha
-                                            </span>
-                                          )}
-                                          <button
-                                            type="button"
-                                            onClick={(event) => {
-                                              event.stopPropagation();
-                                              setSelectedOrderForEtaExtension(order);
-                                            }}
-                                            className="text-xs text-neutral-500 font-medium flex items-center gap-1 bg-neutral-100/60 px-2 py-1 rounded-lg border border-black/5 shrink-0 hover:bg-neutral-200 transition active:scale-95"
-                                          >
-                                            📅 {formatDate(order.estimatedDeliveryTime || order.scheduledDeliveryAt || order.createdAt)}
-                                          </button>
-                                        </>
-                                      );
-                                    })()}
-                                    {profile?.businessType !== 'RESTAURANT' && order.preparationTimeMinutes && order.preparationTimeMinutes > 1 && (order.status === 'CONFIRMED' || order.status === 'PREPARING') && isPrepCountdownRelevant(order, kitchenClockNow) && (() => {
-                                      const remainingMs = getPreparationRemainingMs(order, kitchenClockNow);
-                                      if (remainingMs !== null && remainingMs <= 0) return null;
-                                      return (
-                                        <button
-                                          type="button"
-                                          onClick={(event) => {
-                                            event.stopPropagation();
-                                            setSelectedOrderForEtaExtension(order);
-                                          }}
-                                          className={`rounded-lg border px-3 py-1.5 shadow-sm transition active:scale-95 flex items-center justify-center ${
-                                            isPreparationTimeUrgent(order, kitchenClockNow)
-                                              ? 'border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100 ring-2 ring-rose-200/50'
-                                              : 'border-sky-200 bg-sky-50 text-sky-700 hover:bg-sky-100'
-                                          }`}
-                                          title="Modificar tiempo de preparación"
-                                        >
-                                          <CountdownText order={order} className="font-black tabular-nums text-xs" />
-                                        </button>
-                                      );
-                                    })()}
-                                    {profile?.businessType === 'RESTAURANT' && (order.status === 'CONFIRMED' || order.status === 'PREPARING') && isPrepCountdownRelevant(order, kitchenClockNow) && (() => {
-                                      const remainingMs = getPreparationRemainingMs(order, kitchenClockNow);
-                                      if (remainingMs !== null && remainingMs <= 0) return null;
-                                      return (
-                                        <button
-                                          type="button"
-                                          onClick={(event) => {
-                                            event.stopPropagation();
-                                            setSelectedOrderForEtaExtension(order);
-                                          }}
-                                          className={`rounded-lg border px-3 py-1.5 shadow-sm transition active:scale-95 flex items-center justify-center ${
-                                            isPreparationTimeUrgent(order, kitchenClockNow)
-                                              ? 'border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100 ring-2 ring-rose-200/50'
-                                              : 'border-sky-200 bg-sky-50 text-sky-700 hover:bg-sky-100'
-                                          }`}
-                                          title="Modificar tiempo de preparación"
-                                        >
-                                          <CountdownText order={order} className="font-black tabular-nums text-xs" />
-                                        </button>
-                                      );
-                                    })()}
-                                  </div>
-                                </div>
-                                
-                                {/* Fila 2: Cuerpo */}
-                                <div className="grid gap-2 text-sm text-neutral-600 mb-4">
-                                  {(order as any).fulfillmentType !== 'PICKUP' && (order.driver || order.supportRestaurant?.name || ['READY', 'PICKED_UP', 'IN_TRANSIT', 'DELIVERED'].includes(order.status)) && (
-                                  <div className="flex items-center gap-2">
-                                    <svg className="w-4 h-4 text-neutral-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                                    </svg>
-                                    {order.driver?.user?.name && order.isAcceptedByDriver ? (
-                                      <div className="relative">
-                                        <button
-                                          type="button"
-                                          onClick={() => setDriverContactOpen(prev => ({ ...prev, [order.id]: !prev[order.id] }))}
-                                          className="flex items-center gap-1.5 bg-neutral-100 dark:bg-zinc-800 rounded-full pr-3 pl-1 py-1 transition active:scale-[0.97]"
-                                        >
-                                          {order.driver.user.profilePhoto ? (
-                                            <img src={order.driver.user.profilePhoto} alt={order.driver.user.name} className="w-5 h-5 rounded-full object-cover shadow-sm" />
-                                          ) : (
-                                            <div className="w-5 h-5 rounded-full bg-sky-100 dark:bg-sky-900 flex items-center justify-center text-[9px] font-bold text-sky-600 dark:text-sky-300">
-                                              {order.driver.user.name.charAt(0).toUpperCase()}
-                                            </div>
-                                          )}
-                                          <span className="font-semibold text-neutral-800 dark:text-zinc-200 text-xs">
-                                            🛵 {order.driver.user.name}
-                                          </span>
-                                  {(order as any).fulfillmentType !== 'PICKUP' && driverArrivedOrders[order.id] && ['CONFIRMED', 'PREPARING', 'READY'].includes(order.status) && (
-                                            <span className="text-[10px] font-bold text-emerald-600 bg-emerald-100 dark:bg-emerald-900/30 dark:text-emerald-400 ml-1 px-1.5 py-0.5 rounded-full">● En el restaurante</span>
-                                          )}
-                                        </button>
-                                        {driverContactOpen[order.id] && order.driver.user.phone && (
-                                          <div className="absolute top-full left-0 mt-1.5 z-50 flex gap-1.5">
-                                            <a
-                                              href={`tel:${order.driver.user.phone}`}
-                                              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-neutral-900 dark:bg-zinc-100 text-white dark:text-zinc-900 text-xs font-bold shadow-lg transition active:scale-[0.95]"
-                                            >
-                                              <span>📞</span> Llamar
-                                            </a>
-                                            <a
-                                              href={`https://wa.me/52${order.driver.user.phone.replace(/\D/g, '')}`}
-                                              target="_blank"
-                                              rel="noopener noreferrer"
-                                              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-emerald-600 text-white text-xs font-bold shadow-lg transition active:scale-[0.95]"
-                                            >
-                                              <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5 text-white" fill="currentColor" viewBox="0 0 24 24"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z" /></svg>
-                                              WhatsApp
-                                            </a>
-                                          </div>
-                                        )}
-                                      </div>
-                                    ) : order.driver?.user?.name && !order.isAcceptedByDriver ? (
-                                      <span className="font-medium text-sky-600 bg-sky-50 px-2 py-0.5 rounded border border-sky-100/50">
-                                        Asignado (Esperando confirmación)
-                                      </span>
-                                    ) : order.supportRestaurant?.name || (isSupported && supportAliadoNamesByOrder[order.id]) ? (
-                                      <span className="inline-flex items-center gap-1.5 bg-emerald-50 border border-emerald-100 rounded-full pr-3 pl-1 py-1">
-                                        <div className="w-5 h-5 rounded-full bg-emerald-100 flex items-center justify-center text-[9px] font-bold text-emerald-700">
-                                          🤝
-                                        </div>
-                                        <span className="font-semibold text-emerald-800 dark:text-emerald-300 text-xs">
-                                          {isHelper
-                                            ? `🧑‍🍳 ${order.restaurant?.name || 'Red aliada'}`
-                                            : `🛵 ${order.supportRestaurant?.name || supportAliadoNamesByOrder[order.id] || 'Restaurante aliado'}`}
-                                        </span>
-                                        <span className="text-[9px] font-bold text-emerald-600 bg-emerald-100 px-1.5 py-0.5 rounded-full">
-                                          {isHelper ? 'Entrega de apoyo' : 'Apoyo a red'}
-                                        </span>
-                                        {!isHelper && driverArrivedOrders[order.id] && order.status === 'READY' && (
-                                          <span className="text-[9px] font-bold text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded-full">
-                                            🛵 Repartidor en tienda
-                                          </span>
-                                        )}
-                                      </span>
-                                    ) : hasOwnDelivery ? (
-                                      <span className="font-medium text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-100/50">
-                                        {order.status === 'DELIVERED' ? 'Entregado' : order.status === 'IN_TRANSIT' ? 'En camino' : order.status === 'PICKED_UP' ? 'Recogido para entrega' : 'Pendiente de recogida'}
-                                      </span>
-                                    ) : (
-                                      <span className="font-medium text-sky-600 bg-sky-50 px-2 py-0.5 rounded border border-sky-100/50">
-                                        Sin repartidor asignado
-                                      </span>
-                                    )}
-                                    {order.driver && !order.driverArrivedAt && !driverArrivedOrders[order.id] && !['PICKED_UP', 'IN_TRANSIT', 'DELIVERED', 'CANCELLED'].includes(order.status) && (
-                                      <button
-                                        type="button"
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          setUnassignConfirmOrderId(order.id);
-                                        }}
-                                        disabled={activeActionKey === `${order.id}:quitarRepartidor`}
-                                        className="ml-2 text-xs font-semibold text-red-600 hover:text-red-500 disabled:text-neutral-400"
-                                      >
-                                        {activeActionKey === `${order.id}:quitarRepartidor` ? 'Quitando...' : '✖ Quitar'}
-                                      </button>
-                                    )}
-                                    {order.batchId && order.deliverySequence && (
-                                      <span className="ml-2 inline-flex items-center gap-1 rounded-full bg-violet-50 dark:bg-violet-950/20 border border-violet-200 dark:border-violet-900/30 px-2 py-0.5 text-[9px] font-bold text-violet-700 dark:text-violet-400">
-                                        📦 Lote #{(order.deliverySequence ?? 0) + 1}
-                                      </span>
-                                    )}
-                                  </div>
-                                )}
-
-                                  {/* Vista previa de productos para cocineros */}
-                                  {order.items && order.items.length > 0 && (
-                                    <div
-                                      onClick={() => setSelectedOrderForTicket(order)}
-                                      className="mt-2.5 mb-3 rounded-xl bg-neutral-50/80 p-3 border border-black/5 cursor-pointer transition hover:bg-neutral-100/80"
-                                    >
-                                      <p className="text-[10px] font-bold uppercase tracking-wider text-neutral-400 mb-2 flex items-center gap-1">
-                                        <span>{isHelper ? '🛵' : profile?.businessType !== 'RESTAURANT' ? '📦' : '🍳'}</span> {isHelper ? 'Productos a entregar' : profile?.businessType !== 'RESTAURANT' ? 'Productos a surtir' : 'Productos a preparar'}
-                                      </p>
-                                      <div className="space-y-1.5">
-                                        {order.items.map((item, idx) => (
-                                          <div key={item.id || idx} className="flex justify-between items-center gap-2 text-xs">
-                                            <span className="font-semibold text-neutral-800 truncate">
-                                              {item.product?.name}
-                                            </span>
-                                            <span className={`px-1.5 py-0.5 rounded-md text-[10px] font-black shrink-0 ${
-                                              item.quantity > 1 ? 'bg-amber-500 text-white shadow-sm' : 'bg-neutral-200 text-neutral-700'
-                                            }`}>
-                                              x{item.quantity}
-                                            </span>
-                                          </div>
-                                        ))}
-                                      </div>
-                                    </div>
-                                  )}
-
-                                {(() => {
-                                  const ms = getPreparationRemainingMs(order, kitchenClockNow);
-                                  let isDelayed = false;
-                                  let overdueMinutes = 0;
-                                  if (order.scheduledDeliveryAt) {
-                                    const scheduledMs = new Date(order.scheduledDeliveryAt).getTime() - kitchenClockNow;
-                                    if (scheduledMs <= 0) {
-                                      isDelayed = true;
-                                      overdueMinutes = Math.max(1, Math.round(Math.abs(scheduledMs) / 60000));
-                                    }
-                                  } else {
-                                    const safeMs = ms ?? 0;
-                                    isDelayed = safeMs <= 0;
-                                    overdueMinutes = isDelayed ? Math.max(1, Math.round(Math.abs(safeMs) / 60000)) : 0;
+                {activeSection === 'orders' ? <OrdersSection activeActionKey={activeActionKey} apiBase={apiBase} driverArrivedOrders={driverArrivedOrders} driverContactOpen={driverContactOpen} hasCarriedOverActiveOrders={hasCarriedOverActiveOrders} kitchenClockNow={kitchenClockNow} lastFailedAction={lastFailedAction} loadOrdersOnly={loadOrdersOnly} loading={loading} openAcceptOrderPrompt={openAcceptOrderPrompt} orderModalId={orderModalId} orderSearchTerm={orderSearchTerm} ordersFulfillment={ordersFulfillment} ordersPeriod={ordersPeriod} ordersSearch={ordersSearch} periodOrders={periodOrders} profile={profile} profileLoadState={profileLoadState} pushToast={pushToast} refreshOrders={refreshOrders} refreshingOrders={refreshingOrders} retryLastFailedAction={retryLastFailedAction} runOrderAction={runOrderAction} selectedStatus={selectedStatus} sessionUser={sessionUser} setActiveQrCodeData={setActiveQrCodeData} setActiveTicketTab={setActiveTicketTab} setDriverContactOpen={setDriverContactOpen} setEmergencyConfirmed={setEmergencyConfirmed} setEmergencyDeliveryOrderId={setEmergencyDeliveryOrderId} setEmergencyReason={setEmergencyReason} setHandoverPromptOrderId={setHandoverPromptOrderId} selectedOrderForTicket={selectedOrderForTicket} activeTicketTab={activeTicketTab} renderTicketExtras={(selectedOrderForTicket: OrderItem) => (<>
+                      {/* Flujo de Transferencia Bancaria — versión compacta */}
+                      {selectedOrderForTicket.paymentMethod === 'TRANSFER' && (
+                        <div className="mb-6 flex flex-wrap items-center gap-3 rounded-2xl border border-sky-100 bg-sky-50/40 px-5 py-4">
+                          <div className="flex items-center gap-2.5">
+                            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-sky-100 text-sky-600">
+                              <Mail className="h-4 w-4" />
+                            </div>
+                            <div>
+                              <p className="text-xs font-semibold text-sky-700">Transferencia</p>
+                              <p className="text-[10px] text-sky-500 font-medium">
+                                {selectedOrderForTicket.paymentStatus === 'COMPLETED' ? '✓ Pagado' : selectedOrderForTicket.paymentStatus === 'PENDING' ? '⏳ Pendiente' : '✗ Rechazado'}
+                              </p>
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setPaymentDetailOrder(selectedOrderForTicket)}
+                            className="ml-auto flex items-center gap-1.5 rounded-full border border-sky-200 bg-white px-3.5 py-2 text-xs font-bold text-sky-700 shadow-sm transition hover:bg-sky-50 hover:border-sky-300 active:scale-[0.97]"
+                          >
+                            <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                            </svg>
+                            Ver pago
+                          </button>
+                        </div>
+                      )}
+                    {/* Cancelación solicitada por el cliente — dentro de la comanda */}
+                    {(selectedOrderForTicket as any).cancellationRequestedAt && !(selectedOrderForTicket as any).cancelledBy && ['CONFIRMED', 'PREPARING'].includes(selectedOrderForTicket.status) && (
+                      <div className="border-t-2 border-dashed border-neutral-200 pt-4 px-5 sm:px-7 pb-5 shrink-0 bg-white">
+                        <div className="flex flex-col gap-3">
+                          <div className="flex items-center gap-2 px-3 py-2.5 bg-amber-50 border border-amber-200/60 rounded-xl">
+                            <span className="text-sm">🧾</span>
+                            <p className="text-xs font-semibold text-amber-700">Cliente solicita cancelar</p>
+                          </div>
+                          <div className="flex flex-col gap-2">
+                            <textarea
+                              value={comandaCancelNote}
+                              onChange={(e) => setComandaCancelNote(e.target.value)}
+                              placeholder="Nota para el cliente (opcional)..."
+                              rows={1}
+                              className="w-full rounded-xl border border-neutral-200 bg-neutral-50 px-3 py-2 text-sm font-medium text-neutral-900 placeholder-neutral-400 outline-none focus:border-amber-300 focus:bg-white focus:ring-2 focus:ring-amber-200/50 transition resize-none"
+                            />
+                            <div className="flex gap-2">
+                              <button
+                                type="button"
+                                disabled={selectedOrderForTicket.status === 'PREPARING'}
+                                onClick={async () => {
+                                  try {
+                                    await requestJson({
+                                      apiBase,
+                                      path: `/restaurant-panel/pedidos/${selectedOrderForTicket.id}/responder-solicitud-cancelacion`,
+                                      token,
+                                      options: { method: 'POST', body: JSON.stringify({ approve: true, note: comandaCancelNote.trim() || undefined }) },
+                                      fallbackMessage: 'Error al aprobar cancelación.',
+                                    });
+                                    pushToast('success', 'Cancelación aprobada', 'El cliente será notificado.');
+                                    loadOrdersOnly();
+                                  } catch (err: any) {
+                                    pushToast('error', 'Error', err?.message || 'No se pudo procesar.');
                                   }
-                                  const validStatus = order.status === 'CONFIRMED' || order.status === 'PREPARING';
-                                  if (validStatus && isDelayed) {
-                                    return (
-                                      <button
-                                        type="button"
-                                        onClick={(event) => {
-                                          event.stopPropagation();
-                                          setSelectedOrderForEtaExtension(order);
-                                        }}
-                                        className="mt-3 w-full flex items-center justify-center gap-2 rounded-xl border border-rose-300 bg-rose-500 px-3 py-2.5 text-white shadow-[0_8px_20px_rgba(225,29,72,0.2)] animate-pulse transition hover:bg-rose-600 active:scale-95"
-                                      >
-                                        <svg className="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                                        <div className="flex flex-col items-center">
-                                          <span className="text-xs font-black uppercase tracking-wider text-center">Pedido rezagado</span>
-                                          <span className="text-[10px] font-bold opacity-90">Atrasado {overdueMinutes} min · Toca para reprogramar</span>
-                                        </div>
-</button>
-                                     );
-                                   }
-                                   if (validStatus && order.scheduledDeliveryAt && !isDelayed) {
-                                     const scheduledTime = new Date(order.scheduledDeliveryAt).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' });
-                                     return (
-                                       <div className="mt-3 w-full flex items-center justify-center gap-2 rounded-xl border border-sky-100 bg-sky-50/70 px-3 py-2.5 text-xs font-semibold text-sky-800">
-                                         <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><path d="M12 6v6l4 2" /></svg>
-                                         <span>{order.fulfillmentType === 'PICKUP' ? 'Recogida programada' : 'Entrega programada'} · {scheduledTime}</span>
-                                       </div>
-                                     );
-                                   }
-                                   return null;
-                                 })()}
-
-                                {(order as any).fulfillmentType !== 'PICKUP' && (order.status === 'CONFIRMED' || order.status === 'PREPARING') && !order.driver && !order.noDriversAvailable && !hasOwnDelivery && (
-                  <div className="mt-2 flex items-center gap-2 rounded-xl border border-sky-100 bg-sky-50/70 px-3 py-2 text-xs font-semibold text-sky-800 shadow-sm animate-pulse w-fit">
-                    <span className="relative flex h-2 w-2">
-                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-sky-400 opacity-75"></span>
-                      <span className="relative inline-flex rounded-full h-2 w-2 bg-sky-500"></span>
-                    </span>
-                                    Asignando repartidor...
-                                  </div>
-                                )}
-
-                                {(order as any).fulfillmentType !== 'PICKUP' && (order.status === 'CONFIRMED' || order.status === 'PREPARING') && !order.driver && order.noDriversAvailable && !hasOwnDelivery && (
-                                  <div className="mt-2 flex flex-col gap-1 rounded-xl border border-rose-200 bg-rose-50/80 px-4 py-2.5 text-xs font-semibold text-rose-800 shadow-sm">
-                                    <div className="flex items-center gap-2">
-                                      <span className="relative flex h-2.5 w-2.5">
-                                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
-                                        <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-rose-600"></span>
-                                      </span>
-                                      <span>No hay repartidores disponibles en tu zona</span>
-                                    </div>
-                                    <span className="text-[10px] font-normal text-rose-600 leading-normal">
-                                      Puedes asumir la entrega tú mismo o solicitar apoyo a la red de restaurantes cercanos.
-                                    </span>
-                                  </div>
-                                )}
-                                {parseStoreNotes(order.notes) ? (
-                                  <div className="mt-2 rounded-[16px] border border-amber-100 bg-amber-50 px-4 py-2 text-sm text-amber-800">
-                                    <span className="font-semibold">Nota:</span> {parseStoreNotes(order.notes)}
-                                  </div>
-                                ) : null}
-
-                                {/* Pago en efectivo ya confirmado */}
-                                {order.status === 'PICKED_UP' && order.paymentMethod === 'CASH' && (order as any).cashPaymentConfirmedAt && (
-                                  <div className="mt-3 flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700">
-                                    <span>✅</span> Pago en efectivo confirmado — repartidor habilitado para salir
-                                  </div>
-                                )}
-
-                                {order.status === 'PENDING' && (
-                                  <div
-                                    className={`mt-3 overflow-hidden rounded-2xl border p-4 shadow-sm transition-all duration-300 ${order.paymentMethod === 'TRANSFER'
-                                      ? 'border-sky-100 bg-gradient-to-br from-sky-50/70 to-blue-50/70 animate-float-gentle shadow-md shadow-sky-500/5'
-                                      : 'border-black/5 bg-gradient-to-br from-neutral-50/50 to-white'
-                                      }`}
-                                    onClick={(e) => e.stopPropagation()}
-                                  >
-                                    {order.paymentMethod === 'TRANSFER' ? (
-                                      <div className="flex flex-col gap-3">
-                                        <div className="flex items-center justify-between gap-2">
-                                          <div className="flex items-center gap-2">
-                                            <span className="flex h-2.5 w-2.5 rounded-full bg-sky-600 animate-pulse" />
-                                            <span className="text-xs font-bold uppercase tracking-wider text-sky-700 bg-sky-50 border border-sky-100 px-2 py-0.5 rounded-md">
-                                              Pago por Transferencia
-                                            </span>
-                                          </div>
-                                          <TransferCountdown createdAt={order.createdAt} />
-                                        </div>
-                                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white/60 backdrop-blur-md rounded-xl p-3 border border-white/80">
-                                          <div className="flex flex-col">
-                                            <span className="text-xs font-medium text-neutral-500">Estado de pago</span>
-                                            <span className="text-sm font-bold text-neutral-800 flex items-center gap-1.5 mt-0.5">
-                                              <span className="inline-block w-2 h-2 rounded-full bg-amber-500" />
-                                              Por verificar en banca
-                                            </span>
-                                          </div>
-                                          {order.paymentProofUrl ? (
-                                            <button
-                                              type="button"
-                                              onClick={(e) => {
-                                                e.stopPropagation();
-                                                setZoomedImageUrl(order.paymentProofUrl || null);
-                                              }}
-                                              className="inline-flex items-center justify-center gap-2 rounded-xl bg-sky-600 hover:bg-sky-700 text-white px-4 py-2.5 text-xs font-bold shadow-md shadow-sky-600/10 hover:shadow-sky-600/20 transition active:scale-95 shrink-0"
-                                            >
-                                              <svg className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                                              </svg>
-                                              Ver comprobante
-                                            </button>
-                                          ) : (
-                                            <span className="text-xs font-semibold text-neutral-400 bg-neutral-100/80 px-3 py-2 rounded-xl border border-neutral-200/50">
-                                              Sin comprobante
-                                            </span>
-                                          )}
-                                        </div>
-                                      </div>
-                                    ) : ['CREDIT_CARD', 'DEBIT_CARD', 'DIGITAL_WALLET'].includes(order.paymentMethod || '') ? (
-                                      <div className="flex flex-col gap-2">
-                                        <div className="flex items-center gap-2">
-                                          <span className="flex h-2.5 w-2.5 rounded-full bg-emerald-500" />
-                                          <span className="text-xs font-bold uppercase tracking-wider text-emerald-700 bg-emerald-50 border border-emerald-100 px-2 py-0.5 rounded-md">
-                                            Pago en Línea Autorizado
-                                          </span>
-                                        </div>
-                                        <p className="text-xs text-emerald-600 font-medium bg-emerald-50/50 rounded-xl p-3 border border-emerald-100/50">
-                                          ✓ Transacción validada por pasarela de pago. No requiere comprobante físico.
-                                        </p>
-                                      </div>
-                                    ) : null}
-                                  </div>
-                                )}
-                              </div>
-
-                              {/* Fila 3: Pie (Total y Botones) */}
-                              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-t border-neutral-100 pt-3">
-                                <div>
-                                  {(() => {
-                                    if (isHelper) {
-                                      return (
-                                        <>
-                                          <p className="text-xs font-semibold uppercase tracking-[0.22em] text-emerald-600">Apoyo de entrega · Tu tarifa</p>
-                                          <p className="text-xl font-bold text-neutral-950">{formatCurrency(order.deliveryFee)}</p>
-                                          <p className="text-[10px] text-emerald-600 font-medium flex items-center gap-1 mt-1">
-                                            <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                                            {order.paymentMethod === 'CASH'
-                                              ? `Entregas ${formatCurrency(order.totalAmount - (order.deliveryFee || 0))} al restaurante y cobras ${formatCurrency(order.totalAmount)} al cliente`
-                                              : 'Recibe la tarifa por la entrega del apoyo'}
-                                          </p>
-                                        </>
-                                      );
-                                    }
-
-                                    const foodAmount = order.totalAmount - order.deliveryFee;
-
-                                    if (hasOwnDelivery && (order as any).fulfillmentType !== 'PICKUP') {
-                                      return (
-                                        <>
-                                          <p className="text-xs font-semibold uppercase tracking-[0.22em] text-emerald-600">
-                                            {order.status === 'DELIVERED' ? 'Recibido (Envío propio)' : 'Total a recibir (Envío propio)'}
-                                          </p>
-                                          <p className="text-xl font-bold text-neutral-950">{formatCurrency(order.totalAmount)}</p>
-                                        </>
-                                      );
-                                    }
-
-                                    // Restaurant delivering themselves
-                                    if (order.deliveredByRestaurant) {
-                                      return (
-                                        <>
-                                          <p className="text-xs font-semibold uppercase tracking-[0.22em] text-emerald-600">
-                                            {order.status === 'DELIVERED' ? 'Cobrado (Entrega propia)' : 'Total a cobrar (Entrega propia)'}
-                                          </p>
-                                          <p className="text-xl font-bold text-neutral-950">{formatCurrency(order.totalAmount)}</p>
-                                          {order.status !== 'DELIVERED' && (
-                                            <p className="text-[10px] text-neutral-500">Tú realizas la entrega. El cliente paga el total.</p>
-                                          )}
-                                        </>
-                                      );
-                                    }
-
-                                    // Platform delivery
-                                    if ((order as any).fulfillmentType === 'PICKUP') {
-                                      if (order.paymentMethod === 'TRANSFER') {
-                                        return (
-                                          <>
-                                            <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-sky-600">
-                                              Recibido por transferencia
-                                            </p>
-                                            <p className="text-xl font-bold text-neutral-950">{formatCurrency(order.totalAmount)}</p>
-                                            <p className="text-[10px] text-emerald-600 font-semibold flex items-center gap-1 mt-1">
-                                              <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                                              El cliente recoge en sucursal
-                                            </p>
-                                          </>
-                                        );
-                                      }
-                                      return (
-                                        <>
-                                          <p className="text-xs font-semibold uppercase tracking-[0.22em] text-emerald-600">
-                                            Total a recibir
-                                          </p>
-                                          <p className="text-xl font-bold text-neutral-950">{formatCurrency(order.totalAmount)}</p>
-                                          <p className="text-[10px] text-emerald-600 font-semibold flex items-center gap-1 mt-1">
-                                            <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                                            El cliente recoge en sucursal
-                                          </p>
-                                        </>
-                                      );
-                                    }
-
-                                    if (order.paymentMethod === 'CASH') {
-                                      const supportDelivery = !!order.supportRestaurantId;
-                                      return (
-                                        <>
-                                          <p className="text-xs font-semibold uppercase tracking-[0.22em] text-amber-600">
-                                            {supportDelivery
-                                              ? (['DELIVERED', 'PICKED_UP', 'IN_TRANSIT'].includes(order.status) || order.cashPaymentConfirmedAt ? 'Cobrado al restaurante aliado' : 'Cobrar al restaurante que entrega')
-                                              : (order.status === 'DELIVERED' || order.cashPaymentConfirmedAt ? 'Cobrado al repartidor' : 'Cobrar al repartidor')}
-                                          </p>
-                                          <p className="text-xl font-bold text-neutral-950">{formatCurrency(foodAmount)}</p>
-                                          {!['PICKED_UP', 'IN_TRANSIT', 'DELIVERED'].includes(order.status) && !order.cashPaymentConfirmedAt && (
-                                            supportDelivery
-                                              ? <p className="text-[10px] text-neutral-500">Entregar al aliado al recoger; él cobra el total al cliente y le queda el envío.</p>
-                                              : <p className="text-[10px] text-neutral-500">El repartidor cobra el total al cliente.</p>
-                                          )}
-                                        </>
-                                      );
-                                    }
-
-                                    if (order.paymentMethod === 'TRANSFER') {
-                                      const handedOver = ['PICKED_UP', 'IN_TRANSIT', 'DELIVERED'].includes(order.status);
-                                      return (
-                                        <>
-                                          <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-sky-600">
-                                            Recibido por transferencia
-                                          </p>
-                                          <p className="text-xl font-bold text-neutral-950">{formatCurrency(order.totalAmount)}</p>
-                                          {order.supportRestaurantId ? (
-                                            handedOver ? (
-                                              <div className="mt-2 rounded-xl border border-emerald-200 bg-emerald-50/60 px-3 py-2">
-                                                <div className="flex items-center justify-between">
-                                                  <span className="text-[11px] font-semibold text-emerald-600">✅ Ya pagado al repartidor de apoyo</span>
-                                                  <span className="text-sm font-bold text-emerald-700">{formatCurrency(order.deliveryFee)}</span>
-                                                </div>
-                                                <p className="text-[9px] text-emerald-500 mt-0.5 leading-tight">
-                                                  El total del pedido cuenta como ingreso del restaurante aliado; él gana solo el envío.
-                                                </p>
-                                              </div>
-                                            ) : (
-                                              (order as any).fulfillmentType !== 'PICKUP' && (
-                                                <div className="mt-2 rounded-xl border border-dashed border-rose-200 bg-rose-50/60 px-3 py-2">
-                                                  <div className="flex items-center justify-between">
-                                                    <span className="text-[11px] font-semibold text-rose-600">👉 Pagar al restaurante aliado</span>
-                                                    <span className="text-sm font-bold text-rose-700">{formatCurrency(order.deliveryFee)}</span>
-                                                  </div>
-                                                  <p className="text-[9px] text-rose-400 mt-0.5 leading-tight">
-                                                    Entregar en efectivo al restaurante aliado al recoger el pedido
-                                                  </p>
-                                                </div>
-                                              )
-                                            )
-                                          ) : (
-                                            !handedOver && !order.deliveredByRestaurant && (order as any).fulfillmentType !== 'PICKUP' && (
-                                              <div className="mt-2 rounded-xl border border-dashed border-rose-200 bg-rose-50/60 px-3 py-2">
-                                                <div className="flex items-center justify-between">
-                                                  <span className="text-[11px] font-semibold text-rose-600">👉 Pagar al repartidor</span>
-                                                  <span className="text-sm font-bold text-rose-700">{formatCurrency(order.deliveryFee)}</span>
-                                                </div>
-                                                <p className="text-[9px] text-rose-400 mt-0.5 leading-tight">
-                                                  Entregar en efectivo al repartidor al recoger el pedido
-                                                </p>
-                                              </div>
-                                            )
-                                          )}
-                                        </>
-                                      );
-                                    }
-
-                                    // Fallback if paymentMethod is missing
-                                    return (
-                                      <>
-                                        <p className="text-xs font-semibold uppercase tracking-[0.22em] text-neutral-400">Total (Sin envío)</p>
-                                        <p className="text-xl font-bold text-neutral-950">{formatCurrency(foodAmount)}</p>
-                                      </>
-                                    );
-                                  })()}
-
-                                  {Number(order.promoDiscountAmount || 0) > 0 && (
-                                    <div className="mt-3 inline-flex flex-wrap items-center gap-1.5 rounded-xl border border-sky-100 bg-sky-50/60 px-3 py-2">
-                                      <span className="flex h-5 w-5 items-center justify-center rounded-full bg-sky-500 text-white">
-                                        <Tag className="h-3 w-3" strokeWidth={2.5} />
-                                      </span>
-                                      <span className="text-[11px] font-semibold text-neutral-500">Descuento aplicado</span>
-                                      <span className="text-[12px] font-bold text-sky-700">-{formatCurrency(Number(order.promoDiscountAmount))}</span>
-                                    </div>
-                                  )}
-                                </div>
-                                <div className="flex flex-col sm:flex-row sm:flex-wrap gap-2 items-stretch sm:items-center justify-end min-w-0" onClick={(e) => e.stopPropagation()}>
-                                  {!isHelper && (order.status !== 'IN_TRANSIT' || (!hasOwnDelivery && !!order.driver)) ? (
-                                    <button
-                                      type="button"
-                                      onClick={() => setSelectedOrderForTicket(order)}
-                                      className="w-full sm:w-auto justify-center rounded-full bg-gradient-to-r from-sky-600 to-blue-600 px-5 py-2.5 sm:py-2 text-sm font-semibold text-white shadow-sm hover:from-sky-500 hover:to-blue-500 transition flex items-center gap-2"
-                                    >
-                                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                                      </svg>
-                                      {profile?.businessType !== 'RESTAURANT' ? 'Ver orden' : 'Ver comanda'}
-                                    </button>
-                                  ) : null}
-
-                                  {order.status === 'IN_TRANSIT' && !isHelper && !order.supportRestaurantId && (hasOwnDelivery || !order.driver) && (
-                                    <button
-                                      type="button"
-                                      onClick={async () => {
-                                        try {
-                                          let response = await fetch(`${apiBase}/restaurant-panel/pedidos/${order.id}/delivery-token`, {
-                                            cache: 'no-store',
-                                            headers: {
-                                              Authorization: `Bearer ${token}`,
-                                            },
-                                          });
-                                          if (response.status === 410) {
-                                            if (!window.confirm('El QR venció. ¿Renovar el enlace de reparto? El enlace anterior no funcionará y deberás compartir el nuevo con el repartidor.')) return;
-                                            const renewal = await fetch(`${apiBase}/restaurant-panel/pedidos/${order.id}/delivery-token/renew`, { method: 'POST', headers: { Authorization: `Bearer ${token}` } });
-                                            if (!renewal.ok) {
-                                              pushToast('error', 'No se pudo renovar', 'Comprueba el estado del pedido y vuelve a intentarlo.');
-                                              return;
-                                            }
-                                             response = renewal;
-                                          }
-                                          const res = await response.json();
-                                          if (res.success && res.data) {
-                                            setActiveQrCodeData({
-                                              token: res.data.token,
-                                              orderReference: res.data.orderReference,
-                                              id: order.id,
-                                              url: res.data.url,
-                                            });
-                                          } else {
-                                            pushToast('error', 'Error', 'No se encontró un reparto activo para este pedido.');
-                                          }
-                                        } catch (err) {
-                                          pushToast('error', 'Error de red', 'No se pudo conectar con el servidor.');
-                                        }
-                                      }}
-                                      className="w-full sm:w-auto justify-center rounded-full bg-amber-500 px-5 py-2.5 sm:py-2 text-sm font-semibold text-white shadow-sm hover:bg-amber-600 transition flex items-center gap-2"
-                                    >
-                                      <span>🛵 Ver QR de reparto</span>
-                                    </button>
-                                  )}
-
-                                  {isHelper && !['DELIVERED', 'COMPLETED', 'REJECTED', 'CANCELLED', 'PENDING'].includes(order.status) && (
-                                    <button
-                                      type="button"
-                                      onClick={async () => {
-                                        try {
-                                          const response = await fetch(`${apiBase}/restaurant-panel/pedidos/${order.id}/delivery-token`, {
-                                            headers: {
-                                              Authorization: `Bearer ${token}`,
-                                            },
-                                          });
-                                          const res = await response.json();
-                                          if (res.success && res.data) {
-                                            setActiveQrCodeData({
-                                              token: res.data.token,
-                                              orderReference: res.data.orderReference,
-                                              id: order.id,
-                                              url: res.data.url,
-                                            });
-                                          } else {
-                                            pushToast('error', 'Error', 'No se encontró un reparto activo para este pedido.');
-                                          }
-                                        } catch (err) {
-                                          pushToast('error', 'Error de red', 'No se pudo conectar con el servidor.');
-                                        }
-                                      }}
-                                      className="w-full sm:w-auto justify-center rounded-full bg-amber-500 px-5 py-2.5 sm:py-2 text-sm font-semibold text-white shadow-sm hover:bg-amber-600 transition flex items-center gap-2"
-                                    >
-                                      <span>🛵 Ver QR de reparto</span>
-                                    </button>
-                                  )}
-
-                                  {/* Botones de Accion (solo para pedidos propios; las entregas de apoyo usan el QR) */}
-                                  {!isHelper && authorizedActionButtons.length > 0 ? (
-                                    <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
-                                      {authorizedActionButtons.map((actionKey) => {
-                                        const action = restaurantActionMap[actionKey];
-                                        const isBusy = activeActionKey === `${order.id}:${actionKey}`;
-                                        const tone =
-                                          actionKey === 'accept'
-                                            ? 'primary'
-                                            : actionKey === 'reject' || actionKey === 'cancel'
-                                              ? 'danger'
-                                              : actionKey === 'preparing'
-                                                ? 'warning'
-                                                : 'success';
-
-                                        return (
-                                          <ActionButton
-                                            key={actionKey}
-                                            onClick={() => {
-                                              if (actionKey === 'accept') {
-                                                openAcceptOrderPrompt(order.id);
-                                              } else if (actionKey === 'handover') {
-                                                setHandoverPromptOrderId(order.id);
-                                              } else if (actionKey === 'delivered') {
-                                                setEmergencyReason('');
-                                                setEmergencyConfirmed(false);
-                                                setEmergencyDeliveryOrderId(order.id);
-                                              } else if (actionKey === 'reject' && order.paymentMethod === 'TRANSFER') {
-                                                setTransferRefundOrder(order);
-                                              } else if (actionKey === 'cancel') {
-                                                const reason = window.prompt('Motivo de cancelación (mín. 10 caracteres):');
-                                                if (reason && reason.trim().length >= 10) {
-                                                  void runOrderAction(order.id, actionKey, { preserveFailedAction: true });
-                                                  // Send cancel with reason via PATCH
-                                                  requestJson({
-                                                    apiBase,
-                                                    path: `/restaurant-panel/pedidos/${order.id}/cancelar`,
-                                                    token,
-                                                    options: {
-                                                      method: 'PATCH',
-                                                      body: JSON.stringify({ reason: reason.trim() }),
-                                                    },
-                                                    fallbackMessage: 'No se pudo cancelar el pedido.',
-                                                  }).then(() => {
-                                                    loadOrdersOnly();
-                                                    pushToast('success', 'Pedido cancelado', `Motivo: ${reason.trim()}`);
-                                                  }).catch((err: any) => {
-                                                    pushToast('error', 'Error', err?.message || 'No se pudo cancelar.');
-                                                  });
-                                                } else if (reason !== null) {
-                                                  window.alert('El motivo debe tener al menos 10 caracteres.');
-                                                }
-                                              } else {
-                                                void runOrderAction(order.id, actionKey);
-                                              }
-                                            }}
-                                            disabled={isBusy}
-                                            tone={tone}
-                                          >
-                                            {isBusy ? 'Procesando...' : action.label}
-                                          </ActionButton>
-                                        );
-                                      })}
-                                    </div>
-                                  ) : null}
-
-                                </div>
-                              </div>
-
-                              {/* Pickup: Confirmar recolección */}
-                              {((order as any).fulfillmentType === 'PICKUP' && order.status === 'READY') ? (
-                                <div className="flex flex-col sm:flex-row gap-2 mt-2" onClick={(e) => e.stopPropagation()}>
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      setPickupConfirmOrderId(order.id);
-                                      setPickupConfirmPinInput('');
-                                      setPickupConfirmError(null);
-                                      setPickupConfirmAttemptsLeft(3);
-                                    }}
-                                    className="flex-1 rounded-xl border border-emerald-200 bg-emerald-600 px-4 py-3 text-sm font-semibold text-white shadow-[0_4px_12px_rgba(16,185,129,0.2)] transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-neutral-300 disabled:text-neutral-500"
-                                  >
-                                    ✅ Confirmar recolección
-                                  </button>
-                                </div>
-                              ) : null}
-
-                              {/* Boton de Emergencia: Asumir Reparto o Pedir Apoyo (solo delivery) */}
-                              {((order as any).fulfillmentType !== 'PICKUP' && !order.supportRestaurantId && (order.status === 'READY' || ((order.status === 'CONFIRMED' || order.status === 'PREPARING') && order.noDriversAvailable)) && !order.driver) ? (
-                                <div className="flex flex-col gap-2 mt-2" onClick={(e) => e.stopPropagation()}>
-                                  {/* Esperando respuesta de la red: solo informativo, nunca bloquea acciones */}
-                                  {order.isSupportRequested && order.supportRequestedAt && (
-                                    <div className="rounded-[16px] border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-800">
-                                      <div className="flex items-center gap-2">
-                                        <span className="relative flex h-2.5 w-2.5 shrink-0">
-                                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-sky-400 opacity-75"></span>
-                                          <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-sky-500"></span>
-                                        </span>
-                                        <div className="min-w-0 flex-1">
-                                          <p className="font-semibold">Esperando respuesta de la red…</p>
-                                          <p className="text-xs text-sky-600 mt-0.5">
-                                            {(() => {
-                                              const elapsedMs = Math.max(0, supportCountdownNow - new Date(order.supportRequestedAt!).getTime());
-                                              const remainingMs = Math.max(0, 2 * 60 * 1000 - elapsedMs);
-                                              const secs = Math.ceil(remainingMs / 1000);
-                                              const mm = Math.floor(secs / 60);
-                                              const ss = secs % 60;
-                                              return remainingMs <= 0
-                                                ? 'Finalizando solicitud…'
-                                                : `Si nadie responde en ${mm}:${String(ss).padStart(2, '0')} min, el pedido queda para ti.`;
-                                            })()}
-                                          </p>
-                                        </div>
-                                      </div>
-                                    </div>
-                                  )}
-                                  {supportNotifyHere ? (
-                                    <div className="rounded-[16px] border border-rose-100 bg-rose-50 px-4 py-3 text-sm text-rose-800">
-                                      <div className="flex items-center gap-2">
-                                        <span className="text-base">😕</span>
-                                        <div className="min-w-0 flex-1">
-                                          <p className="font-semibold">Nadie aceptó tu solicitud de apoyo</p>
-                                          {supportNotifyHere.exhausted ? (
-                                            <p className="text-xs text-rose-600 mt-0.5">Agotaste los 2 intentos. Solo puedes ir a entregar tú mismo.</p>
-                                          ) : (
-                                            <p className="text-xs text-rose-600 mt-0.5">
-                                              Puedes reintentar (te queda{supportNotifyHere.attemptsLeft === 1 ? '' : 'n'} {supportNotifyHere.attemptsLeft} intento{supportNotifyHere.attemptsLeft === 1 ? '' : 's'}) o entregarlo tú mismo.
-                                            </p>
-                                          )}
-                                        </div>
-                                        {!WINGSLAB_BUSINESS.ownDeliveryOnly && !supportNotifyHere.exhausted && !order.isSupportRequested && (
-                                          <button
-                                            type="button"
-                                            onClick={() => void runOrderAction(order.id, 'solicitarApoyo')}
-                                            disabled={activeActionKey === `${order.id}:solicitarApoyo`}
-                                            className="shrink-0 rounded-full bg-rose-600 px-4 py-2 text-xs font-bold text-white transition hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-50"
-                                          >
-                                            {activeActionKey === `${order.id}:solicitarApoyo` ? 'Reenviando...' : 'Reintentar'}
-                                          </button>
-                                        )}
-                                      </div>
-                                    </div>
-                                  ) : null}
-                                  <div className="flex flex-col sm:flex-row gap-2">
-                                    <button
-                                      type="button"
-                                      onClick={() => void runOrderAction(order.id, 'asumirReparto')}
-                                      disabled={activeActionKey === `${order.id}:asumirReparto`}
-                                      className="flex-1 rounded-xl border border-emerald-200 bg-emerald-600 px-4 py-3 text-sm font-semibold text-white shadow-[0_4px_12px_rgba(16,185,129,0.2)] transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-neutral-300 disabled:text-neutral-500"
-                                    >
-                                      {activeActionKey === `${order.id}:asumirReparto`
-                                        ? 'Procesando...'
-                                        : 'Generar QR de reparto'}
-                                    </button>
-                                      {!WINGSLAB_BUSINESS.ownDeliveryOnly && !profile?.hasOwnDelivery && !supportExhaustedHere && !supportNotifyHere?.exhausted && !order.isSupportRequested && (
-                                      <button
-                                        type="button"
-                                        onClick={() => void runOrderAction(order.id, 'solicitarApoyo')}
-                                        disabled={activeActionKey === `${order.id}:solicitarApoyo`}
-                                        className="flex-1 rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm font-semibold text-sky-700 transition hover:bg-sky-100 disabled:cursor-not-allowed disabled:bg-neutral-100 disabled:text-neutral-400"
-                                      >
-                                        {activeActionKey === `${order.id}:solicitarApoyo`
-                                          ? 'Enviando...'
-                                          : '🤝 Pedir apoyo a red'}
-                                      </button>
-                                    )}
-                                  </div>
-                                </div>
-                              ) : null}
-                                </div>
-                                  </div>
-                                </section>
-                                </div>}
-                              </div>
-                            </article>
-                          );
-                        })}
+                                }}
+                                className={`flex-1 rounded-full px-4 py-2 text-sm font-bold transition-colors active:scale-[0.97] ${selectedOrderForTicket.status === 'PREPARING' ? 'bg-neutral-200 text-neutral-400 cursor-not-allowed' : 'bg-emerald-500 hover:bg-emerald-600 text-white'}`}
+                              >
+                                Aprobar
+                              </button>
+                              <button
+                                type="button"
+                                onClick={async () => {
+                                  try {
+                                    await requestJson({
+                                      apiBase,
+                                      path: `/restaurant-panel/pedidos/${selectedOrderForTicket.id}/responder-solicitud-cancelacion`,
+                                      token,
+                                      options: { method: 'POST', body: JSON.stringify({ approve: false, note: comandaCancelNote.trim() || undefined }) },
+                                      fallbackMessage: 'Error al rechazar cancelación.',
+                                    });
+                                    pushToast('info', 'Cancelación rechazada', 'El pedido continúa su curso.');
+                                    loadOrdersOnly();
+                                  } catch (err: any) {
+                                    pushToast('error', 'Error', err?.message || 'No se pudo procesar.');
+                                  }
+                                }}
+                                className="flex-1 rounded-full bg-neutral-100 hover:bg-neutral-200 border border-neutral-200 px-4 py-2 text-sm font-semibold text-neutral-700 transition-colors active:scale-[0.97]"
+                              >
+                                Rechazar
+                              </button>
+                            </div>
+                          </div>
+                        </div>
                       </div>
-                    ) : (
-                      <>
-                        <div className="wl-orders-empty"><span><ClipboardList aria-hidden="true" /></span><h2>{loading ? 'Cargando órdenes' : orderSearchTerm || ordersFulfillment !== 'ALL' ? 'Sin resultados' : selectedStatus === 'ACTIVE' ? 'No hay órdenes activas' : 'No hay órdenes en este estado'}</h2><p>{loading ? 'Cargando…' : orderSearchTerm || ordersFulfillment !== 'ALL' ? 'Ajusta la búsqueda o los filtros.' : 'Prueba con otra fecha o estado.'}</p></div>
-                      </>
                     )}
-                  </section>
-                ) : null}
+<div className="mt-3 flex flex-wrap items-center gap-2">{profile?.enableTicketPrinting !== false && <button type="button" disabled={isPrintingTicket} onClick={() => void handlePrintTicket(selectedOrderForTicket)} className="min-h-11 rounded-xl border border-neutral-200 px-3 text-sm font-bold">Imprimir</button>}
+                  {['CONFIRMED', 'PREPARING'].includes(selectedOrderForTicket.status) && !(selectedOrderForTicket as any).cancellationRequestedAt && !(selectedOrderForTicket as any).cancelledBy && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCancelReason('');
+                        setCancelConfirmOrder(selectedOrderForTicket);
+                      }}
+                      className="inline-flex items-center gap-2 rounded-full border border-rose-200 bg-rose-50/70 hover:bg-rose-100 active:scale-95 text-rose-700 px-4 py-2.5 text-sm font-bold shadow-sm transition-all"
+                    >
+                      <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                        <circle cx="12" cy="12" r="10" />
+                        <path d="m4.9 4.9 14.2 14.2" />
+                      </svg>
+                      Cancelar pedido
+                    </button>
+                  )}
+</div></>)} renderTicketChat={(selectedOrderForTicket: OrderItem) => (
+                   <div
+                    className="flex min-h-0 flex-col overflow-hidden rounded-2xl border border-neutral-200 bg-neutral-50"
+                  >
+                    {/* Encabezado del Chat */}
+                    <div className="bg-white border-b border-neutral-200/80 px-4 py-3 flex items-center justify-between shrink-0 shadow-[0_1px_3px_rgba(0,0,0,0.02)]">
+                      <div className="flex items-center gap-2">
+                        <span className="relative flex h-2 w-2">
+                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                          <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                        </span>
+                        <p className="text-xs font-bold uppercase tracking-wider text-neutral-600">
+                          Chat con el Comensal
+                        </p>
+                      </div>
+                      <span className="text-[10px] bg-neutral-100 border border-neutral-200 text-neutral-500 font-semibold px-2 py-0.5 rounded-full shadow-sm">
+                        Canal Directo
+                      </span>
+                    </div>
+
+                    {/* Lista de Mensajes */}
+                    <div className="flex-1 overflow-y-auto p-4 space-y-3 min-h-36 max-h-[42dvh] flex flex-col">
+                      {loadingChat ? (
+                        <div className="flex flex-col items-center justify-center flex-1 py-12 space-y-3">
+                          <SaDelLoader size="sm" label="Cargando conversación..." />
+                        </div>
+                      ) : chatMessages.length === 0 ? (
+                        <div className="flex flex-col items-center justify-center flex-1 py-12 px-6 text-center space-y-4">
+                          <div className="h-16 w-16 bg-neutral-200/40 rounded-full flex items-center justify-center text-neutral-400 border border-neutral-200/30">
+                            <MessageCircle className="h-8 w-8 text-neutral-400" />
+                          </div>
+                          <div>
+                            <p className="text-sm font-bold text-neutral-700">Sin mensajes en esta orden</p>
+                            <p className="mt-1.5 text-xs text-neutral-500 leading-relaxed">
+                              Utiliza este canal directo para avisarle al cliente si algún platillo se agotó, si hay retrasos o para confirmar cualquier especificación de su pedido.
+                            </p>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="space-y-4">
+                          {chatMessages.map((msg, idx) => {
+                            const isMe = msg.senderRole === 'RESTAURANT';
+                            const dateStr = msg.createdAt ? new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
+
+                            return (
+                              <div key={msg.id || idx} className={`flex flex-col ${isMe ? 'items-end' : 'items-start'}`}>
+                                <div className="flex items-center gap-1.5 mb-1 px-1">
+                                  <span className="text-[10px] font-bold text-neutral-400">
+                                    {isMe ? `Tú (${businessTypeLabel(profile?.businessType)})` : msg.senderName || 'Comensal'}
+                                  </span>
+                                  <span className="text-[9px] text-neutral-400">•</span>
+                                  <span className="text-[9px] text-neutral-400 font-medium">{dateStr}</span>
+                                </div>
+                                <div
+                                  className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-sm font-semibold shadow-sm leading-relaxed ${
+                                    isMe
+                                      ? 'bg-emerald-600 text-white rounded-tr-none'
+                                      : 'bg-white text-neutral-800 border border-neutral-200/60 rounded-tl-none'
+                                  }`}
+                                >
+                                  {msg.content}
+                                </div>
+                              </div>
+                            );
+                          })}
+                          <div ref={chatEndRef} />
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Barra de Entrada del Chat */}
+                    {['CONFIRMED', 'PREPARING', 'READY', 'IN_TRANSIT'].includes(selectedOrderForTicket.status) ? (
+                      <form
+                        onSubmit={(e) => {
+                          e.preventDefault();
+                          void sendChatMessage(selectedOrderForTicket.id);
+                        }}
+                        className="p-3 bg-white border-t border-neutral-200/80 flex items-center gap-2 shrink-0 shadow-[0_-1px_3px_rgba(0,0,0,0.02)]"
+                      >
+                        <input
+                          type="text"
+                          value={chatInput}
+                          onChange={(e) => setChatInput(e.target.value)}
+                          placeholder="Escribe un mensaje al comensal..."
+                          disabled={sendingChatMessage}
+                          className="min-w-0 flex-1 bg-neutral-50 border border-neutral-200 hover:border-neutral-300 focus:border-emerald-500 focus:bg-white text-sm font-semibold rounded-full px-4 py-2.5 outline-none transition disabled:opacity-70"
+                        />
+                        <button
+                          type="submit" aria-label="Enviar mensaje"
+                          disabled={!chatInput.trim() || sendingChatMessage}
+                          className="h-10 w-10 bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white rounded-full flex items-center justify-center transition disabled:opacity-50 disabled:scale-100 shadow-sm shrink-0"
+                        >
+                          {sendingChatMessage ? (
+                            <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            </svg>
+                          ) : (
+                            <svg className="h-5 w-5 rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                            </svg>
+                          )}
+                        </button>
+                      </form>
+                    ) : (
+                      <div className="p-4 bg-neutral-50 border-t border-neutral-200/80 shrink-0 text-center">
+                        <div className="inline-flex items-center justify-center gap-2 bg-neutral-100 border border-neutral-200 text-neutral-500 text-xs font-semibold px-4 py-3 rounded-xl w-full shadow-[inset_0_1px_2px_rgba(0,0,0,0.02)]">
+                          <svg className="w-4 h-4 opacity-70" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                          </svg>
+                          Chat bloqueado en este estado del pedido
+                        </div>
+                      </div>
+                    )}
+                  </div>
+)} setOrdersFulfillment={setOrdersFulfillment} setOrdersPeriod={setOrdersPeriod} setOrdersSearch={setOrdersSearch} setPickupConfirmAttemptsLeft={setPickupConfirmAttemptsLeft} setPickupConfirmError={setPickupConfirmError} setPickupConfirmOrderId={setPickupConfirmOrderId} setPickupConfirmPinInput={setPickupConfirmPinInput} setSelectedOrderForEtaExtension={setSelectedOrderForEtaExtension} setSelectedOrderForTicket={setSelectedOrderForTicket} setSelectedStatus={setSelectedStatus} setTransferRefundOrder={setTransferRefundOrder} setUnassignConfirmOrderId={setUnassignConfirmOrderId} setZoomedImageUrl={setZoomedImageUrl} supportAliadoNamesByOrder={supportAliadoNamesByOrder} supportCountdownNow={supportCountdownNow} supportNotifyByOrder={supportNotifyByOrder} token={token} unreadMessagesMap={unreadMessagesMap} visibleOrders={visibleOrders} /> : null}
 
                 {activeSection === 'store' && loading ? (
                   <div className="flex flex-col items-center justify-center rounded-[32px] border border-black/5 bg-white px-6 py-20 text-center shadow-[0_10px_30px_rgba(15,15,15,0.04)]">
@@ -10367,511 +9618,6 @@ export default function Home() {
               </div>
             </div>
           </div>
-
-            {selectedOrderForTicket ? (
-              <div
-              className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 px-3 py-4 sm:px-6"
-              role="dialog"
-              aria-modal="true"
-              aria-labelledby="ticket-modal-title"
-            >
-              <div
-                className="absolute inset-0"
-                onClick={() => setSelectedOrderForTicket(null)}
-                aria-hidden="true"
-              />
-              <div className="relative z-10 flex max-h-[92vh] w-full max-w-3xl lg:max-w-6xl flex-col overflow-hidden rounded-[24px] bg-white shadow-[0_32px_100px_rgba(15,15,15,0.28)] transition-all duration-300">
-                {(() => {
-                  const stampKey =
-                    selectedOrderForTicket.status === 'CANCELLED' || (selectedOrderForTicket as any).cancelledBy
-                      ? 'CANCELLED'
-                      : selectedOrderForTicket.status;
-                  const stamp = ticketStampConfig[stampKey] || null;
-                  if (!stamp) return null;
-                  return (
-                    <div className="pointer-events-none absolute inset-0 z-30 flex items-center justify-center select-none mix-blend-multiply">
-                      <div className={`absolute -rotate-12 translate-x-4 translate-y-3 border-[7px] ${stamp.borderSoft} px-8 py-3 sm:px-16 sm:py-5`}>
-                        <div className={`border-2 border-dashed ${stamp.borderSoft} px-3 py-1.5 text-center sm:px-6 sm:py-2.5`}>
-                          <span className={`text-3xl font-black uppercase leading-none tracking-[0.18em] ${stamp.textSoft} sm:text-6xl lg:text-7xl`}>
-                            {stamp.label}
-                          </span>
-                        </div>
-                      </div>
-                      <div className={`absolute -rotate-12 border-[7px] ${stamp.borderStrong} px-8 py-3 sm:px-16 sm:py-5`}>
-                        <div className={`border-2 border-dashed ${stamp.borderStrong} px-3 py-1.5 text-center sm:px-6 sm:py-2.5`}>
-                          <span className={`text-3xl font-black uppercase leading-none tracking-[0.18em] ${stamp.textStrong} sm:text-6xl lg:text-7xl`}>
-                            {stamp.label}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })()}
-                <button
-                  type="button"
-                  onClick={() => setSelectedOrderForTicket(null)}
-                  className="absolute top-4 right-4 z-20 flex h-8 w-8 items-center justify-center rounded-full bg-neutral-900/80 text-white shadow-md transition hover:bg-neutral-900 active:scale-90"
-                  aria-label="Cerrar comanda"
-                >
-                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M18 6 6 18"/><path d="m6 6 12 12"/>
-                  </svg>
-                </button>
-                <div className="border-b-2 border-dashed border-neutral-200 px-5 py-4 sm:px-7 bg-neutral-50 shrink-0">
-                  <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-                    <div>
-                      <div className="flex flex-wrap items-center gap-3">
-                        <p className="text-xs font-semibold uppercase tracking-[0.24em] text-neutral-500">
-                          {profile?.businessType !== 'RESTAURANT' ? 'Detalle del Pedido' : 'Comanda de Cocina'}
-                        </p>
-                        <div className="flex items-center gap-2">
-                          <StatusBadge status={selectedOrderForTicket.status} />
-                          {selectedOrderForTicket.id.startsWith('mock-order-') && (
-                            <span className="inline-flex items-center gap-1 rounded bg-sky-100 px-2 py-0.5 text-xs font-black tracking-wide text-sky-800 animate-pulse">
-                              ⚠️ MODO SIMULACIÓN
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                      <h3
-                        id="ticket-modal-title"
-                        className="mt-2 text-4xl font-bold tracking-[-0.04em] text-neutral-950"
-                      >
-                        {(selectedOrderForTicket as any).dailyCounter
-                          ? `#${String((selectedOrderForTicket as any).dailyCounter).padStart(2, '0')}`
-                          : selectedOrderForTicket.orderReference.slice(-6)}
-                      </h3>
-                      <p className="mt-1 text-sm text-neutral-500">
-                        Ref: {selectedOrderForTicket.orderReference}
-                      </p>
-                        <div className="mt-3.5 inline-flex items-center gap-2.5 rounded-xl bg-sky-50/70 border border-sky-100 px-3 py-2 text-sm font-semibold text-sky-900 shadow-[0_4px_12px_rgba(14,165,233,0.04)]">
-                          {selectedOrderForTicket.customer?.user?.profilePhoto ? (
-                            <img 
-                              src={selectedOrderForTicket.customer.user.profilePhoto} 
-                              alt="Perfil del comensal" 
-                              className="h-8 w-8 rounded-full object-cover border border-sky-200 shadow-sm"
-                            />
-                          ) : (
-                            <span className="text-lg">👤</span>
-                          )}
-                          <div className="flex flex-col items-start leading-tight">
-                            <span className="text-[9px] uppercase tracking-[0.12em] text-sky-500 font-bold">Comensal</span>
-                            <span className="text-base font-bold text-neutral-950">
-                              {getCustomerFullName(selectedOrderForTicket.customer?.user) || 'Cliente SaDeL'}
-                            </span>
-                          </div>
-                        </div>
-                        </div>
-                    <div className="flex items-center gap-2 sm:self-start">
-                      {profile?.enableTicketPrinting !== false && (
-                        <button
-                          type="button"
-                          onClick={() => handlePrintTicket(selectedOrderForTicket)}
-                          disabled={isPrintingTicket}
-                          className="relative flex items-center gap-2 rounded-full bg-white border border-neutral-200 hover:bg-neutral-50 active:scale-95 text-neutral-900 px-4 py-2.5 text-sm font-bold shadow-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                          <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
-                          </svg>
-                          <span className="hidden sm:inline">{isPrintingTicket ? 'Imprimiendo...' : 'Imprimir'}</span>
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-
-                {/* Navegación por Pestañas (Visible solo en Móviles y Tablets para alternar entre comanda y chat) */}
-                <div className="flex border-b border-neutral-200 bg-white px-5 sm:px-7 lg:hidden shrink-0">
-                  <button
-                    type="button"
-                    onClick={() => setActiveTicketTab('comanda')}
-                    className={`flex-1 py-3 text-center text-sm font-bold border-b-2 transition duration-200 flex items-center justify-center gap-2 ${
-                      activeTicketTab === 'comanda'
-                        ? 'border-sky-600 text-sky-600'
-                        : 'border-transparent text-neutral-500 hover:text-neutral-800'
-                    }`}
-                  >
-                    📋 {profile?.businessType !== 'RESTAURANT' ? 'Pedido' : 'Comanda'}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setActiveTicketTab('chat')}
-                    className={`flex-1 py-3 text-center text-sm font-bold border-b-2 transition duration-200 flex items-center justify-center gap-2 relative ${
-                      activeTicketTab === 'chat'
-                        ? 'border-emerald-600 text-emerald-600'
-                        : 'border-transparent text-neutral-500 hover:text-neutral-800'
-                    }`}
-                  >
-                    💬 Chat con Cliente
-                    {chatMessages.length > 0 && (
-                      <span className="inline-flex h-2 w-2 rounded-full bg-emerald-500"></span>
-                    )}
-                  </button>
-                </div>
-
-                {/* Contenedor Principal Split (Horizontal en desktop) */}
-                <div className="flex flex-1 flex-col lg:flex-row overflow-hidden min-h-0">
-                  
-                  {/* LADO IZQUIERDO: Detalle de la Comanda */}
-                  <div
-                    className={`flex-1 flex flex-col min-h-0 overflow-hidden ${
-                      activeTicketTab === 'comanda' ? 'flex' : 'hidden lg:flex'
-                    } lg:border-r lg:border-neutral-200`}
-                  >
-                    <div className="flex-1 overflow-y-auto px-5 py-5 sm:px-7 sm:py-6">
-                      {/* Indicaciones Generales ARRIBA si existen */}
-                      {parseStoreNotes(selectedOrderForTicket.notes) ? (
-                        <div className="mb-6 rounded-xl border-l-4 border-l-amber-500 border border-amber-100 bg-amber-50 px-5 py-4 text-sm text-amber-900 shadow-sm">
-                          <p className="font-bold text-xs uppercase tracking-[0.1em] text-amber-600 mb-1">⚠️ Indicaciones Generales</p>
-                          <p className="text-base font-semibold">{parseStoreNotes(selectedOrderForTicket.notes)}</p>
-                        </div>
-                      ) : null}
-
-                      {/* Flujo de Transferencia Bancaria — versión compacta */}
-                      {selectedOrderForTicket.paymentMethod === 'TRANSFER' && (
-                        <div className="mb-6 flex flex-wrap items-center gap-3 rounded-2xl border border-sky-100 bg-sky-50/40 px-5 py-4">
-                          <div className="flex items-center gap-2.5">
-                            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-sky-100 text-sky-600">
-                              <Mail className="h-4 w-4" />
-                            </div>
-                            <div>
-                              <p className="text-xs font-semibold text-sky-700">Transferencia</p>
-                              <p className="text-[10px] text-sky-500 font-medium">
-                                {selectedOrderForTicket.paymentStatus === 'COMPLETED' ? '✓ Pagado' : selectedOrderForTicket.paymentStatus === 'PENDING' ? '⏳ Pendiente' : '✗ Rechazado'}
-                              </p>
-                            </div>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => setPaymentDetailOrder(selectedOrderForTicket)}
-                            className="ml-auto flex items-center gap-1.5 rounded-full border border-sky-200 bg-white px-3.5 py-2 text-xs font-bold text-sky-700 shadow-sm transition hover:bg-sky-50 hover:border-sky-300 active:scale-[0.97]"
-                          >
-                            <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                            </svg>
-                            Ver pago
-                          </button>
-                        </div>
-                      )}
-
-                      <div className="border-b border-dashed border-neutral-200 pb-3">
-                        <div className="grid grid-cols-[48px_48px_minmax(0,1fr)] gap-4 text-[10px] font-bold uppercase tracking-[0.18em] text-neutral-400">
-                          <span className="text-center select-none">Cant.</span>
-                          <span className="text-center select-none">Foto</span>
-                          <span className="pl-1">Producto e indicaciones</span>
-                        </div>
-                      </div>
-
-                      <div className="divide-y divide-neutral-100">
-                        {selectedOrderForTicket.items && selectedOrderForTicket.items.length > 0 ? (
-                          selectedOrderForTicket.items.map((item) => (
-                            <div key={item.id} className="grid grid-cols-[48px_48px_minmax(0,1fr)] gap-4 py-5 items-start">
-                              <div className={`flex h-12 w-12 items-center justify-center rounded-xl text-2xl font-black shrink-0 select-none ${
-                                item.quantity > 1
-                                  ? 'bg-amber-500 text-white shadow-sm shadow-amber-500/20'
-                                  : 'bg-sky-50 text-sky-600'
-                              }`}>
-                                {item.quantity > 1 ? `x${item.quantity}` : '1'}
-                              </div>
-
-                              {item.product?.image ? (
-                                <img
-                                  src={item.product.image}
-                                  alt={item.product.name}
-                                  className="h-12 w-12 rounded-xl object-cover border border-black/5 shrink-0 shadow-sm"
-                                  loading="lazy"
-                                  decoding="async"
-                                />
-                              ) : (
-                                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-neutral-50 border border-black/5 text-lg shadow-sm">
-                                  🍽️
-                                </div>
-                              )}
-
-                              <div className="min-w-0 pt-1">
-                                <p className="text-lg font-bold leading-6 text-neutral-950">
-                                  {item.product?.name || 'Producto'}
-                                </p>
-                                {item.sellBy === 'WEIGHT' && item.weightG ? (
-                                  <p className="mt-1 text-sm font-semibold text-amber-600">
-                                    {item.weightG >= 1000 ? `${item.weightG / 1000}kg` : `${item.weightG}g`}
-                                  </p>
-                                ) : null}
-                                {item.options && item.options.length > 0 && (
-                                  <div className="mt-1.5 flex flex-wrap gap-1.5">
-                                    {item.options.map((opt: any) => (
-                                      <span
-                                        key={opt.id}
-                                        className="inline-flex items-center rounded-lg bg-sky-50 dark:bg-sky-950/40 border border-sky-100 dark:border-sky-900/30 px-2 py-0.5 text-xs font-bold text-sky-700 dark:text-sky-300"
-                                      >
-                                        ✦ {opt.name}
-                                        {opt.price > 0 && (
-                                          <span className="ml-1 text-[10px] font-extrabold text-sky-500">
-                                            (+{formatCurrency(opt.price)})
-                                          </span>
-                                        )}
-                                      </span>
-                                    ))}
-                                  </div>
-                                )}
-                                {item.specialInstructions ? (
-                                  <div className="mt-2 rounded-lg border-l-4 border-l-rose-500 border border-rose-100 bg-rose-50 px-4 py-2 text-sm text-rose-800 font-bold">
-                                    🚨 {item.specialInstructions}
-                                  </div>
-                                ) : (
-                                  <p className="mt-1 text-sm leading-6 text-neutral-400">
-                                    Sin especificaciones.
-                                  </p>
-                                )}
-                              </div>
-                            </div>
-                          ))
-                        ) : (
-                          <div className="py-8 text-sm text-neutral-500 text-center">
-                            Este pedido no incluye productos detallados.
-                          </div>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Ingreso neto sticky/bottom en su propia sección de comanda */}
-                    <div className="border-t-2 border-dashed border-neutral-200 pt-4 bg-neutral-50 px-5 sm:px-7 pb-5 shrink-0">
-                      <div className="flex items-end justify-between gap-4">
-                        <div>
-                          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-neutral-500">
-                            {!!profile?.id && selectedOrderForTicket.restaurantId !== profile.id && selectedOrderForTicket.supportRestaurantId
-                              ? 'Tu tarifa por la entrega'
-                              : 'Ingreso neto del pedido'}
-                          </p>
-                          <p className="mt-1 text-4xl font-bold tracking-[-0.04em] text-neutral-950">
-                            {formatCurrency(getRestaurantCollectionAmount(selectedOrderForTicket, profile))}
-                          </p>
-                          {!!profile?.id && selectedOrderForTicket.restaurantId !== profile.id && selectedOrderForTicket.supportRestaurantId && (
-                            <p className="text-[10px] text-emerald-600 font-medium mt-1">
-                              Apoyo a red — te corresponde la tarifa de envío por entregar el pedido de {selectedOrderForTicket.restaurant?.name || 'otro restaurante'}.
-                            </p>
-                          )}
-                        </div>
-                        <div className="text-xs text-neutral-400 font-medium">
-                          SaDeL Restaurant Portal
-                        </div>
-                      </div>
-                    </div>
-                    </div>
-
-                    {/* Cancelación solicitada por el cliente — dentro de la comanda */}
-                    {(selectedOrderForTicket as any).cancellationRequestedAt && !(selectedOrderForTicket as any).cancelledBy && ['CONFIRMED', 'PREPARING'].includes(selectedOrderForTicket.status) && (
-                      <div className="border-t-2 border-dashed border-neutral-200 pt-4 px-5 sm:px-7 pb-5 shrink-0 bg-white">
-                        <div className="flex flex-col gap-3">
-                          <div className="flex items-center gap-2 px-3 py-2.5 bg-amber-50 border border-amber-200/60 rounded-xl">
-                            <span className="text-sm">🧾</span>
-                            <p className="text-xs font-semibold text-amber-700">Cliente solicita cancelar</p>
-                          </div>
-                          <div className="flex flex-col gap-2">
-                            <textarea
-                              value={comandaCancelNote}
-                              onChange={(e) => setComandaCancelNote(e.target.value)}
-                              placeholder="Nota para el cliente (opcional)..."
-                              rows={1}
-                              className="w-full rounded-xl border border-neutral-200 bg-neutral-50 px-3 py-2 text-sm font-medium text-neutral-900 placeholder-neutral-400 outline-none focus:border-amber-300 focus:bg-white focus:ring-2 focus:ring-amber-200/50 transition resize-none"
-                            />
-                            <div className="flex gap-2">
-                              <button
-                                type="button"
-                                disabled={selectedOrderForTicket.status === 'PREPARING'}
-                                onClick={async () => {
-                                  try {
-                                    await requestJson({
-                                      apiBase,
-                                      path: `/restaurant-panel/pedidos/${selectedOrderForTicket.id}/responder-solicitud-cancelacion`,
-                                      token,
-                                      options: { method: 'POST', body: JSON.stringify({ approve: true, note: comandaCancelNote.trim() || undefined }) },
-                                      fallbackMessage: 'Error al aprobar cancelación.',
-                                    });
-                                    pushToast('success', 'Cancelación aprobada', 'El cliente será notificado.');
-                                    loadOrdersOnly();
-                                  } catch (err: any) {
-                                    pushToast('error', 'Error', err?.message || 'No se pudo procesar.');
-                                  }
-                                }}
-                                className={`flex-1 rounded-full px-4 py-2 text-sm font-bold transition-colors active:scale-[0.97] ${selectedOrderForTicket.status === 'PREPARING' ? 'bg-neutral-200 text-neutral-400 cursor-not-allowed' : 'bg-emerald-500 hover:bg-emerald-600 text-white'}`}
-                              >
-                                Aprobar
-                              </button>
-                              <button
-                                type="button"
-                                onClick={async () => {
-                                  try {
-                                    await requestJson({
-                                      apiBase,
-                                      path: `/restaurant-panel/pedidos/${selectedOrderForTicket.id}/responder-solicitud-cancelacion`,
-                                      token,
-                                      options: { method: 'POST', body: JSON.stringify({ approve: false, note: comandaCancelNote.trim() || undefined }) },
-                                      fallbackMessage: 'Error al rechazar cancelación.',
-                                    });
-                                    pushToast('info', 'Cancelación rechazada', 'El pedido continúa su curso.');
-                                    loadOrdersOnly();
-                                  } catch (err: any) {
-                                    pushToast('error', 'Error', err?.message || 'No se pudo procesar.');
-                                  }
-                                }}
-                                className="flex-1 rounded-full bg-neutral-100 hover:bg-neutral-200 border border-neutral-200 px-4 py-2 text-sm font-semibold text-neutral-700 transition-colors active:scale-[0.97]"
-                              >
-                                Rechazar
-                              </button>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-
-                  {/* LADO DERECHO: Chat en Tiempo Real */}
-                  <div
-                    className={`w-full lg:w-[420px] shrink-0 flex flex-col min-h-0 overflow-hidden ${
-                      activeTicketTab === 'chat' ? 'flex' : 'hidden lg:flex'
-                    } bg-neutral-50`}
-                  >
-                    {/* Encabezado del Chat */}
-                    <div className="bg-white border-b border-neutral-200/80 px-4 py-3 flex items-center justify-between shrink-0 shadow-[0_1px_3px_rgba(0,0,0,0.02)]">
-                      <div className="flex items-center gap-2">
-                        <span className="relative flex h-2 w-2">
-                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                          <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-                        </span>
-                        <p className="text-xs font-bold uppercase tracking-wider text-neutral-600">
-                          Chat con el Comensal
-                        </p>
-                      </div>
-                      <span className="text-[10px] bg-neutral-100 border border-neutral-200 text-neutral-500 font-semibold px-2 py-0.5 rounded-full shadow-sm">
-                        Canal Directo
-                      </span>
-                    </div>
-
-                    {/* Lista de Mensajes */}
-                    <div className="flex-1 overflow-y-auto p-4 space-y-3 min-h-[300px] flex flex-col">
-                      {loadingChat ? (
-                        <div className="flex flex-col items-center justify-center flex-1 py-12 space-y-3">
-                          <SaDelLoader size="sm" label="Cargando conversación..." />
-                        </div>
-                      ) : chatMessages.length === 0 ? (
-                        <div className="flex flex-col items-center justify-center flex-1 py-12 px-6 text-center space-y-4">
-                          <div className="h-16 w-16 bg-neutral-200/40 rounded-full flex items-center justify-center text-neutral-400 border border-neutral-200/30">
-                            <MessageCircle className="h-8 w-8 text-neutral-400" />
-                          </div>
-                          <div>
-                            <p className="text-sm font-bold text-neutral-700">Sin mensajes en esta orden</p>
-                            <p className="mt-1.5 text-xs text-neutral-500 leading-relaxed">
-                              Utiliza este canal directo para avisarle al cliente si algún platillo se agotó, si hay retrasos o para confirmar cualquier especificación de su pedido.
-                            </p>
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="space-y-4">
-                          {chatMessages.map((msg, idx) => {
-                            const isMe = msg.senderRole === 'RESTAURANT';
-                            const dateStr = msg.createdAt ? new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
-                            
-                            return (
-                              <div key={msg.id || idx} className={`flex flex-col ${isMe ? 'items-end' : 'items-start'}`}>
-                                <div className="flex items-center gap-1.5 mb-1 px-1">
-                                  <span className="text-[10px] font-bold text-neutral-400">
-                                    {isMe ? `Tú (${businessTypeLabel(profile?.businessType)})` : msg.senderName || 'Comensal'}
-                                  </span>
-                                  <span className="text-[9px] text-neutral-400">•</span>
-                                  <span className="text-[9px] text-neutral-400 font-medium">{dateStr}</span>
-                                </div>
-                                <div
-                                  className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-sm font-semibold shadow-sm leading-relaxed ${
-                                    isMe
-                                      ? 'bg-emerald-600 text-white rounded-tr-none'
-                                      : 'bg-white text-neutral-800 border border-neutral-200/60 rounded-tl-none'
-                                  }`}
-                                >
-                                  {msg.content}
-                                </div>
-                              </div>
-                            );
-                          })}
-                          <div ref={chatEndRef} />
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Barra de Entrada del Chat */}
-                    {['CONFIRMED', 'PREPARING', 'READY', 'IN_TRANSIT'].includes(selectedOrderForTicket.status) ? (
-                      <form
-                        onSubmit={(e) => {
-                          e.preventDefault();
-                          void sendChatMessage(selectedOrderForTicket.id);
-                        }}
-                        className="p-3 bg-white border-t border-neutral-200/80 flex items-center gap-2 shrink-0 shadow-[0_-1px_3px_rgba(0,0,0,0.02)]"
-                      >
-                        <input
-                          type="text"
-                          value={chatInput}
-                          onChange={(e) => setChatInput(e.target.value)}
-                          placeholder="Escribe un mensaje al comensal..."
-                          disabled={sendingChatMessage}
-                          className="flex-1 bg-neutral-50 border border-neutral-200 hover:border-neutral-300 focus:border-emerald-500 focus:bg-white text-sm font-semibold rounded-full px-4 py-2.5 outline-none transition disabled:opacity-70"
-                        />
-                        <button
-                          type="submit"
-                          disabled={!chatInput.trim() || sendingChatMessage}
-                          className="h-10 w-10 bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white rounded-full flex items-center justify-center transition disabled:opacity-50 disabled:scale-100 shadow-sm shrink-0"
-                        >
-                          {sendingChatMessage ? (
-                            <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                            </svg>
-                          ) : (
-                            <svg className="h-5 w-5 rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-                            </svg>
-                          )}
-                        </button>
-                      </form>
-                    ) : (
-                      <div className="p-4 bg-neutral-50 border-t border-neutral-200/80 shrink-0 text-center">
-                        <div className="inline-flex items-center justify-center gap-2 bg-neutral-100 border border-neutral-200 text-neutral-500 text-xs font-semibold px-4 py-3 rounded-xl w-full shadow-[inset_0_1px_2px_rgba(0,0,0,0.02)]">
-                          <svg className="w-4 h-4 opacity-70" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                          </svg>
-                          Chat bloqueado en este estado del pedido
-                        </div>
-                      </div>
-                    )}
-                  </div>
-
-                </div>
-
-                {/* FOOTER: acciones del pedido (Cancelar se separa del botón de cierre) */}
-                <div className="shrink-0 border-t border-neutral-200 bg-white px-5 py-3 sm:px-7 flex items-center justify-between gap-3">
-                  <span className="hidden text-[11px] font-medium text-neutral-400 sm:block">
-                    {selectedOrderForTicket.orderReference}
-                  </span>
-                  {['CONFIRMED', 'PREPARING'].includes(selectedOrderForTicket.status) && !(selectedOrderForTicket as any).cancellationRequestedAt && !(selectedOrderForTicket as any).cancelledBy && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setCancelReason('');
-                        setCancelConfirmOrder(selectedOrderForTicket);
-                      }}
-                      className="inline-flex items-center gap-2 rounded-full border border-rose-200 bg-rose-50/70 hover:bg-rose-100 active:scale-95 text-rose-700 px-4 py-2.5 text-sm font-bold shadow-sm transition-all"
-                    >
-                      <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                        <circle cx="12" cy="12" r="10" />
-                        <path d="m4.9 4.9 14.2 14.2" />
-                      </svg>
-                      Cancelar pedido
-                    </button>
-                  )}
-                </div>
-              </div>
-              </div>
-            ) : null}
 
             {selectedOrderForEtaExtension ? (() => {
               const isStore = profile?.businessType && profile.businessType !== 'RESTAURANT';
@@ -11651,7 +10397,7 @@ export default function Home() {
                   </div>
                   <h3 className="text-xl font-bold text-neutral-950 tracking-tight">¿Cancelar pedido?</h3>
                   <p className="mt-3 text-sm text-neutral-600 leading-relaxed">
-                    Esta acción <strong className="text-rose-600 font-semibold">no se puede deshacer</strong>. 
+                    Esta acción <strong className="text-rose-600 font-semibold">no se puede deshacer</strong>.
                     El pedido será cancelado y se notificará al cliente y al repartidor (si está asignado).
                   </p>
 
@@ -12833,8 +11579,6 @@ function formatCountdown(remainingMs: number) {
 // Countdown aislado del countdown del modal: mantiene su propio timer para que
 // re-renderizar cada segundo no redibuje toda la página del panel.
 function IncomingOrderCountdown({ createdAt, windowMs }: { createdAt: string; windowMs: number }) {
-  // El tiempo restante se calcula desde que el pedido llegó (createdAt), no desde
-  // que el modal se abre: si la app se abrió 30s tarde, debe mostrar 1:30, no 2:00.
   const [remainingMs, setRemainingMs] = useState<number>(() => {
     const createdMs = new Date(createdAt).getTime();
     if (!Number.isFinite(createdMs)) return windowMs;
@@ -12842,18 +11586,22 @@ function IncomingOrderCountdown({ createdAt, windowMs }: { createdAt: string; wi
   });
 
   useEffect(() => {
-    const timer = window.setInterval(() => {
-      setRemainingMs((prev) => Math.max(0, prev - 1000));
-    }, 1000);
-    return () => window.clearInterval(timer);
-  }, []);
+    const update = () => {
+      const started = new Date(createdAt).getTime();
+      setRemainingMs(Number.isFinite(started) ? Math.max(0, started + windowMs - Date.now()) : 0);
+    };
+    update();
+    const timer = window.setInterval(update, 1000);
+    document.addEventListener('visibilitychange', update);
+    return () => { window.clearInterval(timer); document.removeEventListener('visibilitychange', update); };
+  }, [createdAt, windowMs]);
 
   const urgent = remainingMs <= 30000 && remainingMs > 0;
   const expired = remainingMs <= 0;
 
   return (
     <div
-      className={`flex items-center gap-3 self-start rounded-full border px-4 py-2.5 sm:self-center ${
+      className={`flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1.5 ${
         expired
           ? 'border-neutral-200 bg-neutral-100'
           : urgent
@@ -12861,15 +11609,15 @@ function IncomingOrderCountdown({ createdAt, windowMs }: { createdAt: string; wi
             : 'border-rose-100 bg-rose-50'
       }`}
     >
-      <svg className={`h-5 w-5 ${expired ? 'text-neutral-400' : urgent ? 'text-red-600' : 'text-rose-600'}`} viewBox="0 0 24 24" fill="none" stroke="currentColor">
+      <svg className={`h-4 w-4 ${expired ? 'text-neutral-400' : urgent ? 'text-red-600' : 'text-rose-600'}`} viewBox="0 0 24 24" fill="none" stroke="currentColor">
         <circle cx="12" cy="12" r="8" strokeWidth={1.7} />
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M12 7v5l3 2" />
       </svg>
-      <div>
-        <p className={`text-xs font-medium uppercase tracking-[0.1em] ${expired ? 'text-neutral-400' : urgent ? 'text-red-600' : 'text-rose-600'}`}>
+      <div className="flex items-center gap-1.5">
+        <p className={`text-xs font-medium ${expired ? 'text-neutral-400' : urgent ? 'text-red-600' : 'text-rose-600'}`}>
           {expired ? 'Vencido' : 'Expira en'}
         </p>
-        <p className={`font-bold tabular-nums ${expired ? 'text-neutral-500' : urgent ? 'text-red-700' : 'text-rose-700'}`}>
+        <p className={`text-sm font-bold tabular-nums ${expired ? 'text-neutral-500' : urgent ? 'text-red-700' : 'text-rose-700'}`}>
           {formatCountdown(remainingMs)}
         </p>
       </div>
@@ -13092,34 +11840,8 @@ interface CountdownTextProps {
   className?: string;
 }
 
-const CountdownText: React.FC<CountdownTextProps> = ({ order, className = "" }) => {
-  const [now, setNow] = useState(Date.now());
-
-  useEffect(() => {
-    if (!order.preparationDeadlineAt) {
-      return;
-    }
-
-    const updateTimer = () => {
-      setNow(Date.now());
-    };
-
-    updateTimer();
-    const intervalId = window.setInterval(updateTimer, 1000);
-
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible') {
-        updateTimer();
-      }
-    };
-
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-
-    return () => {
-      window.clearInterval(intervalId);
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-    };
-  }, [order.preparationDeadlineAt]);
+const CountdownText: React.FC<CountdownTextProps> = memo(({ order, className = "" }) => {
+  const now = useSharedClock();
 
   const remainingMs = getPreparationRemainingMs(order, now);
 
@@ -13150,4 +11872,932 @@ const CountdownText: React.FC<CountdownTextProps> = ({ order, className = "" }) 
       {formatCountdown(remainingMs)} restantes
     </span>
   );
-};
+});
+
+const OrdersSection = memo(function OrdersSection(props: any) {
+  const { activeActionKey, apiBase, driverArrivedOrders, driverContactOpen, hasCarriedOverActiveOrders, kitchenClockNow, lastFailedAction, loadOrdersOnly, loading, openAcceptOrderPrompt, orderModalId, orderSearchTerm, ordersFulfillment, ordersPeriod, ordersSearch, periodOrders, profile, profileLoadState, pushToast, refreshOrders, refreshingOrders, retryLastFailedAction, runOrderAction, selectedStatus, sessionUser, setActiveQrCodeData, setActiveTicketTab, setDriverContactOpen, setEmergencyConfirmed, setEmergencyDeliveryOrderId, setEmergencyReason, setHandoverPromptOrderId, selectedOrderForTicket, activeTicketTab, renderTicketExtras, renderTicketChat, setOrdersFulfillment, setOrdersPeriod, setOrdersSearch, setPickupConfirmAttemptsLeft, setPickupConfirmError, setPickupConfirmOrderId, setPickupConfirmPinInput, setSelectedOrderForEtaExtension, setSelectedOrderForTicket, setSelectedStatus, setTransferRefundOrder, setUnassignConfirmOrderId, setZoomedImageUrl, supportAliadoNamesByOrder, supportCountdownNow, supportNotifyByOrder, token, unreadMessagesMap, visibleOrders } = props;
+  return (
+                   <section className="wl-orders" aria-labelledby="orders-title">
+                    <header className="wl-orders-heading"><span className="wl-orders-heading-icon"><ClipboardList aria-hidden="true" /></span><div><h1 id="orders-title">Órdenes</h1></div></header>
+                    <div className="wl-orders-overview" aria-label="Resumen de pedidos cargados">
+                      {[
+                        { label: 'Por preparar', statuses: ['PENDING', 'CONFIRMED', 'PREPARING'], Icon: ChefHat, tone: 'preparing' },
+                        { label: 'Listas', statuses: ['READY'], Icon: Package, tone: 'ready' },
+                        { label: 'En entrega', statuses: ['PICKED_UP', 'IN_TRANSIT'], Icon: Bike, tone: 'delivery' },
+                        { label: 'Entregadas', statuses: ['DELIVERED', 'COMPLETED'], Icon: Check, tone: 'done' },
+                      ].map(({ label, statuses, Icon, tone }) => (
+                        <div className={`wl-orders-stat wl-orders-stat--${tone}`} key={label}><Icon aria-hidden="true" /><div><span>{label}</span><strong>{profileLoadState === 'ready' ? periodOrders.filter((order: any) => statuses.includes(order.status)).length : '—'}</strong></div></div>
+                      ))}
+                    </div>
+                    <p className="wl-orders-overview-note">Pedidos activos y de {ordersPeriod === 'today' ? 'hoy' : ordersPeriod === 'week' ? 'esta semana' : 'este mes'} · zona Ciudad de México.{hasCarriedOverActiveOrders ? ' Incluye pedidos activos de días anteriores.' : ''}</p>
+                    {lastFailedAction ? (
+                      <div className="mb-4 rounded-[28px] border border-rose-100 bg-rose-50 p-4">
+                        <p className="text-sm font-semibold text-rose-800">Ultima accion fallida: {lastFailedAction.label}</p>
+                        <p className="mt-1 text-sm text-rose-700">
+                          Puedes reintentarlo sin recargar el tablero.
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => void retryLastFailedAction()}
+                          disabled={Boolean(activeActionKey)}
+                          className="mt-3 rounded-full bg-neutral-950 px-4 py-3 text-sm font-semibold text-white transition hover:bg-neutral-800 disabled:cursor-not-allowed disabled:bg-neutral-300"
+                        >
+                          Reintentar ultima accion
+                        </button>
+                      </div>
+                    ) : null}
+                    <div className="wl-orders-toolbar">
+                      <label className="wl-orders-search"><span className="sr-only">Buscar por orden, cliente o producto</span><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="7"/><path d="m16 16 4 4"/></svg><input type="search" placeholder="Orden, cliente o producto" value={ordersSearch} onChange={(event) => setOrdersSearch(event.target.value)} /></label>
+                      <label className="wl-orders-filter">
+                        <span>Estado</span>
+                        <select
+                          value={selectedStatus}
+                          onChange={(event) => setSelectedStatus(event.target.value as 'ACTIVE' | 'REJECTED' | 'CANCELLED' | 'DELIVERED' | 'COMPLETED')}
+                        >
+                          {orderStatusOptions.map((option) => (
+                            <option key={option.value} value={option.value}>
+                              {option.label}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <label className="wl-orders-filter wl-orders-period"><span>Fecha</span><select value={ordersPeriod} onChange={(event) => setOrdersPeriod(event.target.value as 'today' | 'week' | 'month')}><option value="today">Hoy</option><option value="week">Esta semana</option><option value="month">Este mes</option></select></label>
+                      <label className="wl-orders-filter"><span>Tipo de entrega</span><select value={ordersFulfillment} onChange={(event) => setOrdersFulfillment(event.target.value as 'ALL' | 'DELIVERY' | 'PICKUP')}><option value="ALL">Todos los tipos</option><option value="DELIVERY">A domicilio</option><option value="PICKUP">Para recoger</option></select></label>
+
+                      <button
+                        type="button"
+                        onClick={() => void refreshOrders()}
+                        disabled={refreshingOrders || !sessionUser}
+                        className="wl-orders-refresh"
+                      >
+                         <svg aria-hidden="true" className={`h-4 w-4 ${refreshingOrders ? 'motion-safe:animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.582m0 0a8.001 8.001 0 01-15.356-2m15.356 2H15" />
+                        </svg>
+                        <span>{refreshingOrders ? 'Sincronizando...' : 'Actualizar'}</span>
+                      </button>
+                      {selectedStatus !== 'ACTIVE' ? (
+                        <button
+                          type="button"
+                          onClick={() => setSelectedStatus('ACTIVE')}
+                           className="wl-orders-refresh wl-orders-active"
+                         >
+                          <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                          Ver órdenes activas
+                        </button>
+                      ) : null}
+                    </div>
+                    {visibleOrders.length > 0 || selectedOrderForTicket ? (
+                      <div className="wl-orders-list space-y-4">
+                        {(selectedOrderForTicket && !visibleOrders.some((order: OrderItem) => order.id === selectedOrderForTicket.id) ? [...visibleOrders, selectedOrderForTicket] : visibleOrders).map((order: OrderItem) => {
+                          const detailOnly = order === selectedOrderForTicket && !visibleOrders.some((entry: OrderItem) => entry.id === order.id);
+                          const isHelper = order.restaurantId !== profile?.id;
+                          const hasOwnDelivery = order.restaurant?.hasOwnDelivery ?? profile?.hasOwnDelivery ?? false;
+                          const isSupported = order.notes?.includes('[ApoyoId:');
+                          const supportNotifyHere = supportNotifyByOrder[order.id];
+                          const supportExhaustedHere =
+                            (supportNotifyHere?.exhausted ?? false) ||
+                            ((order.supportAttempts ?? 0) >= 2 && !order.supportRestaurantId && !order.isSupportRequested);
+                          const actionButtons = isHelper
+                            // Se conserva el flujo manual del apoyo (iniciar entrega / marcar entregado);
+                            // el QR de express es la vía principal que usa el repartidor aliado.
+                            ? (order.status === 'READY' ? ['iniciarEntrega'] : order.status === 'IN_TRANSIT' ? ['delivered'] : [])
+                            // Pedido de apoyo (restaurante origen): al llegar el repartidor aliado se
+                            // habilita confirmar la entrega (PIN en transferencia / efectivo), igual que
+                            // con un repartidor SaDeL.
+                            : (isSupported
+                                ? (order.status === 'READY' && driverArrivedOrders[order.id]
+                                    ? ['handover'] as Array<keyof typeof restaurantActionMap>
+                                    : [])
+                                : getRestaurantActions(order, hasOwnDelivery, Boolean(driverArrivedOrders[order.id])));
+                          const authorizedActionButtons = actionButtons;
+                          const prepRemaining = getPreparationRemainingMs(order, kitchenClockNow);
+                          const scheduledTime = order.scheduledDeliveryAt ? Date.parse(order.scheduledDeliveryAt) : NaN;
+                          const preparationActive = ['CONFIRMED', 'PREPARING'].includes(order.status);
+                          const deadlineRemaining = order.scheduledDeliveryAt ? scheduledTime - kitchenClockNow : prepRemaining;
+                          const hasDeadline = typeof deadlineRemaining === 'number' && Number.isFinite(deadlineRemaining);
+                          const isLate = preparationActive && hasDeadline && deadlineRemaining <= 0;
+                          const productCount = countOrderProducts(order);
+                          const paymentLabel = order.paymentMethod === 'CASH' ? 'Efectivo' : order.paymentMethod === 'TRANSFER' ? 'Transferencia' : order.paymentMethod ? 'Pago en línea' : 'Pago no indicado';
+                          return (
+                            <article
+                              key={order.id}
+                              className={detailOnly ? 'contents' : `wl-order-card rounded-xl border border-neutral-200 bg-white px-5 py-4 shadow-sm border-l-4 ${order.status === 'PENDING' ? 'border-l-amber-500' :
+                                order.status === 'CONFIRMED' ? 'border-l-sky-500' :
+                                  order.status === 'PREPARING' ? 'border-l-sky-500' :
+                                    order.status === 'READY' ? 'border-l-emerald-500' :
+                                      order.status === 'COMPLETED' ? 'border-l-teal-500' :
+                                        order.status === 'DELIVERED' ? 'border-l-neutral-400' :
+                                          order.status === 'REJECTED' || order.status === 'CANCELLED' ? 'border-l-rose-500' :
+                                            'border-l-neutral-300'
+                                }`}
+                            >
+                              <div className="wl-order-disclosure">
+                                {!detailOnly && <button type="button" className="wl-order-summary" aria-haspopup="dialog" onClick={() => { setActiveTicketTab('comanda'); setSelectedOrderForTicket(order); }}>
+                                  <span className="wl-order-summary-primary"><span className="wl-order-summary-top"><strong className="wl-order-number">{(order as any).dailyCounter ? `#${String((order as any).dailyCounter).padStart(2, '0')}` : order.orderReference}</strong><StatusBadge status={order.status} /></span><span className="wl-order-summary-date"><Clock aria-hidden="true" />{order.createdAt ? formatDate(order.createdAt) : 'Fecha no disponible'}</span></span>
+                                  <span className="wl-order-summary-person"><strong><User aria-hidden="true" />{getCustomerFullName(order.customer?.user) || 'Cliente'}</strong><span><span className={`wl-order-fulfillment ${order.fulfillmentType === 'PICKUP' ? 'is-pickup' : ''}`}>{order.fulfillmentType === 'PICKUP' ? 'Recogida' : order.fulfillmentType === 'DELIVERY' ? 'Envío' : 'Tipo no disponible'}</span><span>{productCount} {productCount === 1 ? 'producto' : 'productos'}</span></span></span>
+                                  <span className="wl-order-summary-billing"><strong><span className="sr-only">Total: </span>{formatCurrency(order.totalAmount)}</strong><span className="wl-order-payment">{paymentLabel}</span></span>
+                                  <span className="wl-order-summary-time">{preparationActive && hasDeadline ? (order.scheduledDeliveryAt ? <span><Clock aria-hidden="true" />Programado: {formatDate(order.scheduledDeliveryAt)}</span> : <span><Clock aria-hidden="true" />{isLate ? `Vencido hace ${Math.ceil(Math.abs(deadlineRemaining) / 60000)} min` : `Preparación: ${Math.ceil(deadlineRemaining / 60000)} min restantes`}</span>) : null}{isLate && <span className="wl-order-summary-alert">Pedido rezagado</span>}{unreadMessagesMap[order.id] > 0 && <span className="wl-order-summary-alert">{unreadMessagesMap[order.id]} mensaje{unreadMessagesMap[order.id] === 1 ? '' : 's'} nuevo{unreadMessagesMap[order.id] === 1 ? '' : 's'}</span>}{(order as any).cancellationRequestedAt && !(order as any).cancelledBy && preparationActive && <span className="wl-order-summary-alert">Cancelación solicitada</span>}</span>
+                                  <span className="wl-order-expand"><ArrowRight aria-hidden="true" /><span className="sr-only">Abrir detalle del pedido</span></span>
+                                </button>}
+                                {orderModalId === order.id && <div className="wl-comanda-overlay" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setSelectedOrderForTicket(null); }}>
+                                <section className="wl-comanda-modal" role="dialog" aria-modal="true" aria-labelledby={`wl-comanda-${order.id}`}>
+                                  <div className="wl-comanda-heading">
+                                    <div className="wl-comanda-heading-info"><span className="wl-comanda-heading-icon"><ClipboardList aria-hidden="true" /></span><div><span className="wl-comanda-eyebrow">Detalle del pedido</span><div className="wl-comanda-title"><h2 id={`wl-comanda-${order.id}`}>{(order as any).dailyCounter ? `#${String((order as any).dailyCounter).padStart(2, '0')}` : order.orderReference}</h2><StatusBadge status={order.status} /></div><p>{order.createdAt ? formatDate(order.createdAt) : 'Fecha no disponible'} · {order.fulfillmentType === 'PICKUP' ? 'Para recoger' : 'A domicilio'}</p></div></div>
+                                    <div className="flex shrink-0 items-center gap-2">
+                                      <button type="button" title="Chat" aria-label={activeTicketTab === 'chat' ? 'Volver al detalle' : 'Abrir chat'} aria-pressed={activeTicketTab === 'chat'} onClick={() => setActiveTicketTab(activeTicketTab === 'chat' ? 'comanda' : 'chat')} className="relative grid h-11 w-11 place-items-center rounded-xl bg-neutral-100 text-neutral-950 hover:bg-neutral-200 aria-pressed:bg-red-100 aria-pressed:text-red-700 dark:bg-zinc-800 dark:text-white">
+                                        <MessageCircle aria-hidden="true" className="h-5 w-5" />
+                                        {unreadMessagesMap[order.id] > 0 && <span className="absolute -right-1 -top-1 rounded-full bg-red-700 px-1.5 text-xs font-bold text-white">{unreadMessagesMap[order.id] > 9 ? '9+' : unreadMessagesMap[order.id]}</span>}
+                                      </button><button type="button" onClick={() => setSelectedOrderForTicket(null)} aria-label="Cerrar detalle del pedido" className="grid h-11 w-11 place-items-center rounded-xl bg-neutral-100 text-neutral-700 hover:bg-neutral-200 dark:bg-zinc-800 dark:text-white"><X aria-hidden="true" className="h-5 w-5" /></button></div>
+                                  </div>
+                                  <div className="wl-comanda-content">
+                                    {activeTicketTab === 'chat' ? renderTicketChat(order) : <>
+                                    <div className="wl-comanda-customer"><p><User aria-hidden="true" /><strong>{getCustomerFullName(order.customer?.user) || 'Cliente'}</strong></p><CustomerPhoneLine phone={order.customer?.user?.phone} />{order.fulfillmentType === 'DELIVERY' && <p><MapPin aria-hidden="true" /><span>{formatAddress(order.address)}</span></p>}</div>
+                                    {!['CANCELLED', 'REJECTED'].includes(order.status) && <div className="wl-comanda-progress" aria-label="Progreso del pedido">{['Preparación', 'Lista', order.fulfillmentType === 'PICKUP' ? 'Recogida' : 'En entrega', 'Completada'].map((label, index) => { const current = ['PENDING', 'CONFIRMED', 'PREPARING'].includes(order.status) ? 0 : order.status === 'READY' ? 1 : ['PICKED_UP', 'IN_TRANSIT'].includes(order.status) ? 2 : 3; return <div key={label} className={index < current ? 'is-done' : index === current ? 'is-current' : ''} aria-current={index === current ? 'step' : undefined}><span>{index < current ? <Check aria-hidden="true" /> : index === current ? <i aria-hidden="true" /> : null}</span><small>{label}</small></div>; })}</div>}
+                                    <div className="wl-comanda-products"><h3>Productos ({order.items?.length || 0})</h3>{(order.items || []).map((item: any) => <div className="wl-comanda-product" key={item.id}><span className="wl-order-thumb">{item.product?.image ? <img src={item.product.image} alt="" /> : <Package aria-hidden="true" />}</span><div><strong>{item.product?.name || 'Producto'}{item.weightG ? ` (${item.weightG} g)` : ''}</strong>{item.options?.length ? <p>{item.options.map((option: any) => option.name).join(' · ')}</p> : null}{item.specialInstructions && <p>{item.specialInstructions}</p>}</div><b>×{item.quantity}</b>{item.unitPrice != null && <b>{formatCurrency(Number(item.unitPrice) * item.quantity)}</b>}</div>)}</div>
+                                    <div className="wl-comanda-total"><span>Total del pedido</span><strong>{formatCurrency(order.totalAmount)}</strong></div>
+                                    {parseStoreNotes(order.notes) && <div className="wl-comanda-note"><strong>Nota del cliente</strong><p>{parseStoreNotes(order.notes)}</p></div>}
+                                <div className="wl-order-details">
+                              {/* Fila 1: Cabecera */}
+                              <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 mb-3">
+                                <div className="flex flex-wrap items-center gap-2 sm:gap-3 min-w-0">
+                                  {order.id.startsWith('mock-order-') && (
+                                    <span className="rounded bg-sky-100 px-2 py-0.5 text-xs font-bold text-sky-800 animate-pulse">
+                                      SIMULACIÓN
+                                    </span>
+                                  )}
+                                  {(order as any).cancellationRequestedAt && !(order as any).cancelledBy && ['CONFIRMED', 'PREPARING'].includes(order.status) && (
+                                    <span className="inline-flex items-center gap-1 rounded-full bg-sky-100 border border-sky-300 px-2.5 py-0.5 text-xs font-bold text-sky-700 shadow-sm">
+                                      🧾 Cancelación solicitada
+                                    </span>
+                                  )}
+                                  {(order as any).cancelledBy === 'RESTAURANT' && (
+                                    <span className="inline-flex items-center gap-1 rounded-full bg-rose-100 border border-rose-300 px-2.5 py-0.5 text-xs font-bold text-rose-700 shadow-sm">
+                                      Cancelado por ti
+                                    </span>
+                                  )}
+                                  {unreadMessagesMap[order.id] > 0 && (
+                                    <button
+                                      type="button"
+                                      onClick={(e) => { e.stopPropagation(); setSelectedOrderForTicket(order); setActiveTicketTab('chat'); }}
+                                      className="inline-flex items-center gap-1 rounded-full bg-rose-500 px-2 py-0.5 text-xs font-black text-white animate-pulse shadow-sm shadow-rose-200 transition hover:bg-rose-600 active:scale-95"
+                                    >
+                                      💬 {unreadMessagesMap[order.id]} mensaje{unreadMessagesMap[order.id] > 1 ? 's' : ''} nuevo{unreadMessagesMap[order.id] > 1 ? 's' : ''}
+                                    </button>
+                                  )}
+                                </div>
+                                  <div className="flex max-w-full min-w-0 flex-wrap items-center gap-2 sm:justify-end">
+                                    {(() => {
+                                      if (profile?.businessType === 'RESTAURANT') return null;
+                                      if (!order.scheduledDeliveryAt) return null;
+                                      const isCustomerPending = !order.scheduledDeliveryCustomerAcceptedAt && order.status === 'CONFIRMED';
+                                      const isCustomerAccepted = !!order.scheduledDeliveryCustomerAcceptedAt;
+                                      return (
+                                        <>
+                                          {isCustomerPending && (
+                                            <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 border border-amber-200 px-2.5 py-1 text-[10px] font-bold text-amber-700 shadow-sm shrink-0">
+                                              <span className="relative flex h-1.5 w-1.5">
+                                                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-amber-400 opacity-75"></span>
+                                                <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-amber-600"></span>
+                                              </span>
+                                              Pendiente de confirmación
+                                            </span>
+                                          )}
+                                          {isCustomerAccepted && (
+                                            <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 border border-emerald-200 px-2.5 py-1 text-[10px] font-bold text-emerald-700 shadow-sm shrink-0">
+                                              ✅ Cliente confirmó fecha
+                                            </span>
+                                          )}
+                                          <button
+                                            type="button"
+                                            onClick={(event) => {
+                                              event.stopPropagation();
+                                              setSelectedOrderForEtaExtension(order);
+                                            }}
+                                            className="text-xs text-neutral-500 font-medium flex items-center gap-1 bg-neutral-100/60 px-2 py-1 rounded-lg border border-black/5 shrink-0 hover:bg-neutral-200 transition active:scale-95"
+                                          >
+                                            📅 {formatDate(order.estimatedDeliveryTime || order.scheduledDeliveryAt || order.createdAt)}
+                                          </button>
+                                        </>
+                                      );
+                                    })()}
+                                    {profile?.businessType !== 'RESTAURANT' && order.preparationTimeMinutes && order.preparationTimeMinutes > 1 && (order.status === 'CONFIRMED' || order.status === 'PREPARING') && isPrepCountdownRelevant(order, kitchenClockNow) && (() => {
+                                      const remainingMs = getPreparationRemainingMs(order, kitchenClockNow);
+                                      if (remainingMs !== null && remainingMs <= 0) return null;
+                                      return (
+                                        <button
+                                          type="button"
+                                          onClick={(event) => {
+                                            event.stopPropagation();
+                                            setSelectedOrderForEtaExtension(order);
+                                          }}
+                                          className={`rounded-lg border px-3 py-1.5 shadow-sm transition active:scale-95 flex items-center justify-center ${
+                                            isPreparationTimeUrgent(order, kitchenClockNow)
+                                              ? 'border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100 ring-2 ring-rose-200/50'
+                                              : 'border-sky-200 bg-sky-50 text-sky-700 hover:bg-sky-100'
+                                          }`}
+                                          title="Modificar tiempo de preparación"
+                                        >
+                                          <CountdownText order={order} className="font-black tabular-nums text-xs" />
+                                        </button>
+                                      );
+                                    })()}
+                                    {profile?.businessType === 'RESTAURANT' && (order.status === 'CONFIRMED' || order.status === 'PREPARING') && isPrepCountdownRelevant(order, kitchenClockNow) && (() => {
+                                      const remainingMs = getPreparationRemainingMs(order, kitchenClockNow);
+                                      if (remainingMs !== null && remainingMs <= 0) return null;
+                                      return (
+                                        <button
+                                          type="button"
+                                          onClick={(event) => {
+                                            event.stopPropagation();
+                                            setSelectedOrderForEtaExtension(order);
+                                          }}
+                                          className={`rounded-lg border px-3 py-1.5 shadow-sm transition active:scale-95 flex items-center justify-center ${
+                                            isPreparationTimeUrgent(order, kitchenClockNow)
+                                              ? 'border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100 ring-2 ring-rose-200/50'
+                                              : 'border-sky-200 bg-sky-50 text-sky-700 hover:bg-sky-100'
+                                          }`}
+                                          title="Modificar tiempo de preparación"
+                                        >
+                                          <CountdownText order={order} className="font-black tabular-nums text-xs" />
+                                        </button>
+                                      );
+                                    })()}
+                                  </div>
+                                </div>
+
+                                {/* Fila 2: Cuerpo */}
+                                <div className="grid gap-2 text-sm text-neutral-600 mb-4">
+                                  {(order as any).fulfillmentType !== 'PICKUP' && (order.driver || order.supportRestaurant?.name || ['READY', 'PICKED_UP', 'IN_TRANSIT', 'DELIVERED'].includes(order.status)) && (
+                                  <div className="flex items-center gap-2">
+                                    <svg className="w-4 h-4 text-neutral-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                                    </svg>
+                                    {order.driver?.user?.name && order.isAcceptedByDriver ? (
+                                      <div className="relative">
+                                        <button
+                                          type="button"
+                                          onClick={() => setDriverContactOpen((prev: any) => ({ ...prev, [order.id]: !prev[order.id] }))}
+                                          className="flex items-center gap-1.5 bg-neutral-100 dark:bg-zinc-800 rounded-full pr-3 pl-1 py-1 transition active:scale-[0.97]"
+                                        >
+                                          {order.driver.user.profilePhoto ? (
+                                            <img src={order.driver.user.profilePhoto} alt={order.driver.user.name} className="w-5 h-5 rounded-full object-cover shadow-sm" />
+                                          ) : (
+                                            <div className="w-5 h-5 rounded-full bg-sky-100 dark:bg-sky-900 flex items-center justify-center text-[9px] font-bold text-sky-600 dark:text-sky-300">
+                                              {order.driver.user.name.charAt(0).toUpperCase()}
+                                            </div>
+                                          )}
+                                          <span className="font-semibold text-neutral-800 dark:text-zinc-200 text-xs">
+                                            🛵 {order.driver.user.name}
+                                          </span>
+                                  {(order as any).fulfillmentType !== 'PICKUP' && driverArrivedOrders[order.id] && ['CONFIRMED', 'PREPARING', 'READY'].includes(order.status) && (
+                                            <span className="text-[10px] font-bold text-emerald-600 bg-emerald-100 dark:bg-emerald-900/30 dark:text-emerald-400 ml-1 px-1.5 py-0.5 rounded-full">● En el restaurante</span>
+                                          )}
+                                        </button>
+                                        {driverContactOpen[order.id] && order.driver.user.phone && (
+                                          <div className="absolute top-full left-0 mt-1.5 z-50 flex gap-1.5">
+                                            <a
+                                              href={`tel:${order.driver.user.phone}`}
+                                              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-neutral-900 dark:bg-zinc-100 text-white dark:text-zinc-900 text-xs font-bold shadow-lg transition active:scale-[0.95]"
+                                            >
+                                              <span>📞</span> Llamar
+                                            </a>
+                                            <a
+                                              href={`https://wa.me/52${order.driver.user.phone.replace(/\D/g, '')}`}
+                                              target="_blank"
+                                              rel="noopener noreferrer"
+                                              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-emerald-600 text-white text-xs font-bold shadow-lg transition active:scale-[0.95]"
+                                            >
+                                              <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5 text-white" fill="currentColor" viewBox="0 0 24 24"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z" /></svg>
+                                              WhatsApp
+                                            </a>
+                                          </div>
+                                        )}
+                                      </div>
+                                    ) : order.driver?.user?.name && !order.isAcceptedByDriver ? (
+                                      <span className="font-medium text-sky-600 bg-sky-50 px-2 py-0.5 rounded border border-sky-100/50">
+                                        Asignado (Esperando confirmación)
+                                      </span>
+                                    ) : order.supportRestaurant?.name || (isSupported && supportAliadoNamesByOrder[order.id]) ? (
+                                      <span className="inline-flex items-center gap-1.5 bg-emerald-50 border border-emerald-100 rounded-full pr-3 pl-1 py-1">
+                                        <div className="w-5 h-5 rounded-full bg-emerald-100 flex items-center justify-center text-[9px] font-bold text-emerald-700">
+                                          🤝
+                                        </div>
+                                        <span className="font-semibold text-emerald-800 dark:text-emerald-300 text-xs">
+                                          {isHelper
+                                            ? `🧑‍🍳 ${order.restaurant?.name || 'Red aliada'}`
+                                            : `🛵 ${order.supportRestaurant?.name || supportAliadoNamesByOrder[order.id] || 'Restaurante aliado'}`}
+                                        </span>
+                                        <span className="text-[9px] font-bold text-emerald-600 bg-emerald-100 px-1.5 py-0.5 rounded-full">
+                                          {isHelper ? 'Entrega de apoyo' : 'Apoyo a red'}
+                                        </span>
+                                        {!isHelper && driverArrivedOrders[order.id] && order.status === 'READY' && (
+                                          <span className="text-[9px] font-bold text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded-full">
+                                            🛵 Repartidor en tienda
+                                          </span>
+                                        )}
+                                      </span>
+                                    ) : hasOwnDelivery ? (
+                                      <span className="font-medium text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-100/50">
+                                        {order.status === 'DELIVERED' ? 'Entregado' : order.status === 'IN_TRANSIT' ? 'En camino' : order.status === 'PICKED_UP' ? 'Recogido para entrega' : 'Pendiente de recogida'}
+                                      </span>
+                                    ) : (
+                                      <span className="font-medium text-sky-600 bg-sky-50 px-2 py-0.5 rounded border border-sky-100/50">
+                                        Sin repartidor asignado
+                                      </span>
+                                    )}
+                                    {order.driver && !order.driverArrivedAt && !driverArrivedOrders[order.id] && !['PICKED_UP', 'IN_TRANSIT', 'DELIVERED', 'CANCELLED'].includes(order.status) && (
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setUnassignConfirmOrderId(order.id);
+                                        }}
+                                        disabled={activeActionKey === `${order.id}:quitarRepartidor`}
+                                        className="ml-2 text-xs font-semibold text-red-600 hover:text-red-500 disabled:text-neutral-400"
+                                      >
+                                        {activeActionKey === `${order.id}:quitarRepartidor` ? 'Quitando...' : '✖ Quitar'}
+                                      </button>
+                                    )}
+                                    {order.batchId && order.deliverySequence && (
+                                      <span className="ml-2 inline-flex items-center gap-1 rounded-full bg-violet-50 dark:bg-violet-950/20 border border-violet-200 dark:border-violet-900/30 px-2 py-0.5 text-[9px] font-bold text-violet-700 dark:text-violet-400">
+                                        📦 Lote #{(order.deliverySequence ?? 0) + 1}
+                                      </span>
+                                    )}
+                                  </div>
+                                )}
+
+                                {(() => {
+                                  const ms = getPreparationRemainingMs(order, kitchenClockNow);
+                                  let isDelayed = false;
+                                  let overdueMinutes = 0;
+                                  if (order.scheduledDeliveryAt) {
+                                    const scheduledMs = new Date(order.scheduledDeliveryAt).getTime() - kitchenClockNow;
+                                    if (scheduledMs <= 0) {
+                                      isDelayed = true;
+                                      overdueMinutes = Math.max(1, Math.round(Math.abs(scheduledMs) / 60000));
+                                    }
+                                  } else {
+                                    const safeMs = ms ?? 0;
+                                    isDelayed = safeMs <= 0;
+                                    overdueMinutes = isDelayed ? Math.max(1, Math.round(Math.abs(safeMs) / 60000)) : 0;
+                                  }
+                                  const validStatus = order.status === 'CONFIRMED' || order.status === 'PREPARING';
+                                  if (validStatus && isDelayed) {
+                                    return (
+                                      <button
+                                        type="button"
+                                        onClick={(event) => {
+                                          event.stopPropagation();
+                                          setSelectedOrderForEtaExtension(order);
+                                        }}
+                                        className="mt-3 w-full flex items-center justify-center gap-2 rounded-xl border border-rose-300 bg-rose-500 px-3 py-2.5 text-white shadow-[0_8px_20px_rgba(225,29,72,0.2)] animate-pulse transition hover:bg-rose-600 active:scale-95"
+                                      >
+                                        <svg className="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                                        <div className="flex flex-col items-center">
+                                          <span className="text-xs font-black uppercase tracking-wider text-center">Pedido rezagado</span>
+                                          <span className="text-[10px] font-bold opacity-90">Atrasado {overdueMinutes} min · Toca para reprogramar</span>
+                                        </div>
+</button>
+                                     );
+                                   }
+                                   if (validStatus && order.scheduledDeliveryAt && !isDelayed) {
+                                     const scheduledTime = new Date(order.scheduledDeliveryAt).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' });
+                                     return (
+                                       <div className="mt-3 w-full flex items-center justify-center gap-2 rounded-xl border border-sky-100 bg-sky-50/70 px-3 py-2.5 text-xs font-semibold text-sky-800">
+                                         <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><path d="M12 6v6l4 2" /></svg>
+                                         <span>{order.fulfillmentType === 'PICKUP' ? 'Recogida programada' : 'Entrega programada'} · {scheduledTime}</span>
+                                       </div>
+                                     );
+                                   }
+                                   return null;
+                                 })()}
+
+                                {(order as any).fulfillmentType !== 'PICKUP' && (order.status === 'CONFIRMED' || order.status === 'PREPARING') && !order.driver && !order.noDriversAvailable && !hasOwnDelivery && (
+                  <div className="mt-2 flex items-center gap-2 rounded-xl border border-sky-100 bg-sky-50/70 px-3 py-2 text-xs font-semibold text-sky-800 shadow-sm animate-pulse w-fit">
+                    <span className="relative flex h-2 w-2">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-sky-400 opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-2 w-2 bg-sky-500"></span>
+                    </span>
+                                    Asignando repartidor...
+                                  </div>
+                                )}
+
+                                {(order as any).fulfillmentType !== 'PICKUP' && (order.status === 'CONFIRMED' || order.status === 'PREPARING') && !order.driver && order.noDriversAvailable && !hasOwnDelivery && (
+                                  <div className="mt-2 flex flex-col gap-1 rounded-xl border border-rose-200 bg-rose-50/80 px-4 py-2.5 text-xs font-semibold text-rose-800 shadow-sm">
+                                    <div className="flex items-center gap-2">
+                                      <span className="relative flex h-2.5 w-2.5">
+                                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
+                                        <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-rose-600"></span>
+                                      </span>
+                                      <span>No hay repartidores disponibles en tu zona</span>
+                                    </div>
+                                    <span className="text-[10px] font-normal text-rose-600 leading-normal">
+                                      Puedes asumir la entrega tú mismo o solicitar apoyo a la red de restaurantes cercanos.
+                                    </span>
+                                  </div>
+                                )}
+                                {parseStoreNotes(order.notes) ? (
+                                  <div className="mt-2 rounded-[16px] border border-amber-100 bg-amber-50 px-4 py-2 text-sm text-amber-800">
+                                    <span className="font-semibold">Nota:</span> {parseStoreNotes(order.notes)}
+                                  </div>
+                                ) : null}
+
+                                {/* Pago en efectivo ya confirmado */}
+                                {order.status === 'PICKED_UP' && order.paymentMethod === 'CASH' && (order as any).cashPaymentConfirmedAt && (
+                                  <div className="mt-3 flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700">
+                                    <span>✅</span> Pago en efectivo confirmado — repartidor habilitado para salir
+                                  </div>
+                                )}
+
+                                {order.status === 'PENDING' && (
+                                  <div
+                                    className={`mt-3 overflow-hidden rounded-2xl border p-4 shadow-sm transition-all duration-300 ${order.paymentMethod === 'TRANSFER'
+                                      ? 'border-sky-100 bg-gradient-to-br from-sky-50/70 to-blue-50/70 animate-float-gentle shadow-md shadow-sky-500/5'
+                                      : 'border-black/5 bg-gradient-to-br from-neutral-50/50 to-white'
+                                      }`}
+                                    onClick={(e) => e.stopPropagation()}
+                                  >
+                                    {order.paymentMethod === 'TRANSFER' ? (
+                                      <div className="flex flex-col gap-3">
+                                        <div className="flex items-center justify-between gap-2">
+                                          <div className="flex items-center gap-2">
+                                            <span className="flex h-2.5 w-2.5 rounded-full bg-sky-600 animate-pulse" />
+                                            <span className="text-xs font-bold uppercase tracking-wider text-sky-700 bg-sky-50 border border-sky-100 px-2 py-0.5 rounded-md">
+                                              Pago por Transferencia
+                                            </span>
+                                          </div>
+                                          <TransferCountdown createdAt={order.createdAt} />
+                                        </div>
+                                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white/60 backdrop-blur-md rounded-xl p-3 border border-white/80">
+                                          <div className="flex flex-col">
+                                            <span className="text-xs font-medium text-neutral-500">Estado de pago</span>
+                                            <span className="text-sm font-bold text-neutral-800 flex items-center gap-1.5 mt-0.5">
+                                              <span className="inline-block w-2 h-2 rounded-full bg-amber-500" />
+                                              Por verificar en banca
+                                            </span>
+                                          </div>
+                                          {order.paymentProofUrl ? (
+                                            <button
+                                              type="button"
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                setZoomedImageUrl(order.paymentProofUrl || null);
+                                              }}
+                                              className="inline-flex items-center justify-center gap-2 rounded-xl bg-sky-600 hover:bg-sky-700 text-white px-4 py-2.5 text-xs font-bold shadow-md shadow-sky-600/10 hover:shadow-sky-600/20 transition active:scale-95 shrink-0"
+                                            >
+                                              <svg className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                              </svg>
+                                              Ver comprobante
+                                            </button>
+                                          ) : (
+                                            <span className="text-xs font-semibold text-neutral-400 bg-neutral-100/80 px-3 py-2 rounded-xl border border-neutral-200/50">
+                                              Sin comprobante
+                                            </span>
+                                          )}
+                                        </div>
+                                      </div>
+                                    ) : ['CREDIT_CARD', 'DEBIT_CARD', 'DIGITAL_WALLET'].includes(order.paymentMethod || '') ? (
+                                      <div className="flex flex-col gap-2">
+                                        <div className="flex items-center gap-2">
+                                          <span className="flex h-2.5 w-2.5 rounded-full bg-emerald-500" />
+                                          <span className="text-xs font-bold uppercase tracking-wider text-emerald-700 bg-emerald-50 border border-emerald-100 px-2 py-0.5 rounded-md">
+                                            Pago en Línea Autorizado
+                                          </span>
+                                        </div>
+                                        <p className="text-xs text-emerald-600 font-medium bg-emerald-50/50 rounded-xl p-3 border border-emerald-100/50">
+                                          ✓ Transacción validada por pasarela de pago. No requiere comprobante físico.
+                                        </p>
+                                      </div>
+                                    ) : null}
+                                  </div>
+                                )}
+                              </div>
+
+                              {/* Fila 3: Pie (Total y Botones) */}
+                              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-t border-neutral-100 pt-3">
+                                <div>
+                                  {(() => {
+                                    if (isHelper) {
+                                      return (
+                                        <>
+                                          <p className="text-xs font-semibold uppercase tracking-[0.22em] text-emerald-600">Apoyo de entrega · Tu tarifa</p>
+                                          <p className="text-xl font-bold text-neutral-950">{formatCurrency(order.deliveryFee)}</p>
+                                          <p className="text-[10px] text-emerald-600 font-medium flex items-center gap-1 mt-1">
+                                            <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                                            {order.paymentMethod === 'CASH'
+                                              ? `Entregas ${formatCurrency(order.totalAmount - (order.deliveryFee || 0))} al restaurante y cobras ${formatCurrency(order.totalAmount)} al cliente`
+                                              : 'Recibe la tarifa por la entrega del apoyo'}
+                                          </p>
+                                        </>
+                                      );
+                                    }
+
+                                    const foodAmount = order.totalAmount - order.deliveryFee;
+
+                                    if (hasOwnDelivery && (order as any).fulfillmentType !== 'PICKUP') {
+                                      return (
+                                        <>
+                                          <p className="text-xs font-semibold uppercase tracking-[0.22em] text-emerald-600">
+                                            {order.status === 'DELIVERED' ? 'Recibido (Envío propio)' : 'Total a recibir (Envío propio)'}
+                                          </p>
+                                          <p className="text-xl font-bold text-neutral-950">{formatCurrency(order.totalAmount)}</p>
+                                        </>
+                                      );
+                                    }
+
+                                    // Restaurant delivering themselves
+                                    if (order.deliveredByRestaurant) {
+                                      return (
+                                        <>
+                                          <p className="text-xs font-semibold uppercase tracking-[0.22em] text-emerald-600">
+                                            {order.status === 'DELIVERED' ? 'Cobrado (Entrega propia)' : 'Total a cobrar (Entrega propia)'}
+                                          </p>
+                                          <p className="text-xl font-bold text-neutral-950">{formatCurrency(order.totalAmount)}</p>
+                                          {order.status !== 'DELIVERED' && (
+                                            <p className="text-[10px] text-neutral-500">Tú realizas la entrega. El cliente paga el total.</p>
+                                          )}
+                                        </>
+                                      );
+                                    }
+
+                                    // Platform delivery
+                                    if ((order as any).fulfillmentType === 'PICKUP') {
+                                      if (order.paymentMethod === 'TRANSFER') {
+                                        return (
+                                          <>
+                                            <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-sky-600">
+                                              Recibido por transferencia
+                                            </p>
+                                            <p className="text-xl font-bold text-neutral-950">{formatCurrency(order.totalAmount)}</p>
+                                            <p className="text-[10px] text-emerald-600 font-semibold flex items-center gap-1 mt-1">
+                                              <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                                              El cliente recoge en sucursal
+                                            </p>
+                                          </>
+                                        );
+                                      }
+                                      return (
+                                        <>
+                                          <p className="text-xs font-semibold uppercase tracking-[0.22em] text-emerald-600">
+                                            Total a recibir
+                                          </p>
+                                          <p className="text-xl font-bold text-neutral-950">{formatCurrency(order.totalAmount)}</p>
+                                          <p className="text-[10px] text-emerald-600 font-semibold flex items-center gap-1 mt-1">
+                                            <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                                            El cliente recoge en sucursal
+                                          </p>
+                                        </>
+                                      );
+                                    }
+
+                                    if (order.paymentMethod === 'CASH') {
+                                      const supportDelivery = !!order.supportRestaurantId;
+                                      return (
+                                        <>
+                                          <p className="text-xs font-semibold uppercase tracking-[0.22em] text-amber-600">
+                                            {supportDelivery
+                                              ? (['DELIVERED', 'PICKED_UP', 'IN_TRANSIT'].includes(order.status) || order.cashPaymentConfirmedAt ? 'Cobrado al restaurante aliado' : 'Cobrar al restaurante que entrega')
+                                              : (order.status === 'DELIVERED' || order.cashPaymentConfirmedAt ? 'Cobrado al repartidor' : 'Cobrar al repartidor')}
+                                          </p>
+                                          <p className="text-xl font-bold text-neutral-950">{formatCurrency(foodAmount)}</p>
+                                          {!['PICKED_UP', 'IN_TRANSIT', 'DELIVERED'].includes(order.status) && !order.cashPaymentConfirmedAt && (
+                                            supportDelivery
+                                              ? <p className="text-[10px] text-neutral-500">Entregar al aliado al recoger; él cobra el total al cliente y le queda el envío.</p>
+                                              : <p className="text-[10px] text-neutral-500">El repartidor cobra el total al cliente.</p>
+                                          )}
+                                        </>
+                                      );
+                                    }
+
+                                    if (order.paymentMethod === 'TRANSFER') {
+                                      const handedOver = ['PICKED_UP', 'IN_TRANSIT', 'DELIVERED'].includes(order.status);
+                                      return (
+                                        <>
+                                          <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-sky-600">
+                                            Recibido por transferencia
+                                          </p>
+                                          <p className="text-xl font-bold text-neutral-950">{formatCurrency(order.totalAmount)}</p>
+                                          {order.supportRestaurantId ? (
+                                            handedOver ? (
+                                              <div className="mt-2 rounded-xl border border-emerald-200 bg-emerald-50/60 px-3 py-2">
+                                                <div className="flex items-center justify-between">
+                                                  <span className="text-[11px] font-semibold text-emerald-600">✅ Ya pagado al repartidor de apoyo</span>
+                                                  <span className="text-sm font-bold text-emerald-700">{formatCurrency(order.deliveryFee)}</span>
+                                                </div>
+                                                <p className="text-[9px] text-emerald-500 mt-0.5 leading-tight">
+                                                  El total del pedido cuenta como ingreso del restaurante aliado; él gana solo el envío.
+                                                </p>
+                                              </div>
+                                            ) : (
+                                              (order as any).fulfillmentType !== 'PICKUP' && (
+                                                <div className="mt-2 rounded-xl border border-dashed border-rose-200 bg-rose-50/60 px-3 py-2">
+                                                  <div className="flex items-center justify-between">
+                                                    <span className="text-[11px] font-semibold text-rose-600">👉 Pagar al restaurante aliado</span>
+                                                    <span className="text-sm font-bold text-rose-700">{formatCurrency(order.deliveryFee)}</span>
+                                                  </div>
+                                                  <p className="text-[9px] text-rose-400 mt-0.5 leading-tight">
+                                                    Entregar en efectivo al restaurante aliado al recoger el pedido
+                                                  </p>
+                                                </div>
+                                              )
+                                            )
+                                          ) : (
+                                            !handedOver && !order.deliveredByRestaurant && (order as any).fulfillmentType !== 'PICKUP' && (
+                                              <div className="mt-2 rounded-xl border border-dashed border-rose-200 bg-rose-50/60 px-3 py-2">
+                                                <div className="flex items-center justify-between">
+                                                  <span className="text-[11px] font-semibold text-rose-600">👉 Pagar al repartidor</span>
+                                                  <span className="text-sm font-bold text-rose-700">{formatCurrency(order.deliveryFee)}</span>
+                                                </div>
+                                                <p className="text-[9px] text-rose-400 mt-0.5 leading-tight">
+                                                  Entregar en efectivo al repartidor al recoger el pedido
+                                                </p>
+                                              </div>
+                                            )
+                                          )}
+                                        </>
+                                      );
+                                    }
+
+                                    // Fallback if paymentMethod is missing
+                                    return (
+                                      <>
+                                        <p className="text-xs font-semibold uppercase tracking-[0.22em] text-neutral-400">Total (Sin envío)</p>
+                                        <p className="text-xl font-bold text-neutral-950">{formatCurrency(foodAmount)}</p>
+                                      </>
+                                    );
+                                  })()}
+
+                                  {Number(order.promoDiscountAmount || 0) > 0 && (
+                                    <div className="mt-3 inline-flex flex-wrap items-center gap-1.5 rounded-xl border border-sky-100 bg-sky-50/60 px-3 py-2">
+                                      <span className="flex h-5 w-5 items-center justify-center rounded-full bg-sky-500 text-white">
+                                        <Tag className="h-3 w-3" strokeWidth={2.5} />
+                                      </span>
+                                      <span className="text-[11px] font-semibold text-neutral-500">Descuento aplicado</span>
+                                      <span className="text-[12px] font-bold text-sky-700">-{formatCurrency(Number(order.promoDiscountAmount))}</span>
+                                    </div>
+                                  )}
+                                </div>
+                                <div className="flex flex-col sm:flex-row sm:flex-wrap gap-2 items-stretch sm:items-center justify-end min-w-0" onClick={(e) => e.stopPropagation()}>
+                                  {order.status === 'IN_TRANSIT' && !isHelper && !order.supportRestaurantId && (hasOwnDelivery || !order.driver) && (
+                                    <button
+                                      type="button"
+                                      onClick={async () => {
+                                        try {
+                                          let response = await fetch(`${apiBase}/restaurant-panel/pedidos/${order.id}/delivery-token`, {
+                                            cache: 'no-store',
+                                            headers: {
+                                              Authorization: `Bearer ${token}`,
+                                            },
+                                          });
+                                          if (response.status === 410) {
+                                            if (!window.confirm('El QR venció. ¿Renovar el enlace de reparto? El enlace anterior no funcionará y deberás compartir el nuevo con el repartidor.')) return;
+                                            const renewal = await fetch(`${apiBase}/restaurant-panel/pedidos/${order.id}/delivery-token/renew`, { method: 'POST', headers: { Authorization: `Bearer ${token}` } });
+                                            if (!renewal.ok) {
+                                              pushToast('error', 'No se pudo renovar', 'Comprueba el estado del pedido y vuelve a intentarlo.');
+                                              return;
+                                            }
+                                             response = renewal;
+                                          }
+                                          const res = await response.json();
+                                          if (res.success && res.data) {
+                                            setActiveQrCodeData({
+                                              token: res.data.token,
+                                              orderReference: res.data.orderReference,
+                                              id: order.id,
+                                              url: res.data.url,
+                                            });
+                                          } else {
+                                            pushToast('error', 'Error', 'No se encontró un reparto activo para este pedido.');
+                                          }
+                                        } catch (err) {
+                                          pushToast('error', 'Error de red', 'No se pudo conectar con el servidor.');
+                                        }
+                                      }}
+                                      className="w-full sm:w-auto justify-center rounded-full bg-amber-500 px-5 py-2.5 sm:py-2 text-sm font-semibold text-white shadow-sm hover:bg-amber-600 transition flex items-center gap-2"
+                                    >
+                                      <span>🛵 Ver QR de reparto</span>
+                                    </button>
+                                  )}
+
+                                  {isHelper && !['DELIVERED', 'COMPLETED', 'REJECTED', 'CANCELLED', 'PENDING'].includes(order.status) && (
+                                    <button
+                                      type="button"
+                                      onClick={async () => {
+                                        try {
+                                          const response = await fetch(`${apiBase}/restaurant-panel/pedidos/${order.id}/delivery-token`, {
+                                            headers: {
+                                              Authorization: `Bearer ${token}`,
+                                            },
+                                          });
+                                          const res = await response.json();
+                                          if (res.success && res.data) {
+                                            setActiveQrCodeData({
+                                              token: res.data.token,
+                                              orderReference: res.data.orderReference,
+                                              id: order.id,
+                                              url: res.data.url,
+                                            });
+                                          } else {
+                                            pushToast('error', 'Error', 'No se encontró un reparto activo para este pedido.');
+                                          }
+                                        } catch (err) {
+                                          pushToast('error', 'Error de red', 'No se pudo conectar con el servidor.');
+                                        }
+                                      }}
+                                      className="w-full sm:w-auto justify-center rounded-full bg-amber-500 px-5 py-2.5 sm:py-2 text-sm font-semibold text-white shadow-sm hover:bg-amber-600 transition flex items-center gap-2"
+                                    >
+                                      <span>🛵 Ver QR de reparto</span>
+                                    </button>
+                                  )}
+
+                                  {/* Botones de Accion (solo para pedidos propios; las entregas de apoyo usan el QR) */}
+                                  {!isHelper && authorizedActionButtons.length > 0 ? (
+                                    <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+                                      {authorizedActionButtons.map((actionKey) => {
+                                        const action = restaurantActionMap[actionKey];
+                                        const isBusy = activeActionKey === `${order.id}:${actionKey}`;
+                                        const tone =
+                                          actionKey === 'accept'
+                                            ? 'primary'
+                                            : actionKey === 'reject' || actionKey === 'cancel'
+                                              ? 'danger'
+                                              : actionKey === 'preparing'
+                                                ? 'warning'
+                                                : 'success';
+
+                                        return (
+                                          <ActionButton
+                                            key={actionKey}
+                                            onClick={() => {
+                                              if (actionKey === 'accept') {
+                                                openAcceptOrderPrompt(order.id);
+                                              } else if (actionKey === 'handover') {
+                                                setHandoverPromptOrderId(order.id);
+                                              } else if (actionKey === 'delivered') {
+                                                setEmergencyReason('');
+                                                setEmergencyConfirmed(false);
+                                                setEmergencyDeliveryOrderId(order.id);
+                                              } else if (actionKey === 'reject' && order.paymentMethod === 'TRANSFER') {
+                                                setTransferRefundOrder(order);
+                                              } else if (actionKey === 'cancel') {
+                                                const reason = window.prompt('Motivo de cancelación (mín. 10 caracteres):');
+                                                if (reason && reason.trim().length >= 10) {
+                                                  void runOrderAction(order.id, actionKey, { preserveFailedAction: true });
+                                                  // Send cancel with reason via PATCH
+                                                  requestJson({
+                                                    apiBase,
+                                                    path: `/restaurant-panel/pedidos/${order.id}/cancelar`,
+                                                    token,
+                                                    options: {
+                                                      method: 'PATCH',
+                                                      body: JSON.stringify({ reason: reason.trim() }),
+                                                    },
+                                                    fallbackMessage: 'No se pudo cancelar el pedido.',
+                                                  }).then(() => {
+                                                    loadOrdersOnly();
+                                                    pushToast('success', 'Pedido cancelado', `Motivo: ${reason.trim()}`);
+                                                  }).catch((err: any) => {
+                                                    pushToast('error', 'Error', err?.message || 'No se pudo cancelar.');
+                                                  });
+                                                } else if (reason !== null) {
+                                                  window.alert('El motivo debe tener al menos 10 caracteres.');
+                                                }
+                                              } else {
+                                                void runOrderAction(order.id, actionKey);
+                                              }
+                                            }}
+                                            disabled={isBusy}
+                                            tone={tone}
+                                          >
+                                            {isBusy ? 'Procesando...' : action.label}
+                                          </ActionButton>
+                                        );
+                                      })}
+                                    </div>
+                                  ) : null}
+
+                                </div>
+                              </div>
+
+                              {/* Pickup: Confirmar recolección */}
+                              {((order as any).fulfillmentType === 'PICKUP' && order.status === 'READY') ? (
+                                <div className="flex flex-col sm:flex-row gap-2 mt-2" onClick={(e) => e.stopPropagation()}>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setPickupConfirmOrderId(order.id);
+                                      setPickupConfirmPinInput('');
+                                      setPickupConfirmError(null);
+                                      setPickupConfirmAttemptsLeft(3);
+                                    }}
+                                    className="flex-1 rounded-xl border border-emerald-200 bg-emerald-600 px-4 py-3 text-sm font-semibold text-white shadow-[0_4px_12px_rgba(16,185,129,0.2)] transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-neutral-300 disabled:text-neutral-500"
+                                  >
+                                    ✅ Confirmar recolección
+                                  </button>
+                                </div>
+                              ) : null}
+
+                              {/* Boton de Emergencia: Asumir Reparto o Pedir Apoyo (solo delivery) */}
+                              {((order as any).fulfillmentType !== 'PICKUP' && !order.supportRestaurantId && (order.status === 'READY' || ((order.status === 'CONFIRMED' || order.status === 'PREPARING') && order.noDriversAvailable)) && !order.driver) ? (
+                                <div className="flex flex-col gap-2 mt-2" onClick={(e) => e.stopPropagation()}>
+                                  {/* Esperando respuesta de la red: solo informativo, nunca bloquea acciones */}
+                                  {order.isSupportRequested && order.supportRequestedAt && (
+                                    <div className="rounded-[16px] border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-800">
+                                      <div className="flex items-center gap-2">
+                                        <span className="relative flex h-2.5 w-2.5 shrink-0">
+                                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-sky-400 opacity-75"></span>
+                                          <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-sky-500"></span>
+                                        </span>
+                                        <div className="min-w-0 flex-1">
+                                          <p className="font-semibold">Esperando respuesta de la red…</p>
+                                          <p className="text-xs text-sky-600 mt-0.5">
+                                            {(() => {
+                                              const elapsedMs = Math.max(0, supportCountdownNow - new Date(order.supportRequestedAt!).getTime());
+                                              const remainingMs = Math.max(0, 2 * 60 * 1000 - elapsedMs);
+                                              const secs = Math.ceil(remainingMs / 1000);
+                                              const mm = Math.floor(secs / 60);
+                                              const ss = secs % 60;
+                                              return remainingMs <= 0
+                                                ? 'Finalizando solicitud…'
+                                                : `Si nadie responde en ${mm}:${String(ss).padStart(2, '0')} min, el pedido queda para ti.`;
+                                            })()}
+                                          </p>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  )}
+                                  {supportNotifyHere ? (
+                                    <div className="rounded-[16px] border border-rose-100 bg-rose-50 px-4 py-3 text-sm text-rose-800">
+                                      <div className="flex items-center gap-2">
+                                        <span className="text-base">😕</span>
+                                        <div className="min-w-0 flex-1">
+                                          <p className="font-semibold">Nadie aceptó tu solicitud de apoyo</p>
+                                          {supportNotifyHere.exhausted ? (
+                                            <p className="text-xs text-rose-600 mt-0.5">Agotaste los 2 intentos. Solo puedes ir a entregar tú mismo.</p>
+                                          ) : (
+                                            <p className="text-xs text-rose-600 mt-0.5">
+                                              Puedes reintentar (te queda{supportNotifyHere.attemptsLeft === 1 ? '' : 'n'} {supportNotifyHere.attemptsLeft} intento{supportNotifyHere.attemptsLeft === 1 ? '' : 's'}) o entregarlo tú mismo.
+                                            </p>
+                                          )}
+                                        </div>
+                                        {!WINGSLAB_BUSINESS.ownDeliveryOnly && !supportNotifyHere.exhausted && !order.isSupportRequested && (
+                                          <button
+                                            type="button"
+                                            onClick={() => void runOrderAction(order.id, 'solicitarApoyo')}
+                                            disabled={activeActionKey === `${order.id}:solicitarApoyo`}
+                                            className="shrink-0 rounded-full bg-rose-600 px-4 py-2 text-xs font-bold text-white transition hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-50"
+                                          >
+                                            {activeActionKey === `${order.id}:solicitarApoyo` ? 'Reenviando...' : 'Reintentar'}
+                                          </button>
+                                        )}
+                                      </div>
+                                    </div>
+                                  ) : null}
+                                  <div className="flex flex-col sm:flex-row gap-2">
+                                    <button
+                                      type="button"
+                                      onClick={() => void runOrderAction(order.id, 'asumirReparto')}
+                                      disabled={activeActionKey === `${order.id}:asumirReparto`}
+                                      className="flex-1 rounded-xl border border-emerald-200 bg-emerald-600 px-4 py-3 text-sm font-semibold text-white shadow-[0_4px_12px_rgba(16,185,129,0.2)] transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-neutral-300 disabled:text-neutral-500"
+                                    >
+                                      {activeActionKey === `${order.id}:asumirReparto`
+                                        ? 'Procesando...'
+                                        : 'Generar QR de reparto'}
+                                    </button>
+                                      {!WINGSLAB_BUSINESS.ownDeliveryOnly && !profile?.hasOwnDelivery && !supportExhaustedHere && !supportNotifyHere?.exhausted && !order.isSupportRequested && (
+                                      <button
+                                        type="button"
+                                        onClick={() => void runOrderAction(order.id, 'solicitarApoyo')}
+                                        disabled={activeActionKey === `${order.id}:solicitarApoyo`}
+                                        className="flex-1 rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm font-semibold text-sky-700 transition hover:bg-sky-100 disabled:cursor-not-allowed disabled:bg-neutral-100 disabled:text-neutral-400"
+                                      >
+                                        {activeActionKey === `${order.id}:solicitarApoyo`
+                                          ? 'Enviando...'
+                                          : '🤝 Pedir apoyo a red'}
+                                      </button>
+                                    )}
+                                  </div>
+                                </div>
+                              ) : null}
+                                </div>
+                                    </>}
+                                  </div>
+                                </section>
+                                </div>}
+                              </div>
+                            </article>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <>
+                        <div className="wl-orders-empty"><span><ClipboardList aria-hidden="true" /></span><h2>{loading ? 'Cargando órdenes' : orderSearchTerm || ordersFulfillment !== 'ALL' ? 'Sin resultados' : selectedStatus === 'ACTIVE' ? 'No hay órdenes activas' : 'No hay órdenes en este estado'}</h2><p>{loading ? 'Cargando…' : orderSearchTerm || ordersFulfillment !== 'ALL' ? 'Ajusta la búsqueda o los filtros.' : 'Prueba con otra fecha o estado.'}</p></div>
+                      </>
+                    )}
+                  </section>
+  );
+});

@@ -28,6 +28,6 @@ Detalles: `docs/DESARROLLO_WEB_LOCAL.md`.
 - `asumir-reparto` usa `select` de Prisma, no `include`.
 - La comanda muestra nombre completo, teléfono y dirección completa con fallbacks.
 - El comensal tiene heap de 1024 MB y los servicios de app se reinician solos.
-- `[HMR] connected` está filtrado en los `layout.tsx`.
+- `[HMR] connected` es un log de desarrollo inofensivo; no filtrarlo con `<script>` en layout.
 
 Si algo se cae: volver a correr `bash scripts/wingslab-dev.sh all start`. No reconstruir nada.

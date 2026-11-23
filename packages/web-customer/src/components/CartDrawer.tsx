@@ -140,7 +140,7 @@ export default memo(function CartDrawer({
   const freeDelivery = showDelivery && !deliveryFeePending && effectiveDeliveryFee === 0;
 
   const fulfillmentControl = pickupOnly ? (
-    <div className="flex min-h-11 items-center justify-center gap-2 rounded-xl border border-orange-200 bg-orange-50 px-3 text-xs font-semibold text-orange-800">
+    <div className="flex min-h-11 items-center justify-center gap-2 rounded-xl border border-red-200 bg-red-50 px-3 text-xs font-semibold text-red-800 dark:border-red-900 dark:bg-red-950/40 dark:text-red-200">
       <ShoppingBag className="h-4 w-4" strokeWidth={1.7} /> Solo recoger en tienda
     </div>
   ) : (
@@ -152,12 +152,12 @@ export default memo(function CartDrawer({
         className={`inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border px-2.5 text-xs font-semibold transition-colors active:scale-[0.98] ${
           fulfillmentType === 'DELIVERY'
             ? 'border-[var(--wl-action)] bg-red-50 text-red-900 dark:bg-red-950/40 dark:text-red-200 shadow-sm shadow-orange-900/5'
-            : 'border-neutral-200 bg-white text-neutral-600 hover:bg-neutral-50 hover:text-neutral-900'
+            : 'border-neutral-200 bg-white text-neutral-600 hover:bg-neutral-50 hover:text-neutral-900 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800'
         }`}
       >
         <Bike className="h-4 w-4 shrink-0" strokeWidth={1.7} />
         Enviar a domicilio
-        <span className={`grid size-4 shrink-0 place-items-center rounded-full border ${fulfillmentType === 'DELIVERY' ? 'border-orange-600 bg-[var(--wl-action)] text-white' : 'border-neutral-300 text-transparent'}`}>
+        <span className={`grid size-4 shrink-0 place-items-center rounded-full border ${fulfillmentType === 'DELIVERY' ? 'border-red-600 bg-[var(--wl-action)] text-white' : 'border-neutral-300 text-transparent'}`}>
           <Check className="h-3 w-3" strokeWidth={3} />
         </span>
       </button>
@@ -168,12 +168,12 @@ export default memo(function CartDrawer({
         className={`inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border px-2.5 text-xs font-semibold transition-colors active:scale-[0.98] ${
           fulfillmentType === 'PICKUP'
             ? 'border-[var(--wl-action)] bg-red-50 text-red-900 dark:bg-red-950/40 dark:text-red-200 shadow-sm shadow-orange-900/5'
-            : 'border-neutral-200 bg-white text-neutral-600 hover:bg-neutral-50 hover:text-neutral-900'
+            : 'border-neutral-200 bg-white text-neutral-600 hover:bg-neutral-50 hover:text-neutral-900 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800'
         }`}
       >
         <Store className="h-4 w-4 shrink-0" strokeWidth={1.7} />
         Recoger en tienda
-        <span className={`grid size-4 shrink-0 place-items-center rounded-full border ${fulfillmentType === 'PICKUP' ? 'border-orange-600 bg-[var(--wl-action)] text-white' : 'border-neutral-300 text-transparent'}`}>
+        <span className={`grid size-4 shrink-0 place-items-center rounded-full border ${fulfillmentType === 'PICKUP' ? 'border-red-600 bg-[var(--wl-action)] text-white' : 'border-neutral-300 text-transparent'}`}>
           <Check className="h-3 w-3" strokeWidth={3} />
         </span>
       </button>
@@ -241,13 +241,13 @@ export default memo(function CartDrawer({
                         {item.image ? (
                           <img src={item.image} className="h-14 w-14 shrink-0 rounded-2xl object-cover" alt={item.name} loading="lazy" decoding="async" />
                         ) : (
-                          <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-orange-100 to-orange-50 text-orange-400">
+                          <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-red-50 text-red-500 dark:bg-red-950/40 dark:text-red-300">
                             <Utensils className="h-6 w-6" />
                           </div>
                         )}
                         <div className="min-w-0 flex-1">
                           <div className="flex items-start justify-between gap-2">
-                            <p className="font-semibold leading-snug text-neutral-900">{item.name}</p>
+                            <p className="font-semibold leading-snug text-neutral-900 dark:text-zinc-100">{item.name}</p>
                             <div className="flex shrink-0 flex-col items-end gap-1">
                               <span className="rounded-lg bg-neutral-900 px-2.5 py-1 text-xs font-bold text-white shadow-sm">
                                 {formatCurrency(lineTotal)}
@@ -272,11 +272,11 @@ export default memo(function CartDrawer({
                             </div>
                           )}
                           {isWeightItem && item.weightG ? (
-                            <p className="mt-1.5 text-[11px] font-semibold text-neutral-600">
+                            <p className="mt-1.5 text-[11px] font-semibold text-neutral-600 dark:text-zinc-300">
                               {item.weightG >= 1000 ? `${item.weightG / 1000}kg` : `${item.weightG}g`} · {formatCurrency(item.unitPrice || 0)}/kg
                             </p>
                           ) : (
-                            <p className="mt-1.5 text-[11px] font-bold text-neutral-700">
+                            <p className="mt-1.5 text-[11px] font-bold text-neutral-700 dark:text-zinc-300">
                               {formatCurrency(itemUnitPrice)} c/u
                             </p>
                           )}
@@ -313,7 +313,7 @@ export default memo(function CartDrawer({
                           onChange={(event) => updateCartItem(item.cartItemId, { specialInstructions: event.target.value })}
                           placeholder="Nota..."
                           aria-label={`Nota para ${item.name}`}
-                          className="min-w-0 flex-1 rounded-xl border border-transparent bg-neutral-50 dark:bg-[#3b3c3f] dark:text-white px-2.5 py-1.5 text-xs text-neutral-700 outline-none transition-all placeholder:text-neutral-400 focus:border-orange-200 focus:bg-white focus:ring-2 focus:ring-orange-200/50"
+                          className="min-h-11 min-w-0 flex-1 rounded-xl border border-transparent bg-neutral-50 px-2.5 py-1.5 text-xs text-neutral-700 outline-none transition-all placeholder:text-neutral-400 focus:border-red-300 focus:ring-2 focus:ring-red-200/50 dark:bg-zinc-800 dark:text-white dark:focus:border-red-500"
                         />
                       </div>
                     </div>
@@ -392,7 +392,7 @@ export default memo(function CartDrawer({
                     <Wallet className="h-4 w-4" strokeWidth={1.7} />
                     {showDelivery && deliveryFeePending ? 'Total estimado' : 'Total a pagar'}
                   </span>
-                  <span className="text-xl font-extrabold tracking-tight text-neutral-950">{formatCurrency(orderTotal)}</span>
+                  <span className="text-xl font-extrabold tracking-tight text-neutral-950 dark:text-white">{formatCurrency(orderTotal)}</span>
                 </div>
               </div>
 
@@ -406,7 +406,7 @@ export default memo(function CartDrawer({
                 <button
                   type="button"
                   onClick={onClose}
-                  className="group flex min-h-12 items-center justify-center gap-1.5 rounded-xl border border-black/[0.08] bg-white px-3 text-[13px] font-semibold text-neutral-700 transition-colors hover:bg-neutral-50 active:scale-[0.98]"
+                  className="group flex min-h-12 items-center justify-center gap-1.5 rounded-xl border border-black/[0.08] bg-white px-3 text-[13px] font-semibold text-neutral-700 transition-colors hover:bg-neutral-50 active:scale-[0.98] dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
                 >
                   <ChevronLeft className="h-3.5 w-3.5 text-neutral-400 transition-transform group-hover:-translate-x-0.5" />
                   Seguir comprando
@@ -415,7 +415,7 @@ export default memo(function CartDrawer({
                   type="button"
                   onClick={onProceedToCheckout}
                   disabled={!isRestaurantOpen}
-                  className="group flex min-h-12 items-center justify-center gap-2 rounded-xl bg-[var(--wl-action)] px-4 text-sm font-bold text-white shadow-[0_5px_16px_-4px_rgba(2,132,199,0.4)] transition-colors hover:bg-[var(--wl-action-hover)] active:scale-[0.98] disabled:cursor-not-allowed disabled:bg-neutral-100 disabled:text-neutral-400 disabled:shadow-none"
+                  className="group flex min-h-12 items-center justify-center gap-2 rounded-xl bg-[var(--wl-action)] px-4 text-sm font-bold text-white shadow-[0_5px_16px_-4px_rgba(187,10,14,0.35)] transition-colors hover:bg-[var(--wl-action-hover)] active:scale-[0.98] disabled:cursor-not-allowed disabled:bg-neutral-100 disabled:text-neutral-400 disabled:shadow-none dark:disabled:bg-zinc-800 dark:disabled:text-zinc-500"
                 >
                   <span className="flex items-center justify-center gap-2">
                     Completar pedido

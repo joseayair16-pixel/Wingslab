@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import whiteWordmark from '../assets/wingslab-wordmark.png';
+import { WingsLabLoadingContent } from './WingsLabLoading';
 
 type Phase = 'visible' | 'fading' | 'gone';
 
@@ -60,10 +60,7 @@ export default function SplashScreen() {
       data-testid="wl-splash"
       className={`wl-splash ${phase === 'fading' ? 'is-fading' : ''}`}
     >
-      <div className="wl-splash-inner">
-        <img src={whiteWordmark.src} alt="" className="wl-splash-logo" draggable={false} />
-        <span className="wl-splash-spinner" aria-hidden="true" />
-      </div>
+      <WingsLabLoadingContent />
     </div>
   );
 }

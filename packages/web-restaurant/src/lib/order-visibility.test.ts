@@ -13,6 +13,15 @@ describe('order visibility', () => {
     expect(isOrderInPeriod(order, today, today)).toBe(false);
   });
 
+  it('groups a delivered order by its delivery date, not its creation date', () => {
+    const order = {
+      status: 'DELIVERED',
+      createdAt: '2026-11-20T07:26:30.632Z',
+      deliveredAt: '2026-11-22T18:00:00.000Z',
+    };
+    expect(isOrderInPeriod(order, today, today)).toBe(true);
+  });
+
   it('shows a finished order from today', () => {
     const order = { status: 'DELIVERED', createdAt: '2026-11-22T18:00:00.000Z' };
     expect(isOrderInPeriod(order, today, today)).toBe(true);

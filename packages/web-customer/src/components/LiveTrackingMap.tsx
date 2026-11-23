@@ -254,11 +254,11 @@ export default memo(function LiveTrackingMap({
 
     let cancelled = false;
     setMapLoadState('loading');
-    const loadTimeout = window.setTimeout(() => setMapLoadState('unavailable'), 15000);
+    let loadTimeout: number | undefined;
 
     const createMap = (google: any) => {
       const mapEl = document.getElementById(`map-tracking-${orderId}`);
-      if (!mapEl) return;
+      if (!mapEl) throw new Error('Map container unavailable');
       if (initOrderIdRef.current === orderId && mapRef.current) return;
 
       const map = new google.maps.Map(mapEl, {
@@ -277,6 +277,9 @@ export default memo(function LiveTrackingMap({
         clickableIcons: false,
       });
       mapRef.current = map;
+      loadTimeout = window.setTimeout(() => {
+        if (!cancelled) setMapLoadState('unavailable');
+      }, 10000);
       const tilesListener = google.maps.event.addListenerOnce(map, 'tilesloaded', () => {
         window.clearTimeout(loadTimeout);
         if (!cancelled) setMapLoadState('ready');

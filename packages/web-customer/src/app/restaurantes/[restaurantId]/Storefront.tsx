@@ -2,7 +2,8 @@
 import { WINGSLAB_BUSINESS } from '@sadel/shared';
 import { getWingslabSocketUrl } from '@sadel/shared';
 import { AlertTriangle, ArrowLeft, Banknote, Bell, BellOff, Bike, Check, ChevronLeft, ChevronRight, ChevronUp, CircleCheck, CirclePlus, ClipboardCheck, Clock, Copy, DollarSign, Gift, Home, Landmark, Loader2, Mail, Map, MapPin, MessageCircle, Minus, Package, Plus, RefreshCw, Search, ShoppingBag, ShoppingCart, Store, Tag, Ticket, Trash2, Upload, User, X, ZoomIn, Flame, LayoutGrid, Drumstick, Sandwich, CupSoda, Utensils, MoreHorizontal, ReceiptText } from 'lucide-react';
-import officialWordmark from '../../../assets/wingslab-wordmark.png';
+import officialWordmark from '../../../assets/wingslab-wordmark-red.png';
+import officialWhiteWordmark from '../../../assets/wingslab-wordmark.png';
 import { Hamburger } from 'lucide-react';
 import { CategoryIcon } from '../../../components/CategoryIcon';
 import { CustomerNavigation } from '../../../components/CustomerNavigation';
@@ -17,11 +18,10 @@ import { AuthModal } from '../../../components/AuthModal';
 import { CompactActiveOrderBanner, computeDelayState, formatEstimatedArrivalMinutes, formatOverdueMinutes } from '../../../components/CompactActiveOrderBanner';
 import { buildWeekSchedule, formatHour12, formatNextOpen, getCurrentShiftClose } from '../../../lib/operatingHours';
 import { completeOrderIntent, resolveOrderIntentKey } from '../../../lib/orderIntentKey';
-import { buildOrderAcceptedNotice, buildOrderReadyNotice } from '../../../lib/orderStatusNotices';
+import { buildOrderAcceptedNotice } from '../../../lib/orderStatusNotices';
 import { ensureGoogleMapsScript, getGoogleMaps, isGoogleMapsUnavailable } from '../../../lib/googleMaps';
 import RatingModal from '../../../components/RatingModal';
 import { useForegroundPolling } from '../../../hooks/useForegroundPolling';
-import { SaDelLoader } from '../../../components/SaDelLoader';
 import CartDrawer from '../../../components/CartDrawer';
 import ImageZoomLightbox from '../../../components/ImageZoomLightbox';
 import { createPlacesSource, fetchSelectedPlaceFields } from '../../../lib/places';
@@ -824,10 +824,9 @@ export default function RestaurantPage({
 
   const [isRatingModalOpen, setIsRatingModalOpen] = useState(false);
   const [orderToRate, setOrderToRate] = useState<string | null>(null);
-  const [ratingBusinessType, setRatingBusinessType] = useState<string | null>(null);
   const [ratingIsPickup, setRatingIsPickup] = useState(false);
   const [restaurantRating, setRestaurantRating] = useState(0);
-  const [driverRatingVal, setDriverRatingVal] = useState(0);
+  const [ratingComment, setRatingComment] = useState('');
   const [isSubmittingRating, setIsSubmittingRating] = useState(false);
   const [pullDistance, setPullDistance] = useState(0);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -1284,7 +1283,7 @@ export default function RestaurantPage({
             showTransientNotice({
               key: `restaurant-recent-order-rejected:${recentCreatedOrder.id}`,
               title: 'Pedido rechazado',
-              description: 'El restaurante rechazó tu pedido. No te preocupes, no se realizó ningún cobro.',
+              description: 'El restaurante no pudo aceptar tu pedido.',
               tone: 'danger',
               requiresAcknowledgement: true,
               orderId: recentCreatedOrder.id,
@@ -1331,7 +1330,6 @@ export default function RestaurantPage({
         );
         if (unratedOrder) {
           setOrderToRate(unratedOrder.id);
-          setRatingBusinessType((unratedOrder as any).restaurant?.businessType || null);
           setRatingIsPickup(normalizeOrderStatusValue(unratedOrder.status) === 'COMPLETED');
           setIsRatingModalOpen(true);
         }
@@ -1517,7 +1515,7 @@ export default function RestaurantPage({
           const paymentMethod = matchingOrder?.paymentMethod;
           const orderReference = matchingOrder?.orderReference || recentCreatedOrderRef.current?.orderReference;
 
-          const description = 'El restaurante rechazó tu pedido. No te preocupes, no se realizó ningún cobro.';
+          const description = 'El restaurante no pudo aceptar tu pedido.';
 
           setTransientNotice({
             id: `socket-rejected:${payload.orderId}`,
@@ -1550,8 +1548,6 @@ export default function RestaurantPage({
         if (eventName === 'order:delivered' && payload.orderId) {
           if (localStorage.getItem(`sadel_dismissed_rating_${payload.orderId}`)) return;
           setOrderToRate(payload.orderId);
-          const order = activeOrderDetailsMapRef.current[payload.orderId];
-          setRatingBusinessType(order?.restaurant?.businessType || null);
           setRatingIsPickup(false);
           setIsRatingModalOpen(true);
         }
@@ -1562,7 +1558,6 @@ export default function RestaurantPage({
           if (isPickup) {
             if (localStorage.getItem(`sadel_dismissed_rating_${payload.orderId}`)) return;
             setOrderToRate(payload.orderId);
-            setRatingBusinessType(existing?.restaurant?.businessType || null);
             setRatingIsPickup(true);
             setIsRatingModalOpen(true);
           }
@@ -1571,8 +1566,6 @@ export default function RestaurantPage({
         if (eventName === 'order:completed' && payload.orderId) {
           if (localStorage.getItem(`sadel_dismissed_rating_${payload.orderId}`)) return;
           setOrderToRate(payload.orderId);
-          const order = activeOrderDetailsMapRef.current[payload.orderId];
-          setRatingBusinessType(order?.restaurant?.businessType || null);
           setRatingIsPickup(true);
           setIsRatingModalOpen(true);
         }
@@ -1680,32 +1673,9 @@ export default function RestaurantPage({
           }).then((res) => {
             if (res.success && res.data.fulfillmentType === 'PICKUP') {
               setPickupReadyOrder(res.data);
-            } else {
-              // Delivery (o detalle no disponible): aviso visible con sonido,
-              // igual que en el inicio. Antes esta rama quedaba en silencio.
-              const readyNotice = buildOrderReadyNotice(
-                payload.orderId,
-                res.success ? res.data.orderReference : undefined
-              );
-              setTransientNotice({
-                id: readyNotice.key,
-                title: readyNotice.title,
-                description: readyNotice.description,
-                tone: readyNotice.tone,
-                orderId: readyNotice.orderId,
-                orderReference: readyNotice.orderReference,
-              });
             }
           }).catch(() => {
-            const readyNotice = buildOrderReadyNotice(payload.orderId);
-            setTransientNotice({
-              id: readyNotice.key,
-              title: readyNotice.title,
-              description: readyNotice.description,
-              tone: readyNotice.tone,
-              orderId: readyNotice.orderId,
-              orderReference: readyNotice.orderReference,
-            });
+            // La notificación del pedido listo se envía independientemente del detalle.
           });
         }
 
@@ -2086,7 +2056,7 @@ export default function RestaurantPage({
       showTransientNotice({
         key: `restaurant-order-rejected:${activeOrder.id}:${normalizedStatus}`,
         title: 'Pedido rechazado',
-        description: 'El restaurante rechazó tu pedido. No te preocupes, no se realizó ningún cobro.',
+        description: 'El restaurante no pudo aceptar tu pedido.',
         tone: 'danger',
         requiresAcknowledgement: true,
         orderId: activeOrder.id,
@@ -2643,7 +2613,8 @@ function ProductImage({
       return;
     }
 
-    const stickyHeight = document.querySelector('.wl-header')?.getBoundingClientRect().height ?? 68;
+    const stickyHeight = (document.querySelector('.wl-header')?.getBoundingClientRect().height ?? 68)
+      + (document.querySelector('.wl-menu-search-sticky')?.getBoundingClientRect().height ?? 0);
 
     const targetPosition = target.getBoundingClientRect().top + window.scrollY - stickyHeight;
 
@@ -3445,9 +3416,10 @@ function ProductImage({
       ) : null}
       <header suppressHydrationWarning className={`wl-header wl-official-header sticky top-0 z-40 pt-[env(safe-area-inset-top)] ${headerIsPinned ? 'wl-header-pinned' : ''}`}>
         <div className="wl-official-header-inner">
-          <button type="button" className="wl-header-status" aria-label={`${restaurant ? (restaurant.isOpen ? 'Restaurante abierto' : 'Restaurante cerrado') : 'Consultando estado del restaurante'}. Ver información del restaurante`} aria-haspopup="dialog" onClick={() => window.dispatchEvent(new Event('wingslab:restaurant-info'))}><span className={`wl-header-status-dot ${restaurant ? (restaurant.isOpen ? 'is-open' : 'is-closed') : ''}`} aria-hidden="true" /><span>{restaurant ? (restaurant.isOpen ? 'Abierto' : 'Cerrado') : 'Consultando'}</span><ChevronRight className="wl-header-status-arrow" aria-hidden="true" /></button>
+          <span aria-hidden="true" />
           <button type="button" onClick={goHome} className="wl-official-logo" aria-label="WingsLab, ir al inicio">
-            <img src={officialWordmark.src} width={783} height={229} alt="WingsLab" fetchPriority="high" />
+            <img className="wl-logo-on-light" src={officialWordmark.src} width={783} height={229} alt="" fetchPriority="high" />
+            <img className="wl-logo-on-dark" src={officialWhiteWordmark.src} width={783} height={229} alt="" />
           </button>
           <div className="wl-header-actions-right">
             {!sessionUser && (
@@ -3461,7 +3433,7 @@ function ProductImage({
               </button>
             )}
             <button ref={cartButtonRef} type="button" onClick={() => setIsCartOpen(true)} className="wl-header-cart wl-official-cart" aria-label={`Abrir carrito de compra, ${displayCartCount} ${displayCartCount === 1 ? 'producto' : 'productos'}`}>
-              <CartIcon strokeWidth={1.8} /><span className="wl-cart-count">{displayCartCount}</span>
+              <CartIcon strokeWidth={1.8} /><span className="wl-cart-count" aria-hidden="true">{displayCartCount > 99 ? '99+' : displayCartCount}</span>
             </button>
           </div>
         </div>
@@ -3984,16 +3956,14 @@ function ProductImage({
         {isRatingModalOpen && (() => {
           const ratingOrder = orderToRate ? activeOrderDetailsMap[orderToRate] || null : null;
           const isPickupRating = ratingOrder ? (ratingOrder as any)?.fulfillmentType === 'PICKUP' : ratingIsPickup;
-          const bizType = ratingOrder?.restaurant?.businessType || ratingBusinessType;
           return (
             <RatingModal
               open
               isPickup={isPickupRating}
-              bizType={bizType}
               restaurantRating={restaurantRating}
               onRestaurantRatingChange={setRestaurantRating}
-              driverRating={driverRatingVal}
-              onDriverRatingChange={setDriverRatingVal}
+              comment={ratingComment}
+              onCommentChange={setRatingComment}
               submitting={isSubmittingRating}
               onSkip={() => {
                 if (orderToRate) {
@@ -4009,7 +3979,7 @@ function ProductImage({
                 }
                 setIsRatingModalOpen(false);
                 setRestaurantRating(0);
-                setDriverRatingVal(0);
+                setRatingComment('');
                 setRatingIsPickup(false);
                 setOrderToRate(null);
               }}
@@ -4023,7 +3993,7 @@ function ProductImage({
                     orderId: orderToRate,
                     payload: {
                       rating: restaurantRating,
-                      ...(isPickupRating ? {} : { driverRating: driverRatingVal || undefined }),
+                      comment: ratingComment.trim() || undefined,
                     },
                     getUser: () => sessionUser,
                     onTokenRefreshed: (newToken) => setToken(newToken),
@@ -4032,6 +4002,7 @@ function ProductImage({
                     showTransientNotice({ key: 'rating-submitted', title: '¡Gracias!', description: 'Tu calificación nos ayuda a mejorar.', tone: 'success' });
                   } else {
                     showTransientNotice({ key: 'rating-error', title: 'Error', description: result.message || 'No se pudo guardar tu calificación.', tone: 'danger' });
+                    return;
                   }
                   if (orderToRate) {
                     setActiveOrderListItems((prev) => prev.filter((o) => o.id !== orderToRate));
@@ -4043,7 +4014,7 @@ function ProductImage({
                   }
                   setIsRatingModalOpen(false);
                   setRestaurantRating(0);
-                  setDriverRatingVal(0);
+                  setRatingComment('');
                   setRatingIsPickup(false);
                   setOrderToRate(null);
                 } finally {
@@ -4719,24 +4690,25 @@ function ProductImage({
                   )}
 
                   {/* ── PASO 2: INSTRUCCIONES (colapsable, opcional) ── */}
-                  <div className="rounded-[22px] border border-black/[0.04] dark:border-white/10 bg-white dark:bg-neutral-900 p-4 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
+                  <div className="rounded-[22px] border border-red-200/80 bg-white p-4 shadow-sm dark:border-red-900/60 dark:bg-neutral-900">
                     <button
                       type="button"
                       onClick={() => setShowInstructions((v) => !v)}
                       aria-expanded={showInstructions}
-                      className="-mx-2 mb-1 flex w-full items-center justify-between gap-3 rounded-xl px-2 py-1 text-left transition-colors hover:bg-neutral-50 active:scale-[0.99] dark:hover:bg-zinc-800/50"
+                      aria-controls="checkout-instructions"
+                      className="flex min-h-12 w-full items-center justify-between gap-3 rounded-xl text-left transition-colors active:scale-[0.99] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-red-600"
                     >
                       <div className="flex items-center gap-2.5">
-                        <span className="flex h-6 w-6 items-center justify-center rounded-full bg-neutral-200 text-[11px] font-black text-neutral-500 dark:bg-zinc-700 dark:text-zinc-300">2</span>
+                        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-red-50 text-sm font-black text-red-700 dark:bg-red-950/50 dark:text-red-300">2</span>
                         <div>
-                          <h3 className="text-[13px] font-bold tracking-tight text-neutral-900 dark:text-neutral-100">Instrucciones</h3>
+                          <h3 className="text-sm font-bold tracking-tight text-neutral-900 dark:text-neutral-100">Instrucciones</h3>
                           <p className="text-[11px] font-medium text-neutral-500 dark:text-zinc-400">Opcional · para la tienda o el repartidor</p>
                         </div>
                       </div>
-                      <ChevronUp className={`h-4 w-4 shrink-0 text-neutral-400 transition-transform duration-200 ${showInstructions ? '' : 'rotate-180'}`} strokeWidth={2} />
+                      <span className="flex shrink-0 items-center gap-1 text-xs font-bold text-red-700 dark:text-red-300">{showInstructions ? 'Cerrar' : 'Agregar'}<ChevronUp aria-hidden="true" className={`h-4 w-4 transition-transform duration-200 ${showInstructions ? '' : 'rotate-180'}`} strokeWidth={2.5} /></span>
                     </button>
                     {showInstructions && (
-                    <div className="mt-4 space-y-3.5">
+                    <div id="checkout-instructions" className="mt-4 space-y-3.5">
                       <Field 
                         label="Instrucciones para la tienda" 
                         value={checkoutForm.storeNotes} 
@@ -4764,19 +4736,20 @@ function ProductImage({
                     </section>
                   )}
                   {/* ── PASO 2.5: CUPÓN (opcional, colapsable) ── */}
-                  <div className="rounded-[22px] border border-black/[0.04] dark:border-white/10 bg-white dark:bg-neutral-900 p-4 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
+                  <div className="rounded-[22px] border border-red-200/80 bg-white p-4 shadow-sm dark:border-red-900/60 dark:bg-neutral-900">
                     <button
                       type="button"
                       onClick={() => setIsCouponOpen((v) => !v)}
-                      aria-expanded={isCouponOpen || promoCodeState === 'valid'}
-                      className="-mx-2 mb-1 flex w-full items-center justify-between gap-3 rounded-xl px-2 py-1 text-left transition-colors hover:bg-neutral-50 active:scale-[0.99] dark:hover:bg-zinc-800/50"
+                      aria-expanded={isCouponOpen}
+                      aria-controls="checkout-coupon"
+                      className="flex min-h-12 w-full items-center justify-between gap-3 rounded-xl text-left transition-colors active:scale-[0.99] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-red-600"
                     >
                       <div className="flex items-center gap-2.5">
-                        <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-neutral-200 text-neutral-500 dark:bg-zinc-700 dark:text-zinc-300">
-                          <Ticket className="h-3.5 w-3.5" strokeWidth={1.8} />
+                        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-red-50 text-red-700 dark:bg-red-950/50 dark:text-red-300">
+                          <Ticket className="h-4 w-4" strokeWidth={1.8} />
                         </span>
                         <div>
-                          <h3 className="text-[13px] font-bold tracking-tight text-neutral-900 dark:text-neutral-100">Cupón de descuento</h3>
+                          <h3 className="text-sm font-bold tracking-tight text-neutral-900 dark:text-neutral-100">Cupón de descuento</h3>
                           <p className="text-[11px] font-medium text-neutral-500 dark:text-zinc-400">¿Tienes un código? Aplícalo aquí</p>
                         </div>
                       </div>
@@ -4784,12 +4757,12 @@ function ProductImage({
                         {promoCodeState === 'valid' && promoCodeInfo && !isCouponOpen && (
                           <span className="text-[11px] font-black text-emerald-600">-{formatCurrency(promoCodeInfo.discount)}</span>
                         )}
-                        <ChevronUp className={`h-4 w-4 shrink-0 text-neutral-400 transition-transform duration-200 ${isCouponOpen || promoCodeState === 'valid' ? '' : 'rotate-180'}`} strokeWidth={2} />
+                        <span className="flex items-center gap-1 text-xs font-bold text-red-700 dark:text-red-300">{isCouponOpen ? 'Cerrar' : promoCodeState === 'valid' ? 'Ver' : 'Agregar'}<ChevronUp aria-hidden="true" className={`h-4 w-4 transition-transform duration-200 ${isCouponOpen ? '' : 'rotate-180'}`} strokeWidth={2.5} /></span>
                       </div>
                     </button>
 
-                    {(isCouponOpen || promoCodeState === 'valid') && (
-                    <>
+                    {isCouponOpen && (
+                    <div id="checkout-coupon" className="mt-4">
                     {promoCodeState === 'valid' && promoCodeInfo ? (
                       <div className="space-y-3.5">
                         <div className="overflow-hidden rounded-2xl border border-red-200/70 bg-gradient-to-br from-red-50/90 via-white to-red-50/60">
@@ -4869,7 +4842,7 @@ function ProductImage({
                         </button>
                       </div>
                     )}
-                    </>
+                    </div>
                     )}
                   </div>
                   </div>
@@ -5924,40 +5897,39 @@ function ProductImage({
                 </div>
               )}
 
-              {featuredProducts.length > 0 && <section id="wl-featured" className="wl-featured" aria-labelledby="wl-featured-title">
+              {!productSearchQuery.trim() && featuredProducts.length > 0 && <section id="wl-featured" className="wl-featured" aria-labelledby="wl-featured-title">
                 <div className="wl-section-heading"><h2 id="wl-featured-title"><Flame aria-hidden="true" />Destacados</h2><button type="button" onClick={() => setMenuTab('promos')}>Ver todos <ChevronRight aria-hidden="true" /></button></div>
-                <div className="wl-featured-track">{featuredProducts.map(product => <button key={product.id} type="button" className="wl-featured-card" disabled={!restaurant.isOpen || !getProductAvailability(product).available} aria-label={`Agregar ${product.name} desde destacados`} onClick={() => addToCart(product)}>
+                <div className="wl-featured-track">{featuredProducts.map(product => <button key={product.id} type="button" className="wl-featured-card" disabled={!getProductAvailability(product).available} aria-label={`Agregar ${product.name} desde destacados`} onClick={() => addToCart(product)}>
                   {product.image && <img src={product.image} alt="" loading="lazy" />}<span><strong>{product.name}</strong><b>{formatCurrency(product.discountPrice ?? product.price)}</b></span>
                 </button>)}</div>
               </section>}
-              <div data-sticky-header className="wl-menu-nav wl-reference-categories">
-                <div className="px-0 py-3">
+              <div data-sticky-header className="wl-menu-search-sticky">
+                <div className="py-3">
                   <div className="relative w-full max-w-2xl mx-auto lg:mx-0">
-                    <Search className="pointer-events-none absolute left-4 top-1/2 h-[18px] w-[18px] -translate-y-1/2 text-neutral-400 dark:text-zinc-500" strokeWidth={1.8} />
+                    <span className="pointer-events-none absolute left-2 top-1/2 grid h-10 w-10 -translate-y-1/2 place-items-center rounded-full bg-red-50 text-red-700 dark:bg-red-950/50 dark:text-red-300"><Search aria-hidden="true" className="h-[18px] w-[18px]" strokeWidth={2} /></span>
                     <input
                       type="text"
                       placeholder="Busca tu favorito"
                       aria-label="Buscar productos en el menú"
                       value={productSearchQuery}
                       onChange={(e) => setProductSearchQuery(e.target.value)}
-                      className={`w-full rounded-full border bg-white pl-11 pr-11 py-3 text-base text-neutral-900 outline-none transition-all duration-200 placeholder:text-neutral-400 focus:border-black/25 focus:shadow-[0_4px_16px_rgba(0,0,0,0.07)] active:border-black/15 dark:bg-neutral-900 dark:text-zinc-100 dark:placeholder:text-zinc-500 dark:focus:border-zinc-600 dark:focus:shadow-none ${
-                        productSearchQuery
-                          ? 'border-black/20 dark:border-zinc-700'
-                          : 'border-black/[0.09] dark:border-zinc-800'
-                      }`}
+                      className="min-h-14 w-full rounded-full border border-neutral-200 bg-white py-3 pl-14 pr-12 text-base font-medium text-neutral-950 shadow-[0_4px_18px_rgba(23,23,23,0.05)] outline-none transition-colors placeholder:font-normal placeholder:text-neutral-500 focus:border-red-500 focus:ring-2 focus:ring-red-100 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:placeholder:text-zinc-400 dark:focus:border-red-400 dark:focus:ring-red-950"
                     />
                     {productSearchQuery && (
                       <button
                         type="button"
                         onClick={() => setProductSearchQuery('')}
-                        className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 text-neutral-400 hover:text-neutral-700 transition-colors rounded-full hover:bg-neutral-100 active:scale-90 dark:text-zinc-500 dark:hover:text-zinc-200 dark:hover:bg-zinc-800"
-                        aria-label="Limpiar búsqueda"
+                        className="absolute right-1 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full text-red-700 transition-colors hover:text-red-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-red-600 dark:text-red-300 dark:hover:text-red-100"
+                        aria-label="Cerrar y limpiar búsqueda"
+                        title="Cerrar búsqueda"
                       >
-                        <X className="h-4 w-4" />
+                        <span className="flex h-8 w-8 items-center justify-center rounded-full bg-red-100 dark:bg-red-950/70"><X aria-hidden="true" className="h-4 w-4" strokeWidth={2.5} /></span>
                       </button>
                     )}
                   </div>
                 </div>
+              </div>
+              <div className="wl-menu-nav wl-reference-categories">
                 {!productSearchQuery.trim() && menuTab === 'home' && (
                 <div className="pb-2.5 lg:pb-3">
                   <div className="wl-section-heading"><h2><LayoutGrid aria-hidden="true" />Categorías</h2></div>
@@ -6021,13 +5993,14 @@ function ProductImage({
                     </button>
                   </div>
                 ) : (
-                  <div className="wl-products-grid">
+                  <div className="divide-y divide-neutral-200 dark:divide-zinc-800" aria-label="Resultados de búsqueda">
                     {searchResults.map((product) => {
                       const quantity = getCartQuantity(product.id);
+                      const availability = getProductAvailability(product);
                       return (
-                        <article id={product.id} key={product.id} data-wl-product className="overflow-hidden rounded-[24px] border border-black/[0.04] bg-[var(--menu-card)] transition-all duration-300 shadow-[0_2px_12px_rgba(0,0,0,0.02)] hover:shadow-[0_8px_24px_rgba(0,0,0,0.06)] dark:border-zinc-800 dark:bg-[var(--menu-card-dark)]">
-                          <div className="flex gap-4 p-4">
-                            <div className="relative h-24 w-24 shrink-0 overflow-hidden rounded-2xl sm:h-28 sm:w-28">
+                        <article id={product.id} key={product.id} data-wl-product className="py-4">
+                          <div className="flex gap-3 sm:gap-4">
+                            <div className="relative h-20 w-20 shrink-0 overflow-hidden rounded-2xl sm:h-24 sm:w-24">
                               {product.image ? (
                                 <ProductImage product={product} />
                               ) : (
@@ -6050,7 +6023,7 @@ function ProductImage({
                                 )}
                                 {quantity > 0 ? (
                                   <div className="flex items-center gap-0.5 rounded-full border border-black/[0.06] bg-neutral-50 p-0.5 dark:border-zinc-700 dark:bg-neutral-800">
-                                    <button type="button" onClick={() => { if (product.optionGroups?.length) { decreaseQuantityForProduct(product.id); } else { updateCartItem(product.id, { quantity: quantity - 1 }); } }} className="flex h-7 w-7 items-center justify-center rounded-full text-neutral-500 transition-all hover:bg-white active:scale-90 dark:text-zinc-300 dark:hover:bg-zinc-700">
+                                    <button type="button" aria-label={`Quitar una unidad de ${product.name}`} onClick={() => { if (product.optionGroups?.length) { decreaseQuantityForProduct(product.id); } else { updateCartItem(product.id, { quantity: quantity - 1 }); } }} className="flex h-11 w-11 items-center justify-center rounded-full text-neutral-500 transition-all hover:bg-white active:scale-90 dark:text-zinc-300 dark:hover:bg-zinc-700">
                                       {quantity === 1 ? (
                                         <Trash2 className="h-3 w-3 text-red-500" />
                                       ) : (
@@ -6058,13 +6031,13 @@ function ProductImage({
                                       )}
                                     </button>
                                     <span className="flex h-7 w-7 items-center justify-center text-xs font-bold text-neutral-900 dark:text-white">{quantity}</span>
-                                    <button type="button" onClick={() => addToCart(product)} className="flex h-7 w-7 items-center justify-center rounded-full text-neutral-500 transition-all hover:bg-white active:scale-90 dark:text-zinc-300 dark:hover:bg-zinc-700">
+                                    <button type="button" aria-label={`Agregar una unidad de ${product.name}`} onClick={() => addToCart(product)} disabled={!availability.available || (availability.tracked && quantity >= availability.maxQty)} className="flex h-11 w-11 items-center justify-center rounded-full text-neutral-500 transition-all hover:bg-white active:scale-90 disabled:opacity-40 dark:text-zinc-300 dark:hover:bg-zinc-700">
                                       <Plus className="h-3 w-3" strokeWidth={2.5} />
                                     </button>
                                   </div>
                                 ) : (
-                                  <button type="button" onClick={() => addToCart(product)} disabled={!restaurant?.isOpen} className="rounded-full bg-neutral-100 px-4 py-2 text-sm font-bold text-neutral-900 transition hover:bg-neutral-200 disabled:cursor-not-allowed disabled:bg-neutral-50 disabled:text-neutral-400 dark:bg-zinc-100 dark:text-neutral-950 dark:hover:bg-white dark:disabled:bg-zinc-800 dark:disabled:text-zinc-600">
-                                    Agregar
+                                  <button type="button" aria-label={`Agregar ${product.name} al carrito`} onClick={() => addToCart(product)} disabled={!availability.available} className="inline-flex min-h-11 items-center gap-1.5 rounded-full bg-red-700 px-4 text-sm font-bold text-white transition hover:bg-red-800 disabled:cursor-not-allowed disabled:bg-neutral-200 disabled:text-neutral-500 dark:disabled:bg-zinc-800 dark:disabled:text-zinc-400">
+                                    <CartIcon aria-hidden="true" className="h-4 w-4" />Agregar
                                   </button>
                                 )}
                               </div>
@@ -6166,7 +6139,7 @@ function ProductImage({
                                     </button>
                                   </div>
                                 ) : (
-                                  <button type="button" onClick={() => addToCart(product)} disabled={!restaurant.isOpen || !avail.available} className="w-full rounded-lg bg-neutral-900 py-1.5 text-[10px] font-bold text-white transition hover:bg-neutral-800 disabled:bg-neutral-200 disabled:text-neutral-400 dark:bg-white dark:text-neutral-950 dark:hover:bg-zinc-200 dark:disabled:bg-neutral-800 dark:disabled:text-zinc-600">
+                                  <button type="button" onClick={() => addToCart(product)} disabled={!avail.available} className="w-full rounded-lg bg-neutral-900 py-1.5 text-[10px] font-bold text-white transition hover:bg-neutral-800 disabled:bg-neutral-200 disabled:text-neutral-400 dark:bg-white dark:text-neutral-950 dark:hover:bg-zinc-200 dark:disabled:bg-neutral-800 dark:disabled:text-zinc-600">
                                     Agregar
                                   </button>
                                 )}
@@ -6249,7 +6222,7 @@ function ProductImage({
                                       </button>
                                     </div>
                                   ) : (
-                                    <button type="button" onClick={() => addToCart(product)} disabled={!restaurant.isOpen || !avail.available} className="w-full rounded-xl bg-neutral-900 py-2.5 text-[11px] font-bold text-white transition hover:bg-neutral-800 disabled:bg-neutral-200 disabled:text-neutral-400 dark:bg-white dark:text-neutral-950 dark:hover:bg-zinc-200 dark:disabled:bg-neutral-800 dark:disabled:text-zinc-600">
+                                    <button type="button" onClick={() => addToCart(product)} disabled={!avail.available} className="w-full rounded-xl bg-neutral-900 py-2.5 text-[11px] font-bold text-white transition hover:bg-neutral-800 disabled:bg-neutral-200 disabled:text-neutral-400 dark:bg-white dark:text-neutral-950 dark:hover:bg-zinc-200 dark:disabled:bg-neutral-800 dark:disabled:text-zinc-600">
                                       Agregar
                                     </button>
                                   )}
@@ -6333,7 +6306,7 @@ function ProductImage({
                                       </button>
                                     </div>
                                   ) : (
-                                    <button type="button" onClick={() => addToCart(product)} disabled={!restaurant.isOpen || !avail.available} className="w-full rounded-xl bg-neutral-900 py-2.5 text-[11px] font-bold text-white transition hover:bg-neutral-800 disabled:bg-neutral-200 disabled:text-neutral-400 dark:bg-white dark:text-neutral-950 dark:hover:bg-zinc-200 dark:disabled:bg-neutral-800 dark:disabled:text-zinc-600">
+                                    <button type="button" onClick={() => addToCart(product)} disabled={!avail.available} className="w-full rounded-xl bg-neutral-900 py-2.5 text-[11px] font-bold text-white transition hover:bg-neutral-800 disabled:bg-neutral-200 disabled:text-neutral-400 dark:bg-white dark:text-neutral-950 dark:hover:bg-zinc-200 dark:disabled:bg-neutral-800 dark:disabled:text-zinc-600">
                                       Agregar
                                     </button>
                                   )}
@@ -6448,7 +6421,8 @@ function ProductImage({
                                       </button>
                                     </div>
                                   ) : (
-                                    <button type="button" onClick={() => addToCart(product)} disabled={!restaurant.isOpen || !avail.available} className="wl-product-add rounded-xl bg-neutral-900 px-5 py-2.5 text-[11px] font-bold text-white transition hover:bg-neutral-800 disabled:bg-neutral-200 disabled:text-neutral-400 dark:bg-white dark:text-neutral-950 dark:hover:bg-zinc-200 dark:disabled:bg-neutral-800 dark:disabled:text-zinc-600" aria-label={`Agregar ${product.name} al carrito`}>
+                                    <button type="button" onClick={() => addToCart(product)} disabled={!avail.available} className="wl-product-add rounded-xl bg-neutral-900 px-5 py-2.5 text-[11px] font-bold text-white transition hover:bg-neutral-800 disabled:bg-neutral-200 disabled:text-neutral-400 dark:bg-white dark:text-neutral-950 dark:hover:bg-zinc-200 dark:disabled:bg-neutral-800 dark:disabled:text-zinc-600" aria-label={`Agregar ${product.name} al carrito`}>
+                                      <CartIcon aria-hidden="true" strokeWidth={2} />
                                       <span>Agregar</span>
                                     </button>
                                   )}
@@ -6520,8 +6494,8 @@ function ProductImage({
 
       {/* Modal de Detalle de Pedido */}
       {isDetailModalOpen && selectedOrderId && activeOrderDetailsMap[selectedOrderId] && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-neutral-950/60 backdrop-blur-sm px-2 sm:px-4 pt-4 pb-2 sm:py-6">
-          <div role="dialog" aria-modal="true" aria-labelledby="order-detail-title" className="relative w-full max-w-[480px] rounded-[28px] bg-[#faf9f8] shadow-[0_30px_100px_rgba(0,0,0,0.25)] h-fit max-h-[90dvh] overflow-y-auto no-scrollbar">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-neutral-950/60 px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-[max(1rem,env(safe-area-inset-top))] backdrop-blur-sm sm:py-6">
+          <div role="dialog" aria-modal="true" aria-labelledby="order-detail-title" className="relative h-fit max-h-full w-full max-w-[480px] overflow-y-auto overscroll-contain rounded-[28px] bg-[#faf9f8] shadow-[0_30px_100px_rgba(0,0,0,0.25)] no-scrollbar">
             {/* Encabezado Fijo con Botón de Cierre */}
             <div className="sticky top-0 z-10 flex items-center justify-between bg-[#faf9f8]/95 backdrop-blur-md px-5 sm:px-6 py-4 border-b border-black/5">
               <div><p className="text-[10px] font-bold uppercase tracking-[0.16em] text-red-600">Tu pedido</p><h3 id="order-detail-title" className="text-lg font-bold tracking-tight text-neutral-950">Detalles del pedido</h3></div>
@@ -6938,7 +6912,7 @@ function ProductImage({
             <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-neutral-50/50">
               {loadingChat ? (
                 <div className="h-full flex items-center justify-center text-neutral-500">
-                  <SaDelLoader size="sm" label="Cargando chat..." />
+                  <p role="status" className="py-6 text-center text-sm text-neutral-500 dark:text-zinc-400">Cargando chat…</p>
                 </div>
               ) : chatMessages.length === 0 ? (
                 <div className="h-full flex flex-col items-center justify-center text-center p-6 text-neutral-400">
@@ -7397,19 +7371,13 @@ function TransientNoticeBanner({
 }) {
   const styles = {
     success: {
-      iconCircle: 'bg-emerald-50 text-emerald-600 border-emerald-200',
-      badge: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-      label: 'Información',
+      iconCircle: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300',
     },
     danger: {
-      iconCircle: 'bg-rose-50 text-rose-600 border-rose-200',
-      badge: 'bg-rose-50 text-rose-700 border-rose-200',
-      label: 'Aviso',
+      iconCircle: 'bg-red-50 text-red-700 dark:bg-red-950/50 dark:text-red-300',
     },
     info: {
-      iconCircle: 'bg-sky-50 text-[var(--accent)] border-sky-200',
-      badge: 'bg-sky-50 text-[var(--accent-strong)] border-sky-200',
-      label: 'Información',
+      iconCircle: 'bg-neutral-100 text-neutral-700 dark:bg-zinc-800 dark:text-zinc-200',
     },
   } as const;
 
@@ -7418,14 +7386,15 @@ function TransientNoticeBanner({
   const isTransferRefund = notice.tone === 'danger' && notice.paymentMethod === 'TRANSFER' && notice.orderId;
 
   return (
-    <div className="fixed inset-0 z-[90] flex items-center justify-center px-4">
-      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={notice.dismissible !== false ? onClose : undefined} />
-      <div className="relative w-full max-w-md rounded-[32px] bg-white px-6 py-8 text-center shadow-[0_30px_100px_rgba(0,0,0,0.2)] border border-black/5 animate-in zoom-in-95 fade-in slide-in-from-bottom-4 duration-300">
+    <div className="fixed inset-0 z-[90] flex items-center justify-center px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-[max(1rem,env(safe-area-inset-top))]" role="dialog" aria-modal="true" aria-labelledby="transient-notice-title" aria-describedby="transient-notice-description">
+      <div aria-hidden="true" className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={notice.dismissible !== false ? onClose : undefined} />
+      <div className="relative max-h-[calc(100dvh-2rem)] w-full max-w-sm overflow-y-auto rounded-[28px] border border-neutral-200 bg-white px-5 pb-5 pt-7 text-center shadow-2xl dark:border-zinc-800 dark:bg-zinc-900 sm:p-7">
         {notice.dismissible !== false && (
           <button
             type="button"
             onClick={onClose}
-            className="absolute right-4 top-4 flex h-8 w-8 items-center justify-center rounded-full bg-neutral-100 text-neutral-500 transition hover:bg-neutral-200 hover:text-neutral-800 active:scale-95"
+            aria-label="Cerrar aviso"
+            className="absolute right-3 top-3 flex h-11 w-11 items-center justify-center rounded-full text-neutral-500 transition hover:bg-neutral-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-red-600 dark:text-zinc-400 dark:hover:bg-zinc-800"
           >
             <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
               <path d="M18 6 6 18" />
@@ -7434,8 +7403,8 @@ function TransientNoticeBanner({
           </button>
         )}
 
-        <div className={`mx-auto flex h-14 w-14 items-center justify-center rounded-full border ${s.iconCircle}`}>
-          <svg className="h-7 w-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <div className={`mx-auto flex h-16 w-16 items-center justify-center rounded-2xl ${s.iconCircle}`}>
+          <svg aria-hidden="true" className="h-8 w-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             {notice.tone === 'success' ? (
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
             ) : notice.tone === 'danger' ? (
@@ -7446,28 +7415,24 @@ function TransientNoticeBanner({
           </svg>
         </div>
 
-        <span className={`mt-4 inline-flex rounded-full border px-3 py-1 text-[10px] font-bold uppercase tracking-widest ${s.badge}`}>
-          {s.label}
-        </span>
+        <h2 id="transient-notice-title" className="mt-5 text-xl font-extrabold tracking-tight text-neutral-950 dark:text-white">{notice.title}</h2>
 
-        <p className="mt-4 text-xl font-bold tracking-tight text-neutral-900">{notice.title}</p>
-
-        <p className="mt-2 text-sm text-neutral-500 leading-relaxed">{notice.description}</p>
+        <p id="transient-notice-description" className="mx-auto mt-2 max-w-xs text-sm leading-6 text-neutral-600 dark:text-zinc-300">{notice.description}</p>
 
         {isTransferRefund ? (
           <div className="mt-6 w-full">
-            <div className="rounded-2xl bg-neutral-50 p-4 border border-neutral-200/60 text-left">
-              <p className="text-sm font-semibold text-neutral-800 leading-relaxed">
+            <div className="rounded-2xl border border-neutral-200 bg-neutral-50 p-4 text-left dark:border-zinc-700 dark:bg-zinc-800">
+              <p className="text-sm font-semibold leading-relaxed text-neutral-800 dark:text-zinc-100">
                 Tu pago fue por transferencia. Serás contactado para coordinar la devolución.
               </p>
             </div>
-            <p className="mt-3 text-xs text-neutral-500 leading-relaxed">
+            <p className="mt-3 text-xs leading-relaxed text-neutral-500 dark:text-zinc-400">
               Nuestro equipo de soporte revisará tu pedido y se pondrá en contacto contigo y con el restaurante para procesar el reembolso.
             </p>
             <button
               type="button"
               onClick={onClose}
-              className="mt-5 w-full rounded-full bg-neutral-950 px-6 py-3.5 text-xs font-bold text-white shadow-lg shadow-neutral-950/25 transition-all hover:bg-neutral-800 hover:shadow-xl active:scale-[0.97]"
+              className="mt-5 min-h-12 w-full rounded-2xl bg-red-700 px-5 py-3 text-sm font-bold text-white transition hover:bg-red-800 active:scale-[0.98] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-600"
             >
               Entendido
             </button>
@@ -7477,7 +7442,7 @@ function TransientNoticeBanner({
             <button
               type="button"
               onClick={onClose}
-              className="mt-6 rounded-full bg-neutral-950 px-8 py-3.5 text-sm font-bold text-white shadow-lg shadow-neutral-950/25 transition-all hover:bg-neutral-800 hover:shadow-xl active:scale-[0.97]"
+              className="mt-6 min-h-12 w-full rounded-2xl bg-red-700 px-5 py-3 text-sm font-bold text-white transition hover:bg-red-800 active:scale-[0.98] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-600"
             >
               Entendido
             </button>

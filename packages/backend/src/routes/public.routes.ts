@@ -151,7 +151,6 @@ export async function registerPublicRoutes(fastify: FastifyInstance): Promise<vo
             category: true,
           },
         },
-        stats: true,
       },
     });
 
@@ -239,8 +238,6 @@ export async function registerPublicRoutes(fastify: FastifyInstance): Promise<vo
         promoMinOrderAmount: restaurant.promoMinOrderAmount,
         promoMinOrderPercent: restaurant.promoMinOrderPercent,
         acceptedPaymentMethods: resolveAcceptedPaymentMethods(restaurant),
-        rating: (restaurant as any).stats?.rating || 0,
-        reviewCount: (restaurant as any).stats?.reviewCount || 0,
         regionName: regionConfig?.name || null,
         isOpen,
         nextOpenTime: !isOpen && !restaurant.isPaused ? getNextOpenTime(restaurant.operatingHours) : null,

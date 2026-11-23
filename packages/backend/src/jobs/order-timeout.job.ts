@@ -7,6 +7,42 @@ import { emitNotification } from '../services/socket.service';
 import { sendPushNotification } from '../services/notification.service';
 import { logger } from '../utils/logger';
 import crypto from 'node:crypto';
+import { ORDER_DECISION_STARTED, ORDER_DECISION_WINDOW_MS } from '../services/order-decision-window';
+
+/** Only orders explicitly presented by the WingsLab panel can expire. */
+export async function expireReviewedOrders(fastify: FastifyInstance) {
+  const orders = await prisma.order.findMany({
+    where: { status: 'PENDING', tracking: { some: { status: 'PENDING', notes: ORDER_DECISION_STARTED, createdAt: { lte: new Date(Date.now() - ORDER_DECISION_WINDOW_MS) } } } },
+    take: 50,
+    select: { id: true, restaurant: { select: { id: true, userId: true } }, customer: { select: { userId: true } } },
+  });
+  for (const order of orders) {
+    try {
+      await updateOrderStatusByRestaurant({ prisma, restaurantUserId: order.restaurant.userId, orderId: order.id, nextStatus: OrderStatus.REJECTED, trackingNote: 'Pedido rechazado automáticamente: venció el plazo de cinco minutos.' });
+      await dequeueRestaurantOrder(order.restaurant.id, order.id);
+      const payload = { orderId: order.id, status: OrderStatus.REJECTED };
+      const context = { requestId: crypto.randomUUID(), orderId: order.id };
+      emitNotification(fastify.io, order.customer.userId, 'CUSTOMER', 'order:rejected', payload, context);
+      emitNotification(fastify.io, order.restaurant.userId, 'RESTAURANT', 'order:rejected', payload, context);
+    } catch (error) {
+      if ((error as { statusCode?: number }).statusCode !== 409) logger.error('[OrderReview] No se pudo vencer el pedido', { orderId: order.id, error });
+    }
+  }
+}
+
+export function registerOrderReviewTimeout(fastify: FastifyInstance) {
+  let timer: ReturnType<typeof setInterval> | undefined;
+  let running: Promise<void> | undefined;
+  fastify.addHook('onReady', async () => {
+    const tick = () => {
+      if (running) return;
+      running = expireReviewedOrders(fastify).catch(error => logger.error('[OrderReview] Error de sincronización', error)).finally(() => { running = undefined; });
+    };
+    timer = setInterval(tick, 5000);
+    timer.unref();
+  });
+  fastify.addHook('onClose', async () => { if (timer) clearInterval(timer); await running; });
+}
 
 const isStore = (businessType?: string | null) => businessType && businessType !== 'RESTAURANT';
 

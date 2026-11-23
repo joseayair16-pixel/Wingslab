@@ -83,7 +83,10 @@ export function ensureGoogleMapsScript(apiKey?: string): Promise<GoogleMaps | nu
 
   const existingScript = document.querySelector('script[src*="maps.googleapis.com/maps/api/js"]');
   if (existingScript) {
-    mapsScriptPromise = waitForGoogleMaps();
+    mapsScriptPromise = waitForGoogleMaps().then((google) => {
+      if (!google) mapsScriptPromise = null;
+      return google;
+    });
     return mapsScriptPromise;
   }
 
@@ -91,7 +94,7 @@ export function ensureGoogleMapsScript(apiKey?: string): Promise<GoogleMaps | nu
     let key = apiKey?.trim() || '';
     if (!key) {
       try {
-        const response = await fetch('/wingslab-google-maps-config', { cache: 'no-store' });
+        const response = await fetch('/wingslab-google-maps-config', { cache: 'no-store', signal: AbortSignal.timeout(5000) });
         if (!response.ok) return null;
         const config = await response.json();
         if (config.enabled !== true || typeof config.apiKey !== 'string') return null;
@@ -102,22 +105,39 @@ export function ensureGoogleMapsScript(apiKey?: string): Promise<GoogleMaps | nu
     }
     if (!key) return null;
     return new Promise<GoogleMaps | null>((resolve) => {
-    const previousCallback = (window as any).__onSadelMapsLoaded;
-    (window as any).__onSadelMapsLoaded = () => {
-      if (typeof previousCallback === 'function') previousCallback();
-      resolve(getGoogleMaps());
-    };
+      let settled = false;
+      let timer: number | undefined;
+      const finish = (value: GoogleMaps | null) => {
+        if (settled) return;
+        settled = true;
+        if (timer !== undefined) window.clearTimeout(timer);
+        if (!value) {
+          script.remove();
+          mapsScriptPromise = null;
+        }
+        script.onerror = null;
+        resolve(value);
+      };
 
-    const script = document.createElement('script');
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(key)}&callback=__onSadelMapsLoaded&loading=async`;
-    script.async = true;
-    script.defer = true;
-    script.dataset.sadelMaps = '1';
-    script.onerror = () => {
-      mapsScriptPromise = null;
-      resolve(null);
-    };
-    document.head.appendChild(script);
+      const previousCallback = (window as any).__onSadelMapsLoaded;
+      (window as any).__onSadelMapsLoaded = () => {
+        if (typeof previousCallback === 'function') previousCallback();
+        finish(getGoogleMaps());
+      };
+      const previousAuthFailure = (window as any).gm_authfailure;
+      (window as any).gm_authfailure = () => {
+        if (typeof previousAuthFailure === 'function') previousAuthFailure();
+        finish(null);
+      };
+
+      const script = document.createElement('script');
+      script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(key)}&callback=__onSadelMapsLoaded&loading=async`;
+      script.async = true;
+      script.defer = true;
+      script.dataset.sadelMaps = '1';
+      script.onerror = () => finish(null);
+      timer = window.setTimeout(() => finish(null), 12_000);
+      document.head.appendChild(script);
     });
   })();
 

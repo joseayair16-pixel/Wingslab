@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
+
 import { io } from 'socket.io-client';
 import { MapPin, Plus, Search, Star, Trash2, LogOut, X, Loader2, Pencil, Camera, Smartphone, PackageCheck, ReceiptText, QrCode, Gift, Award, UserRound } from 'lucide-react';
 import { getWingslabApiUrl, getWingslabSocketUrl, getOrderStatusLabel, readStoredSession, persistStoredSession, requestJson, clearStoredSession, type AuthUser } from '@sadel/shared';
@@ -16,7 +17,13 @@ import officialLogo from '../../assets/wingslab-wordmark.png';
 import { LoyaltyCard } from '../../../../shared/src/loyalty-card';
 
 const storageKey = 'sadel.customer';
-const money = (amount: number) => new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(amount);
+const moneyFormatter = new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' });
+const money = (amount: number) => moneyFormatter.format(amount);
+const orderDateFormatter = new Intl.DateTimeFormat('es-MX', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'America/Mexico_City' });
+function formatOrderDate(value: string) {
+  const date = new Date(value);
+  return Number.isFinite(date.getTime()) ? orderDateFormatter.format(date) : 'Fecha no disponible';
+}
 
 type LoyaltyHistoryItem = {
   sequence: number; goal: number; stamps: number; rewardDescription: string;
@@ -53,6 +60,16 @@ function addressLabel(address: any): string {
 
 function addressDetail(address: any): string {
   return [address.neighborhood, address.city, address.state, address.zipCode].filter(Boolean).join(', ');
+}
+
+function RewardImage({ src }: { src?: string | null }) {
+  const [failed, setFailed] = useState(false);
+  const [loaded, setLoaded] = useState(false);
+  if (!src || failed) return <span className="wl-reward-feature-icon"><Gift aria-hidden="true" /></span>;
+  return <span className="wl-reward-feature-image-wrap" aria-hidden="true">
+    {!loaded && <Gift className="wl-reward-feature-placeholder" />}
+    <img src={src} alt="" className={`wl-reward-feature-image ${loaded ? 'is-loaded' : ''}`} decoding="async" fetchPriority="high" onLoad={() => setLoaded(true)} onError={() => setFailed(true)} />
+  </span>;
 }
 
 function AddressPinMap({ latitude, longitude, onChange }: { latitude: number; longitude: number; onChange: (latitude: number, longitude: number) => void }) {
@@ -109,6 +126,8 @@ export default function CustomerAccount() {
   const [orders, setOrders] = useState<any[]>([]);
   const [ordersLoading, setOrdersLoading] = useState(true);
   const [ordersLoadFailed, setOrdersLoadFailed] = useState(false);
+  const [ordersLimit, setOrdersLimit] = useState(12);
+  const [ordersHasMore, setOrdersHasMore] = useState(false);
   const [addresses, setAddresses] = useState<any[]>([]);
   const [loyalty, setLoyalty] = useState<any>(null);
   const [customerStats, setCustomerStats] = useState<{ totalOrders: number } | null>(null);
@@ -153,7 +172,7 @@ export default function CustomerAccount() {
   // El perfil completo (apellido, foto y fecha real) vive en /customer/profile;
   // el login solo entrega un subconjunto. Una sola fuente de verdad: `user`.
   useEffect(() => {
-    if (!token) return;
+    if (!token || section !== 'perfil') return;
     let active = true;
     void requestJson<any>({ apiBase, path: '/customer/profile', token })
       .then(result => {
@@ -173,43 +192,70 @@ export default function CustomerAccount() {
       })
       .catch(() => {});
     return () => { active = false; };
-  }, [apiBase, token]);
+  }, [apiBase, token, section]);
   useEffect(() => {
-    if (!token) return;
+    if (!token || section !== 'perfil') return;
     let active = true;
-    let requestSequence = 0;
+    void requestJson<any>({ apiBase, path: '/customer/addresses', token })
+      .then(result => { if (active) setAddresses(result.data); })
+      .catch(() => { if (active) setError('No se pudieron consultar tus direcciones.'); });
+    return () => { active = false; };
+  }, [apiBase, token, section]);
+  useEffect(() => {
+    if (!token || section !== 'pedidos') return;
+    let active = true;
+    let ordersInFlight = false;
+    let ordersRefreshPending = false;
     const load = async () => {
-      const sequence = ++requestSequence;
-      // Orders must not wait for the independent address request.
-      void requestJson<any>({ apiBase, path: '/customer/addresses', token })
-        .then(result => { if (active && sequence === requestSequence) setAddresses(result.data); })
-        .catch(() => { if (active && sequence === requestSequence) setError('No se pudieron consultar tus direcciones.'); });
+      if (!active) return;
+      // No descartar indefinidamente una respuesta lenta por nuevas consultas.
+      if (ordersInFlight) { ordersRefreshPending = true; return; }
+      ordersInFlight = true;
       try {
-        const result = await requestJson<any>({ apiBase, path: '/me/pedidos?limit=100', token });
-        if (active && sequence === requestSequence) { setOrders(result.data.items || result.data.orders || result.data); setOrdersLoadFailed(false); }
-      } catch { if (active && sequence === requestSequence) setOrdersLoadFailed(true); }
-      finally { if (active && sequence === requestSequence) setOrdersLoading(false); }
+        const result = await requestJson<any>({ apiBase, path: `/me/pedidos?limit=${ordersLimit}`, token });
+        if (active) { setOrders(result.data.items); setOrdersHasMore(result.data.hasMore === true); setOrdersLoadFailed(false); }
+      } catch { if (active) setOrdersLoadFailed(true); }
+      finally {
+        ordersInFlight = false;
+        if (active) {
+          setOrdersLoading(false);
+          if (ordersRefreshPending) { ordersRefreshPending = false; void load(); }
+        }
+      }
     };
     void load();
     const socket = io(getWingslabSocketUrl(), { auth: { token }, transports: ['websocket', 'polling'] });
     socket.on('connect', () => socket.emit('join-room'));
-    for (const event of ['order:accepted', 'order:preparing', 'order:ready', 'order:in-transit', 'order:driver-arrived', 'order:delivered']) socket.on(event, () => void load());
-    const timer = window.setInterval(() => void load(), 15000);
-    return () => { active = false; window.clearInterval(timer); socket.disconnect(); };
-  }, [apiBase, token]);
+    const refreshVisible = () => { if (document.visibilityState === 'visible') void load(); };
+    for (const event of ['order:accepted', 'order:preparing', 'order:ready', 'order:in-transit', 'order:driver-arrived', 'order:delivered', 'order:rejected', 'order:cancelled']) socket.on(event, refreshVisible);
+    const timer = window.setInterval(refreshVisible, 30000);
+    document.addEventListener('visibilitychange', refreshVisible);
+    return () => { active = false; window.clearInterval(timer); document.removeEventListener('visibilitychange', refreshVisible); socket.disconnect(); };
+  }, [apiBase, token, section, ordersLimit]);
   useEffect(() => {
     if (!token) { setLoyalty(null); setLoyaltyError(false); return; }
+    if (section !== 'fidelidad') return;
     let active = true;
-    void requestJson<any>({ apiBase, path: '/customer/lealtad', token }).then(result => { if (active) { setLoyalty(result.data); setLoyaltyError(false); } }).catch(() => { if (active) setLoyaltyError(true); });
+    void requestJson<any>({ apiBase, path: '/customer/lealtad', token }).then(result => {
+      if (!active) return;
+      if (result.data?.rewardKind === 'PRODUCT' && result.data.rewardProductImage) {
+        // Adelantar la descarga aunque el usuario todavía no abra Fidelidad.
+        const image = new Image();
+        image.src = result.data.rewardProductImage;
+      }
+      setLoyalty(result.data);
+      setLoyaltyError(false);
+    }).catch(() => { if (active) setLoyaltyError(true); });
     return () => { active = false; };
-  }, [apiBase, token]);
+  }, [apiBase, token, section]);
+  const selectedOrderStatus = orders.find(order => order.id === selected)?.status;
   useEffect(() => {
     if (!detailOpen || !selected || !token) return;
     let active = true;
     setDetail(null);
     void requestJson<any>({ apiBase, path: `/me/pedidos/${selected}`, token }).then(r => { if (active) setDetail(r.data); }).catch(() => { if (active) setError('No se pudo cargar el pedido.'); });
     return () => { active = false; };
-  }, [apiBase, token, selected, detailOpen, orders]);
+  }, [apiBase, token, selected, detailOpen, selectedOrderStatus]);
 
   const placesSourceRef = useRef<ReturnType<typeof createPlacesSource> | null>(null);
   const addressSelectionRef = useRef(0);
@@ -393,6 +439,7 @@ export default function CustomerAccount() {
   const logout = () => {
     clearStoredSession(storageKey);
     setToken(''); setUser(null); setOrders([]); setAddresses([]);
+    setOrdersLimit(12); setOrdersHasMore(false); setOrdersLoading(true); setOrdersLoadFailed(false);
   };
 
   const openProfileEditor = () => {
@@ -502,7 +549,7 @@ export default function CustomerAccount() {
 
             {/* Recompensa fuera de la tarjeta, con el estilo del footer de la card */}
             <section className="wl-reward-feature" aria-label="Tu recompensa">
-              <span className="wl-reward-feature-icon"><Gift aria-hidden="true" /></span>
+              <RewardImage key={loyalty.rewardProductImage || 'gift'} src={loyalty.rewardKind === 'PRODUCT' ? loyalty.rewardProductImage : null} />
               <div className="min-w-0">
                 <small className="wl-reward-feature-kicker">Tu recompensa</small>
                 <b className="wl-reward-feature-value">{loyalty.rewardDescription || 'Tu próxima recompensa'}</b>
@@ -621,11 +668,12 @@ export default function CustomerAccount() {
               </div>
             </div>
             <div className="wl-orders-dashboard-grid">
-              <div><span>En curso</span><strong>{orderSummary.active}</strong></div>
-              <div><span>Completados</span><strong>{orderSummary.completed}</strong></div>
+              <div><span>En curso</span><strong>{ordersLoading ? '—' : orderSummary.active}</strong></div>
+              <div><span>Completados</span><strong>{ordersLoading ? '—' : orderSummary.completed}</strong></div>
             </div>
+            {ordersHasMore && <p className="mt-2 text-xs text-neutral-500 dark:text-zinc-400">Resumen de los {orders.length} pedidos cargados</p>}
           </section>
-          <div id="pedidos">{ordersLoading ? <p role="status" className="wl-fidelity-message">Cargando tus pedidos…</p> : ordersLoadFailed && orders.length === 0 ? <p role="alert" className="wl-fidelity-message">No se pudieron cargar tus pedidos. Revisa tu conexión; volveremos a intentarlo.</p> : <>{ordersLoadFailed && <p role="status" className="wl-fidelity-message">No se pudieron actualizar tus pedidos. Comprueba tu conexión.</p>}<OrdersView sortedOrders={orders} visibleOrdersCount={100} setSelectedOrderId={setSelected} setIsDetailModalOpen={setDetailOpen} formatCurrency={money} formatDate={s => new Intl.DateTimeFormat('es-MX', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'America/Mexico_City' }).format(new Date(s))} StatusBadge={({ status }) => <span className="rounded-full bg-orange-50 px-3 py-1 text-xs font-semibold text-orange-800">{getOrderStatusLabel(status)}</span>} showLoadMore={false} loadMoreOrders={() => {}} /></>}</div>
+          <div id="pedidos">{ordersLoading ? <p role="status" className="wl-fidelity-message">Cargando tus pedidos…</p> : ordersLoadFailed && orders.length === 0 ? <p role="alert" className="wl-fidelity-message">No se pudieron cargar tus pedidos. Revisa tu conexión; volveremos a intentarlo.</p> : <>{ordersLoadFailed && <p role="status" className="wl-fidelity-message">No se pudieron actualizar tus pedidos. Comprueba tu conexión.</p>}<OrdersView sortedOrders={orders} visibleOrdersCount={orders.length} setSelectedOrderId={setSelected} setIsDetailModalOpen={setDetailOpen} formatCurrency={money} formatDate={formatOrderDate} StatusBadge={({ status }) => <span className="rounded-full bg-orange-50 px-3 py-1 text-xs font-semibold text-orange-800">{getOrderStatusLabel(status)}</span>} showLoadMore={ordersHasMore && ordersLimit < 100 && (orders.length >= ordersLimit || ordersLoadFailed)} loadMoreOrders={() => setOrdersLimit(limit => Math.min(100, limit + 12))} />{ordersHasMore && orders.length < ordersLimit && !ordersLoadFailed && <p role="status" className="wl-fidelity-message">Cargando más pedidos…</p>}</>}</div>
         </>}
       </>}
     </div>
