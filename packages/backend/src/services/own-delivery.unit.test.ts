@@ -69,6 +69,9 @@ test('own-delivery projections are passed to Prisma as select, never as include'
     expect(call[0]).toHaveProperty('select');
     expect(call[0]).not.toHaveProperty('include');
     expect(call[0].select.restaurant.select.hasOwnDelivery).toBe(true);
+    expect(call[0].select.restaurant.select.userId).toBe(true);
+    expect(call[0].select.customer.select.user.select.id).toBe(true);
+    expect(call[0].select.customer.select.user.select).not.toHaveProperty('passwordHash');
   }
   for (const call of f.db.order.findUniqueOrThrow.mock.calls) {
     expect(call[0]).toHaveProperty('select');

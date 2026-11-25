@@ -11,8 +11,9 @@ import { driverActiveOrderListSelect } from './order-selects';
 const select = {
   ...driverActiveOrderListSelect,
   restaurant: {
-    select: { ...driverActiveOrderListSelect.restaurant.select, hasOwnDelivery: true },
+    select: { ...driverActiveOrderListSelect.restaurant.select, hasOwnDelivery: true, userId: true },
   },
+  customer: { select: { user: { select: { ...driverActiveOrderListSelect.customer.select.user.select, id: true } } } },
 };
 function allowed(order: any) {
   if (!order) throw new AppError(404, 'DELIVERY_NOT_AUTHORIZED', 'Pedido de reparto propio no encontrado.');

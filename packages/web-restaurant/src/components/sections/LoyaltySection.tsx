@@ -1,5 +1,7 @@
 'use client';
 
+import { SectionHeader } from '../SectionHeader';
+
 import { useCallback, useEffect, useState } from 'react';
 import { Award, Eye, Save } from 'lucide-react';
 import { LoyaltyCard } from '../../../../shared/src/loyalty-card';
@@ -51,10 +53,7 @@ export function LoyaltySection({ apiBase, token }: { apiBase: string; token: str
       : config.rewardValue / 100;
 
   return <section className="wl-campaigns wl-loyalty-manager" aria-labelledby="loyalty-title">
-    <header className="wl-campaign-header">
-      <span className="wl-campaign-header-icon"><Award aria-hidden="true" /></span>
-      <div><p className="wl-campaign-eyebrow">WingsLab</p><h1 id="loyalty-title">Fidelidad</h1></div>
-    </header>
+    <SectionHeader title="Fidelidad" titleId="loyalty-title" icon={<Award />} />
 
     {loading ? <p role="status">Cargando…</p> : !configLoaded ? <div role="alert" className="wl-campaign-feedback is-error">{error} <button type="button" className="font-semibold underline" onClick={() => setAttempt(value => value + 1)}>Reintentar</button></div> : null}
 

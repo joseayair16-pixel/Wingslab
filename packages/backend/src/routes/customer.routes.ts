@@ -14,14 +14,18 @@ import { isMexicanLocalPhone } from '../utils/mexican-phone';
 import { getLoyaltyConfiguration } from '../services/restaurant-marketing.service';
 import { loyaltyQuote, loyaltyState } from '../services/loyalty-runtime.service';
 import { RESTAURANT_ID } from '../config/single-restaurant';
-import { createScanSession } from '../services/loyalty-inperson.service';
+import { createScanSession, getScanStatus } from '../services/loyalty-inperson.service';
+import {
+  createMercadoPagoCustomer, deleteMercadoPagoCard, findMercadoPagoCustomer, listMercadoPagoCards,
+  saveMercadoPagoCard, sandboxPayerEmail,
+} from '../services/mercado-pago-customer';
+import { saveCardRequestSchema } from '../services/saved-card-policy';
 
 const updatePreferencesSchema = z.object({
   deliveryPreference: z
-    .enum(['NO_DOORBELL', 'CALL_ON_ARRIVAL', 'PREFER_WHATSAPP', 'HONK_ON_ARRIVAL', 'BEWARE_OF_DOG'])
+    .enum(['NO_DOORBELL', 'CALL_ON_ARRIVAL',  'HONK_ON_ARRIVAL', 'BEWARE_OF_DOG'])
     .nullable()
     .optional(),
-  whatsappNotifications: z.boolean().optional(),
 });
 
 const changePasswordSchema = z.object({
@@ -101,21 +105,113 @@ export async function registerCustomerRoutes(fastify: FastifyInstance): Promise<
     customerPanel.addHook('preHandler', authenticate);
   customerPanel.addHook('preHandler', authorize([UserRole.CUSTOMER]));
 
+    // The vault is only exposed by the explicitly authorized local sandbox.
+    // Saved card IDs are resolved server-side and never treated as ownership proof.
+    const mpSandboxToken = process.env.WINGSLAB_MP_SANDBOX_ACCESS_TOKEN;
+    const cardVaultEnabled = process.env.WINGSLAB_CHECKOUT_SANDBOX_ROUTES === 'true' &&
+      process.env.WINGSLAB_CHECKOUT_RESERVATION_SWEEP === 'true' && Boolean(mpSandboxToken);
+    if (cardVaultEnabled && mpSandboxToken) {
+      customerPanel.get('/me/payment-methods/cards', { config: { rateLimit: { max: 20, timeWindow: '1 minute' } } }, async (request, reply) => {
+        reply.header('Cache-Control', 'no-store');
+        try {
+          const profile = await prisma.customer.findUnique({
+            where: { userId: getAuthenticatedUser(request).sub },
+            select: { mercadoPagoCustomerId: true },
+          });
+          if (!profile) return reply.code(404).send({ success: false, error: { code: 'CUSTOMER_NOT_FOUND', message: 'No se encontró la cuenta.' } });
+          if (!profile.mercadoPagoCustomerId) return reply.send({ success: true, data: [] });
+          const cards = await listMercadoPagoCards(mpSandboxToken, profile.mercadoPagoCustomerId);
+          return reply.send({ success: true, data: cards.map(card => ({
+            id: card.id, lastFourDigits: card.last_four_digits,
+            expirationMonth: card.expiration_month ?? null, expirationYear: card.expiration_year ?? null,
+            paymentMethod: { id: card.payment_method.id, name: card.payment_method.name ?? card.payment_method.id, type: card.payment_method.payment_type_id },
+          })) });
+        } catch (error) {
+          request.log.error('No se pudieron cargar las tarjetas guardadas');
+          return reply.code(503).send({ success: false, error: { code: 'SAVED_CARDS_UNAVAILABLE', message: 'No pudimos cargar tus tarjetas. Inténtalo de nuevo.' } });
+        }
+      });
+
+      customerPanel.post('/me/payment-methods/cards', { config: { rateLimit: { max: 5, timeWindow: '1 minute' } } }, async (request, reply) => {
+        reply.header('Cache-Control', 'no-store');
+        const body = saveCardRequestSchema.safeParse(request.body);
+        if (!body.success) return reply.code(400).send({ success: false, error: { code: 'CARD_CONSENT_REQUIRED', message: 'Confirma que quieres guardar la tarjeta para futuras compras.' } });
+        try {
+          const userId = getAuthenticatedUser(request).sub;
+          const profile = await prisma.customer.findUnique({
+            where: { userId }, select: { id: true, mercadoPagoCustomerId: true, user: { select: { name: true, lastName: true } } },
+          });
+          if (!profile) return reply.code(404).send({ success: false, error: { code: 'CUSTOMER_NOT_FOUND', message: 'No se encontró la cuenta.' } });
+
+          // Serialize external customer creation per local profile; the provider
+          // call is deliberately bounded by its timeout and no card token is stored.
+          const customerId = await prisma.$transaction(async tx => {
+            await tx.$queryRaw`SELECT "id" FROM "Customer" WHERE "id" = ${profile.id} FOR UPDATE`;
+            const current = await tx.customer.findUnique({ where: { id: profile.id }, select: { mercadoPagoCustomerId: true } });
+            if (current?.mercadoPagoCustomerId) return current.mercadoPagoCustomerId;
+            const [firstName, ...lastNameParts] = profile.user.name.trim().split(/\s+/);
+            const email = sandboxPayerEmail(profile.id);
+            const mpCustomer = await findMercadoPagoCustomer(mpSandboxToken, email) ??
+              await createMercadoPagoCustomer(mpSandboxToken, email, firstName, lastNameParts.join(' ') || profile.user.lastName?.trim() || undefined);
+            await tx.customer.update({ where: { id: profile.id }, data: { mercadoPagoCustomerId: mpCustomer.id } });
+            return mpCustomer.id;
+          }, { timeout: 15_000 });
+
+          const card = await saveMercadoPagoCard(mpSandboxToken, customerId, body.data.cardToken);
+          return reply.code(201).send({ success: true, data: {
+            id: card.id, lastFourDigits: card.last_four_digits, expirationMonth: card.expiration_month ?? null,
+            expirationYear: card.expiration_year ?? null,
+            paymentMethod: { id: card.payment_method.id, name: card.payment_method.name ?? card.payment_method.id, type: card.payment_method.payment_type_id },
+          } });
+        } catch (error) {
+          request.log.error('No se pudo guardar la tarjeta en Mercado Pago');
+          return reply.code(502).send({ success: false, error: { code: 'CARD_SAVE_FAILED', message: 'Mercado Pago no pudo guardar la tarjeta. Puedes continuar sin guardarla.' } });
+        }
+      });
+
+      customerPanel.delete('/me/payment-methods/cards/:id', { config: { rateLimit: { max: 10, timeWindow: '1 minute' } } }, async (request, reply) => {
+        reply.header('Cache-Control', 'no-store');
+        const params = z.object({ id: z.string().min(1).max(128) }).safeParse(request.params);
+        if (!params.success) return reply.code(404).send({ success: false, error: { code: 'CARD_NOT_FOUND', message: 'No se encontró esa tarjeta.' } });
+        try {
+          const profile = await prisma.customer.findUnique({
+            where: { userId: getAuthenticatedUser(request).sub }, select: { mercadoPagoCustomerId: true },
+          });
+          if (!profile?.mercadoPagoCustomerId) return reply.code(404).send({ success: false, error: { code: 'CARD_NOT_FOUND', message: 'No se encontró esa tarjeta.' } });
+          const cards = await listMercadoPagoCards(mpSandboxToken, profile.mercadoPagoCustomerId);
+          if (!cards.some(card => card.id === params.data.id)) return reply.code(404).send({ success: false, error: { code: 'CARD_NOT_FOUND', message: 'No se encontró esa tarjeta.' } });
+          await deleteMercadoPagoCard(mpSandboxToken, profile.mercadoPagoCustomerId, params.data.id);
+          return reply.send({ success: true, data: { deleted: true } });
+        } catch (error) {
+          request.log.error('No se pudo quitar la tarjeta guardada');
+          return reply.code(502).send({ success: false, error: { code: 'CARD_DELETE_FAILED', message: 'No pudimos quitar la tarjeta. Inténtalo de nuevo.' } });
+        }
+      });
+    }
+
     customerPanel.get('/customer/lealtad', async (request, reply) => {
       const user = getAuthenticatedUser(request);
       const customer = await prisma.customer.findUnique({ where: { userId: user.sub }, select: { id: true } });
       if (!customer) return reply.status(404).send({ success: false, error: { code: 'CUSTOMER_NOT_FOUND', message: 'No se encontró la cuenta.' } });
       const currentProgram = await getLoyaltyConfiguration();
       const live = currentProgram.redemptionReady ? await prisma.$transaction(tx => loyaltyState(tx, customer.id), { timeout: 30000 }) : null;
-      const rewardProgram = live?.program ?? currentProgram;
+      // Show the terms of the card that actually earns the next stamp. A
+      // completed card keeps its own reward in history.
+      const rewardProgram = live?.open ?? live?.program ?? currentProgram;
       const rewardProductPromise = rewardProgram.rewardKind === 'PRODUCT' && rewardProgram.rewardProductId
         ? prisma.product.findFirst({ where: { id: rewardProgram.rewardProductId, restaurantId: RESTAURANT_ID, deleted: false }, select: { image: true } })
         : Promise.resolve(null);
       if (live) {
-        const visual = live.open || live.next;
-        const [brand, rewardProduct] = await Promise.all([
+        const [brand, rewardProduct, stampRecords] = await Promise.all([
           prisma.restaurant.findUnique({ where: { id: RESTAURANT_ID }, select: { name: true, logo: true } }),
           rewardProductPromise,
+          live.open ? prisma.loyaltyStamp.findMany({
+            where: { cardId: live.open.id, card: { customerId: customer.id, restaurantId: RESTAURANT_ID } },
+            orderBy: [{ earnedAt: 'asc' }, { id: 'asc' }],
+            select: { id: true, source: true, earnedAt: true,
+              order: { select: { customerId: true, restaurantId: true, orderReference: true, dailyCounter: true, status: true, totalAmount: true } },
+              visit: { select: { customerId: true, restaurantId: true, totalCents: true, amountCents: true, paymentMethod: true } } },
+          }) : Promise.resolve([]),
         ]);
         const completedCards = live.list
           .filter((card: any) => card.state === 'COMPLETED')
@@ -131,21 +227,26 @@ export async function registerCustomerRoutes(fastify: FastifyInstance): Promise<
           redeemed: card.redemptionState === 'COMPLETED',
           reserved: card.redemptionState === 'RESERVED',
         }));
-        // La configuración vigente manda: meta, recompensa y condiciones se leen
-        // siempre del programa actual, no de la tarjeta en curso (que conserva
-        // los valores con los que fue creada). El progreso (stamps) sí es de la
-        // tarjeta abierta. Así los cambios del restaurante se reflejan al instante.
-        const programGoal = Number(live.program.stampGoal) || 8;
+        const programGoal = live.open?.goal ?? live.program.stampGoal;
         const openStamps = Math.min(programGoal, live.open?.stamps ?? 0);
+        const terms = live.open?.terms ?? live.program.stampTerms;
         return reply.send({ success: true, data: {
           enabled: live.program.enabled, redemptionEnabled: true,
           stamps: openStamps, stampGoal: programGoal,
-          rewardDescription: live.program.rewardDescription,
-          rewardTerms: live.program.stampTerms,
-          rewardKind: live.program.rewardKind,
+          stampDetails: stampRecords.slice(0, openStamps).map(stamp => ({
+            id: stamp.id, source: stamp.source, earnedAt: stamp.earnedAt,
+            order: stamp.order?.customerId === customer.id && stamp.order.restaurantId === RESTAURANT_ID
+              ? { reference: stamp.order.orderReference, number: stamp.order.dailyCounter, status: stamp.order.status, total: stamp.order.totalAmount } : null,
+            visitTotal: stamp.visit && (stamp.visit.paymentMethod || stamp.visit.totalCents !== null || stamp.visit.amountCents > 0)
+              && stamp.visit.customerId === customer.id && stamp.visit.restaurantId === RESTAURANT_ID
+              ? (stamp.visit.totalCents ?? stamp.visit.amountCents) / 100 : null,
+          })),
+          rewardDescription: rewardProgram.rewardDescription,
+          rewardTerms: terms,
+          rewardKind: rewardProgram.rewardKind,
           rewardProductImage: rewardProduct?.image || null,
-          rewardValue: live.program.rewardValue,
-          stampTerms: live.program.stampTerms,
+          rewardValue: rewardProgram.rewardValue,
+          stampTerms: terms,
           availableRewards: live.available.length, reserved: live.reserved,
           eligibleForNextOrder: live.eligible, brand,
           completedCount: history.filter((item: any) => item.redeemed).length,
@@ -161,7 +262,7 @@ export async function registerCustomerRoutes(fastify: FastifyInstance): Promise<
       const stamps = program.enabled && program.stampStartsAt ? orders.filter(order => order.createdAt >= new Date(program.stampStartsAt)).length : 0;
       return reply.send({ success: true, data: { enabled: program.enabled, points, eligibleOrders: orders.length,
         nextRewardPoints: program.rewardPoints, rewardAmount: program.rewardAmount, redemptionEnabled: false,
-        stamps, stampGoal: program.stampGoal, rewardType: program.rewardType, rewardKind: program.rewardKind, rewardProductImage: rewardProduct?.image || null, rewardDescription: program.rewardDescription, stampTerms: program.stampTerms, stampStartsAt: program.stampStartsAt } });
+        stamps, stampDetails: [], stampGoal: program.stampGoal, rewardType: program.rewardType, rewardKind: program.rewardKind, rewardProductImage: rewardProduct?.image || null, rewardDescription: program.rewardDescription, stampTerms: program.stampTerms, stampStartsAt: program.stampStartsAt } });
     });
 
     customerPanel.post('/customer/lealtad/qr', {
@@ -173,6 +274,18 @@ export async function registerCustomerRoutes(fastify: FastifyInstance): Promise<
       const program = await getLoyaltyConfiguration();
       if (!program.redemptionReady || !program.enabled) return reply.status(409).send({ success: false, error: { code: 'LOYALTY_PROGRAM_OFF', message: 'El programa de fidelidad está en pausa o aún no está configurado.' } });
       return reply.send({ success: true, data: await createScanSession(prisma, customer.id) });
+    });
+
+    customerPanel.get('/customer/lealtad/qr/:sessionId', {
+      config: { rateLimit: { max: 45, timeWindow: '1 minute' } },
+    }, async (request, reply) => {
+      reply.header('Cache-Control', 'no-store');
+      const parsed = z.object({ sessionId: z.string().uuid() }).safeParse(request.params);
+      if (!parsed.success) return reply.status(400).send({ success: false, error: { code: 'INVALID_QR', message: 'Código no válido.' } });
+      const user = getAuthenticatedUser(request);
+      const customer = await prisma.customer.findUnique({ where: { userId: user.sub }, select: { id: true } });
+      if (!customer) return reply.status(404).send({ success: false, error: { code: 'CUSTOMER_NOT_FOUND', message: 'No se encontró la cuenta.' } });
+      return reply.send({ success: true, data: await getScanStatus(prisma, customer.id, parsed.data.sessionId) });
     });
 
     customerPanel.post('/customer/lealtad/cotizar', async (request, reply) => {

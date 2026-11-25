@@ -18,10 +18,9 @@ export function isActiveOrderStatus(status: string): boolean {
 type ActionRule = Readonly<{ from: ReadonlyArray<string>; to: string }>;
 
 export const RESTAURANT_ORDER_ACTIONS: Readonly<Record<string, ActionRule>> = Object.freeze({
-  accept: Object.freeze({ from: Object.freeze(['PENDING']), to: 'CONFIRMED' }),
+  accept: Object.freeze({ from: Object.freeze(['PENDING']), to: 'PREPARING' }),
   reject: Object.freeze({ from: Object.freeze(['PENDING']), to: 'REJECTED' }),
-  preparing: Object.freeze({ from: Object.freeze(['CONFIRMED']), to: 'PREPARING' }),
-  ready: Object.freeze({ from: Object.freeze(['PREPARING']), to: 'READY' }),
+  ready: Object.freeze({ from: Object.freeze(['CONFIRMED', 'PREPARING']), to: 'READY' }),
   asumirReparto: Object.freeze({ from: Object.freeze(['READY']), to: 'READY' }),
   handover: Object.freeze({ from: Object.freeze(['READY']), to: 'PICKED_UP' }),
   delivered: Object.freeze({ from: Object.freeze(['IN_TRANSIT']), to: 'DELIVERED' }),
@@ -40,6 +39,7 @@ export function restaurantOrderActionAllowed(status: string, action: string): bo
   return RESTAURANT_ORDER_ACTIONS[action]?.from.includes(status) === true;
 }
 
-export function restaurantOrderTargetStatus(action: string): string | undefined {
+export function restaurantOrderTargetStatus(action: string, scheduleProposal = false): string | undefined {
+  if (action === 'accept' && scheduleProposal) return 'CONFIRMED';
   return RESTAURANT_ORDER_ACTIONS[action]?.to;
 }

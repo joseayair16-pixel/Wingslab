@@ -13,7 +13,7 @@ import { buildRestaurantInsights } from '../services/restaurant-insights';
 import { calendarReportRange } from '../services/report-calendar';
 import { RESTAURANT_ID } from '../config/single-restaurant';
 import { audienceCount, cancelCampaign, createCampaign, duplicateCampaign, getLoyaltyConfiguration, listCampaigns, prepareCampaign, saveLoyaltyConfiguration, updateCampaign } from '../services/restaurant-marketing.service';
-import { previewInPerson, quoteInPerson, recentVisits, registerInPerson, voidInPerson } from '../services/loyalty-inperson.service';
+import { previewInPerson, quoteInPerson, recentVisits, registerInPerson, registerInPersonStamp, voidInPerson } from '../services/loyalty-inperson.service';
 
 const restaurantProfileSchema = z.object({
   name: z.string().min(3, 'El nombre es obligatorio.').optional(),
@@ -41,6 +41,7 @@ const restaurantProfileSchema = z.object({
   deliveryMaxFee: z.number().nonnegative().optional(),
   maxCashOrder: z.number().positive().optional(),
   acceptsCash: z.boolean().optional(),
+  acceptsCard: z.boolean().optional(),
   minDeliveryTime: z.number().int().positive().optional(),
   maxDeliveryTime: z.number().int().positive().optional(),
   contactPhone: z.string().min(8, 'El telefono de contacto es obligatorio.').optional(),
@@ -50,7 +51,6 @@ const restaurantProfileSchema = z.object({
   transferBeneficiaryName: z.string().min(3, 'El beneficiario es obligatorio.').nullable().optional(),
   storeCategories: z.array(z.string()).optional(),
   enableTicketPrinting: z.boolean().optional(),
-  whatsappNotifications: z.boolean().optional(),
   instagram: z.string().nullable().optional(),
   facebook: z.string().nullable().optional(),
   tiktok: z.string().nullable().optional(),
@@ -556,6 +556,18 @@ export async function registerRestaurantPanelRoutes(fastify: FastifyInstance): P
       try { return reply.status(201).send({ success: true, data: await registerInPerson(prisma, { ...parsed.data, staffUserId: staff.sub }) }); }
       catch (error: any) { return reply.status(error.statusCode || 400).send({ success: false, error: { code: error.code || 'LOYALTY_VISIT_FAILED', message: error.message } }); }
     });
+    restaurant.post('/restaurant-panel/lealtad/sellos', {
+      config: { rateLimit: { max: 30, timeWindow: '1 minute' } },
+    }, async (request, reply) => {
+      const parsed = z.object({
+        code: z.string().trim().min(6).max(32),
+        previewKey: z.string().regex(/^[a-f0-9]{64}$/),
+        deliverReward: z.boolean(),
+      }).strict().safeParse(request.body);
+      if (!parsed.success) return reply.status(400).send({ success: false, error: { code: 'INVALID_STAMP', message: 'Verifica el código antes de agregar el sello.' } });
+      const staff = getAuthenticatedUser(request);
+      return reply.status(201).send({ success: true, data: await registerInPersonStamp(prisma, { ...parsed.data, staffUserId: staff.sub }) });
+    });
     restaurant.get('/restaurant-panel/lealtad/visitas', async (request, reply) => {
       const parsed = z.object({ limit: z.coerce.number().int().min(1).max(50).default(20) }).safeParse(request.query);
       if (!parsed.success) return reply.status(400).send({ success: false, error: { code: 'INVALID_QUERY', message: 'Consulta no válida.' } });
@@ -617,6 +629,7 @@ export async function registerRestaurantPanelRoutes(fastify: FastifyInstance): P
             orderBy: { dayOfWeek: 'asc' },
           },
           categories: {
+            where: { deleted: false },
             orderBy: { order: 'asc' },
           },
           storeCategories: {
@@ -880,7 +893,7 @@ export async function registerRestaurantPanelRoutes(fastify: FastifyInstance): P
       }
 
       const items = await prisma.menuCategory.findMany({
-        where: { restaurantId: ownedRestaurant.id },
+        where: { restaurantId: ownedRestaurant.id, deleted: false },
         orderBy: [{ order: 'asc' }, { createdAt: 'asc' }],
       });
 
@@ -902,11 +915,11 @@ export async function registerRestaurantPanelRoutes(fastify: FastifyInstance): P
       }
       const ids = parsed.data.categoryIds;
       const updated = await prisma.$transaction(async (tx) => {
-        const current = await tx.menuCategory.findMany({ where: { restaurantId: ownedRestaurant.id }, select: { id: true } });
+        const current = await tx.menuCategory.findMany({ where: { restaurantId: ownedRestaurant.id, deleted: false }, select: { id: true } });
         const currentIds = new Set(current.map((category) => category.id));
         if (current.length !== ids.length || ids.some((id) => !currentIds.has(id))) return false;
         for (const [order, id] of ids.entries()) {
-          await tx.menuCategory.updateMany({ where: { id, restaurantId: ownedRestaurant.id }, data: { order } });
+          await tx.menuCategory.updateMany({ where: { id, restaurantId: ownedRestaurant.id, deleted: false }, data: { order } });
         }
         return true;
       });
@@ -987,6 +1000,7 @@ export async function registerRestaurantPanelRoutes(fastify: FastifyInstance): P
         where: {
           id: params.data.id,
           restaurantId: ownedRestaurant.id,
+          deleted: false,
         },
       });
 
@@ -1046,9 +1060,11 @@ export async function registerRestaurantPanelRoutes(fastify: FastifyInstance): P
         where: {
           id: params.data.id,
           restaurantId: ownedRestaurant.id,
+          deleted: false,
         },
         include: {
           products: {
+            where: { deleted: false },
             select: { id: true },
           },
         },
@@ -1074,9 +1090,13 @@ export async function registerRestaurantPanelRoutes(fastify: FastifyInstance): P
         });
       }
 
-      await prisma.menuCategory.delete({
-        where: { id: category.id },
+      const removed = await prisma.menuCategory.updateMany({
+        where: { id: category.id, restaurantId: ownedRestaurant.id, deleted: false, products: { none: { deleted: false } } },
+        data: { deleted: true },
       });
+      if (removed.count === 0) {
+        return reply.status(409).send({ success: false, error: { code: 'CATEGORY_IN_USE', message: 'La categoría cambió o tiene productos activos. Actualiza e intenta de nuevo.' } });
+      }
 
       return reply.status(204).send();
     });
@@ -1096,7 +1116,7 @@ export async function registerRestaurantPanelRoutes(fastify: FastifyInstance): P
       }
 
       const items = await prisma.product.findMany({
-        where: { restaurantId: ownedRestaurant.id },
+        where: { restaurantId: ownedRestaurant.id, deleted: false },
         orderBy: { createdAt: 'desc' },
         take: 200,
         include: {
@@ -1139,6 +1159,7 @@ export async function registerRestaurantPanelRoutes(fastify: FastifyInstance): P
         where: {
           id: parsed.data.categoryId,
           restaurantId: ownedRestaurant.id,
+          deleted: false,
         },
       });
 
@@ -1243,7 +1264,7 @@ export async function registerRestaurantPanelRoutes(fastify: FastifyInstance): P
 
       const ownedCategoryIds = new Set(
         (await prisma.menuCategory.findMany({
-          where: { restaurantId: ownedRestaurant.id },
+          where: { restaurantId: ownedRestaurant.id, deleted: false },
           select: { id: true },
         })).map((category) => category.id),
       );
@@ -1366,6 +1387,7 @@ export async function registerRestaurantPanelRoutes(fastify: FastifyInstance): P
         where: {
           id: { in: parsed.data.ids },
           restaurantId: ownedRestaurant.id,
+          deleted: false,
         },
         data: {
           isAvailable: parsed.data.isAvailable,
@@ -1404,6 +1426,7 @@ export async function registerRestaurantPanelRoutes(fastify: FastifyInstance): P
         where: {
           id: parsed.data.categoryId,
           restaurantId: ownedRestaurant.id,
+          deleted: false,
         },
       });
 
@@ -1421,6 +1444,7 @@ export async function registerRestaurantPanelRoutes(fastify: FastifyInstance): P
         where: {
           id: { in: parsed.data.ids },
           restaurantId: ownedRestaurant.id,
+          deleted: false,
         },
         data: {
           categoryId: parsed.data.categoryId,
@@ -1455,30 +1479,13 @@ export async function registerRestaurantPanelRoutes(fastify: FastifyInstance): P
         });
       }
 
-      const productsToDelete = await prisma.product.findMany({
+      const result = await prisma.product.updateMany({
         where: {
           id: { in: parsed.data.ids },
           restaurantId: ownedRestaurant.id,
+          deleted: false,
         },
-        select: {
-          id: true,
-          image: true,
-          images: true,
-        },
-      });
-
-      const imageKeys = productsToDelete
-        .flatMap((product) => [product.image, ...(product.images || [])])
-        .filter((key): key is string => Boolean(key))
-        .map(urlToKey);
-
-      await deleteImages(imageKeys);
-
-      const result = await prisma.product.deleteMany({
-        where: {
-          id: { in: parsed.data.ids },
-          restaurantId: ownedRestaurant.id,
-        },
+        data: { deleted: true, isAvailable: false },
       });
 
       return reply.send({
@@ -1519,6 +1526,7 @@ export async function registerRestaurantPanelRoutes(fastify: FastifyInstance): P
         where: {
           id: params.data.id,
           restaurantId: ownedRestaurant.id,
+          deleted: false,
         },
         include: {
           category: true,
@@ -1584,6 +1592,7 @@ export async function registerRestaurantPanelRoutes(fastify: FastifyInstance): P
         where: {
           id: params.data.id,
           restaurantId: ownedRestaurant.id,
+          deleted: false,
         },
       });
 
@@ -1602,6 +1611,7 @@ export async function registerRestaurantPanelRoutes(fastify: FastifyInstance): P
           where: {
             id: parsed.data.categoryId,
             restaurantId: ownedRestaurant.id,
+            deleted: false,
           },
         });
 
@@ -1725,6 +1735,7 @@ export async function registerRestaurantPanelRoutes(fastify: FastifyInstance): P
         where: {
           id: params.data.id,
           restaurantId: ownedRestaurant.id,
+          deleted: false,
         },
       });
 
@@ -1781,6 +1792,7 @@ export async function registerRestaurantPanelRoutes(fastify: FastifyInstance): P
         where: {
           id: params.data.id,
           restaurantId: ownedRestaurant.id,
+          deleted: false,
         },
       });
 
@@ -1794,11 +1806,9 @@ export async function registerRestaurantPanelRoutes(fastify: FastifyInstance): P
         });
       }
 
-      const imageKeys = [product.image, ...(product.images || [])].filter((k): k is string => !!k).map(urlToKey);
-      await deleteImages(imageKeys);
-
-      await prisma.product.delete({
-        where: { id: product.id },
+      await prisma.product.updateMany({
+        where: { id: product.id, restaurantId: ownedRestaurant.id, deleted: false },
+        data: { deleted: true, isAvailable: false },
       });
 
       return reply.send({

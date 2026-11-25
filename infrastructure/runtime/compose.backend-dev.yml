@@ -31,3 +31,10 @@ services:
         target: /app/packages/backend/dist
         read_only: true
         bind: { create_host_path: false }
+      # El cliente Prisma se genera en el host; el contenedor de desarrollo lo
+      # consume generado para no reconstruir la imagen ante cambios de esquema.
+      - type: bind
+        source: ../../node_modules/.prisma/client
+        target: /app/node_modules/.prisma/client
+        read_only: true
+        bind: { create_host_path: false }

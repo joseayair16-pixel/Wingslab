@@ -2,7 +2,7 @@ import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { AppError } from '../errors/app-error';
 import { RESTAURANT_ID } from '../config/single-restaurant';
 import { calculateInPersonSaleItems, type InPersonSaleItemInput } from './loyalty-inperson-policy';
-import { loyaltyQuote, loyaltyState, readProgram, type Program } from './loyalty-runtime.service';
+import { findLoyaltyGift, loyaltyQuote, loyaltyState, readProgram, type Program } from './loyalty-runtime.service';
 import type { Prisma, PrismaClient } from '@prisma/client';
 
 type Tx = Prisma.TransactionClient;
@@ -15,6 +15,8 @@ type SaleInput = {
   note?: string;
   staffUserId: string;
 };
+type ScanInput = { code: string; staffUserId: string };
+type StampInput = ScanInput & { previewKey: string; deliverReward: boolean };
 const SCAN_TTL_SECONDS = 90;
 const VOID_WINDOW_MS = 5 * 60 * 1000;
 const hash = (code: string) => createHash('sha256').update(code).digest('hex');
@@ -42,11 +44,11 @@ async function sessionForCode(tx: Tx, code: string, activeOnly: boolean) {
   const rows = await tx.$queryRaw<Array<{ id: string; customerId: string }>>`
     SELECT id,"customerId" FROM "LoyaltyScanSession"
     WHERE code=${hash(code)} AND "restaurantId"=${RESTAURANT_ID}
-    AND (NOT ${activeOnly} OR ("consumedAt" IS NULL AND "expiresAt">CURRENT_TIMESTAMP))`;
+    AND (NOT ${activeOnly} OR ("consumedAt" IS NULL AND "expiresAt">timezone('UTC',clock_timestamp())))`;
   return rows[0] || null;
 }
 
-async function replayOrReject(tx: Tx, input: SaleInput, requestHash: string): Promise<never | unknown> {
+async function replayOrReject(tx: Tx, input: ScanInput, requestHash: string): Promise<unknown> {
   const session = await sessionForCode(tx, input.code, false);
   const prior = session ? await tx.loyaltyVisit.findUnique({ where: { scanSessionId: session.id } }) : null;
   if (prior?.voidedAt) throw new AppError(409, 'VISIT_ALREADY_VOIDED', 'Esta venta ya fue anulada. Solicita un nuevo código para otra compra.');
@@ -54,6 +56,27 @@ async function replayOrReject(tx: Tx, input: SaleInput, requestHash: string): Pr
     return JSON.parse(prior.resultJson);
   }
   throw new AppError(409, 'LOYALTY_CODE_INVALID', 'El código ya fue usado o expiró. Solicita uno nuevo.');
+}
+
+async function claimScanCode(tx: Tx, code: string) {
+  const candidate = await sessionForCode(tx, code, true);
+  if (!candidate) return null;
+  // Same customer -> QR lock order as issuance, including during concurrent retries.
+  await lock(tx, candidate.customerId);
+  const consumed = await tx.$queryRaw<Array<{ id: string; customerId: string }>>`
+    UPDATE "LoyaltyScanSession" SET "consumedAt"=timezone('UTC',clock_timestamp())
+    WHERE id=${candidate.id} AND code=${hash(code)} AND "customerId"=${candidate.customerId}
+      AND "restaurantId"=${RESTAURANT_ID} AND "consumedAt" IS NULL AND "expiresAt">timezone('UTC',clock_timestamp())
+    RETURNING id,"customerId"`;
+  return consumed[0] || null;
+}
+
+async function appendStamp(tx: Tx, card: { id: string; goal: number; stamps: number }, visitId: string) {
+  await tx.loyaltyStamp.create({ data: { id: randomUUID(), cardId: card.id, source: 'IN_PERSON', visitId } });
+  const stamps = card.stamps + 1;
+  const completed = stamps >= card.goal;
+  if (completed) await tx.loyaltyCard.update({ where: { id: card.id }, data: { state: 'COMPLETED', completedAt: new Date() } });
+  return { stamps, goal: card.goal, completed };
 }
 
 async function saleCatalog(tx: Tx, items: InPersonSaleItemInput[]) {
@@ -117,7 +140,8 @@ export async function createScanSession(db: PrismaClient, customerId: string) {
   return db.$transaction(async (tx: Tx) => {
     await lock(tx, customerId);
     const code = randomBytes(18).toString('base64url');
-    const clock = await tx.$queryRaw<Array<{ now: Date }>>`SELECT CURRENT_TIMESTAMP AS now`;
+    const sessionId = randomUUID();
+    const clock = await tx.$queryRaw<Array<{ now: Date }>>`SELECT clock_timestamp() AS now`;
     const now = clock[0]?.now;
     if (!now) throw new Error('Database clock unavailable.');
     const expiresAt = new Date(now.getTime() + SCAN_TTL_SECONDS * 1000);
@@ -128,30 +152,135 @@ export async function createScanSession(db: PrismaClient, customerId: string) {
       where: { customerId, restaurantId: RESTAURANT_ID, consumedAt: null, expiresAt: { gt: now } },
       data: { consumedAt: now },
     });
-    await tx.loyaltyScanSession.create({ data: { id: randomUUID(), customerId, restaurantId: RESTAURANT_ID, code: hash(code), expiresAt } });
-    return { code, expiresAt: expiresAt.toISOString(), ttlSeconds: SCAN_TTL_SECONDS };
+    await tx.loyaltyScanSession.create({ data: { id: sessionId, customerId, restaurantId: RESTAURANT_ID, code: hash(code), expiresAt } });
+    return { sessionId, code, expiresAt: expiresAt.toISOString(), ttlSeconds: SCAN_TTL_SECONDS };
   }, { timeout: 15000 });
 }
 
-/** Preview is read-only: scanning never creates a sale or consumes a stamp. */
+export async function getScanStatus(db: PrismaClient, customerId: string, sessionId: string) {
+  const readSession = (tx: Tx) => tx.loyaltyScanSession.findFirst({
+    where: { id: sessionId, customerId, restaurantId: RESTAURANT_ID },
+    select: { expiresAt: true, consumedAt: true, visit: { select: { id: true, voidedAt: true,
+      stamps: { where: { source: 'IN_PERSON' }, take: 1, select: { card: { select: {
+        goal: true, rewardDescription: true, terms: true,
+        redemption: { select: { state: true, visitId: true } },
+      } } } }, resultJson: true,
+    } } },
+  });
+  let session = await readSession(db);
+  const expiredAtRead = session !== null && !session.consumedAt && session.expiresAt.getTime() <= Date.now();
+  if (expiredAtRead) {
+    // At expiry a confirmation may already hold the row lock but not have
+    // committed its stamp. Wait and reread before reporting a terminal state.
+    session = await db.$transaction(async tx => {
+      await tx.$queryRaw`SELECT id FROM "LoyaltyScanSession" WHERE id=${sessionId}
+        AND "customerId"=${customerId} AND "restaurantId"=${RESTAURANT_ID} FOR SHARE`;
+      return readSession(tx);
+    });
+  }
+  if (!session) throw new AppError(404, 'LOYALTY_QR_NOT_FOUND', 'No se encontró el código.');
+  const visit = session.visit;
+  if (visit?.voidedAt) return { state: 'voided' as const };
+  const stamp = visit?.stamps[0];
+  if (visit?.resultJson && stamp) {
+    const { stamps, completed } = JSON.parse(visit.resultJson) as { stamps: number; completed: boolean };
+    const { goal, rewardDescription, terms, redemption } = stamp.card;
+    return { state: 'applied' as const, receipt: {
+      stamps, goal, completed, terms, rewardDescription,
+      rewardDelivered: completed && redemption?.visitId === visit.id && redemption?.state === 'COMPLETED',
+    } };
+  }
+  if (session.consumedAt) return { state: 'invalidated' as const };
+  // Don't check the clock again here: crossing expiry between checks would
+  // skip the locked reread and could hide a confirmation that is committing.
+  return { state: expiredAtRead ? 'expired' as const : 'active' as const };
+}
+
+// The open card is the one receiving the stamp, never an older unclaimed reward.
+function stampTarget(state: NonNullable<Awaited<ReturnType<typeof loyaltyState>>>, sessionId: string) {
+  const { open, program } = state;
+  const goal = open?.goal ?? program.stampGoal;
+  const stamps = open?.stamps ?? 0;
+  const rewardKind = open?.rewardKind ?? program.rewardKind;
+  const rewardValue = open ? open.rewardValue : program.rewardValue;
+  const rewardProductId = open ? open.rewardProductId : program.rewardProductId;
+  const rewardDescription = open?.rewardDescription ?? program.rewardDescription;
+  const completesCard = stamps + 1 === goal;
+  const previewKey = hash(JSON.stringify([sessionId, open?.id ?? program.programVersion, stamps, goal, rewardKind, rewardValue, rewardProductId, rewardDescription, state.reserved]));
+  return { stamps, goal, rewardKind, rewardValue, rewardProductId, rewardDescription, completesCard, previewKey };
+}
+
+/** Scanning previews the customer; only staff confirmation consumes the QR. */
 export async function previewInPerson(db: PrismaClient, code: string) {
   return db.$transaction(async (tx: Tx) => {
     const session = await sessionForCode(tx, code, true);
     if (!session) throw new AppError(409, 'LOYALTY_CODE_INVALID', 'El código expiró o ya fue usado. Pide al cliente que muestre uno nuevo.');
     const state = await loyaltyState(tx, session.customerId);
     if (!state || !state.program.enabled) throw new AppError(409, 'LOYALTY_PROGRAM_OFF', 'El programa de fidelidad está en pausa.');
+    // loyaltyState waits on the customer lock. The QR may have expired, been
+    // replaced or been consumed while waiting for that lock.
+    if (!(await sessionForCode(tx, code, true))) throw new AppError(409, 'LOYALTY_CODE_INVALID', 'El código expiró o ya fue usado. Pide al cliente que muestre uno nuevo.');
     const customer = await tx.customer.findUniqueOrThrow({ where: { id: session.customerId }, select: { user: { select: { name: true, lastName: true } } } });
-    const card = state.next;
+    const target = stampTarget(state, session.id);
+    const { rewardProductId, ...preview } = target;
+    const gift = target.completesCard && !state.reserved && target.rewardKind === 'PRODUCT'
+      ? await findLoyaltyGift(tx, rewardProductId)
+      : null;
+    const rewardBlockedReason = !target.completesCard ? null : state.reserved
+      ? 'Tiene una recompensa reservada en un pedido en curso.'
+      : target.rewardKind === 'PRODUCT' && !gift ? 'El producto de regalo no está disponible. Puedes registrar el sello sin entregarlo.' : null;
     return {
+      ...preview,
       customerName: [customer.user.name, customer.user.lastName].filter(Boolean).join(' ') || 'Cliente WingsLab',
-      stamps: state.open?.stamps ?? 0,
-      goal: card?.goal ?? state.program.stampGoal,
-      availableRewards: state.available.length,
-      reserved: state.reserved,
-      rewardDescription: card?.rewardDescription ?? state.program.rewardDescription,
-      eligibleForReward: state.eligible,
-      canEarnStamp: true,
+      rewardBlockedReason,
     };
+  }, { timeout: 30000 });
+}
+
+/** Records loyalty only. No sale, payment, or customer-supplied products. */
+export async function registerInPersonStamp(db: PrismaClient, input: StampInput) {
+  const requestHash = hash(JSON.stringify(['stamp', input.previewKey, input.deliverReward]));
+  return db.$transaction(async tx => {
+    const session = await claimScanCode(tx, input.code);
+    if (!session) return replayOrReject(tx, input, requestHash);
+    const { id: scanSessionId, customerId } = session;
+    const state = await loyaltyState(tx, customerId);
+    if (!state?.program.enabled) throw new AppError(409, 'LOYALTY_PROGRAM_OFF', 'El programa está en pausa. No se agregó el sello.');
+    const target = stampTarget(state, scanSessionId);
+    if (target.previewKey !== input.previewKey) {
+      throw new AppError(409, 'LOYALTY_PREVIEW_CHANGED', 'Cambió el progreso de la tarjeta. Verifica el código de nuevo.');
+    }
+    if (input.deliverReward && (!target.completesCard || state.reserved)) {
+      throw new AppError(409, 'LOYALTY_REWARD_UNAVAILABLE', 'La recompensa no se puede entregar en esta compra.');
+    }
+    const gift = input.deliverReward && target.rewardKind === 'PRODUCT' ? await findLoyaltyGift(tx, target.rewardProductId) : null;
+    if (input.deliverReward && target.rewardKind === 'PRODUCT' && !gift) {
+      throw new AppError(409, 'LOYALTY_GIFT_UNAVAILABLE', 'El producto de regalo no está disponible. Puedes agregar el sello sin entregar la recompensa.');
+    }
+    if (gift?.trackStock) {
+      const updated = await tx.product.updateMany({
+        where: { id: gift.id, restaurantId: RESTAURANT_ID, isAvailable: true, deleted: false, trackStock: true, stock: { gte: 1 } },
+        data: { stock: { decrement: 1 } },
+      });
+      if (updated.count !== 1) throw new AppError(409, 'LOYALTY_GIFT_UNAVAILABLE', 'El producto se agotó. Puedes agregar el sello sin entregar la recompensa.');
+    }
+    const card = state.open ?? await openCard(tx, customerId, state.program);
+    const visitId = randomUUID();
+    await tx.loyaltyVisit.create({ data: {
+      id: visitId, customerId, restaurantId: RESTAURANT_ID, scanSessionId, requestHash,
+      amountCents: 0, createdBy: input.staffUserId,
+      rewardDescription: input.deliverReward ? target.rewardDescription : null,
+      rewardProductId: gift?.id ?? null, giftStockDecremented: gift?.trackStock ?? false,
+    } });
+    const progress = await appendStamp(tx, card, visitId);
+    if (input.deliverReward) {
+      // Discounts are confirmed at the counter; this flow has no sale total.
+      await tx.loyaltyRedemption.create({ data: { id: randomUUID(), cardId: card.id, visitId, state: 'COMPLETED', discountCents: 0, completedAt: new Date() } });
+    }
+    const result = { ...progress, visitId, rewardDelivered: input.deliverReward, rewardDescription: target.rewardDescription };
+    await tx.loyaltyVisit.update({ where: { id: visitId }, data: { resultJson: JSON.stringify(result) } });
+    await tx.auditLog.create({ data: { userId: input.staffUserId, action: 'LOYALTY_IN_PERSON_STAMP', entity: 'LoyaltyVisit', entityId: visitId, newValue: JSON.stringify(result) } });
+    return result;
   }, { timeout: 30000 });
 }
 
@@ -182,19 +311,9 @@ export async function registerInPerson(prisma: PrismaClient, input: SaleInput) {
   if (!['CASH', 'CARD', 'TRANSFER', 'OTHER'].includes(input.paymentMethod)) throw new AppError(400, 'INVALID_PAYMENT_METHOD', 'Selecciona una forma de pago válida.');
   const requestHash = hash(normalizeSaleInput(input));
   return prisma.$transaction(async (tx: Tx) => {
-    // Acquire the shared customer lock before locking the QR row. QR issuance
-    // uses that same order (customer -> session), avoiding a deadlock between
-    // a new QR and a simultaneous sale using the previous one.
-    const candidate = await sessionForCode(tx, input.code, true);
-    if (!candidate) return replayOrReject(tx, input, requestHash);
-    await lock(tx, candidate.customerId);
-    const consumed = await tx.$queryRaw<Array<{ id: string; customerId: string }>>`
-      UPDATE "LoyaltyScanSession" SET "consumedAt"=CURRENT_TIMESTAMP
-      WHERE id=${candidate.id} AND code=${hash(input.code)} AND "customerId"=${candidate.customerId}
-        AND "restaurantId"=${RESTAURANT_ID} AND "consumedAt" IS NULL AND "expiresAt">CURRENT_TIMESTAMP
-      RETURNING id,"customerId"`;
-    if (!consumed[0]) return replayOrReject(tx, input, requestHash);
-    const { id: scanSessionId, customerId } = consumed[0];
+    const session = await claimScanCode(tx, input.code);
+    if (!session) return replayOrReject(tx, input, requestHash);
+    const { id: scanSessionId, customerId } = session;
     const program = await readProgram(tx);
     if (!program?.enabled) throw new AppError(409, 'LOYALTY_PROGRAM_OFF', 'El programa está en pausa. No se registró la compra.');
     const state = await loyaltyState(tx, customerId);
@@ -251,10 +370,7 @@ export async function registerInPerson(prisma: PrismaClient, input: SaleInput) {
       await tx.loyaltyRedemption.create({ data: { id: randomUUID(), cardId: reward.cardId, visitId, state: 'COMPLETED', discountCents: rewardAppliedCents, completedAt: new Date() } });
     }
     const card = await openCard(tx, customerId, program);
-    await tx.loyaltyStamp.create({ data: { id: randomUUID(), cardId: card.id, source: 'IN_PERSON', visitId } });
-    const stamps = card.stamps + 1;
-    const completed = stamps >= card.goal;
-    if (completed) await tx.loyaltyCard.update({ where: { id: card.id }, data: { state: 'COMPLETED', completedAt: new Date() } });
+    const { stamps, completed } = await appendStamp(tx, card, visitId);
     await tx.auditLog.create({ data: { userId: input.staffUserId, action: 'LOYALTY_IN_PERSON_VISIT', entity: 'LoyaltyVisit', entityId: visitId,
       newValue: JSON.stringify({ subtotalCents: sale.subtotalCents, totalCents, rewardAppliedCents, completed, giftStockDecremented, paymentMethod: input.paymentMethod }) } });
     const result = { visitId, customerId, stamps, goal: card.goal, completed, subtotalCents: sale.subtotalCents, totalCents, rewardAppliedCents, rewardDescription, amountCents: sale.subtotalCents, paymentMethod: input.paymentMethod };
@@ -276,7 +392,7 @@ export async function voidInPerson(prisma: PrismaClient, visitId: string, staffU
       throw new AppError(409, 'VISIT_ALREADY_VOIDED', 'La venta ya fue anulada.');
     }
     if (current.createdBy !== staffUserId) throw new AppError(403, 'VOID_FORBIDDEN', 'Solo quien registró la venta puede anularla.');
-    const age = await tx.$queryRaw<Array<{ ageMs: number }>>`SELECT (EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP-${current.createdAt})) * 1000)::int AS "ageMs"`;
+    const age = await tx.$queryRaw<Array<{ ageMs: number }>>`SELECT (EXTRACT(EPOCH FROM (clock_timestamp()-${current.createdAt}::timestamptz)) * 1000)::float8 AS "ageMs"`;
     if ((age[0]?.ageMs ?? Infinity) > VOID_WINDOW_MS) throw new AppError(409, 'VOID_WINDOW_CLOSED', 'El plazo para corregir la venta terminó.');
 
     const stamp = await tx.loyaltyStamp.findFirst({ where: { visitId, source: 'IN_PERSON' } });
@@ -287,7 +403,11 @@ export async function voidInPerson(prisma: PrismaClient, visitId: string, staffU
       if (card) {
         const laterCards = await tx.loyaltyCard.count({ where: { customerId: current.customerId, restaurantId: RESTAURANT_ID, sequence: { gt: card.sequence } } });
         const otherRedemption = await tx.loyaltyRedemption.findFirst({ where: { cardId: card.id, OR: [{ visitId: null }, { visitId: { not: visitId } }] } });
-        if (laterCards || otherRedemption) throw new AppError(409, 'VISIT_HAS_DEPENDENCIES', 'No se puede anular: ya hay movimientos posteriores o el premio de esta tarjeta fue usado.');
+        const laterStamp = await tx.loyaltyStamp.findFirst({
+          where: { cardId: card.id, id: { not: stamp.id }, earnedAt: { gte: stamp.earnedAt } },
+          select: { id: true },
+        });
+        if (laterCards || otherRedemption || laterStamp) throw new AppError(409, 'VISIT_HAS_DEPENDENCIES', 'No se puede anular: ya hay movimientos posteriores o el premio de esta tarjeta fue usado.');
       }
     }
     let items: Array<{ productId: string; quantity: number; stockDeducted: boolean }>;

@@ -168,7 +168,6 @@ services:
     command: ["node", "scripts/wingslab-run.cjs", "customer", "start"]
     tmpfs:
       - /tmp:rw,nosuid,nodev,size=256m,uid=1000,gid=1000
-      - /app/packages/web-customer/.next/cache:rw,nosuid,nodev,size=128m,uid=1000,gid=1000
     volumes:
       - type: bind
         source: ../../config/wingslab.customer.local.json
@@ -193,7 +192,6 @@ services:
     command: ["node", "scripts/wingslab-run.cjs", "restaurant", "start"]
     tmpfs:
       - /tmp:rw,nosuid,nodev,size=256m,uid=1000,gid=1000
-      - /app/packages/web-restaurant/.next/cache:rw,nosuid,nodev,size=128m,uid=1000,gid=1000
     volumes:
       - type: bind
         source: ../../config/wingslab.restaurant.local.json

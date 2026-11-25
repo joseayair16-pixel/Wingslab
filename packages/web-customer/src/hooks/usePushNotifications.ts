@@ -1,23 +1,18 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
   waitForNativeBridge,
-  revokeDevicePush,
   saveStoredPushEndpoint,
   readStoredPushEndpoint,
-  clearStoredPushEndpoint,
 } from '@sadel/shared';
 import {
-  clearNativeFcmToken,
   getNativePushPermissionState,
   isNativePlatform,
   readNativeFcmToken,
   registerNativePush,
   requestNativePushPermission,
 } from '../lib/native';
-import {
-  saveSubscriptionSecrets,
-  clearSubscriptionSecrets,
-} from '../lib/subscriptionSecrets';
+import { saveSubscriptionSecrets } from '../lib/subscriptionSecrets';
+import { isAppleMobileBrowser } from '../lib/pushPlatform';
 
 
 const API_URL = '/api';
@@ -31,12 +26,12 @@ async function fetchVapidKey(): Promise<string> {
 
   vapidKeyPromise = (async () => {
     try {
-      const res = await fetch(`${API_URL}/notifications/vapid-key`);
+      const res = await fetch(`${API_URL}/notifications/vapid-key`, { signal: AbortSignal.timeout(5000) });
       const data = await res.json();
-      cachedVapidKey = data?.publicKey || null;
-      if (!cachedVapidKey || data?.configured === false) {
-        throw new Error('VAPID public key not returned');
+      if (!res.ok || data?.configured !== true || typeof data.publicKey !== 'string' || !data.publicKey) {
+        throw new Error('Las notificaciones push no están disponibles en este momento.');
       }
+      cachedVapidKey = data.publicKey as string;
       return cachedVapidKey;
     } catch (err) {
       vapidKeyPromise = null;
@@ -47,12 +42,21 @@ async function fetchVapidKey(): Promise<string> {
   return vapidKeyPromise;
 }
 
+export async function canOfferCustomerWebPush(): Promise<boolean> {
+  if (!window.isSecureContext || isNativePlatform() || getPushSupportIssue() || needsIosPwaInstall() || !('PushManager' in window)) return false;
+  if (Notification.permission === 'denied') return false;
+  try {
+    await fetchVapidKey();
+    const registration = await navigator.serviceWorker.getRegistration();
+    return Boolean(registration?.active);
+  } catch {
+    return false;
+  }
+}
+
 function isIosDevice(): boolean {
   if (typeof window === 'undefined') return false;
-  const ua = navigator.userAgent;
-  const iOS = /iPhone|iPad|iPod/i.test(ua);
-  const iPadOS13 = navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1;
-  return iOS || iPadOS13;
+  return isAppleMobileBrowser(navigator.userAgent, navigator.platform, navigator.maxTouchPoints);
 }
 
 // Web Push en iOS solo existe desde 16.4. Esto devuelve el motivo de no soporte,
@@ -83,23 +87,22 @@ function isPwaInstalled(): boolean {
 // Si falta la instalación, no hay que intentar suscribir: hay que guiar.
 function needsIosPwaInstall(): boolean {
   if (!isIosDevice()) return false;
-  if (getPushSupportIssue()) return false; // ya hay otro motivo (browser/versión)
+  // A browser that exposes PushManager can attempt registration directly;
+  // do not block a capable desktop browser because of an ambiguous UA.
+  if ('PushManager' in window) return false;
+  const match = /OS (\d+)(?:[_.](\d+))?/.exec(navigator.userAgent);
+  if (match && (Number(match[1]) < 16 || (Number(match[1]) === 16 && Number(match[2] || 0) < 4))) return false;
   return !isPwaInstalled();
 }
 
 export const usePushNotifications = () => {
   const [isSubscribed, setIsSubscribed] = useState(false);
-  const [subscription, setSubscription] = useState<PushSubscription | null>(null);
-  const [permission, setPermission] = useState<NotificationPermission>('default');
   // Estado (no valor en render) para evitar mismatch de hidratación: en SSR es null,
   // y se calcula del lado del cliente tras montar.
   const [pushSupportIssue, setPushSupportIssue] = useState<string | null>(null);
   // iOS con Web Push soportado pero PWA sin instalar: suscribir fallaría en
   // silencio; la UI debe guiar a instalar en vez de intentar.
   const [needsIosInstall, setNeedsIosInstall] = useState(false);
-  // Detección asentada (permiso + suscripción consultados). Hasta entonces la
-  // UI no debe invitar: evita el parpadeo de aparecer y desaparecer.
-  const [pushReady, setPushReady] = useState(false);
 
   // Dentro del WebView de la app nativa NO existe web-push (service worker /
   // pushManager): las notificaciones van por FCM nativo. Este flag corta todo
@@ -121,24 +124,11 @@ export const usePushNotifications = () => {
       getNativePushPermissionState()
         .then((state) => {
           if (cancelled) return;
-          if (state === 'granted') {
-            setPermission('granted');
-            setIsSubscribed(true);
-          } else if (state === 'denied') {
-            setPermission('denied');
-            setIsSubscribed(false);
-          } else {
-            setPermission('default');
-            setIsSubscribed(false);
-          }
+          setIsSubscribed(state === 'granted' && Boolean(readNativeFcmToken()));
         })
         .catch(() => {
           if (cancelled) return;
-          setPermission('default');
           setIsSubscribed(false);
-        })
-        .finally(() => {
-          if (!cancelled) setPushReady(true);
         });
     };
 
@@ -147,28 +137,27 @@ export const usePushNotifications = () => {
       setNeedsIosInstall(needsIosPwaInstall());
       if (typeof window === 'undefined' || !('Notification' in window)) {
         // Sin API no hay permiso que evaluar (pushSupportIssue ya lo cubre).
-        setPushReady(true);
         return;
       }
 
-      setPermission(Notification.permission);
       if ('serviceWorker' in navigator) {
         navigator.serviceWorker.ready
           .then((registration) => registration.pushManager.getSubscription())
-          .then((sub) => {
+          .then(async (sub) => {
             if (cancelled) return;
-            setSubscription(sub);
-            setIsSubscribed(!!sub);
+            if (Notification.permission !== 'granted' || !sub || !localStorage.getItem('sadel.customer.token')) {
+              setIsSubscribed(false);
+              return;
+            }
+            // Reconcile with the server: a local endpoint alone does not prove
+            // that this account is still registered after logout or DB changes.
+            await sendSubscriptionToBackend(sub);
+            if (!cancelled) setIsSubscribed(true);
           })
           .catch(() => {
             if (cancelled) return;
             setIsSubscribed(false);
-          })
-          .finally(() => {
-            if (!cancelled) setPushReady(true);
           });
-      } else {
-        setPushReady(true);
       }
     };
 
@@ -200,15 +189,12 @@ export const usePushNotifications = () => {
         return;
       }
 
-      if (isNative) {
+      if (isNativePlatform()) {
         // App nativa: pedir permiso FCM y registrar el token en el backend.
         const perm = await requestNativePushPermission();
         if (perm !== 'granted') {
-          setPermission('default');
           throw new Error('Permiso de notificación no concedido');
         }
-        setPermission('granted');
-        try { localStorage.removeItem('sadel.push_optout'); } catch { /* noop */ }
 
         const token = tokenOverride || localStorage.getItem('sadel.customer.token') || '';
         const result = await registerNativePush(API_URL, token);
@@ -223,52 +209,38 @@ export const usePushNotifications = () => {
         );
       }
 
-      if (!('Notification' in window)) {
-        return;
-      }
-
       // Apple y Chrome exigen que el primer permiso se pida desde un gesto del
       // usuario. Si este método se llama sin gesto (p. ej. al cargar la página),
       // el permiso 'default' se ignora en silencio y la suscripción nunca ocurre.
-      if (pushSupportIssue) {
-        throw new Error(pushSupportIssue);
+      const supportIssue = getPushSupportIssue();
+      if (supportIssue || !('PushManager' in window)) {
+        throw new Error(supportIssue || 'Este navegador no soporta notificaciones push.');
       }
 
-      if (needsIosInstall) {
+      if (needsIosPwaInstall()) {
         throw new Error(
           'En iPhone las notificaciones solo llegan a la app instalada: toca Compartir y elige "Añadir a pantalla de inicio", luego ábrela desde tu pantalla de inicio.'
         );
       }
 
       if (Notification.permission === 'default') {
-        try {
-          const permission = await Notification.requestPermission();
-          setPermission(permission);
-          if (permission !== 'granted') {
-            return;
-          }
-        } catch {
-          return;
-        }
+        await Notification.requestPermission();
       }
       if (Notification.permission !== 'granted') {
-        return;
+        throw new Error('Permite las notificaciones en los ajustes del navegador para activar los avisos.');
       }
 
-      // El usuario optó explícitamente por desactivarlas desde su perfil; al
-      // suscribirse de nuevo (gesto) se limpia esa bandera.
-      try { localStorage.removeItem('sadel.push_optout'); } catch { /* noop */ }
 
-      const registration = await navigator.serviceWorker.ready;
+      const registration = await navigator.serviceWorker.getRegistration();
+      if (!registration?.active) throw new Error('La aplicación todavía no está lista para activar las notificaciones.');
 
       // ROBUSTEZ: si ya existe una suscripción válida se REUTILIZA tal cual.
       // Nunca se desuscribe una sub válida para re-crearla: eso mata las push
       // (sobre todo en iOS) si la recreación falla a mitad.
       const existingSub = await registration.pushManager.getSubscription();
       if (existingSub) {
-        setSubscription(existingSub);
-        setIsSubscribed(true);
         await sendSubscriptionToBackend(existingSub, tokenOverride);
+        setIsSubscribed(true);
         await persistSecrets(tokenOverride ?? null);
         return;
       }
@@ -303,12 +275,10 @@ export const usePushNotifications = () => {
           throw subscribeError;
         }
       }
-      if (!sub) return;
-
-      setSubscription(sub);
-      setIsSubscribed(true);
+      if (!sub) throw new Error('No se pudo crear la suscripción de notificaciones.');
 
       await sendSubscriptionToBackend(sub, tokenOverride);
+      setIsSubscribed(true);
       await persistSecrets(tokenOverride ?? null);
 
     } catch (error: any) {
@@ -321,76 +291,6 @@ export const usePushNotifications = () => {
     }
   }, []);
 
-  const unsubscribe = async (options?: { isLogout?: boolean }) => {
-    const isLogout = options?.isLogout ?? false;
-
-    // Solo si el usuario opta explícitamente por desactivar notificaciones
-    // (no en logout) se persiste el opt-out local: cerrar sesión no debe
-    // silenciar al próximo usuario de este dispositivo.
-    if (!isLogout) {
-      try { localStorage.setItem('sadel.push_optout', 'true'); } catch { /* noop */ }
-    }
-
-    // Capturar credencial e identificadores ANTES de cualquier await: en
-    // logout el llamador limpia el almacenamiento local en el mismo tick y la
-    // revocación debe seguir usando el JWT de ESTA sesión, para que el backend
-    // solo borre filas de este usuario (aunque la petición llegue tarde, no
-    // puede tocar las filas que registre el próximo usuario de este dispositivo).
-    let jwt: string | null = null;
-    try {
-      jwt = localStorage.getItem('sadel.customer.token');
-    } catch {
-      jwt = null;
-    }
-    const deviceToken = isNative ? readNativeFcmToken() : null;
-    const endpoint = !isNative
-      ? ((subscription as PushSubscription)?.endpoint || readStoredPushEndpoint('sadel.customer'))
-      : null;
-
-    // Los secretos (JWT + VAPID) se borran SIEMPRE, también en logout: si
-    // quedan en el IndexedDB del service worker, el SW puede re-suscribir y
-    // RE-REGISTRAR en el backend la sesión recién cerrada (pushsubscriptionchange
-    // con reintentos), reviviendo sus notificaciones, y deja un JWT aún válido
-    // guardado en el dispositivo. Borrarlos no desuscribe la suscripción del
-    // navegador: en el próximo login la auto-sincronización vuelve a guardarlos.
-    await clearSubscriptionSecrets();
-
-    // Revoca las filas del backend para que este dispositivo deje de recibir
-    // los avisos del usuario actual al cerrar sesión o desactivar notificaciones.
-    const revokeOnServer = async () => {
-      await revokeDevicePush({
-        apiBase: API_URL,
-        jwt,
-        fcmToken: deviceToken,
-        endpoint,
-        timeoutMs: 3500,
-      });
-    };
-
-    if (isNative) {
-      await revokeOnServer();
-      clearNativeFcmToken();
-      setIsSubscribed(false);
-      return;
-    }
-
-    if (subscription) {
-      if (!isLogout) {
-        try {
-          await subscription.unsubscribe();
-        } catch {}
-      }
-      setSubscription(null);
-      setIsSubscribed(false);
-      await revokeOnServer();
-      clearStoredPushEndpoint('sadel.customer');
-    } else {
-      await revokeOnServer();
-      clearStoredPushEndpoint('sadel.customer');
-    }
-  };
-
-
   // Cuando el navegador rota la suscripción push (pushsubscriptionchange), el service
   // worker nos avisa para volver a suscribirnos con un endpoint nuevo. El permiso ya
   // fue concedido antes, así que esto no requiere gesto del usuario.
@@ -399,53 +299,17 @@ export const usePushNotifications = () => {
     if (typeof window === 'undefined' || !('serviceWorker' in navigator)) return;
 
     const onMessage = (event: MessageEvent) => {
-      if (event.data?.type === 'PUSH_SUBSCRIPTION_CHANGED') {
+      if (event.data?.type === 'PUSH_SUBSCRIPTION_CHANGED' &&
+          !isNativePlatform() && window.Notification?.permission === 'granted' &&
+          localStorage.getItem('sadel.customer.token')) {
         subscribe().catch(() => {});
       }
     };
     navigator.serviceWorker.addEventListener('message', onMessage);
     return () => navigator.serviceWorker.removeEventListener('message', onMessage);
-  }, [subscribe]);
+  }, [isNative, subscribe]);
 
-  // Si el usuario cambia el permiso desde los ajustes del navegador/sitio, la
-  // UI debe enterarse sin recargar: el modal desaparece y la re-sincronización
-  // (que observa `permission`) registra la suscripción sin pedir nada.
-  useEffect(() => {
-    if (isNative) return;
-    if (typeof window === 'undefined') return;
-    try {
-      const permissions = (navigator as any)?.permissions;
-      if (!permissions || typeof permissions.query !== 'function') return;
-      let status: any = null;
-      let cancelled = false;
-      permissions
-        .query({ name: 'notifications' })
-        .then((s: any) => {
-          if (cancelled) return;
-          status = s;
-          s.onchange = () => {
-            if (cancelled) return;
-            const next = (s.state ?? 'default') as NotificationPermission;
-            setPermission(next);
-          };
-        })
-        .catch(() => {});
-      return () => {
-        cancelled = true;
-        try {
-          if (status) status.onchange = null;
-        } catch {
-          /* noop */
-        }
-      };
-    } catch {
-      /* Permissions API no disponible */
-    }
-    return undefined;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  return { isSubscribed, subscription, permission, pushSupportIssue, needsIosInstall, pushReady, subscribe, unsubscribe };
+  return { isSubscribed, pushSupportIssue, needsIosInstall, subscribe };
 };
 
 function urlBase64ToUint8Array(base64String: string) {
@@ -461,12 +325,14 @@ function urlBase64ToUint8Array(base64String: string) {
 
 async function sendSubscriptionToBackend(subscription: PushSubscription, tokenOverride?: string) {
   const keys = subscription.toJSON().keys;
-  if (!keys) return;
+  if (!keys?.p256dh || !keys.auth) throw new Error('La suscripción de este dispositivo no es válida.');
 
   const token = tokenOverride || (typeof window !== 'undefined' ? localStorage.getItem('sadel.customer.token') : null);
+  if (!token) throw new Error('Inicia sesión para activar las notificaciones.');
 
   const response = await fetch(`${API_URL}/notifications/subscribe`, {
     method: 'POST',
+    signal: AbortSignal.timeout(8000),
     headers: {
       'Content-Type': 'application/json',
       'Authorization': `Bearer ${token}`,

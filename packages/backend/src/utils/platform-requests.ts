@@ -58,13 +58,12 @@ export async function createPlatformRequest(data: {
   ownerName: string;
   businessName?: string;
   giro?: string;
-  whatsapp: string;
   location: string;
   motorcycle?: string;
 }) {
   try {
     return await prisma.platformRequest.create({
-      data,
+      data: { ...data, whatsapp: '' },
     });
   } catch (err) {
     console.warn('Database error, falling back to JSON file for platform request creation:', err);

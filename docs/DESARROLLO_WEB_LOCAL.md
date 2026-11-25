@@ -30,7 +30,8 @@ Si el equipo tiene poca memoria libre, detén el que no estés usando:
   recompila solo lo necesario (menos de un segundo tras el primer arranque).
 - **Backend:** tras cambiar `packages/backend/src`, ejecuta
   `bash scripts/wingslab-dev.sh backend compile`. Compila en el host en segundos y
-  `node --watch` reinicia el proceso automáticamente.
+  el proceso se reinicia una sola vez, cuando la compilación terminó por completo
+  (señal `dist/.reload`), nunca a mitad de la escritura de archivos.
 
 El código se monta en solo lectura; los archivos generados por Next viven en un
 `tmpfs` del contenedor. La configuración local con credenciales sigue siendo la
@@ -51,6 +52,17 @@ versión estable o hacer una demo; no tiene recarga automática y cada cambio ex
 reconstruir la imagen. Los mensajes `[Violation]` de Chrome y el aviso de React
 DevTools son ruido exclusivo de desarrollo: son inofensivos y no deben motivar un
 cambio de modo. `[HMR] connected` ya está filtrado en el código.
+
+También son ruido esperado de desarrollo:
+
+- `beforeinstallpromptevent.preventDefault() called`: Chrome avisa que no mostrará
+  su mini-infobar porque la PWA captura el evento para enseñar su propio botón
+  «Instalar». Es intencional; el `prompt()` se lanza al pulsar el botón.
+- `WebSocket connection ... failed` y `[Socket] connect_error: websocket error`
+  justo después de recargar o de `backend compile`: el backend tarda ~4 s en
+  volver y las conexiones abiertas se cortan. El reinicio único por compilación
+  evita los 5xx repetidos. Un rechazo `UNAUTHORIZED` sí significa token viejo y
+  la app lo renueva sola.
 
 ## Reglas para agentes de código
 

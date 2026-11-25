@@ -25,4 +25,5 @@ export type PushOptions = {
   urgency?: 'very-low' | 'low' | 'normal' | 'high';
   /** true cuando el envío proviene de la cola de reintentos (evita re-encolar). */
   skipRetryQueue?: boolean;
+  webSubscriptionId?: string;
 };

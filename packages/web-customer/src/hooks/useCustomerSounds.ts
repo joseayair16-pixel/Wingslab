@@ -2,9 +2,8 @@
 
 import { useCallback, useEffect } from 'react';
 import {
-  preload,
-  preloadAll,
   play,
+  preloadOnFirstInteraction,
   vibrate,
   warmup,
   installWarmupListeners,
@@ -21,12 +20,14 @@ const CUSTOMER_SOUNDS: SoundName[] = ['mensaje', 'llegue'];
  * reproducción, eliminando la duplicación entre páginas.
  */
 export function useCustomerSounds() {
-  // Precarga + desbloqueo por gesto + reintento al volver a la pestaña.
+  // Descarga diferida al primer gesto + desbloqueo + reintento al volver.
+  // No se precarga al montar: en la mayoría de visitas nunca suena una alerta.
   useEffect(() => {
-    preloadAll(CUSTOMER_SOUNDS);
+    const uninstallPreload = preloadOnFirstInteraction(CUSTOMER_SOUNDS);
     const uninstallWarmup = installWarmupListeners();
     const uninstallVisibility = installVisibilityResumeListener();
     return () => {
+      uninstallPreload();
       uninstallWarmup();
       uninstallVisibility();
       reset();
@@ -71,5 +72,3 @@ function isSoundEnabled(): boolean {
     return true;
   }
 }
-
-export { preload };

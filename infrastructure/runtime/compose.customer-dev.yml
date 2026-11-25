@@ -1,5 +1,5 @@
 # Optional customer-only development overlay. Source is read-only from the
-# host; Next's generated files live in a container tmpfs. The image is reused.
+# host; the Next cache uses a disk-backed volume instead of filling tmpfs.
 services:
   customer:
     # Un OOM en dev no debe dejar el servicio caído permanentemente.
@@ -9,6 +9,12 @@ services:
       - /tmp:rw,nosuid,nodev,size=256m,uid=1000,gid=1000
       - /app/packages/web-customer:rw,nosuid,nodev,size=384m,uid=1000,gid=1000
     volumes:
+      - customer-next-dev:/app/packages/web-customer/.next
+      - type: bind
+        source: ../../node_modules/@phosphor-icons/react
+        target: /app/node_modules/@phosphor-icons/react
+        read_only: true
+        bind: { create_host_path: false }
       - type: bind
         source: ../../scripts/wingslab-customer-dev.cjs
         target: /app/scripts/wingslab-customer-dev.cjs
@@ -64,3 +70,5 @@ services:
         target: /app/packages/shared/src
         read_only: true
         bind: { create_host_path: false }
+volumes:
+  customer-next-dev:

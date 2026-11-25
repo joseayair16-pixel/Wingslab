@@ -119,7 +119,6 @@ export function CustomerNavigation({ active, onHome, onAuthenticated, onLogout }
     const preference = dark ? 'light' : 'dark';
     try { localStorage.setItem('wingslab.theme', preference); } catch {}
     window.dispatchEvent(new CustomEvent('wingslab:theme', { detail: preference }));
-    setOpen(false); trigger.current?.focus();
   }
   function navigate(tab: Tab) {
     setOpen(false);
@@ -167,7 +166,7 @@ export function CustomerNavigation({ active, onHome, onAuthenticated, onLogout }
         {info.address && <section className="wl-info-section"><span className="wl-info-icon"><MapPin /></span><div><h3>Ubicación</h3><p>{info.address}</p></div></section>}
         {typeof info.latitude === 'number' && typeof info.longitude === 'number' && <section className="wl-info-section"><span className="wl-info-icon"><Navigation aria-hidden="true" /></span><div><h3>Distancia a ti</h3>{distance !== null ? <p><strong>{distance < 1 ? `${Math.round(distance * 1000)} m` : `${distance.toFixed(1)} km`}</strong> aproximadamente en línea recta; no es distancia de envío.</p> : <><p role="status">{locationStatus === 'loading' || locationStatus === 'idle' ? 'Calculando distancia…' : locationStatus === 'denied' ? 'Permite la ubicación en los ajustes del navegador.' : 'No pudimos obtener tu ubicación.'}</p>{(locationStatus === 'denied' || locationStatus === 'unavailable') && <button type="button" className="wl-info-location-button" onClick={requestDistance}>Reintentar</button>}</>}</div></section>}
         {!!info.operatingHours?.length && <section className="wl-info-section"><span className="wl-info-icon"><Clock3 /></span><div><h3>Horarios</h3><div className="wl-info-hours">{info.operatingHours.map((h, i) => <div key={i}><span>{days[h.dayOfWeek] || 'Horario'}</span><span>{h.isClosed ? 'Cerrado' : `${h.openTime} – ${h.closeTime}`}</span></div>)}</div></div></section>}
-        {!!info.acceptedPaymentMethods?.length && <section className="wl-info-section"><span className="wl-info-icon"><CreditCard /></span><div><h3>Métodos de pago</h3><div className="wl-info-payments">{info.acceptedPaymentMethods.map(m => <span key={m}>{({ CASH:'Efectivo', TRANSFER:'Transferencia', CARD:'Tarjeta' } as Record<string,string>)[m] || m}</span>)}</div></div></section>}
+        {!!info.acceptedPaymentMethods?.length && <section className="wl-info-section"><span className="wl-info-icon"><CreditCard /></span><div><h3>Métodos de pago</h3><div className="wl-info-payments">{info.acceptedPaymentMethods.map(m => <span key={m}>{({ CASH:'Efectivo', CREDIT_CARD:'Tarjeta', CARD:'Tarjeta', TRANSFER:'Transferencia' } as Record<string,string>)[m] || m}</span>)}</div></div></section>}
         {(info.pickupOnly === true || info.hasOwnDelivery === true) && <section className="wl-info-section"><span className="wl-info-icon"><ShoppingBag /></span><div><h3>Servicio</h3><p>{info.pickupOnly ? 'Recogida en tienda' : 'Entrega y recogida en tienda'}</p></div></section>}
       </div>}
     </dialog>

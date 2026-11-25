@@ -86,6 +86,23 @@ describe('avisos al comensal al aceptar y marcar listo', () => {
     });
   }
 
+  it('rechazo notifica al comensal aunque falle la cola tras guardar el estado', async () => {
+    jest.spyOn(orderWorkflowService, 'updateOrderStatusByRestaurant')
+      .mockResolvedValue({ ...pickupOrder(), status: OrderStatus.REJECTED } as never);
+    jest.spyOn(orderWorkflowService, 'dequeueRestaurantOrder').mockRejectedValue(new Error('cola no disponible'));
+    const token = await restaurantToken();
+    const response = await app.inject({
+      method: 'PATCH', url: '/restaurant-panel/pedidos/order-1/rechazar',
+      headers: { authorization: `Bearer ${token}` }, payload: {},
+    });
+    expect(response.statusCode).toBe(200);
+    expect(emitSpy).toHaveBeenCalledWith(expect.anything(), 'customer-user-1', 'CUSTOMER', 'order:rejected',
+      expect.objectContaining({ orderId: 'order-1', status: OrderStatus.REJECTED }), expect.anything());
+    expect(pushSpy).toHaveBeenCalledWith('customer-user-1', expect.objectContaining({
+      data: expect.objectContaining({ orderId: 'order-1', event: 'order:rejected' }),
+    }));
+  });
+
   it('aceptar emite order:accepted al room del cliente y push de confirmación', async () => {
     const updateSpy = jest
       .spyOn(orderWorkflowService, 'updateOrderStatusByRestaurant')

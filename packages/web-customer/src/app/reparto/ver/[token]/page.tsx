@@ -11,7 +11,7 @@ import { useEffect, useRef, useState, use } from 'react';
 import { Banknote, Check, Clock, CreditCard, MapPin, Package, Route, Store } from 'lucide-react';
 import DeliveryRouteMap from '../../../../components/DeliveryRouteMap';
 import DriverTurnByTurnOverlay from '../../../../components/DriverTurnByTurnOverlay';
-import { Html5Qrcode } from 'html5-qrcode';
+import type { Html5Qrcode } from 'html5-qrcode';
 import {
   optimizeRoute,
   orderReferenceToTime,
@@ -1056,7 +1056,9 @@ export default function DeliveryTicketPage({ params }: PageProps) {
     setShowAddModal(true);
     // Iniciar la cámara tras un pequeño delay para que el contenedor exista.
     setTimeout(() => {
-      if (addModalOpenRef.current) startScanner();
+      if (addModalOpenRef.current) {
+        void startScanner().catch(() => setAddError('No se pudo iniciar la cámara.'));
+      }
     }, 150);
   };
 
@@ -1071,7 +1073,7 @@ export default function DeliveryTicketPage({ params }: PageProps) {
   // Arrancar el escáner HTML5-QRCode dentro del contenedor del modal.
   // Reutiliza la instancia existente si la hay: crear una nueva sobre el mismo
   // contenedor sin liberar antes la cámara provoca "Camera already in use".
-  const startScanner = () => {
+  const startScanner = async () => {
     if (typeof document === 'undefined') return;
     if (!addModalOpenRef.current) return;
     const el = document.getElementById(scannerContainerId);
@@ -1080,6 +1082,9 @@ export default function DeliveryTicketPage({ params }: PageProps) {
     let scanner = scannerRef.current;
     if (scanner && scanner.isScanning) return; // ya está escaneando
     if (!scanner) {
+      // El escáner es pesado: solo se descarga cuando se abre la cámara.
+      const { Html5Qrcode } = await import('html5-qrcode');
+      if (!addModalOpenRef.current) return;
       scanner = new Html5Qrcode(scannerContainerId, { verbose: false });
       scannerRef.current = scanner;
     }
@@ -1118,7 +1123,9 @@ export default function DeliveryTicketPage({ params }: PageProps) {
     setAddError('');
     if (mode === 'qr') {
       setTimeout(() => {
-        if (addModalOpenRef.current) startScanner();
+        if (addModalOpenRef.current) {
+          void startScanner().catch(() => setAddError('No se pudo iniciar la cámara.'));
+        }
       }, 100);
     } else {
       stopScanner();
@@ -1804,22 +1811,6 @@ export default function DeliveryTicketPage({ params }: PageProps) {
                             </svg>
                           </a>
                         )}
-
-                        {/* WhatsApp */}
-                        <a
-                          href={`https://wa.me/52${deliv.data.customer.phone.replace(/\D/g, '')}?text=${encodeURIComponent(`Hola ${deliv.data.customer.name}, soy tu repartidor de ${deliv.data.isOwnDelivery ? 'WingsLab' : 'SaDeL Express'}.${deliv.data.isOwnDelivery && deliv.data.status === 'READY' ? ' Estoy por recoger tu pedido.' : ' Voy en camino con tu pedido.'}`)}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          onClick={(e) => { e.stopPropagation(); triggerHaptic([30]); }}
-                          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl transition-all active:scale-90 border border-[#25D366]/20 bg-[#25D366]/10 text-[#168b44] hover:bg-[#25D366]/20 dark:text-[#4ade80]"
-                          title="Enviar WhatsApp"
-                          aria-label="Enviar WhatsApp al cliente"
-                        >
-                          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5">
-                            <path fillRule="evenodd" d="M12 2.25c-5.385 0-9.75 4.365-9.75 9.75 0 1.71.442 3.321 1.226 4.733L2.25 21.75l5.163-1.189A9.704 9.704 0 0012 21.75c5.385 0 9.75-4.365 9.75-9.75S17.385 2.25 12 2.25zM9.475 7.15c-.19-.425-.39-.434-.575-.441-.157-.006-.337-.006-.516-.006-.18 0-.472.067-.718.334-.247.268-.944.922-.944 2.247 0 1.325.966 2.607 1.1 2.785.135.178 1.9 2.9 4.6 4.066 2.245.968 2.705.776 3.199.73.493-.045 1.595-.651 1.82-1.28.224-.63.224-1.168.156-1.28-.067-.113-.247-.18-.517-.315-.27-.135-1.595-.788-1.843-.878-.246-.09-.426-.135-.606.135-.18.27-.697.878-.854 1.058-.157.18-.314.203-.584.068-.27-.135-1.138-.419-2.167-1.336-.799-.714-1.338-1.598-1.495-1.868-.157-.27-.017-.417.118-.551.121-.12.27-.315.405-.473.134-.157.179-.27.269-.45.09-.18.045-.337-.023-.472-.067-.135-.606-1.463-.83-2.003z" clipRule="evenodd" />
-                          </svg>
-                        </a>
-
                         {/* Llamar */}
                         <a
                           href={`tel:${deliv.data.customer.phone}`}
@@ -2116,9 +2107,7 @@ export default function DeliveryTicketPage({ params }: PageProps) {
                 <div className="mt-3 flex items-center justify-between gap-3 text-sm"><span className={textSecondary}>Pago</span><span className={`text-right font-semibold ${textPrimary}`}>{currentTicket.paymentMethod === 'CASH' ? 'Efectivo' : currentTicket.paymentMethod === 'TRANSFER' ? 'Transferencia' : 'En línea'}</span></div>
                 <div className={`mt-3 flex items-center justify-between border-t pt-3 text-sm ${divider}`}><span className={textSecondary}>Total</span><span className={`text-lg font-extrabold ${textPrimary}`}>${currentTicket.totalAmount.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</span></div>
               </div>
-              {currentTicket.customer.phone && <div className="mt-4 flex gap-2">
-                <a href={`https://wa.me/52${currentTicket.customer.phone.replace(/\D/g, '')}?text=${encodeURIComponent(`Hola ${currentTicket.customer.name}, soy tu repartidor de ${currentTicket.isOwnDelivery ? 'WingsLab' : 'SaDeL Express'}.`)}`} target="_blank" rel="noopener noreferrer" className="flex min-h-12 flex-1 items-center justify-center rounded-2xl border border-emerald-500/25 bg-emerald-500/10 px-3 text-sm font-bold text-emerald-700 dark:text-emerald-400">WhatsApp</a>
-                <a href={`tel:${currentTicket.customer.phone}`} className={`flex min-h-12 flex-1 items-center justify-center rounded-2xl border px-3 text-sm font-bold ${cardBorder} ${textPrimary}`}>Llamar</a>
+              {currentTicket.customer.phone && <div className="mt-4 flex gap-2">                <a href={`tel:${currentTicket.customer.phone}`} className={`flex min-h-12 flex-1 items-center justify-center rounded-2xl border px-3 text-sm font-bold ${cardBorder} ${textPrimary}`}>Llamar</a>
               </div>}
               <button type="button" onClick={() => { triggerHaptic([40, 20]); setSelectedToken(null); }} className="mt-4 min-h-12 w-full rounded-2xl bg-red-600 px-4 py-3 text-sm font-bold text-white transition hover:bg-red-700 active:scale-[0.98] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-600">{activeCount > 0 ? `Volver al tablero · ${activeCount} pendientes` : 'Volver al tablero'}</button>
             </div>
@@ -2524,20 +2513,7 @@ export default function DeliveryTicketPage({ params }: PageProps) {
               <p className={`text-[10px] font-black uppercase tracking-widest ${darkMode ? 'text-red-300' : 'text-red-500'}`}>Entregar a</p>
               <h1 className={`text-xl font-black tracking-tight mt-1 truncate ${textPrimary}`}>{fullCustomerName(currentTicket.customer)}</h1>
             </div>
-            <div className="flex items-center gap-2.5 shrink-0">
-              <a
-                href={`https://wa.me/52${currentTicket.customer.phone.replace(/\D/g, '')}?text=${encodeURIComponent(`Hola ${currentTicket.customer.name}, soy tu repartidor de ${currentTicket.isOwnDelivery ? 'WingsLab' : 'SaDeL Express'}.${ownDeliveryAwaitingPickup ? ' Estoy por recoger tu pedido.' : ' Voy en camino con tu pedido.'}`)}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                onClick={() => triggerHaptic([30])}
-                className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#25D366] text-white hover:bg-[#128C7E] transition-all active:scale-90 shadow-[0_4px_14px_rgba(37,211,102,0.25)]"
-                aria-label="WhatsApp al cliente"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5">
-                  <path fillRule="evenodd" d="M12 2.25c-5.385 0-9.75 4.365-9.75 9.75 0 1.71.442 3.321 1.226 4.733L2.25 21.75l5.163-1.189A9.704 9.704 0 0012 21.75c5.385 0 9.75-4.365 9.75-9.75S17.385 2.25 12 2.25zM9.475 7.15c-.19-.425-.39-.434-.575-.441-.157-.006-.337-.006-.516-.006-.18 0-.472.067-.718.334-.247.268-.944.922-.944 2.247 0 1.325.966 2.607 1.1 2.785.135.178 1.9 2.9 4.6 4.066 2.245.968 2.705.776 3.199.73.493-.045 1.595-.651 1.82-1.28.224-.63.224-1.168.156-1.28-.067-.113-.247-.18-.517-.315-.27-.135-1.595-.788-1.843-.878-.246-.09-.426-.135-.606.135-.18.27-.697.878-.854 1.058-.157.18-.314.203-.584.068-.27-.135-1.138-.419-2.167-1.336-.799-.714-1.338-1.598-1.495-1.868-.157-.27-.017-.417.118-.551.121-.12.27-.315.405-.473.134-.157.179-.27.269-.45.09-.18.045-.337-.023-.472-.067-.135-.606-1.463-.83-2.003z" clipRule="evenodd" />
-                </svg>
-              </a>
-              <a
+            <div className="flex items-center gap-2.5 shrink-0">              <a
                 href={`tel:${currentTicket.customer.phone}`}
                 onClick={() => triggerHaptic([30])}
                 className={`flex h-11 w-11 items-center justify-center rounded-xl transition-all active:scale-90 border shadow-sm ${

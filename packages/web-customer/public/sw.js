@@ -86,15 +86,19 @@ self.addEventListener('notificationclick', function (event) {
     : data.orderId
       ? `/?orderId=${data.orderId}`
       : '/';
-  const urlToOpen = new URL(relativePath, self.location.origin).href;
+  let urlToOpen = self.location.origin + '/';
+  try {
+    const target = new URL(relativePath, self.location.origin);
+    if (target.origin === self.location.origin && target.protocol === new URL(self.location.origin).protocol) urlToOpen = target.href;
+  } catch {}
 
   event.waitUntil(
-    clients.matchAll({ type: 'window', includeUncontrolled: true }).then(function (windowClients) {
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then(async function (windowClients) {
       let matchingClient = null;
 
       for (let i = 0; i < windowClients.length; i++) {
         const windowClient = windowClients[i];
-        if (windowClient.url.startsWith(self.location.origin)) {
+        if (new URL(windowClient.url).origin === self.location.origin) {
           matchingClient = windowClient;
           break;
         }
@@ -108,8 +112,8 @@ self.addEventListener('notificationclick', function (event) {
         });
         if ('navigate' in matchingClient && matchingClient.url !== urlToOpen) {
           try {
-            matchingClient.navigate(urlToOpen);
-          } catch (e) {}
+            matchingClient = await matchingClient.navigate(urlToOpen) || matchingClient;
+          } catch { return clients.openWindow(urlToOpen); }
         }
         return matchingClient.focus();
       } else {
@@ -185,28 +189,31 @@ function serializeSubscription(subscription) {
   };
 }
 
-function reportSubscriptionToBackend(subscription, token, attempts) {
+async function reportSubscriptionToBackend(subscription, token) {
   var body = serializeSubscription(subscription);
-  if (!body || !token) return Promise.resolve();
-  attempts = attempts || 0;
-  return fetch('/api/notifications/subscribe', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': 'Bearer ' + token,
-    },
-    body: JSON.stringify(body),
-  }).catch(function () {
-    // Reintenta con backoff si hay fallo transitorio de red; mantiene viva la
-    // suscripción local aunque no se pueda reportar de inmediato.
-    if (attempts < 4) {
-      return new Promise(function (resolve) {
-        setTimeout(function () {
-          reportSubscriptionToBackend(subscription, token, attempts + 1).then(resolve);
-        }, 1000 * Math.pow(2, attempts));
+  if (!body || !token) return false;
+  for (var attempt = 0; attempt < 3; attempt++) {
+    // El usuario pudo cerrar sesión o cambiar de cuenta durante la espera.
+    var current = await readSecrets();
+    if (!current || current.token !== token) return false;
+    try {
+      var response = await fetch('/api/notifications/subscribe', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ' + token,
+        },
+        body: JSON.stringify(body),
+        signal: AbortSignal.timeout(5000),
       });
+      if (response.ok) return true;
+      if (response.status !== 429 && response.status < 500) return false;
+    } catch {
+      // Los fallos de red y los tiempos de espera también son transitorios.
     }
-  });
+    if (attempt < 2) await new Promise(function (resolve) { setTimeout(resolve, 1000 * Math.pow(2, attempt)); });
+  }
+  return false;
 }
 
 function resubscribeInServiceWorker(attempts) {
@@ -222,13 +229,11 @@ function resubscribeInServiceWorker(attempts) {
     if (secrets.vapidKey) {
       options.applicationServerKey = urlBase64ToUint8Array(secrets.vapidKey);
     }
+    function syncRotatedSubscription(newSubscription) {
+      return reportSubscriptionToBackend(newSubscription, secrets.token).then(notifyOpenClients);
+    }
     return self.registration.pushManager.subscribe(options)
-      .then(function (newSubscription) {
-        return Promise.all([
-          reportSubscriptionToBackend(newSubscription, secrets.token, 0),
-          notifyOpenClients(),
-        ]);
-      })
+      .then(syncRotatedSubscription)
       .catch(function (err) {
         // InvalidStateError: la sub vieja quedó huérfana y hay que limpiarla
         // antes de poder crear la nueva. Tras limpiarla, re-suscribimos y
@@ -241,12 +246,7 @@ function resubscribeInServiceWorker(attempts) {
             .then(function () {
               return self.registration.pushManager.subscribe(options);
             })
-            .then(function (newSubscription) {
-              return Promise.all([
-                reportSubscriptionToBackend(newSubscription, secrets.token, 0),
-                notifyOpenClients(),
-              ]);
-            })
+            .then(syncRotatedSubscription)
             .catch(function () {
               return notifyOpenClients();
             });

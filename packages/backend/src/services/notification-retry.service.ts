@@ -7,6 +7,7 @@ import { notificationRetryDedupeKey } from './notification-retry-key';
 // Un pedido nuevo/repartidor llegó es urgente por horas; un chat, menos; y
 // avisos genéricos caducan rápido para no molestar tarde.
 const TTL_BY_EVENT: Record<string, number> = {
+  'order:created': 5 * 60 * 1000,
   'order:ready': 6 * 60 * 60 * 1000,
   'order:driver-arrived': 4 * 60 * 60 * 1000,
   'order:driver_arrived': 4 * 60 * 60 * 1000,
@@ -39,24 +40,27 @@ export function computeRetryTtlMs(payload: NotificationPayload): number {
 export async function enqueueNotificationRetry(
   userId: string,
   payload: NotificationPayload,
-  reason: string
+  reason: string,
+  webSubscriptionId?: string
 ): Promise<void> {
   try {
     const expiresAt = new Date(Date.now() + computeRetryTtlMs(payload));
-    const key = notificationRetryDedupeKey(userId, payload);
+    const eventKey = notificationRetryDedupeKey(userId, payload);
+    const key = webSubscriptionId ? `${eventKey ?? `uid-${userId}-${Date.now()}`}:web:${webSubscriptionId}` : eventKey;
+    const serialized = JSON.stringify({ ...payload, ...(webSubscriptionId ? { webSubscriptionId } : {}) });
 
     await prisma.notificationRetry.upsert({
       where: { dedupeKey: key ?? `uid-${userId}-${Date.now()}` },
       update: {
         userId,
-        payload: JSON.stringify(payload),
+        payload: serialized,
         lastError: reason,
         expiresAt,
       },
       create: {
         userId,
         dedupeKey: key,
-        payload: JSON.stringify(payload),
+        payload: serialized,
         lastError: reason,
         expiresAt,
         maxAttempts: MAX_RETRY_ATTEMPTS,

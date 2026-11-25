@@ -36,9 +36,11 @@ import { startScheduledDeliveryReminderJob } from './jobs/scheduled-delivery-rem
 import { startCleanupOrphanMediaJob } from './jobs/cleanup-orphan-media.job';
 import { startCleanupPushSubscriptionsJob } from './jobs/cleanup-push-subscriptions.job';
 import { startNotificationRetryJob } from './jobs/notification-retry.job';
+import { reconcileSubmittedCheckoutPayments, sweepExpiredCheckoutPayments } from './services/checkout-payment-intent';
+import { settleVerifiedCheckoutPayment } from './services/checkout-settlement.service';
+import { dispatchCheckoutKitchenOutbox } from './services/checkout-kitchen-outbox';
+import { processCheckoutRefundOutbox } from './services/checkout-refund-outbox';
 import { startOrderRingJob } from './jobs/order-ring.job';
-import { startPaymentRemindersJob } from './jobs/payment-reminders.job';
-import { startThankYouMessagesJob } from './jobs/thank-you-messages.job';
 
 declare module 'fastify' {
   interface FastifyInstance {
@@ -233,6 +235,11 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     setupNotificationSubscribers(fastify);
   }
 
+  fastify.addHook('preClose', async () => {
+    // Upgraded sockets must disconnect before Fastify waits for HTTP to close.
+    if (enableSocketIO && fastify.io) fastify.io.engine.close();
+  });
+
   fastify.addHook('onClose', async () => {
     if (enableSocketIO && fastify.io) {
       await fastify.io.close();
@@ -240,10 +247,47 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   });
 
   await setupRoutes(fastify);
+  // Enable only after the checkout intent migration is deployed.
+  if (process.env.WINGSLAB_CHECKOUT_RESERVATION_SWEEP === 'true') {
+    let running: Promise<void> | undefined;
+    const timer = setInterval(() => {
+      if (running) return;
+      running = sweepExpiredCheckoutPayments(prisma, (err, intentId) => {
+        fastify.log.error({ err, intentId }, 'No se pudo liberar la reserva de pago');
+      }).catch(err => {
+        fastify.log.error({ err }, 'No se pudieron consultar las reservas vencidas');
+      }).then(async () => {
+        await reconcileSubmittedCheckoutPayments(
+          prisma,
+          process.env.WINGSLAB_MP_SANDBOX_ACCESS_TOKEN || '',
+          {
+            onVerified: (intentId, order) => settleVerifiedCheckoutPayment(prisma, fastify.io, intentId, order, err => {
+              fastify.log.error({ err, intentId }, 'Pedido pagado reconciliado; pendiente de entregar a cocina');
+            }),
+            onError: (err, intentId) => {
+              fastify.log.error({ err, intentId }, 'No se pudo conciliar el intento de pago; se reintentará');
+            },
+          },
+        );
+        await dispatchCheckoutKitchenOutbox(prisma, fastify.io, (err, orderId) => {
+          fastify.log.error({ err, orderId }, 'No se pudo entregar el pedido pagado a cocina; se reintentará');
+        });
+        await processCheckoutRefundOutbox(prisma, process.env.WINGSLAB_MP_SANDBOX_ACCESS_TOKEN, (err, orderId) => {
+          fastify.log.error({ err, orderId }, 'No se pudo confirmar un reembolso de tarjeta; se reintentará');
+        });
+      }).catch(err => {
+        fastify.log.error({ err }, 'No se pudieron procesar entregas de pedidos pagados');
+      }).finally(() => { running = undefined; });
+    }, 60_000);
+    timer.unref();
+    fastify.addHook('onClose', async () => {
+      clearInterval(timer);
+      await running;
+    });
+  }
   if (process.env.WINGSLAB_RUNTIME_AUTHORIZED === 'reviewed-phase-2b') registerOrderReviewTimeout(fastify);
 
   startSelectedJobs(requestedJobs, {
-    paymentReminders: () => startPaymentRemindersJob(), thankYouMessages: () => startThankYouMessagesJob(),
     orderTimeout: () => startOrderTimeoutJob(fastify), restaurantHours: () => startRestaurantHoursJob(fastify),
     driverPickupAlert: () => startDriverPickupAlertJob(fastify),
     stuckOrder: () => startStuckOrderJob(fastify),

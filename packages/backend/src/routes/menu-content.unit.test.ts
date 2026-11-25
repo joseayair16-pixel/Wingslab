@@ -48,4 +48,25 @@ describe('Menu content access and publication', () => {
     const invalid = await app.inject({ url: '/public/menu-content', headers: { authorization: 'Bearer invalid' } });
     expect(invalid.statusCode).toBe(401);
   });
+  it('shares simultaneous image downloads and serves later requests from the bounded cache', async () => {
+    const url = '/public/menu-images/5db6f18e-e05a-416d-8dd4-ec96d4ee7034';
+    const read = jest.spyOn(content, 'readMenuImage').mockResolvedValue('https://example.invalid/banner');
+    const fetchImage = jest.spyOn(global, 'fetch').mockResolvedValue(new Response('fixture', { headers: { 'content-type': 'image/webp' } }));
+    const responses = await Promise.all([app.inject(url), app.inject(url)]);
+    responses.push(await app.inject(url));
+    expect(responses.map(response => response.statusCode)).toEqual([200, 200, 200]);
+    expect(responses.every(response => response.body === 'fixture' && response.headers['cache-control'] === 'public, max-age=86400, immutable')).toBe(true);
+    expect(read).toHaveBeenCalledTimes(1);
+    expect(fetchImage).toHaveBeenCalledTimes(1);
+  });
+  it('allows a fresh attempt after an upstream failure', async () => {
+    const url = '/public/menu-images/5db6f18e-e05a-416d-8dd4-ec96d4ee7035';
+    jest.spyOn(content, 'readMenuImage').mockResolvedValue('https://example.invalid/banner');
+    const fetchImage = jest.spyOn(global, 'fetch')
+      .mockResolvedValueOnce(new Response(null, { status: 503 }))
+      .mockResolvedValueOnce(new Response('fixture'));
+    expect((await app.inject(url)).statusCode).toBe(502);
+    expect((await app.inject(url)).statusCode).toBe(200);
+    expect(fetchImage).toHaveBeenCalledTimes(2);
+  });
 });

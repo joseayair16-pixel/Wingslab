@@ -12,12 +12,14 @@ WORKDIR /app
 ENV NEXT_TELEMETRY_DISABLED=1 CHECKPOINT_DISABLE=1 NODE_ENV=production
 LABEL org.wingslab.project=wingslab org.wingslab.phase=3b org.wingslab.role=restaurant
 COPY --from=build --chown=1000:1000 /app/package.json /app/wingslab-build.json /app/provision-manifest.json ./
-COPY --from=build --chown=1000:1000 /app/node_modules ./node_modules
-COPY --from=build --chown=1000:1000 /app/packages/shared ./packages/shared
 COPY --from=build --chown=1000:1000 /app/config/wingslab.cjs ./config/wingslab.cjs
 COPY --from=build --chown=1000:1000 /app/scripts/wingslab-run.cjs /app/scripts/blocked-operation.cjs ./scripts/
-COPY --from=build --chown=1000:1000 /app/packages/web-restaurant/.next ./packages/web-restaurant/.next
-COPY --from=build --chown=1000:1000 /app/packages/web-restaurant/public ./packages/web-restaurant/public
-COPY --from=build --chown=1000:1000 /app/packages/web-restaurant/package.json /app/packages/web-restaurant/next.config.js ./packages/web-restaurant/
+COPY --from=build --chown=1000:1000 /app/packages/shared/package.json ./packages/shared/package.json
+COPY --from=build --chown=1000:1000 /app/packages/shared/src/wingslab-policy.cjs ./packages/shared/src/wingslab-policy.cjs
+# Standalone de Next: solo las dependencias trazadas (~60 MB) en vez de todo
+# node_modules (1,1 GB). Static y public van dentro del propio standalone.
+COPY --from=build --chown=1000:1000 /app/packages/web-restaurant/.next/standalone ./packages/web-restaurant/.next/standalone
+COPY --from=build --chown=1000:1000 /app/packages/web-restaurant/.next/static ./packages/web-restaurant/.next/standalone/packages/web-restaurant/.next/static
+COPY --from=build --chown=1000:1000 /app/packages/web-restaurant/public ./packages/web-restaurant/.next/standalone/packages/web-restaurant/public
 USER 1000:1000
 CMD ["node", "scripts/blocked-operation.cjs"]

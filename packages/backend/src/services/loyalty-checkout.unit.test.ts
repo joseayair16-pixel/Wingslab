@@ -6,7 +6,8 @@ import * as hours from '../utils/restaurant';
 function fixture() {
   const tx = {
     $queryRawUnsafe: jest.fn().mockResolvedValue([]),
-    order: { findUnique: jest.fn().mockResolvedValue(null), count: jest.fn().mockResolvedValue(0), create: jest.fn().mockImplementation(async ({ data }) => ({ id: 'created', orderReference: 'WL-1', customerId: 'customer', ...data })) },
+    $queryRaw: jest.fn().mockResolvedValue([]),
+    order: { aggregate: jest.fn().mockResolvedValue({ _max: { dailyCounter: null } }), findUnique: jest.fn().mockResolvedValue(null), count: jest.fn().mockResolvedValue(0), create: jest.fn().mockImplementation(async ({ data }) => ({ id: 'created', orderReference: 'WL-1', customerId: 'customer', ...data })) },
     customer: { update: jest.fn().mockResolvedValue({}) },
     product: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
   };

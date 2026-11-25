@@ -1,5 +1,7 @@
 'use client';
 
+import { SectionHeader } from '../SectionHeader';
+
 import { useCallback, useEffect, useState } from 'react';
 import { ArrowDown, ArrowUp, Check, Eye, Image as ImageIcon, Images, Info, Layers, LayoutPanelTop, Pencil, Plus, Trash2 } from 'lucide-react';
 
@@ -117,10 +119,7 @@ export function MenuContentSection({ apiBase, token }: { apiBase: string; token:
   const editing = !!draft && !!content?.items.some(i => i.id === draft.id);
 
   return <section className="wl-campaigns wl-menu-content" aria-labelledby="menu-content-title">
-    <header className="wl-campaign-header">
-      <span className="wl-campaign-header-icon"><Layers aria-hidden="true" /></span>
-      <div><p className="wl-campaign-eyebrow">Contenido WingsLab</p><h1 id="menu-content-title">Contenido del menú</h1><p>Personaliza lo que ven tus clientes al visitar tu menú.</p></div>
-    </header>
+    <SectionHeader title="Contenido del menú" titleId="menu-content-title" icon={<Layers />} description="Personaliza lo que ven tus clientes al visitar tu menú." />
 
     <div className="wl-menu-toolbar wl-campaign-card">
       <div className="wl-menu-tabs" aria-label="Tipo de contenido">

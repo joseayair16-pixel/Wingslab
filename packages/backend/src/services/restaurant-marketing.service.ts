@@ -121,9 +121,11 @@ export async function saveLoyaltyConfiguration(data: { enabled: boolean; pointsP
       const customers = await tx.customer.findMany({ where: { orders: { some: { restaurantId: RESTAURANT_ID } } }, select: { id: true }, orderBy: { id: 'asc' } });
       for (const customer of customers) await reconcileLoyalty(tx, customer.id, oldProgram);
     }
+    let rewardProductName: string | null = null;
     if (data.rewardKind === 'PRODUCT') {
-      const product = await tx.product.findFirst({ where: { id: data.rewardProductId!, restaurantId: RESTAURANT_ID, deleted: false, isAvailable: true, sellBy: 'UNIT', isAdultOnly: false }, select: { id: true, optionGroups: { select: { minSelection: true } } } });
+      const product = await tx.product.findFirst({ where: { id: data.rewardProductId!, restaurantId: RESTAURANT_ID, deleted: false, isAvailable: true, sellBy: 'UNIT', isAdultOnly: false }, select: { id: true, name: true, optionGroups: { select: { minSelection: true } } } });
       if (!product || product.optionGroups.some(g => g.minSelection > 0)) throw Object.assign(new Error('Selecciona un producto disponible, por unidad y sin opciones obligatorias.'), { statusCode: 400, code: 'INVALID_LOYALTY_PRODUCT' });
+      rewardProductName = product.name;
     }
     const now = new Date().toISOString();
     const stampStartsAt = current.stampStartsAt || (data.enabled ? now : null);
@@ -132,6 +134,22 @@ export async function saveLoyaltyConfiguration(data: { enabled: boolean; pointsP
     if (data.enabled && (!activePeriods.length || activePeriods[activePeriods.length - 1].to !== null)) activePeriods.push({ from: now, to: null });
     const next = { ...current, ...data, programVersion: (current.programVersion || 0) + 1, redemptionReady: true, stampStartsAt, activePeriods };
     await tx.systemSetting.upsert({ where: { key: loyaltySettingKey }, create: { key: loyaltySettingKey, value: JSON.stringify(next) }, update: { value: JSON.stringify(next) } });
+    // La recompensa configurada rige también para quien ya lleva sellos: el
+    // comensal ve y recibe la nueva, no la del programa anterior. Se respetan
+    // las tarjetas con canje reservado (hay un pedido en curso) y las ya
+    // completadas, cuyo premio queda registrado en el historial.
+    await tx.loyaltyCard.updateMany({
+      where: { restaurantId: RESTAURANT_ID, state: 'OPEN', redemption: { is: null } },
+      data: {
+        programVersion: next.programVersion,
+        rewardKind: data.rewardKind,
+        rewardValue: data.rewardValue,
+        rewardProductId: data.rewardProductId,
+        rewardProductName,
+        rewardDescription: data.rewardDescription,
+        terms: data.stampTerms,
+      },
+    });
     return next;
   }, { timeout: 60000 });
 }

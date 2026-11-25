@@ -2,7 +2,7 @@ import cron from 'node-cron';
 import { FastifyInstance } from 'fastify';
 import { prisma } from '../config/database';
 import { emitNotification } from '../services/socket.service';
-import { createTransferRefundTicket } from '../services/refund-ticket.service';
+import { enqueueCancellationRefunds } from '../services/order-cancellation-refunds';
 import { restoreStockForOrder } from '../services/stock.service';
 import { logger } from '../utils/logger';
 
@@ -30,7 +30,9 @@ export function startOwnDeliveryTimeoutJob(fastify: FastifyInstance) {
         select: {
           id: true,
           orderReference: true,
+          clientOrderKey: true,
           paymentMethod: true,
+          paymentStatus: true,
           restaurant: { select: { userId: true, name: true } },
           customer: { select: { userId: true, user: { select: { name: true } } } },
         },
@@ -41,16 +43,18 @@ export function startOwnDeliveryTimeoutJob(fastify: FastifyInstance) {
 
       for (const order of stale) {
         try {
-          await prisma.order.update({
-            where: { id: order.id },
+          const cancelled = await prisma.$transaction(async tx => {
+          const claim = await tx.order.updateMany({
+            where: { id: order.id, status: 'IN_TRANSIT', deliveredByRestaurant: true, inTransitAt: { not: null, lt: cutoff } },
             data: {
               status: 'CANCELLED' as any,
               cancelledBy: 'system',
               cancellationReason: 'Reparto propio no completado en 24h.',
             },
           });
+          if (!claim.count) return false;
 
-          await prisma.orderTracking.create({
+          await tx.orderTracking.create({
             data: {
               orderId: order.id,
               status: 'CANCELLED' as any,
@@ -58,10 +62,13 @@ export function startOwnDeliveryTimeoutJob(fastify: FastifyInstance) {
             },
           });
 
-          await createTransferRefundTicket(prisma, order.id, 'Pedido no entregado por reparto propio.');
+          await enqueueCancellationRefunds(tx, order, 'Pedido no entregado por reparto propio.');
 
           // Liberar el stock reservado al cancelar (productos trackeados por unidad).
-          await restoreStockForOrder(prisma, order.id);
+          await restoreStockForOrder(tx, order.id);
+          return true;
+          });
+          if (!cancelled) continue;
 
           emitNotification(fastify.io, order.customer.userId, 'CUSTOMER', 'order:cancelled', {
             orderId: order.id,

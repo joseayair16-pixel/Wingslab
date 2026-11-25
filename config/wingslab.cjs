@@ -44,17 +44,31 @@ function frontendConfig(role) {
   const customer = assertOrigin(process.env.NEXT_PUBLIC_CUSTOMER_URL, 'customer');
   const site = assertOrigin(process.env.NEXT_PUBLIC_SITE_URL, role);
   return {
+    // Build autocontenido: el runtime copia solo lo que Next tracedó en vez
+    // del node_modules completo (1,1 GB en el contexto de build).
+    output: 'standalone',
     env: {
       NEXT_PUBLIC_API_URL: api, NEXT_PUBLIC_SOCKET_URL: socket,
       NEXT_PUBLIC_CUSTOMER_URL: customer, NEXT_PUBLIC_SITE_URL: site,
       NEXT_PUBLIC_WINGSLAB_ROLE: role,
+      NEXT_PUBLIC_MP_PUBLIC_KEY: process.env.NEXT_PUBLIC_MP_PUBLIC_KEY || '',
+      NEXT_PUBLIC_WINGSLAB_MP_SANDBOX: process.env.NEXT_PUBLIC_WINGSLAB_MP_SANDBOX === 'true' ? 'true' : 'false',
     },
     async rewrites() { return [{ source: '/api/:path*', destination: `${internalApi}/:path*` }]; },
     async headers() {
-      return [{ source: '/:path*', headers: [{
-        key: 'Content-Security-Policy',
-        value: `default-src 'self'; connect-src 'self' ${api} ${socket.replace('http:', 'ws:')} https://res.cloudinary.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://www.googleapis.com https://www.google.com https://www.recaptcha.net https://maps.googleapis.com https://maps.gstatic.com https://*.googleapis.com${role === 'customer' ? ' https://www.gstatic.com data:' : ''}; img-src 'self' data: blob: ${api} https://res.cloudinary.com https://www.gstatic.com https://www.google.com https://maps.googleapis.com https://maps.gstatic.com https://*.googleapis.com https://*.gstatic.com; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.gstatic.com https://www.google.com https://www.recaptcha.net https://maps.googleapis.com https://maps.gstatic.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; media-src 'self' blob:; worker-src 'self' blob:; frame-src https://www.google.com https://www.recaptcha.net https://maps.google.com; object-src 'none'; base-uri 'self'; form-action 'self'`,
-      }] }];
+      return [
+        { source: '/:path*', headers: [{
+          key: 'Content-Security-Policy',
+          value: `default-src 'self'; connect-src 'self' ${api} ${socket.replace('http:', 'ws:')} https://res.cloudinary.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://www.googleapis.com https://www.google.com https://www.recaptcha.net https://maps.googleapis.com https://maps.gstatic.com https://*.googleapis.com${role === 'customer' ? ' https://www.gstatic.com https://api.mercadopago.com https://api-static.mercadopago.com https://api.mercadolibre.com https://sdk.mercadopago.com https://secure-fields.mercadopago.com https://secure-fields-stg.mercadopago.com data:' : ''}; img-src 'self' data: blob: ${api} https://res.cloudinary.com https://www.gstatic.com https://www.google.com https://maps.googleapis.com https://maps.gstatic.com https://*.googleapis.com https://*.gstatic.com${role === 'customer' ? ' https://http2.mlstatic.com https://secure-fields.mercadopago.com https://www.mercadolibre.com https://www.mercadolivre.com' : ''}; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.gstatic.com https://www.google.com https://www.recaptcha.net https://maps.googleapis.com https://maps.gstatic.com${role === 'customer' ? ' https://sdk.mercadopago.com' : ''}; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; media-src 'self' blob:; worker-src 'self' blob:; frame-src https://www.google.com https://www.recaptcha.net https://maps.google.com${role === 'customer' ? ' https://mercadopago.com https://www.mercadopago.com https://*.mercadopago.com https://secure-fields.mercadopago.com https://secure-fields-stg.mercadopago.com' : ''}; object-src 'none'; base-uri 'self'; form-action 'self'`,
+         }].map(header => role === 'customer' && process.env.NEXT_PUBLIC_WINGSLAB_MP_SANDBOX === 'true'
+           ? { ...header, value: header.value.replace('https://sdk.mercadopago.com; style-src', 'https://sdk.mercadopago.com https://www.mercadopago.com/v2/security.js; style-src').replace('https://*.mercadopago.com https://secure-fields', 'https://*.mercadopago.com https://www.mercadopago.com.mx https://secure-fields') }
+           : header) },
+        // Los sonidos llevan versión en el nombre: se pueden cachear para siempre.
+        { source: '/sounds/:path*', headers: [{
+          key: 'Cache-Control',
+          value: 'public, max-age=31536000, immutable',
+        }] },
+      ];
     },
   };
 }
@@ -156,8 +170,33 @@ function processEnvironment(config, role, action) {
         });
       }
     }
+    // Mercado Pago sandbox is opt-in per environment. Credentials come only
+    // from the explicit local JSON configuration, never from the ambient env.
+    const mercadoPago = config.mercadoPago || {};
+    if (mercadoPago.sandbox === true) {
+      const token = typeof mercadoPago.accessToken === 'string' ? mercadoPago.accessToken.trim() : '';
+      const webhookSecret = typeof mercadoPago.webhookSecret === 'string' ? mercadoPago.webhookSecret.trim() : '';
+      if (!token || !webhookSecret) throw new Error('[WingsLab] Mercado Pago sandbox requires an access token and webhook secret.');
+      Object.assign(env, {
+        WINGSLAB_MP_SANDBOX_ACCESS_TOKEN: token,
+        WINGSLAB_MP_SANDBOX_WEBHOOK_SECRET: webhookSecret,
+        WINGSLAB_MP_SANDBOX_PLATFORM_ID: typeof mercadoPago.platformId === 'string' ? mercadoPago.platformId.trim() : '',
+        WINGSLAB_CHECKOUT_SANDBOX_ROUTES: 'true',
+        WINGSLAB_CHECKOUT_RESERVATION_SWEEP: 'true',
+        // The explicit sandbox-only config block is the sole authorization
+        // source for card charges; never inherit this from the host environment.
+        WINGSLAB_CHECKOUT_SANDBOX_CHARGES: 'true',
+      });
+    }
   }
   if (role === 'customer') {
+    const mercadoPago = config.mercadoPago || {};
+    if (mercadoPago.sandbox === true) {
+      const publicKey = typeof mercadoPago.publicKey === 'string' ? mercadoPago.publicKey.trim() : '';
+      if (!publicKey) throw new Error('[WingsLab] Mercado Pago sandbox requires a public key.');
+      env.NEXT_PUBLIC_MP_PUBLIC_KEY = publicKey;
+      env.NEXT_PUBLIC_WINGSLAB_MP_SANDBOX = 'true';
+    }
     const firebase = config.firebase || {};
     for (const [field, name] of [
       ['apiKey', 'WINGSLAB_FIREBASE_WEB_API_KEY'],

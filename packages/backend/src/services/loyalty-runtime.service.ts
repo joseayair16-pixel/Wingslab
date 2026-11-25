@@ -84,6 +84,16 @@ export async function loyaltyState(tx: Tx, customerId: string) {
   return { program, list, reserved, available, open, next, eligible: program.enabled && !reserved && !!next && (next.state === 'COMPLETED' || next.stamps === next.goal - 1) };
 }
 
+export async function findLoyaltyGift(tx: Tx, productId: string | null) {
+  if (!productId) return null;
+  const product = await tx.product.findFirst({
+    where: { id: productId, restaurantId: RESTAURANT_ID, isAvailable: true, deleted: false, sellBy: 'UNIT', isAdultOnly: false },
+    select: { id: true, name: true, trackStock: true, stock: true, optionGroups: { select: { minSelection: true } } },
+  });
+  if (!product || (product.trackStock && product.stock < 1) || product.optionGroups.some(group => group.minSelection > 0)) return null;
+  return { id: product.id, name: product.name, trackStock: product.trackStock, stock: product.stock };
+}
+
 export async function loyaltyQuote(tx: Tx, customerId: string, subtotalCents: number, productIds: string[] = [], otherPromotion = false) {
   const state = await loyaltyState(tx, customerId);
   if (!state?.eligible || !state.next) return { eligible: false as const, reason: state && !state.program.enabled ? 'El programa está en pausa. Tus sellos y premios se conservan.' : state?.reserved ? 'Ya tienes una recompensa reservada en un pedido en curso.' : 'Sigue acumulando compras para tu próxima recompensa.' };
@@ -94,9 +104,8 @@ export async function loyaltyQuote(tx: Tx, customerId: string, subtotalCents: nu
   let gift: { id: string; name: string; trackStock: boolean; stock: number } | null = null;
   let discountCents = 0;
   if (card.rewardKind === 'PRODUCT') {
-    const product = await tx.product.findFirst({ where: { id: card.rewardProductId!, restaurantId: RESTAURANT_ID, isAvailable: true, deleted: false, sellBy: 'UNIT', isAdultOnly: false }, select: { id: true, name: true, trackStock: true, stock: true, optionGroups: { select: { minSelection: true } } } });
-    if (!product || (product.trackStock && product.stock < 1) || product.optionGroups.some(g => g.minSelection > 0)) return { eligible: false as const, reason: 'El producto de regalo no está disponible ahora. Tu recompensa se conserva.' };
-    gift = { id: product.id, name: product.name, trackStock: product.trackStock, stock: product.stock };
+    gift = await findLoyaltyGift(tx, card.rewardProductId);
+    if (!gift) return { eligible: false as const, reason: 'El producto de regalo no está disponible ahora. Tu recompensa se conserva.' };
   } else {
     discountCents = loyaltyDiscount({ subtotalCents, kind: card.rewardKind === 'AMOUNT' ? 'amount' : 'percent', value: card.rewardValue!, otherPromotionApplied: false });
   }

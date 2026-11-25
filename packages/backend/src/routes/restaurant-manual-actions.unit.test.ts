@@ -93,7 +93,7 @@ describe('acciones manuales del restaurante', () => {
     expect(updateSpy).toHaveBeenCalledWith(expect.objectContaining({
       restaurantUserId: 'restaurant-user-1',
       orderId: ORDER_ID,
-      nextStatus: OrderStatus.CONFIRMED,
+      nextStatus: OrderStatus.PREPARING,
     }));
   });
 
@@ -126,7 +126,7 @@ describe('acciones manuales del restaurante', () => {
     expect(updateSpy).toHaveBeenCalledWith(expect.objectContaining({
       restaurantUserId: 'restaurant-user-1',
       orderId: ORDER_ID,
-      nextStatus: OrderStatus.CONFIRMED,
+      nextStatus: OrderStatus.PREPARING,
       preparationTimeMinutes: 15,
     }));
 

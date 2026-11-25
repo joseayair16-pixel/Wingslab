@@ -192,13 +192,10 @@ describe('app integration', () => {
     expect(response.statusCode).toBe(200);
   });
 
-  it('retira todas las rutas de OTP por correo y WhatsApp', async () => {
+  it('retira las rutas de OTP por correo', async () => {
     const paths = [
       '/auth/email-otp/iniciar',
       '/auth/email-otp/confirmar',
-      '/auth/whatsapp/iniciar',
-      '/auth/whatsapp/estado',
-      '/auth/whatsapp/confirmar',
     ];
     const responses = await Promise.all(paths.map((url) => app.inject({ method: 'POST', url, payload: {} })));
 

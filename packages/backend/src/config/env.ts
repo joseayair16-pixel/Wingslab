@@ -60,7 +60,7 @@ export function loadEnvironment(): void {
   const policy = require('../../../../config/wingslab.cjs');
   policy.assertLocalAuthorization();
   const inherited = Object.keys(process.env).filter((key) =>
-    /^(DATABASE_URL|REDIS_URL|JWT_SECRET|DATABASE_ENCRYPTION_KEYS?|FIREBASE_.*|GOOGLE_APPLICATION_CREDENTIALS|VAPID_.*|WHATSAPP_.*|SMS_.*|SMTP_.*|RESEND_.*|AWS_.*|CF_.*|PAYMENT_GATEWAY_.*)$/.test(key) && process.env[key]
+    /^(DATABASE_URL|REDIS_URL|JWT_SECRET|DATABASE_ENCRYPTION_KEYS?|FIREBASE_.*|GOOGLE_APPLICATION_CREDENTIALS|VAPID_.*|SMS_.*|SMTP_.*|RESEND_.*|AWS_.*|CF_.*|PAYMENT_GATEWAY_.*)$/.test(key) && process.env[key]
   );
   if (inherited.length) throw new Error('[WingsLab] Legacy service variables present; use a clean process environment.');
   configuration = parseBackendConfiguration(process.env);

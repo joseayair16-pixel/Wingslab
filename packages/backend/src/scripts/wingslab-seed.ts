@@ -94,7 +94,7 @@ async function main(): Promise<void> {
       minDeliveryTime: 20, maxDeliveryTime: 60, maxCashOrder: 500, acceptsCash: true,
       contactPhone: FICTIONAL_PHONE, email: 'restaurante@wingslab.local', billingCycle: 'WEEKLY',
       platformFeeRate: 0.08, platformFeePerOrder: 5, enableTicketPrinting: false, isFeatured: false,
-      businessType: 'RESTAURANT', whatsappNotifications: false,
+      businessType: 'RESTAURANT',
     },
   });
 
@@ -131,7 +131,7 @@ async function main(): Promise<void> {
   const customer = await prisma.customer.upsert({
     where: { userId: customerUser.id },
     update: {},
-    create: { userId: customerUser.id, rating: 5, totalOrders: 0, isSuspendedByDebt: false, debtAmount: 0, whatsappNotifications: false },
+    create: { userId: customerUser.id, rating: 5, totalOrders: 0, isSuspendedByDebt: false, debtAmount: 0 },
   });
   const address = await prisma.address.upsert({
     where: { id: 'wl_addr_1' },
@@ -161,7 +161,7 @@ async function main(): Promise<void> {
         isAcceptedByDriver: false, isSupportRequested: false, supportCount: 0,
         supportRejectionCount: 0, supportAttempts: 0, noDriversAvailable: false, fulfillmentType: 'DELIVERY',
         addressId: address.id, latitude: 19.4330, longitude: -99.1340, subtotal, taxAmount: 0,
-        serviceFee: 8, platformFee: 5, driverPlatformFee: 5, whatsappFee: 0, deliveryFee: 35,
+        serviceFee: 8, platformFee: 5, driverPlatformFee: 5, deliveryFee: 35,
         totalAmount: total, status: seed.status, paymentMethod: 'CASH', paymentStatus: seed.status === 'DELIVERED' ? 'COMPLETED' : 'PENDING',
         estimatedDeliveryTime: new Date(now.getTime() + 45 * 60 * 1000), deliveredByRestaurant: seed.status === 'DELIVERED',
         actualDeliveryTime: seed.status === 'DELIVERED' ? now : null, etaExtendedMinutes: 0, notes: 'Pedido ficticio de prueba',

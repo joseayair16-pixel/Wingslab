@@ -1,4 +1,5 @@
 'use client';
+import { SectionHeader } from '../SectionHeader';
 import { Info, Settings2, Tag } from 'lucide-react';
 
 import React, { useEffect, useState } from 'react';
@@ -208,7 +209,6 @@ export const SettingsSection = React.memo(function SettingsSection({
   ToggleField,
 }: SettingsSectionProps) {
   const currentSettingsTab = settingsTabs.find((t: any) => t.key === activeSettingsTab) ?? settingsTabs[0];
-  const [showWhatsappConfirm, setShowWhatsappConfirm] = React.useState(false);
   // Diagnóstico de notificaciones push (visible en el bloque Diagnóstico):
   // permite al restaurante verificar y re-activar la suscripción sin tocar el
   // banner superior (útil en Android PWA, donde el permiso live a nivel de SO).
@@ -613,27 +613,6 @@ export const SettingsSection = React.memo(function SettingsSection({
   };
   const activeSaveBarCopy = saveBarCopy[activeSettingsTab] ?? saveBarCopy.perfil;
 
-  const applyWhatsappNotifications = async (checked: boolean) => {
-    setStoreDraft((c: any) => ({ ...c, whatsappNotifications: checked }));
-    if (!token) return;
-    try {
-      const payload = await requestJson<SuccessResponse<RestaurantProfile>>({
-        apiBase,
-        path: '/restaurant-panel/perfil',
-        token,
-        options: {
-          method: 'PATCH',
-          body: JSON.stringify({ whatsappNotifications: checked }),
-        },
-        fallbackMessage: 'Error al actualizar',
-      });
-      setProfile(payload.data);
-    } catch (e) {
-      setStoreDraft((c: any) => ({ ...c, whatsappNotifications: !checked }));
-      pushToast('error', 'Error', 'No se pudo actualizar la configuración.');
-    }
-  };
-
   const toggleAutoOpen = async (checked: boolean) => {
     if (!token) return;
     const previous = profile?.autoOpenEnabled ?? false;
@@ -681,13 +660,7 @@ export const SettingsSection = React.memo(function SettingsSection({
 
   return (
     <div className="wl-settings">
-        <header className="wl-settings-header">
-          <span className="wl-settings-header-icon"><Settings2 aria-hidden="true" /></span>
-          <div>
-            <p>WingsLab</p>
-            <h2>Configuración</h2>
-          </div>
-        </header>
+        <SectionHeader title="Configuración" icon={<Settings2 />} />
 
         {/* Contenedor Principal */}
         <div className="wl-settings-layout">
@@ -1303,15 +1276,21 @@ export const SettingsSection = React.memo(function SettingsSection({
             {activeSettingsTab === 'pagos' && (
               <div className="wl-settings-form grid min-w-0 grid-cols-1 gap-4 md:grid-cols-2">
                 <div className="md:col-span-2 rounded-[18px] border border-sky-100 bg-sky-50 p-4 text-sm text-sky-700">
-                  <p className="font-semibold mb-0.5">Pago en efectivo</p>
-                  <p className="text-sky-700/80">Los pedidos que superen el límite se pagan por transferencia.</p>
+                  <p className="font-semibold mb-0.5">Métodos de pago</p>
+                  <p className="text-sky-700/80">Elige efectivo, tarjeta o ambos. La tarjeta solo estará disponible cuando la integración de cobros esté habilitada.</p>
                 </div>
                 <div className="md:col-span-2">
                   <ToggleField
                     label="Aceptar pagos en efectivo"
                     checked={storeDraft.acceptsCash}
                     onChange={(checked: boolean) => setStoreDraft((c: any) => ({ ...c, acceptsCash: checked }))}
-                    description="Desactiva si prefieres cobrar solo con transferencia."
+                    description="Los límites de distancia y monto aplican al efectivo."
+                  />
+                  <ToggleField
+                    label="Aceptar pagos con tarjeta"
+                    checked={storeDraft.acceptsCard}
+                    onChange={(checked: boolean) => setStoreDraft((c: any) => ({ ...c, acceptsCard: checked }))}
+                    description="Los pagos se procesan en línea; los rechazos o cancelaciones de pedidos pagados generan una solicitud de reembolso."
                   />
                 </div>
                 <div className="md:col-span-2">
@@ -1321,30 +1300,6 @@ export const SettingsSection = React.memo(function SettingsSection({
                     onChange={(value: string) => setStoreDraft((c: any) => ({ ...c, maxCashOrder: value }))}
                     placeholder="500"
                     type="number"
-                  />
-                </div>
-                <div className="md:col-span-2 rounded-[18px] border border-emerald-100 bg-emerald-50 p-4 text-sm text-emerald-800">
-                  <p className="font-semibold mb-0.5">Cuenta para recibir transferencias</p>
-                  <p className="text-emerald-700/80">Estos datos se muestran al elegir transferencia.</p>
-                </div>
-                <Field
-                  label="Banco"
-                  value={transferBankName}
-                  onChange={setTransferBankName}
-                  placeholder="BBVA, Banorte, HSBC…"
-                />
-                <Field
-                  label="Número de cuenta o tarjeta"
-                  value={transferAccountNumber}
-                  onChange={setTransferAccountNumber}
-                  placeholder="1234 5678 9012 3456"
-                />
-                <div className="md:col-span-2">
-                  <Field
-                    label="Nombre del beneficiario"
-                    value={transferBeneficiaryName}
-                    onChange={setTransferBeneficiaryName}
-                    placeholder="Tacos Centro SA de CV"
                   />
                 </div>
               </div>
@@ -1453,21 +1408,7 @@ export const SettingsSection = React.memo(function SettingsSection({
                       ))}
                     </div>
                   </div>
-                )}
-                <ToggleField
-                  mobileCompact
-                  label="Notificaciones por WhatsApp"
-                  description="Avisos de pedidos: $0.50 MXN por pedido. Configura tu número en el perfil."
-                  checked={!!storeDraft.whatsappNotifications}
-                  onChange={async (checked: boolean) => {
-                    if (checked) {
-                      setShowWhatsappConfirm(true);
-                      return;
-                    }
-                    await applyWhatsappNotifications(false);
-                  }}
-                />
-                {orderAlertAudioState === 'unsupported' && (
+                )}                {orderAlertAudioState === 'unsupported' && (
                   <div className="rounded-[16px] border border-amber-100 bg-amber-50 p-3.5 text-sm text-amber-800">
                     Tu navegador no admite reproducción de audio automática. Intenta con Chrome o Edge.
                   </div>
@@ -2094,44 +2035,6 @@ export const SettingsSection = React.memo(function SettingsSection({
         </div>
       )}
 
-      {showWhatsappConfirm && (
-        <div className="fixed inset-0 z-[95] flex items-center justify-center bg-black/60 px-4 py-5 backdrop-blur-sm animate-fade-in"
-          onClick={() => setShowWhatsappConfirm(false)}>
-          <div className="relative w-full max-w-md rounded-[28px] bg-white p-6 shadow-2xl"
-            onClick={(e) => e.stopPropagation()}>
-            <button onClick={() => setShowWhatsappConfirm(false)}
-              className="absolute top-4 right-4 flex h-8 w-8 items-center justify-center rounded-full bg-neutral-100 text-neutral-500 hover:bg-neutral-200 hover:text-neutral-700 transition-colors">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-            </button>
-            <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-100 text-emerald-600">
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
-            </div>
-            <h3 className="text-lg font-bold text-neutral-900">Activar notificaciones por WhatsApp</h3>
-            <p className="mt-2 text-sm leading-relaxed text-neutral-600">
-              Recibirás un mensaje a tu WhatsApp cuando a tu negocio llegue un pedido nuevo.
-            </p>
-            <div className="mt-4 rounded-2xl border border-emerald-100 bg-emerald-50 p-4">
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-semibold text-neutral-800">Costo por pedido</span>
-                <span className="text-sm font-bold text-neutral-900">$0.50 MXN</span>
-              </div>
-              <p className="mt-1 text-xs text-neutral-500">
-                Este cargo se suma a tu tarifa de uso y aparecerá en tu liquidación semanal. Solo se cobra cuando se envía el mensaje de un pedido.
-              </p>
-            </div>
-            <div className="mt-6 flex flex-col gap-2">
-              <button onClick={async () => { setShowWhatsappConfirm(false); await applyWhatsappNotifications(true); }}
-                className="w-full rounded-xl bg-emerald-600 py-3 text-sm font-semibold text-white hover:bg-emerald-700 transition-colors">
-                Aceptar y activar
-              </button>
-              <button onClick={() => setShowWhatsappConfirm(false)}
-                className="w-full rounded-xl border border-black/10 bg-white py-3 text-sm font-semibold text-neutral-700 hover:bg-neutral-50 transition-colors">
-                Cancelar
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   )
 });

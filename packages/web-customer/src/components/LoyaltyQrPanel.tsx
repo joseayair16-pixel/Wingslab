@@ -1,51 +1,184 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
-import { Copy, RefreshCw } from 'lucide-react';
-import { getWingslabApiUrl, readStoredSession, requestJson } from '@sadel/shared';
+import { Award, Copy, Gift, RefreshCw, X } from 'lucide-react';
+import { ApiRequestError, getWingslabApiUrl, readStoredSession, requestJson } from '@sadel/shared';
+import { LoyaltyCard } from '../../../shared/src/loyalty-card';
 
-type Qr = { code: string; expiresAt: string; ttlSeconds: number };
+type Qr = { sessionId: string; code: string; ttlSeconds: number };
+type ActiveQr = Qr & { deadline: number; customerUserId: string };
+type Receipt = { stamps: number; goal: number; completed: boolean; rewardDelivered: boolean; rewardDescription: string; terms: string };
+type QrStatus = { state: 'active' | 'expired' | 'invalidated' | 'voided' } | { state: 'applied'; receipt: Receipt };
+type Props = { onClose: () => void; onRefresh: () => void; brand?: { name?: string; logo?: string | null }; fallbackLogoUrl: string };
+const POLL_MS = 2500;
 
-/** Short-lived, single-use code. The restaurant scans it to apply one stamp. */
-export function LoyaltyQrPanel({ onClose }: { onClose: () => void }) {
-  const [qr, setQr] = useState<Qr | null>(null);
+export function LoyaltyQrPanel({ onClose, onRefresh, brand, fallbackLogoUrl }: Props) {
+  const [qr, setQr] = useState<ActiveQr | null>(null);
+  const [status, setStatus] = useState<QrStatus | null>(null);
   const [seconds, setSeconds] = useState(0);
   const [error, setError] = useState('');
+  const [syncError, setSyncError] = useState(false);
   const [loading, setLoading] = useState(true);
   const [copied, setCopied] = useState(false);
-  const refresh = useCallback(async () => {
-    const session = readStoredSession('sadel.customer');
-    if (!session?.token) { setError('Inicia sesión para mostrar tu código.'); setLoading(false); return; }
-    setLoading(true); setError(''); setQr(null); setSeconds(0);
+  const live = useRef(false);
+  const issuing = useRef(false);
+  const onRefreshRef = useRef(onRefresh);
+  const receiptHeading = useRef<HTMLHeadingElement>(null);
+  onRefreshRef.current = onRefresh;
+
+  const issue = useCallback(async () => {
+    if (issuing.current) return;
+    issuing.current = true;
+    setQr(null);
+    setStatus(null);
+    setError('');
+    setSyncError(false);
+    setCopied(false);
+    setLoading(true);
     try {
-      const result = await requestJson<{ data: Qr }>({ apiBase: getWingslabApiUrl(), path: '/customer/lealtad/qr', token: session.token, options: { method: 'POST', body: '{}' }, retry: { attempts: 0 } });
-      setQr(result.data);
-      setSeconds(result.data.ttlSeconds);
-      setCopied(false);
-    } catch (reason) { setError(reason instanceof Error ? reason.message : 'No pudimos generar tu código. Intenta de nuevo.'); }
-    finally { setLoading(false); }
+      const { token, user } = readStoredSession('sadel.customer');
+      if (!token || !user?.id) throw new Error('Inicia sesión para mostrar tu código.');
+      const startedAt = performance.now();
+      const { data } = await requestJson<{ data: Qr }>({
+        apiBase: getWingslabApiUrl(), path: '/customer/lealtad/qr', token,
+        options: { method: 'POST', body: '{}' }, retry: { attempts: 0 },
+        fallbackMessage: 'No pudimos generar tu código.',
+      });
+      if (!live.current) return;
+      if (readStoredSession('sadel.customer').user?.id !== user.id) throw new Error('Tu sesión cambió. Genera otro código.');
+      const deadline = startedAt + data.ttlSeconds * 1000;
+      setQr({ ...data, deadline, customerUserId: user.id });
+      setSeconds(Math.max(0, Math.ceil((deadline - performance.now()) / 1000)));
+    } catch (reason) {
+      if (live.current) setError(reason instanceof Error ? reason.message : 'No pudimos generar tu código.');
+    } finally {
+      issuing.current = false;
+      if (live.current) setLoading(false);
+    }
   }, []);
 
-  useEffect(() => { void refresh(); }, [refresh]);
+  useEffect(() => {
+    live.current = true;
+    void issue();
+    return () => { live.current = false; };
+  }, [issue]);
+
   useEffect(() => {
     if (!qr) return;
-    const timer = window.setInterval(() => {
-      setSeconds(value => {
-        if (value <= 1) { window.clearInterval(timer); void refresh(); return 0; }
-        return value - 1;
-      });
-    }, 1000);
-    return () => window.clearInterval(timer);
-  }, [qr, refresh]);
+    const tick = () => setSeconds(Math.max(0, Math.ceil((qr.deadline - performance.now()) / 1000)));
+    const timer = window.setInterval(tick, 1000);
+    document.addEventListener('visibilitychange', tick);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener('visibilitychange', tick);
+    };
+  }, [qr]);
+
+  useEffect(() => {
+    if (!qr) return;
+    let active = true;
+    let inFlight = false;
+    let controller: AbortController | undefined;
+    let timer: number | undefined;
+    let failures = 0;
+    const poll = async () => {
+      if (!active || inFlight || document.visibilityState === 'hidden') return;
+      inFlight = true;
+      window.clearTimeout(timer);
+      controller = new AbortController();
+      const timeout = window.setTimeout(() => controller?.abort(), 6500);
+      const stopForSessionChange = () => {
+        active = false;
+        setQr(null);
+        setError('Tu sesión cambió. Genera otro código.');
+      };
+      try {
+        const { token, user } = readStoredSession('sadel.customer');
+        if (!token || user?.id !== qr.customerUserId) { stopForSessionChange(); return; }
+        const { data } = await requestJson<{ data: QrStatus }>({
+          apiBase: getWingslabApiUrl(), path: `/customer/lealtad/qr/${encodeURIComponent(qr.sessionId)}`, token,
+          options: { signal: controller.signal }, timeoutMs: 6500, retry: { attempts: 0 },
+        });
+        if (!active) return;
+        if (readStoredSession('sadel.customer').user?.id !== qr.customerUserId) { stopForSessionChange(); return; }
+        failures = 0;
+        setSyncError(false);
+        if (data.state !== 'active') {
+          active = false;
+          setQr(null);
+          setStatus(data);
+          if (data.state === 'applied' || data.state === 'voided') onRefreshRef.current();
+        }
+      } catch (reason) {
+        if (!active) return;
+        if (reason instanceof ApiRequestError && (reason.status === 404 || reason.status === 401 || reason.status === 403)) {
+          active = false;
+          setQr(null);
+          setError('Este código ya no está disponible.');
+        } else {
+          failures += 1;
+          setSyncError(true);
+        }
+      } finally {
+        window.clearTimeout(timeout);
+        controller = undefined;
+        inFlight = false;
+        if (active) timer = window.setTimeout(poll, Math.min(12000, POLL_MS * (1 + failures)));
+      }
+    };
+    const resume = () => { void poll(); };
+    timer = window.setTimeout(poll, POLL_MS);
+    document.addEventListener('visibilitychange', resume);
+    window.addEventListener('online', resume);
+    return () => {
+      active = false;
+      window.clearTimeout(timer);
+      controller?.abort();
+      document.removeEventListener('visibilitychange', resume);
+      window.removeEventListener('online', resume);
+    };
+  }, [qr]);
+
+  useEffect(() => {
+    if (status?.state === 'applied') receiptHeading.current?.focus();
+  }, [status]);
+
+  if (status?.state === 'applied') {
+    const { receipt } = status;
+    const remaining = Math.max(0, receipt.goal - receipt.stamps);
+    return <section className="wl-loyalty-receipt" aria-labelledby="wl-loyalty-receipt-title">
+      <header className="wl-loyalty-receipt-copy">
+        <span className="wl-loyalty-receipt-icon">{receipt.completed ? <Gift aria-hidden="true" /> : <Award aria-hidden="true" />}</span>
+        <h3 ref={receiptHeading} tabIndex={-1} id="wl-loyalty-receipt-title">{receipt.completed ? '¡Tarjeta completada!' : '¡Recibiste un sello!'}</h3>
+        <p>{receipt.completed
+          ? receipt.rewardDelivered ? `Recompensa entregada: ${receipt.rewardDescription}.` : `Ganaste ${receipt.rewardDescription}. Tu recompensa queda disponible.`
+          : remaining === 1 ? 'Te falta 1 sello para tu recompensa.' : `Te faltan ${remaining} sellos para tu recompensa.`}</p>
+        <small>Gracias por comprar en WingsLab.</small>
+      </header>
+      <LoyaltyCard logoUrl={brand?.logo || fallbackLogoUrl} fallbackLogoUrl={fallbackLogoUrl} name={brand?.name}
+        goal={receipt.goal} stamps={receipt.stamps} reward={receipt.rewardDescription} animateStamp={receipt.stamps} />
+      <button type="button" className="wl-primary-action" onClick={onClose}>{receipt.completed ? 'Ver mi nueva tarjeta' : 'Entendido'}</button>
+    </section>;
+  }
 
   return <section className="wl-loyalty-qr" aria-label="Código para compras en el local">
-    <div className="wl-loyalty-qr-head"><div><span className="wl-kicker">Compra en el local</span><h3>Muestra este código</h3><p>Pídele a WingsLab que lo escanee al cobrar tu compra.</p></div><button type="button" onClick={onClose} aria-label="Cerrar código">Cerrar</button></div>
-    {loading && !qr ? <p role="status">Generando tu código…</p> : error && !qr ? <p role="alert">{error}</p> : qr ? <>
-      <div className="wl-loyalty-qr-code"><QRCodeSVG value={qr.code} size={188} level="M" marginSize={1} bgColor="#ffffff" fgColor="#201914" /></div>
-      <p className="wl-loyalty-qr-code-text">{qr.code}</p>
-      <div className="wl-loyalty-qr-actions"><button type="button" onClick={() => void navigator.clipboard?.writeText(qr.code).then(() => setCopied(true)).catch(() => undefined)}><Copy size={15} />{copied ? 'Copiado' : 'Copiar código'}</button><button type="button" onClick={() => void refresh()} disabled={loading}><RefreshCw size={15} />Nuevo código</button></div>
-      <div className="wl-loyalty-qr-timer" role="status"><span className={seconds <= 15 ? 'is-urgent' : ''}>{seconds}s</span><small>Vence pronto. Se renueva automáticamente y solo sirve para una compra.</small></div>
-    </> : null}
+    <div className="wl-loyalty-qr-head">
+      <div><span className="wl-kicker">Compra en el local</span><h3>Muestra tu QR</h3><p>En caja lo escanean para agregar un sello.</p></div>
+      <button type="button" onClick={() => { onRefresh(); onClose(); }} aria-label="Cerrar código"><X size={18} aria-hidden="true" /></button>
+    </div>
+    {loading ? <p role="status">Generando tu código…</p> : qr && seconds > 0 ? <>
+      <div className="wl-loyalty-qr-code"><QRCodeSVG value={qr.code} size={188} level="M" marginSize={4} bgColor="#ffffff" fgColor="#201914" /></div>
+      <div className="wl-loyalty-qr-timer"><span className={seconds <= 15 ? 'is-urgent' : ''}>{seconds}s</span><small>Un solo uso. Esperando confirmación de la tienda.</small></div>
+      <details className="wl-loyalty-qr-manual">
+        <summary>Mostrar código manual</summary>
+        <p className="wl-loyalty-qr-code-text">{qr.code}</p>
+        <div className="wl-loyalty-qr-actions"><button type="button" onClick={() => void navigator.clipboard?.writeText(qr.code).then(() => setCopied(true)).catch(() => undefined)}><Copy size={15} aria-hidden="true" />{copied ? 'Copiado' : 'Copiar código'}</button></div>
+      </details>
+    </> : qr ? <p role="status">Comprobando si la tienda confirmó el sello…</p> : <>
+      <p role={error ? 'alert' : 'status'}>{error || (status?.state === 'voided' ? 'La tienda anuló este sello.' : 'Este código ya venció o dejó de estar activo.')}</p>
+      <div className="wl-loyalty-qr-actions"><button type="button" onClick={() => void issue()}><RefreshCw size={15} aria-hidden="true" />Generar otro código</button></div>
+    </>}
+    {syncError && qr && <p role="status" className="wl-loyalty-qr-sync">Sin conexión con WingsLab. Volveremos a comprobar el código al reconectar.</p>}
   </section>;
 }

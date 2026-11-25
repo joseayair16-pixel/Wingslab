@@ -1,181 +1,316 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Award, Check, CircleAlert, Plus, ScanLine, ShieldCheck, Trash2, X } from 'lucide-react';
-import { getRequestErrorMessage, requestJson } from '@sadel/shared';
+import { Award, Check, Gift, ScanLine, X } from 'lucide-react';
+import { ApiRequestError, getRequestErrorMessage, requestJson } from '@sadel/shared';
+import { SectionHeader } from '../SectionHeader';
 
-type Option = { id: string; name: string; price: number; isAvailable: boolean };
-type OptionGroup = { id: string; name: string; minSelection: number; maxSelection: number; options: Option[] };
-type Product = { id: string; name: string; price: number; discountPrice: number | null; promoType: string | null; promoBuyQuantity: number | null; promoPayQuantity: number | null; sellBy: string; unitPrice: number | null; minWeightG: number | null; maxWeightG: number | null; stepWeightG: number | null; trackStock: boolean; stock: number; optionGroups: OptionGroup[]; category?: { name: string } };
-type CartLine = { key: number; productId: string; quantity: number; weightG?: number; optionIds: string[] };
-type Preview = { customerName: string; stamps: number; goal: number; availableRewards: number; reserved: boolean; rewardDescription: string; eligibleForReward: boolean };
-type Quote = { customerName: string; items: Array<{ productId: string; name: string; quantity: number; subtotalCents: number; weightG: number | null; options: Array<{ name: string }> }>; subtotalCents: number; totalCents: number; rewardAppliedCents: number; rewardDescription: string | null; rewardEligible: boolean; rewardUnavailableReason: string | null; rewardApplied: boolean; hasPromotion: boolean; stamps: number; goal: number; availableRewards: number; reserved: boolean };
-type Visit = { id: string; amountCents: number; totalCents: number | null; paymentMethod: string | null; items: Array<{ productId: string; name: string; quantity: number; subtotalCents: number }>; rewardAppliedCents: number; rewardDescription: string | null; customerName: string; voidedAt: string | null; createdAt: string };
-const money = (cents: number) => `$${(cents / 100).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+type Preview = {
+  customerName: string;
+  stamps: number;
+  goal: number;
+  completesCard: boolean;
+  previewKey: string;
+  rewardDescription: string;
+  rewardKind: 'AMOUNT' | 'PERCENT' | 'PRODUCT';
+  rewardValue: number | null;
+  rewardBlockedReason: string | null;
+};
+type Receipt = { stamps: number; goal: number; completed: boolean; rewardDelivered: boolean; rewardDescription: string };
+type Confirmation = {
+  kind: 'stamp' | 'completed' | 'delivered';
+  title: string;
+  description: string;
+  stamps?: number;
+  goal?: number;
+  rewardDescription?: string;
+};
+type Visit = {
+  id: string; amountCents: number; totalCents: number | null; paymentMethod: string | null;
+  items: Array<{ quantity: number; name: string }>; rewardAppliedCents: number; rewardDescription: string | null;
+  customerName: string; voidedAt: string | null; createdAt: string;
+};
+type Detector = new (options: { formats: string[] }) => { detect: (video: HTMLVideoElement) => Promise<Array<{ rawValue?: string }>> };
+
+const localMoney = new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' });
+const visitDate = new Intl.DateTimeFormat('es-MX', { dateStyle: 'medium', timeStyle: 'short' });
+const expiryCodes = ['LOYALTY_CODE_INVALID', 'VISIT_ALREADY_VOIDED', 'LOYALTY_PREVIEW_CHANGED', 'LOYALTY_PROGRAM_OFF'];
+const isSale = (visit: Visit) => !!visit.paymentMethod || visit.totalCents !== null || visit.amountCents > 0;
 
 export function InPersonSalesSection({ apiBase, token }: { apiBase: string; token: string }) {
   const [code, setCode] = useState('');
   const [preview, setPreview] = useState<Preview | null>(null);
-  const [catalog, setCatalog] = useState<Product[]>([]);
-  const [catalogError, setCatalogError] = useState('');
-  const [cart, setCart] = useState<CartLine[]>([]);
-  const [selectedProductId, setSelectedProductId] = useState('');
-  const [quantity, setQuantity] = useState(1);
-  const [weightG, setWeightG] = useState(100);
-  const [optionIds, setOptionIds] = useState<string[]>([]);
-  const [quote, setQuote] = useState<Quote | null>(null);
-  const [applyReward, setApplyReward] = useState(false);
-  const [paymentMethod, setPaymentMethod] = useState<'CASH' | 'CARD' | 'TRANSFER' | 'OTHER'>('CASH');
-  const [paymentConfirmed, setPaymentConfirmed] = useState(false);
-  const [note, setNote] = useState('');
   const [busy, setBusy] = useState(false);
+  const [retryChoice, setRetryChoice] = useState<boolean | null>(null);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
+  const [confirmation, setConfirmation] = useState<Confirmation | null>(null);
   const [visits, setVisits] = useState<Visit[]>([]);
-  const [version, setVersion] = useState(0);
+  const [historyError, setHistoryError] = useState(false);
+  const [revision, setRevision] = useState(0);
   const [showScanner, setShowScanner] = useState(false);
-  const videoRef = useRef<HTMLVideoElement | null>(null);
-  const streamRef = useRef<MediaStream | null>(null);
-  const lineKey = useRef(0);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const flight = useRef(false);
+  const confirmRef = useRef<HTMLButtonElement>(null);
 
-  const call = useCallback(<T,>(path: string, options?: RequestInit) => requestJson<{ data: T }>({ apiBase, token, path, options, retry: { attempts: 0 }, fallbackMessage: 'No se pudo completar la operación.' }), [apiBase, token]);
-  const loadVisits = useCallback(() => {
-    void call<Visit[]>('/restaurant-panel/lealtad/visitas?limit=20').then(result => setVisits(result.data)).catch(() => setVisits([]));
-  }, [call]);
-  useEffect(() => { loadVisits(); }, [loadVisits, version]);
+  const call = useCallback(<T,>(path: string, options?: RequestInit) => requestJson<{ data: T }>({
+    apiBase, token, path, options, retry: { attempts: 0 }, fallbackMessage: 'No se pudo completar la operación.',
+  }), [apiBase, token]);
+
   useEffect(() => {
-    let alive = true;
-    void call<Product[]>('/restaurant-panel/lealtad/catalogo-local').then(result => {
-      if (!alive) return;
-      setCatalog(result.data);
-      setSelectedProductId(result.data[0]?.id || '');
-    }).catch(reason => { if (alive) setCatalogError(getRequestErrorMessage(reason, 'No se pudo cargar el menú.')); });
-    return () => { alive = false; };
+    let active = true;
+    void call<Visit[]>('/restaurant-panel/lealtad/visitas?limit=20')
+      .then(({ data }) => { if (active) { setVisits(data); setHistoryError(false); } })
+      .catch(() => { if (active) setHistoryError(true); });
+    return () => { active = false; };
+  }, [call, revision]);
+
+  const verify = useCallback(async (rawCode: string) => {
+    if (flight.current) return;
+    const scanned = rawCode.trim();
+    if (!/^[\w-]{6,32}$/.test(scanned)) {
+      setError('No es un código de fidelidad válido. Pide al cliente su código de WingsLab.');
+      return;
+    }
+    flight.current = true;
+    setShowScanner(false);
+    setCode(scanned);
+    setPreview(null);
+    setRetryChoice(null);
+    setBusy(true);
+    setError('');
+    setNotice('');
+    setConfirmation(null);
+    try {
+      const { data } = await call<Preview>('/restaurant-panel/lealtad/verificar', {
+        method: 'POST', body: JSON.stringify({ code: scanned }),
+      });
+      setPreview(data);
+    } catch (reason) {
+      setError(getRequestErrorMessage(reason, 'No se pudo verificar el código.'));
+    } finally {
+      flight.current = false;
+      setBusy(false);
+    }
   }, [call]);
 
-  const selectedProduct = catalog.find(product => product.id === selectedProductId);
-  const saleItems = cart.map(({ productId, quantity: qty, weightG: grams, optionIds: options }) => ({ productId, quantity: qty, ...(grams ? { weightG: grams } : {}), optionIds: options }));
-  const resetQuote = () => { setQuote(null); setPaymentConfirmed(false); };
-  const verify = async () => {
-    if (!code.trim() || busy) return;
-    setShowScanner(false);
-    streamRef.current?.getTracks().forEach(track => track.stop());
-    setBusy(true); setError(''); setNotice(''); setPreview(null); setQuote(null); setPaymentConfirmed(false);
-    try {
-      const result = await call<Preview>('/restaurant-panel/lealtad/verificar', { method: 'POST', body: JSON.stringify({ code: code.trim() }) });
-      setPreview(result.data); setApplyReward(result.data.eligibleForReward);
-    } catch (reason) { setError(getRequestErrorMessage(reason, 'No se pudo verificar el código.')); }
-    finally { setBusy(false); }
-  };
-  const addItem = () => {
-    if (!selectedProduct || busy) return;
-    for (const group of selectedProduct.optionGroups) {
-      const count = optionIds.filter(id => group.options.some(option => option.id === id)).length;
-      if (count < group.minSelection || count > group.maxSelection) { setError(`Revisa las opciones de ${selectedProduct.name}: ${group.name}.`); return; }
-    }
+  useEffect(() => {
+    if (preview) confirmRef.current?.focus();
+  }, [preview]);
+
+  useEffect(() => {
+    if (!confirmation) return;
+    const close = (event: KeyboardEvent) => { if (event.key === 'Escape') setConfirmation(null); };
+    window.addEventListener('keydown', close);
+    return () => window.removeEventListener('keydown', close);
+  }, [confirmation]);
+
+  async function confirm(deliverReward: boolean) {
+    if (!preview || flight.current || (retryChoice !== null && retryChoice !== deliverReward)) return;
+    flight.current = true;
+    setBusy(true);
     setError('');
-    setCart(lines => [...lines, { key: ++lineKey.current, productId: selectedProduct.id, quantity, ...(selectedProduct.sellBy === 'WEIGHT' ? { weightG } : {}), optionIds: [...optionIds] }]);
-    setQuantity(1); setOptionIds([]); resetQuote();
-  };
-  const quoteSale = async () => {
-    if (!preview || !code.trim() || cart.length === 0 || busy) return;
-    setBusy(true); setError(''); setNotice(''); setPaymentConfirmed(false);
+    setNotice('');
     try {
-      const result = await call<Quote>('/restaurant-panel/lealtad/cotizar-local', { method: 'POST', body: JSON.stringify({ code: code.trim(), items: saleItems, applyReward }) });
-      setQuote(result.data);
-      if (applyReward && !result.data.rewardEligible) setApplyReward(false);
-    } catch (reason) { setQuote(null); setError(getRequestErrorMessage(reason, 'No se pudo calcular la venta.')); }
-    finally { setBusy(false); }
-  };
-  const confirm = async () => {
-    if (!preview || !quote || !paymentConfirmed || busy) return;
-    setBusy(true); setError(''); setNotice('');
-    try {
-      const result = await call<{ stamps: number; goal: number; completed: boolean; subtotalCents: number; totalCents: number; rewardAppliedCents: number; rewardDescription: string | null; paymentMethod: string }>('/restaurant-panel/lealtad/registrar', { method: 'POST', body: JSON.stringify({ code: code.trim(), items: saleItems, applyReward: quote.rewardApplied, paymentMethod, note: note.trim() || undefined }) });
-      setNotice(`Venta registrada y cobrada por ${money(result.data.totalCents)} (${result.data.paymentMethod}). ${result.data.stamps} de ${result.data.goal} sellos.${result.data.completed ? ' ¡Tarjeta completada!' : ''}${result.data.rewardAppliedCents ? ` Descuento aplicado: ${money(result.data.rewardAppliedCents)}.` : result.data.rewardDescription ? ` ${result.data.rewardDescription}.` : ''}`);
-      setPreview(null); setQuote(null); setCode(''); setCart([]); setApplyReward(false); setNote(''); setPaymentConfirmed(false); setVersion(v => v + 1);
+      const { data } = await call<Receipt>('/restaurant-panel/lealtad/sellos', {
+        method: 'POST', body: JSON.stringify({ code, previewKey: preview.previewKey, deliverReward }),
+      });
+      setConfirmation(data.rewardDelivered
+        ? { kind: 'delivered', title: 'Recompensa entregada', description: 'La tarjeta se completó y entregaste el premio.', rewardDescription: data.rewardDescription, stamps: data.stamps, goal: data.goal }
+        : data.completed
+          ? { kind: 'completed', title: 'Tarjeta completada', description: 'El premio quedó disponible para entregarlo después.', rewardDescription: data.rewardDescription, stamps: data.stamps, goal: data.goal }
+          : { kind: 'stamp', title: 'Sello agregado', description: 'El cliente ya puede verlo en su tarjeta.', stamps: data.stamps, goal: data.goal });
+      setPreview(null);
+      setCode('');
+      setRetryChoice(null);
+      setRevision(value => value + 1);
     } catch (reason) {
-      setError(`${getRequestErrorMessage(reason, 'No se pudo confirmar el resultado.')} Conserva los mismos productos y forma de pago, y revisa el historial antes de reintentar; el sistema reconocerá el mismo QR y la misma venta si ya se guardó.`);
-      setVersion(v => v + 1);
-    } finally { setBusy(false); }
-  };
-  const voidVisit = async (id: string) => {
-    if (!window.confirm('¿Anular el registro de esta venta? Se devolverán el sello, la recompensa y las existencias controladas. Si ya cobraste, gestiona también la devolución del dinero por el medio de pago.')) return;
-    setBusy(true); setError(''); setNotice('');
-    try { await call(`/restaurant-panel/lealtad/visitas/${encodeURIComponent(id)}/anular`, { method: 'POST', body: '{}' }); setNotice('Registro de venta anulado. Se restauraron sellos y existencias controladas; devuelve el pago por separado si corresponde.'); setVersion(v => v + 1); }
-    catch (reason) { setError(getRequestErrorMessage(reason, 'No se pudo anular la venta.')); }
-    finally { setBusy(false); }
-  };
-  const stopScanner = useCallback(() => {
-    streamRef.current?.getTracks().forEach(track => track.stop());
-    streamRef.current = null;
-    if (videoRef.current) videoRef.current.srcObject = null;
-    setShowScanner(false);
-  }, []);
+      setError(getRequestErrorMessage(reason, 'No se pudo confirmar el sello.'));
+      if (reason instanceof ApiRequestError && expiryCodes.includes(reason.code ?? '')) {
+        setPreview(null);
+        setRetryChoice(null);
+      } else if (reason instanceof ApiRequestError && ['LOYALTY_GIFT_UNAVAILABLE', 'LOYALTY_REWARD_UNAVAILABLE'].includes(reason.code ?? '')) {
+        setRetryChoice(null);
+        setPreview({ ...preview, rewardBlockedReason: reason.message });
+      } else if (retryChoice !== null || !(reason instanceof ApiRequestError) || reason.status == null || reason.status >= 500 || reason.kind === 'network' || reason.kind === 'timeout') {
+        // If the response was lost, replay exactly the same decision for this QR.
+        setRetryChoice(deliverReward);
+        setRevision(value => value + 1);
+      }
+    } finally {
+      flight.current = false;
+      setBusy(false);
+    }
+  }
+
+  async function voidVisit(visit: Visit) {
+    if (flight.current || retryChoice !== null) return;
+    const sale = isSale(visit);
+    if (!window.confirm(sale
+      ? '¿Anular esta venta? Se revertirán el sello, la recompensa y las existencias afectadas. El reembolso se gestiona por separado.'
+      : '¿Anular este sello? También se revertirá la recompensa registrada, si corresponde.')) return;
+    flight.current = true;
+    setBusy(true);
+    setError('');
+    setNotice('');
+    try {
+      await call(`/restaurant-panel/lealtad/visitas/${encodeURIComponent(visit.id)}/anular`, { method: 'POST', body: '{}' });
+      setNotice(sale ? 'Venta anulada.' : 'Sello anulado.');
+      setRevision(value => value + 1);
+    } catch (reason) {
+      setError(getRequestErrorMessage(reason, 'No se pudo anular el registro.'));
+    } finally {
+      flight.current = false;
+      setBusy(false);
+    }
+  }
+
   useEffect(() => {
     if (!showScanner) return;
-    let mounted = true;
-    const Detector = (window as unknown as { BarcodeDetector?: new (options: { formats: string[] }) => { detect: (source: HTMLVideoElement) => Promise<Array<{ rawValue?: string }>> } }).BarcodeDetector;
-    if (!Detector || !navigator.mediaDevices?.getUserMedia) { setError('Este navegador no puede escanear QR. Escribe el código manualmente.'); setShowScanner(false); return; }
-    let raf = 0;
+    const BarcodeDetector = (window as Window & { BarcodeDetector?: Detector }).BarcodeDetector;
+    if (!BarcodeDetector || !navigator.mediaDevices?.getUserMedia) {
+      setError('La cámara para escanear no está disponible en este navegador. Usa el código manual.');
+      setShowScanner(false);
+      return;
+    }
+    let active = true;
+    let stream: MediaStream | undefined;
+    let frame = 0;
+    const video = videoRef.current;
+    if (!video) return;
     void (async () => {
       try {
-        const detector = new Detector({ formats: ['qr_code'] });
-        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
-        if (!mounted) { stream.getTracks().forEach(track => track.stop()); return; }
-        streamRef.current = stream;
-        const video = videoRef.current;
-        if (!video) return;
+        const detector = new BarcodeDetector({ formats: ['qr_code'] });
+        stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+        if (!active) { stream.getTracks().forEach(track => track.stop()); return; }
         video.srcObject = stream;
         await video.play();
-        const scan = async () => {
-          if (!mounted) return;
-          try {
-            const codes = await detector.detect(video);
-            if (!mounted) return;
-            if (codes[0]?.rawValue) { setPreview(null); setQuote(null); setCode(String(codes[0].rawValue).trim().slice(0, 64)); stopScanner(); return; }
-          } catch { /* Keep scanning; manual entry remains available. */ }
-          raf = requestAnimationFrame(scan);
+        let lastScan = 0;
+        const scan = async (now: number) => {
+          if (!active) return;
+          if (now - lastScan >= 150 && video.readyState >= 2) {
+            lastScan = now;
+            const codes = await detector.detect(video).catch(() => []);
+            if (!active) return;
+            if (codes[0]?.rawValue) {
+              setShowScanner(false);
+              void verify(codes[0].rawValue);
+              return;
+            }
+          }
+          frame = requestAnimationFrame(scan);
         };
-        raf = requestAnimationFrame(scan);
-      } catch { setError('No pudimos abrir la cámara. Escribe el código manualmente.'); setShowScanner(false); }
+        if (active) frame = requestAnimationFrame(scan);
+      } catch {
+        if (active) {
+          setError('No pudimos abrir la cámara. Usa el código manual.');
+          setShowScanner(false);
+        }
+      }
     })();
-    return () => { mounted = false; cancelAnimationFrame(raf); streamRef.current?.getTracks().forEach(track => track.stop()); };
-  }, [showScanner, stopScanner]);
+    return () => {
+      active = false;
+      cancelAnimationFrame(frame);
+      stream?.getTracks().forEach(track => track.stop());
+      video.srcObject = null;
+    };
+  }, [showScanner, verify]);
 
   return <section className="wl-campaigns wl-inperson" aria-labelledby="inperson-title">
-    <header className="wl-campaign-header"><span className="wl-campaign-header-icon"><Award aria-hidden="true" /></span><div><p className="wl-campaign-eyebrow">Fidelidad en persona</p><h1 id="inperson-title">Ventas en el local</h1></div></header>
+    <SectionHeader title="Ventas en el local" titleId="inperson-title" icon={<Award />} />
     {error && <p role="alert" className="wl-campaign-feedback is-error">{error}</p>}
     {notice && <p role="status" className="wl-campaign-feedback">{notice}</p>}
     <div className="wl-inperson-grid">
       <div className="wl-campaign-card wl-inperson-main">
-        <h2>Registrar venta</h2>
-        <div className="wl-inperson-code"><input value={code} disabled={busy} onChange={event => { setPreview(null); setQuote(null); setApplyReward(false); setCode(event.target.value.trim()); }} placeholder="Código del cliente" aria-label="Código de fidelidad" /><button type="button" className="wl-menu-action" disabled={busy} onClick={() => setShowScanner(value => !value)}><ScanLine aria-hidden="true" />{showScanner ? 'Cerrar cámara' : 'Escanear'}</button><button type="button" className="wl-campaign-button is-primary" disabled={busy || !code.trim()} onClick={() => void verify()}>Verificar</button></div>
-        {showScanner && <video ref={videoRef} className="wl-inperson-scanner" playsInline muted />}
-        {catalogError && <p role="alert" className="wl-inperson-warn"><CircleAlert aria-hidden="true" />{catalogError}</p>}
+        <h2>Sellos en el local</h2>
+        <p className="wl-loyalty-help">Escanea el QR del cliente después de su compra.</p>
+        <form className="wl-inperson-code" onSubmit={event => { event.preventDefault(); void verify(code); }}>
+          <button type="button" className="wl-menu-action" disabled={busy || retryChoice !== null} onClick={() => {
+            setError('');
+            if (!showScanner) { setPreview(null); setCode(''); setNotice(''); setConfirmation(null); }
+            setShowScanner(!showScanner);
+          }}>
+            <ScanLine aria-hidden="true" />{showScanner ? 'Cerrar cámara' : 'Escanear QR'}
+          </button>
+          <input value={code} disabled={busy || retryChoice !== null} autoComplete="off" autoCapitalize="none" spellCheck={false} maxLength={32}
+            onChange={event => { setPreview(null); setCode(event.target.value); setError(''); }}
+            placeholder="Ingresar código manual" aria-label="Código de fidelidad" />
+          <button type="submit" className="wl-campaign-button is-primary" disabled={busy || !code.trim() || retryChoice !== null}>Verificar</button>
+        </form>
+        {showScanner && <video ref={videoRef} className="wl-inperson-scanner" playsInline muted aria-label="Cámara para escanear el código" />}
         {preview && <div className="wl-inperson-preview">
-          <div className="wl-inperson-person"><span className="wl-customers-avatar">{preview.customerName.slice(0, 1).toUpperCase()}</span><div><h3>{preview.customerName}</h3><p>{preview.stamps} de {preview.goal} sellos · {preview.availableRewards} recompensa(s) disponible(s)</p></div></div>
-          {preview.reserved && <p className="wl-inperson-warn"><CircleAlert aria-hidden="true" />Tiene una recompensa reservada en otro pedido; no se puede aplicar aquí.</p>}
-          <div className="wl-inperson-product-picker">
-            <label>Producto<select value={selectedProductId} onChange={event => { setSelectedProductId(event.target.value); setOptionIds([]); }}><option value="">Selecciona un producto</option>{catalog.map(product => <option key={product.id} value={product.id} disabled={product.trackStock && product.stock < 1}>{product.name}{product.trackStock ? ` · ${product.stock} disponibles` : ''}</option>)}</select></label>
-            {selectedProduct?.sellBy === 'WEIGHT' && <label>Peso por porción (g)<input type="number" min={selectedProduct.minWeightG ?? 100} max={selectedProduct.maxWeightG ?? 5000} step={selectedProduct.stepWeightG ?? 100} value={weightG} onChange={event => setWeightG(Number(event.target.value))} /></label>}
-            {selectedProduct && <label>Cantidad<input type="number" min="1" max="100" value={quantity} onChange={event => setQuantity(Math.max(1, Math.min(100, Number(event.target.value))))} /></label>}
-            {selectedProduct?.optionGroups.map(group => <fieldset key={group.id} className="wl-inperson-option-group"><legend>{group.name} ({group.minSelection === group.maxSelection ? `elige ${group.minSelection}` : `${group.minSelection}–${group.maxSelection}`})</legend>{group.options.filter(option => option.isAvailable).map(option => <label key={option.id}><input type="checkbox" checked={optionIds.includes(option.id)} onChange={event => setOptionIds(ids => event.target.checked ? [...ids, option.id] : ids.filter(id => id !== option.id))} />{option.name}{option.price ? ` (+${money(Math.round(option.price * 100))})` : ''}</label>)}</fieldset>)}
-            <button type="button" className="wl-menu-action" disabled={!selectedProduct || busy} onClick={addItem}><Plus size={16} />Agregar al pedido</button>
+          <div className="wl-inperson-person">
+            <span className="wl-customers-avatar" aria-hidden="true">{preview.customerName.slice(0, 1).toUpperCase()}</span>
+            <div><h3>{preview.customerName}</h3><p>{preview.stamps} de {preview.goal} sellos</p></div>
           </div>
-          <div className="wl-inperson-cart"><h3>Productos de la venta</h3>{cart.length === 0 ? <p className="wl-loyalty-help">Agrega al menos un producto.</p> : cart.map(line => { const product = catalog.find(item => item.id === line.productId); return <article key={line.key}><div><strong>{product?.name || 'Producto'}</strong><small>{line.quantity} × {product?.sellBy === 'WEIGHT' ? `${line.weightG} g` : 'unidad(es)'}{line.optionIds.length ? ` · ${line.optionIds.map(id => product?.optionGroups.flatMap(group => group.options).find(option => option.id === id)?.name).filter(Boolean).join(', ')}` : ''}{product?.discountPrice != null || !!product?.promoType ? ' · promoción de producto' : ''}</small></div><button type="button" aria-label={`Quitar ${product?.name || 'producto'}`} onClick={() => { setCart(lines => lines.filter(item => item.key !== line.key)); resetQuote(); }}><Trash2 size={16} /></button></article>; })}</div>
-          <label className="wl-inperson-reward"><input type="checkbox" checked={applyReward} disabled={!preview.eligibleForReward || preview.reserved} onChange={event => { setApplyReward(event.target.checked); resetQuote(); }} /><span><strong>{preview.rewardDescription}</strong><small>{preview.eligibleForReward ? 'Aplicar solo si ningún producto tiene promoción' : 'Aún no tiene una recompensa disponible'}</small></span></label>
-          <button type="button" className="wl-campaign-button is-primary wl-inperson-confirm" disabled={busy || !cart.length} onClick={() => void quoteSale()}>{busy ? 'Calculando…' : 'Verificar total y recompensa'}</button>
-          {quote && <div className="wl-inperson-payment"><h3>Resumen y cobro</h3><div className="wl-inperson-totals"><span>Subtotal</span><strong>{money(quote.subtotalCents)}</strong>{quote.rewardAppliedCents > 0 && <><span>Recompensa</span><strong>−{money(quote.rewardAppliedCents)}</strong></>}<span>Total a cobrar</span><strong>{money(quote.totalCents)}</strong></div>{quote.rewardDescription && <p className="wl-inperson-warn"><Award size={16} />{quote.rewardDescription}{quote.rewardAppliedCents ? ` · descuento ${money(quote.rewardAppliedCents)}` : ' · entregar al cliente'}</p>}{quote.rewardUnavailableReason && <p className="wl-inperson-warn"><CircleAlert size={16} />{quote.rewardUnavailableReason}</p>}{quote.hasPromotion && <p className="wl-inperson-warn"><CircleAlert size={16} />Esta venta incluye promoción de producto. El premio de fidelidad se conserva para otra compra.</p>}
-            <label className="wl-inperson-note">Forma de pago<select value={paymentMethod} onChange={event => { setPaymentMethod(event.target.value as typeof paymentMethod); setPaymentConfirmed(false); }}><option value="CASH">Efectivo</option><option value="CARD">Tarjeta</option><option value="TRANSFER">Transferencia</option><option value="OTHER">Otro</option></select></label>
-            <label className="wl-inperson-note">Nota (opcional)<input value={note} maxLength={300} onChange={event => { setNote(event.target.value); setPaymentConfirmed(false); }} placeholder="Referencia o nota de la venta" /></label>
-            <label className="wl-inperson-paid"><input type="checkbox" checked={paymentConfirmed} onChange={event => setPaymentConfirmed(event.target.checked)} />Confirmo que ya recibí {money(quote.totalCents)} por {paymentMethod === 'CASH' ? 'efectivo' : paymentMethod === 'CARD' ? 'tarjeta' : paymentMethod === 'TRANSFER' ? 'transferencia' : 'otro medio'}.</label>
-            <button type="button" className="wl-campaign-button is-primary wl-inperson-confirm" disabled={busy || !paymentConfirmed} onClick={() => void confirm()}><Check aria-hidden="true" />{busy ? 'Registrando…' : 'Registrar venta y sumar sello'}</button>
-          </div>}
+          <progress className="wl-inperson-progress" value={preview.stamps} max={preview.goal} aria-label="Progreso de la tarjeta" />
+          <div className="wl-inperson-reward" data-final={preview.completesCard}>
+            <Gift size={18} aria-hidden="true" />
+            <div>
+              <small>{preview.completesCard ? 'Último sello · compra con recompensa' : 'Recompensa de esta tarjeta'}</small>
+              <strong>{preview.rewardDescription}</strong>
+              {preview.completesCard && preview.rewardKind !== 'PRODUCT' && preview.rewardValue != null && (
+                <small>Aplica {preview.rewardKind === 'PERCENT' ? `${preview.rewardValue}%` : localMoney.format(preview.rewardValue / 100)} de descuento en caja antes de confirmar la entrega.</small>
+              )}
+              {preview.rewardBlockedReason && <small>{preview.rewardBlockedReason}</small>}
+            </div>
+          </div>
+          <div className="wl-inperson-confirm">
+            {retryChoice !== null ? (
+              <>
+                <button ref={confirmRef} type="button" className="wl-campaign-button is-primary" disabled={busy} onClick={() => void confirm(retryChoice)}>Reintentar confirmación</button>
+                <button type="button" className="wl-menu-action" disabled={busy} onClick={() => {
+                  setPreview(null); setCode(''); setRetryChoice(null); setError('');
+                  setNotice('Revisa la actividad reciente antes de usar otro QR para esta compra.');
+                  setRevision(value => value + 1);
+                }}>Salir y revisar actividad</button>
+              </>
+            ) : preview.completesCard && !preview.rewardBlockedReason ? <>
+              <button ref={confirmRef} type="button" className="wl-campaign-button is-primary" disabled={busy} onClick={() => void confirm(true)}>
+                <Gift size={16} aria-hidden="true" />{busy ? 'Registrando…' : 'Confirmar entrega y sellar'}
+              </button>
+              <button type="button" className="wl-menu-action" disabled={busy} onClick={() => void confirm(false)}>Solo agregar sello</button>
+            </> : (
+              <button ref={confirmRef} type="button" className="wl-campaign-button is-primary" disabled={busy} onClick={() => void confirm(false)}>
+                <Check size={16} aria-hidden="true" />{busy ? 'Registrando…' : 'Agregar sello'}
+              </button>
+            )}
+          </div>
         </div>}
       </div>
-      <aside className="wl-campaign-card wl-inperson-guide"><div className="wl-campaign-preview-title"><ShieldCheck aria-hidden="true" /><div><h2>Venta segura</h2></div></div><ol><li>Verifica el código del cliente.</li><li>Agrega productos y confirma el cobro.</li><li>Se guardan venta, sello y recompensa.</li></ol><p className="wl-loyalty-help">Puedes anular la venta durante 5 minutos.</p></aside>
+      <aside className="wl-campaign-card wl-inperson-guide">
+        <div className="wl-campaign-preview-title"><Award aria-hidden="true" /><h2>Un QR, un sello</h2></div>
+        <ol><li>Escanea o verifica el código.</li><li>Confirma el sello. Si completa la tarjeta, verifica la recompensa antes de entregarla.</li></ol>
+      </aside>
     </div>
-    <div className="wl-campaign-card wl-inperson-history"><h2>Últimas ventas</h2>{!visits.length ? <p className="wl-campaign-empty">Todavía no hay ventas presenciales.</p> : <div className="wl-inperson-list">{visits.map(visit => <article key={visit.id} className={visit.voidedAt ? 'is-voided' : ''}><div><strong>{visit.customerName}</strong><small>{new Date(visit.createdAt).toLocaleString('es-MX', { dateStyle: 'medium', timeStyle: 'short' })} · {visit.items?.map(item => `${item.quantity}× ${item.name}`).join(', ') || 'Venta histórica'} · Total {money(visit.totalCents ?? visit.amountCents - visit.rewardAppliedCents)}{visit.paymentMethod ? ` · ${visit.paymentMethod}` : ''}</small></div><span>{visit.voidedAt ? 'Anulada' : visit.rewardDescription || 'Solo sello'}</span><button type="button" className="wl-menu-action" disabled={busy || !!visit.voidedAt} onClick={() => void voidVisit(visit.id)}><X aria-hidden="true" />Anular</button></article>)}</div>}</div>
+    <div className="wl-campaign-card wl-inperson-history">
+      <h2>Actividad reciente</h2>
+      {historyError && <p role="status" className="wl-loyalty-help">No se pudo actualizar el historial. <button type="button" className="underline" onClick={() => setRevision(value => value + 1)}>Reintentar</button></p>}
+      {!visits.length && !historyError && <p className="wl-campaign-empty">Aún no se registran sellos en el local.</p>}
+      {!!visits.length && <div className="wl-inperson-list">{visits.map(visit => (
+        <article key={visit.id} className={visit.voidedAt ? 'is-voided' : ''}>
+          <div><strong>{visit.customerName}</strong><small>{visitDate.format(new Date(visit.createdAt))}
+            {isSale(visit) ? ` · ${visit.items.map(item => `${item.quantity}× ${item.name}`).join(', ') || 'Venta'} · ${localMoney.format((visit.totalCents ?? visit.amountCents - visit.rewardAppliedCents) / 100)}` : ' · Sello en tienda'}</small></div>
+          <span>{visit.voidedAt ? 'Anulado' : visit.rewardDescription || 'Sello registrado'}</span>
+          <button type="button" className="wl-menu-action" disabled={busy || retryChoice !== null || !!visit.voidedAt} onClick={() => void voidVisit(visit)}><X aria-hidden="true" />Anular</button>
+        </article>
+      ))}</div>}
+    </div>
+
+    {confirmation && <div className="wl-inperson-success-overlay" onClick={() => setConfirmation(null)}>
+      <section role="dialog" aria-modal="true" aria-labelledby="wl-inperson-success-title" className="wl-inperson-success-card" onClick={event => event.stopPropagation()}>
+        <button type="button" autoFocus className="wl-inperson-success-close" aria-label="Cerrar confirmación" onClick={() => setConfirmation(null)}><X aria-hidden="true" /></button>
+        <span className={`wl-inperson-success-icon is-${confirmation.kind}`}>{confirmation.kind === 'stamp' ? <Check aria-hidden="true" /> : <Gift aria-hidden="true" />}</span>
+        <span className="wl-kicker">Fidelidad · compra en el local</span>
+        <h2 id="wl-inperson-success-title">{confirmation.title}</h2>
+        <p>{confirmation.description}</p>
+        {!!confirmation.goal && <div className="wl-inperson-success-progress">
+          <div className="wl-inperson-success-progress-top"><strong>Sellos de tu cliente</strong><span>{confirmation.stamps} / {confirmation.goal}</span></div>
+          <div className="wl-inperson-success-track" role="progressbar" aria-label="Sellos de la tarjeta" aria-valuemin={0} aria-valuemax={confirmation.goal} aria-valuenow={confirmation.stamps}><span style={{ width: `${Math.min(100, (confirmation.stamps! / confirmation.goal) * 100)}%` }} /></div>
+        </div>}
+        {confirmation.rewardDescription && <p className="wl-inperson-success-reward"><Gift aria-hidden="true" />{confirmation.rewardDescription}</p>}
+        <button type="button" className="wl-campaign-button is-primary" onClick={() => setConfirmation(null)}>Entendido</button>
+      </section>
+    </div>}
   </section>;
 }

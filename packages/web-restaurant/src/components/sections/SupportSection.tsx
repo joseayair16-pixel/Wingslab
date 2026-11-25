@@ -1,5 +1,7 @@
 'use client';
 
+import { SectionHeader } from '../SectionHeader';
+
 import { useCallback, useEffect, useState } from 'react';
 import { AlertCircle, CheckCircle2, ChevronLeft, ChevronRight, Clock3, MessageSquareText, RefreshCw, Search, Send, Star } from 'lucide-react';
 
@@ -65,7 +67,7 @@ export function SupportSection({ apiBase, token }: { apiBase: string; token: str
   const switchTab = (next: 'reports' | 'reviews') => { setTab(next); setPage(1); setSearch(''); setQuery(''); setExpanded(null); setNotice(''); setError(''); };
 
   return <section className="wl-feedback" aria-labelledby="feedback-title">
-    <header className="wl-feedback-header"><div><p>WingsLab · Atención al cliente</p><h1 id="feedback-title">La voz de tus clientes</h1><span>Escucha, responde y mejora cada experiencia en WingsLab.</span></div><button type="button" onClick={() => setRevision(value => value + 1)} disabled={loading}><RefreshCw size={16} className={loading ? 'animate-spin' : ''} /> Actualizar</button></header>
+    <SectionHeader title="Reportes de clientes" titleId="feedback-title" icon={<MessageSquareText />} description="Escucha, responde y mejora cada experiencia." action={<button type="button" className="wl-orders-refresh" onClick={() => setRevision(value => value + 1)} disabled={loading}><RefreshCw size={16} className={loading ? 'animate-spin' : ''} /> Actualizar</button>} />
     <div className="wl-feedback-tabs" role="tablist" aria-label="Atención al cliente"><button type="button" role="tab" aria-selected={tab === 'reports'} onClick={() => switchTab('reports')}><MessageSquareText size={17} /> Reportes</button><button type="button" role="tab" aria-selected={tab === 'reviews'} onClick={() => switchTab('reviews')}><Star size={17} /> Reseñas</button></div>
     <div className={`wl-feedback-stats ${tab === 'reviews' ? 'wl-feedback-stats--reviews' : ''}`}>{tab === 'reports' ? <><div><span><Clock3 size={17} /> Pendientes</span><strong>{reports ? count('PENDING') : '—'}</strong></div><div><span><AlertCircle size={17} /> En revisión</span><strong>{reports ? count('IN_PROGRESS') : '—'}</strong></div><div><span><CheckCircle2 size={17} /> Resueltos</span><strong>{reports ? count('RESOLVED') : '—'}</strong></div></> : <><div><span><Star size={17} /> Calificación promedio</span><strong>{reviews?.summary?.average != null ? reviews.summary.average.toFixed(1) : '—'} <small>/ 5</small></strong></div><div><span><MessageSquareText size={17} /> Reseñas recibidas</span><strong>{reviews?.summary?.total ?? '—'}</strong></div></>}</div>
     <div className="wl-feedback-panel" role="tabpanel"><div className="wl-feedback-panel-head"><div><h2>{tab === 'reports' ? 'Reportes de clientes' : 'Reseñas del restaurante'}</h2><p>{tab === 'reports' ? 'Consulta los reportes y responde directamente a cada cliente.' : 'Conoce las calificaciones y comentarios asociados a cada pedido.'}</p></div><span>{result?.total ?? 0} {result?.total === 1 ? 'resultado' : 'resultados'}</span></div>

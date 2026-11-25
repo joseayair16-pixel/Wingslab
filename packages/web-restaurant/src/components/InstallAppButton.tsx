@@ -128,7 +128,7 @@ export default function InstallAppButton() {
 
       {isIOS && showIOSHelp && (
         <div className="fixed inset-0 z-[9995] flex items-end justify-center bg-black/45 px-4 pb-8 sm:items-center sm:pb-0">
-          <div className="w-full max-w-sm rounded-[28px] bg-white p-6 shadow-2xl">
+          <div className="wl-install-help-card w-full max-w-sm rounded-[28px] bg-white p-6 shadow-2xl">
             <div className="mb-4 flex items-center justify-between">
               <h3 className="text-lg font-bold text-neutral-900">Instalar WingsLab en tu iPhone</h3>
               <button

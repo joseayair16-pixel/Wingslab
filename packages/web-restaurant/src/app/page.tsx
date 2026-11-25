@@ -4,8 +4,9 @@ import { getWingslabApiUrl, getWingslabSocketUrl, getWingslabCustomerUrl, wingsl
   restaurantOrderTargetStatus, CATEGORY_ICON_LIBRARY, CATEGORY_ICON_GROUPS, filterCategoryIcons } from '@sadel/shared';
 import { createOrderSyncGate, createOrderActionFlight, mergeConfirmedOrder, reconcileOrders } from '../lib/order-sync';
 import { incomingOrderDisposition } from '../lib/incoming-order-policy';
-import { Activity, AlertTriangle, ArrowRight, Award, Bike, Check, ChefHat, ChevronUp, ClipboardList, Clock, Home as HomeIcon, Info, Layers, Loader2, Lock, Mail, MapPin, Megaphone, MessageCircle, MessageSquareText, Minus, Moon, Package, Pencil, Phone, Plus, RefreshCw, Settings, ShoppingBag, Sparkles, Store, Tag, Trash2, User, Users, X } from 'lucide-react';
+import { Activity, AlertTriangle, ArrowRight, Award, Bike, Check, ChefHat, ChevronUp, ClipboardList, Clock, CreditCard, Home as HomeIcon, Info, Layers, Loader2, Lock, Mail, MapPin, Megaphone, MessageCircle, MessageSquareText, Minus, Moon, Package, Pencil, Phone, Plus, RefreshCw, Settings, ShoppingBag, Sparkles, Store, Tag, Trash2, User, Users, X } from 'lucide-react';
 import redWordmark from '../assets/wingslab-wordmark-red.png';
+import { SectionHeader } from '../components/SectionHeader';
 import whiteWordmark from '../assets/wingslab-wordmark-white.png';
 import { CategoryIcon } from '../components/CategoryIcon';
 import { IncomingRouteDistance } from '../components/IncomingRouteDistance';
@@ -28,7 +29,7 @@ import {
   requestJson,
   uploadMediaAsset,
   convertImageFileToDataUrl,
-  preloadAll,
+  preloadOnFirstInteraction,
   warmup,
   play,
   stopAll,
@@ -171,6 +172,7 @@ type RestaurantProfile = {
   deliveryMaxFee?: number | null;
   maxCashOrder?: number | null;
   acceptsCash?: boolean | null;
+  acceptsCard?: boolean | null;
   hasOwnDelivery: boolean;
   supportsNetworkDelivery?: boolean;
   pickupOnly?: boolean;
@@ -189,7 +191,6 @@ type RestaurantProfile = {
     category: StoreCategoryItem;
   }[];
   enableTicketPrinting?: boolean;
-  whatsappNotifications?: boolean;
   instagram?: string | null;
   facebook?: string | null;
   tiktok?: string | null;
@@ -208,6 +209,7 @@ type OperatingHourItem = {
 };
 
 type OrderItem = {
+  dailyCounter?: number | null;
   id: string;
   updatedAt?: string;
   orderReference: string;
@@ -250,7 +252,7 @@ type OrderItem = {
   cashPaymentConfirmedAt?: string | null;
   driverArrivedAt?: string | null;
   etaExtendedMinutes?: number;
-  deliveryPreference?: 'NO_DOORBELL' | 'CALL_ON_ARRIVAL' | 'PREFER_WHATSAPP' | 'HONK_ON_ARRIVAL' | 'BEWARE_OF_DOG' | null;
+  deliveryPreference?: 'NO_DOORBELL' | 'CALL_ON_ARRIVAL' | 'HONK_ON_ARRIVAL' | 'BEWARE_OF_DOG' | null;
   notes?: string | null;
   noDriversAvailable?: boolean;
   isAcceptedByDriver?: boolean;
@@ -365,7 +367,27 @@ type ProductItem = {
   optionGroups?: ProductOptionGroup[];
 };
 
-/** Interruptor accesible y compacto, con una sola definición visual. */
+function ThemeToggle({ darkMode, onToggle, compact = false }: {
+  darkMode: boolean; onToggle: () => void; compact?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      className="wl-admin-theme-toggle"
+      role="switch"
+      aria-checked={darkMode}
+      aria-label="Modo oscuro"
+      title={compact ? 'Modo oscuro' : undefined}
+      onClick={onToggle}
+    >
+      <Moon aria-hidden="true" />
+      <span>Modo oscuro</span>
+      <span className="wl-admin-switch-track" aria-hidden="true"><i /></span>
+    </button>
+  );
+}
+
+/** Interruptor accesible: mismo riel que el modo oscuro, una sola definición visual. */
 function Toggle({ checked, label, onClick, disabled = false, tone = 'red' }: {
   checked: boolean; label: string; onClick: () => void; disabled?: boolean; tone?: 'red' | 'emerald' | 'amber';
 }) {
@@ -377,9 +399,9 @@ function Toggle({ checked, label, onClick, disabled = false, tone = 'red' }: {
       aria-label={label}
       onClick={onClick}
       disabled={disabled}
-      className={`wl-toggle is-${tone} ${checked ? 'is-on' : ''}`}
+      className={`wl-admin-switch-btn is-${tone}`}
     >
-      <span className="wl-toggle-thumb" />
+      <span className="wl-admin-switch-track" aria-hidden="true"><i /></span>
     </button>
   );
 }
@@ -443,9 +465,9 @@ type StoreProfileDraft = {
   deliveryMaxFee: string;
   maxCashOrder: string;
   acceptsCash: boolean;
+  acceptsCard: boolean;
   storeCategories: string[];
   enableTicketPrinting: boolean;
-  whatsappNotifications: boolean;
   instagram: string;
   facebook: string;
   tiktok: string;
@@ -730,27 +752,35 @@ const ORDER_ALERT_REPEAT_WORKER = `
 
 let orderAlertRepeatWorker: Worker | null = null;
 let orderAlertRepeatUrl: string | null = null;
+let orderAlertRepeatTimer: ReturnType<typeof setInterval> | null = null;
 
 /** Arranca (o rearranca) el bucle de repetición del aviso de pedido nuevo. */
 function startWebRepeatAlarm(tick: () => void): void {
   stopWebRepeatAlarm();
-  if (typeof window === 'undefined' || typeof Worker === 'undefined') return;
+  if (typeof window === 'undefined') return;
+  const fallback = () => {
+    stopWebRepeatAlarm();
+    orderAlertRepeatTimer = setInterval(tick, 3000);
+  };
+  if (typeof Worker === 'undefined') return fallback();
   try {
     orderAlertRepeatUrl = URL.createObjectURL(
       new Blob([ORDER_ALERT_REPEAT_WORKER], { type: 'application/javascript' }),
     );
     const worker = new Worker(orderAlertRepeatUrl);
     worker.onmessage = () => tick();
-    worker.postMessage('start');
     orderAlertRepeatWorker = worker;
+    worker.onerror = () => { if (orderAlertRepeatWorker === worker) fallback(); };
+    worker.postMessage('start');
   } catch {
-    // Sin Worker (entorno restringido): el aviso suena una vez y listo.
-    stopWebRepeatAlarm();
+    fallback();
   }
 }
 
 /** Detiene el bucle y libera su Blob URL. Seguro de llamar aunque no exista. */
 function stopWebRepeatAlarm(): void {
+  if (orderAlertRepeatTimer !== null) clearInterval(orderAlertRepeatTimer);
+  orderAlertRepeatTimer = null;
   try {
     orderAlertRepeatWorker?.postMessage('stop');
     orderAlertRepeatWorker?.terminate();
@@ -845,11 +875,6 @@ const restaurantActionMap: Record<
     path: 'rechazar',
     label: 'Rechazar pedido',
     successMessage: 'Pedido rechazado y tablero sincronizado.',
-  },
-  preparing: {
-    path: 'preparacion',
-    label: 'Iniciar preparacion',
-    successMessage: 'Pedido movido a preparacion.',
   },
   ready: {
     path: 'listo',
@@ -1079,6 +1104,7 @@ export default function Home() {
   const [ordersPeriod, setOrdersPeriod] = useState<'today' | 'week' | 'month'>('today');
   const [activeActionKey, setActiveActionKey] = useState<string | null>(null);
   const [showLogoutWarningModal, setShowLogoutWarningModal] = useState(false);
+  const [logoutCloseError, setLogoutCloseError] = useState('');
   const [activeSection, setActiveSection] = useState<RestaurantPortalSection>('dashboard');
   const [selectedOrderForTicket, setSelectedOrderForTicket] = useState<OrderItem | null>(null);
   // Alias compartido con OrdersSection: solo existe un detalle de pedido.
@@ -1219,9 +1245,9 @@ export default function Home() {
     deliveryMaxFee: '',
     maxCashOrder: '',
     acceptsCash: true,
+    acceptsCard: false,
     storeCategories: [],
     enableTicketPrinting: true,
-    whatsappNotifications: false,
     instagram: '',
     facebook: '',
     tiktok: '',
@@ -1273,7 +1299,6 @@ export default function Home() {
   const [processingProductImage, setProcessingProductImage] = useState(false);
   const [productImageValidationError, setProductImageValidationError] = useState('');
   const [activeAvailabilityProductId, setActiveAvailabilityProductId] = useState<string | null>(null);
-  const [continueAfterSave, setContinueAfterSave] = useState(false);
   const [selectedWeekOffset, setSelectedWeekOffset] = useState(0);
   const [darkMode, setDarkMode] = useState(false);
   useEffect(() => { const sync = () => setDarkMode(document.documentElement.classList.contains('dark')); sync(); const observer = new MutationObserver(sync); observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] }); return () => observer.disconnect(); }, []);
@@ -1353,8 +1378,6 @@ export default function Home() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [socketStatus, setSocketStatus] = useState<'idle' | 'connecting' | 'connected' | 'reconnecting'>('idle');
   const [socketAttempts, setSocketAttempts] = useState(0);
-  const [toasts, setToasts] = useState<ToastItem[]>([]);
-  const toastTimeoutsRef = useRef<Map<string, NodeJS.Timeout>>(new Map());
 
   const [dashboardChartView, setDashboardChartView] = useState<'revenue' | 'orders'>('revenue');
   const [isOrderAlertSoundEnabled, setIsOrderAlertSoundEnabled] = useState(true);
@@ -1394,20 +1417,14 @@ export default function Home() {
   const promptedIncomingOrderIdsRef = useRef<string[]>([]);
   const resolvedIncomingOrderIdsRef = useRef<string[]>([]);
   const autoRejectingOrderIdsRef = useRef<string[]>([]);
-  const soundedIncomingOrderIdsRef = useRef<string[]>([]);
   const wakeLockRef = useRef<any>(null);
   const hasShownOrderAlertBlockedToastRef = useRef(false);
   const coverImageInputRef = useRef<HTMLInputElement | null>(null);
   const logoInputRef = useRef<HTMLInputElement | null>(null);
   const productImageInputRef = useRef<HTMLInputElement | null>(null);
   const productImageExtraInputRef = useRef<HTMLInputElement | null>(null);
-  const cropDragRef = useRef<{
-    isDragging: boolean;
-    startX: number;
-    startY: number;
-    startPosition: string;
-  }>({ isDragging: false, startX: 0, startY: 0, startPosition: '50% 50%' });
-  const cropContainerRef = useRef<HTMLDivElement | null>(null);
+  const [imageEditor, setImageEditor] = useState<{ position: string; zoom: number } | null>(null);
+  const cropDragRef = useRef<{ x: number; y: number; position: string } | null>(null);
   const lastProductConfigRef = useRef<{
     sellBy: ProductDraft['sellBy'];
     unitPrice: string;
@@ -1577,8 +1594,6 @@ export default function Home() {
       if (savedSection && ['dashboard', 'orders', 'store', 'settings', 'campaigns', 'customers', 'loyalty', 'inperson', 'menu-content', 'support'].includes(savedSection)) {
         setActiveSection(savedSection as RestaurantPortalSection);
       }
-
-      preloadAll(['notifica', 'mensaje', 'llegue', 'rezagado']);
 
       // Cross-tab sound dedup: listen for alerts from other tabs
       try {
@@ -2204,7 +2219,6 @@ export default function Home() {
     promptedIncomingOrderIdsRef.current = [];
     resolvedIncomingOrderIdsRef.current = [];
     autoRejectingOrderIdsRef.current = [];
-    soundedIncomingOrderIdsRef.current = [];
     pendingNotificationOrderIdRef.current = null;
     pendingEtaExtensionOrderIdRef.current = null;
 
@@ -2224,7 +2238,6 @@ export default function Home() {
     setCategories([]);
     setSocketStatus('idle');
     setSocketAttempts(0);
-    setToasts([]);
     setLastFailedAction(null);
     setSelectedOrderForTicket(null);
     setSelectedOrderForEtaExtension(null);
@@ -2260,9 +2273,9 @@ export default function Home() {
       deliveryMaxFee: '',
       maxCashOrder: '',
       acceptsCash: true,
+      acceptsCard: false,
       storeCategories: [],
       enableTicketPrinting: true,
-      whatsappNotifications: false,
       instagram: '',
       facebook: '',
       tiktok: '',
@@ -2343,50 +2356,6 @@ export default function Home() {
     };
   }, [incomingOrderQueue.length, selectedOrderForTicket, activeTicketTab]);
 
-  // Crop drag global listeners
-  useEffect(() => {
-    const onMove = (clientX: number, clientY: number) => {
-      const drag = cropDragRef.current;
-      if (!drag.isDragging) return;
-      const div = cropContainerRef.current;
-      if (!div) return;
-      const rect = div.getBoundingClientRect();
-      const [startPctX, startPctY] = (drag.startPosition || '50% 50%').split('% ').map((v) => parseFloat(v));
-      const deltaPctX = ((clientX - drag.startX) / rect.width) * 100;
-      const deltaPctY = ((clientY - drag.startY) / rect.height) * 100;
-      const x = Math.max(0, Math.min(100, startPctX + deltaPctX));
-      const y = Math.max(0, Math.min(100, startPctY + deltaPctY));
-      setProductDraft((curr) => ({ ...curr, imagePosition: `${Math.round(x)}% ${Math.round(y)}%` }));
-    };
-    const onUp = () => {
-      cropDragRef.current.isDragging = false;
-    };
-    const handleMouseMove = (e: MouseEvent) => onMove(e.clientX, e.clientY);
-    const handleMouseUp = () => onUp();
-    const handleTouchMove = (e: TouchEvent) => {
-      const touch = e.touches[0];
-      if (touch) onMove(touch.clientX, touch.clientY);
-    };
-    const handleTouchEnd = () => onUp();
-    window.addEventListener('mousemove', handleMouseMove);
-    window.addEventListener('mouseup', handleMouseUp);
-    window.addEventListener('touchmove', handleTouchMove, { passive: true });
-    window.addEventListener('touchend', handleTouchEnd);
-    const el = cropContainerRef.current;
-    const handleWheel = (e: WheelEvent) => {
-      e.preventDefault();
-      setProductDraft((curr) => ({ ...curr, imageZoom: Math.max(30, Math.min(300, (curr.imageZoom || 100) + (e.deltaY > 0 ? -10 : 10))) }));
-    };
-    if (el) el.addEventListener('wheel', handleWheel, { passive: false });
-    return () => {
-      window.removeEventListener('mousemove', handleMouseMove);
-      window.removeEventListener('mouseup', handleMouseUp);
-      window.removeEventListener('touchmove', handleTouchMove);
-      window.removeEventListener('touchend', handleTouchEnd);
-      if (el) el.removeEventListener('wheel', handleWheel);
-    };
-  }, []);
-
   const pendingIncomingOrders = [...orders]
     .filter((order) => order.status === 'PENDING')
     .sort((left, right) => new Date(left.createdAt).getTime() - new Date(right.createdAt).getTime() || (left.id < right.id ? -1 : left.id > right.id ? 1 : 0));
@@ -2447,21 +2416,8 @@ export default function Home() {
     }
   }, [pickupConfirmOrder?.id]);
 
-  function pushToast(tone: ToastItem['tone'], title: string, message: string) {
-    const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-    setToasts((current) => [{ id, tone, title, message }, ...current].slice(0, 6));
-    const timeoutId = setTimeout(() => dismissToast(id), 4000);
-    toastTimeoutsRef.current.set(id, timeoutId);
-  }
-
-  function dismissToast(id: string) {
-    const timeoutId = toastTimeoutsRef.current.get(id);
-    if (timeoutId) {
-      clearTimeout(timeoutId);
-      toastTimeoutsRef.current.delete(id);
-    }
-    setToasts((current) => current.filter((toast) => toast.id !== id));
-  }
+  // Los avisos flotantes del panel están desactivados.
+  function pushToast(_tone: ToastItem['tone'], _title: string, _message: string) {}
 
   const warmOrderAlertAudio = useCallback(async () => {
     const ok = await warmup();
@@ -2469,7 +2425,7 @@ export default function Home() {
     return ok;
   }, []);
 
-  const playIncomingOrderAlert = useCallback(async (force = false) => {
+  const playIncomingOrderAlert = useCallback(async (force = false, isCurrent: () => boolean = () => true) => {
     if (!isOrderAlertSoundEnabled) return false;
 
     // En la APK el sonido lo pone el Foreground Service (funciona en segundo
@@ -2479,22 +2435,22 @@ export default function Home() {
     // el pedido no pase inadvertido. `force` lo omite para el botón "Probar
     // sonido" de ajustes, que debe sonar aunque la alarma nativa esté activa.
     if (!force && (await nativeAlarmHandlesSound())) return false;
+    if (!isCurrent()) return false;
 
     // Cross-tab dedup: skip if another tab just played (within 1s)
-    if (typeof window !== 'undefined' && (window as any).__sadelLastAlertFromOtherTab) {
+    if (!force && typeof window !== 'undefined' && (window as any).__sadelLastAlertFromOtherTab) {
       const elapsed = Date.now() - (window as any).__sadelLastAlertFromOtherTab;
       if (elapsed < 1000) return false;
     }
 
-    // Broadcast to other tabs that we played
-    try {
+    const result = play('notifica');
+    setOrderAlertAudioState(getAudioState());
+    if (!force && result === 'played') try {
       const bc = new BroadcastChannel('sadel-order-alert');
       bc.postMessage('played');
       bc.close();
     } catch { /* BroadcastChannel not supported */ }
 
-    const result = play('notifica');
-    setOrderAlertAudioState(getAudioState());
     return result === 'played';
   }, [isOrderAlertSoundEnabled]);
 
@@ -2736,9 +2692,9 @@ export default function Home() {
         deliveryMaxFee: profileData.data.deliveryMaxFee != null ? String(profileData.data.deliveryMaxFee) : '',
         maxCashOrder: profileData.data.maxCashOrder != null ? String(profileData.data.maxCashOrder) : '',
         acceptsCash: profileData.data.acceptsCash !== false,
+        acceptsCard: profileData.data.acceptsCard === true,
         storeCategories: profileData.data.storeCategories?.map(sc => sc.category.id) || [],
         enableTicketPrinting: profileData.data.enableTicketPrinting ?? true,
-        whatsappNotifications: profileData.data.whatsappNotifications ?? false,
         instagram: profileData.data.instagram || '',
         facebook: profileData.data.facebook || '',
         tiktok: profileData.data.tiktok || '',
@@ -2989,8 +2945,6 @@ export default function Home() {
 
 
     if (eventName === 'order:created') {
-      // Play sound DIRECTLY — no depende del reload de pedidos
-      void playIncomingOrderAlert();
       // Una consulta ya iniciada puede haber tomado su instantánea antes del
       // pedido. Esperarla y volver a consultar evita perder el aviso hasta el
       // siguiente sondeo de respaldo.
@@ -3259,9 +3213,11 @@ export default function Home() {
     if (!isOrderAlertSoundEnabled || orderAlertAudioState === 'unsupported') {
       return;
     }
+    const uninstallPreload = preloadOnFirstInteraction(['notifica', 'mensaje', 'llegue', 'rezagado']);
     const uninstallWarmup = installWarmupListeners();
     const uninstallVisibility = installVisibilityResumeListener();
     return () => {
+      uninstallPreload();
       uninstallWarmup();
       uninstallVisibility();
     };
@@ -3337,27 +3293,12 @@ export default function Home() {
       promptedIncomingOrderIdsRef.current = [...promptedIncomingOrderIdsRef.current.slice(-79), order.id];
       setIncomingOrderQueue((current) => (current.includes(order.id) ? current : [...current, order.id]));
 
-      if (!soundedIncomingOrderIdsRef.current.includes(order.id)) {
-        soundedIncomingOrderIdsRef.current = [...soundedIncomingOrderIdsRef.current.slice(-79), order.id];
-
-        if (isOrderAlertSoundEnabled) {
-          void playIncomingOrderAlert().then((didPlay) => {
-            if (didPlay || orderAlertAudioState !== 'needs-gesture') {
-              return;
-            }
-            pushToast(
-              'info',
-              'Sonido bloqueado',
-              'Toca la pantalla para habilitar el sonido de nuevos pedidos. El navegador requiere una interacción manual.'
-            );
-          });
-        }
-      }
     }
-  }, [isOrderAlertSoundEnabled, orderAlertAudioState, orders, playIncomingOrderAlert]);
+  }, [orders, profile?.businessType]);
 
+  const activeIncomingOrderId = activeIncomingOrder?.id;
   useEffect(() => {
-    if (!activeIncomingOrder || !isOrderAlertSoundEnabled) {
+    if (!activeIncomingOrderId || !isOrderAlertSoundEnabled) {
       return;
     }
 
@@ -3369,17 +3310,16 @@ export default function Home() {
 
     void nativeAlarmHandlesSound().then((nativeRinging) => {
       if (cancelled || nativeRinging) return;
-      startWebRepeatAlarm(() => {
-        void playIncomingOrderAlert();
-      });
-      void playIncomingOrderAlert();
+      const ring = () => { if (!cancelled) void playIncomingOrderAlert(false, () => !cancelled); };
+      startWebRepeatAlarm(ring);
+      ring();
     });
 
     return () => {
       cancelled = true;
       stopWebRepeatAlarm();
     };
-  }, [activeIncomingOrder, isOrderAlertSoundEnabled, playIncomingOrderAlert]);
+  }, [activeIncomingOrderId, isOrderAlertSoundEnabled, playIncomingOrderAlert]);
 
   // Detener la alarma nativa cuando el usuario navega a un pedido que ya no
   // requiere atención (estado distinto de PENDING/CONFIRMED). Cubre el caso de
@@ -3465,15 +3405,6 @@ export default function Home() {
     return () => {
       if (timer) window.clearInterval(timer);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
-    };
-  }, []);
-
-  useEffect(() => {
-    return () => {
-      for (const [, timeoutId] of toastTimeoutsRef.current) {
-        clearTimeout(timeoutId);
-      }
-      toastTimeoutsRef.current.clear();
     };
   }, []);
 
@@ -3665,7 +3596,7 @@ export default function Home() {
         },
       });
 
-      if (!res.success || res.data?.id !== orderId || res.data?.status !== restaurantOrderTargetStatus(actionKey)) {
+      if (!res.success || res.data?.id !== orderId || res.data?.status !== restaurantOrderTargetStatus(actionKey, Boolean(options?.scheduledDeliveryAt))) {
         throw new Error('La respuesta no confirmó el estado esperado. Consulta el pedido antes de reintentar.');
       }
       ordersSyncGateRef.current.invalidate();
@@ -3896,6 +3827,7 @@ export default function Home() {
     // pagos
     body.maxCashOrder = num(storeDraft.maxCashOrder) ?? 500;
     body.acceptsCash = storeDraft.acceptsCash;
+    body.acceptsCard = storeDraft.acceptsCard;
     body.transferBankName = transferBankName.trim() || null;
     body.transferAccountNumber = transferAccountNumber.trim() || null;
     body.transferBeneficiaryName = transferBeneficiaryName.trim() || null;
@@ -3931,7 +3863,7 @@ export default function Home() {
         },
       });
 
-      if (section === 'entrega' && payload.data.serviceFee !== payloadBody.serviceFee) {
+      if (section === 'entrega' && Number(payload.data.serviceFee ?? 0) !== Number(payloadBody.serviceFee)) {
         throw new Error('No se pudo confirmar la tarifa de servicio. Revisa la configuración e intenta de nuevo.');
       }
 
@@ -3967,9 +3899,9 @@ export default function Home() {
         deliveryMaxFee: payload.data.deliveryMaxFee != null ? String(payload.data.deliveryMaxFee) : '',
         maxCashOrder: payload.data.maxCashOrder != null ? String(payload.data.maxCashOrder) : '',
         acceptsCash: payload.data.acceptsCash !== false,
+        acceptsCard: payload.data.acceptsCard === true,
         storeCategories: payload.data.storeCategories?.map((sc: any) => sc.category.id) || [],
         enableTicketPrinting: payload.data.enableTicketPrinting ?? true,
-        whatsappNotifications: payload.data.whatsappNotifications ?? false,
         instagram: payload.data.instagram || '',
         facebook: payload.data.facebook || '',
         tiktok: payload.data.tiktok || '',
@@ -3981,7 +3913,7 @@ export default function Home() {
         perfil: ['name', 'description', 'seoTitle', 'seoDescription', 'contactPhone', 'email', 'instagram', 'facebook', 'tiktok', 'storeCategories'],
         ubicacion: ['address', 'houseNumber', 'latitude', 'longitude'],
         entrega: ['pickupOnly', 'hasOwnDelivery', 'supportsNetworkDelivery', 'minDeliveryTime', 'maxDeliveryTime', 'deliveryFee', 'serviceFee', 'deliveryRadius', 'deliveryPricingModel', 'deliveryBaseRate', 'deliveryPerKmRate', 'deliveryMinFee', 'deliveryMaxFee', 'promoFreeDeliveryThreshold', 'promoMinOrderAmount', 'promoMinOrderPercent'],
-        pagos: ['maxCashOrder', 'acceptsCash'],
+        pagos: ['maxCashOrder', 'acceptsCash', 'acceptsCard'],
       };
       setStoreDraft((current) => {
         const next = { ...current };
@@ -4524,25 +4456,14 @@ export default function Home() {
         fallbackMessage: 'No se pudo crear el producto.',
       });
 
-      const publishedCategoryId = productDraft.categoryId;
       storeLastProductConfig(productDraft);
       setProductImageValidationError('');
       await loadDashboard();
 
-      if (continueAfterSave) {
-        setProductDraft(buildEmptyProductDraft(publishedCategoryId, lastProductConfigRef.current || undefined));
-        setProductConfigInherited(true);
-        pushToast('success', 'Producto creado', 'Producto publicado. Listo para el siguiente.');
-        requestAnimationFrame(() => {
-          productModalScrollRef.current?.scrollTo({ top: 0 });
-          productNameInputRef.current?.focus();
-        });
-      } else {
-        setIsProductModalOpen(false);
-        setProductDraft(buildEmptyProductDraft(categories[0]?.id || ''));
-        pushToast('success', 'Producto creado', 'El nuevo producto ya aparece en tu menu.');
-        setShowSaveSuccessModal(true);
-      }
+      setIsProductModalOpen(false);
+      setProductDraft(buildEmptyProductDraft(categories[0]?.id || ''));
+      pushToast('success', 'Producto creado', 'El nuevo producto ya aparece en tu menu.');
+      setShowSaveSuccessModal(true);
     } catch (requestError) {
       const message = getRequestErrorMessage(requestError, 'No se pudo crear el producto.');
       setError(message);
@@ -4920,7 +4841,7 @@ export default function Home() {
   }
 
   async function performStatusUpdate(isAcceptingOrders: boolean) {
-    if (!token || !profile) return;
+    if (!token || !profile) return false;
 
     setUpdatingOperationalStatus(true);
     setError('');
@@ -4947,10 +4868,12 @@ export default function Home() {
         ? { type: 'open', title: '🚀 Negocio abierto', description: 'Los comensales pueden ver tu negocio y ya estás recibiendo pedidos.' }
         : { type: 'close', title: 'Negocio cerrado', description: 'Tu restaurante ya no recibe nuevos pedidos.' }
       );
+      return true;
     } catch (requestError) {
       const message = getRequestErrorMessage(requestError, 'No se pudo actualizar el estado operativo.');
       setError(message);
       pushToast('error', 'No se pudo actualizar', message);
+      return false;
     } finally {
       setUpdatingOperationalStatus(false);
     }
@@ -5567,7 +5490,7 @@ export default function Home() {
         : 'Estado no disponible';
   const navigationItems: Array<{ key: RestaurantPortalSection; label: string }> = [
     { key: 'dashboard', label: 'Dashboard' },
-    { key: 'orders', label: 'Ordenes' },
+    { key: 'orders', label: 'Órdenes' },
     { key: 'store', label: 'Menú WingsLab' },
     { key: 'campaigns', label: 'Campañas' },
     { key: 'menu-content', label: 'Contenido del menú' },
@@ -5575,7 +5498,7 @@ export default function Home() {
     { key: 'loyalty', label: 'Fidelidad' },
     { key: 'inperson', label: 'Ventas en local' },
     { key: 'support', label: 'Reportes de clientes' },
-    { key: 'settings', label: 'Configuracion' },
+    { key: 'settings', label: 'Configuración' },
   ];
 
   if (checkingAuth) {
@@ -5596,34 +5519,6 @@ export default function Home() {
         onEnable={() => subscribeToPush(token || '')}
       />
 
-      {/* Toast notifications */}
-      {toasts.length > 0 && (
-        <div className="fixed top-4 right-4 z-[200] flex flex-col gap-2 max-w-sm">
-          {toasts.map((toast) => (
-            <div
-              key={toast.id}
-              onClick={() => dismissToast(toast.id)}
-              className={`relative rounded-2xl border px-4 py-3 pr-10 text-sm shadow-lg backdrop-blur-md cursor-pointer transition hover:scale-[1.02] active:scale-[0.98] ${
-                toast.tone === 'error'
-                  ? 'border-red-200 bg-red-50/95 text-red-800'
-                  : toast.tone === 'success'
-                    ? 'border-emerald-200 bg-emerald-50/95 text-emerald-800'
-                    : 'border-sky-200 bg-sky-50/95 text-sky-800'
-              }`}
-            >
-              <p className="font-bold">{toast.title}</p>
-              {toast.message && <p className="mt-0.5 opacity-80">{toast.message}</p>}
-              <button
-                onClick={(e) => { e.stopPropagation(); dismissToast(toast.id); }}
-                className="absolute top-2 right-2 flex h-5 w-5 items-center justify-center rounded-full text-current opacity-50 hover:opacity-100"
-              >
-                ✕
-              </button>
-            </div>
-          ))}
-        </div>
-      )}
-
       {/* Pull to refresh indicator */}
       <div
         className={`fixed top-0 left-0 right-0 z-50 flex justify-center pt-2 pointer-events-none transition-opacity ${pullDistance > 0 || isRefreshing ? 'opacity-100' : 'opacity-0'}`}
@@ -5643,6 +5538,13 @@ export default function Home() {
           aria-labelledby="incoming-order-title"
         >
           <div className="flex max-h-full w-full max-w-md flex-col overflow-hidden rounded-[24px] bg-white shadow-[0_32px_110px_rgba(15,15,15,0.35)] sm:max-h-[min(calc(100dvh-2rem),850px)] sm:max-w-2xl sm:rounded-[28px]">
+            {isOrderAlertSoundEnabled && orderAlertAudioState === 'needs-gesture' && (
+              <button type="button" className="min-h-11 shrink-0 bg-amber-50 px-4 text-sm font-semibold text-amber-900" onClick={async () => {
+                if (await warmOrderAlertAudio()) {
+                  await playIncomingOrderAlert(false, () => ordersRef.current.some(order => order.id === activeIncomingOrder.id && order.status === 'PENDING'));
+                }
+              }}>Toca para activar el sonido de pedidos</button>
+            )}
             {/* HEADER */}
             <div className="shrink-0 border-b border-neutral-200 bg-white px-4 py-3 sm:px-6">
               <div className="flex items-center justify-between gap-3">
@@ -5659,9 +5561,7 @@ export default function Home() {
                     id="incoming-order-title"
                     className="text-lg font-black leading-tight tracking-tight text-neutral-950"
                   >
-                    {(activeIncomingOrder as any).dailyCounter ? `#${String((activeIncomingOrder as any).dailyCounter).padStart(2, '0')}` : (
-                      activeIncomingOrder.orderReference.slice(-6)
-                    )}
+                    {activeIncomingOrder.dailyCounter ? `#${String(activeIncomingOrder.dailyCounter).padStart(2, '0')}` : 'Número no disponible'}
                   </h2>
                   </div>
                   {waitingIncomingOrders.length > 0 && (
@@ -6004,6 +5904,11 @@ export default function Home() {
                       {activeIncomingOrder.paymentMethod === 'CASH' && (
                         <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-bold text-amber-800">💵 Efectivo</span>
                       )}
+                      {['CREDIT_CARD', 'DEBIT_CARD', 'DIGITAL_WALLET'].includes(activeIncomingOrder.paymentMethod || '') && (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-violet-100 px-2 py-0.5 text-[11px] font-bold text-violet-700">
+                          <CreditCard className="h-3 w-3" aria-hidden="true" /> {activeIncomingOrder.paymentMethod === 'DIGITAL_WALLET' ? 'Billetera digital' : 'Tarjeta'}
+                        </span>
+                      )}
                       <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-bold ${
                         (activeIncomingOrder as any).fulfillmentType === 'PICKUP'
                           ? 'bg-emerald-100 text-emerald-700'
@@ -6064,7 +5969,7 @@ export default function Home() {
                       )}
                     </div>
                     <div className="mt-2.5 flex items-center justify-between gap-3 border-t border-neutral-100 pt-2">
-                      <div><p className="text-xs font-medium text-neutral-500">Total del pedido</p>{activeIncomingOrder.paymentMethod !== 'CASH' && <p className="mt-1 text-xs font-bold text-neutral-500">{activeIncomingOrder.paymentMethod === 'TRANSFER' ? 'Transferencia' : activeIncomingOrder.paymentMethod ? 'Pago en línea' : 'Pago no indicado'}</p>}</div>
+                      <div><p className="text-xs font-medium text-neutral-500">Total del pedido</p>{activeIncomingOrder.paymentMethod !== 'CASH' && <p className="mt-1 text-xs font-bold text-neutral-500">{activeIncomingOrder.paymentMethod === 'TRANSFER' ? 'Transferencia (histórico)' : activeIncomingOrder.paymentMethod ? 'Tarjeta' : 'Pago no indicado'}</p>}</div>
                       <p className="text-xl font-black tracking-tight text-neutral-950">
                         {formatCurrency(activeIncomingOrder.totalAmount)}
                       </p>
@@ -6117,7 +6022,7 @@ export default function Home() {
                       <div className="flex items-center gap-2 mb-1.5">
                         <span className={`flex h-2 w-2 rounded-full ${activeIncomingOrder.paymentStatus === 'COMPLETED' ? 'bg-emerald-500' : 'bg-amber-500'}`} />
                         <span className={`rounded-md px-2 py-0.5 text-xs font-bold ${activeIncomingOrder.paymentStatus === 'COMPLETED' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-800'}`}>
-                          {activeIncomingOrder.paymentStatus === 'COMPLETED' ? 'Pago en línea confirmado' : 'Pago en línea'}
+                          {activeIncomingOrder.paymentStatus === 'COMPLETED' ? 'Pago con tarjeta confirmado' : 'Pago con tarjeta'}
                         </span>
                       </div>
                         <p className={`text-xs font-medium ${activeIncomingOrder.paymentStatus === 'COMPLETED' ? 'text-emerald-700' : 'text-amber-800'}`}>
@@ -6182,52 +6087,45 @@ export default function Home() {
           role="dialog"
           aria-modal="true"
           aria-labelledby="logout-warning-title"
+          aria-describedby="logout-warning-description"
+          onKeyDown={(event) => { if (event.key === 'Escape' && !updatingOperationalStatus) setShowLogoutWarningModal(false); }}
         >
-          <div className="flex max-h-[min(92vh,960px)] w-full max-w-lg flex-col overflow-hidden rounded-[24px] bg-white shadow-[0_28px_90px_rgba(15,15,15,0.34)] sm:rounded-[20px]">
-            <div className="border-b border-black/10 px-4 py-4 sm:px-7">
-              <h2 id="logout-warning-title" className="text-2xl font-bold text-neutral-900">
-                ¡Atención! Negocio Abierto
-              </h2>
+          <div className="wl-logout-dialog">
+            <div className="wl-logout-heading">
+              <span className="wl-logout-icon" aria-hidden="true"><Store /></span>
+              <div><p>Sesión del restaurante</p><h2 id="logout-warning-title">Tu negocio sigue abierto</h2></div>
+              <button type="button" aria-label="Cerrar aviso" className="wl-logout-close" disabled={updatingOperationalStatus} onClick={() => setShowLogoutWarningModal(false)}><X aria-hidden="true" /></button>
             </div>
-
-            <div className="flex-1 overflow-y-auto px-4 py-6 sm:px-7">
-              <p className="text-sm text-neutral-600">
-                Tu negocio sigue <strong>Abierto</strong> y los clientes pueden seguir haciendo pedidos. ¿Qué deseas hacer?
-              </p>
-            </div>
-
-            <div className="border-t border-black/10 px-4 py-4 sm:px-7">
-              <div className="flex flex-col gap-3 sm:flex-row sm:justify-end">
+            <p id="logout-warning-description" className="wl-logout-description">Los clientes pueden seguir haciendo pedidos si sales sin cerrar el negocio. Elige cómo deseas continuar.</p>
+            {logoutCloseError && <p role="alert" className="wl-logout-error">{logoutCloseError}</p>}
+              <div className="wl-logout-actions">
                 <button
                   type="button"
-                  onClick={() => setShowLogoutWarningModal(false)}
-                  className="w-full rounded-full border border-black/10 bg-white px-5 py-4 text-sm font-semibold text-neutral-700 transition hover:bg-neutral-50 sm:w-auto"
+                  disabled={updatingOperationalStatus}
+                  onClick={async () => {
+                    setLogoutCloseError('');
+                    const closed = await performStatusUpdate(false);
+                    if (!closed) { setLogoutCloseError('No se pudo cerrar el negocio. Revisa tu conexión e inténtalo de nuevo.'); return; }
+                    setShowLogoutWarningModal(false);
+                    clearSession('Negocio cerrado y sesion terminada.');
+                  }}
+                  className="wl-logout-primary"
                 >
-                  Cancelar
+                  {updatingOperationalStatus ? 'Cerrando negocio…' : 'Cerrar negocio y salir'}
                 </button>
                 <button
                   type="button"
+                  disabled={updatingOperationalStatus}
                   onClick={() => {
                     setShowLogoutWarningModal(false);
                     clearSession('Sesion cerrada. Regresaste al login.');
                   }}
-                  className="w-full rounded-full bg-red-600 px-5 py-4 text-sm font-semibold text-white shadow-[0_4px_12px_rgba(220,38,38,0.3)] transition hover:bg-red-700 sm:w-auto"
+                  className="wl-logout-secondary"
                 >
-                  Cerrar sesión de todos modos
+                  Salir y dejar abierto
                 </button>
-                <button
-                  type="button"
-                  onClick={async () => {
-                    await toggleOperationalStatus();
-                    setShowLogoutWarningModal(false);
-                    clearSession('Negocio cerrado y sesion terminada.');
-                  }}
-                  className="w-full rounded-full bg-sky-600 px-5 py-4 text-sm font-semibold text-white shadow-[0_4px_12px_rgba(2,132,199,0.3)] transition hover:bg-sky-700 sm:w-auto"
-                >
-                  Cerrar negocio y salir
-                </button>
+                <button type="button" autoFocus disabled={updatingOperationalStatus} onClick={() => setShowLogoutWarningModal(false)} className="wl-logout-cancel">Cancelar</button>
               </div>
-            </div>
           </div>
         </div>
       ) : null}
@@ -6300,21 +6198,6 @@ export default function Home() {
                     className="flex min-h-12 w-full items-center justify-center rounded-2xl bg-red-600 px-4 text-sm font-bold text-white transition hover:bg-red-700 active:scale-[0.98] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-600">
                     Abrir reparto en este dispositivo
                   </a>
-                  {wingslabExternalServicesEnabled() && <button
-                    type="button"
-                    disabled={!wingslabExternalServicesEnabled()}
-                    onClick={() => {
-                      if (!wingslabExternalServicesEnabled()) return;
-                      const message = `Entrega WingsLab — Pedido ${activeQrCodeData.orderReference}\n${deliveryUrl}`;
-                      window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, '_blank', 'noopener,noreferrer');
-                    }}
-                    className="flex min-h-12 w-full items-center justify-center rounded-2xl border border-neutral-200 bg-white px-4 text-sm font-bold text-neutral-800 transition hover:bg-neutral-50 active:scale-[0.98] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-600 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100 dark:hover:bg-zinc-700"
-                  >
-                    <span className="inline-flex items-center gap-2">
-                      <svg className="h-4 w-4" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
-                      Enviar por WhatsApp
-                    </span>
-                  </button>}
                 </div>
               </div>
             </div>
@@ -6762,23 +6645,24 @@ export default function Home() {
         </div>
       ) : null}
       {showSaveSuccessModal ? (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-labelledby="save-success-title" aria-describedby="save-success-description" onKeyDown={(event) => { if (event.key === 'Escape') { event.stopPropagation(); setShowSaveSuccessModal(false); } }}>
           <div
-            className="absolute inset-0 bg-neutral-950/20 backdrop-blur-sm transition-opacity"
+            className="absolute inset-0 bg-neutral-950/50 backdrop-blur-sm"
             onClick={() => setShowSaveSuccessModal(false)}
           />
-          <div className="relative w-full max-w-[360px] rounded-[32px] bg-white p-8 text-center shadow-[0_32px_64px_rgba(0,0,0,0.1)]">
-            <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-green-50 text-green-500 ring-8 ring-green-50/50">
-              <Check className="h-10 w-10" />
+          <div className="relative w-full max-w-[380px] overflow-hidden rounded-[28px] border border-neutral-100 bg-white px-6 pb-6 pt-8 text-center shadow-[0_28px_90px_rgba(15,15,15,0.3)] sm:px-8 sm:pb-8">
+            <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-600 ring-8 ring-emerald-50/60">
+              <Check className="h-8 w-8" aria-hidden="true" />
             </div>
-            <h3 className="mb-3 text-[22px] font-bold tracking-tight text-neutral-900">Cambios guardados</h3>
-            <p className="mb-8 text-[15px] leading-relaxed text-neutral-500">
-              La configuración de tu tienda ha sido actualizada exitosamente.
+            <h3 id="save-success-title" className="text-xl font-bold tracking-tight text-neutral-900">Cambios guardados</h3>
+            <p id="save-success-description" className="mt-2 text-sm leading-6 text-neutral-500">
+              La configuración de tu tienda se actualizó correctamente.
             </p>
             <button
               type="button"
+              autoFocus
               onClick={() => setShowSaveSuccessModal(false)}
-              className="w-full rounded-full bg-neutral-950 py-4 text-[15px] font-semibold text-white transition-all hover:bg-black focus:outline-none focus:ring-4 focus:ring-neutral-200 active:scale-[0.98]"
+              className="mt-7 min-h-12 w-full rounded-xl bg-neutral-900 px-5 text-sm font-bold text-white transition hover:bg-neutral-800 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-neutral-300 active:scale-[0.98]"
             >
               Entendido
             </button>
@@ -6979,7 +6863,7 @@ export default function Home() {
             }
           }}
         >
-          <div className="wl-pm-sheet relative flex h-[94dvh] w-full max-w-4xl flex-col overflow-hidden sm:h-auto sm:max-h-[92dvh]">
+          <div className="wl-pm-sheet relative flex w-full flex-col overflow-hidden">
             <div className="wl-pm-grip flex shrink-0 justify-center pt-2.5 sm:hidden" aria-hidden="true">
               <span className="h-1 w-10 rounded-full" />
             </div>
@@ -7030,7 +6914,7 @@ export default function Home() {
 
             {/* Scrollable Content */}
             <div ref={productModalScrollRef} className="wl-pm-body relative min-h-0 flex-1 overflow-y-auto overscroll-contain" style={{ WebkitOverflowScrolling: 'touch' }}>
-              <div className="space-y-6 sm:space-y-7">
+              <div className="wl-pm-sections">
 
                 {/* 1. Información Básica */}
                 <section>
@@ -7492,138 +7376,70 @@ export default function Home() {
 
                           </div>
 
-                          {/* Crop Preview */}
                           {productDraft.image.trim() && !productImageValidationError ? (
-                            <div className="mt-4 flex flex-col items-center gap-1 sm:mt-0">
-                              <div
-                                ref={cropContainerRef}
-                                className="group relative w-full select-none touch-none overflow-hidden rounded-2xl border border-neutral-200 bg-neutral-100 shadow-sm aspect-[4/3] sm:w-44 sm:aspect-square"
-                                onMouseDown={(e) => {
-                                  const div = cropContainerRef.current;
-                                  if (!div) return;
-                                  const rect = div.getBoundingClientRect();
-                                  const x = Math.round(((e.clientX - rect.left) / rect.width) * 100);
-                                  const y = Math.round(((e.clientY - rect.top) / rect.height) * 100);
-                                  cropDragRef.current = {
-                                    isDragging: true,
-                                    startX: e.clientX,
-                                    startY: e.clientY,
-                                    startPosition: `${x}% ${y}%`,
-                                  };
-                                  setProductDraft((curr) => ({ ...curr, imagePosition: `${x}% ${y}%` }));
-                                }}
-                                onTouchStart={(e) => {
-                                  const touches = e.touches;
-                                  if (touches.length === 2) {
-                                    cropDragRef.current.isDragging = false;
-                                    const dx = touches[0].clientX - touches[1].clientX;
-                                    const dy = touches[0].clientY - touches[1].clientY;
-                                    const dist = Math.sqrt(dx * dx + dy * dy);
-                                    (cropContainerRef.current as any).__pinchDist = dist;
-                                    (cropContainerRef.current as any).__pinchZoom = productDraft.imageZoom || 100;
-                                    return;
-                                  }
-                                  const div = cropContainerRef.current;
-                                  if (!div || !touches[0]) return;
-                                  const rect = div.getBoundingClientRect();
-                                  const touch = touches[0];
-                                  const x = Math.round(((touch.clientX - rect.left) / rect.width) * 100);
-                                  const y = Math.round(((touch.clientY - rect.top) / rect.height) * 100);
-                                  cropDragRef.current = {
-                                    isDragging: true,
-                                    startX: touch.clientX,
-                                    startY: touch.clientY,
-                                    startPosition: `${x}% ${y}%`,
-                                  };
-                                  setProductDraft((curr) => ({ ...curr, imagePosition: `${x}% ${y}%` }));
-                                }}
-                                onTouchMove={(e) => {
-                                  const touches = e.touches;
-                                  const el = cropContainerRef.current;
-                                  if (touches.length === 2 && el) {
-                                    const dx = touches[0].clientX - touches[1].clientX;
-                                    const dy = touches[0].clientY - touches[1].clientY;
-                                    const dist = Math.sqrt(dx * dx + dy * dy);
-                                    const startDist = (el as any).__pinchDist;
-                                    const startZoom = (el as any).__pinchZoom || 100;
-                                    if (startDist > 0) {
-                                      const ratio = dist / startDist;
-                                      const newZoom = Math.max(30, Math.min(300, Math.round(startZoom * ratio)));
-                                      setProductDraft((curr) => ({ ...curr, imageZoom: newZoom }));
-                                    }
-                                    return;
-                                  }
-                                }}
-                                onTouchEnd={() => {
-                                  cropDragRef.current.isDragging = false;
-                                  if (cropContainerRef.current) {
-                                    (cropContainerRef.current as any).__pinchDist = 0;
-                                  }
-                                }}
-                              >
-                                <div
-                                  className="absolute inset-0 flex items-center justify-center overflow-hidden"
-                                  style={{ transform: `scale(${(productDraft.imageZoom || 100) / 100})` }}
-                                >
-                                  <img
-                                    src={productDraft.image}
-                                    alt="Vista previa"
-                                    className={`pointer-events-none h-full w-full ${(productDraft.imageZoom || 100) < 100 ? 'object-contain' : 'object-cover'}`}
-                                    style={{ objectPosition: productDraft.imagePosition || '50% 50%' }}
-                                    draggable={false}
-                                  />
+                            <div className="mt-4 w-full sm:mt-0 sm:w-44 sm:shrink-0">
+                              <div className="relative aspect-square overflow-hidden rounded-2xl border border-neutral-200 bg-neutral-100">
+                                <div className="absolute inset-0 overflow-hidden" style={{ transform: `scale(${(productDraft.imageZoom || 100) / 100})` }}>
+                                  <img src={productDraft.image} alt="Vista previa de la foto del producto" draggable={false} className="h-full w-full object-contain" style={{ objectPosition: productDraft.imagePosition || '50% 50%' }} />
                                 </div>
-                                {productDraft.imagePosition && (
-                                  <div className="pointer-events-none absolute inset-0">
-                                    <div
-                                      className="absolute h-7 w-7 -translate-x-1/2 -translate-y-1/2"
-                                      style={{
-                                        left: productDraft.imagePosition.split(' ')[0],
-                                        top: productDraft.imagePosition.split(' ')[1],
-                                      }}
-                                    >
-                                      <div className="h-full w-full rounded-full border-[3px] border-white/90 shadow-[0_2px_12px_rgba(0,0,0,0.4)]" />
-                                      <div className="absolute left-1/2 top-0 h-full w-px -translate-x-1/2 bg-white/50" />
-                                      <div className="absolute left-0 top-1/2 h-px w-full -translate-y-1/2 bg-white/50" />
+                              </div>
+                              <button type="button" onClick={() => setImageEditor({ position: productDraft.imagePosition || '50% 50%', zoom: productDraft.imageZoom || 100 })} className="mt-3 min-h-11 w-full rounded-xl border border-neutral-300 bg-white px-4 text-sm font-bold text-neutral-800 hover:bg-neutral-50">
+                                Ajustar foto
+                              </button>
+                            </div>
+                          ) : null}
+
+                          {imageEditor ? (
+                            <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/70 sm:p-4" role="dialog" aria-modal="true" aria-labelledby="image-editor-title" onKeyDown={(event) => { if (event.key === 'Escape') { event.stopPropagation(); setImageEditor(null); } }}>
+                              <div className="flex h-[100dvh] w-full flex-col overflow-y-auto bg-white sm:h-auto sm:max-h-[95dvh] sm:max-w-lg sm:rounded-3xl sm:shadow-2xl">
+                                <div className="px-5 pb-3 pt-5 sm:px-6">
+                                  <h2 id="image-editor-title" className="text-xl font-bold text-neutral-900">Ajustar foto</h2>
+                                  <p className="mt-1 text-sm text-neutral-500">Arrastra la foto para acomodarla.</p>
+                                </div>
+                                <div className="flex min-h-0 flex-1 items-center justify-center px-5 py-2 sm:px-6">
+                                  <div
+                                    className="relative aspect-square w-full max-w-[min(100%,50dvh)] touch-none select-none overflow-hidden rounded-2xl bg-neutral-100"
+                                    onPointerDown={(event) => {
+                                      if (!event.isPrimary) return;
+                                      event.currentTarget.setPointerCapture(event.pointerId);
+                                      cropDragRef.current = { x: event.clientX, y: event.clientY, position: imageEditor.position };
+                                    }}
+                                    onPointerMove={(event) => {
+                                      const drag = cropDragRef.current;
+                                      if (!drag || !event.currentTarget.hasPointerCapture(event.pointerId)) return;
+                                      const rect = event.currentTarget.getBoundingClientRect();
+                                      const [x, y] = drag.position.split(' ').map(parseFloat);
+                                      setImageEditor((current) => current ? { ...current, position: `${Math.round(Math.max(0, Math.min(100, x + (event.clientX - drag.x) / rect.width * 100)))}% ${Math.round(Math.max(0, Math.min(100, y + (event.clientY - drag.y) / rect.height * 100)))}%` } : current);
+                                    }}
+                                    onPointerUp={() => { cropDragRef.current = null; }}
+                                    onPointerCancel={() => { cropDragRef.current = null; }}
+                                  >
+                                    <div className="absolute inset-0 overflow-hidden" style={{ transform: `scale(${imageEditor.zoom / 100})` }}>
+                                      <img src={productDraft.image} alt="Vista previa del encuadre" draggable={false} className="pointer-events-none h-full w-full object-contain" style={{ objectPosition: imageEditor.position }} />
                                     </div>
                                   </div>
-                                )}
-                                <div className="pointer-events-none absolute right-2 top-2 z-10 flex items-center gap-1">
-                                  <div className="rounded-md bg-black/50 px-2 py-0.5 text-[11px] font-semibold text-white backdrop-blur">
-                                    {(productDraft.imageZoom || 100) < 100 ? '' : '+'}{(productDraft.imageZoom || 100) - 100}%
-                                  </div>
-                                  <button
-                                    type="button"
-                                    onClick={() => setProductDraft((curr) => ({ ...curr, imageZoom: Math.max(30, (curr.imageZoom || 100) - 10) }))}
-                                    className="pointer-events-auto flex h-11 w-11 items-center justify-center rounded-lg bg-black/60 text-base font-semibold text-white shadow-sm backdrop-blur transition hover:bg-black/75 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
-                                    title="Reducir zoom"
-                                    aria-label="Reducir zoom"
-                                  >
-                                    −
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => setProductDraft((curr) => ({ ...curr, imageZoom: Math.min(300, (curr.imageZoom || 100) + 10) }))}
-                                    className="pointer-events-auto flex h-11 w-11 items-center justify-center rounded-lg bg-black/60 text-base font-semibold text-white shadow-sm backdrop-blur transition hover:bg-black/75 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
-                                    title="Aumentar zoom"
-                                    aria-label="Aumentar zoom"
-                                  >
-                                    +
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => setProductDraft((curr) => ({ ...curr, imageZoom: 100 }))}
-                                    className="pointer-events-auto flex h-11 w-11 items-center justify-center rounded-lg bg-black/60 text-sm font-semibold text-white shadow-sm backdrop-blur transition hover:bg-black/75 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
-                                    title="Restablecer zoom"
-                                    aria-label="Restablecer encuadre"
-                                  >
-                                    ↺
-                                  </button>
                                 </div>
-                                <div className="absolute inset-x-0 bottom-0 flex items-center justify-center bg-gradient-to-t from-black/60 to-transparent pb-2 pt-7 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100">
-                                  <span className="rounded-full bg-white/90 px-3 py-1 text-[11px] font-semibold text-neutral-800 shadow-sm backdrop-blur">
-                                    Arrastra para encuadrar y haz zoom
-                                  </span>
+                                <div className="space-y-4 px-5 pb-5 pt-3 sm:px-6 sm:pb-6" style={{ paddingBottom: 'max(1.25rem, env(safe-area-inset-bottom))' }}>
+                                  <div className="flex items-center justify-between"><label htmlFor="product-image-zoom" className="text-sm font-bold text-neutral-800">Zoom <span className="ml-1 font-medium text-neutral-500">{imageEditor.zoom}%</span></label><button type="button" onClick={() => setImageEditor({ position: '50% 50%', zoom: 100 })} className="min-h-11 px-2 text-sm font-semibold text-red-600">Restablecer</button></div>
+                                  <div className="flex items-center gap-3">
+                                    <button type="button" aria-label="Reducir zoom" onClick={() => setImageEditor((current) => current ? { ...current, zoom: Math.max(30, current.zoom - 10) } : current)} className="h-11 w-11 shrink-0 rounded-xl border border-neutral-200 text-xl font-semibold">−</button>
+                                    <input id="product-image-zoom" type="range" min="30" max="300" step="1" value={imageEditor.zoom} onChange={(event) => setImageEditor((current) => current ? { ...current, zoom: Number(event.target.value) } : current)} className="h-11 min-w-0 flex-1 accent-red-600" />
+                                    <button type="button" aria-label="Aumentar zoom" onClick={() => setImageEditor((current) => current ? { ...current, zoom: Math.min(300, current.zoom + 10) } : current)} className="h-11 w-11 shrink-0 rounded-xl border border-neutral-200 text-xl font-semibold">+</button>
+                                  </div>
+                                  <div className="flex flex-wrap items-center justify-center gap-2">
+                                    <span className="mr-1 text-sm text-neutral-500">Mover foto</span>
+                                    {([['←', -5, 0, 'izquierda'], ['↑', 0, -5, 'arriba'], ['↓', 0, 5, 'abajo'], ['→', 5, 0, 'derecha']] as const).map(([icon, dx, dy, direction]) => (
+                                      <button key={direction} type="button" aria-label={`Mover foto hacia ${direction}`} onClick={() => setImageEditor((current) => {
+                                        if (!current) return current;
+                                        const [x, y] = current.position.split(' ').map(parseFloat);
+                                        return { ...current, position: `${Math.max(0, Math.min(100, x + dx))}% ${Math.max(0, Math.min(100, y + dy))}%` };
+                                      })} className="h-11 w-11 rounded-xl border border-neutral-200 text-lg font-semibold text-neutral-700">{icon}</button>
+                                    ))}
+                                  </div>
+                                  <div className="grid grid-cols-2 gap-3">
+                                    <button type="button" onClick={() => setImageEditor(null)} className="min-h-12 rounded-xl border border-neutral-300 font-bold text-neutral-700">Cancelar</button>
+                                    <button type="button" onClick={() => { setProductDraft((current) => ({ ...current, imagePosition: imageEditor.position, imageZoom: imageEditor.zoom })); setImageEditor(null); }} className="min-h-12 rounded-xl bg-red-600 px-3 font-bold text-white hover:bg-red-700">Guardar encuadre</button>
+                                  </div>
                                 </div>
                               </div>
                             </div>
@@ -7985,21 +7801,6 @@ export default function Home() {
 
             {/* Sticky Footer */}
             <div className="wl-pm-footer relative shrink-0" style={{ paddingBottom: 'max(0.875rem, env(safe-area-inset-bottom))' }}>
-              {!productDraft.id ? (
-                <div className="wl-pm-footer-top">
-                  <label className="wl-pm-check">
-                    <input
-                      type="checkbox"
-                      checked={continueAfterSave}
-                      onChange={(event) => setContinueAfterSave(event.target.checked)}
-                    />
-                    Añadir otro al publicar
-                  </label>
-                  <span className="wl-pm-shortcut">
-                    Enter en precio publica · Cmd/Ctrl + Enter en cualquier campo
-                  </span>
-                </div>
-              ) : null}
               <div className="wl-pm-actions">
                 <button
                   type="button"
@@ -8030,20 +7831,18 @@ export default function Home() {
         </div>
       ) : null}
       {isImportModalOpen ? (
-        <div className="fixed inset-0 z-[90] flex items-end justify-center bg-sky-950/40 backdrop-blur-md sm:items-center sm:px-4 sm:py-6">
-          <div className="relative flex h-[94vh] w-full max-w-[900px] flex-col overflow-hidden rounded-t-[36px] bg-white shadow-[0_32px_120px_rgba(14,165,233,0.25)] ring-1 ring-sky-100 sm:h-auto sm:max-h-[92vh] sm:rounded-[36px]">
-            <div className="pointer-events-none absolute -left-20 -top-20 h-64 w-64 rounded-full bg-sky-300/20 blur-[80px]" />
-            <div className="pointer-events-none absolute -right-20 top-1/2 h-64 w-64 rounded-full bg-blue-300/10 blur-[80px]" />
+        <div className="wl-import-overlay fixed inset-0 z-[90] flex items-end justify-center sm:items-center sm:px-4 sm:py-6">
+          <div role="dialog" aria-modal="true" aria-labelledby="import-menu-title" className={`wl-import-dialog relative flex w-full max-w-[900px] flex-col overflow-hidden${importResult ? ' wl-import-dialog--result' : ''}`}>
 
-            <div className="relative shrink-0 border-b border-sky-100/50 bg-white/80 px-5 py-4 backdrop-blur-xl sm:px-8 sm:py-5">
+            <div className="wl-import-header relative shrink-0 px-5 py-4 sm:px-7">
               <div className="flex items-center justify-between gap-3">
                 <div className="flex items-center gap-3 sm:gap-4">
-                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-sky-100 to-sky-50 text-sky-600 shadow-inner ring-1 ring-sky-200/50 sm:h-14 sm:w-14">
+                  <div className="wl-import-icon flex h-11 w-11 shrink-0 items-center justify-center rounded-xl">
                     <svg className="h-6 w-6 sm:h-7 sm:w-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" /></svg>
                   </div>
                   <div className="min-w-0">
-                    <h3 className="text-lg font-bold tracking-tight text-neutral-900 sm:text-2xl">Importar menú</h3>
-                    <p className="mt-0.5 text-[13px] font-medium text-sky-700/70 sm:text-sm">
+                    <h3 id="import-menu-title" className="text-lg font-bold tracking-tight sm:text-xl">Importar menú</h3>
+                    <p className="wl-import-subtitle mt-0.5 text-[13px] sm:text-sm">
                       Pega una tabla de Excel o Sheets y crea todos los productos de una vez.
                     </p>
                   </div>
@@ -8055,25 +7854,25 @@ export default function Home() {
                     setImportResult(null);
                     setImportText('');
                   }}
-                  className="group inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-sky-50 text-sky-600 transition-all hover:bg-sky-100 hover:text-sky-900 sm:h-12 sm:w-12"
+                  className="wl-import-close inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl"
                   aria-label="Cerrar importación"
                 >
-                  <X className="h-5 w-5 transition-transform duration-300 group-hover:rotate-90" strokeWidth={2.5} />
+                  <X className="h-5 w-5" strokeWidth={2} />
                 </button>
               </div>
             </div>
 
-            <div className="relative flex-1 overflow-y-auto bg-gradient-to-b from-sky-50/30 to-white px-5 py-5 sm:px-8">
+            <div className="wl-import-body relative min-h-0 flex-1 overflow-y-auto px-5 py-5 sm:px-7">
               {importResult ? (
-                <div className="mx-auto max-w-[520px] py-8 text-center">
-                  <div className={`mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-full ring-8 ${importResult.created > 0 ? 'bg-emerald-50 text-emerald-500 ring-emerald-50/50' : 'bg-amber-50 text-amber-500 ring-amber-50/50'}`}>
-                    {importResult.skipped === 0 ? (
-                      <Check className="h-10 w-10" strokeWidth={2.5} />
+                <div className="wl-import-result mx-auto max-w-[420px] py-2 text-center">
+                  <div className={`mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full ring-4 ${importResult.created > 0 ? 'bg-emerald-50 text-emerald-500 ring-emerald-50/50' : 'bg-amber-50 text-amber-500 ring-amber-50/50'}`}>
+                    {importResult.created > 0 && importResult.skipped === 0 ? (
+                      <Check className="h-7 w-7" strokeWidth={2.5} />
                     ) : (
-                      <Info className="h-10 w-10" />
+                      <Info className="h-7 w-7" />
                     )}
                   </div>
-                  <h3 className="mb-2 text-[22px] font-bold tracking-tight text-neutral-900">
+                  <h3 role="status" className="mb-2 text-lg font-bold tracking-tight text-neutral-900">
                     {importResult.created > 0 ? `Se importaron ${importResult.created} producto${importResult.created === 1 ? '' : 's'}` : 'Ningún producto importado'}
                   </h3>
                   {importResult.skipped > 0 ? (
@@ -8082,7 +7881,7 @@ export default function Home() {
                     </p>
                   ) : (
                     <p className="mb-5 text-[15px] leading-relaxed text-neutral-500">
-                      Ya aparecen en tu menú publico.
+                      Ya aparecen en tu menú público.
                     </p>
                   )}
 
@@ -8099,7 +7898,7 @@ export default function Home() {
                     </div>
                   ) : null}
 
-                  <div className="flex items-center justify-center gap-3">
+                  <div className="wl-import-result-actions">
                     <button
                       type="button"
                       onClick={() => {
@@ -8107,14 +7906,14 @@ export default function Home() {
                         setImportText('');
                         setImportHasHeader(false);
                       }}
-                      className="rounded-full border border-black/10 px-5 py-3 text-sm font-bold text-neutral-600 transition hover:bg-neutral-100 hover:text-neutral-900"
+                      className="wl-import-secondary min-h-11 px-4 py-3 text-sm font-bold"
                     >
                       Importar otra lista
                     </button>
                     <button
                       type="button"
                       onClick={() => setIsImportModalOpen(false)}
-                      className="rounded-full bg-gradient-to-r from-sky-500 to-sky-400 px-6 py-3 text-sm font-bold text-white shadow-[0_4px_16px_rgba(14,165,233,0.35)] ring-1 ring-sky-400/50 transition-all hover:scale-105"
+                      className="wl-import-primary min-h-11 px-4 py-3 text-sm font-bold"
                     >
                       Listo
                     </button>
@@ -8123,14 +7922,14 @@ export default function Home() {
               ) : (
                 <>
                   <div>
-                    <details className="mb-4 rounded-2xl border border-sky-100 bg-sky-50/70 p-4 text-sm text-neutral-700">
-                      <summary className="cursor-pointer font-bold text-sky-900">¿Tu menú tiene opciones? Usa estas instrucciones para IA</summary>
+                    <details className="mb-4 rounded-2xl border border-neutral-200 bg-neutral-50 p-4 text-sm text-neutral-700">
+                      <summary className="cursor-pointer font-bold text-neutral-900">¿Tu menú tiene opciones? Usa estas instrucciones para IA</summary>
                       <p className="mt-2 leading-5">Incluye salsas, extras o variantes solo en los productos que correspondan. Usa tabulaciones y deja vacía la columna cuando no haya opciones.</p>
                       <p className="mt-2 break-words rounded-xl bg-white p-3 font-mono text-xs leading-5">Salsa [1-1]: Verde ($0) | Roja ($0); Extras [0-2]: Queso ($15) | Tocino ($20)</p>
                       <button type="button" onClick={async () => {
                         try { await navigator.clipboard.writeText(IMPORT_AI_PROMPT); setImportPromptCopied(true); }
                         catch { setImportPromptCopied(false); }
-                      }} className="mt-3 min-h-11 rounded-xl bg-sky-700 px-4 text-sm font-bold text-white hover:bg-sky-800">{importPromptCopied ? 'Instrucciones copiadas' : 'Copiar instrucciones para IA'}</button>
+                      }} className="mt-3 min-h-11 rounded-xl bg-red-700 px-4 text-sm font-bold text-white hover:bg-red-800">{importPromptCopied ? 'Instrucciones copiadas' : 'Copiar instrucciones para IA'}</button>
                       <p className="mt-2 text-xs text-neutral-500">Si no puedes copiar automáticamente, selecciona el texto de abajo.</p>
                       <p className="mt-2 select-all text-xs leading-5 text-neutral-600">{IMPORT_AI_PROMPT}</p>
                     </details>
@@ -8141,7 +7940,7 @@ export default function Home() {
                         onChange={(event) => setImportText(event.target.value)}
                         rows={6}
                         placeholder={'nombre,precio,categoría,tipo,descripción\nTacos al pastor,45,Tacos,pieza,Tres tortillas con pastor y piña\nHamburguesa doble,90,Burgers,pieza,Pan artesanal con doble carne'}
-                        className="w-full rounded-[18px] border border-black/5 bg-white px-5 py-4 text-[15px] font-medium text-neutral-950 shadow-inner outline-none transition-all placeholder:text-neutral-400 focus:border-sky-400 focus:ring-4 focus:ring-sky-400/20"
+                        className="w-full rounded-[18px] border border-black/5 bg-white px-5 py-4 text-[15px] font-medium text-neutral-950 shadow-inner outline-none transition-all placeholder:text-neutral-400 focus:border-red-600 focus:ring-4 focus:ring-red-600/15"
                       />
                     </label>
                     <p className="mt-2 text-[13px] leading-6 text-neutral-500">
@@ -8151,15 +7950,15 @@ export default function Home() {
 
                   {importDataRows.length > 0 ? (
                     <>
-                      <div className="mt-5 rounded-[28px] border border-sky-100 bg-white/80 p-5 shadow-[0_8px_30px_rgba(14,165,233,0.06)] ring-1 ring-sky-100/50">
+                      <div className="mt-5 rounded-[28px] border border-neutral-200 bg-white/80 p-5 shadow-sm ring-1 ring-neutral-100/50">
                         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
                           <p className="text-sm font-bold text-neutral-900">Mapeo de columnas</p>
-                          <label className="flex cursor-pointer select-none items-center gap-2 text-[13px] font-semibold text-sky-800">
+                          <label className="flex cursor-pointer select-none items-center gap-2 text-[13px] font-semibold text-neutral-700">
                             <input
                               type="checkbox"
                               checked={importHasHeader}
                               onChange={(event) => setImportHasHeader(event.target.checked)}
-                              className="h-4 w-4 accent-sky-500"
+                              className="h-4 w-4 accent-red-700"
                             />
                             Primera fila es encabezado
                           </label>
@@ -8176,7 +7975,7 @@ export default function Home() {
                                     [field]: event.target.value === '' ? undefined : Number(event.target.value),
                                   }))
                                 }
-                                className="w-full rounded-xl border border-black/5 bg-neutral-50 px-3 py-2.5 text-sm font-semibold text-neutral-800 outline-none transition focus:border-sky-400 focus:ring-2 focus:ring-sky-400/20"
+                                className="w-full rounded-xl border border-black/5 bg-neutral-50 px-3 py-2.5 text-sm font-semibold text-neutral-800 outline-none transition focus:border-red-600 focus:ring-2 focus:ring-red-600/15"
                               >
                                 <option value="">— Sin usar —</option>
                                 {Array.from({ length: importColumnCount }, (_, index) => (
@@ -8192,7 +7991,7 @@ export default function Home() {
                             <select
                               value={importDefaultCategoryId}
                               onChange={(event) => setImportDefaultCategoryId(event.target.value)}
-                              className="w-full rounded-xl border border-black/5 bg-neutral-50 px-3 py-2.5 text-sm font-semibold text-neutral-800 outline-none transition focus:border-sky-400 focus:ring-2 focus:ring-sky-400/20"
+                              className="w-full rounded-xl border border-black/5 bg-neutral-50 px-3 py-2.5 text-sm font-semibold text-neutral-800 outline-none transition focus:border-red-600 focus:ring-2 focus:ring-red-600/15"
                             >
                               <option value="">— Sin usar —</option>
                               {categories.map((category) => (
@@ -8201,18 +8000,18 @@ export default function Home() {
                             </select>
                           </label>
                         </div>
-                        <label className="mt-4 flex cursor-pointer select-none items-center gap-2 text-[13px] font-semibold text-sky-800">
+                        <label className="mt-4 flex cursor-pointer select-none items-center gap-2 text-[13px] font-semibold text-neutral-700">
                           <input
                             type="checkbox"
                             checked={importCreateMissingCategories}
                             onChange={(event) => setImportCreateMissingCategories(event.target.checked)}
-                            className="h-4 w-4 accent-sky-500"
+                            className="h-4 w-4 accent-red-700"
                           />
                           Crear automáticamente las categorías que falten
                         </label>
                       </div>
 
-                      <div className="mt-5 rounded-[28px] border border-sky-100 bg-white/70 p-4 shadow-sm">
+                      <div className="mt-5 rounded-[28px] border border-neutral-200 bg-white/70 p-4 shadow-sm">
                         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
                           <p className="text-sm font-bold text-neutral-900">Vista previa</p>
                           <p className="text-[13px] font-semibold">
@@ -8244,7 +8043,7 @@ export default function Home() {
                                 <tr key={row.rowIndex} className="align-top">
                                   <td className="px-3 py-2 font-medium text-neutral-900">
                                     {row.name || '—'}
-                                    {row.optionGroups.length > 0 && <details className="mt-1 text-xs font-normal text-neutral-600"><summary className="cursor-pointer font-semibold text-sky-700">Ver {row.optionGroups.length} grupo{row.optionGroups.length === 1 ? '' : 's'}</summary>
+                                    {row.optionGroups.length > 0 && <details className="mt-1 text-xs font-normal text-neutral-600"><summary className="cursor-pointer font-semibold text-red-700">Ver {row.optionGroups.length} grupo{row.optionGroups.length === 1 ? '' : 's'}</summary>
                                       {row.optionGroups.map((group, index) => <div key={index} className="mt-2 min-w-40"><p className="font-bold">{group.name} · {group.minSelection ? `Mín. ${group.minSelection}` : 'Opcional'} · Máx. {group.maxSelection}</p><p className="mt-1 leading-5">{group.options.map((option) => `${option.name} (${formatCurrency(option.price)})`).join(' · ')}</p></div>)}
                                     </details>}
                                   </td>
@@ -8276,7 +8075,7 @@ export default function Home() {
               )}
             </div>
 
-            <div className="relative shrink-0 border-t border-sky-100/50 bg-white/70 px-5 py-4 backdrop-blur-xl sm:px-8 sm:py-5">
+            {!importResult && <div className="wl-import-footer relative shrink-0 px-5 py-4 sm:px-7">
               <div className="flex items-center justify-between gap-3">
                 <button
                   type="button"
@@ -8285,7 +8084,7 @@ export default function Home() {
                     setImportResult(null);
                     setImportText('');
                   }}
-                  className="rounded-full border border-black/10 px-5 py-3 text-sm font-bold text-neutral-600 transition hover:bg-neutral-100 hover:text-neutral-900"
+                  className="wl-import-secondary min-h-11 px-5 py-3 text-sm font-bold"
                 >
                   Cancelar
                 </button>
@@ -8294,16 +8093,15 @@ export default function Home() {
                     type="button"
                     onClick={() => void handleImportSubmit()}
                     disabled={importingProducts || importValidCount === 0 || importValidCount > 200}
-                    className="group relative flex-1 overflow-hidden rounded-full bg-gradient-to-r from-sky-500 to-sky-400 px-6 py-3 text-sm font-bold text-white shadow-[0_4px_16px_rgba(14,165,233,0.35)] ring-1 ring-sky-400/50 transition-all hover:scale-105 disabled:pointer-events-none disabled:opacity-60 disabled:shadow-none disabled:grayscale sm:flex-none"
+                    className="wl-import-primary min-h-11 flex-1 px-6 py-3 text-sm font-bold disabled:cursor-not-allowed disabled:opacity-50 sm:flex-none"
                   >
-                    <div className="absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/30 to-transparent transition-transform duration-1000 group-hover:translate-x-full" />
                     {importingProducts
                       ? 'Importando...'
                       : `Importar ${importValidCount} producto${importValidCount === 1 ? '' : 's'}`}
                   </button>
                 ) : null}
               </div>
-            </div>
+            </div>}
           </div>
         </div>
       ) : null}
@@ -8647,10 +8445,8 @@ export default function Home() {
         </div>
       ) : (
         <div className="min-h-[100dvh] bg-white">
-          <header className="wl-admin-header sticky top-0 z-40 w-full border-b border-black/5 bg-white">
-              <div className="grid grid-cols-[56px_1fr_56px] items-center px-3 py-2 md:px-6 lg:grid-cols-[220px_1fr_220px]">
-              <div className="mx-auto w-full max-w-[1540px] contents">
-                <div className="flex items-center">
+            <header className="wl-admin-section-heading wl-admin-topbar">
+              <div className="wl-admin-topbar-leading">
                   <button
                     type="button"
                     onClick={() => setIsMobileNavOpen(true)}
@@ -8659,7 +8455,7 @@ export default function Home() {
                         ? 'border-sky-200 bg-sky-50 text-sky-700 animate-heartbeat'
                         : 'border-black/10 bg-white text-neutral-800'
                     }`}
-                    aria-label="Abrir menu"
+                    aria-label="Abrir menú"
                     aria-expanded={isMobileNavOpen}
                     aria-controls="wl-mobile-navigation"
                   >
@@ -8673,26 +8469,19 @@ export default function Home() {
                       </span>
                     )}
                   </button>
-                </div>
-                <div className="px-3 text-center flex flex-col items-center gap-0">
-                  <img className="wl-admin-logo-light wl-admin-header-logo" src={redWordmark.src} alt="WingsLab" /><img className="wl-admin-logo-dark wl-admin-header-logo" src={whiteWordmark.src} alt="" aria-hidden="true" />
-                  <span className="wl-admin-header-subtitle">Panel de administración</span>
-                </div>
-                <div className="flex items-center justify-end">
-                  <span className="hidden rounded-full bg-sky-100 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-sky-700 lg:inline-flex">
-                    {businessTypeLabel(profile?.businessType)}
-                  </span>
-                </div>
               </div>
-            </div>
-          </header>
-
-          <div className={`wl-admin-layout flex min-h-[calc(100dvh-5rem)] w-full bg-transparent ${sidebarCollapsed ? 'wl-admin-layout--collapsed' : ''}`}>
+              <div className="wl-admin-topbar-brand">
+                <img className="wl-admin-logo-light w-28 max-w-full" src={redWordmark.src} alt="WingsLab" />
+                <img className="wl-admin-logo-dark w-28 max-w-full" src={whiteWordmark.src} alt="" aria-hidden="true" />
+                <span className="wl-admin-topbar-module" aria-hidden="true">{navigationItems.find(item => item.key === activeSection)?.label}</span>
+              </div>
+            </header>
+          <div className={`wl-admin-layout flex min-h-[100dvh] w-full flex-col bg-transparent lg:flex-row ${sidebarCollapsed ? 'wl-admin-layout--collapsed' : ''}`}>
             <aside className="wl-admin-sidebar fixed left-0 top-[5rem] hidden h-[calc(100dvh-5rem)] w-[260px] border-r border-black/5 bg-white lg:flex lg:flex-col">
               <div className="flex-1 overflow-y-auto px-4 pb-6 pt-4">
                 <div className="wl-admin-sidebar-top">
                 <div className="wl-admin-business">
-                  <p className="wl-admin-business-name">{restaurantName}</p>
+                  <p className="wl-admin-business-name">Panel de gestión</p>
                   <p className="wl-admin-business-status"><span className={isBusinessOpen && isWithinHours && !isBusinessPaused ? 'is-open' : ''} aria-hidden="true" />{operationalStatusLabel}</p>
                 </div>
                 <button type="button" className="wl-admin-sidebar-toggle" onClick={toggleSidebar} aria-label={sidebarCollapsed ? 'Expandir menú lateral' : 'Contraer menú lateral'} aria-expanded={!sidebarCollapsed} title={sidebarCollapsed ? 'Expandir menú lateral' : 'Contraer menú lateral'}><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="M9 4v16"/><path d={sidebarCollapsed ? 'm13 9 3 3-3 3' : 'm16 9-3 3 3 3'}/></svg></button>
@@ -8722,7 +8511,7 @@ export default function Home() {
 
               <div className="wl-admin-sidebar-footer mt-auto border-t border-black/5 px-4 py-5">
                 <div className="grid gap-2">
-                  <button type="button" className="wl-admin-theme-toggle" role="switch" aria-label="Modo oscuro" title={sidebarCollapsed ? 'Modo oscuro' : undefined} aria-checked={darkMode} onClick={toggleDarkMode}><Moon aria-hidden="true" /><span>Modo oscuro</span><span className="wl-admin-switch-track" aria-hidden="true"><i /></span></button>
+                  <ThemeToggle darkMode={darkMode} onToggle={toggleDarkMode} compact={sidebarCollapsed} />
 
                   <button
                     type="button"
@@ -8731,6 +8520,7 @@ export default function Home() {
                     onClick={() => {
                       const isBusinessOpen = profile?.isAcceptingOrders ?? false;
                       if (isBusinessOpen) {
+                        setLogoutCloseError('');
                         setShowLogoutWarningModal(true);
                       } else {
                         clearSession('Sesion cerrada. Regresaste al login.');
@@ -9066,7 +8856,7 @@ export default function Home() {
 
                 {activeSection === 'store' && profile ? (
                     <div className={`wl-menu-manager w-full space-y-4 sm:space-y-6 ${isSelectionMode ? 'pb-32' : ''}`}>
-                      <header className="wl-menu-manager-hero"><div><p>WingsLab</p><h1>Menú</h1></div><button type="button" onClick={() => setShowMenuPreview(true)}><Store aria-hidden="true" />Ver menú como cliente</button></header>
+                      <SectionHeader title="Menú WingsLab" icon={<Store />} action={<button type="button" className="wl-menu-preview-button" onClick={() => setShowMenuPreview(true)} aria-label="Abrir vista previa del menú como cliente"><Store aria-hidden="true" />Vista previa del menú</button>} />
 
                       <div className="wl-menu-manager-toolbar">
                         <div className="relative min-w-0 flex-1 sm:max-w-md">
@@ -9146,7 +8936,7 @@ export default function Home() {
                           </div>
                         ) : (
                         <CategoryScroller>
-                          <div className="flex min-w-max items-center gap-2 px-4 sm:px-5">
+                          <div className="wl-category-list flex min-w-max items-center gap-2 px-4 sm:px-5">
                             {storeCategories.map((category) => {
                               const productCount = category.products.length;
                               const cannotDelete = productCount > 0;
@@ -9154,12 +8944,12 @@ export default function Home() {
                               return (
                                 <div
                                   key={category.id}
-                                  className="inline-flex min-h-12 items-center gap-2.5 rounded-2xl border border-neutral-200/80 bg-neutral-50 pl-4 pr-1 text-sm font-semibold text-neutral-800"
+                                  className="wl-category-chip"
                                 >
-                                  <span className="max-w-[180px] truncate">{category.name}</span>
+                                  <span className="wl-category-name" title={category.name}>{category.name}</span>
                                   <span
-                                    className="inline-flex h-6 min-w-6 items-center justify-center rounded-full bg-white px-2 text-xs font-bold tabular-nums text-neutral-500 ring-1 ring-neutral-200/70"
-                                    title={`${productCount} productos`}
+                                    className="wl-category-count"
+                                    title={`${productCount} ${productCount === 1 ? 'producto' : 'productos'}`}
                                     aria-label={`${productCount} ${productCount === 1 ? 'producto' : 'productos'}`}
                                   >
                                     {productCount}
@@ -9168,7 +8958,7 @@ export default function Home() {
                                     type="button"
                                     onClick={() => openCategoryEditor(category)}
                                     disabled={Boolean(activeActionKey) || savingCategoryOrder}
-                                    className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-neutral-500 transition hover:bg-neutral-200 hover:text-neutral-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 disabled:cursor-not-allowed disabled:opacity-40"
+                                    className="wl-category-action"
                                     aria-label={`Editar categoría ${category.name}`}
                                     title={`Editar categoría ${category.name}`}
                                   >
@@ -9180,7 +8970,7 @@ export default function Home() {
                                       void deleteCategory(category.id, category.name, productCount)
                                     }
                                     disabled={Boolean(activeActionKey)}
-                                    className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-neutral-500 transition hover:bg-rose-50 hover:text-rose-600 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-50"
+                                    className="wl-category-action wl-category-action--delete"
                                     aria-label={`Eliminar categoría ${category.name}`}
                                     title={`Eliminar categoría ${category.name}`}
                                   >
@@ -9192,12 +8982,10 @@ export default function Home() {
                             <button
                               type="button"
                               onClick={() => setIsCategoryModalOpen(true)}
-                              className="inline-flex min-h-12 items-center gap-2 rounded-2xl bg-sky-700 px-4 py-2 text-sm font-bold text-white shadow-[0_4px_12px_rgba(3,105,161,0.2)] transition hover:bg-sky-800 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-offset-2"
+                              className="wl-category-add"
                             >
-                              <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-white/15 text-white">
-                                <Plus className="h-4 w-4" strokeWidth={2.5} aria-hidden="true" />
-                              </span>
-                              Agregar
+                              <Plus className="h-4 w-4" strokeWidth={2.5} aria-hidden="true" />
+                              Agregar categoría
                             </button>
                           </div>
                         </CategoryScroller>
@@ -9259,7 +9047,7 @@ export default function Home() {
                                     </button>
                                   </div>
                                 </div>
-                                <div className="divide-y divide-black/5">
+                                <div className="wl-menu-manager-products">
                                   {category.products.length === 0 ? (
                                     <div className="flex flex-col items-center gap-3 px-4 py-8 text-center sm:flex-row sm:justify-between sm:px-5 sm:text-left">
                                       <div className="min-w-0">
@@ -9317,7 +9105,7 @@ export default function Home() {
                                           ) : null}
                                         </div>
                                         </div>
-                                        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-neutral-100 pt-3 min-[420px]:flex-nowrap sm:w-auto sm:border-0 sm:pt-0 sm:justify-start sm:gap-4">
+                                        <div className="flex flex-wrap items-center justify-between gap-3 min-[420px]:flex-nowrap sm:w-auto sm:justify-start sm:gap-4">
                                           <div className="flex min-w-0 items-center gap-2.5">
                                             <span className="shrink-0 text-[15px] font-bold text-neutral-950">{product.discountPrice ? formatCurrency(product.discountPrice) : formatCurrency(product.price)}</span>
                                             <span className={`text-xs font-medium ${product.isAvailable ? 'text-emerald-700' : 'text-neutral-500'}`}>{product.isAvailable ? 'Disponible' : 'Agotado'}</span>
@@ -9333,16 +9121,18 @@ export default function Home() {
                                             <button
                                               type="button"
                                               onClick={() => openEditProductModal(product)}
-                                              className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-black/10 bg-white text-neutral-800 transition active:scale-90 hover:bg-neutral-100"
+                                              className="wl-product-action wl-product-action--edit"
                                               aria-label={`Editar ${product.name}`}
+                                              title={`Editar ${product.name}`}
                                             >
                                               <Pencil className="h-4 w-4" strokeWidth={1.9} />
                                             </button>
                                             <button
                                               type="button"
                                               onClick={() => openDeleteProductModal(product)}
-                                              className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-rose-200 bg-rose-50 text-rose-600 transition active:scale-90 hover:bg-rose-100"
+                                              className="wl-product-action wl-product-action--delete"
                                               aria-label={`Eliminar ${product.name}`}
+                                              title={`Eliminar ${product.name}`}
                                             >
                                               <Trash2 className="h-4 w-4" strokeWidth={1.9} />
                                             </button>
@@ -9359,7 +9149,7 @@ export default function Home() {
 
                       {isSelectionMode ? (
                         <div className="fixed inset-x-0 bottom-[max(1rem,env(safe-area-inset-bottom))] z-[70] px-4">
-                          <div className="mx-auto flex max-w-2xl flex-wrap items-center justify-center gap-2 rounded-3xl border border-sky-100 bg-white/95 px-4 py-3 shadow-[0_20px_50px_rgba(15,15,15,0.2)] backdrop-blur-xl ring-1 ring-black/5">
+                          <div className="wl-menu-bulk-bar mx-auto flex max-w-2xl flex-wrap items-center justify-center gap-2 rounded-2xl border border-neutral-200 bg-white px-3 py-3 shadow-xl dark:border-zinc-700 dark:bg-zinc-900">
                             <span className="mx-1 text-[13px] font-bold text-neutral-900">
                               {selectedProductCount === 0 ? 'Nada seleccionado' : `${selectedProductCount} seleccionado${selectedProductCount === 1 ? '' : 's'}`}
                             </span>
@@ -9368,7 +9158,7 @@ export default function Home() {
                               type="button"
                               onClick={() => void handleBulkAvailability(true)}
                               disabled={bulkActionLoading || selectedProductCount === 0}
-                              className="rounded-full bg-emerald-500 px-4 py-2 text-[13px] font-bold text-white transition hover:bg-emerald-600 disabled:cursor-not-allowed disabled:opacity-50"
+                              className="min-h-11 rounded-xl border border-neutral-300 bg-white px-3 text-[13px] font-semibold text-neutral-800 transition hover:bg-neutral-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-100"
                             >
                               Disponible
                             </button>
@@ -9376,15 +9166,16 @@ export default function Home() {
                               type="button"
                               onClick={() => void handleBulkAvailability(false)}
                               disabled={bulkActionLoading || selectedProductCount === 0}
-                              className="rounded-full border border-neutral-300 bg-white px-4 py-2 text-[13px] font-bold text-neutral-600 transition hover:bg-neutral-100 disabled:cursor-not-allowed disabled:opacity-50"
+                              className="min-h-11 rounded-xl border border-neutral-300 bg-white px-3 text-[13px] font-semibold text-neutral-800 transition hover:bg-neutral-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-100"
                             >
                               Agotado
                             </button>
                             <select
                               value={bulkCategoryTargetId}
+                              aria-label="Mover productos seleccionados a otra categoría"
                               onChange={(event) => void handleBulkMoveCategory(event.target.value)}
                               disabled={bulkActionLoading || selectedProductCount === 0}
-                              className="rounded-full border border-black/10 bg-white px-3.5 py-2 text-[13px] font-semibold text-neutral-700 outline-none transition focus:border-sky-400 disabled:cursor-not-allowed disabled:opacity-50"
+                              className="min-h-11 rounded-xl border border-neutral-300 bg-white px-3 text-[13px] font-semibold text-neutral-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-red-700 disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-100"
                             >
                               <option value="">Mover a categoría...</option>
                               {categories.map((category) => (
@@ -9395,7 +9186,7 @@ export default function Home() {
                               type="button"
                               onClick={() => setIsBulkDeleteModalOpen(true)}
                               disabled={bulkActionLoading || selectedProductCount === 0}
-                              className="rounded-full border border-rose-200 bg-rose-50 px-4 py-2 text-[13px] font-bold text-rose-600 transition hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-50"
+                              className="min-h-11 rounded-xl border border-red-200 bg-white px-3 text-[13px] font-semibold text-red-700 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-red-900 dark:bg-zinc-800 dark:text-red-300"
                             >
                               Eliminar
                             </button>
@@ -10235,7 +10026,7 @@ export default function Home() {
 
                 <div className="wl-admin-sidebar-footer shrink-0 border-t border-black/5 bg-white px-4 py-5">
                   <div className="grid gap-2">
-                    <button type="button" className="wl-admin-theme-toggle" role="switch" aria-checked={darkMode} onClick={toggleDarkMode}><Moon aria-hidden="true" /><span>Modo oscuro</span><span className="wl-admin-switch-track" aria-hidden="true"><i /></span></button>
+                    <ThemeToggle darkMode={darkMode} onToggle={toggleDarkMode} />
                     <button
                       type="button"
                       onClick={() => {
@@ -11349,7 +11140,7 @@ function getRestaurantActions(
   }
 
   if (status === 'CONFIRMED') {
-    return ['preparing'];
+    return order.scheduledDeliveryAt && !order.scheduledDeliveryCustomerAcceptedAt ? [] : ['ready'];
   }
   if (status === 'PREPARING') {
     return ['ready'];
@@ -11878,7 +11669,7 @@ const OrdersSection = memo(function OrdersSection(props: any) {
   const { activeActionKey, apiBase, driverArrivedOrders, driverContactOpen, hasCarriedOverActiveOrders, kitchenClockNow, lastFailedAction, loadOrdersOnly, loading, openAcceptOrderPrompt, orderModalId, orderSearchTerm, ordersFulfillment, ordersPeriod, ordersSearch, periodOrders, profile, profileLoadState, pushToast, refreshOrders, refreshingOrders, retryLastFailedAction, runOrderAction, selectedStatus, sessionUser, setActiveQrCodeData, setActiveTicketTab, setDriverContactOpen, setEmergencyConfirmed, setEmergencyDeliveryOrderId, setEmergencyReason, setHandoverPromptOrderId, selectedOrderForTicket, activeTicketTab, renderTicketExtras, renderTicketChat, setOrdersFulfillment, setOrdersPeriod, setOrdersSearch, setPickupConfirmAttemptsLeft, setPickupConfirmError, setPickupConfirmOrderId, setPickupConfirmPinInput, setSelectedOrderForEtaExtension, setSelectedOrderForTicket, setSelectedStatus, setTransferRefundOrder, setUnassignConfirmOrderId, setZoomedImageUrl, supportAliadoNamesByOrder, supportCountdownNow, supportNotifyByOrder, token, unreadMessagesMap, visibleOrders } = props;
   return (
                    <section className="wl-orders" aria-labelledby="orders-title">
-                    <header className="wl-orders-heading"><span className="wl-orders-heading-icon"><ClipboardList aria-hidden="true" /></span><div><h1 id="orders-title">Órdenes</h1></div></header>
+                    <SectionHeader title="Órdenes" titleId="orders-title" icon={<ClipboardList />} className="wl-orders-section-header" />
                     <div className="wl-orders-overview" aria-label="Resumen de pedidos cargados">
                       {[
                         { label: 'Por preparar', statuses: ['PENDING', 'CONFIRMED', 'PREPARING'], Icon: ChefHat, tone: 'preparing' },
@@ -11889,7 +11680,7 @@ const OrdersSection = memo(function OrdersSection(props: any) {
                         <div className={`wl-orders-stat wl-orders-stat--${tone}`} key={label}><Icon aria-hidden="true" /><div><span>{label}</span><strong>{profileLoadState === 'ready' ? periodOrders.filter((order: any) => statuses.includes(order.status)).length : '—'}</strong></div></div>
                       ))}
                     </div>
-                    <p className="wl-orders-overview-note">Pedidos activos y de {ordersPeriod === 'today' ? 'hoy' : ordersPeriod === 'week' ? 'esta semana' : 'este mes'} · zona Ciudad de México.{hasCarriedOverActiveOrders ? ' Incluye pedidos activos de días anteriores.' : ''}</p>
+                    <p className="wl-orders-overview-note">Pedidos activos y de {ordersPeriod === 'today' ? 'hoy' : ordersPeriod === 'week' ? 'esta semana' : 'este mes'}.{hasCarriedOverActiveOrders ? ' Incluye pedidos activos de días anteriores.' : ''}</p>
                     {lastFailedAction ? (
                       <div className="mb-4 rounded-[28px] border border-rose-100 bg-rose-50 p-4">
                         <p className="text-sm font-semibold text-rose-800">Ultima accion fallida: {lastFailedAction.label}</p>
@@ -11908,7 +11699,7 @@ const OrdersSection = memo(function OrdersSection(props: any) {
                     ) : null}
                     <div className="wl-orders-toolbar">
                       <label className="wl-orders-search"><span className="sr-only">Buscar por orden, cliente o producto</span><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="7"/><path d="m16 16 4 4"/></svg><input type="search" placeholder="Orden, cliente o producto" value={ordersSearch} onChange={(event) => setOrdersSearch(event.target.value)} /></label>
-                      <label className="wl-orders-filter">
+                      <label className="wl-orders-filter wl-orders-status">
                         <span>Estado</span>
                         <select
                           value={selectedStatus}
@@ -11922,13 +11713,13 @@ const OrdersSection = memo(function OrdersSection(props: any) {
                         </select>
                       </label>
                       <label className="wl-orders-filter wl-orders-period"><span>Fecha</span><select value={ordersPeriod} onChange={(event) => setOrdersPeriod(event.target.value as 'today' | 'week' | 'month')}><option value="today">Hoy</option><option value="week">Esta semana</option><option value="month">Este mes</option></select></label>
-                      <label className="wl-orders-filter"><span>Tipo de entrega</span><select value={ordersFulfillment} onChange={(event) => setOrdersFulfillment(event.target.value as 'ALL' | 'DELIVERY' | 'PICKUP')}><option value="ALL">Todos los tipos</option><option value="DELIVERY">A domicilio</option><option value="PICKUP">Para recoger</option></select></label>
+                      <label className="wl-orders-filter wl-orders-fulfillment-filter"><span>Tipo de entrega</span><select value={ordersFulfillment} onChange={(event) => setOrdersFulfillment(event.target.value as 'ALL' | 'DELIVERY' | 'PICKUP')}><option value="ALL">Todos los tipos</option><option value="DELIVERY">A domicilio</option><option value="PICKUP">Para recoger</option></select></label>
 
                       <button
                         type="button"
                         onClick={() => void refreshOrders()}
                         disabled={refreshingOrders || !sessionUser}
-                        className="wl-orders-refresh"
+                        className="wl-orders-refresh wl-orders-refresh-main"
                       >
                          <svg aria-hidden="true" className={`h-4 w-4 ${refreshingOrders ? 'motion-safe:animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.582m0 0a8.001 8.001 0 01-15.356-2m15.356 2H15" />
@@ -11949,7 +11740,7 @@ const OrdersSection = memo(function OrdersSection(props: any) {
                       ) : null}
                     </div>
                     {visibleOrders.length > 0 || selectedOrderForTicket ? (
-                      <div className="wl-orders-list space-y-4">
+                      <div className="wl-orders-list space-y-2">
                         {(selectedOrderForTicket && !visibleOrders.some((order: OrderItem) => order.id === selectedOrderForTicket.id) ? [...visibleOrders, selectedOrderForTicket] : visibleOrders).map((order: OrderItem) => {
                           const detailOnly = order === selectedOrderForTicket && !visibleOrders.some((entry: OrderItem) => entry.id === order.id);
                           const isHelper = order.restaurantId !== profile?.id;
@@ -11979,7 +11770,7 @@ const OrdersSection = memo(function OrdersSection(props: any) {
                           const hasDeadline = typeof deadlineRemaining === 'number' && Number.isFinite(deadlineRemaining);
                           const isLate = preparationActive && hasDeadline && deadlineRemaining <= 0;
                           const productCount = countOrderProducts(order);
-                          const paymentLabel = order.paymentMethod === 'CASH' ? 'Efectivo' : order.paymentMethod === 'TRANSFER' ? 'Transferencia' : order.paymentMethod ? 'Pago en línea' : 'Pago no indicado';
+                          const paymentLabel = order.paymentMethod === 'CASH' ? 'Efectivo' : order.paymentMethod === 'CREDIT_CARD' ? 'Tarjeta' : order.paymentMethod === 'TRANSFER' ? 'Transferencia (histórico)' : order.paymentMethod ? 'Tarjeta' : 'Pago no indicado';
                           return (
                             <article
                               key={order.id}
@@ -11995,7 +11786,7 @@ const OrdersSection = memo(function OrdersSection(props: any) {
                             >
                               <div className="wl-order-disclosure">
                                 {!detailOnly && <button type="button" className="wl-order-summary" aria-haspopup="dialog" onClick={() => { setActiveTicketTab('comanda'); setSelectedOrderForTicket(order); }}>
-                                  <span className="wl-order-summary-primary"><span className="wl-order-summary-top"><strong className="wl-order-number">{(order as any).dailyCounter ? `#${String((order as any).dailyCounter).padStart(2, '0')}` : order.orderReference}</strong><StatusBadge status={order.status} /></span><span className="wl-order-summary-date"><Clock aria-hidden="true" />{order.createdAt ? formatDate(order.createdAt) : 'Fecha no disponible'}</span></span>
+                                  <span className="wl-order-summary-primary"><span className="wl-order-summary-top"><strong className="wl-order-number">{order.dailyCounter ? `#${String(order.dailyCounter).padStart(2, '0')}` : 'Número no disponible'}</strong><StatusBadge status={order.status} /></span><span className="wl-order-summary-date"><Clock aria-hidden="true" />{order.createdAt ? formatDate(order.createdAt) : 'Fecha no disponible'}</span></span>
                                   <span className="wl-order-summary-person"><strong><User aria-hidden="true" />{getCustomerFullName(order.customer?.user) || 'Cliente'}</strong><span><span className={`wl-order-fulfillment ${order.fulfillmentType === 'PICKUP' ? 'is-pickup' : ''}`}>{order.fulfillmentType === 'PICKUP' ? 'Recogida' : order.fulfillmentType === 'DELIVERY' ? 'Envío' : 'Tipo no disponible'}</span><span>{productCount} {productCount === 1 ? 'producto' : 'productos'}</span></span></span>
                                   <span className="wl-order-summary-billing"><strong><span className="sr-only">Total: </span>{formatCurrency(order.totalAmount)}</strong><span className="wl-order-payment">{paymentLabel}</span></span>
                                   <span className="wl-order-summary-time">{preparationActive && hasDeadline ? (order.scheduledDeliveryAt ? <span><Clock aria-hidden="true" />Programado: {formatDate(order.scheduledDeliveryAt)}</span> : <span><Clock aria-hidden="true" />{isLate ? `Vencido hace ${Math.ceil(Math.abs(deadlineRemaining) / 60000)} min` : `Preparación: ${Math.ceil(deadlineRemaining / 60000)} min restantes`}</span>) : null}{isLate && <span className="wl-order-summary-alert">Pedido rezagado</span>}{unreadMessagesMap[order.id] > 0 && <span className="wl-order-summary-alert">{unreadMessagesMap[order.id]} mensaje{unreadMessagesMap[order.id] === 1 ? '' : 's'} nuevo{unreadMessagesMap[order.id] === 1 ? '' : 's'}</span>}{(order as any).cancellationRequestedAt && !(order as any).cancelledBy && preparationActive && <span className="wl-order-summary-alert">Cancelación solicitada</span>}</span>
@@ -12004,9 +11795,9 @@ const OrdersSection = memo(function OrdersSection(props: any) {
                                 {orderModalId === order.id && <div className="wl-comanda-overlay" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setSelectedOrderForTicket(null); }}>
                                 <section className="wl-comanda-modal" role="dialog" aria-modal="true" aria-labelledby={`wl-comanda-${order.id}`}>
                                   <div className="wl-comanda-heading">
-                                    <div className="wl-comanda-heading-info"><span className="wl-comanda-heading-icon"><ClipboardList aria-hidden="true" /></span><div><span className="wl-comanda-eyebrow">Detalle del pedido</span><div className="wl-comanda-title"><h2 id={`wl-comanda-${order.id}`}>{(order as any).dailyCounter ? `#${String((order as any).dailyCounter).padStart(2, '0')}` : order.orderReference}</h2><StatusBadge status={order.status} /></div><p>{order.createdAt ? formatDate(order.createdAt) : 'Fecha no disponible'} · {order.fulfillmentType === 'PICKUP' ? 'Para recoger' : 'A domicilio'}</p></div></div>
+                                    <div className="wl-comanda-heading-info"><span className="wl-comanda-heading-icon"><ClipboardList aria-hidden="true" /></span><div><span className="wl-comanda-eyebrow">Detalle del pedido</span><div className="wl-comanda-title"><h2 id={`wl-comanda-${order.id}`}>{order.dailyCounter ? `#${String(order.dailyCounter).padStart(2, '0')}` : 'Número no disponible'}</h2><StatusBadge status={order.status} /></div><p>{order.createdAt ? formatDate(order.createdAt) : 'Fecha no disponible'} · {order.fulfillmentType === 'PICKUP' ? 'Para recoger' : 'A domicilio'}</p></div></div>
                                     <div className="flex shrink-0 items-center gap-2">
-                                      <button type="button" title="Chat" aria-label={activeTicketTab === 'chat' ? 'Volver al detalle' : 'Abrir chat'} aria-pressed={activeTicketTab === 'chat'} onClick={() => setActiveTicketTab(activeTicketTab === 'chat' ? 'comanda' : 'chat')} className="relative grid h-11 w-11 place-items-center rounded-xl bg-neutral-100 text-neutral-950 hover:bg-neutral-200 aria-pressed:bg-red-100 aria-pressed:text-red-700 dark:bg-zinc-800 dark:text-white">
+                                      <button type="button" title="Chat" aria-label={activeTicketTab === 'chat' ? 'Volver al detalle' : 'Abrir chat'} aria-pressed={activeTicketTab === 'chat'} onClick={() => setActiveTicketTab(activeTicketTab === 'chat' ? 'comanda' : 'chat')} className="relative grid h-11 w-11 shrink-0 place-items-center rounded-2xl border border-neutral-200 bg-white text-neutral-700 shadow-[0_3px_12px_rgba(23,23,23,0.07)] transition-all hover:border-red-200 hover:bg-red-50 hover:text-red-700 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-2 aria-pressed:border-red-200 aria-pressed:bg-red-50 aria-pressed:text-red-700 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100 dark:hover:bg-zinc-700 dark:aria-pressed:border-red-800 dark:aria-pressed:bg-red-950 dark:aria-pressed:text-red-300">
                                         <MessageCircle aria-hidden="true" className="h-5 w-5" />
                                         {unreadMessagesMap[order.id] > 0 && <span className="absolute -right-1 -top-1 rounded-full bg-red-700 px-1.5 text-xs font-bold text-white">{unreadMessagesMap[order.id] > 9 ? '9+' : unreadMessagesMap[order.id]}</span>}
                                       </button><button type="button" onClick={() => setSelectedOrderForTicket(null)} aria-label="Cerrar detalle del pedido" className="grid h-11 w-11 place-items-center rounded-xl bg-neutral-100 text-neutral-700 hover:bg-neutral-200 dark:bg-zinc-800 dark:text-white"><X aria-hidden="true" className="h-5 w-5" /></button></div>
@@ -12162,15 +11953,6 @@ const OrdersSection = memo(function OrdersSection(props: any) {
                                               className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-neutral-900 dark:bg-zinc-100 text-white dark:text-zinc-900 text-xs font-bold shadow-lg transition active:scale-[0.95]"
                                             >
                                               <span>📞</span> Llamar
-                                            </a>
-                                            <a
-                                              href={`https://wa.me/52${order.driver.user.phone.replace(/\D/g, '')}`}
-                                              target="_blank"
-                                              rel="noopener noreferrer"
-                                              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-emerald-600 text-white text-xs font-bold shadow-lg transition active:scale-[0.95]"
-                                            >
-                                              <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5 text-white" fill="currentColor" viewBox="0 0 24 24"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z" /></svg>
-                                              WhatsApp
                                             </a>
                                           </div>
                                         )}

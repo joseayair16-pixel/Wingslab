@@ -14,15 +14,13 @@ import {
   revokeAllUserRefreshTokens,
   validateAndRotateRefreshToken,
 } from '../services/refresh-token.service';
-import { isMexicanLocalPhone, normalizeStoredMexicanPhone, toWhatsAppLinkNumber } from '../utils/mexican-phone';
+import { isMexicanLocalPhone, normalizeStoredMexicanPhone } from '../utils/mexican-phone';
 import {
   FirebaseAuthNotConfiguredError,
   isFirebaseAuthConfigured,
   verifyFirebasePhoneToken,
 } from '../services/firebase-auth.service';
 
-const WHATSAPP_AUTH_TTL_SECONDS = 300;
-const WHATSAPP_AUTH_STARTS_PER_HOUR = 5;
 const EMAIL_OTP_TTL_SECONDS = 300;
 const EMAIL_OTP_MAX_ATTEMPTS = 5;
 const EMAIL_OTP_STARTS_PER_HOUR = 5;
@@ -105,16 +103,6 @@ function getPhoneLookupCandidates(phone: string): string[] {
   );
 }
 
-function getWhatsAppChallengeKey(challengeId: string): string {
-  const hash = crypto.createHash('sha256').update(challengeId).digest('hex');
-  return `whatsapp_auth:challenge:${hash}`;
-}
-
-function getWhatsAppMessageKey(messageCode: string): string {
-  const hash = crypto.createHash('sha256').update(messageCode).digest('hex');
-  return `whatsapp_auth:message:${hash}`;
-}
-
 function hashEmailOtpChallengeId(challengeId: string): string {
   return crypto.createHash('sha256').update(challengeId).digest('hex');
 }
@@ -166,17 +154,6 @@ type EmailOtpChallenge = {
   lastName?: string;
   dateOfBirth?: string;
   userId?: string;
-  grantToken?: string;
-};
-
-type WhatsAppAuthChallenge = {
-  status: 'pending' | 'verified' | 'exchanged';
-  intent: 'register' | 'recovery';
-  phone: string;
-  name?: string;
-  lastName?: string;
-  dateOfBirth?: string;
-  email?: string;
   grantToken?: string;
 };
 
@@ -243,9 +220,6 @@ export async function registerAuthRoutes(fastify: FastifyInstance): Promise<void
   const retiredVerificationPaths = new Set([
     '/auth/email-otp/iniciar',
     '/auth/email-otp/confirmar',
-    '/auth/whatsapp/iniciar',
-    '/auth/whatsapp/estado',
-    '/auth/whatsapp/confirmar',
   ]);
   fastify.addHook('preHandler', async (request, reply) => {
     const path = request.raw.url?.split('?')[0];
@@ -254,7 +228,7 @@ export async function registerAuthRoutes(fastify: FastifyInstance): Promise<void
       success: false,
       error: {
         code: 'AUTH_SMS_REQUIRED',
-        message: 'La verificación por correo y WhatsApp ya no está disponible. Usa SMS.',
+        message: 'La verificación por correo ya no está disponible. Usa SMS.',
       },
     });
   });
@@ -576,7 +550,7 @@ export async function registerAuthRoutes(fastify: FastifyInstance): Promise<void
         if (!isRealEmail(existingUser.email)) {
           return reply.status(409).send({
             success: false,
-            error: { code: 'EMAIL_NOT_AVAILABLE', message: 'Esta cuenta no tiene un correo de recuperación. Usa WhatsApp para verificar tu número.' },
+            error: { code: 'EMAIL_NOT_AVAILABLE', message: 'Esta cuenta no tiene un correo de recuperación. Usa SMS para verificar tu número.' },
           });
         }
         email = normalizeEmail(existingUser.email);
@@ -632,7 +606,7 @@ export async function registerAuthRoutes(fastify: FastifyInstance): Promise<void
         await redis.del(challengeKey, activeKey);
         return reply.status(503).send({
           success: false,
-          error: { code: 'EMAIL_DELIVERY_UNAVAILABLE', message: 'No se pudo enviar el código por correo. Intenta por WhatsApp.' },
+          error: { code: 'EMAIL_DELIVERY_UNAVAILABLE', message: 'No se pudo enviar el código por correo. Intenta por SMS.' },
         });
       }
 
@@ -778,263 +752,7 @@ export async function registerAuthRoutes(fastify: FastifyInstance): Promise<void
     },
   );
 
-  const whatsappStartSchema = z.object({
-    phone: z.string().refine(isMexicanLocalPhone, 'Ingresa un teléfono de 10 dígitos.'),
-    intent: z.enum(['register', 'recovery']),
-    email: z.string().email('Correo inválido.').optional(),
-    name: z.string().min(2, 'El nombre debe tener al menos 2 caracteres.').optional(),
-    lastName: z.string().min(2, 'Los apellidos deben tener al menos 2 caracteres.').optional(),
-    dateOfBirth: z.string().refine((value) => parseCalendarDate(value) !== null, 'Fecha de nacimiento inválida.').optional(),
-  });
-
-  const whatsappChallengeIdSchema = z.object({
-    challengeId: z.string().regex(/^[A-Za-z0-9_-]{43}$/, 'La verificación venció. Iníciala de nuevo.'),
-  });
-
-  fastify.post(
-    '/auth/whatsapp/iniciar',
-    { config: { rateLimit: { max: 5, timeWindow: '15 minutes' } } },
-    async (request, reply) => {
-      const parsed = whatsappStartSchema.safeParse(request.body);
-      if (!parsed.success) {
-        return reply.status(400).send({
-          success: false,
-          error: { code: 'INVALID_PAYLOAD', message: parsed.error.issues[0]?.message || 'Datos inválidos.' },
-        });
-      }
-
-      if (parsed.data.intent === 'register' && !isEligibleCustomerBirthDate(parsed.data.dateOfBirth)) {
-        return invalidBirthDate(reply);
-      }
-
-      const whatsappNumber = toWhatsAppLinkNumber(process.env.WHATSAPP_AUTH_PHONE || '');
-      if (!whatsappNumber) {
-        return reply.status(503).send({
-          success: false,
-          error: {
-            code: 'WHATSAPP_AUTH_UNAVAILABLE',
-            message: 'La verificación por WhatsApp no está configurada. Intenta más tarde.',
-          },
-        });
-      }
-
-      const redis = getRedis();
-      const sentKey = 'whatsapp_auth:starts:' + parsed.data.phone;
-      const sentCount = Number.parseInt((await redis.get(sentKey)) || '0', 10);
-      if (sentCount >= WHATSAPP_AUTH_STARTS_PER_HOUR) {
-        return reply.status(429).send({
-          success: false,
-          error: { code: 'WHATSAPP_AUTH_LIMIT', message: 'Alcanzaste el límite de intentos. Intenta de nuevo más tarde.' },
-        });
-      }
-
-      const challengeId = crypto.randomBytes(32).toString('base64url');
-      const messageCode = crypto.randomBytes(16).toString('hex');
-      const challengeIdHash = crypto.createHash('sha256').update(challengeId).digest('hex');
-      const challenge: WhatsAppAuthChallenge = {
-        status: 'pending',
-        intent: parsed.data.intent,
-        phone: parsed.data.phone,
-        ...(parsed.data.intent === 'register'
-          ? {
-              name: parsed.data.name?.trim(),
-              lastName: parsed.data.lastName?.trim(),
-              dateOfBirth: parsed.data.dateOfBirth,
-              email: parsed.data.email ? normalizeEmail(parsed.data.email) : undefined,
-            }
-          : {}),
-      };
-
-      await redis.set(
-        getWhatsAppChallengeKey(challengeId),
-        JSON.stringify(challenge),
-        'EX',
-        WHATSAPP_AUTH_TTL_SECONDS,
-      );
-      await redis.set(
-        getWhatsAppMessageKey(messageCode),
-        challengeIdHash,
-        'EX',
-        WHATSAPP_AUTH_TTL_SECONDS,
-      );
-      await redis.multi().incr(sentKey).expire(sentKey, 60 * 60).exec();
-
-      const whatsappUrl = 'https://wa.me/' + whatsappNumber + '?text=' +
-        encodeURIComponent('SADEL ' + messageCode);
-      return reply.send({
-        success: true,
-        data: {
-          challengeId,
-          whatsappUrl,
-          expiresInSeconds: WHATSAPP_AUTH_TTL_SECONDS,
-        },
-      });
-    },
-  );
-
-  fastify.post(
-    '/auth/whatsapp/estado',
-    { config: { rateLimit: { max: 60, timeWindow: '1 minute' } } },
-    async (request, reply) => {
-      const parsed = whatsappChallengeIdSchema.safeParse(request.body);
-      if (!parsed.success) {
-        return reply.status(400).send({
-          success: false,
-          error: { code: 'INVALID_PAYLOAD', message: parsed.error.issues[0]?.message || 'Solicitud inválida.' },
-        });
-      }
-
-      const redis = getRedis();
-      const challengeKey = getWhatsAppChallengeKey(parsed.data.challengeId);
-      const raw = await redis.get(challengeKey);
-      if (!raw) {
-        return reply.status(410).send({
-          success: false,
-          error: { code: 'WHATSAPP_CHALLENGE_EXPIRED', message: 'La verificación venció. Solicita una nueva.' },
-        });
-      }
-
-      let challenge: WhatsAppAuthChallenge;
-      try {
-        challenge = JSON.parse(raw);
-      } catch {
-        await redis.del(challengeKey);
-        return reply.status(410).send({
-          success: false,
-          error: { code: 'WHATSAPP_CHALLENGE_EXPIRED', message: 'La verificación venció. Solicita una nueva.' },
-        });
-      }
-
-      return reply.send({
-        success: true,
-        data: {
-          status: challenge.status === 'pending' ? 'pending' : 'verified',
-          expiresInSeconds: Math.max(await redis.ttl(challengeKey), 0),
-        },
-      });
-    },
-  );
-
-  fastify.post(
-    '/auth/whatsapp/confirmar',
-    { config: { rateLimit: { max: 10, timeWindow: '15 minutes' } } },
-    async (request, reply) => {
-      const parsed = whatsappChallengeIdSchema.safeParse(request.body);
-      if (!parsed.success) {
-        return reply.status(400).send({
-          success: false,
-          error: { code: 'INVALID_PAYLOAD', message: parsed.error.issues[0]?.message || 'Solicitud inválida.' },
-        });
-      }
-
-      const redis = getRedis();
-      const challengeKey = getWhatsAppChallengeKey(parsed.data.challengeId);
-      const raw = await redis.get(challengeKey);
-      if (!raw) {
-        return reply.status(410).send({
-          success: false,
-          error: { code: 'WHATSAPP_CHALLENGE_EXPIRED', message: 'La verificación venció. Solicita una nueva.' },
-        });
-      }
-
-      let challenge: WhatsAppAuthChallenge;
-      try {
-        challenge = JSON.parse(raw);
-      } catch {
-        await redis.del(challengeKey);
-        return reply.status(410).send({
-          success: false,
-          error: { code: 'WHATSAPP_CHALLENGE_EXPIRED', message: 'La verificación venció. Solicita una nueva.' },
-        });
-      }
-
-      if (challenge.status === 'pending') {
-        return reply.status(409).send({
-          success: false,
-          error: { code: 'WHATSAPP_NOT_VERIFIED', message: 'Envía el mensaje desde tu WhatsApp para continuar.' },
-        });
-      }
-
-      if (challenge.grantToken) {
-        return reply.send({
-          success: true,
-          data: challenge.intent === 'register'
-            ? { registerToken: challenge.grantToken }
-            : { resetToken: challenge.grantToken },
-        });
-      }
-
-      let grantToken: string;
-      if (challenge.intent === 'register') {
-        const existingUser = await prisma.user.findFirst({
-          where: { phoneNormalized: challenge.phone, role: UserRole.CUSTOMER },
-          select: { id: true },
-        });
-        if (existingUser) {
-          return reply.status(409).send({
-            success: false,
-            error: {
-              code: 'PHONE_ALREADY_REGISTERED',
-              message: 'Este número ya tiene una cuenta. Inicia sesión o recupera tu contraseña.',
-            },
-          });
-        }
-
-        grantToken = await reply.jwtSign({
-          phone: challenge.phone,
-          name: challenge.name,
-          lastName: challenge.lastName,
-          dateOfBirth: challenge.dateOfBirth,
-          email: isRealEmail(challenge.email) ? challenge.email : undefined,
-          verification: 'whatsapp',
-          intent: 'register_confirm',
-        }, { expiresIn: '15m' });
-      } else {
-        const user = await prisma.user.findFirst({
-          where: { phoneNormalized: challenge.phone, role: UserRole.CUSTOMER },
-          select: { id: true, phone: true },
-        });
-        if (!user) {
-          return reply.status(404).send({
-            success: false,
-            error: { code: 'USER_NOT_FOUND', message: 'No existe una cuenta con ese teléfono.' },
-          });
-        }
-
-        grantToken = await reply.jwtSign({
-          sub: user.id,
-          phone: user.phone,
-          verification: 'whatsapp',
-          intent: 'password_reset',
-        }, { expiresIn: '15m' });
-      }
-
-      const remainingTtl = await redis.ttl(challengeKey);
-      if (remainingTtl <= 0) {
-        return reply.status(410).send({
-          success: false,
-          error: { code: 'WHATSAPP_CHALLENGE_EXPIRED', message: 'La verificación venció. Solicita una nueva.' },
-        });
-      }
-
-      await redis.set(
-        challengeKey,
-        JSON.stringify({ ...challenge, status: 'exchanged', grantToken }),
-        'EX',
-        remainingTtl,
-      );
-
-      return reply.send({
-        success: true,
-        data: challenge.intent === 'register'
-          ? { registerToken: grantToken }
-          : { resetToken: grantToken },
-      });
-    },
-  );
-
-  // Legacy OTP routes remain retired; the email option uses the challenge-based
-  // endpoints above so its proof can be exchanged once for a scoped JWT.
+  // Legacy OTP routes remain retired; verification now uses SMS.
   const retiredOtpResponse = async (_request: FastifyRequest, reply: FastifyReply) =>
     reply.status(410).send({
       success: false,
@@ -1094,7 +812,7 @@ export async function registerAuthRoutes(fastify: FastifyInstance): Promise<void
   });
 
   // Availability checks are retired; registration validates both values when
-  // starting the selected email or WhatsApp verification flow.
+  // starting the selected email verification flow.
   fastify.post('/auth/check-phone', retiredOtpResponse);
   fastify.post('/auth/check-email', retiredOtpResponse);
 

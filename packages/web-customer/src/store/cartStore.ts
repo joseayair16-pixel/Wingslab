@@ -119,14 +119,16 @@ export const useCartStore = create<CartState>()(
               if (item.cartItemId !== cartItemId) return item;
               const next = { ...item, ...patch };
               const max = next.maxStock ?? null;
-              if (max != null) {
+              if (max != null && patch.quantity !== undefined && patch.quantity > item.quantity) {
                 // El stock es por producto, no por variante de opciones.
                 // Limitamos respecto al total ya en el carrito de ese producto.
                 const othersQty = state.items
                   .filter((i) => i.productId === next.productId && i.cartItemId !== cartItemId)
                   .reduce((sum, i) => sum + i.quantity, 0);
                 const allowed = Math.max(0, max - othersQty);
-                if (next.quantity > allowed) next.quantity = allowed;
+                // Si el stock bajó desde que se añadió la línea, intentar
+                // incrementar nunca debe reducir ni eliminar lo ya elegido.
+                next.quantity = Math.max(item.quantity, Math.min(next.quantity, allowed));
               }
               return next;
             })
@@ -181,7 +183,7 @@ export const useCartStore = create<CartState>()(
             if (!fresh) return item;
             const price = fresh.price;
             const discountPrice = fresh.discountPrice != null ? fresh.discountPrice : item.discountPrice;
-            const maxStock = fresh.maxStock != null ? fresh.maxStock : item.maxStock;
+            const maxStock = fresh.maxStock !== undefined ? fresh.maxStock : item.maxStock;
             // Actualiza el precio/snapshot de stock, pero NO reduce ni elimina
             // unidades ya válidas en el carrito (solo refresca el techo de stock).
             return { ...item, price, discountPrice, maxStock };

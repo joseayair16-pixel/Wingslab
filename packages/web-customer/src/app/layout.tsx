@@ -1,12 +1,14 @@
 import { getWingslabSiteUrl } from '@sadel/shared';
 import type { Metadata } from 'next';
+import Script from 'next/script';
 import '../styles/globals.css';
 import ServiceWorkerRegister from './ServiceWorkerRegister';
+import SessionRefreshBootstrap from '../components/SessionRefreshBootstrap';
 import InstallAppButton from '../components/InstallAppButton';
 import AppUpdateBanner from '../components/AppUpdateBanner';
 import SplashScreen from '../components/SplashScreen';
 import DriverArrivalModal from '../components/DriverArrivalModal';
-import { ClientOnly } from '../components/ClientOnly';
+import { ClientOnly, PageContent } from '../components/ClientOnly';
 
 const siteUrl = getWingslabSiteUrl();
 
@@ -40,6 +42,8 @@ export const viewport: import('next').Viewport = {
   width: 'device-width',
   initialScale: 1,
   viewportFit: 'cover',
+  colorScheme: 'light dark',
+  themeColor: '#f20d12',
 };
 
 export default function RootLayout({
@@ -49,8 +53,8 @@ export default function RootLayout({
 }) {
   return (
     <html lang="es-MX" className="wl-booting" suppressHydrationWarning>
-      <head>
-        <script
+      <body>
+        <Script id="wingslab-theme" strategy="beforeInteractive"
           dangerouslySetInnerHTML={{
             __html: `(function(){
   try {
@@ -64,35 +68,21 @@ export default function RootLayout({
       d.classList.toggle('dark', dark);
       d.classList.toggle('pure-dark', dark);
       d.style.colorScheme = dark ? 'dark' : 'light';
-      var cs = document.querySelector('meta[name="color-scheme"]');
-      if (cs) cs.setAttribute('content', dark ? 'dark light' : 'light dark');
     };
     apply();
     if (mq.addEventListener) mq.addEventListener('change', apply);
     window.addEventListener('wingslab:theme', function(e) { preference = e.detail; apply(); });
     window.addEventListener('storage', function(e) { if (e.key === 'wingslab.theme') { preference = e.newValue || 'system'; apply(); } });
   } catch (e) {}
-})();
-(function(){try{
-  var m=document.querySelector('meta[name="theme-color"]');
-  if(m){var upd=function(){
-    m.setAttribute('content', document.documentElement.classList.contains('dark') ? '#101012' : '#ffffff');
-  };
-  upd();
-  new MutationObserver(upd).observe(document.documentElement,{attributes:true,attributeFilter:['class']});
-}}catch(e){}})();`,
+})();`,
           }}
         />
-        <meta name="color-scheme" content="light dark" />
-        <meta name="theme-color" content="#f20d12" />
-        <style>{`html.wl-booting,html.wl-booting body{background-color:#f20d12!important}`}</style>
-      </head>
-      <body>
         <ServiceWorkerRegister />
+        <SessionRefreshBootstrap />
         <ClientOnly><InstallAppButton /></ClientOnly>
         <ClientOnly><AppUpdateBanner /></ClientOnly>
         <SplashScreen />
-        <ClientOnly>{children}</ClientOnly>
+        <PageContent>{children}</PageContent>
         <ClientOnly><DriverArrivalModal /></ClientOnly>
       </body>
     </html>

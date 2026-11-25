@@ -9,7 +9,7 @@ import {
 describe('WingsLab restaurant order action policy', () => {
   it('offers only actions valid for the current status', () => {
     expect(restaurantOrderActionsForStatus('PENDING')).toEqual(['accept', 'reject', 'cancel']);
-    expect(restaurantOrderActionsForStatus('CONFIRMED')).toEqual(['preparing', 'cancel']);
+    expect(restaurantOrderActionsForStatus('CONFIRMED')).toEqual(['ready', 'cancel']);
     expect(restaurantOrderActionsForStatus('PREPARING')).toEqual(['ready', 'cancel']);
     expect(restaurantOrderActionsForStatus('READY')).toEqual([
       'asumirReparto', 'handover', 'cancel', 'quitarRepartidor', 'marcarRecogido', 'iniciarEntrega',
@@ -19,7 +19,9 @@ describe('WingsLab restaurant order action policy', () => {
   });
 
   it('maps actions to the committed state expected by the UI', () => {
-    expect(restaurantOrderTargetStatus('accept')).toBe('CONFIRMED');
+    expect(restaurantOrderTargetStatus('accept')).toBe('PREPARING');
+    expect(restaurantOrderTargetStatus('accept', true)).toBe('CONFIRMED');
+    expect(restaurantOrderActionAllowed('CONFIRMED', 'ready')).toBe(true);
     expect(restaurantOrderTargetStatus('reject')).toBe('REJECTED');
     expect(restaurantOrderTargetStatus('asumirReparto')).toBe('READY');
     expect(restaurantOrderTargetStatus('handover')).toBe('PICKED_UP');

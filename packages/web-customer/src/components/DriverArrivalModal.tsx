@@ -154,9 +154,13 @@ export default function DriverArrivalModal() {
       auth: { token: getSocketToken() },
     });
 
-    socket.on('reconnect_attempt', () => {
+    // 'reconnect_attempt' pertenece al Manager (socket.io), no al Socket: si se
+    // registra en el socket nunca se dispara y cada reintento viaja con el
+    // access token del montaje (rechazado tras una rotación).
+    const handleReconnectAttempt = () => {
       socket.auth = { token: getSocketToken() };
-    });
+    };
+    socket.io.on('reconnect_attempt', handleReconnectAttempt);
 
     const sessionUserIdRef = sessionUser.id;
     socket.on('connect', () => {
@@ -211,6 +215,7 @@ export default function DriverArrivalModal() {
 
     return () => {
       cancelled = true;
+      socket.io.off('reconnect_attempt', handleReconnectAttempt);
       socket.disconnect();
     };
   }, [apiBase, token, sessionUser]);

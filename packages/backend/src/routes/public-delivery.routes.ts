@@ -39,6 +39,15 @@ export async function registerPublicDeliveryRoutes(fastify: FastifyInstance): Pr
             ...(action === 'location' ? { latitude: order.lastDriverLatitude, longitude: order.lastDriverLongitude } : {}) };
           emitNotification(fastify.io, order.customer.user.id, 'CUSTOMER', event, payload, { orderId: order.id });
           emitNotification(fastify.io, order.restaurant.userId, 'RESTAURANT', event, payload, { orderId: order.id });
+          if (action === 'deliver') {
+            void sendPushNotification(order.customer.user.id, {
+              title: '¡Pedido entregado!',
+              body: 'Gracias por elegir WingsLab. ¡Que disfrutes tu pedido!',
+              icon: '/app-icon-192.png',
+              badge: '/badge.png',
+              data: { orderId: order.id, event, url: `/?orderId=${order.id}` },
+            }).catch(err => fastify.log.error({ err, orderId: order.id }, 'No se pudo enviar el push de entrega'));
+          }
         }
         return reply.send({ success: true, data: { id: order.id, status: order.status,
           arrived: action === 'arrive' || action === 'start', needsHandover: false,

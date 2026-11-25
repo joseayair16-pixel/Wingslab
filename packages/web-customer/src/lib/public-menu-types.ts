@@ -53,6 +53,7 @@ export type PublicRestaurantDetail = {
   transferAccountNumber?: string | null;
   transferBeneficiaryName?: string | null;
   acceptsCash?: boolean | null;
+  acceptsCard?: boolean | null;
   acceptedPaymentMethods?: string[];
   promoFreeDeliveryThreshold?: number | null;
   promoMinOrderAmount?: number | null;

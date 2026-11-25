@@ -6,8 +6,6 @@ import { prisma } from '../config/database';
 import { RESTAURANT_ID } from '../config/single-restaurant';
 import { getDistanceInKm, isRestaurantOpenNow, getNextOpenTime } from '../utils/restaurant';
 import { calculateDistanceDeliveryFee } from '../utils/delivery-pricing';
-import { decrypt } from '../utils/crypto';
-import { tryAuthenticate } from '../middleware/auth';
 
 type RegionDeliveryConfig = {
   baseDeliveryFee?: number | null;
@@ -76,25 +74,16 @@ function resolveDeliveryPricing(
 /**
  * Métodos de pago que un restaurante acepta de forma efectiva.
  * - Efectivo: habilitado si `acceptsCash` (default true) no fue desactivado.
- * - Transferencia: habilitada si completó los datos bancarios (banco + cuenta + beneficiario).
+ * - Tarjeta: habilitada únicamente si el restaurante la activó.
  */
 function resolveAcceptedPaymentMethods(restaurant: {
   acceptsCash?: boolean | null;
-  transferBankName?: string | null;
-  transferAccountNumber?: string | null;
-  transferBeneficiaryName?: string | null;
+  acceptsCard?: boolean | null;
 }): string[] {
-  const acceptsCash = restaurant.acceptsCash !== false;
-  const acceptsTransfer = Boolean(
-    restaurant.transferBankName?.trim() &&
-      restaurant.transferAccountNumber?.trim() &&
-      restaurant.transferBeneficiaryName?.trim()
-  );
-
-  const methods: string[] = [];
-  if (acceptsCash) methods.push('CASH');
-  if (acceptsTransfer) methods.push('TRANSFER');
-  return methods;
+  return [
+    ...(restaurant.acceptsCash !== false ? ['CASH'] : []),
+    ...(restaurant.acceptsCard === true ? ['CREDIT_CARD'] : []),
+  ];
 }
 
 export async function registerPublicRoutes(fastify: FastifyInstance): Promise<void> {
@@ -126,6 +115,7 @@ export async function registerPublicRoutes(fastify: FastifyInstance): Promise<vo
           orderBy: { dayOfWeek: 'asc' },
         },
         categories: {
+          where: { deleted: false },
           orderBy: [{ order: 'asc' }, { createdAt: 'asc' }],
           include: {
             products: {
@@ -171,7 +161,6 @@ export async function registerPublicRoutes(fastify: FastifyInstance): Promise<vo
       restaurant.operatingHours
     );
 
-    const authenticated = await tryAuthenticate(request);
     const regionConfig = await prisma.region.findUnique({
       where: { code: restaurant.region },
       select: {
@@ -220,6 +209,7 @@ export async function registerPublicRoutes(fastify: FastifyInstance): Promise<vo
         hasOwnDelivery: restaurant.hasOwnDelivery,
         supportsNetworkDelivery: restaurant.supportsNetworkDelivery,
         pickupOnly: restaurant.pickupOnly,
+        acceptsCard: restaurant.acceptsCard,
         businessType: restaurant.businessType,
         operatingHours: restaurant.operatingHours.map(({ dayOfWeek, shiftIndex, openTime, closeTime, isClosed }) => ({
           dayOfWeek,
@@ -230,10 +220,10 @@ export async function registerPublicRoutes(fastify: FastifyInstance): Promise<vo
         })),
         minDeliveryTime: restaurant.minDeliveryTime,
         maxDeliveryTime: restaurant.maxDeliveryTime,
+        serviceFee: restaurant.serviceFee,
         deliveryFee: restaurant.deliveryFee,
         deliveryRadius: restaurant.deliveryRadius,
         enableTicketPrinting: restaurant.enableTicketPrinting,
-        whatsappNotifications: restaurant.whatsappNotifications,
         promoFreeDeliveryThreshold: restaurant.promoFreeDeliveryThreshold,
         promoMinOrderAmount: restaurant.promoMinOrderAmount,
         promoMinOrderPercent: restaurant.promoMinOrderPercent,
@@ -247,15 +237,6 @@ export async function registerPublicRoutes(fastify: FastifyInstance): Promise<vo
         distanceKm,
         categories: restaurant.categories?.filter((category) => category.products?.length > 0) || [],
         storeCategories: restaurant.storeCategories?.map(sc => sc.category) || [],
-        transferBankName: restaurant.transferBankName,
-        ...(authenticated
-          ? {
-              transferAccountNumber: restaurant.transferAccountNumber
-                ? decrypt(restaurant.transferAccountNumber)
-                : restaurant.transferAccountNumber,
-            }
-          : {}),
-        transferBeneficiaryName: restaurant.transferBeneficiaryName,
       },
     });
   });
@@ -263,7 +244,7 @@ export async function registerPublicRoutes(fastify: FastifyInstance): Promise<vo
   fastify.get('/settings', async () => ({ success: true, data: {
     businessName: 'WingsLab', restaurantWelcomeImage: '', driverWelcomeImage: '',
     promoModalEnabled: false, promoModalImage: '', restaurantPromoModalEnabled: false,
-    restaurantPromoModalImage: '', customerThankYouWhatsappEnabled: false,
+    restaurantPromoModalImage: '',
     socialInstagram: '', socialFacebook: '', socialTiktok: '',
   } }));
 

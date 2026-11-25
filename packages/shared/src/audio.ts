@@ -6,8 +6,8 @@
  * Tras ese primer gesto, el audio queda desbloqueado para toda la sesión.
  *
  * La reproducción usa una cascada de 3 niveles:
- *   1. AudioBuffer (WAV decodificado vía Web Audio API) — mejor calidad.
- *   2. Oscilador programático — respaldo si el WAV no está disponible.
+ *   1. AudioBuffer (MP3 decodificado vía Web Audio API) — mejor calidad.
+ *   2. Oscilador programático — respaldo si el MP3 no está disponible.
  *   3. Elemento <audio> — último recurso (sujeto a autoplay policy).
  *
  * Diseño:
@@ -32,10 +32,10 @@ type SoundConfig = {
 };
 
 const SOUNDS: Record<SoundName, SoundConfig> = {
-  notifica: { src: '/sounds/notifica.wav', fallbackFrequency: 880, fallbackType: 'square' },
-  mensaje: { src: '/sounds/mensaje.wav', fallbackFrequency: 1000, fallbackType: 'sine' },
-  llegue: { src: '/sounds/llegue.wav', fallbackFrequency: 880, fallbackType: 'sine' },
-  rezagado: { src: '/sounds/rezagado.wav', fallbackFrequency: 440, fallbackType: 'square' },
+  notifica: { src: '/sounds/notifica-v2.mp3', fallbackFrequency: 880, fallbackType: 'square' },
+  mensaje: { src: '/sounds/mensaje-v2.mp3', fallbackFrequency: 1000, fallbackType: 'sine' },
+  llegue: { src: '/sounds/llegue-v2.mp3', fallbackFrequency: 880, fallbackType: 'sine' },
+  rezagado: { src: '/sounds/rezagado-v2.mp3', fallbackFrequency: 440, fallbackType: 'square' },
 };
 
 let audioContext: AudioContext | null = null;
@@ -43,6 +43,11 @@ let hasInteracted = false;
 const buffers = new Map<SoundName, AudioBuffer>();
 const rawBuffers = new Map<SoundName, ArrayBuffer>();
 const activeHandles = new Set<{ stop: () => void }>();
+// Una única petición por sonido: sin esto, dos hooks montados a la vez
+// descargan el mismo archivo dos veces (la comprobación de rawBuffers ocurre
+// después del fetch). La generación evita guardar respuestas tras un reset().
+const pendingPreloads = new Map<SoundName, Promise<void>>();
+let preloadGeneration = 0;
 
 function isBrowser(): boolean {
   return typeof window !== 'undefined';
@@ -83,28 +88,71 @@ function findAudioElement(src: string): HTMLAudioElement | null {
   return el;
 }
 
+/** Decodifica un buffer ya descargado si el contexto está activo. */
+async function decodeRaw(name: SoundName, buffer: ArrayBuffer): Promise<void> {
+  if (buffers.has(name) || !audioContext || audioContext.state !== 'running') return;
+  try {
+    buffers.set(name, await audioContext.decodeAudioData(buffer.slice(0)));
+  } catch {
+    // Se mantiene el fallback de oscilador.
+  }
+}
+
 /**
  * Precarga el array buffer de un sonido sin crear el AudioContext
  * (así la descarga no queda bloqueada por la política de autoplay).
+ * Dedupe peticiones en vuelo: varios componentes pueden pedir el mismo sonido.
  */
 export function preload(name: SoundName): void {
   if (!isBrowser()) return;
-  if (rawBuffers.has(name) || buffers.has(name)) return;
+  if (rawBuffers.has(name) || buffers.has(name) || pendingPreloads.has(name)) return;
   const config = SOUNDS[name];
   if (!config) return;
-  fetch(config.src)
+  const generation = preloadGeneration;
+  const pending = fetch(config.src)
     .then((res) => (res.ok ? res.arrayBuffer() : Promise.reject(new Error(`HTTP ${res.status}`))))
     .then((buffer) => {
+      if (generation !== preloadGeneration) return;
       rawBuffers.set(name, buffer);
+      void decodeRaw(name, buffer);
     })
-    .catch(() => {
-      rawBuffers.delete(name);
+    .catch(() => undefined)
+    .finally(() => {
+      if (generation === preloadGeneration) pendingPreloads.delete(name);
     });
+  pendingPreloads.set(name, pending);
 }
 
 /** Precarga todos los sonidos registrados. */
 export function preloadAll(names: SoundName[]): void {
   names.forEach(preload);
+}
+
+/**
+ * Precarga los sonidos en el PRIMER gesto real del usuario, no al montar.
+ * Evita descargar audio en visitas donde nunca se reproducirá una alerta.
+ */
+export function preloadOnFirstInteraction(names: SoundName[]): () => void {
+  if (!isBrowser()) return () => undefined;
+  const onGesture = (event: Event) => {
+    if (!event.isTrusted) return;
+    preloadAll(names);
+    window.removeEventListener('pointerdown', onGesture);
+    window.removeEventListener('keydown', onGesture);
+    window.removeEventListener('touchstart', onGesture);
+    window.removeEventListener('click', onGesture);
+  };
+  const options: AddEventListenerOptions = { passive: true };
+  window.addEventListener('pointerdown', onGesture, options);
+  window.addEventListener('keydown', onGesture, options);
+  window.addEventListener('touchstart', onGesture, options);
+  window.addEventListener('click', onGesture, options);
+  return () => {
+    window.removeEventListener('pointerdown', onGesture);
+    window.removeEventListener('keydown', onGesture);
+    window.removeEventListener('touchstart', onGesture);
+    window.removeEventListener('click', onGesture);
+  };
 }
 
 /** Marca que el usuario interactuó con la app (requerido para desbloquear el audio). */
@@ -146,14 +194,7 @@ export async function warmup(): Promise<boolean> {
 
   // Decodificar buffers pendientes ahora que el contexto está activo.
   await Promise.all(
-    Array.from(rawBuffers.entries()).map(async ([name, buffer]) => {
-      if (buffers.has(name)) return;
-      try {
-        buffers.set(name, await ctx.decodeAudioData(buffer.slice(0)));
-      } catch {
-        // Se mantiene el fallback de oscilador.
-      }
-    }),
+    Array.from(rawBuffers.entries()).map(([name, buffer]) => decodeRaw(name, buffer)),
   );
 
   // Oscilador silencioso (gain 0) para desbloquear en iOS.
@@ -315,6 +356,8 @@ export function stopAll(): void {
  */
 export function reset(): void {
   stopAll();
+  preloadGeneration += 1;
+  pendingPreloads.clear();
   buffers.clear();
   rawBuffers.clear();
   if (audioContext) {

@@ -3,7 +3,7 @@ import { webPushEnabled } from '../config/isolation';
 import { prisma } from '../config/database';
 import { logger } from '../utils/logger';
 import { isFcmConfigured, sendFcmNotification } from './fcm.service';
-import { enqueueNotificationRetry } from './notification-retry.service';
+import { computeRetryTtlMs, enqueueNotificationRetry } from './notification-retry.service';
 import type { NotificationPayload, PushOptions } from './notification-types';
 
 export type { NotificationPayload, PushOptions };
@@ -107,6 +107,7 @@ async function sendWithRetry(
     await webpush.sendNotification(subscription, payloadString, {
       TTL: options.ttl,
       urgency: options.urgency as any,
+      timeout: 5000,
     });
     return { success: true };
   } catch (error: any) {
@@ -137,8 +138,8 @@ export const sendPushNotification = async (
   }
 
   const [subscriptions, fcmTokens] = await Promise.all([
-    prisma.pushSubscription.findMany({ where: { userId } }),
-    prisma.fcmToken.findMany({ where: { userId } }),
+    vapidConfigured ? prisma.pushSubscription.findMany({ where: { userId, id: options?.webSubscriptionId } }) : [],
+    !options?.webSubscriptionId && isFcmConfigured() ? prisma.fcmToken.findMany({ where: { userId } }) : [],
   ]);
 
   const webPushEnabled = vapidConfigured && subscriptions.length > 0;
@@ -159,7 +160,7 @@ export const sendPushNotification = async (
 
   if (webPushEnabled) {
     const payloadString = JSON.stringify(payload);
-    const ttl = options?.ttl ?? 86400;
+    const ttl = options?.ttl ?? Math.ceil(computeRetryTtlMs(payload) / 1000);
     const urgency = options?.urgency ?? determineUrgency(payload);
 
     const results = await Promise.allSettled(
@@ -182,8 +183,10 @@ export const sendPushNotification = async (
           });
 
           if (isExpiredSubscription(error)) {
-            await prisma.pushSubscription.delete({ where: { id: sub.id } });
+            await prisma.pushSubscription.deleteMany({ where: { id: sub.id, userId, p256dh: sub.p256dh, auth: sub.auth } });
             logger.info(`[PushService] Suscripción expirada eliminada: ${sub.id}`);
+          } else if (isTransientError(error) && !options?.skipRetryQueue) {
+            await enqueueNotificationRetry(userId, payload, 'Fallo temporal de Web Push', sub.id);
           }
 
           throw error;
@@ -216,7 +219,7 @@ export const sendPushNotification = async (
   // RED DE SEGURIDAD: si ningún canal entregó y no venimos de la propia cola
   // de reintentos, encolamos el reenvío en diferido. Así un aviso crítico no
   // se pierde por un bajón momentáneo de FCM/web-push: el job lo reintenta.
-  if (!delivered && !options?.skipRetryQueue) {
+  if (fcmEnabled && !webPushEnabled && !delivered && !options?.skipRetryQueue) {
     await enqueueNotificationRetry(userId, payload, 'Ningún canal entregó en el intento inicial').catch((err: any) => {
       logger.error(`[PushService] No se pudo encolar reenvío para usuario ${userId}: ${err?.message || err}`);
     });

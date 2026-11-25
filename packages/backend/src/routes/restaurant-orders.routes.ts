@@ -13,6 +13,7 @@ import { requireRestaurantOperable } from './restaurant-panel.routes';
 import { completeUnassignedOwnDeliveryByRestaurant, prepareOwnDelivery } from '../services/own-delivery.service';
 import { emitNotification } from '../services/socket.service';
 import { sendPushNotification } from '../services/notification.service';
+import { processCheckoutRefundOutbox } from '../services/checkout-refund-outbox';
 import {
   assignDriverToOrder,
   getAvailableDriversForRestaurant,
@@ -359,13 +360,16 @@ export async function registerRestaurantOrderRoutes(fastify: FastifyInstance): P
             : undefined;
 
         const isScheduleProposal = Boolean(scheduledDeliveryAt);
+        const acceptImmediately = config.status === OrderStatus.CONFIRMED && !isScheduleProposal;
+        const nextStatus = acceptImmediately ? OrderStatus.PREPARING : config.status;
 
         try {
           let order = await updateOrderStatusByRestaurant({
             prisma,
             restaurantUserId: user.sub,
             orderId: params.data.id,
-            nextStatus: config.status,
+            nextStatus,
+            acceptImmediately,
             trackingNote:
               (config.status === OrderStatus.CONFIRMED || config.status === OrderStatus.PREPARING)
                 ? isScheduleProposal
@@ -378,14 +382,21 @@ export async function registerRestaurantOrderRoutes(fastify: FastifyInstance): P
             isScheduleProposal,
           });
 
+          if (config.status === OrderStatus.REJECTED) {
+            await processCheckoutRefundOutbox(prisma, process.env.WINGSLAB_MP_SANDBOX_ACCESS_TOKEN, (error, orderId) =>
+              request.log.error({ err: error, orderId }, 'No se pudo procesar el reembolso de tarjeta tras rechazar el pedido; se reintentará'),
+            );
+          }
+
           // Dequeue resolved order and activate next in queue
           if (
             config.status === OrderStatus.CONFIRMED ||
             config.status === OrderStatus.PREPARING ||
             config.status === OrderStatus.REJECTED
           ) {
-            const { nextOrderId, queueLength } = await dequeueRestaurantOrder(order.restaurant.id, params.data.id);
-            if (nextOrderId && queueLength > 0) {
+            try {
+              const { nextOrderId, queueLength } = await dequeueRestaurantOrder(order.restaurant.id, params.data.id);
+              if (nextOrderId && queueLength > 0) {
               emitNotification(
                 fastify.io,
                 user.sub,
@@ -400,6 +411,11 @@ export async function registerRestaurantOrderRoutes(fastify: FastifyInstance): P
                   orderId: nextOrderId,
                 }
               );
+              }
+            } catch (queueError) {
+              // The status is already committed; a queue outage must not prevent
+              // the customer from receiving the status event and push.
+              request.log.error({ err: queueError, orderId: params.data.id }, 'No se pudo actualizar la cola del restaurante');
             }
           }
 
@@ -410,7 +426,7 @@ export async function registerRestaurantOrderRoutes(fastify: FastifyInstance): P
             config.customerEvent,
             {
               orderId: params.data.id,
-              status: config.status,
+               status: nextStatus,
             },
             {
               requestId: requestContext.requestId,
@@ -420,7 +436,7 @@ export async function registerRestaurantOrderRoutes(fastify: FastifyInstance): P
 
           // Same restaurant's other tabs receive only committed state. No broadcast.
           emitNotification(fastify.io, user.sub, 'RESTAURANT', config.customerEvent,
-            { orderId: params.data.id, status: config.status, updatedAt: order.updatedAt },
+             { orderId: params.data.id, status: nextStatus, updatedAt: order.updatedAt },
             { requestId: requestContext.requestId, orderId: params.data.id });
 
           if (isScheduleProposal) {
@@ -478,7 +494,7 @@ export async function registerRestaurantOrderRoutes(fastify: FastifyInstance): P
                       .replace(/tu orden/gi, 'tu pedido');
               const pushResult = await sendPushNotification(order.customer.user.id, {
                 title: config.pushTitle,
-                body,
+                 body: acceptImmediately ? 'El restaurante aceptó tu pedido y ya lo está preparando.' : body,
                 icon: '/app-icon-192.png',
                 badge: '/badge.png',
                 vibrate: config.pushVibrate,
@@ -503,7 +519,7 @@ export async function registerRestaurantOrderRoutes(fastify: FastifyInstance): P
               config.customerEvent,
               {
                 orderId: params.data.id,
-                status: config.status,
+                 status: nextStatus,
               },
               {
                 requestId: requestContext.requestId,
@@ -1698,9 +1714,19 @@ export async function registerRestaurantOrderRoutes(fastify: FastifyInstance): P
       const requestContext = getOrCreateRequestContext(request);
 
       try {
-        const { customerUserId, driverUserId } = await cancelOrderByRestaurant(
+        const { customerUserId, driverUserId, refundRequestId } = await cancelOrderByRestaurant(
           prisma, params.data.id, user.sub, parsed.data.reason
         );
+
+        let refundStatus: string | undefined;
+        if (refundRequestId) {
+          await processCheckoutRefundOutbox(prisma, process.env.WINGSLAB_MP_SANDBOX_ACCESS_TOKEN, (error, orderId) => {
+            request.log.error({ error, orderId }, 'Reembolso de tarjeta pendiente; el proceso automático lo reintentará');
+          });
+          refundStatus = (await prisma.checkoutRefundRequest.findUnique({
+            where: { id: refundRequestId }, select: { state: true },
+          }))?.state;
+        }
 
         // Notify customer
         emitNotification(
@@ -1771,7 +1797,12 @@ export async function registerRestaurantOrderRoutes(fastify: FastifyInstance): P
 
         return reply.send({
           success: true,
-          data: { message: 'Pedido cancelado exitosamente.' },
+          data: {
+            message: refundRequestId
+              ? (refundStatus === 'REFUNDED' ? 'Pedido cancelado y reembolso confirmado.' : 'Pedido cancelado; el reembolso está en proceso.')
+              : 'Pedido cancelado exitosamente.',
+            ...(refundRequestId ? { refundStatus: refundStatus || 'PENDING' } : {}),
+          },
         });
       } catch (error) {
         return sendAppError(reply, error);

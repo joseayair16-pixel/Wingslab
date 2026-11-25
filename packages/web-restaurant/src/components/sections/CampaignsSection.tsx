@@ -1,4 +1,6 @@
 'use client';
+
+import { SectionHeader } from '../SectionHeader';
 import { useCallback, useEffect, useState } from 'react';
 import { CalendarClock, Copy, Eye, FileText, Info, Layers, Megaphone, Plus, Search, Tag, Ticket, Users } from 'lucide-react';
 
@@ -22,20 +24,21 @@ export function CampaignsSection({ apiBase, token }: { apiBase:string; token:str
   });
   const reset = () => { setEditing(null); setTitle(''); setBody(''); setPromoCode(''); setScheduledAt(''); setTargetUrl('/'); setSegment('subscribed'); };
   return <section className="wl-campaigns" aria-labelledby="campaigns-title">
-    <header className="wl-campaign-header"><span className="wl-campaign-header-icon"><Megaphone aria-hidden="true" /></span><div><p className="wl-campaign-eyebrow">Marketing WingsLab</p><h1 id="campaigns-title">Campañas a tus clientes</h1><p>Prepara mensajes promocionales para mantenerte cerca de tus clientes.</p></div></header>
-    <div className="wl-campaign-notice" role="note"><Info aria-hidden="true"/><p><strong>Envío de notificaciones no disponible.</strong> Puedes guardar borradores y una fecha de programación, pero no se enviarán automáticamente hasta configurar y autorizar el proveedor.</p></div>
+    <SectionHeader title="Campañas" titleId="campaigns-title" icon={<Megaphone />} description="Prepara mensajes para tus clientes." />
+    <div className="wl-campaign-notice" role="note"><Info aria-hidden="true"/><p><strong>Envío no disponible.</strong> Puedes guardar borradores; no se enviarán automáticamente.</p></div>
     {error && <div className="wl-campaign-feedback is-error" role="alert">{error}</div>}{notice && <div className="wl-campaign-feedback" role="status">{notice}</div>}
     <div className="wl-campaign-workspace">
-      <div className="wl-campaign-card wl-campaign-editor"><div className="wl-campaign-card-heading"><span className="wl-campaign-heading-icon"><Plus aria-hidden="true"/></span><div><h2>{editing ? 'Editar campaña' : 'Nueva campaña'}</h2><p>Prepara el mensaje que quieres compartir.</p></div></div>
+      <div className="wl-campaign-card wl-campaign-editor"><div className="wl-campaign-card-heading"><span className="wl-campaign-heading-icon"><Plus aria-hidden="true"/></span><div><h2>{editing ? 'Editar campaña' : 'Nueva campaña'}</h2></div></div>
         <div className="wl-campaign-fields">
           <label>Título de la campaña <em>*</em><span className="wl-campaign-input"><Tag aria-hidden="true"/><input maxLength={65} value={title} onChange={e=>setTitle(e.target.value)} placeholder="Ej. Promoción de alitas" /></span><small>{title.length}/65 caracteres</small></label>
           <label>Segmento de clientes<span className="wl-campaign-input"><Users aria-hidden="true"/><select value={segment} onChange={e=>setSegment(e.target.value as Campaign['segment'])}>{segments.map(s=><option key={s.id} value={s.id}>{s.label}</option>)}</select></span><small>{audienceError ? 'No se pudo consultar la audiencia.' : audience===null ? 'Consultando audiencia…' : `${audience} clientes elegibles con permiso vigente`}</small></label>
           <label className="wl-campaign-field-wide">Mensaje <em>*</em><span className="wl-campaign-input wl-campaign-textarea"><textarea maxLength={160} rows={4} value={body} onChange={e=>setBody(e.target.value)} placeholder="Cuéntales tu promoción, nuevo producto o alguna novedad…" /></span><small className="wl-campaign-counter">{body.length}/160</small></label>
+        </div>
+        <details className="wl-campaign-advanced"><summary>Opciones adicionales <span>{promoCode || scheduledAt || targetUrl !== '/' ? 'Configuradas' : 'Opcional'}</span></summary><div className="wl-campaign-fields">
           <label>Cupón activo <span className="wl-campaign-optional">(opcional)</span><span className="wl-campaign-input"><Ticket aria-hidden="true"/><input value={promoCode} onChange={e=>setPromoCode(e.target.value.toUpperCase())} placeholder="Ej. ALITAS10" /></span></label>
           <label>Fecha programada <span className="wl-campaign-optional">(opcional)</span><span className="wl-campaign-input"><CalendarClock aria-hidden="true"/><input type="datetime-local" value={scheduledAt} onChange={e=>setScheduledAt(e.target.value)} /></span><small>Guardar una fecha no activa el envío.</small></label>
           <label className="wl-campaign-field-wide">Destino interno <span className="wl-campaign-optional">(opcional)</span><span className="wl-campaign-input"><input value={targetUrl} onChange={e=>setTargetUrl(e.target.value)} placeholder="/" /></span><small>Ruta dentro de la aplicación a la que llevará la notificación.</small></label>
-        </div>
-        {audience===0 && !audienceError && <p className="wl-campaign-audience"><Info aria-hidden="true"/> No hay clientes elegibles en este segmento. Puedes guardar el borrador.</p>}
+        </div></details>
         <div className="wl-campaign-actions">{editing && <button type="button" className="wl-campaign-button" onClick={reset}>Cancelar edición</button>}<button type="button" className="wl-campaign-button is-primary" disabled={saving||title.trim().length<3||body.trim().length<3} onClick={()=>void save()}><FileText aria-hidden="true"/>{saving?'Guardando…':editing?'Guardar cambios':scheduledAt?'Guardar con fecha':'Guardar borrador'}</button></div>
       </div>
       <aside className="wl-campaign-card wl-campaign-preview" aria-label="Vista previa de notificación"><div className="wl-campaign-preview-title"><Eye aria-hidden="true"/><div><h2>Vista previa del mensaje</h2><p>Así podría verse en un dispositivo.</p></div></div><div className="wl-campaign-phone"><div className="wl-campaign-phone-notch"/><div className="wl-campaign-phone-time">9:41<span>Vista previa</span></div><div className="wl-campaign-push"><div className="wl-campaign-push-brand"><span>W.</span><strong>WingsLab</strong><small>Ahora</small></div><h3>{title || 'Tu título aquí'}</h3><p>{body || 'Escribe tu mensaje para ver cómo se mostrará.'}</p></div><div className="wl-campaign-phone-bar"/></div><p className="wl-campaign-preview-note">Vista ilustrativa; no se enviará ninguna notificación. El aspecto final depende del dispositivo.</p></aside>

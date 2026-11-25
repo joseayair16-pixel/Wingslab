@@ -3,6 +3,7 @@
 import { ChevronDown, House, Route as RouteIcon, Store } from 'lucide-react';
 import { useEffect, useId, useRef, useState } from 'react';
 import { ensureGoogleMapsScript } from '../lib/googleMaps';
+import { fetchIncomingRoute } from '../lib/incomingRoute';
 
 type Props = {
   originLatitude?: number | null;
@@ -80,6 +81,8 @@ function RouteMap({ preview }: { preview: Preview }) {
 export function IncomingRouteDistance({ originLatitude, originLongitude, destinationLatitude, destinationLongitude }: Props) {
   const [preview, setPreview] = useState<Preview | null>(null);
   const [loading, setLoading] = useState(true);
+  const [attempt, setAttempt] = useState(0);
+  const [error, setError] = useState('');
   const [mapVisibility, setMapVisibility] = useState<'unopened' | 'open' | 'collapsed'>('unopened');
   const expanded = mapVisibility === 'open';
   const mapId = useId();
@@ -89,46 +92,38 @@ export function IncomingRouteDistance({ originLatitude, originLongitude, destina
     const origin = toPoint(originLatitude, originLongitude);
     const destination = toPoint(destinationLatitude, destinationLongitude);
     setPreview(null);
+    setError('');
     setMapVisibility('unopened');
     if (!origin || !destination) {
+      setError('Faltan coordenadas válidas del restaurante o de la entrega.');
       setLoading(false);
       return;
     }
 
     setLoading(true);
     const timeout = window.setTimeout(() => {
-      cancelled = true;
       setLoading(false);
-    }, 12000);
+      setError('La consulta de Google Maps tardó demasiado. Comprueba la conexión e intenta de nuevo.');
+    }, 18000);
     void (async () => {
       try {
         const google = await ensureGoogleMapsScript();
-        if (cancelled || !google) return;
+        if (cancelled) return;
+        if (!google) throw new Error('No se pudo cargar Google Maps. Comprueba la conexión o la configuración de Maps.');
         setPreview({ google, origin, destination, route: null });
-        const { Route } = await google.maps.importLibrary('routes');
+        const route = await fetchIncomingRoute(google, origin, destination);
         if (cancelled) return;
-        const { routes } = await Route.computeRoutes({
-          origin, destination, computeAlternativeRoutes: true,
-          travelMode: 'DRIVING', routingPreference: 'TRAFFIC_UNAWARE', language: 'es', region: 'mx',
-          polylineQuality: 'OVERVIEW',
-          fields: ['distanceMeters', 'path'],
-        });
-        if (cancelled) return;
-        let shortest: RouteResult | null = null;
-        for (const route of routes ?? []) {
-          if (!Number.isFinite(route.distanceMeters) || route.distanceMeters < 0 || !route.path?.length) continue;
-          if (!shortest || route.distanceMeters < shortest.distanceMeters) shortest = route;
-        }
-        setPreview({ google, origin, destination, route: shortest });
-      } catch {
-        // Sin ruta, se conservan los puntos si el mapa pudo cargarse.
+        setError('');
+        setPreview({ google, origin, destination, route });
+      } catch (cause) {
+        if (!cancelled) setError(cause instanceof Error ? cause.message : 'No se pudo calcular la ruta.');
       } finally {
         window.clearTimeout(timeout);
         if (!cancelled) setLoading(false);
       }
     })();
     return () => { cancelled = true; window.clearTimeout(timeout); };
-  }, [originLatitude, originLongitude, destinationLatitude, destinationLongitude]);
+  }, [originLatitude, originLongitude, destinationLatitude, destinationLongitude, attempt]);
 
   const distance = preview?.route?.distanceMeters;
   return (
@@ -138,12 +133,16 @@ export function IncomingRouteDistance({ originLatitude, originLongitude, destina
           <RouteIcon aria-hidden="true" className="h-3.5 w-3.5 shrink-0" />
           {loading ? 'Calculando ruta…' : distance == null ? 'Distancia por ruta no disponible' : `${new Intl.NumberFormat('es-MX', { maximumFractionDigits: 2 }).format(distance / 1000)} km por ruta`}
         </p>
-        {preview && !loading && (
+        {preview && (
           <button type="button" aria-expanded={expanded} aria-controls={mapId} onClick={() => setMapVisibility(expanded ? 'collapsed' : 'open')} className="inline-flex min-h-11 items-center gap-1 rounded-lg px-2 text-xs font-bold text-red-700 hover:bg-red-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-red-700">
             {expanded ? 'Ocultar mapa' : 'Ver mapa'}<ChevronDown aria-hidden="true" className={`h-3.5 w-3.5 ${expanded ? 'rotate-180' : ''}`} />
           </button>
         )}
+        {!loading && distance == null && toPoint(originLatitude, originLongitude) && toPoint(destinationLatitude, destinationLongitude) && (
+          <button type="button" onClick={() => setAttempt(value => value + 1)} className="min-h-11 rounded-lg px-2 text-xs font-bold text-red-700 hover:bg-red-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-red-700">Reintentar ruta</button>
+        )}
       </div>
+      {error && <p className="text-xs text-neutral-600" role="status">{error}</p>}
       <div id={mapId} hidden={!expanded}>
         {mapVisibility !== 'unopened' && preview && <RouteMap preview={preview} />}
       </div>

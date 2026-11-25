@@ -10,17 +10,22 @@ import { customerOrderDetailSelect, customerOrderListSelect } from '../services/
 import { emitNotification } from '../services/socket.service';
 import { restoreStockForOrder } from '../services/stock.service';
 import { getOrCreateRequestContext } from '../utils/request-context';
-import { createOrderForCustomer } from '../services/order.service';
+import { createOrderForCustomer, reserveCustomerCardCheckout } from '../services/order.service';
+import { createMercadoPagoCardOrder, fetchMercadoPagoOrder, mapMercadoPagoDeclineReason, mercadoPagoChallengeUrl, mercadoPagoItemsFromSnapshot, searchMercadoPagoOrdersByReference, verifyMercadoPagoOrderSignature } from '../services/mercado-pago-orders';
+import { attachCheckoutProviderOrder, claimCheckoutPaymentReconciliation, claimCheckoutPaymentSubmission, markCheckoutPaymentDeclined } from '../services/checkout-payment-intent';
+import { settleVerifiedCheckoutPayment } from '../services/checkout-settlement.service';
 import { sendPushNotification } from '../services/notification.service';
 import { enqueueRestaurantOrder, requestOrderCancellation, retractCancellationRequest } from '../services/order-workflow.service';
 import { decisionWindowMs } from '../services/order-ring.service';
-import { createTransferRefundTicket } from '../services/refund-ticket.service';
+import { enqueueCancellationRefunds } from '../services/order-cancellation-refunds';
 import { getPromoLimitViolation } from '../services/order-promotion-policy';
-import { sendWhatsAppNewOrder } from '../services/whatsapp.service';
+import { isSandboxCardChargingEnabled } from '../services/checkout-sandbox-policy';
+import { listMercadoPagoCards, type MercadoPagoSavedCard } from '../services/mercado-pago-customer';
+import { resolveOwnedSavedCard } from '../services/saved-card-policy';
 
-const createOrderSchema = z.object({
+const orderFields = z.object({
   restaurantId: z.literal(RESTAURANT_ID).default(RESTAURANT_ID),
-  clientOrderKey: z.string().min(8, 'La clave de pedido es obligatoria.').max(64).optional(),
+  clientOrderKey: z.string().min(8, 'La clave de pedido es obligatoria.').max(64).refine(key => !key.startsWith('mp:'), 'Clave de pedido reservada.').optional(),
   items: z
     .array(
       z.object({
@@ -53,13 +58,14 @@ const createOrderSchema = z.object({
     accuracy: z.number().nonnegative().optional(),
     capturedAt: z.union([z.string(), z.number()]).optional(),
   }).optional(),
-  paymentMethod: z.enum([PaymentMethod.CASH, PaymentMethod.TRANSFER]),
-  paymentProofUrl: z.string().url('El comprobante debe ser una URL valida.').nullish().transform(v => v ?? undefined),
+  paymentMethod: z.literal(PaymentMethod.CASH),
   notes: z.string().max(500).nullish().transform(v => v ?? undefined),
   locationVerified: z.boolean().optional().default(false),
   promoCode: z.string().max(30).trim().optional().transform(v => v?.toUpperCase() ?? undefined),
   loyalty: z.object({ cardId: z.string().uuid(), discountCents: z.number().int().min(0).max(100000000), expectedTotalCents: z.number().int().min(0).max(100000000) }).optional(),
-}).superRefine((data, context) => {
+});
+
+function validateOrderAddress(data: Pick<z.output<typeof orderFields>, 'fulfillmentType' | 'deliveryAddress'>, context: z.RefinementCtx) {
   if (data.fulfillmentType === 'DELIVERY' && !data.deliveryAddress) {
     context.addIssue({
       code: z.ZodIssueCode.custom,
@@ -67,14 +73,21 @@ const createOrderSchema = z.object({
       path: ['deliveryAddress'],
     });
   }
-  if (data.paymentMethod === PaymentMethod.TRANSFER && !data.paymentProofUrl?.trim()) {
-    context.addIssue({
-      code: z.ZodIssueCode.custom,
-      message: 'El comprobante de transferencia es obligatorio.',
-      path: ['paymentProofUrl'],
-    });
-  }
-});
+}
+
+const createOrderSchema = orderFields.superRefine(validateOrderAddress);
+const cardReservationSchema = orderFields.omit({ paymentMethod: true, clientOrderKey: true }).extend({
+  requestKey: z.string().uuid(),
+  items: orderFields.shape.items.max(50),
+}).strict().superRefine(validateOrderAddress);
+
+function checkoutStatus(intent: { id: string; amountCents: number; state: string; expiresAt: Date; declineReason?: string | null }) {
+  return {
+    id: intent.id, amountCents: intent.amountCents, currency: 'MXN', state: intent.state,
+    expiresAt: intent.expiresAt,
+    ...(intent.declineReason ? { declineReason: intent.declineReason } : {}),
+  };
+}
 
 const listMyOrdersQuerySchema = z.object({
   page: z.coerce.number().int().positive().default(1),
@@ -82,9 +95,207 @@ const listMyOrdersQuerySchema = z.object({
 });
 
 export async function registerOrderRoutes(fastify: FastifyInstance): Promise<void> {
+  const webhookSecret = process.env.WINGSLAB_MP_SANDBOX_WEBHOOK_SECRET;
+  const sandboxAccessToken = process.env.WINGSLAB_MP_SANDBOX_ACCESS_TOKEN;
+  const sandboxEnabled = process.env.WINGSLAB_CHECKOUT_SANDBOX_ROUTES === 'true' && process.env.WINGSLAB_CHECKOUT_RESERVATION_SWEEP === 'true';
+  const sandboxChargesEnabled = isSandboxCardChargingEnabled(process.env);
+  // Shared settlement: idempotent and used by the webhook, the charge response
+  // and the background reconciliation sweep.
+  const settleVerifiedIntent = (intentId: string, order: Awaited<ReturnType<typeof fetchMercadoPagoOrder>>, log: (message: string) => void) =>
+    settleVerifiedCheckoutPayment(prisma, fastify.io, intentId, order, error => {
+      log(`Pedido pagado ${intentId} pendiente de entrega a cocina: ${error instanceof Error ? error.message : 'error'}`);
+    });
+
+  if (sandboxEnabled && webhookSecret && sandboxAccessToken) {
+    fastify.post('/webhooks/mercado-pago/orders', async (request, reply) => {
+      const parsed = z.object({ 'data.id': z.string().max(64) }).safeParse(request.query);
+      const signature = request.headers['x-signature'];
+      const requestId = request.headers['x-request-id'];
+      if (!parsed.success || typeof signature !== 'string' || typeof requestId !== 'string' ||
+          !verifyMercadoPagoOrderSignature(parsed.data['data.id'], requestId, signature, webhookSecret)) {
+        return reply.code(401).send({ success: false });
+      }
+      try {
+        const order = await fetchMercadoPagoOrder(sandboxAccessToken, parsed.data['data.id']);
+        if (order.id !== parsed.data['data.id']) return reply.code(503).send({ success: false });
+        const reference = z.string().uuid().safeParse(order.external_reference);
+        if (!reference.success) return reply.code(204).send();
+        await settleVerifiedIntent(reference.data, order, (message) => request.log.error({ orderId: reference.data }, message));
+        return reply.code(204).send();
+      } catch {
+        request.log.error('No se pudo procesar el webhook de Mercado Pago');
+        return reply.code(503).send({ success: false });
+      }
+    });
+  }
   fastify.register(async function customerScope(customer) {
     customer.addHook('preHandler', authenticate);
     customer.addHook('preHandler', authorize([UserRole.CUSTOMER]));
+
+    // Internal sandbox surface. Does not accept card tokens or submit charges.
+    if (process.env.WINGSLAB_CHECKOUT_SANDBOX_ROUTES === 'true' && process.env.WINGSLAB_CHECKOUT_RESERVATION_SWEEP === 'true') {
+      customer.post('/me/checkout/card/intents', { config: { rateLimit: { max: 5, timeWindow: '1 minute' } } }, async (request, reply) => {
+        reply.header('Cache-Control', 'no-store');
+        const parsed = cardReservationSchema.safeParse(request.body);
+        if (!parsed.success) return reply.code(400).send({ success: false, error: { code: 'INVALID_CHECKOUT', message: 'Revisa los datos del carrito.' } });
+        const { requestKey, ...input } = parsed.data;
+        // Tarjeta no exige GPS: la ubicación solo es obligatoria para efectivo.
+        try {
+          const intent = await reserveCustomerCardCheckout({ prisma, customerUserId: getAuthenticatedUser(request).sub, input: { ...input, paymentMethod: PaymentMethod.CREDIT_CARD } }, requestKey);
+          return reply.send({ success: true, data: checkoutStatus(intent) });
+        } catch (error) { return sendAppError(reply, error); }
+      });
+
+      customer.get('/me/checkout/card/intents/:id', async (request, reply) => {
+        reply.header('Cache-Control', 'no-store');
+        const parsed = z.object({ id: z.string().uuid() }).safeParse(request.params);
+        const notFound = () => reply.code(404).send({ success: false, error: { code: 'CHECKOUT_NOT_FOUND', message: 'Intento de pago no encontrado.' } });
+        if (!parsed.success) return notFound();
+        const profile = await prisma.customer.findUnique({ where: { userId: getAuthenticatedUser(request).sub }, select: { id: true } });
+        if (!profile) return notFound();
+        const intent = await prisma.checkoutPaymentIntent.findFirst({
+          where: { id: parsed.data.id, customerId: profile.id, restaurantId: RESTAURANT_ID },
+          select: { id: true, amountCents: true, state: true, expiresAt: true, providerOrderId: true, declineReason: true },
+        });
+        if (!intent) return notFound();
+        if (sandboxAccessToken && await claimCheckoutPaymentReconciliation(prisma, intent.id)) {
+          try {
+            const candidates = intent.providerOrderId
+              ? [await fetchMercadoPagoOrder(sandboxAccessToken, intent.providerOrderId)]
+              : await searchMercadoPagoOrdersByReference(sandboxAccessToken, intent.id);
+            // Never guess when the provider returns ambiguous results. Keep inventory reserved.
+            if (candidates.length === 1) {
+              const order = candidates[0];
+              if (order.external_reference === intent.id) {
+                if (!intent.providerOrderId) await attachCheckoutProviderOrder(prisma, intent.id, order.id);
+                if (await settleVerifiedIntent(intent.id, order, message => request.log.error({ intentId: intent.id }, message))) {
+                  return reply.send({ success: true, data: { ...checkoutStatus(intent), state: 'VERIFIED' } });
+                }
+                if (order.status === 'failed' || order.status === 'canceled') {
+                  const reason = mapMercadoPagoDeclineReason(order);
+                  await markCheckoutPaymentDeclined(prisma, intent.id, order.id, reason);
+                  return reply.send({ success: true, data: { ...checkoutStatus(intent), state: 'DECLINED', declineReason: reason } });
+                }
+                 const threeDsUrl = mercadoPagoChallengeUrl(order);
+                return reply.send({ success: true, data: { ...checkoutStatus(intent), state: 'PENDING', threeDsUrl } });
+              }
+            }
+          } catch {
+            request.log.error({ intentId: intent.id }, 'No se pudo conciliar el intento de pago');
+          }
+        }
+        return reply.send({ success: true, data: { ...checkoutStatus(intent), state: intent.state === 'SUBMITTING' ? 'PENDING' : intent.state } });
+      });
+
+      // The browser sends only a provider-generated token: no PAN or CVV reaches WingsLab.
+      customer.post('/me/checkout/card/intents/:id/charge', { config: { rateLimit: { max: 5, timeWindow: '1 minute' } } }, async (request, reply) => {
+        reply.header('Cache-Control', 'no-store');
+        if (!sandboxChargesEnabled || !sandboxAccessToken) return reply.code(503).send({ success: false, error: { code: 'CHECKOUT_DISABLED', message: 'El pago con tarjeta no está habilitado en este entorno.' } });
+        const token = sandboxAccessToken;
+        const params = z.object({ id: z.string().uuid() }).safeParse(request.params);
+        const body = z.object({
+          cardToken: z.string().min(8).max(512),
+          savedCardId: z.string().min(1).max(128).optional(),
+          deviceId: z.string().regex(/^[\x21-\x7E]{1,512}$/).optional(),
+          payerEmail: z.string().email().max(254).optional(),
+          identificationType: z.string().min(1).max(20).optional(),
+          identificationNumber: z.string().min(3).max(32).optional(),
+          paymentMethodId: z.string().regex(/^[a-z0-9_]{1,40}$/).optional(),
+          cardType: z.enum(['credit_card', 'debit_card']).optional(),
+          issuerId: z.string().max(32).optional(),
+          installments: z.literal(1),
+        }).strict().refine(data => Boolean(data.identificationType) === Boolean(data.identificationNumber))
+          .refine(data => data.savedCardId
+            ? !data.payerEmail && !data.paymentMethodId && !data.cardType && !data.issuerId && !data.identificationType
+            : Boolean(data.payerEmail && data.paymentMethodId && data.cardType),
+          'Los datos de tarjeta nueva y guardada no se pueden mezclar.').safeParse(request.body);
+        if (!params.success || !body.success) return reply.code(400).send({ success: false, error: { code: 'INVALID_CHARGING_DATA', message: 'Datos de pago inválidos.' } });
+
+        const profile = await prisma.customer.findUnique({ where: { userId: getAuthenticatedUser(request).sub }, select: { id: true, mercadoPagoCustomerId: true, user: { select: { name: true, lastName: true } } } });
+        if (!profile) return reply.code(404).send({ success: false, error: { code: 'CHECKOUT_NOT_FOUND', message: 'Intento de pago no encontrado.' } });
+        const where = { id: params.data.id, customerId: profile.id, restaurantId: RESTAURANT_ID };
+        const intent = await prisma.checkoutPaymentIntent.findFirst({
+          where: { ...where, OR: [{ state: 'RESERVED', expiresAt: { gt: new Date() } }, { state: 'SUBMITTING' }] },
+          select: { id: true, amountCents: true, state: true, expiresAt: true, providerOrderId: true, snapshot: true },
+        });
+        if (!intent) return reply.code(409).send({ success: false, error: { code: 'CHECKOUT_NOT_AVAILABLE', message: 'El intento venció o ya se procesó.' } });
+
+        // Re-check the opt-in at charge time: the restaurant may have disabled
+        // card payments after the reservation was created.
+        const restaurant = await prisma.restaurant.findUnique({ where: { id: RESTAURANT_ID }, select: { acceptsCard: true } });
+        if (!restaurant?.acceptsCard) {
+          return reply.code(409).send({ success: false, error: { code: 'CARD_NOT_ACCEPTED', message: 'Este restaurante ya no acepta pagos con tarjeta.' } });
+        }
+
+        try {
+          if (intent.state === 'SUBMITTING' && intent.providerOrderId) {
+            const existing = await fetchMercadoPagoOrder(token, intent.providerOrderId);
+            if (await settleVerifiedIntent(intent.id, existing, (message) => request.log.error({ intentId: intent.id }, message))) {
+              return reply.send({ success: true, data: { ...checkoutStatus(intent), state: 'VERIFIED' } });
+            }
+            if (existing.status === 'failed' || existing.status === 'canceled') {
+              const reason = mapMercadoPagoDeclineReason(existing);
+              await markCheckoutPaymentDeclined(prisma, intent.id, existing.id, reason);
+              return reply.send({ success: true, data: { ...checkoutStatus(intent), state: 'DECLINED', declineReason: reason } });
+            }
+             return reply.send({ success: true, data: { ...checkoutStatus(intent), state: 'PENDING', threeDsUrl: mercadoPagoChallengeUrl(existing) } });
+          }
+          let savedCard: MercadoPagoSavedCard | undefined;
+          if (body.data.savedCardId) {
+            if (!profile.mercadoPagoCustomerId) {
+              return reply.code(404).send({ success: false, error: { code: 'SAVED_CARD_NOT_FOUND', message: 'Esa tarjeta ya no está disponible. Elige otra forma de pago.' } });
+            }
+            const cards = await listMercadoPagoCards(token, profile.mercadoPagoCustomerId);
+            savedCard = resolveOwnedSavedCard(cards, body.data.savedCardId) ?? undefined;
+            if (!savedCard) {
+              return reply.code(404).send({ success: false, error: { code: 'SAVED_CARD_NOT_FOUND', message: 'Esa tarjeta ya no está disponible. Elige otra forma de pago.' } });
+            }
+          }
+          if (!await claimCheckoutPaymentSubmission(prisma, intent.id, profile.id)) {
+            return reply.code(409).send({ success: false, error: { code: 'CHECKOUT_BUSY', message: 'El pago se está procesando.' } });
+          }
+          let providerOrder;
+          try {
+            providerOrder = await createMercadoPagoCardOrder(token, {
+              intentId: intent.id, idempotencyKey: intent.id, amountCents: intent.amountCents,
+                ...(savedCard
+                  ? { payerCustomerId: profile.mercadoPagoCustomerId!, methodId: savedCard.payment_method.id,
+                    cardType: savedCard.payment_method.payment_type_id, issuerId: savedCard.issuer?.id ? String(savedCard.issuer.id) : undefined }
+                  : { payerEmail: body.data.payerEmail!, methodId: body.data.paymentMethodId!, cardType: body.data.cardType! }),
+                ...(!savedCard ? {
+                  identificationType: body.data.identificationType,
+                  identificationNumber: body.data.identificationNumber,
+                  payerFirstName: profile.user.name.trim().slice(0, 100).trim() || undefined,
+                  payerLastName: profile.user.lastName?.trim().slice(0, 100).trim() || undefined,
+                } : {}),
+                platformId: process.env.WINGSLAB_MP_SANDBOX_PLATFORM_ID || undefined,
+                cardToken: body.data.cardToken,
+                deviceId: body.data.deviceId,
+               ...(!savedCard && body.data.issuerId ? { issuerId: body.data.issuerId } : {}),
+               installments: body.data.installments,
+               items: mercadoPagoItemsFromSnapshot(intent.snapshot, intent.amountCents),
+               requireThreeDs: true,
+            });
+          } catch (error) {
+            // A timeout or malformed response can follow a successful charge.
+            // Keep SUBMITTING and its stock until reconciliation confirms the outcome.
+            request.log.error({ intentId: intent.id }, 'Resultado del cobro desconocido; requiere conciliación');
+            return reply.code(503).send({ success: false, error: { code: 'PAYMENT_OUTCOME_UNKNOWN', message: 'Estamos verificando el pago. No vuelvas a pagar hasta confirmar su estado.' } });
+          }
+          await attachCheckoutProviderOrder(prisma, intent.id, providerOrder.id);
+          if (await settleVerifiedIntent(intent.id, providerOrder, (message) => request.log.error({ intentId: intent.id }, message))) {
+            return reply.send({ success: true, data: { ...checkoutStatus(intent), state: 'VERIFIED' } });
+          }
+           const threeDsUrl = mercadoPagoChallengeUrl(providerOrder);
+          const terminalFailure = providerOrder.status === 'failed' || providerOrder.status === 'canceled';
+          const declineReason = terminalFailure ? mapMercadoPagoDeclineReason(providerOrder) : undefined;
+          if (terminalFailure && declineReason) await markCheckoutPaymentDeclined(prisma, intent.id, providerOrder.id, declineReason);
+          return reply.send({ success: true, data: { ...checkoutStatus(intent), state: terminalFailure ? 'DECLINED' : 'PENDING', threeDsUrl, ...(declineReason ? { declineReason } : {}) } });
+        } catch (error) {
+          return sendAppError(reply, error);
+        }
+      });
+    }
 
     customer.post('/pedidos/validar-cupon', {
       config: {
@@ -255,7 +466,10 @@ export async function registerOrderRoutes(fastify: FastifyInstance): Promise<voi
           });
         }
 
-        const queueInfo = await enqueueRestaurantOrder(order.restaurant.id, order.id, order.createdAt);
+        const queueInfo = await enqueueRestaurantOrder(order.restaurant.id, order.id, order.createdAt).catch(error => {
+          request.log.error({ err: error, orderId: order.id }, 'Pedido guardado; no se pudo actualizar la cola');
+          return null;
+        });
 
         emitNotification(
           fastify.io,
@@ -271,8 +485,8 @@ export async function registerOrderRoutes(fastify: FastifyInstance): Promise<voi
               .filter(Boolean)
               .join(' ')
               .trim() || 'Cliente SaDeL',
-            queuePosition: queueInfo.position,
-            queueLength: queueInfo.queueLength,
+            queuePosition: queueInfo?.position,
+            queueLength: queueInfo?.queueLength,
           },
           {
             requestId: requestContext.requestId,
@@ -286,7 +500,7 @@ export async function registerOrderRoutes(fastify: FastifyInstance): Promise<voi
         // decisión corriendo; ese es el que debe sonar de forma continua en la
         // app nativa. Los siguientes suenan como aviso normal (un toque) hasta
         // que el primero se resuelva y pasen a ser el activo.
-        const isQueueHead = queueInfo.position <= 1;
+        const isQueueHead = queueInfo !== null && queueInfo.position <= 1;
         void sendPushNotification(order.restaurant.userId, {
           title: '¡Nuevo Pedido Recibido!',
           body: `Pedido ${order.orderReference} — Ingreso: $${restaurantEarnings.toFixed(2)}.`,
@@ -303,32 +517,13 @@ export async function registerOrderRoutes(fastify: FastifyInstance): Promise<voi
           data: {
             orderId: order.id,
             orderReference: order.orderReference,
+            event: 'order:created',
             url: `/?orderId=${order.id}`,
           },
           tag: `new-order-${order.id}`,
         }).catch((err) => {
           request.log.error('Error sending push for new order', err);
         });
-
-        // Send WhatsApp Notification to Restaurant (if enabled)
-        void (async () => {
-          try {
-            const restaurant = await prisma.restaurant.findUnique({
-              where: { id: order.restaurant.id },
-              select: { contactPhone: true, whatsappNotifications: true },
-            });
-            if (restaurant?.whatsappNotifications && restaurant?.contactPhone) {
-              const panelBase = (process.env.RESTAURANT_PANEL_URL || process.env.WEBAPP_URL || '').replace(/\/+$/, '');
-              const panelUrl = panelBase ? `${panelBase}/?orderId=${order.id}` : '';
-              void sendWhatsAppNewOrder({
-                restaurantPhone: restaurant.contactPhone,
-                orderNumber: order.dailyCounter ?? 0,
-                panelUrl,
-              });
-            }
-          } catch {}
-        })();
-
 
         return reply.status(201).send({
           success: true,
@@ -713,6 +908,9 @@ export async function registerOrderRoutes(fastify: FastifyInstance): Promise<voi
           select: {
             id: true,
             orderReference: true,
+            clientOrderKey: true,
+            paymentMethod: true,
+            paymentStatus: true,
             restaurant: {
               select: {
                 id: true,
@@ -738,16 +936,18 @@ export async function registerOrderRoutes(fastify: FastifyInstance): Promise<voi
 
         const cancellationReason = 'El cliente no aceptó la fecha de entrega programada.';
 
-        await prisma.order.update({
-          where: { id: order.id },
+        const cancelled = await prisma.$transaction(async tx => {
+        const claim = await tx.order.updateMany({
+          where: { id: order.id, customer: { userId: user.sub }, status: OrderStatus.CONFIRMED, scheduledDeliveryAt: { not: null }, scheduledDeliveryCustomerAcceptedAt: null },
           data: {
             status: OrderStatus.CANCELLED,
             cancellationReason,
             cancelledBy: 'CUSTOMER',
           },
         });
+        if (!claim.count) return false;
 
-        await prisma.orderTracking.create({
+        await tx.orderTracking.create({
           data: {
             orderId: order.id,
             status: OrderStatus.CANCELLED,
@@ -755,10 +955,13 @@ export async function registerOrderRoutes(fastify: FastifyInstance): Promise<voi
           },
         });
 
-        await createTransferRefundTicket(prisma, order.id, cancellationReason);
+        await enqueueCancellationRefunds(tx, order, cancellationReason);
 
         // Liberar el stock reservado al cancelar (productos trackeados por unidad).
-        await restoreStockForOrder(prisma, order.id);
+        await restoreStockForOrder(tx, order.id);
+        return true;
+        });
+        if (!cancelled) return reply.status(409).send({ success: false, error: { code: 'ORDER_STATE_CHANGED', message: 'El pedido ya cambió de estado.' } });
 
         // Notify restaurant via socket
         emitNotification(
@@ -798,7 +1001,7 @@ export async function registerOrderRoutes(fastify: FastifyInstance): Promise<voi
         return reply.send({
           success: true,
           data: {
-            message: 'Pedido cancelado. No se te hará ningún cobro.',
+            message: order.paymentMethod === PaymentMethod.CREDIT_CARD ? 'Pedido cancelado. El reembolso está pendiente de confirmación.' : 'Pedido cancelado.',
           },
         });
       } catch (error) {

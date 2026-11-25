@@ -19,6 +19,7 @@ describe('order workflow transitions', () => {
     expect(canRestaurantApplyStatus(OrderStatus.PENDING, OrderStatus.CONFIRMED)).toBe(true);
     expect(canRestaurantApplyStatus(OrderStatus.CONFIRMED, OrderStatus.PREPARING)).toBe(true);
     expect(canRestaurantApplyStatus(OrderStatus.PREPARING, OrderStatus.READY)).toBe(true);
+    expect(canRestaurantApplyStatus(OrderStatus.CONFIRMED, OrderStatus.READY)).toBe(true);
     expect(canRestaurantApplyStatus(OrderStatus.PENDING, OrderStatus.REJECTED)).toBe(true);
     expect(canRestaurantApplyStatus(OrderStatus.PENDING, OrderStatus.PREPARING)).toBe(false);
     expect(canRestaurantApplyStatus(OrderStatus.CONFIRMED, OrderStatus.REJECTED)).toBe(false);

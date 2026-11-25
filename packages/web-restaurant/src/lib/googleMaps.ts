@@ -62,6 +62,7 @@ export function waitForGoogleMaps(timeoutMs: number = MAPS_TIMEOUT_MS): Promise<
 
   try {
     (window as any)[cacheKey] = promise;
+    void promise.then(() => { if ((window as any)[cacheKey] === promise) delete (window as any)[cacheKey]; });
   } catch {
     // sin acceso a window global (tests/SSR): no cachear
   }
@@ -139,7 +140,10 @@ export function ensureGoogleMapsScript(apiKey?: string): Promise<GoogleMaps | nu
       timer = window.setTimeout(() => finish(null), 12_000);
       document.head.appendChild(script);
     });
-  })();
+  })().then((google) => {
+    if (!google) mapsScriptPromise = null;
+    return google;
+  });
 
   return mapsScriptPromise;
 }

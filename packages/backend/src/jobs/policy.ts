@@ -3,7 +3,7 @@ import { webPushRetryJobEnabled } from '../config/isolation';
 /** Capability inventory, independent from cron registration and domain logic. */
 export const JOB_GROUPS = {
   orderLifecycle: ['orderTimeout', 'restaurantHours', 'pickupReady', 'ownDeliveryTimeout'],
-  notifications: ['paymentReminders', 'thankYouMessages', 'driverPickupAlert', 'stuckOrder', 'customerPickupReminder',
+  notifications: ['driverPickupAlert', 'stuckOrder', 'customerPickupReminder',
     'customerArrivalReminder', 'overduePreparation', 'scheduledDeliveryReminder', 'notificationRetry', 'orderRing'],
   maintenance: ['cleanupPushSubscriptions'],
   externalStorage: ['cleanupOrphanMedia'],

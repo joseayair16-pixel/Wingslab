@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { io } from 'socket.io-client';
 import { MapPin, Plus, Search, Star, Trash2, LogOut, X, Loader2, Pencil, Camera, Smartphone, PackageCheck, ReceiptText, QrCode, Gift, Award, UserRound } from 'lucide-react';
-import { getWingslabApiUrl, getWingslabSocketUrl, getOrderStatusLabel, readStoredSession, persistStoredSession, requestJson, clearStoredSession, type AuthUser } from '@sadel/shared';
+import { getWingslabApiUrl, getWingslabSocketUrl, getOrderStatusLabel, readStoredSession, persistStoredSession, requestJson, clearStoredSession, forceSessionExpired, handleSocketUnauthorized, setGlobalSessionExpiredHandler, type AuthUser } from '@sadel/shared';
 import { AuthModal } from '../../components/AuthModal';
 import { OrdersView } from '../../views/OrdersView';
 import { CustomerNavigation } from '../../components/CustomerNavigation';
@@ -13,10 +13,23 @@ import { PageHeader } from '../../components/PageHeader';
 import { LoyaltyQrPanel } from '../../components/LoyaltyQrPanel';
 import { createPlacesSource, fetchSelectedPlaceFields, type PlacesSuggestion } from '../../lib/places';
 import { ensureGoogleMapsScript } from '../../lib/googleMaps';
+import { usePushNotifications } from '../../hooks/usePushNotifications';
+import { PushActivationButton } from '../../components/PushActivationButton';
+import { revokeCustomerPush } from '../../lib/revokeCustomerPush';
 import officialLogo from '../../assets/wingslab-wordmark.png';
 import { LoyaltyCard } from '../../../../shared/src/loyalty-card';
 
 const storageKey = 'sadel.customer';
+
+function OrderNotificationSettings({ token }: { token: string }) {
+  const { isSubscribed, subscribe, needsIosInstall, pushSupportIssue } = usePushNotifications();
+
+  return <section className="wl-profile-card p-4" aria-label="Notificaciones de pedidos">
+    <h2 className="font-bold">Notificaciones de pedidos</h2>
+    <p className="mt-1 text-sm" role="status">{isSubscribed ? 'Activadas en este dispositivo.' : needsIosInstall ? 'Añade WingsLab a la pantalla de inicio y ábrelo desde allí para activar los avisos.' : pushSupportIssue || 'Recibe avisos de tus pedidos aunque no tengas WingsLab abierto.'}</p>
+    {!isSubscribed && !needsIosInstall && !pushSupportIssue && <PushActivationButton activate={() => subscribe(token)} className="wl-profile-add mt-2 min-h-11" />}
+  </section>;
+}
 const moneyFormatter = new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' });
 const money = (amount: number) => moneyFormatter.format(amount);
 const orderDateFormatter = new Intl.DateTimeFormat('es-MX', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'America/Mexico_City' });
@@ -130,8 +143,20 @@ export default function CustomerAccount() {
   const [ordersHasMore, setOrdersHasMore] = useState(false);
   const [addresses, setAddresses] = useState<any[]>([]);
   const [loyalty, setLoyalty] = useState<any>(null);
+  const [selectedStamp, setSelectedStamp] = useState<{ index: number; detail: any } | null>(null);
+  useEffect(() => {
+    if (!selectedStamp) return;
+    const close = (event: KeyboardEvent) => { if (event.key === 'Escape') setSelectedStamp(null); };
+    window.addEventListener('keydown', close);
+    return () => window.removeEventListener('keydown', close);
+  }, [selectedStamp]);
   const [customerStats, setCustomerStats] = useState<{ totalOrders: number } | null>(null);
   const [showLoyaltyQr, setShowLoyaltyQr] = useState(false);
+  const qrDialogRef = useRef<HTMLDialogElement>(null);
+  useEffect(() => {
+    if (showLoyaltyQr && !qrDialogRef.current?.open) qrDialogRef.current?.showModal();
+  }, [showLoyaltyQr]);
+  const [loyaltyRevision, setLoyaltyRevision] = useState(0);
   const [editOpen, setEditOpen] = useState(false);
   const [editForm, setEditForm] = useState<{ name: string; lastName: string; photoSource: string | null }>({ name: '', lastName: '', photoSource: null });
   const [editSaving, setEditSaving] = useState(false);
@@ -168,6 +193,27 @@ export default function CustomerAccount() {
   useEffect(() => {
     const saved = readStoredSession(storageKey);
     if (saved?.token) { setToken(saved.token); setUser(saved.user); }
+  }, []);
+  // Un refresh silencioso de requestJson renueva el token en localStorage pero
+  // no el estado React. Sin esto, las llamadas y el socket de esta vista siguen
+  // usando el token viejo hasta recargar la página.
+  useEffect(() => {
+    const onTokenRefreshed = (event: Event) => {
+      const nextToken = (event as CustomEvent<string>).detail;
+      if (nextToken) setToken(nextToken);
+    };
+    window.addEventListener('sadel:token-refreshed', onTokenRefreshed);
+    return () => window.removeEventListener('sadel:token-refreshed', onTokenRefreshed);
+  }, []);
+  // Mismo cierre de sesión global que el storefront: un 401 irrecuperable o un
+  // socket rechazado deben limpiar esta vista, no dejarla con datos obsoletos.
+  useEffect(() => {
+    setGlobalSessionExpiredHandler(() => {
+      clearStoredSession(storageKey);
+      setToken(''); setUser(null); setOrders([]); setAddresses([]);
+      setLoyalty(null); setAuthOpen(true);
+    });
+    return () => setGlobalSessionExpiredHandler(null);
   }, []);
   // El perfil completo (apellido, foto y fecha real) vive en /customer/profile;
   // el login solo entrega un subconjunto. Una sola fuente de verdad: `user`.
@@ -224,13 +270,46 @@ export default function CustomerAccount() {
       }
     };
     void load();
-    const socket = io(getWingslabSocketUrl(), { auth: { token }, transports: ['websocket', 'polling'] });
-    socket.on('connect', () => socket.emit('join-room'));
+    // Leer el token de localStorage en cada intento evita reconectar con el
+    // access token viejo después de una rotación.
+    const getSocketToken = () => readStoredSession(storageKey).token || token;
+    const socket = io(getWingslabSocketUrl(), {
+      auth: { token: getSocketToken() },
+      transports: ['websocket', 'polling'],
+      reconnection: true,
+    });
+    const handleReconnectAttempt = () => { socket.auth = { token: getSocketToken() }; };
+    socket.io.on('reconnect_attempt', handleReconnectAttempt);
+    socket.on('connect_error', (err) => {
+      if (!String((err as Error)?.message || '').includes('UNAUTHORIZED')) return;
+      socket.disconnect();
+      void handleSocketUnauthorized({
+        apiBase,
+        storageKey,
+        socket,
+        isActive: () => active,
+        onLoggedOut: () => forceSessionExpired(),
+      });
+    });
     const refreshVisible = () => { if (document.visibilityState === 'visible') void load(); };
+    let connectedBefore = false;
+    socket.on('connect', () => {
+      socket.emit('join-room');
+      if (connectedBefore) refreshVisible();
+      connectedBefore = true;
+    });
     for (const event of ['order:accepted', 'order:preparing', 'order:ready', 'order:in-transit', 'order:driver-arrived', 'order:delivered', 'order:rejected', 'order:cancelled']) socket.on(event, refreshVisible);
     const timer = window.setInterval(refreshVisible, 30000);
     document.addEventListener('visibilitychange', refreshVisible);
-    return () => { active = false; window.clearInterval(timer); document.removeEventListener('visibilitychange', refreshVisible); socket.disconnect(); };
+    window.addEventListener('online', refreshVisible);
+    return () => {
+      active = false;
+      window.clearInterval(timer);
+      document.removeEventListener('visibilitychange', refreshVisible);
+      window.removeEventListener('online', refreshVisible);
+      socket.io.off('reconnect_attempt', handleReconnectAttempt);
+      socket.disconnect();
+    };
   }, [apiBase, token, section, ordersLimit]);
   useEffect(() => {
     if (!token) { setLoyalty(null); setLoyaltyError(false); return; }
@@ -247,7 +326,7 @@ export default function CustomerAccount() {
       setLoyaltyError(false);
     }).catch(() => { if (active) setLoyaltyError(true); });
     return () => { active = false; };
-  }, [apiBase, token, section]);
+  }, [apiBase, token, section, loyaltyRevision]);
   const selectedOrderStatus = orders.find(order => order.id === selected)?.status;
   useEffect(() => {
     if (!detailOpen || !selected || !token) return;
@@ -437,6 +516,7 @@ export default function CustomerAccount() {
   };
 
   const logout = () => {
+    void revokeCustomerPush().catch(() => {});
     clearStoredSession(storageKey);
     setToken(''); setUser(null); setOrders([]); setAddresses([]);
     setOrdersLimit(12); setOrdersHasMore(false); setOrdersLoading(true); setOrdersLoadFailed(false);
@@ -515,39 +595,34 @@ export default function CustomerAccount() {
       {!token ? <div className="wl-premium-empty"><h2>Tu espacio en WingsLab</h2><p>Inicia sesión para consultar {section === 'pedidos' ? 'tus pedidos' : section === 'soporte' ? 'tus reportes y pedir ayuda' : section === 'fidelidad' ? 'tu fidelidad' : 'tu perfil'}.</p><button className="wl-primary-action" onClick={() => setAuthOpen(true)}>Iniciar sesión</button></div> : <>
         {section === 'soporte' && <CustomerSupport token={token} orders={orders} />}
         {section === 'fidelidad' && <>
-          {loyaltyError ? <p role="alert" className="wl-fidelity-message">No se pudo consultar el programa de fidelidad.</p>
+          {loyaltyError && !loyalty ? <p role="alert" className="wl-fidelity-message">No se pudo consultar el programa de fidelidad.</p>
           : !loyalty ? <p role="status" className="wl-fidelity-message">Consultando tu tarjeta…</p>
           : !loyalty.enabled && !loyalty.redemptionEnabled ? <div className="wl-fidelity-card wl-premium-empty"><Award aria-hidden="true" /><h3>Programa no disponible</h3><p>El restaurante aún no ha activado su tarjeta de fidelidad.</p></div>
           : <>
+            {loyaltyError && <p role="status" className="wl-fidelity-note">No se pudo actualizar tu tarjeta. <button type="button" className="underline" onClick={() => setLoyaltyRevision(value => value + 1)}>Reintentar</button></p>}
             {!loyalty.enabled && <p role="status" className="wl-fidelity-note">Programa en pausa. Tus sellos y premios se conservan.</p>}
 
             {/* Progreso fuera de la tarjeta, claro y confiable */}
             <div className="wl-loyalty-progress-panel">
               <div className="wl-loyalty-progress-top">
-                <div>
-                  <span className="wl-kicker">Tu progreso</span>
-                  <h2>{loyalty.stamps} de {loyalty.stampGoal} compras</h2>
-                </div>
-                <span className="wl-loyalty-progress-badge">
-                  {Math.min(100, Math.round((loyalty.stamps / Math.max(1, loyalty.stampGoal)) * 100))}%
-                </span>
+                <h2>Tu progreso</h2>
+                <span className="wl-loyalty-progress-badge">{loyalty.stamps} <small>/ {loyalty.stampGoal} sellos</small></span>
               </div>
-              <div className="wl-loyalty-progress-track" role="progressbar" aria-valuemin={0} aria-valuemax={loyalty.stampGoal} aria-valuenow={loyalty.stamps}>
+              <div className="wl-loyalty-progress-track" role="progressbar" aria-label="Progreso de sellos" aria-valuemin={0} aria-valuemax={loyalty.stampGoal} aria-valuenow={Math.min(loyalty.stamps, loyalty.stampGoal)}>
                 <span style={{ width: `${Math.min(100, (loyalty.stamps / Math.max(1, loyalty.stampGoal)) * 100)}%` }} />
               </div>
               <p className="wl-loyalty-progress-copy">
                 {loyalty.stamps >= loyalty.stampGoal
-                  ? '¡Tarjeta completa! Tu recompensa está lista.'
-                  : `Te faltan ${loyalty.stampGoal - loyalty.stamps} ${loyalty.stampGoal - loyalty.stamps === 1 ? 'compra' : 'compras'} para tu recompensa.`}
+                  ? 'Recompensa disponible'
+                  : `Faltan ${loyalty.stampGoal - loyalty.stamps} ${loyalty.stampGoal - loyalty.stamps === 1 ? 'sello' : 'sellos'} para tu recompensa`}
               </p>
             </div>
 
             <div className="wl-fidelity-card">
-              {loyalty.enabled ? (showLoyaltyQr ? <LoyaltyQrPanel onClose={() => setShowLoyaltyQr(false)} /> : <button type="button" className="wl-loyalty-qr-trigger" onClick={() => setShowLoyaltyQr(true)}><QrCode aria-hidden="true" /><span><strong>Compraste en el local</strong><small>Muestra tu código para que te pongan un sello</small></span></button>) : <p className="wl-loyalty-paused">El código QR estará disponible cuando el restaurante reactive el programa.</p>}
-              <LoyaltyCard logoUrl={loyalty.brand?.logo || officialLogo.src} fallbackLogoUrl={officialLogo.src} name={loyalty.brand?.name} logoOnDark={!loyalty.brand?.logo} goal={loyalty.stampGoal} stamps={loyalty.stamps} reward={loyalty.rewardDescription} terms={loyalty.stampTerms} />
+              <LoyaltyCard logoUrl={loyalty.brand?.logo || officialLogo.src} fallbackLogoUrl={officialLogo.src} name={loyalty.brand?.name} logoOnDark={!loyalty.brand?.logo} goal={loyalty.stampGoal} stamps={loyalty.stamps} reward={loyalty.rewardDescription} terms={loyalty.stampTerms} onStampClick={index => setSelectedStamp({ index, detail: loyalty.stampDetails?.[index] || null })} />
             </div>
 
-            {/* Recompensa fuera de la tarjeta, con el estilo del footer de la card */}
+            {/* Recompensa destacada y, debajo, la acción para acumular sellos. */}
             <section className="wl-reward-feature" aria-label="Tu recompensa">
               <RewardImage key={loyalty.rewardProductImage || 'gift'} src={loyalty.rewardKind === 'PRODUCT' ? loyalty.rewardProductImage : null} />
               <div className="min-w-0">
@@ -555,6 +630,8 @@ export default function CustomerAccount() {
                 <b className="wl-reward-feature-value">{loyalty.rewardDescription || 'Tu próxima recompensa'}</b>
               </div>
             </section>
+
+            {loyalty.enabled && <button type="button" className="wl-loyalty-qr-trigger" onClick={() => setShowLoyaltyQr(true)}><QrCode aria-hidden="true" /><span><strong>Mostrar QR en caja</strong><small>Recibe un sello por tu compra en el local</small></span></button>}
 
             {/* Historial de tarjetas / recompensas obtenidas */}
             <section className="wl-loyalty-history" aria-label="Historial de recompensas">
@@ -650,6 +727,7 @@ export default function CustomerAccount() {
             </div>
 
             <div className="wl-profile-side">
+              {token && <OrderNotificationSettings key={user?.id} token={token} />}
               <section className="wl-profile-card wl-profile-logout-card" aria-label="Sesión">
                 <button type="button" className="wl-profile-logout" onClick={logout}>
                   <LogOut aria-hidden="true" /> Cerrar sesión de forma segura
@@ -677,7 +755,40 @@ export default function CustomerAccount() {
         </>}
       </>}
     </div>
-    {!authOpen && !detailOpen && <CustomerNavigation active={section} onAuthenticated={(nextToken, nextUser) => { setToken(nextToken); setUser(nextUser); }} onLogout={logout} />}
+    {showLoyaltyQr && loyalty && (
+      <dialog
+        ref={qrDialogRef}
+        className="wl-loyalty-dialog wl-premium-dialog"
+        aria-label="Código para compras en el local"
+        onClose={() => setShowLoyaltyQr(false)}
+        onClick={event => { if (event.target === event.currentTarget) qrDialogRef.current?.close(); }}
+      >
+        <LoyaltyQrPanel
+          onClose={() => qrDialogRef.current?.close()}
+          onRefresh={() => setLoyaltyRevision(value => value + 1)}
+          brand={loyalty.brand}
+          fallbackLogoUrl={officialLogo.src}
+        />
+      </dialog>
+    )}
+    {!authOpen && !detailOpen && !selectedStamp && !showLoyaltyQr && <CustomerNavigation active={section} onAuthenticated={(nextToken, nextUser) => { setToken(nextToken); setUser(nextUser); }} onLogout={logout} />}
+    {selectedStamp && <div className="fixed inset-0 z-[90] flex items-center justify-center bg-neutral-950/60 px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-[max(1rem,env(safe-area-inset-top))] backdrop-blur-sm" onClick={() => setSelectedStamp(null)}>
+      <section role="dialog" aria-modal="true" aria-labelledby="stamp-detail-title" className="max-h-full w-full max-w-sm overflow-y-auto rounded-[28px] border border-neutral-200 bg-white p-5 text-neutral-950 shadow-2xl dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-50 sm:p-6" onClick={event => event.stopPropagation()}>
+        <div className="flex items-center gap-3">
+          <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-neutral-950 text-white dark:bg-zinc-700"><Award aria-hidden="true" className="h-6 w-6" /></span>
+          <div className="min-w-0 flex-1"><p className="text-xs font-semibold text-neutral-500 dark:text-zinc-400">Tu tarjeta de lealtad</p><h2 id="stamp-detail-title" className="mt-0.5 text-lg font-extrabold tracking-tight">Sello {selectedStamp.index + 1}</h2></div>
+          <button autoFocus type="button" aria-label="Cerrar detalle del sello" onClick={() => setSelectedStamp(null)} className="grid h-11 w-11 shrink-0 place-items-center rounded-full text-neutral-500 hover:bg-neutral-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-red-600 dark:text-zinc-400 dark:hover:bg-zinc-800"><X aria-hidden="true" className="h-5 w-5" /></button>
+        </div>
+        {selectedStamp.detail ? <div className="mt-5 rounded-2xl border border-neutral-100 bg-neutral-50 p-4 dark:border-zinc-700 dark:bg-zinc-800/70">
+          <p className="text-sm font-bold">{selectedStamp.detail.source === 'IN_PERSON' ? 'Compra en tienda' : selectedStamp.detail.order ? 'Pedido asociado' : 'Información del pedido no disponible'}</p>
+          <dl className="mt-3 space-y-2.5 text-sm">
+            {selectedStamp.detail.earnedAt && <div className="flex justify-between gap-4"><dt className="text-neutral-500 dark:text-zinc-400">Fecha del sello</dt><dd className="text-right font-medium">{formatOrderDate(selectedStamp.detail.earnedAt)}</dd></div>}
+            {selectedStamp.detail.order && <><div className="flex justify-between gap-4"><dt className="text-neutral-500 dark:text-zinc-400">Pedido</dt><dd className="break-all text-right font-semibold">{selectedStamp.detail.order.number ? `#${String(selectedStamp.detail.order.number).padStart(2, '0')}` : selectedStamp.detail.order.reference}</dd></div><div className="flex justify-between gap-4"><dt className="text-neutral-500 dark:text-zinc-400">Estado</dt><dd className="text-right font-medium">{getOrderStatusLabel(selectedStamp.detail.order.status)}</dd></div><div className="flex justify-between gap-4 border-t border-neutral-200 pt-2.5 dark:border-zinc-700"><dt className="font-semibold">Total</dt><dd className="font-extrabold tabular-nums">{money(selectedStamp.detail.order.total)}</dd></div></>}
+            {selectedStamp.detail.source === 'IN_PERSON' && selectedStamp.detail.visitTotal != null && <div className="flex justify-between gap-4 border-t border-neutral-200 pt-2.5 dark:border-zinc-700"><dt className="font-semibold">Total</dt><dd className="font-extrabold tabular-nums">{money(selectedStamp.detail.visitTotal)}</dd></div>}
+          </dl>
+        </div> : <p className="mt-5 text-sm leading-6 text-neutral-600 dark:text-zinc-300">No hay información individual disponible para este sello.</p>}
+      </section>
+    </div>}
     {addressToDelete && <div className="wl-auth wl-address-delete-overlay" role="dialog" aria-modal="true" aria-labelledby="delete-address-title" aria-describedby="delete-address-description" onClick={() => { if (!deletingAddressId) setAddressToDelete(null); }} onKeyDown={(event) => { if (event.key === 'Escape' && !deletingAddressId) setAddressToDelete(null); }}>
       <section className="wl-auth-sheet wl-address-delete-sheet" onClick={(event) => event.stopPropagation()}>
         <span className="wl-address-delete-icon"><Trash2 aria-hidden="true" /></span>

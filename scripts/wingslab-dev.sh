@@ -18,6 +18,9 @@ if [[ "$APP" == "backend" && "$ACTION" == "compile" ]]; then
   ./node_modules/.bin/tsc -p packages/shared/tsconfig.json
   ./node_modules/.bin/tsc -p packages/backend/tsconfig.json
   ./node_modules/.bin/tsc-alias -p packages/backend/tsconfig.json
+  # Single reload signal after every file is written. The dev runner watches
+  # this sentinel instead of the dist tree, so it never restarts mid-build.
+  node -e "require('node:fs').writeFileSync('packages/backend/dist/.reload', String(Date.now()))"
   echo "Backend dist recompiled; the container restarts automatically."
   exit 0
 fi

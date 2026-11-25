@@ -120,6 +120,7 @@ model Restaurant {
   maxDeliveryTime         Int              @default(60)
   maxCashOrder            Float            @default(500) // max amount payable in cash
   acceptsCash             Boolean          @default(true) // si acepta pagos en efectivo
+  acceptsCard             Boolean          @default(false) // opt-in explícito para checkout con tarjeta
   contactPhone            String
   email                   String
   transferBankName        String?
@@ -137,7 +138,6 @@ model Restaurant {
   enableTicketPrinting    Boolean          @default(true)
   isFeatured              Boolean          @default(false)
   businessType            BusinessType     @default(RESTAURANT)
-  whatsappNotifications   Boolean          @default(false)
 
   // Promociones a nivel de pedido
   promoFreeDeliveryThreshold Float? // envío gratis en pedidos >= este monto
@@ -198,7 +198,6 @@ model RestaurantBillingSettlement {
   amount           Float
   serviceFeeTotal  Float                   @default(0)
   platformFeeTotal Float                   @default(0)
-  whatsappFeeTotal Float                   @default(0)
   status           BillingSettlementStatus @default(PENDING)
   reference        String                  @unique
   notes            String?
@@ -365,6 +364,8 @@ model Customer {
   id     String @id @default(cuid())
   userId String @unique
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // Mercado Pago vault reference only. PAN, CVV and card tokens are never stored.
+  mercadoPagoCustomerId String? @unique
 
   rating      Float @default(0)
   totalOrders Int   @default(0)
@@ -375,7 +376,6 @@ model Customer {
 
   // Preferencias de entrega
   deliveryPreference    DeliveryPreference?
-  whatsappNotifications Boolean             @default(false)
 
   addresses          Address[]
   orders             Order[]
@@ -420,6 +420,58 @@ model Address {
 }
 
 // ============== Orders ==============
+model CheckoutPaymentIntent {
+  id          String   @id @db.Uuid
+  customerId  String
+  restaurantId String
+  requestKey  String
+  fingerprint String
+  providerOrderId String? @unique
+  lastReconciledAt DateTime?
+  // Código cerrado derivado de status_detail; nunca el detalle crudo del proveedor.
+  declineReason String?
+  amountCents Int
+  snapshot    Json
+  stock       Json
+  state       String   @default("RESERVED")
+  expiresAt   DateTime
+  createdAt   DateTime @default(now())
+
+  @@unique([customerId, requestKey])
+  @@index([state, expiresAt])
+}
+
+model KitchenOrderOutbox {
+  orderId       String   @id
+  restaurantId  String
+  orderCreatedAt DateTime
+  status        String   @default("PENDING")
+  attempts      Int      @default(0)
+  nextAttemptAt DateTime @default(now())
+  leaseUntil    DateTime?
+  lastError     String?
+  deliveredAt   DateTime?
+  createdAt     DateTime @default(now())
+
+  @@index([status, nextAttemptAt])
+}
+
+model CheckoutRefundRequest {
+  id             String   @id @db.Uuid
+  orderId        String   @unique
+  intentId       String   @db.Uuid
+  providerOrderId String
+  state          String   @default("PENDING")
+  attempts       Int      @default(0)
+  nextAttemptAt  DateTime @default(now())
+  leaseUntil     DateTime?
+  lastError      String?
+  refundedAt     DateTime?
+  createdAt      DateTime @default(now())
+
+  @@index([state, nextAttemptAt])
+}
+
 model Order {
   id             String     @id @default(cuid())
   orderReference String     @unique // For human readable reference
@@ -466,7 +518,6 @@ model Order {
   serviceFee         Float       @default(0)
   platformFee        Float       @default(0)
   driverPlatformFee  Float       @default(0)
-  whatsappFee        Float       @default(0)
   deliveryFee        Float
   deliveryDistanceKm Float?
   totalAmount        Float
@@ -515,10 +566,6 @@ model Order {
   lastDriverLatitude  Float?
   lastDriverLongitude Float?
   lastDriverLocationAt DateTime?
-
-  // Thank-you WhatsApp (5+ min after delivery, gated by admin toggle)
-  whatsappThankYouSentAt   DateTime?
-  whatsappThankYouSkippedAt DateTime?
 
   // Driver pickup tracking
   readyAt                 DateTime?

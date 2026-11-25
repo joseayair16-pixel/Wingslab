@@ -147,7 +147,9 @@ for package in ['backend', 'shared']:
                    not (Path(directory) / d).is_symlink()]
         for name in files:
             source = Path(directory) / name
-            if (source.is_symlink() or source.suffix not in ['.ts', '.js', '.json'] or
+            # .cjs también es fuente: config/wingslab.cjs y el Dockerfile de
+            # runtime requieren packages/shared/src/wingslab-policy.cjs.
+            if (source.is_symlink() or source.suffix not in ['.ts', '.js', '.cjs', '.json'] or
                     name.startswith(('.env', 'check_transfer_db')) or name == 'test-setup.ts' or
                     'firebase-adminsdk' in name.lower() or
                     (('.test.' in name or '.spec.' in name) and not name.endswith('.unit.test.ts'))):

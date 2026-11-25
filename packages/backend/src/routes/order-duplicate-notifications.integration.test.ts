@@ -1,6 +1,6 @@
 /**
  * Regresión: cuando el backend responde `isDuplicate`, la ruta NO debe volver a
- * encolar el pedido ni emitir notificaciones (socket, push, WhatsApp).
+ * encolar el pedido ni emitir notificaciones (socket, push).
  *
  * Un reintento del cliente (doble toque, timeout, recarga) llega por la misma
  * ruta que un pedido nuevo; si la ruta no respetara `isDuplicate`, el

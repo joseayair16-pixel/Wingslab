@@ -1,5 +1,7 @@
 'use client';
 
+import { SectionHeader } from '../SectionHeader';
+
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ChevronLeft, ChevronRight, CircleAlert, Search, ShieldBan, ShoppingBag, Users, X } from 'lucide-react';
 import { getRequestErrorMessage, requestJson } from '@sadel/shared';
@@ -84,7 +86,7 @@ export function CustomersSection({ apiBase, token }: { apiBase: string; token: s
   };
 
   return <section className="wl-campaigns wl-customers" aria-labelledby="customers-title">
-    <header className="wl-campaign-header"><span className="wl-campaign-header-icon"><Users aria-hidden="true" /></span><div><p className="wl-campaign-eyebrow">WingsLab</p><h1 id="customers-title">Clientes</h1></div></header>
+    <SectionHeader title="Clientes" titleId="customers-title" icon={<Users />} />
     {notice && <div role="status" className="wl-campaign-feedback">{notice}<button type="button" onClick={() => setNotice('')} aria-label="Cerrar aviso"><X size={16} /></button></div>}
     <div className="wl-campaign-card wl-customers-directory"><div className="wl-customers-heading"><div><h2>Directorio</h2></div><span className="wl-menu-count">{loading || !data ? 'Consultando…' : `${data.total} ${data.total === 1 ? 'cuenta' : 'cuentas'}`}</span></div>
       <div className="wl-customers-filters"><label className="wl-customers-search"><Search aria-hidden="true" /><span className="sr-only">Buscar clientes</span><input value={search} onChange={event => setSearch(event.target.value)} placeholder="Buscar cliente" /></label><label className="wl-customers-status"><span>Estado</span><select value={status} onChange={event => { setStatus(event.target.value); setPage(1); }}><option value="all">Todas</option><option value="ACTIVE">Activas</option><option value="SUSPENDED">Suspendidas</option><option value="INACTIVE">Inactivas</option></select></label></div>

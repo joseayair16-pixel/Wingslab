@@ -69,8 +69,11 @@ export async function processNotificationRetries(batchSize = 50): Promise<number
     if (claim.count !== 1) continue;
 
     let payload: NotificationPayload;
+    let webSubscriptionId: string | undefined;
     try {
-      payload = JSON.parse(retry.payload) as NotificationPayload;
+      const { webSubscriptionId: target, ...notification } = JSON.parse(retry.payload) as NotificationPayload & { webSubscriptionId?: string };
+      payload = notification;
+      webSubscriptionId = target;
     } catch {
       await prisma.notificationRetry.deleteMany({ where: { id: retry.id } }).catch(() => undefined);
       continue;
@@ -86,9 +89,12 @@ export async function processNotificationRetries(batchSize = 50): Promise<number
         payload = { ...payload, nativeRingExpiresAt: Date.now() + RING_RETRY_WINDOW_MS };
       }
 
-      const result = await sendPushNotification(retry.userId, payload, { skipRetryQueue: true });
-      if (result.success) {
-        delivered += 1;
+      const result = await sendPushNotification(retry.userId, payload, {
+        skipRetryQueue: true, webSubscriptionId,
+        ttl: Math.max(0, Math.floor((retry.expiresAt.getTime() - Date.now()) / 1000)),
+      });
+      if (result.success || (webSubscriptionId && result.reason === 'NO_SUBSCRIPTIONS')) {
+        if (result.success) delivered += 1;
         await prisma.notificationRetry.delete({ where: { id: retry.id } }).catch(() => undefined);
         continue;
       }

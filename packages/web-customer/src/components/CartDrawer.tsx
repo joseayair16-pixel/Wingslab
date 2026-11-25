@@ -230,6 +230,8 @@ export default memo(function CartDrawer({
                   const lineTotal = getLineTotal(item);
                   const hasDirectDiscount = item.discountPrice != null && Number(item.discountPrice) < originalUnitPrice;
                   const isWeightItem = item.sellBy === 'WEIGHT';
+                  const quantityForProduct = cart.reduce((sum, line) => line.productId === item.productId ? sum + line.quantity : sum, 0);
+                  const stockLimitReached = item.maxStock != null && quantityForProduct >= item.maxStock;
 
                   return (
                     <div
@@ -301,12 +303,16 @@ export default memo(function CartDrawer({
                           <button
                             type="button"
                             onClick={() => updateCartItem(item.cartItemId, { quantity: item.quantity + 1 })}
-                            className="flex items-center justify-center rounded-full transition-colors active:scale-90"
+                            disabled={stockLimitReached}
+                            title={stockLimitReached ? 'No hay más unidades disponibles' : undefined}
+                            className="flex items-center justify-center rounded-full transition-colors active:scale-90 disabled:cursor-not-allowed disabled:opacity-40"
                             aria-label={`Agregar una unidad de ${item.name}`}
                           >
                             <Plus className="h-4 w-4" strokeWidth={2.5} />
                           </button>
                         </div>
+
+                        {stockLimitReached && <span role="status" className="sr-only">No hay más unidades disponibles de {item.name}.</span>}
 
                         <input
                           value={item.specialInstructions}

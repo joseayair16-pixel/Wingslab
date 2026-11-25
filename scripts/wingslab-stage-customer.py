@@ -114,7 +114,9 @@ for relative in ['packages/shared/src', f'packages/web-{ROLE}/src', f'packages/w
                     re.search(r'\.(test|spec)\.|\.bak$|\.map$', name) or
                     re.search(r'firebase-adminsdk|\.(pem|key|p12|jks|dump|apk)$', name, re.I)):
                 continue
-            if '/src/' in str(source) and source.suffix not in ['.ts', '.tsx', '.js', '.json', '.css', '.png']:
+            # .cjs también es fuente: config/wingslab.cjs requiere
+            # packages/shared/src/wingslab-policy.cjs en tiempo de build.
+            if '/src/' in str(source) and source.suffix not in ['.ts', '.tsx', '.js', '.cjs', '.json', '.css', '.png']:
                 continue
             copy_file(str(source.relative_to(ROOT)))
 

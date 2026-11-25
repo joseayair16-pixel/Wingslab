@@ -25,6 +25,9 @@ import { buildApartmentWhere } from '../utils/address';
 import { calculateOrderEta } from '../utils/order-eta';
 import { getPromoLimitViolation } from './order-promotion-policy';
 import { loyaltyQuote, reserveRuntimeReward, moneyCents } from './loyalty-runtime.service';
+import { expireReservedCheckoutPaymentInTransaction, reserveCheckoutPaymentInTransaction } from './checkout-payment-intent';
+import { checkoutRequestFingerprint } from './checkout-request-fingerprint';
+import { z } from 'zod';
 
 
 type OrderInput = {
@@ -205,12 +208,89 @@ function validateCustomerLocation(input: OrderInput, customerUserId: string) {
   }
 }
 
-export async function createOrderForCustomer({
+type OrderServiceParams = CreateOrderParams & { requestHeaders?: any };
+
+const paidSnapshotSchema = z.object({
+  fulfillmentType: z.enum(['PICKUP', 'DELIVERY']), addressId: z.string().optional(),
+  latitude: z.number().optional(), longitude: z.number().optional(), notes: z.string().optional(),
+  subtotal: z.number(), taxAmount: z.number(), serviceFee: z.number(), deliveryFee: z.number(),
+  deliveryDistanceKm: z.number().nullish(), promoDiscountAmount: z.number(), etaMs: z.number().nonnegative(),
+  items: z.array(z.object({ productId: z.string(), quantity: z.number().int().positive(), unitPrice: z.number(),
+    subtotal: z.number(), specialInstructions: z.string().nullish(), sellBy: z.enum(['UNIT', 'WEIGHT']), weightG: z.number().nullish(),
+    options: z.array(z.object({ id: z.string(), name: z.string(), price: z.number() })),
+  })).min(1),
+});
+
+async function nextDailyOrderNumber(tx: Prisma.TransactionClient, restaurantId: string): Promise<number> {
+  await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${`order-daily:${restaurantId}`}))::text`;
+  const startOfDay = new Date();
+  startOfDay.setHours(0, 0, 0, 0);
+  const last = await tx.order.aggregate({
+    where: { restaurantId, createdAt: { gte: startOfDay } },
+    _max: { dailyCounter: true },
+  });
+  return (last._max.dailyCounter ?? 0) + 1;
+}
+
+/** Convert an accredited reservation without charging or decrementing inventory again. */
+export async function finalizeVerifiedCustomerCheckout(prisma: PrismaClient, intentId: string) {
+  return prisma.$transaction(async tx => {
+    const claimed = await tx.checkoutPaymentIntent.updateMany({
+      where: { id: intentId, state: 'VERIFIED', providerOrderId: { not: null } }, data: { state: 'ORDER_CREATED' },
+    });
+    const clientOrderKey = `mp:${intentId}`;
+    if (!claimed.count) {
+      const intent = await tx.checkoutPaymentIntent.findUnique({ where: { id: intentId } });
+      if (intent?.state !== 'ORDER_CREATED') throw new AppError(409, 'PAYMENT_NOT_VERIFIED', 'El pago aún no está verificado.');
+      return { order: await tx.order.findUniqueOrThrow({ where: { clientOrderKey }, select: customerCreatedOrderSelect }), isDuplicate: true };
+    }
+    const intent = await tx.checkoutPaymentIntent.findUniqueOrThrow({ where: { id: intentId } });
+    const { items, etaMs, ...snapshot } = paidSnapshotSchema.parse(intent.snapshot);
+    const estimatedDeliveryTime = new Date(Date.now() + etaMs);
+    const dailyCounter = await nextDailyOrderNumber(tx, intent.restaurantId);
+    const order = await tx.order.create({
+      data: {
+        ...snapshot, restaurantId: intent.restaurantId, customerId: intent.customerId,
+        orderReference: generateOrderReference(), dailyCounter, clientOrderKey, totalAmount: intent.amountCents / 100,
+        status: OrderStatus.PENDING, paymentMethod: PaymentMethod.CREDIT_CARD, paymentStatus: PaymentStatus.COMPLETED,
+        estimatedDeliveryTime, pickupReadyAt: snapshot.fulfillmentType === 'PICKUP' ? estimatedDeliveryTime : null,
+        items: { create: items.map(({ options, ...item }) => ({ ...item,
+          options: { create: options.map(({ id, name, price }) => ({ optionId: id, name, price })) },
+        })) },
+        tracking: { create: [{ status: OrderStatus.PENDING, notes: 'Pago en línea acreditado.' }, { status: OrderStatus.PENDING, notes: ORDER_DECISION_ELIGIBLE }] },
+      },
+      select: customerCreatedOrderSelect,
+    });
+    await tx.kitchenOrderOutbox.create({
+      data: { orderId: order.id, restaurantId: intent.restaurantId, orderCreatedAt: order.createdAt },
+    });
+    await tx.customer.update({ where: { id: intent.customerId }, data: { totalOrders: { increment: 1 } } });
+    return { order, isDuplicate: false };
+  });
+}
+
+export async function createOrderForCustomer(params: OrderServiceParams) {
+  const result = await processCustomerOrder(params);
+  if (!result.order) throw new Error('Unexpected checkout reservation');
+  return { order: result.order, isDuplicate: result.isDuplicate };
+}
+
+/** Internal card checkout; no provider call or operational order is created here. */
+export async function reserveCustomerCardCheckout(params: OrderServiceParams, requestKey: string) {
+  if (!/^[\w-]{16,128}$/.test(requestKey)) throw new AppError(400, 'INVALID_CHECKOUT_KEY', 'Clave de pago inválida.');
+  if (params.input.loyalty || params.input.promoCode) throw new AppError(400, 'CARD_REWARD_NOT_SUPPORTED', 'La prueba de pago con tarjeta no admite cupones ni recompensas.');
+  const input = { ...params.input, paymentMethod: PaymentMethod.CREDIT_CARD, clientOrderKey: undefined, paymentProofUrl: undefined };
+  const result = await processCustomerOrder({ ...params, input }, requestKey);
+  if (!('intent' in result) || !result.intent) throw new Error('Expected checkout reservation');
+  return result.intent;
+}
+
+async function processCustomerOrder({
   prisma,
   customerUserId,
   input,
   requestHeaders: _requestHeaders,
-}: CreateOrderParams & { requestHeaders?: any }) {
+}: OrderServiceParams, reservationKey?: string) {
   assertRestaurantId(input.restaurantId);
   logger.info('Creating order for customer', {
     customerUserId,
@@ -243,6 +323,19 @@ export async function createOrderForCustomer({
       'ACCOUNT_SUSPENDED',
       'Tu cuenta ha sido suspendida. Contacta a soporte.'
     );
+  }
+
+  const reservationFingerprint = reservationKey ? checkoutRequestFingerprint(input as unknown as Record<string, unknown>) : undefined;
+  if (reservationKey) {
+    const existing = await prisma.checkoutPaymentIntent.findUnique({
+      where: { customerId_requestKey: { customerId: customer.id, requestKey: reservationKey } },
+    });
+    if (existing) {
+      if (existing.restaurantId !== input.restaurantId || existing.fingerprint !== reservationFingerprint) {
+        throw new AppError(409, 'CHECKOUT_KEY_CONFLICT', 'El intento corresponde a otro carrito.');
+      }
+      return { intent: existing };
+    }
   }
 
   // Idempotencia: si el cliente reintenta con la misma clientOrderKey (red caída,
@@ -280,6 +373,16 @@ export async function createOrderForCustomer({
 
   if (!restaurant) {
     throw new AppError(404, 'RESTAURANT_NOT_FOUND', 'No se encontro el restaurante.');
+  }
+
+  // Bank-transfer checkout is retired for new orders. Keep the enum and legacy
+  // rendering paths so existing historical orders remain readable.
+  if (input.paymentMethod === PaymentMethod.TRANSFER) {
+    throw new AppError(400, 'PAYMENT_METHOD_RETIRED', 'La transferencia ya no está disponible. Elige efectivo o tarjeta.');
+  }
+
+  if (input.paymentMethod === PaymentMethod.CREDIT_CARD && !restaurant.acceptsCard) {
+    throw new AppError(409, 'CARD_NOT_ACCEPTED', 'Este restaurante no acepta pagos con tarjeta.');
   }
 
   const regionConfig = await prisma.region.findUnique({
@@ -397,7 +500,7 @@ export async function createOrderForCustomer({
             parseFloat(String(process.env.DELIVERY_RADIUS_BUFFER_KM || '0.1')) || 0.1;
           const allowedRadius = maxRadius + bufferKm;
 
-          if (distanceKm > allowedRadius) {
+          if (input.paymentMethod === PaymentMethod.CASH && distanceKm > allowedRadius) {
             logger.warn('Order rejected: OUT_OF_DELIVERY_RANGE', {
               restaurantId: restaurant.id,
               customerUserId,
@@ -412,7 +515,7 @@ export async function createOrderForCustomer({
             throw new AppError(
               400,
               'OUT_OF_DELIVERY_RANGE',
-              `La dirección está fuera del radio de entrega del restaurante (distancia: ${distanceKm.toFixed(2)} km, radio: ${maxRadius} km).`
+              `El pago en efectivo no está disponible: la dirección está fuera del radio de entrega (distancia: ${distanceKm.toFixed(2)} km, radio: ${maxRadius} km). Usa tarjeta si el restaurante la tiene habilitada.`
             );
           }
         }
@@ -808,16 +911,16 @@ export async function createOrderForCustomer({
     throw new AppError(
       400,
       'CASH_LIMIT_EXCEEDED',
-      `Los pedidos mayores a $${maxCashAmount} no se pueden pagar en efectivo. Por favor usa transferencia.`
+      `Los pedidos mayores a $${maxCashAmount} no se pueden pagar en efectivo. Elige tarjeta si está disponible.`
     );
   }
 
-  // El restaurante puede no aceptar pagos en efectivo (solo transferencia).
+  // El restaurante puede deshabilitar el efectivo.
   if (input.paymentMethod === PaymentMethod.CASH && restaurant.acceptsCash === false) {
     throw new AppError(
       400,
       'CASH_NOT_ACCEPTED',
-      'Este restaurante no acepta pagos en efectivo. Por favor usa transferencia.'
+      'Este restaurante no acepta pagos en efectivo. Elige tarjeta si está disponible.'
     );
   }
 
@@ -907,20 +1010,6 @@ export async function createOrderForCustomer({
           'Ya tienes 2 pedidos en proceso. Espera a que alguno se entregue para realizar otro.'
         );
       }
-
-      const startOfDay = new Date();
-      startOfDay.setHours(0, 0, 0, 0);
-
-      const count = await tx.order.count({
-        where: {
-          restaurantId: restaurant.id,
-          createdAt: {
-            gte: startOfDay,
-          },
-        },
-      });
-
-      const dailyCounter = count + 1;
 
       let addressId: string | undefined;
       let latitude: number | undefined;
@@ -1020,6 +1109,42 @@ export async function createOrderForCustomer({
         longitude = input.deliveryAddress!.longitude;
       }
 
+      if (reservationKey && reservationFingerprint) {
+        const amountCents = moneyCents(finalTotal);
+        const existing = await tx.checkoutPaymentIntent.findUnique({ where: { customerId_requestKey: { customerId: customer.id, requestKey: reservationKey } } });
+        if (existing) {
+          if (existing.fingerprint !== reservationFingerprint || existing.restaurantId !== restaurant.id) throw new AppError(409, 'CHECKOUT_KEY_CONFLICT', 'El intento corresponde a otro carrito.');
+          return { intent: existing };
+        }
+        const pending = await tx.checkoutPaymentIntent.findFirst({ where: { customerId: customer.id, OR: [
+          { state: 'RESERVED', expiresAt: { gt: new Date() } }, { state: { in: ['SUBMITTING', 'VERIFIED'] } },
+        ] } });
+        if (pending) {
+          if (pending.state === 'RESERVED' && pending.restaurantId === restaurant.id && pending.fingerprint === reservationFingerprint && pending.amountCents === amountCents) {
+            return { intent: pending };
+          }
+          if (pending.state !== 'RESERVED' || !await expireReservedCheckoutPaymentInTransaction(tx, pending.id)) {
+            throw new AppError(409, 'CHECKOUT_ALREADY_ACTIVE', 'Ya hay un pago en curso. Espera a que confirmemos su resultado antes de intentarlo de nuevo.');
+          }
+        }
+        if (promoGift) throw new AppError(400, 'CARD_REWARD_NOT_SUPPORTED', 'La prueba de pago con tarjeta no admite regalos promocionales.');
+        const snapshot = JSON.parse(JSON.stringify({
+          items: itemsWithOptionsInfo.map(item => ({ ...item, title: productsById.get(item.productId)?.name })),
+          fulfillmentType: isPickup ? 'PICKUP' : 'DELIVERY',
+          addressId, latitude, longitude, notes: input.notes,
+          subtotal, taxAmount, serviceFee, deliveryFee, deliveryDistanceKm, promoDiscountAmount: finalPromoDiscount,
+          etaMs: Math.max(0, estimatedDeliveryTime.getTime() - Date.now()),
+        })) as Prisma.InputJsonObject;
+        const intent = await reserveCheckoutPaymentInTransaction(tx, {
+          customerId: customer.id, restaurantId: restaurant.id, requestKey: reservationKey, fingerprint: reservationFingerprint, amountCents, snapshot,
+          stock: input.items.flatMap(item => {
+            const product = productsById.get(item.productId);
+            return product?.trackStock && product.sellBy === 'UNIT' ? [{ productId: item.productId, quantity: item.quantity }] : [];
+          }),
+        });
+        return { intent };
+      }
+
       const pickupPin =
         isPickup && input.paymentMethod === PaymentMethod.TRANSFER
           ? String(Math.floor(1000 + Math.random() * 9000))
@@ -1061,6 +1186,7 @@ export async function createOrderForCustomer({
         itemsWithOptionsInfo.push({ productId: promoGift.id, quantity: 1, unitPrice: 0, subtotal: 0, specialInstructions: `REGALO POR CUPÓN ${appliedPromoCode} · 1 unidad sin costo`, sellBy: 'UNIT', weightG: null, options: [] });
       }
 
+      const dailyCounter = await nextDailyOrderNumber(tx, restaurant.id);
       const order = await tx.order.create({
         data: {
           orderReference: generateOrderReference(),
@@ -1080,7 +1206,6 @@ export async function createOrderForCustomer({
           // Persisted legacy columns remain, but WingsLab does not charge operator commissions.
           platformFee: 0,
           driverPlatformFee: 0,
-          whatsappFee: 0,
           deliveryFee,
           deliveryDistanceKm,
           totalAmount: finalTotal,

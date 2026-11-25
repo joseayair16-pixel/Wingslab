@@ -98,6 +98,9 @@ export default function InstallAppButton() {
     setIosBrowser(/CriOS/i.test(ua) ? 'chrome' : 'safari');
 
     const onBeforeInstallPrompt = (event: Event) => {
+      // Intencional: sin preventDefault Chrome muestra su mini-infobar y el
+      // evento se consume una sola vez. Lo guardamos para lanzar prompt() desde
+      // el botón «Instalar» de la app (el aviso de Chrome es informativo).
       event.preventDefault();
       deferredPromptRef.current = event as BeforeInstallPromptEvent;
       setDeferredPrompt(event as BeforeInstallPromptEvent);

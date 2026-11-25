@@ -1,7 +1,7 @@
 'use client';
 import { CalendarDays, Check, Clock, Clock3, Copy, Pause, Play, Power, PackageCheck, ReceiptText, Users } from 'lucide-react';
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { isActiveOrderStatus, requestJson } from '@sadel/shared';
 
 function useRestaurantReport(apiBase: string, token: string, query: string) {
@@ -97,7 +97,8 @@ export const DashboardSection = React.memo(function DashboardSection({
     return Array.from({ length: 7 }, (_, offset) => {
       const start = new Date(anchor); start.setUTCDate(start.getUTCDate() - offset * 7);
       const end = new Date(start); end.setUTCDate(end.getUTCDate() + 6);
-      return { offset, label: `${offset === 0 ? 'Esta semana' : offset === 1 ? 'Semana pasada' : `Hace ${offset} semanas`} · ${format.format(start)} – ${format.format(end)}` };
+      const label = offset === 0 ? 'Esta semana' : offset === 1 ? 'Semana pasada' : `Hace ${offset} semanas`;
+      return { offset, label: `${label} · ${format.format(start)} – ${format.format(end)}`, shortLabel: label, range: `${format.format(start)} – ${format.format(end)}` };
     });
   }, [mexicoToday]);
   const dayLabel = useMemo(() => {
@@ -124,7 +125,7 @@ export const DashboardSection = React.memo(function DashboardSection({
   return (
     <div className="wl-dashboard">
       <section className="wl-dash-hero" aria-labelledby="wl-dashboard-title">
-        <div><p className="wl-dash-eyebrow">Panel del restaurante</p><h1 id="wl-dashboard-title">{restaurantName}</h1><div className="wl-dash-status"><span className={`wl-dash-status-dot ${profile?.status === 'ACTIVE' && isBusinessOpen && isWithinHours && !isBusinessPaused ? 'is-open' : ''}`} />{operationalStatusLabel}{profile?.autoOpenEnabled && <span className="wl-dash-auto">· Apertura automática</span>}</div></div>
+        <div><p className="wl-dash-eyebrow">Estado del negocio</p><h2 id="wl-dashboard-title">{restaurantName}</h2><div className="wl-dash-status"><span className={`wl-dash-status-dot ${profile?.status === 'ACTIVE' && isBusinessOpen && isWithinHours && !isBusinessPaused ? 'is-open' : ''}`} />{operationalStatusLabel}{profile?.autoOpenEnabled && <span className="wl-dash-auto">· Apertura automática</span>}</div></div>
         {profile?.status === 'ACTIVE' && <div className="wl-dash-actions"><button type="button" onClick={async () => { const origin = getCustomerOrigin(); if (!origin) { onPushToast('error', 'No configurado', 'No hay una URL de tienda configurada.'); return; } try { await navigator.clipboard.writeText(`${origin}/restaurantes/${profile.id}`); setCopyCount(count => count + 1); } catch { setCopyCount(0); onPushToast('error', 'Error', 'No se pudo copiar el enlace.'); } }}>{copyCount ? <Check aria-hidden="true" /> : <Copy aria-hidden="true" />} <span aria-live="polite">{copyCount ? 'Copiado' : 'Copiar enlace'}</span></button><button type="button" onClick={onTogglePause} disabled={updatingOperationalStatus || !isBusinessOpen}>{isBusinessPaused ? <Play aria-hidden="true" /> : <Pause aria-hidden="true" />} {isBusinessPaused ? 'Reanudar pedidos' : 'Pausar pedidos'}</button><button type="button" className="wl-dash-action-strong" onClick={onToggleOperational} disabled={updatingOperationalStatus}><Power aria-hidden="true" /> {isBusinessOpen ? 'Cerrar negocio' : 'Abrir negocio'}</button></div>}
       </section>
       {wasAutoPausedByInactivity && <div className="wl-dash-alert"><div><strong>El negocio se cerró por inactividad</strong><p>Un pedido no se respondió a tiempo. Cuando estés listo, vuelve a abrir tu negocio.</p></div><button type="button" disabled={updatingOperationalStatus} onClick={onToggleOperational}>Reabrir negocio</button></div>}
@@ -137,16 +138,16 @@ export const DashboardSection = React.memo(function DashboardSection({
         </div>
         {todayError ? <div className="wl-dash-report-error" role="alert"><span>{todayError}</span><button type="button" onClick={retryToday}>Reintentar</button></div> : !today || todayLoading ? <p role="status" className="wl-dash-report-state">Cargando ventas del día…</p> : <><div className="wl-dash-today-grid"><article><span>Importe vendido</span><strong>{formatCurrency(today.sales.net)}</strong></article><article><span>Pedidos completados</span><strong>{today.sales.completedOrders}</strong></article><article><span>Ticket promedio</span><strong>{formatCurrency(today.sales.averageTicket)}</strong></article></div><p className="wl-dash-today-note">Total de pedidos completados; no descuenta costos ni representa ganancia.</p></>}
       </section>
+        <section className="wl-dash-panel wl-dash-stats-panel" aria-busy={reportLoading} aria-label="Indicadores de la semana seleccionada"><p className="wl-dash-stats-label">Indicadores · {weekOptions.find(option => option.offset === weekOffset)?.label || "Semana seleccionada"}</p>{!report ? <p className="wl-dash-report-state">{reportError ? 'No se pudieron cargar los indicadores.' : 'Cargando indicadores…'}</p> : <div className="wl-dash-metrics"><article><PackageCheck aria-hidden="true" /><span>Pedidos completados</span><strong>{report.sales.completedOrders}</strong><small>Entregados o recogidos</small></article><article><ReceiptText aria-hidden="true" /><span>Ticket promedio</span><strong>{formatCurrency(report.sales.averageTicket)}</strong><small>Por pedido completado</small></article><article><Users aria-hidden="true" /><span>Compradores</span><strong>{report.customers.uniqueBuyers}</strong><small>Clientes con compras completadas</small></article><article><Clock3 aria-hidden="true" /><span>Inicio de preparación</span><strong>{report.operations.averagePreparationMinutes === null ? '—' : `${report.operations.averagePreparationMinutes} min`}</strong><small>Tiempo promedio desde el pedido</small></article></div>}</section>
       <section className="wl-dash-panel" aria-labelledby="wl-live-title"><div className="wl-dash-panel-heading"><div><p className="wl-dash-eyebrow">Operación en vivo</p><h2 id="wl-live-title">Pedidos en curso</h2><p>Consulta y atiende los pedidos de cada etapa.</p></div><span className="wl-dash-live">{activeOrders.length} {activeOrders.length === 1 ? 'pedido activo' : 'pedidos activos'}</span></div><div className="wl-dash-columns">{columns.map(column => <OrderColumn key={column.title} {...column} onSelectOrder={onSelectOrderForTicket} onSelectOrderChat={(order: any) => { onSetActiveTicketTab('chat'); onSelectOrderForTicket(order); }} onPrintTicket={onPrintTicket} isPrintingTicket={isPrintingTicket} unreadMessagesMap={unreadMessagesMap} formatCurrency={formatCurrency} formatDate={formatDate} profile={profile} getRestaurantCollectionAmount={getRestaurantCollectionAmount} kitchenClockNow={kitchenClockNow} onSelectOrderForEtaExtension={onSelectOrderForEtaExtension} getPreparationRemainingMs={getPreparationRemainingMs} isPreparationTimeUrgent={isPreparationTimeUrgent} />)}</div></section>
       <section className="wl-dash-results" aria-labelledby="business-report-title">
-        <div className="wl-dash-panel wl-dash-sales"><div className="wl-dash-panel-heading"><div><p className="wl-dash-eyebrow">Resultados del negocio</p><h2 id="business-report-title">Resumen de ventas</h2><p>Pedidos creados en la semana y completados · Ciudad de México.</p></div><label className="wl-dash-period">Semana<select value={weekOffset} onChange={event => setWeekOffset(Number(event.target.value))}>{weekOptions.map(option => <option key={option.offset} value={option.offset}>{option.label}</option>)}</select></label></div>
+        <div className="wl-dash-panel wl-dash-sales"><div className="wl-dash-panel-heading"><div><p className="wl-dash-eyebrow">Resultados del negocio</p><h2 id="business-report-title">Resumen de ventas</h2><p>Pedidos creados en la semana y completados · Ciudad de México.</p></div><label className="wl-dash-period wl-dash-week-selector"><span className="sr-only">Seleccionar semana</span><select value={weekOffset} onChange={event => setWeekOffset(Number(event.target.value))}>{weekOptions.map(option => <option key={option.offset} value={option.offset}>{option.shortLabel}</option>)}</select><span className="wl-dash-week-range">{weekOptions.find(option => option.offset === weekOffset)?.range}</span></label></div>
           {reportError && <div role="alert" className="wl-dash-report-error"><span>{reportError}{report ? ' Se muestran los datos del periodo anterior.' : ''}</span><button type="button" onClick={retryReport}>Reintentar</button></div>}
           {report && <p role="status" className="wl-dash-updating">{reportLoading ? 'Actualizando resultados; se muestran los datos del periodo anterior…' : ''}</p>}
           {!report ? !reportError && <p role="status" className="wl-dash-report-state">Cargando resultados…</p> : <div className="wl-dash-sales-layout" aria-busy={reportLoading}><div className="wl-dash-sales-total"><span>Ventas completadas</span><strong>{formatCurrency(report.sales.net)}</strong><small>Importe total de pedidos completados; no es ganancia neta.</small></div><SalesTrend points={report.salesTrend} formatCurrency={formatCurrency} /></div>}
         </div>
-        <div className="wl-dash-panel wl-dash-stats-panel" aria-busy={reportLoading}>{!report ? <p className="wl-dash-report-state">{reportError ? 'No se pudieron cargar los indicadores.' : 'Cargando indicadores…'}</p> : <div className="wl-dash-metrics"><article><PackageCheck aria-hidden="true" /><span>Pedidos completados</span><strong>{report.sales.completedOrders}</strong><small>Entregados o recogidos</small></article><article><ReceiptText aria-hidden="true" /><span>Ticket promedio</span><strong>{formatCurrency(report.sales.averageTicket)}</strong><small>Por pedido completado</small></article><article><Users aria-hidden="true" /><span>Compradores</span><strong>{report.customers.uniqueBuyers}</strong><small>Clientes con compras completadas</small></article><article><Clock3 aria-hidden="true" /><span>Inicio de preparación</span><strong>{report.operations.averagePreparationMinutes === null ? '—' : `${report.operations.averagePreparationMinutes} min`}</strong><small>Tiempo promedio desde el pedido</small></article></div>}</div>
       </section>
-      {report && <div className="wl-dash-insight-panels"><section className="wl-dash-panel wl-dash-insight"><h2>Productos más vendidos</h2>{report.topProducts.length ? <ol>{report.topProducts.slice(0,5).map((product: any) => { const image = products.find((item: any) => item.id === product.productId)?.image; return <li key={product.productId}>{image ? <img src={image} alt="" loading="lazy" /> : <span className="wl-dash-product-placeholder" aria-hidden="true">◈</span>}<span>{product.name}</span><b>{product.units} uds.</b></li>; })}</ol> : <p>Aún no hay ventas completadas en este periodo.</p>}</section><section className="wl-dash-panel wl-dash-insight"><h2>Clientes y servicio</h2><dl><div><dt>Clientes nuevos</dt><dd>{report.customers.newBuyers}</dd></div><div><dt>Clientes recurrentes</dt><dd>{report.customers.repeatBuyers}</dd></div><div><dt>Tiempo hasta iniciar preparación</dt><dd>{report.operations.averagePreparationMinutes === null ? '—' : `${report.operations.averagePreparationMinutes} min`}</dd></div><div><dt>Tiempo de entrega</dt><dd>{report.operations.averageDeliveryMinutes === null ? '—' : `${report.operations.averageDeliveryMinutes} min`}</dd></div></dl></section></div>}
+      {report && <div className="wl-dash-insight-panels"><section className="wl-dash-panel wl-dash-insight"><h2>Productos más vendidos</h2>{report.topProducts.length ? <ol>{report.topProducts.slice(0,3).map((product: any) => { const image = products.find((item: any) => item.id === product.productId)?.image; return <li key={product.productId}>{image ? <img src={image} alt="" loading="lazy" /> : <span className="wl-dash-product-placeholder" aria-hidden="true">◈</span>}<span>{product.name}</span><b>{product.units} uds.</b></li>; })}</ol> : <p>Aún no hay ventas completadas en este periodo.</p>}</section><section className="wl-dash-panel wl-dash-insight"><h2>Clientes y servicio</h2><dl><div><dt>Clientes nuevos</dt><dd>{report.customers.newBuyers}</dd></div><div><dt>Clientes recurrentes</dt><dd>{report.customers.repeatBuyers}</dd></div><div><dt>Tiempo hasta iniciar preparación</dt><dd>{report.operations.averagePreparationMinutes === null ? '—' : `${report.operations.averagePreparationMinutes} min`}</dd></div><div><dt>Tiempo de entrega</dt><dd>{report.operations.averageDeliveryMinutes === null ? '—' : `${report.operations.averageDeliveryMinutes} min`}</dd></div></dl></section></div>}
       {report?.promotions.length > 0 && <details className="wl-dash-panel wl-dash-promotions"><summary>Cupones utilizados</summary><ul>{report.promotions.map((promo: any) => <li key={promo.code}><span>{promo.code} · {promo.uses} usos</span><b>{formatCurrency(promo.discount)}</b></li>)}</ul></details>}
     </div>
   );
@@ -154,15 +155,57 @@ export const DashboardSection = React.memo(function DashboardSection({
 
 type SalesTrendPoint = { from: string; to: string; sales: number; completedOrders: number };
 function SalesTrend({ points, formatCurrency }: { points?: SalesTrendPoint[]; formatCurrency: (amount: number) => string }) {
+  const [selectedFrom, setSelectedFrom] = useState<string | null>(null);
+  const detailId = useId();
+  const plotRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!selectedFrom) return;
+    const dismissOutside = (event: PointerEvent) => {
+      const target = event.target;
+      if (target instanceof Element && plotRef.current?.contains(target) && target.closest('.wl-dash-chart-point, .wl-dash-point-detail')) return;
+      setSelectedFrom(null);
+    };
+    document.addEventListener('pointerdown', dismissOutside, true);
+    return () => document.removeEventListener('pointerdown', dismissOutside, true);
+  }, [selectedFrom]);
   if (!Array.isArray(points) || !points.length) return <p className="wl-dash-chart-empty">La evolución de ventas no está disponible.</p>;
   const max = Math.max(0, ...points.map(point => point.sales));
   const floor = 116, top = 18, left = 20, width = 380;
   const coordinates = points.map((point, index) => ({ ...point, x: left + (index / Math.max(1, points.length - 1)) * width, y: max > 0 ? floor - (point.sales / max) * (floor - top) : floor }));
+  const selected = coordinates.find(point => point.from === selectedFrom);
   const line = coordinates.map(point => `${point.x},${point.y}`).join(' ');
   const area = `${left},${floor} ${line} ${left + width},${floor}`;
-  const shortDate = (value: string) => new Date(value).toLocaleDateString('es-MX', { day:'numeric', month:'short' });
-  const fullDate = (value: string) => new Date(value).toLocaleString('es-MX', { day:'numeric', month:'short', hour:'2-digit', minute:'2-digit' });
-  return <div className="wl-dash-chart"><div className="wl-dash-chart-top"><span>Evolución por intervalo</span><span>{max > 0 ? `Máximo ${formatCurrency(max)}` : 'Sin ventas en el periodo'}</span></div><svg viewBox="0 0 420 132" role="img" aria-label="Evolución de importes de pedidos completados por intervalo"><defs><linearGradient id="wl-dashboard-sales-gradient" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#f20d12" stopOpacity=".22" /><stop offset="100%" stopColor="#f20d12" stopOpacity="0" /></linearGradient></defs>{[18,51,83,116].map(y=><line key={y} x1={left} x2={left+width} y1={y} y2={y} className="wl-dash-chart-grid" />)}<polygon points={area} fill="url(#wl-dashboard-sales-gradient)" /><polyline points={line} fill="none" stroke="#e10b11" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />{coordinates.map((point,index)=><circle key={point.from} cx={point.x} cy={point.y} r="4" fill="#e10b11" stroke="var(--wl-admin-surface)" strokeWidth="2"><title>{`Intervalo ${index+1}: ${formatCurrency(point.sales)}`}</title></circle>)}</svg><div className="wl-dash-chart-labels"><span>{shortDate(points[0].from)}</span><span>{shortDate(points[points.length-1].to)}</span></div><details className="wl-dash-chart-details"><summary>Ver datos de la gráfica</summary><div className="wl-dash-chart-table" role="table" aria-label="Ventas por intervalo">{points.map(point=><div key={point.from} role="row"><span role="cell">{fullDate(point.from)} – {fullDate(point.to)}</span><b role="cell">{formatCurrency(point.sales)} · {point.completedOrders} pedidos</b></div>)}</div></details></div>;
+  const fullDate = (value: string) => new Date(value).toLocaleString('es-MX', { timeZone:'America/Mexico_City', day:'numeric', month:'short', hour:'2-digit', minute:'2-digit' });
+  const weekday = (value: string, style: 'long' | 'short') => new Intl.DateTimeFormat('es-MX', { timeZone:'America/Mexico_City', weekday:style }).format(new Date(value));
+  return <div className="wl-dash-chart">
+    <div className="wl-dash-chart-top"><span>Ventas por día</span><span>{max > 0 ? `Máximo ${formatCurrency(max)}` : 'Sin ventas en el periodo'}</span></div>
+    <div className="wl-dash-chart-plot">
+      <div ref={plotRef} className="wl-dash-chart-interactive" onKeyDown={event => { if (event.key === 'Escape') setSelectedFrom(null); }}>
+      <svg viewBox="0 0 420 132" role="img" aria-label="Evolución diaria de importes de pedidos completados">
+        <defs><linearGradient id="wl-dashboard-sales-gradient" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#f20d12" stopOpacity=".22" /><stop offset="100%" stopColor="#f20d12" stopOpacity="0" /></linearGradient></defs>
+        {[18,51,83,116].map(y => <line key={y} x1={left} x2={left+width} y1={y} y2={y} className="wl-dash-chart-grid" />)}
+        <polygon points={area} fill="url(#wl-dashboard-sales-gradient)" />
+        <polyline points={line} fill="none" stroke="#e10b11" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+        {coordinates.map(point => <circle key={point.from} cx={point.x} cy={point.y} r="4" fill="#e10b11" stroke="var(--wl-admin-surface)" strokeWidth="2" />)}
+      </svg>
+      {coordinates.map(point => <button key={point.from} type="button" className="wl-dash-chart-point"
+        style={{ left: `${point.x / 420 * 100}%`, top: `${point.y / 132 * 100}%` }}
+        aria-label={`Ver ventas del ${weekday(point.from, 'long')}`}
+        aria-pressed={selected?.from === point.from} aria-controls={detailId}
+        onClick={() => setSelectedFrom(current => current === point.from ? null : point.from)} />)}
+      <div id={detailId} aria-live="polite">
+        {selected && <div className={`wl-dash-point-detail${selected.x > 210 ? ' is-left' : ''}`} style={{ left: `${selected.x / 420 * 100}%`, top: `${selected.y / 132 * 100}%` }}>
+          <span>{new Intl.DateTimeFormat('es-MX', { timeZone: 'America/Mexico_City', weekday: 'long', day: 'numeric', month: 'long' }).format(new Date(selected.from))}</span>
+          <strong>{formatCurrency(selected.sales)}</strong>
+          <span>{selected.completedOrders} {selected.completedOrders === 1 ? 'pedido completado' : 'pedidos completados'}</span>
+        </div>}
+      </div>
+      </div>
+      <div className="wl-dash-weekdays" aria-hidden="true">{coordinates.map(point => <span key={point.from} style={{ left: `${point.x / 420 * 100}%` }}><span className="wl-dash-weekday-full">{weekday(point.from, 'long')}</span><span className="wl-dash-weekday-short">{weekday(point.from, 'short').replace('.', '')}</span></span>)}</div>
+    </div>
+    <details className="wl-dash-chart-details"><summary>Ver datos de la gráfica</summary><div className="wl-dash-chart-table" role="table" aria-label="Ventas por intervalo">{points.map(point => <div key={point.from} role="row"><span role="cell">{fullDate(point.from)} – {fullDate(point.to)}</span><b role="cell">{formatCurrency(point.sales)} · {point.completedOrders} {point.completedOrders === 1 ? 'pedido' : 'pedidos'}</b></div>)}</div></details>
+  </div>;
 }
 
 function MetricGlyph({ kind }: { kind: string }) {

@@ -10,6 +10,7 @@ import { logger } from './utils/logger';
 import type { FastifyInstance } from 'fastify';
 
 let fastify: FastifyInstance | null = null;
+let shuttingDown = false;
 
 async function startServer() {
   try {
@@ -31,7 +32,14 @@ async function startServer() {
 }
 
 async function shutdown(signal: string) {
+  if (shuttingDown) return;
+  shuttingDown = true;
   logger.info(`${signal} received, shutting down gracefully...`);
+  const deadline = setTimeout(() => {
+    logger.error('Graceful shutdown exceeded 10 seconds; exiting to unblock restart.');
+    process.exit(1);
+  }, 10_000);
+  deadline.unref();
 
   // 1. Stop accepting new connections
   if (fastify) {

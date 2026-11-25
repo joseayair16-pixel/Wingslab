@@ -1,17 +1,17 @@
 'use client';
 import { WINGSLAB_BUSINESS } from '@sadel/shared';
 import { getWingslabSocketUrl } from '@sadel/shared';
-import { AlertTriangle, ArrowLeft, Banknote, Bell, BellOff, Bike, Check, ChevronLeft, ChevronRight, ChevronUp, CircleCheck, CirclePlus, ClipboardCheck, Clock, Copy, DollarSign, Gift, Home, Landmark, Loader2, Mail, Map, MapPin, MessageCircle, Minus, Package, Plus, RefreshCw, Search, ShoppingBag, ShoppingCart, Store, Tag, Ticket, Trash2, Upload, User, X, ZoomIn, Flame, LayoutGrid, Drumstick, Sandwich, CupSoda, Utensils, MoreHorizontal, ReceiptText } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, Banknote, Bell, Bike, Check, ChevronLeft, ChevronRight, ChevronUp, CircleCheck, CirclePlus, ClipboardCheck, Clock, CreditCard, DollarSign, Gift, Home, Loader2, Mail, Map, MapPin, MessageCircle, Minus, Package, Plus, RefreshCw, Search, ShoppingBag, ShoppingCart, Store, Tag, Ticket, Trash2, User, X, ZoomIn, Flame, Drumstick, Sandwich, CupSoda, Utensils, MoreHorizontal, ReceiptText } from 'lucide-react';
 import officialWordmark from '../../../assets/wingslab-wordmark-red.png';
 import officialWhiteWordmark from '../../../assets/wingslab-wordmark.png';
 import { Hamburger } from 'lucide-react';
-import { CategoryIcon } from '../../../components/CategoryIcon';
+import { categoryAtScrollLine, categoryScrollLine } from '../../../lib/categoryScroll';
 import { CustomerNavigation } from '../../../components/CustomerNavigation';
 import { CartIcon } from '../../../components/CartIcon';
 
 import { use, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { AuthUser, clearStoredSession, readStoredSession, requestJson, submitReview, uploadMediaAsset, convertImageFileToDataUrl, getOrderStatusLabel, isRestaurant, ApiRequestError, isSessionInvalidError, handleSocketUnauthorized, setGlobalSessionExpiredHandler, forceSessionExpired, setDefaultRefreshConfig, formatCurrency as formatSharedCurrency } from '@sadel/shared';
+import { AuthUser, clearStoredSession, readStoredSession, requestJson, submitReview, getOrderStatusLabel, isRestaurant, ApiRequestError, isSessionInvalidError, handleSocketUnauthorized, setGlobalSessionExpiredHandler, forceSessionExpired, formatCurrency as formatSharedCurrency } from '@sadel/shared';
 import { MenuPromotions } from '../../../components/MenuPromotions';
 import { io } from 'socket.io-client';
 import { AuthModal } from '../../../components/AuthModal';
@@ -19,13 +19,17 @@ import { CompactActiveOrderBanner, computeDelayState, formatEstimatedArrivalMinu
 import { buildWeekSchedule, formatHour12, formatNextOpen, getCurrentShiftClose } from '../../../lib/operatingHours';
 import { completeOrderIntent, resolveOrderIntentKey } from '../../../lib/orderIntentKey';
 import { buildOrderAcceptedNotice } from '../../../lib/orderStatusNotices';
-import { ensureGoogleMapsScript, getGoogleMaps, isGoogleMapsUnavailable } from '../../../lib/googleMaps';
+import { ensureGoogleMapsScript, isGoogleMapsUnavailable } from '../../../lib/googleMaps';
 import RatingModal from '../../../components/RatingModal';
 import { useForegroundPolling } from '../../../hooks/useForegroundPolling';
 import CartDrawer from '../../../components/CartDrawer';
 import ImageZoomLightbox from '../../../components/ImageZoomLightbox';
+import { setCardCheckoutDraft } from '../../../lib/card-checkout-draft';
+import SavedCardSelector from '../../../components/SavedCardSelector';
+import type { SavedCard } from '../../../lib/savedCards';
 import { createPlacesSource, fetchSelectedPlaceFields } from '../../../lib/places';
 import type { ProductOptionGroup, PublicRestaurantDetail } from '../../../lib/public-menu-types';
+import type { MenuPromotion } from '../../../lib/menu-promotions';
 
 function weightInputGrams(input: string, unit: 'g' | 'kg'): number | null {
   const normalized = input.replace(',', '.');
@@ -39,7 +43,9 @@ function isValidWeightInput(input: string, unit: 'g' | 'kg', min: number, max: n
   return grams !== null && grams >= min && grams <= max;
 }
 
-type PaymentMethod = 'CASH' | 'TRANSFER';
+// Para pedidos nuevos solo se ofrecen CASH y CREDIT_CARD; TRANSFER se mantiene
+// en el tipo únicamente para poder renderizar pedidos históricos.
+type PaymentMethod = 'CASH' | 'CREDIT_CARD' | 'TRANSFER';
 type OrderStatus =
   | 'PENDING'
   | 'CONFIRMED'
@@ -51,7 +57,9 @@ type OrderStatus =
   | 'CANCELLED'
   | 'REJECTED';
 
-import { usePushNotifications } from '../../../hooks/usePushNotifications';
+import { canOfferCustomerWebPush, usePushNotifications } from '../../../hooks/usePushNotifications';
+import { PushActivationButton } from '../../../components/PushActivationButton';
+import { revokeCustomerPush } from '../../../lib/revokeCustomerPush';
 import { useCustomerSounds } from '../../../hooks/useCustomerSounds';
 import { ScheduleProposalModal } from '../../../components/ScheduleProposalModal';
 import { useCartStore, type CartItem } from '../../../store/cartStore';
@@ -225,25 +233,6 @@ const defaultApiBase = '/api';
 const storageKey = 'sadel.customer';
 const profileAddressStorageKey = `${storageKey}.profile-address`;
 
-// Wire transparent access-token refresh for every requestJson call in this app.
-if (typeof window !== 'undefined') {
-  setDefaultRefreshConfig({
-    refreshToken: () => readStoredSession(storageKey).refreshToken,
-    onRefreshed: (token, rt) => {
-      try {
-        window.localStorage.setItem(`${storageKey}.token`, token);
-        if (rt) window.localStorage.setItem(`${storageKey}.refreshToken`, rt);
-      } catch {
-        // ignore storage failures
-      }
-      // Sincronizar el token renovado con las vistas montadas (chat + llamadas
-      // API usan el estado React, no solo localStorage). Mismo patrón que
-      // 'order-updated'.
-      window.dispatchEvent(new CustomEvent<string>('sadel:token-refreshed', { detail: token }));
-    },
-    onRefreshFailed: () => forceSessionExpired(),
-  });
-}
 const persistentNoticeStorageKey = `${storageKey}.persistent-notice`;
 
 const defaultCheckoutForm: CheckoutForm = {
@@ -380,9 +369,11 @@ function CarouselOrGrid({
 export default function RestaurantPage({
   searchParams,
   initialRestaurant,
+  initialBanners,
 }: {
   searchParams?: Promise<{ [key: string]: string | string[] | undefined }>;
   initialRestaurant?: PublicRestaurantDetail | null;
+  initialBanners: MenuPromotion[];
 }) {
   // En Next 15+ params/searchParams son Promises en client components: se
   // 'desenvuelven' con use() (un solo resultado, estable entre renders).
@@ -393,7 +384,7 @@ export default function RestaurantPage({
   const [token, setToken] = useState('');
   const [isAuthReady, setIsAuthReady] = useState(false);
   const [sessionUser, setSessionUser] = useState<AuthUser | null>(null);
-  const { permission: pushPermission, subscribe: subscribePush } = usePushNotifications();
+  const { isSubscribed, subscribe: subscribePush } = usePushNotifications();
   const [isPushReminderModalOpen, setIsPushReminderModalOpen] = useState(false);
   const [showMaxCashModal, setShowMaxCashModal] = useState(false);
   const [showGpsCashModal, setShowGpsCashModal] = useState(false);
@@ -497,6 +488,7 @@ export default function RestaurantPage({
   const trackingOrderIdRef = useRef<string | null>(null);
   const [showAuthModal, setShowAuthModal] = useState(false);
   const handleLogout = useCallback(() => {
+    void revokeCustomerPush().catch(() => {});
     clearStoredSession(storageKey);
     setToken('');
     setSessionUser(null);
@@ -683,6 +675,9 @@ export default function RestaurantPage({
     if (cartImageSync.length) refreshCartItemImages(cartImageSync);
   }, [cartImageSync, refreshCartItemImages]);
   const [checkoutForm, setCheckoutForm] = useState<CheckoutForm>(defaultCheckoutForm);
+  const [selectedSavedCard, setSelectedSavedCard] = useState<SavedCard | null>(null);
+  const [savedCardsLoading, setSavedCardsLoading] = useState(false);
+  const handleSavedCardSelect = useCallback((card: SavedCard | null) => setSelectedSavedCard(card), []);
 
   // Si el restaurante solo acepta un método de pago, ajusta el seleccionado por
   // defecto para que el checkout siempre arranque con una opción válida.
@@ -690,7 +685,7 @@ export default function RestaurantPage({
     if (!rawRestaurant) return;
     const accepted = getAcceptedPaymentMethods(rawRestaurant);
     if (accepted.length === 1 && checkoutForm.paymentMethod !== accepted[0]) {
-      setCheckoutForm((current) => ({ ...current, paymentMethod: accepted[0] as 'CASH' | 'TRANSFER' }));
+      setCheckoutForm((current) => ({ ...current, paymentMethod: accepted[0] as PaymentMethod }));
     }
   }, [rawRestaurant, checkoutForm.paymentMethod]);
   const [promoCodeState, setPromoCodeState] = useState<'idle' | 'validating' | 'valid' | 'invalid'>('idle');
@@ -718,26 +713,7 @@ export default function RestaurantPage({
   }, []);
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(() => urlSearchParams?.checkout === 'true');
-  const [cartJustUpdated, setCartJustUpdated] = useState(false);
-  const [cartPulse, setCartPulse] = useState(false);
-  const [hideCartButton, setHideCartButton] = useState(false);
-
-  // Ocultar el botón flotante de carrito al llegar al fondo de la página para
-  // no tapar las redes sociales del footer; reaparece al hacer scroll hacia arriba.
-  useEffect(() => {
-    const handleScroll = () => {
-      const scrolledToBottom =
-        window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 80;
-      setHideCartButton(scrolledToBottom);
-    };
-    window.addEventListener('scroll', handleScroll, { passive: true });
-    handleScroll();
-    return () => window.removeEventListener('scroll', handleScroll);
-  }, []);
-  const [transferProofName, setTransferProofName] = useState('');
-  const [transferProofSource, setTransferProofSource] = useState('');
-  // Guía de errores: true cuando el usuario intentó confirmar y faltaba algo.
-  const [attemptedCheckout, setAttemptedCheckout] = useState(false);
+  const cardCheckoutRequestRef = useRef(0);
   const [showInstructions, setShowInstructions] = useState(() =>
     Boolean(checkoutForm.storeNotes || checkoutForm.notes)
   );
@@ -807,20 +783,11 @@ export default function RestaurantPage({
   // Latido del banner de pedido activo al crear un pedido (scroll + animación).
   const [orderCreatedPulse, setOrderCreatedPulse] = useState(false);
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
+  const activeCategoryRef = useRef<string | null>(null);
   const categoryNavRef = useRef<HTMLDivElement | null>(null);
-
-  // Auto-centrar la pestaña de categoría activa dentro del carrusel del
-  // header sticky: cubre tanto taps como el scroll-spy que marca categorías
-  // mientras el usuario recorre el menú.
-  useEffect(() => {
-    const nav = categoryNavRef.current;
-    if (!nav || !activeCategory) return;
-    const el = nav.querySelector<HTMLButtonElement>(`[data-category-id="${activeCategory}"]`);
-    if (!el) return;
-    requestAnimationFrame(() => {
-      el.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
-    });
-  }, [activeCategory]);
+  const categorySearchRef = useRef<HTMLDivElement | null>(null);
+  const categoryScrollTargetRef = useRef<string | null>(null);
+  const categoryScrollIdleRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [isRatingModalOpen, setIsRatingModalOpen] = useState(false);
   const [orderToRate, setOrderToRate] = useState<string | null>(null);
@@ -841,6 +808,15 @@ export default function RestaurantPage({
   const [locatingAddress, setLocatingAddress] = useState(false);
   const checkoutRef = useRef<HTMLDivElement | null>(null);
   const checkoutLayerRef = useRef<HTMLDivElement | null>(null);
+  const closeCheckout = useCallback(() => {
+    cardCheckoutRequestRef.current += 1;
+    const layer = checkoutLayerRef.current;
+    if (layer?.contains(document.activeElement)) {
+      if (cartButtonRef.current?.isConnected) cartButtonRef.current.focus({ preventScroll: true });
+      else if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+    }
+    setIsCheckoutOpen(false);
+  }, []);
   const checkoutMapRef = useRef<any>(null);
   const checkoutMarkerRef = useRef<any>(null);
   const [checkoutMapUnavailable, setCheckoutMapUnavailable] = useState(false);
@@ -918,23 +894,9 @@ export default function RestaurantPage({
 
   const [pickupReadyOrder, setPickupReadyOrder] = useState<CustomerOrderDetail | null>(null);
   const [scheduleProposalOrder, setScheduleProposalOrder] = useState<CustomerOrderDetail | null>(null);
-  const [copiedField, setCopiedField] = useState<'account' | 'beneficiary' | 'amount' | null>(null);
-
-  // Image preview modal for store products
-  const [previewProduct, setPreviewProduct] = useState<{
-    images: string[];
-    name: string;
-    description: string;
-    price: number;
-    discountPrice?: number | null;
-    promoType?: 'MULTI_BUY' | null;
-    promoBuyQuantity?: number | null;
-    promoPayQuantity?: number | null;
-    sellBy?: string;
-    unitPrice?: number | null;
-    id: string;
-    optionGroups?: ProductOptionGroup[];
-  } | null>(null);
+  const [previewProduct, setPreviewProduct] = useState<(PublicRestaurantDetail['categories'][number]['products'][number] & { images: string[] }) | null>(null);
+  const previewDialogRef = useRef<HTMLDialogElement>(null);
+  const previewSuspendedRef = useRef(false);
   const [previewIndex, setPreviewIndex] = useState(0);
 
   // Product options / customization modal state
@@ -954,32 +916,19 @@ export default function RestaurantPage({
 
   const openProductPreview = (product: PublicRestaurantDetail['categories'][number]['products'][number]) => {
     const imgs = product.images?.length ? product.images : product.image ? [product.image] : [];
-    setPreviewProduct({
-      images: imgs,
-      name: product.name,
-      description: product.description,
-      price: product.price,
-      discountPrice: product.discountPrice,
-      promoType: product.promoType,
-      promoBuyQuantity: product.promoBuyQuantity,
-      promoPayQuantity: product.promoPayQuantity,
-      sellBy: product.sellBy,
-      unitPrice: product.unitPrice,
-      id: product.id,
-      optionGroups: product.optionGroups,
-    });
+    setPreviewProduct({ ...product, images: imgs });
     setPreviewIndex(0);
     setPreviewLightboxOpen(false);
   };
 
-  const handleCopyText = (text: string | undefined | null, field: 'account' | 'beneficiary' | 'amount') => {
-    if (!text) return;
-    void navigator.clipboard.writeText(text);
-    setCopiedField(field);
-    setTimeout(() => {
-      setCopiedField(null);
-    }, 1500);
-  };
+  useEffect(() => {
+    const dialog = previewDialogRef.current;
+    if (previewProduct && !customizingProduct && dialog && !dialog.open) dialog.showModal();
+  }, [previewProduct, customizingProduct]);
+
+  const currentPreviewProduct = previewProduct
+    ? restaurant?.categories.flatMap(category => category.products).find(product => product.id === previewProduct.id) ?? null
+    : null;
 
   const handlePullToRefresh = useCallback(() => {
     setIsRefreshing(true);
@@ -1265,7 +1214,9 @@ export default function RestaurantPage({
 
     let cancelled = false;
 
+    let loadRevision = 0;
     async function loadActiveOrders() {
+      const revision = ++loadRevision;
       try {
         const ordersPayload = await requestJson<PaginatedOrdersResponse>({
           apiBase,
@@ -1273,6 +1224,7 @@ export default function RestaurantPage({
           token,
           fallbackMessage: 'No se pudo cargar el pedido activo.',
         });
+        if (cancelled || revision !== loadRevision) return;
 
         const recentCreatedOrder = recentCreatedOrderRef.current;
         if (recentCreatedOrder) {
@@ -1361,7 +1313,7 @@ export default function RestaurantPage({
 
         const results = await Promise.all(promises);
 
-        if (!cancelled) {
+        if (!cancelled && revision === loadRevision) {
           setActiveOrderListItems(activeItems);
           const nextMap: Record<string, CustomerOrderDetail> = {};
           results.forEach((detail) => {
@@ -1387,10 +1339,7 @@ export default function RestaurantPage({
           }
         }
       } catch {
-        if (!cancelled) {
-          setActiveOrderListItems([]);
-          setActiveOrderDetailsMap({});
-        }
+        // Keep the last known state during transient failures; polling will retry.
       }
     }
 
@@ -1651,7 +1600,7 @@ export default function RestaurantPage({
           setTransientNotice({
             id: acceptedNotice.key,
             title: acceptedNotice.title,
-            description: acceptedNotice.description,
+            description: payload.status === 'PREPARING' ? 'El restaurante aceptó tu pedido y ya lo está preparando.' : acceptedNotice.description,
             tone: acceptedNotice.tone,
             orderId: acceptedNotice.orderId,
             orderReference: acceptedNotice.orderReference,
@@ -1785,20 +1734,13 @@ export default function RestaurantPage({
   }, [apiBase, sessionUser?.id, token]);
 
   useEffect(() => {
-    const layer = checkoutLayerRef.current;
-    if (!layer) return;
-    if (isCheckoutOpen) layer.removeAttribute('inert');
-    else layer.setAttribute('inert', '');
-  }, [isCheckoutOpen]);
-
-  useEffect(() => {
     if (!isCheckoutOpen || showMaxCashModal || showGpsCashModal || deliveryErrorModal || locationNotice || isPushReminderModalOpen) {
       return;
     }
 
     function handlePointerDown(event: MouseEvent) {
       if (!checkoutRef.current?.contains(event.target as Node)) {
-        setIsCheckoutOpen(false);
+        closeCheckout();
       }
     }
 
@@ -1806,7 +1748,7 @@ export default function RestaurantPage({
     return () => {
       document.removeEventListener('mousedown', handlePointerDown);
     };
-  }, [isCheckoutOpen, showMaxCashModal, showGpsCashModal, deliveryErrorModal, locationNotice, isPushReminderModalOpen]);
+  }, [closeCheckout, isCheckoutOpen, showMaxCashModal, showGpsCashModal, deliveryErrorModal, locationNotice, isPushReminderModalOpen]);
 
   useEffect(() => {
     if (locationNotice && locationNoticeRef.current && !locationNoticeRef.current.open) {
@@ -2018,14 +1960,14 @@ export default function RestaurantPage({
   }, [isCartOpen, isCheckoutOpen]);
 
   useEffect(() => {
-    if (!isCheckoutOpen || !rawRestaurant || cartItems.length === 0) return;
+    if (!rawRestaurant || cartItems.length === 0) return;
     const freshByProduct: Record<string, { price: number; discountPrice?: number | null; maxStock?: number | null }> = {};
     for (const category of rawRestaurant.categories) {
       for (const product of category.products) {
         freshByProduct[product.id] = {
           price: product.price,
           discountPrice: product.discountPrice ?? null,
-          maxStock: product.stock ?? null,
+          maxStock: product.trackStock ? (product.stock ?? 0) : null,
         };
       }
     }
@@ -2079,35 +2021,6 @@ export default function RestaurantPage({
       });
     }
   }, [activeOrder]);
-
-  useEffect(() => {
-    if (!cartJustUpdated) {
-      return;
-    }
-
-    const timeoutId = window.setTimeout(() => {
-      setCartJustUpdated(false);
-    }, 900);
-
-    return () => {
-      window.clearTimeout(timeoutId);
-    };
-  }, [cartJustUpdated]);
-
-  useEffect(() => {
-    if (!cart.length || isCartOpen) {
-      return;
-    }
-
-    const intervalId = window.setInterval(() => {
-      setCartPulse(true);
-      window.setTimeout(() => setCartPulse(false), 1200);
-    }, 5000);
-
-    return () => {
-      window.clearInterval(intervalId);
-    };
-  }, [cart.length, isCartOpen]);
 
   const cartSubtotal = useMemo(
     () => cart.reduce((sum, item) => {
@@ -2337,8 +2250,8 @@ export default function RestaurantPage({
   const loyaltyDiscount = loyaltyApplied ? (loyaltyQuote?.discountCents || 0) / 100 : 0;
   const orderTotal = Math.max(0, effectiveSubtotal - couponDiscount - minOrderDiscount - loyaltyDiscount + serviceFee + (fulfillmentType === 'PICKUP' ? 0 : deliveryFee));
   const checkoutValidationMessage = useMemo(() => {
-    return getCheckoutValidationMessage(checkoutForm, cart, restaurant, token, Boolean(transferProofSource), fulfillmentType);
-  }, [cart, checkoutForm, restaurant, token, transferProofSource, fulfillmentType]);
+    return getCheckoutValidationMessage(checkoutForm, cart, restaurant, token, fulfillmentType, promoCodeState === 'valid' || loyaltyApplied);
+  }, [cart, checkoutForm, restaurant, token, fulfillmentType, promoCodeState, loyaltyApplied]);
 
 function triggerHaptic(pattern: number | number[] = 10) {
   if (typeof window !== 'undefined' && navigator.vibrate) {
@@ -2456,7 +2369,6 @@ function ProductImage({
       sellBy: 'UNIT',
       maxStock: availability.tracked ? (product.stock ?? 0) : null,
     } as any, urlParams.restaurantId as string, restaurant?.serviceFee || 0, restaurant?.effectiveDeliveryFee || 0);
-    setCartJustUpdated(true);
     triggerHaptic(15); // Small vibration
   }
 
@@ -2523,7 +2435,6 @@ function ProductImage({
     setCustomizingProduct(null);
     setWeightLimitWarning(false);
     setWeightLimitPendingValue(0);
-    setCartJustUpdated(true);
     triggerHaptic(15);
   }
 
@@ -2570,34 +2481,102 @@ function ProductImage({
   };
 
   useEffect(() => {
-    if (!restaurant?.categories) return;
-    
-    // Initialize active category so the selector has an active tab on first load
-    if (!activeCategory || activeCategory === '__promotions__') {
-      setActiveCategory(restaurant.categories.find(category => category.id !== '__promotions__')?.id ?? null);
-    }
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((entry) => {
-          if (entry.isIntersecting) {
-            setActiveCategory(entry.target.id);
-          }
-        });
-      },
-      { rootMargin: '-80px 0px -60% 0px', threshold: 0 }
-    );
-
-    Object.values(categorySectionRefs.current).forEach((section) => {
-      if (section) observer.observe(section);
+    if (!restaurant?.categories || menuTab !== 'home' || productSearchQuery.trim()) return;
+    const header = document.querySelector<HTMLElement>('.wl-header');
+    const nav = categoryNavRef.current;
+    if (!nav) return;
+    const search = categorySearchRef.current;
+    const list = nav.querySelector<HTMLElement>('.wl-category-scroll');
+    let frame = 0;
+    let sections: Array<{ id: string; top: number }> = [];
+    let line = 0;
+    let viewportHeight = 0;
+    let pageHeight = 0;
+    let needsMeasure = true;
+    const elements = restaurant.categories.flatMap(({ id }) => {
+      const element = categorySectionRefs.current[id];
+      return element && id !== '__promotions__' ? [{ id, element }] : [];
     });
-
-    return () => observer.disconnect();
+    const measure = (scrollY: number) => {
+      const headerHeight = header?.getBoundingClientRect().height ?? 68;
+      const searchHeight = search?.getBoundingClientRect().height ?? 0;
+      search?.style.setProperty('--wl-search-header-offset', `${headerHeight}px`);
+      nav.style.setProperty('--wl-category-header-offset', `${headerHeight + searchHeight}px`);
+      viewportHeight = window.innerHeight;
+      pageHeight = document.documentElement.scrollHeight;
+      line = categoryScrollLine(headerHeight + searchHeight, nav.getBoundingClientRect().height, viewportHeight);
+      sections = elements.flatMap(({ id, element }) => {
+        const rect = element.getBoundingClientRect();
+        return rect.height ? [{ id, top: rect.top + scrollY }] : [];
+      });
+      needsMeasure = false;
+    };
+    const update = () => {
+      frame = 0;
+      const scrollY = window.scrollY;
+      if (needsMeasure) measure(scrollY);
+      const headerBottom = header?.getBoundingClientRect().bottom ?? 0;
+      const searchRect = search?.getBoundingClientRect();
+      const navRect = nav.getBoundingClientRect();
+      const joined = Boolean(searchRect && Math.abs(searchRect.top - headerBottom) <= 2 && Math.abs(navRect.top - searchRect.bottom) <= 2);
+      search?.classList.toggle('is-joined', joined);
+      nav.classList.toggle('is-joined', joined);
+      header?.classList.toggle('wl-controls-joined', joined);
+      if (categoryScrollTargetRef.current) return;
+      const last = sections[sections.length - 1];
+      const viewportEnd = scrollY + viewportHeight;
+      const next = viewportEnd >= pageHeight - 2 && last && last.top < viewportEnd ? last.id : categoryAtScrollLine(sections, scrollY + line);
+      if (next !== activeCategoryRef.current) {
+        activeCategoryRef.current = next;
+        setActiveCategory(next);
+        revealActive();
+      }
+    };
+    const schedule = () => { if (!frame) frame = requestAnimationFrame(update); };
+    const invalidate = () => { needsMeasure = true; schedule(); };
+    const revealActive = () => {
+      if (!list || categoryScrollTargetRef.current) return;
+      const button = Array.from(list.querySelectorAll<HTMLButtonElement>('[data-category-id]'))
+        .find(element => element.dataset.categoryId === activeCategoryRef.current);
+      if (!button) return;
+      const viewport = list.getBoundingClientRect();
+      const item = button.getBoundingClientRect();
+      const delta = item.left < viewport.left ? item.left - viewport.left : item.right > viewport.right ? item.right - viewport.right : 0;
+      if (Math.abs(delta) > 1) list.scrollBy({ left: delta, behavior: 'instant' });
+    };
+    const clearPending = () => {
+      categoryScrollTargetRef.current = null;
+      if (categoryScrollIdleRef.current) clearTimeout(categoryScrollIdleRef.current);
+      categoryScrollIdleRef.current = null;
+    };
+    const onScroll = () => {
+      if (categoryScrollTargetRef.current) {
+        // Wait for the actual end of smooth scrolling rather than a fixed
+        // travel time or the moment the target passes the tracking line.
+        if (categoryScrollIdleRef.current) clearTimeout(categoryScrollIdleRef.current);
+        categoryScrollIdleRef.current = setTimeout(clearPending, 180);
+      }
+      schedule();
+    };
+    const onManualScroll = () => { clearPending(); schedule(); };
+    const resizeObserver = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(invalidate);
+    if (header) resizeObserver?.observe(header);
+    if (search) resizeObserver?.observe(search);
+    resizeObserver?.observe(nav);
+    resizeObserver?.observe(document.body);
+    for (const { element } of elements) resizeObserver?.observe(element);
+    window.addEventListener('scroll', onScroll, { passive: true });
+    window.addEventListener('wheel', onManualScroll, { passive: true });
+    window.addEventListener('touchstart', onManualScroll, { passive: true });
+    window.addEventListener('resize', invalidate);
+    schedule();
+    return () => { window.removeEventListener('scroll', onScroll); window.removeEventListener('wheel', onManualScroll); window.removeEventListener('touchstart', onManualScroll); window.removeEventListener('resize', invalidate); resizeObserver?.disconnect(); clearPending(); if (frame) cancelAnimationFrame(frame); search?.classList.remove('is-joined'); nav.classList.remove('is-joined'); header?.classList.remove('wl-controls-joined'); };
   }, [restaurant, menuTab, productSearchQuery]);
 
   function goHome() {
     setMenuTab('home');
     setProductSearchQuery('');
+    activeCategoryRef.current = null;
     setActiveCategory(null);
     if (window.location.hash) {
       window.history.replaceState(null, '', window.location.pathname + window.location.search);
@@ -2606,21 +2585,32 @@ function ProductImage({
   }
 
   function scrollToCategory(categoryId: string) {
-    setActiveCategory(categoryId);
     const target = categorySectionRefs.current[categoryId];
 
     if (!target) {
       return;
     }
 
+    activeCategoryRef.current = categoryId;
+    setActiveCategory(categoryId);
+
     const stickyHeight = (document.querySelector('.wl-header')?.getBoundingClientRect().height ?? 68)
-      + (document.querySelector('.wl-menu-search-sticky')?.getBoundingClientRect().height ?? 0);
+      + (categorySearchRef.current?.getBoundingClientRect().height ?? 0)
+      + (categoryNavRef.current?.getBoundingClientRect().height ?? 0);
 
     const targetPosition = target.getBoundingClientRect().top + window.scrollY - stickyHeight;
+    categoryScrollTargetRef.current = categoryId;
+    if (categoryScrollIdleRef.current) clearTimeout(categoryScrollIdleRef.current);
+    // Also clear the guard if the destination is already in place and the
+    // browser therefore emits no scroll event.
+    categoryScrollIdleRef.current = setTimeout(() => {
+      categoryScrollTargetRef.current = null;
+      categoryScrollIdleRef.current = null;
+    }, 180);
 
     window.scrollTo({
       top: targetPosition,
-      behavior: 'smooth',
+      behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth',
     });
   }
 
@@ -2722,7 +2712,7 @@ function ProductImage({
         }));
 
         try {
-            const google = getGoogleMaps();
+            const google = await ensureGoogleMapsScript();
             if (!google) throw new Error("Google Maps not loaded");
 
             const geocoder = new google.maps.Geocoder();
@@ -2948,6 +2938,87 @@ function ProductImage({
     }, 100);
   }
 
+  // This public flag is injected only by the explicit local sandbox config.
+  // The backend independently enforces its private sandbox charge gate.
+  const cardEnabled = process.env.NEXT_PUBLIC_WINGSLAB_MP_SANDBOX === 'true' && getAcceptedPaymentMethods(restaurant).includes('CREDIT_CARD');
+
+  async function startCardCheckout() {
+    if (!cardEnabled || !token || !sessionUser?.id) return;
+    if (promoCodeState === 'valid' || loyaltyApplied) {
+      setError('Para pagar con tarjeta, quita el cupón o la recompensa aplicados. Solo están disponibles con efectivo.');
+      return;
+    }
+    const request = ++cardCheckoutRequestRef.current;
+    setError('');
+    const form = applyDeliveryPreset(checkoutForm, deliveryPreset);
+
+    // Con tarjeta el GPS es best-effort: un permiso denegado o un error del
+    // dispositivo no bloquea el pago (las restricciones de ubicación son solo
+    // para efectivo).
+    let location: Awaited<ReturnType<typeof getCurrentOrderLocation>> | null = null;
+    try {
+      location = await getCurrentOrderLocation();
+    } catch {
+      // El cobro continúa sin coordenadas actuales.
+    }
+    if (request !== cardCheckoutRequestRef.current) return;
+
+    if (fulfillmentType !== 'PICKUP') {
+      // La dirección debe existir en el backend. La verificación usa las
+      // coordenadas de la dirección, no el GPS del dispositivo.
+      try {
+        await requestJson<{ success: boolean; data: any }>({
+          apiBase,
+          path: '/customer/addresses/verify',
+          token,
+          options: {
+            method: 'POST',
+            body: JSON.stringify({
+              street: form.street.trim(), number: form.number.trim(),
+              neighborhood: form.neighborhood.trim(), city: form.city.trim(),
+              state: form.state.trim(), zipCode: form.zipCode.trim(), country: form.country.trim(),
+              ...(form.reference.trim() ? { reference: form.reference.trim() } : {}),
+              latitude: parseFloat(form.latitude), longitude: parseFloat(form.longitude),
+            }),
+          },
+          fallbackMessage: 'No se pudo verificar la dirección de entrega.',
+        });
+      } catch {
+        // La reserva puede crear la dirección; no exigimos GPS para tarjeta.
+      }
+    }
+    if (request !== cardCheckoutRequestRef.current) return;
+
+    const body: Record<string, unknown> = {
+      items: cart.map(item => ({
+        productId: item.productId,
+        quantity: item.quantity,
+        ...(item.specialInstructions.trim() ? { specialInstructions: item.specialInstructions.trim() } : {}),
+        optionIds: (item.selectedOptions || []).map(o => o.id),
+        sellBy: item.sellBy || 'UNIT',
+        ...(item.sellBy === 'WEIGHT' && item.weightG ? { weightG: item.weightG } : {}),
+      })),
+      fulfillmentType,
+      paymentMethod: 'CREDIT_CARD',
+      locationVerified: !!location,
+      ...(location ? { currentLocation: location } : {}),
+      ...(form.storeNotes.trim() || form.notes.trim()
+        ? { notes: [form.storeNotes.trim() ? `Tienda: ${form.storeNotes.trim()}` : '', fulfillmentType !== 'PICKUP' && form.notes.trim() ? `Repartedor: ${form.notes.trim()}` : ''].filter(Boolean).join('\n') }
+        : {}),
+      ...(fulfillmentType !== 'PICKUP' ? {
+        deliveryAddress: {
+          street: form.street.trim(), number: form.number.trim(), neighborhood: form.neighborhood.trim(),
+          city: form.city.trim(), state: form.state.trim(), zipCode: form.zipCode.trim(), country: form.country.trim(),
+          ...(form.reference.trim() ? { reference: form.reference.trim() } : {}),
+          latitude: parseFloat(form.latitude), longitude: parseFloat(form.longitude),
+        },
+      } : {}),
+    };
+    setCardCheckoutDraft({ body, userId: sessionUser.id, restaurantId: urlParams.restaurantId, savedCard: selectedSavedCard });
+    closeCheckout();
+    router.push('/pago/tarjeta');
+  }
+
   async function createOrder() {
     if (creatingOrderRef.current || creatingOrder || !restaurant) {
       return;
@@ -3002,7 +3073,7 @@ function ProductImage({
       }
 
       // 4. Límite de Cobertura del Restaurante (solo para delivery)
-      if (fulfillmentType !== 'PICKUP' && restaurant?.latitude && restaurant?.longitude) {
+      if (normalizedCheckoutForm.paymentMethod === 'CASH' && fulfillmentType !== 'PICKUP' && restaurant?.latitude && restaurant?.longitude) {
         const restLat = restaurant.latitude;
         const restLng = restaurant.longitude;
         const deliveryLat = parseFloat(normalizedCheckoutForm.latitude);
@@ -3021,7 +3092,7 @@ function ProductImage({
         const maxRadius = restaurant.deliveryRadius || 3;
         
         if (distanceToRestaurant > maxRadius) {
-          setDeliveryErrorModal(`Lo sentimos, esta dirección queda fuera de la zona de cobertura de este restaurante (Máximo ${maxRadius} km).`);
+          setDeliveryErrorModal(`El pago en efectivo no está disponible porque la dirección está fuera del radio de entrega (máximo ${maxRadius} km). ${cardEnabled ? 'Selecciona Tarjeta para continuar.' : 'El restaurante no tiene tarjeta habilitada; elige una dirección dentro de cobertura.'}`);
           setCreatingOrder(false);
           return;
         }
@@ -3047,21 +3118,11 @@ function ProductImage({
         const MAX_DISTANCE_KM = 1;
         
         if (distance > MAX_DISTANCE_KM) {
-          setDeliveryErrorModal(`Estás demasiado lejos de la dirección de entrega (${distance.toFixed(1)} km). Para pedir a esta distancia debes usar pago por transferencia.`);
+          setDeliveryErrorModal(`El pago en efectivo no está disponible porque estás demasiado lejos de la dirección de entrega (${distance.toFixed(1)} km). ${cardEnabled ? 'Selecciona Tarjeta para continuar.' : 'El restaurante no tiene tarjeta habilitada; verifica tu dirección y ubicación.'}`);
           setCreatingOrder(false);
           return;
         }
       }
-      const paymentProofUrl =
-        normalizedCheckoutForm.paymentMethod === 'TRANSFER' && transferProofSource
-          ? await persistTransferProof({
-              apiBase,
-              token,
-              source: transferProofSource,
-              fileName: transferProofName,
-            })
-          : '';
-
       const combinedNotes = [
         normalizedCheckoutForm.storeNotes.trim() ? `Tienda: ${normalizedCheckoutForm.storeNotes.trim()}` : '',
         fulfillmentType !== 'PICKUP' && normalizedCheckoutForm.notes.trim() ? `Repartidor: ${normalizedCheckoutForm.notes.trim()}` : ''
@@ -3111,7 +3172,6 @@ function ProductImage({
         })),
         fulfillmentType,
         paymentMethod: normalizedCheckoutForm.paymentMethod,
-        ...(paymentProofUrl ? { paymentProofUrl } : {}),
         ...(combinedNotes ? { notes: combinedNotes } : {}),
         locationVerified: !!currentLocation,
         ...(loyaltyApplied && loyaltyQuote?.cardId ? { loyalty: { cardId: loyaltyQuote.cardId, discountCents: loyaltyQuote.discountCents || 0, expectedTotalCents: Math.round(orderTotal * 100) } } : {}),
@@ -3221,9 +3281,7 @@ function ProductImage({
         window.clearTimeout(couponFeedbackTimerRef.current);
         couponFeedbackTimerRef.current = null;
       }
-      setIsCheckoutOpen(false);
-      setTransferProofName('');
-      setTransferProofSource('');
+      closeCheckout();
       recentCreatedOrderRef.current = {
         id: payload.data.id,
         orderReference: payload.data.orderReference,
@@ -3241,8 +3299,11 @@ function ProductImage({
 
       // Recordatorio de notificaciones (no bloqueante): se sugiere activar push
       // tras el éxito del pedido, en lugar de condicionar la confirmación.
-      if (pushPermission !== 'granted') {
-        setIsPushReminderModalOpen(true);
+      if (!payload.isDuplicate && !isSubscribed) {
+        void canOfferCustomerWebPush().then((available) => {
+          if (!available || recentCreatedOrderRef.current?.id !== payload.data.id) return;
+          setIsPushReminderModalOpen(true);
+        });
       }
 
       // Lleva al usuario arriba para ver el banner del pedido activo y lo "late".
@@ -3274,41 +3335,6 @@ function ProductImage({
     } finally {
       setCreatingOrder(false);
       creatingOrderRef.current = false;
-    }
-  }
-
-  async function handleTransferProofChange(event: React.ChangeEvent<HTMLInputElement>) {
-    const selectedFile = event.target.files?.[0];
-
-    if (!selectedFile) {
-      setTransferProofName('');
-      setTransferProofSource('');
-      return;
-    }
-
-    if (!selectedFile.type.startsWith('image/')) {
-      setError('Selecciona una imagen valida para el comprobante.');
-      setTransferProofName('');
-      setTransferProofSource('');
-      event.target.value = '';
-      return;
-    }
-
-    try {
-      const proofDataUrl = await convertImageFileToDataUrl(selectedFile, 900, 900, 0.7);
-      setTransferProofName(selectedFile.name);
-      setTransferProofSource(proofDataUrl);
-      setError('');
-    } catch (fileError) {
-      setError(
-        fileError instanceof Error
-          ? fileError.message
-          : 'No se pudo preparar la imagen del comprobante.'
-      );
-      setTransferProofName('');
-      setTransferProofSource('');
-    } finally {
-      event.target.value = '';
     }
   }
 
@@ -3522,25 +3548,22 @@ function ProductImage({
 
         {/* Modal de Personalización de Producto (Uber Eats / Rappi Style) */}
         {customizingProduct && (
-          <div className="wl-customize fixed inset-0 z-50 flex items-end justify-center bg-black/60 px-0 py-0 sm:items-center sm:px-4 sm:py-6" onClick={() => setCustomizingProduct(null)}>
+          <div className="wl-customize fixed inset-0 z-50 flex items-center justify-center bg-black/65 px-4 py-4 backdrop-blur-sm sm:px-6 sm:py-6" onClick={() => setCustomizingProduct(null)}>
 
-                <div className="relative bg-white dark:bg-neutral-900 rounded-t-3xl sm:rounded-[32px] overflow-hidden shadow-2xl flex flex-col w-full max-w-2xl max-h-[92dvh] sm:max-h-[90vh] border border-black/5 dark:border-zinc-800 animate-fade-in" onClick={(e) => e.stopPropagation()}>
+                <div role="dialog" aria-modal="true" aria-labelledby="customize-product-title" className="relative bg-white dark:bg-neutral-900 rounded-[24px] sm:rounded-[32px] overflow-hidden shadow-[0_28px_90px_rgba(0,0,0,0.32)] flex flex-col w-full max-w-2xl max-h-[calc(100dvh-2rem)] sm:max-h-[90dvh] border border-black/5 dark:border-zinc-800 animate-fade-in" onClick={(e) => e.stopPropagation()}>
               
-              {/* Drag handle (mobile bottom sheet) */}
-              <div className="mx-auto mt-2 h-1.5 w-10 shrink-0 rounded-full bg-neutral-300 dark:bg-zinc-600 sm:hidden" />
-
               {/* Botón de Cerrar */}
               <button
                 type="button"
                 onClick={() => setCustomizingProduct(null)}
-                className="absolute top-4 right-4 z-10 flex h-10 w-10 items-center justify-center rounded-full bg-black/40 hover:bg-black/60 text-white backdrop-blur transition shadow-md"
+                className="absolute top-3 right-3 z-10 flex h-11 w-11 items-center justify-center rounded-full bg-neutral-950/65 text-white shadow-md backdrop-blur-sm transition hover:bg-neutral-950/85 active:scale-95"
                 aria-label="Cerrar personalización"
               >
                 <X className="h-5 w-5" strokeWidth={2.5} />
               </button>
 
               {/* Imagen y Detalles del Producto */}
-              <div className="overflow-y-auto flex-1">
+              <div className="min-h-0 overflow-y-auto overscroll-contain flex-1">
                 {customizingProduct.image ? (
                   <div className="relative h-48 w-full overflow-hidden bg-gradient-to-br from-neutral-100 to-neutral-200 min-[420px]:h-56 sm:h-72 dark:from-neutral-900 dark:to-neutral-950">
                     <img
@@ -3555,7 +3578,7 @@ function ProductImage({
                     />
                     <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/75 via-black/10 to-transparent"></div>
                     <div className="absolute bottom-6 left-6 right-6 text-white">
-                      <h3 className="text-2xl font-bold tracking-[-0.03em] drop-shadow-sm">{customizingProduct.name}</h3>
+                      <h3 id="customize-product-title" className="text-2xl font-bold tracking-[-0.03em] drop-shadow-sm">{customizingProduct.name}</h3>
                     </div>
                     <button
                       type="button"
@@ -3567,8 +3590,8 @@ function ProductImage({
                     </button>
                   </div>
                 ) : (
-                  <div className="p-6 pb-4 border-b border-black/5 dark:border-zinc-800 dark:bg-neutral-950">
-                    <h3 className="text-2xl font-bold text-neutral-950 dark:text-white tracking-[-0.03em]">{customizingProduct.name}</h3>
+                  <div className="px-5 pb-4 pt-6 pr-16 sm:px-6 border-b border-black/5 dark:border-zinc-800 dark:bg-neutral-950">
+                    <h3 id="customize-product-title" className="text-2xl font-bold text-neutral-950 dark:text-white tracking-[-0.03em]">{customizingProduct.name}</h3>
                   </div>
                 )}
 
@@ -3590,7 +3613,7 @@ function ProductImage({
                     const isRequirementMet = selected.length >= group.minSelection && selected.length <= group.maxSelection;
 
                     return (
-                      <div key={group.id} className="p-6">
+                      <div key={group.id} className="px-5 py-5 sm:p-6">
                         <div className="flex items-start justify-between gap-4 mb-4">
                           <div>
                             <h4 className="font-semibold text-neutral-950 dark:text-white text-base">
@@ -3598,7 +3621,7 @@ function ProductImage({
                             </h4>
                             <p className="mt-1 text-xs text-neutral-500 dark:text-neutral-400 font-medium">
                               {isRequired
-                                ? `Obligatorio · Elige de ${group.minSelection} a ${group.maxSelection} opciones`
+                                ? group.minSelection === 1 && group.maxSelection === 1 ? 'Obligatorio · Elige una opción' : `Obligatorio · Elige de ${group.minSelection} a ${group.maxSelection} opciones`
                                 : `Opcional · Elige hasta ${group.maxSelection} opciones`
                               }
                             </p>
@@ -3630,6 +3653,7 @@ function ProductImage({
                               <button
                                 key={opt.id}
                                 type="button"
+                                aria-pressed={isChecked}
                                 disabled={!opt.isAvailable || isSelectionDisabled}
                                 onClick={() => {
                                   if (isSingleSelection) {
@@ -3640,8 +3664,8 @@ function ProductImage({
                                 }}
                                 className={`flex w-full items-center justify-between gap-4 rounded-2xl border p-4 text-left transition ${
                                   isChecked
-                                    ? 'border-red-400/30 bg-red-100/40 dark:bg-red-900/10'
-                                    : 'border-black/5 dark:border-zinc-800 hover:bg-neutral-50 dark:hover:bg-neutral-800/40'
+                                    ? 'border-red-400 bg-red-50 dark:border-red-700 dark:bg-red-900/20'
+                                    : 'border-neutral-200 bg-white dark:bg-neutral-900 dark:border-zinc-700 hover:bg-neutral-50 dark:hover:bg-neutral-800/40'
                                 } ${(!opt.isAvailable || isSelectionDisabled) ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'}`}
                               >
                                 <div className="flex items-center gap-3">
@@ -3827,7 +3851,7 @@ function ProductImage({
               </div>
 
               {/* Footer con Sumatorias */}
-              <div className="border-t border-black/5 dark:border-zinc-800 bg-white/95 dark:bg-neutral-900/95 backdrop-blur px-4 py-3 sm:px-6 flex flex-row items-center gap-3 sticky bottom-0 z-10 pb-[calc(0.75rem+env(safe-area-inset-bottom))]">
+              <div className="shrink-0 border-t border-black/5 dark:border-zinc-800 bg-white dark:bg-neutral-900 px-4 py-3 sm:px-6 flex flex-row items-center gap-2 sm:gap-3">
                 {/* Selector de Cantidad */}
                 <div className="flex shrink-0 items-center rounded-2xl border border-black/5 dark:border-zinc-800 bg-neutral-50 dark:bg-neutral-950 px-1 py-1 shadow-sm">
                   <button
@@ -3873,7 +3897,7 @@ function ProductImage({
                       type="button"
                       disabled={isMissingRequired || invalidWeight}
                       onClick={addCustomizedItemToCart}
-                      className="min-w-0 flex-1 rounded-2xl bg-neutral-950 dark:bg-white text-white dark:text-neutral-950 text-sm font-bold min-h-12 py-3 px-4 shadow-lg transition duration-200 flex items-center justify-between gap-2 disabled:bg-neutral-300 dark:disabled:bg-neutral-800 dark:disabled:text-neutral-500 disabled:cursor-not-allowed active:scale-[0.98]"
+                      className="min-w-0 flex-1 rounded-2xl bg-red-700 text-white text-sm font-bold min-h-12 py-3 px-3 sm:px-4 shadow-sm transition duration-200 flex items-center justify-between gap-2 disabled:bg-neutral-200 disabled:text-neutral-600 dark:disabled:bg-neutral-800 dark:disabled:text-neutral-400 disabled:cursor-not-allowed active:scale-[0.98]"
                     >
                       <span>{invalidWeight ? 'Revisa el peso' : isMissingRequired ? 'Elige las opciones obligatorias' : 'Agregar al carrito'}</span>
                       {!isMissingRequired && !invalidWeight && (
@@ -4058,9 +4082,11 @@ function ProductImage({
                   </div>
                 )}
 
-                {cancelledOrderNotice.paymentMethod === 'TRANSFER' && (
+                {(cancelledOrderNotice.paymentMethod === 'TRANSFER' || cancelledOrderNotice.paymentMethod === 'CREDIT_CARD') && (
                   <p className="mt-4 text-xs leading-relaxed text-neutral-500">
-                    Si realizaste una transferencia, el reembolso se gestionará automáticamente.
+                    {cancelledOrderNotice.paymentMethod === 'CREDIT_CARD'
+                      ? 'El reembolso total de tu pago con tarjeta se procesa automáticamente.'
+                      : 'Si realizaste una transferencia, el reembolso se gestionará automáticamente.'}
                   </p>
                 )}
 
@@ -4119,7 +4145,7 @@ function ProductImage({
                             ? 'bg-sky-100 text-sky-700 border border-sky-200'
                             : 'bg-green-100 text-green-800 border border-green-200'
                       }`}>
-                        {pickupReadyOrder.paymentMethod === 'CASH' ? <><svg className="h-3.5 w-3.5 inline-block align-text-bottom" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 6v12m-3-2.818l.879.659c1.171.879 3.07.879 4.242 0 1.172-.879 1.172-2.303 0-3.182C13.536 12.219 12.768 12 12 12c-.725 0-1.45-.22-2.003-.659-1.106-.879-1.106-2.303 0-3.182s2.9-.879 4.006 0l.415.33M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg> Efectivo</> : pickupReadyOrder.paymentMethod === 'TRANSFER' ? <><svg className="h-3.5 w-3.5 inline-block align-text-bottom" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M2.25 21h19.5m-18-18v18m10.5-18v18m6-13.5V21M6.75 6.75h.75m-.75 3h.75m-.75 3h.75m3-6h.75m-.75 3h.75m-.75 3h.75M6.75 21v-3.375c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21M3 3h12m-.75 4.5H21m-3.75 3.75h.008v.008h-.008v-.008zm0 3h.008v.008h-.008v-.008zm0 3h.008v.008h-.008v-.008z" /></svg> Transferencia</> : '💳 Pago Online'}
+                        {pickupReadyOrder.paymentMethod === 'CASH' ? <><svg className="h-3.5 w-3.5 inline-block align-text-bottom" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 6v12m-3-2.818l.879.659c1.171.879 3.07.879 4.242 0 1.172-.879 1.172-2.303 0-3.182C13.536 12.219 12.768 12 12 12c-.725 0-1.45-.22-2.003-.659-1.106-.879-1.106-2.303 0-3.182s2.9-.879 4.006 0l.415.33M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg> Efectivo</> : pickupReadyOrder.paymentMethod === 'TRANSFER' ? <><svg className="h-3.5 w-3.5 inline-block align-text-bottom" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M2.25 21h19.5m-18-18v18m10.5-18v18m6-13.5V21M6.75 6.75h.75m-.75 3h.75m-.75 3h.75m3-6h.75m-.75 3h.75m-.75 3h.75M6.75 21v-3.375c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21M3 3h12m-.75 4.5H21m-3.75 3.75h.008v.008h-.008v-.008zm0 3h.008v.008h-.008v-.008zm0 3h.008v.008h-.008v-.008z" /></svg> Transferencia</> : 'Tarjeta'}
                       </span>
                       <p className="text-[10px] text-neutral-400 mt-1.5 font-medium">
                         {pickupReadyOrder.paymentMethod === 'CASH' ? 'Paga al recoger' : 'Ya pagado'}
@@ -4210,13 +4236,13 @@ function ProductImage({
         freeDeliveryThreshold={restaurant?.promoFreeDeliveryThreshold ?? null}
       />
 
-      <div ref={checkoutLayerRef} aria-hidden={!isCheckoutOpen} className={`wl-checkout-layer fixed inset-0 z-50 transition-opacity duration-300 ${isCheckoutOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
-        <div className="absolute inset-0 bg-black/50 backdrop-blur-[2px]" onClick={() => setIsCheckoutOpen(false)} />
+      <div ref={checkoutLayerRef} aria-hidden={!isCheckoutOpen} inert={!isCheckoutOpen} className={`wl-checkout-layer fixed inset-0 z-50 transition-opacity duration-300 ${isCheckoutOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
+        <div className="absolute inset-0 bg-black/50 backdrop-blur-[2px]" onClick={closeCheckout} />
         <div
           ref={checkoutRef}
           className={`wl-checkout absolute right-0 top-0 flex h-full w-full max-w-[580px] flex-col overflow-hidden bg-white dark:bg-[#0c0c0e] shadow-[0_0_0_1px_rgba(0,0,0,0.04),0_40px_100px_rgba(15,15,15,0.25)] sm:rounded-l-[36px] transition-[transform,opacity] duration-[350ms] ease-[cubic-bezier(0.16,1,0.3,1)] lg:bottom-auto lg:right-auto lg:left-1/2 lg:top-1/2 lg:h-auto lg:max-h-[92vh] lg:w-full lg:max-w-4xl lg:rounded-[32px] ${isCheckoutOpen ? 'translate-x-0 opacity-100 lg:-translate-x-1/2 lg:-translate-y-1/2 lg:scale-100' : 'translate-x-full opacity-100 lg:-translate-x-1/2 lg:-translate-y-1/2 lg:scale-95 lg:opacity-0'}`}
         >
-            <section className="flex h-full flex-col lg:h-auto lg:max-h-[92vh]">
+            <section className="flex min-h-0 flex-1 flex-col lg:max-h-[92dvh]">
               {/* ── Header ── */}
               <div className="wl-checkout-heading sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-black/[0.04] dark:border-white/10 bg-white dark:bg-neutral-950 px-5 py-4 sm:px-6">
                 <div className="flex min-w-0 items-center gap-3.5">
@@ -4250,7 +4276,7 @@ function ProductImage({
                 </div>
                 <button
                   type="button"
-                  onClick={() => setIsCheckoutOpen(false)}
+                  onClick={closeCheckout}
                   className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-neutral-100 text-neutral-500 transition-colors hover:bg-neutral-200 hover:text-neutral-700 active:scale-90 dark:bg-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-700 dark:hover:text-zinc-200"
                   aria-label="Cerrar confirmación del pedido"
                 >
@@ -4258,7 +4284,7 @@ function ProductImage({
                 </button>
               </div>
 
-              <div className="wl-checkout-content flex-1 min-h-0 overflow-y-auto px-4 pb-8 pt-5 sm:px-5 lg:px-6">
+              <div className="wl-checkout-content min-h-0 flex-1 overflow-y-auto [overflow-anchor:none] px-4 pb-8 pt-5 sm:px-5 lg:px-6">
                 {/* Desktop: formulario (izq.) + pago (der.). Móvil: columna única. */}
                 <div className="space-y-4 lg:grid lg:grid-cols-2 lg:items-start lg:gap-5 lg:space-y-0 xl:gap-6">
                   <div className="space-y-4">
@@ -4850,13 +4876,13 @@ function ProductImage({
                   {/* ── Columna derecha (desktop): PAGO Y DETALLES ── */}
                   <div className="space-y-4">
                   {/* ── PASO 3: PAGO Y DETALLES ── */}
-                  <div className="rounded-[22px] border border-black/[0.04] dark:border-white/10 bg-white dark:bg-neutral-900 p-4 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
-                    <div className="mb-4 flex items-center justify-between border-b border-black/[0.05] pb-3">
-                      <div className="flex items-center gap-2.5">
-                        <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[var(--accent)] text-[11px] font-black text-white">3</span>
+                  <div className="rounded-[24px] border border-black/[0.06] bg-white p-4 shadow-[0_4px_20px_rgba(0,0,0,0.04)] dark:border-white/10 dark:bg-neutral-900 sm:p-5">
+                    <div className="mb-4 flex items-center justify-between border-b border-black/[0.05] pb-4 dark:border-white/10">
+                      <div className="flex items-center gap-3">
+                        <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[var(--accent)] text-xs font-black text-white">3</span>
                         <div>
-                          <h3 className="text-[13px] font-bold tracking-tight text-neutral-900 dark:text-neutral-100">Método de pago</h3>
-                          <p className="text-[11px] font-medium text-neutral-500 dark:text-zinc-400">¿Cómo prefieres pagar?</p>
+                          <h3 className="text-sm font-bold tracking-tight text-neutral-900 dark:text-neutral-100">Método de pago</h3>
+                          <p className="mt-0.5 text-xs text-neutral-500 dark:text-zinc-400">Elige cómo quieres pagar</p>
                         </div>
                       </div>
                     </div>
@@ -4867,187 +4893,60 @@ function ProductImage({
                         {(() => {
                           const accepted = getAcceptedPaymentMethods(restaurant);
                           const showCash = accepted.includes('CASH');
-                          const showTransfer = accepted.includes('TRANSFER');
-                          if (!showCash && !showTransfer) return null;
+                          const showCard = cardEnabled && accepted.includes('CREDIT_CARD');
+                          if (!showCash && !showCard) return null;
                           return (
-                            <div className="flex gap-1.5 rounded-2xl bg-neutral-100 dark:bg-zinc-800 p-1">
+                            <div role="group" aria-label="Método de pago" className="flex gap-1 rounded-2xl border border-neutral-200/80 bg-neutral-100 p-1 dark:border-white/10 dark:bg-zinc-800">
                               {showCash && (
                                 <button
                                   type="button"
                                   onClick={() => {
+                                    cardCheckoutRequestRef.current += 1;
                                     setCheckoutForm((current) => ({ ...current, paymentMethod: 'CASH' }));
-                                    setTransferProofName('');
-                                    setTransferProofSource('');
                                   }}
-                                  className={`flex flex-1 items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-xs font-bold transition-all ${
+                                  aria-pressed={checkoutForm.paymentMethod === 'CASH'}
+                                  className={`flex min-h-11 min-w-0 flex-1 items-center justify-center gap-1.5 rounded-xl px-2 py-2.5 text-xs font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 dark:focus-visible:ring-offset-zinc-900 ${
                                     checkoutForm.paymentMethod === 'CASH'
-                                      ? 'bg-[var(--accent)] text-white shadow-sm shadow-[0_4px_14px_var(--accent-soft)]'
-                                      : 'text-neutral-500 hover:text-neutral-800'
+                                      ? 'bg-[var(--accent)] text-white shadow-sm'
+                                      : 'text-neutral-600 hover:bg-white/60 dark:text-zinc-300 dark:hover:bg-white/5'
                                   }`}
                                 >
                                   <DollarSign className="h-4 w-4" strokeWidth={1.5} />
                                   Efectivo
                                 </button>
                               )}
-                              {showTransfer && (
+                              {showCard && (
                                 <button
                                   type="button"
                                   onClick={() => {
-                                    setCheckoutForm((current) => ({ ...current, paymentMethod: 'TRANSFER' }));
+                                    cardCheckoutRequestRef.current += 1;
+                                    setCheckoutForm((current) => ({ ...current, paymentMethod: 'CREDIT_CARD' }));
                                   }}
-                                  className={`flex flex-1 items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-xs font-bold transition-all ${
-                                    checkoutForm.paymentMethod === 'TRANSFER'
-                                      ? 'bg-[var(--accent)] text-white shadow-sm shadow-[0_4px_14px_var(--accent-soft)]'
-                                      : 'text-neutral-500 hover:text-neutral-800'
+                                  aria-pressed={checkoutForm.paymentMethod === 'CREDIT_CARD'}
+                                  className={`flex min-h-11 min-w-0 flex-1 items-center justify-center gap-1.5 rounded-xl px-2 py-2.5 text-xs font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 dark:focus-visible:ring-offset-zinc-900 ${
+                                    checkoutForm.paymentMethod === 'CREDIT_CARD'
+                                      ? 'bg-[var(--accent)] text-white shadow-sm'
+                                      : 'text-neutral-600 hover:bg-white/60 dark:text-zinc-300 dark:hover:bg-white/5'
                                   }`}
                                 >
-                                  <Landmark className="h-4 w-4" strokeWidth={1.5} />
-                                  Transferencia
+                                  <CreditCard className="h-4 w-4" strokeWidth={1.5} />
+                                  Tarjeta
                                 </button>
                               )}
                             </div>
                           );
                         })()}
                       </div>
-
-                      {/* CONDICIONAL: Detalles de Transferencia Integrados */}
-                      {checkoutForm.paymentMethod === 'TRANSFER' && (
-                        <div className="space-y-4 pt-2 animate-in fade-in duration-300">
-                          {hasTransferDetails(restaurant) ? (
-                            <div className="rounded-2xl border border-[var(--accent)] bg-white dark:bg-neutral-900 p-4">
-                              <p className="text-xs font-semibold text-neutral-500 mb-3 flex items-center gap-1.5">
-                                <Landmark className="h-4 w-4 text-[var(--accent)]" strokeWidth={1.5} />
-                                Transferencia bancaria
-                              </p>
-                              {/* Checklist rápido del flujo de transferencia */}
-                              <div className="mb-4 flex flex-wrap items-center gap-x-2 gap-y-1.5 text-[10px] font-semibold text-neutral-400 dark:text-zinc-500">
-                                <span className="flex items-center gap-1"><span className="flex h-4 w-4 items-center justify-center rounded-full bg-[var(--accent-soft-strong)] text-[9px] font-black text-[var(--accent-strong)]">1</span>Transfiere el monto exacto</span>
-                                <ChevronRight className="h-3 w-3" strokeWidth={2.5} />
-                                <span className="flex items-center gap-1"><span className="flex h-4 w-4 items-center justify-center rounded-full bg-[var(--accent-soft-strong)] text-[9px] font-black text-[var(--accent-strong)]">2</span>Sube tu comprobante</span>
-                                <ChevronRight className="h-3 w-3" strokeWidth={2.5} />
-                                <span className="flex items-center gap-1"><span className="flex h-4 w-4 items-center justify-center rounded-full bg-[var(--accent-soft-strong)] text-[9px] font-black text-[var(--accent-strong)]">3</span>Confirmamos tu pedido</span>
-                              </div>
-                              <div className="rounded-xl bg-neutral-50 dark:bg-zinc-800 px-4 py-3 text-center mb-3">
-                                <p className="text-[11px] text-neutral-500 font-medium">Monto exacto a transferir</p>
-                                <p className="text-xl font-extrabold text-neutral-900 dark:text-neutral-50 mt-0.5">{formatCurrency(orderTotal)}</p>
-                              </div>
-                              <div className="space-y-2.5 text-sm dark:text-zinc-300">
-                                <div className="flex items-center justify-between border-b border-neutral-100 dark:border-white/10 pb-2">
-                                  <span className="text-neutral-500 dark:text-zinc-400 text-[13px]">Banco</span>
-                                  <span className="font-semibold text-neutral-900 dark:text-neutral-100">{restaurant?.transferBankName}</span>
-                                </div>
-                                <div className="flex items-center justify-between border-b border-neutral-100 dark:border-white/10 pb-2">
-                                  <span className="text-neutral-500 dark:text-zinc-400 text-[13px]">Cuenta</span>
-                                  <div className="flex items-center gap-2">
-                                    <span className="font-mono font-semibold text-neutral-900 dark:text-neutral-100 select-all">{restaurant?.transferAccountNumber}</span>
-                                    <button
-                                      type="button"
-                                      onClick={() => handleCopyText(restaurant?.transferAccountNumber, 'account')}
-                                      className="flex h-7 w-7 items-center justify-center rounded-lg text-neutral-400 hover:bg-neutral-100 hover:text-neutral-600 active:scale-90 transition-all relative dark:text-zinc-500 dark:hover:bg-zinc-800 dark:hover:text-zinc-300"
-                                      title="Copiar"
-                                    >
-                                      {copiedField === 'account' ? (
-                                        <Check className="h-3.5 w-3.5 text-emerald-500" strokeWidth={3} />
-                                      ) : (
-                                        <Copy className="h-3.5 w-3.5" strokeWidth={2} />
-                                      )}
-                                    </button>
-                                  </div>
-                                </div>
-                                <div className="flex items-center justify-between">
-                                  <span className="text-neutral-500 dark:text-zinc-400 text-[13px]">Beneficiario</span>
-                                  <div className="flex items-center gap-2">
-                                    <span className="font-semibold text-neutral-900 dark:text-neutral-100">{restaurant?.transferBeneficiaryName}</span>
-                                    <button
-                                      type="button"
-                                      onClick={() => handleCopyText(restaurant?.transferBeneficiaryName, 'beneficiary')}
-                                      className="flex h-7 w-7 items-center justify-center rounded-lg text-neutral-400 hover:bg-neutral-100 hover:text-neutral-600 active:scale-90 transition-all relative dark:text-zinc-500 dark:hover:bg-zinc-800 dark:hover:text-zinc-300"
-                                      title="Copiar"
-                                    >
-                                      {copiedField === 'beneficiary' ? (
-                                        <Check className="h-3.5 w-3.5 text-emerald-500" strokeWidth={3} />
-                                      ) : (
-                                        <Copy className="h-3.5 w-3.5" strokeWidth={2} />
-                                      )}
-                                    </button>
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
-                          ) : (
-                            <div className="rounded-2xl border border-amber-200 dark:border-amber-500/30 bg-amber-50/50 dark:bg-amber-500/10 p-4 text-sm text-amber-800 dark:text-amber-300 leading-relaxed">
-                              <AlertTriangle className="h-4 w-4 inline-block align-text-bottom" strokeWidth={1.5} /> Este restaurante aún no ha configurado sus datos de transferencia. Usa efectivo o vuelve más tarde.
-                            </div>
-                          )}
-
-                          {/* Zona de Carga de Archivos Premium */}
-                          <div className="space-y-2">
-                            <label className="text-sm font-semibold text-neutral-800 dark:text-neutral-200">Comprobante de transferencia</label>
-                            {transferProofSource ? (
-                              <div className="space-y-3">
-                                <div className="relative overflow-hidden rounded-2xl border border-black/[0.06] bg-neutral-900/5">
-                                  <img
-                                    src={transferProofSource}
-                                    alt={transferProofName}
-                                    loading="lazy" decoding="async"
-                                    className="w-full h-48 object-contain bg-neutral-100 dark:bg-zinc-800"
-                                  />
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      setTransferProofSource('');
-                                      setTransferProofName('');
-                                    }}
-                                    className="absolute top-2 right-2 flex h-7 w-7 items-center justify-center rounded-full bg-black/50 text-white text-sm hover:bg-black/70 transition-all"
-                                  >
-                                    ✕
-                                  </button>
-                                </div>
-                                <label className="relative flex cursor-pointer items-center justify-center gap-2.5 rounded-2xl border-2 border-dashed border-neutral-200 bg-white px-5 py-4 text-sm font-bold text-neutral-700 transition-all hover:border-[var(--accent)] hover:bg-red-50/40 hover:text-[var(--accent-strong)] active:scale-[0.97] shadow-sm hover:shadow-md group dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-red-500/10">
-                                  <input
-                                    type="file"
-                                    accept="image/*"
-                                    onChange={(event) => void handleTransferProofChange(event)}
-                                    className="sr-only"
-                                  />
-                                  <div className="flex h-9 w-9 items-center justify-center rounded-full bg-red-50 text-[var(--accent)] group-hover:bg-[var(--accent-soft-strong)] transition-colors dark:bg-red-500/15 dark:text-red-300">
-                                    <Upload className="h-4 w-4" strokeWidth={1.5} />
-                                  </div>
-                                  <div className="flex flex-col items-start">
-                                    <span className="text-sm font-bold">Cambiar comprobante de pago</span>
-                                    <span className="text-[10px] font-medium text-neutral-400 group-hover:text-[var(--accent)] transition-colors">Toca para seleccionar otro archivo</span>
-                                  </div>
-                                </label>
-                              </div>
-                            ) : (
-                              <label
-                                id="transfer-proof-upload"
-                                className={`relative flex cursor-pointer items-center justify-center gap-2.5 rounded-2xl border-2 border-dashed px-5 py-4 text-sm font-bold transition-all active:scale-[0.97] shadow-sm group ${
-                                  attemptedCheckout && checkoutForm.paymentMethod === 'TRANSFER'
-                                    ? 'border-rose-300 bg-rose-50/50 text-rose-700 hover:border-rose-400'
-                                    : 'border-neutral-200 bg-white text-neutral-700 hover:border-[var(--accent)] hover:bg-red-50/40 hover:text-[var(--accent-strong)] hover:shadow-md dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300'
-                                }`}
-                              >
-                                <input
-                                  type="file"
-                                  accept="image/*"
-                                  onChange={(event) => void handleTransferProofChange(event)}
-                                  className="sr-only"
-                                />
-                                <div className={`flex h-9 w-9 items-center justify-center rounded-full transition-colors ${attemptedCheckout && checkoutForm.paymentMethod === 'TRANSFER' ? 'bg-rose-100 text-rose-500 dark:bg-rose-500/20 dark:text-rose-400' : 'bg-red-50 text-[var(--accent)] group-hover:bg-[var(--accent-soft-strong)] dark:bg-red-500/15 dark:text-red-300'}`}>
-                                  <Upload className="h-4 w-4" strokeWidth={1.5} />
-                                </div>
-                                <div className="flex flex-col items-start">
-                                  <span className="text-sm font-bold">Subir comprobante de pago</span>
-                                  {attemptedCheckout && checkoutForm.paymentMethod === 'TRANSFER' ? (
-                                    <span className="text-[10px] font-bold text-rose-500">Necesario para confirmar tu pedido</span>
-                                  ) : (
-                                    <span className="text-[10px] font-medium text-neutral-400 group-hover:text-[var(--accent)] transition-colors">JPG, PNG o captura de pantalla</span>
-                                  )}
-                                </div>
-                              </label>
-                            )}
-                          </div>
+                      {checkoutForm.paymentMethod === 'CREDIT_CARD' && cardEnabled && token && (
+                        <div className="space-y-3">
+                          <SavedCardSelector apiBase={apiBase} token={token} selectedId={selectedSavedCard?.id ?? null}
+                            onSelect={handleSavedCardSelect} onLoadingChange={setSavedCardsLoading} />
+                          <p className="flex items-start gap-2 px-1 text-[11px] leading-relaxed text-neutral-500 dark:text-zinc-400">
+                            <CreditCard className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                            {selectedSavedCard
+                              ? 'Confirma tu tarjeta con el código de seguridad.'
+                              : 'Datos protegidos por Mercado Pago.'}
+                          </p>
                         </div>
                       )}
                     </div>
@@ -5079,7 +4978,7 @@ function ProductImage({
                   </div>
                 </div>
 
-                <div className="sticky bottom-0 z-10 border-t border-black/[0.04] dark:border-white/10 bg-white/95 dark:bg-neutral-950/95 px-4 pt-4 pb-[calc(1.5rem+env(safe-area-inset-bottom))] backdrop-blur-xl sm:px-5 shadow-[0_-12px_30px_-8px_rgba(0,0,0,0.08)]">
+                <div className="sticky bottom-0 z-10 border-t border-black/[0.04] dark:border-white/10 bg-white/95 dark:bg-neutral-950/95 px-4 pt-4 pb-[max(1rem,env(safe-area-inset-bottom))] backdrop-blur-xl sm:px-5 shadow-[0_-12px_30px_-8px_rgba(0,0,0,0.08)]">
                   {/* Validation Warning Callout (Animated and Professional) */}
                   {checkoutValidationMessage && token && (
                     <div className="mb-3.5 flex justify-center animate-in slide-in-from-bottom-2 fade-in duration-300">
@@ -5104,7 +5003,7 @@ function ProductImage({
                     <button
                       type="button"
                       onClick={() => {
-                        setIsCheckoutOpen(false);
+                        closeCheckout();
                         setIsCartOpen(true);
                       }}
                       className="group flex items-center justify-center gap-1.5 rounded-2xl bg-neutral-100/80 px-4 py-3.5 text-sm font-semibold text-neutral-600 transition-all hover:bg-neutral-200/80 active:scale-[0.97] active-scale shrink-0 dark:bg-zinc-800/80 dark:text-zinc-300 dark:hover:bg-zinc-700/80"
@@ -5129,39 +5028,38 @@ function ProductImage({
                       <button
                         type="button"
                         onClick={() => {
-                          if (creatingOrder) return;
-                          // Guía al error en lugar de bloquear en silencio:
-                          // falta comprobante → sacudir + scroll al upload.
+                          if (creatingOrder || (checkoutForm.paymentMethod === 'CREDIT_CARD' && savedCardsLoading)) return;
                           if (checkoutValidationMessage) {
-                            setAttemptedCheckout(true);
-                            if (checkoutValidationMessage === 'Carga la imagen del comprobante de transferencia para continuar.') {
-                              const el = document.getElementById('transfer-proof-upload');
-                              if (el) {
-                                el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                                el.classList.remove('animate-nudge');
-                                void (el as HTMLElement).offsetWidth; // reinicia la animación
-                                el.classList.add('animate-nudge');
-                              }
-                            }
+                            setError(checkoutValidationMessage);
+                            return;
+                          }
+                          // Con tarjeta no pasamos por /pedidos: abrimos el
+                          // checkout de Mercado Pago, que hace de confirmación.
+                          if (checkoutForm.paymentMethod === 'CREDIT_CARD') {
+                            void startCardCheckout();
                             return;
                           }
                           // El modal de confirmación (cuenta regresiva) NO depende del
                           // permiso de notificaciones: debe aparecer SIEMPRE al confirmar,
-                          // igual en web, PWA y app nativa. El recordatorio de push se
-                          // muestra aparte, sin bloquear el cierre del pedido.
+                          // igual en web, PWA y app nativa.
                           openPreConfirm();
                         }}
-                        aria-disabled={creatingOrder || Boolean(checkoutValidationMessage)}
+                        disabled={creatingOrder || (checkoutForm.paymentMethod === 'CREDIT_CARD' && savedCardsLoading)}
+                        aria-disabled={creatingOrder || Boolean(checkoutValidationMessage) || (checkoutForm.paymentMethod === 'CREDIT_CARD' && savedCardsLoading)}
                         className={`group relative flex-1 overflow-hidden rounded-2xl px-5 py-3.5 text-[15px] font-bold text-white transition-all active:scale-[0.97] active-scale ${
-                          checkoutValidationMessage && !creatingOrder
+                          (checkoutValidationMessage && !creatingOrder) || (checkoutForm.paymentMethod === 'CREDIT_CARD' && savedCardsLoading)
                             ? 'bg-neutral-400 shadow-none'
                             : 'bg-[var(--accent)] shadow-[0_8px_20px_-6px_rgba(14,165,233,0.4)] hover:bg-[var(--accent-strong)] hover:shadow-[0_12px_24px_-8px_rgba(14,165,233,0.5)]'
                         }`}
                       >
                         <div className="absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/20 to-transparent transition-transform duration-1000 group-hover:translate-x-full disabled:hidden" />
                         <span className="relative flex items-center justify-center gap-2">
-                          {creatingOrder ? 'Procesando...' : `Confirmar • ${formatCurrency(orderTotal)}`}
-                          {!creatingOrder && (
+                          {creatingOrder
+                            ? 'Procesando...'
+                             : checkoutForm.paymentMethod === 'CREDIT_CARD'
+                               ? savedCardsLoading ? 'Cargando tarjetas…' : `Continuar con tarjeta • ${formatCurrency(orderTotal)}`
+                              : `Confirmar • ${formatCurrency(orderTotal)}`}
+                          {!creatingOrder && !(checkoutForm.paymentMethod === 'CREDIT_CARD' && savedCardsLoading) && (
                             <Check className="h-4 w-4 transition-transform group-hover:translate-x-1" strokeWidth={2.5} />
                           )}
                         </span>
@@ -5313,10 +5211,10 @@ function ProductImage({
                     <p className="mt-1 text-[28px] font-extrabold leading-none tracking-tight tabular-nums">{formatCurrency(orderTotal)}</p>
                   </div>
                   <span className="inline-flex max-w-[48%] items-center gap-1.5 rounded-full bg-white/10 px-2.5 py-1.5 text-right text-[10px] font-semibold leading-snug text-neutral-100">
-                    {checkoutForm.paymentMethod === 'CASH' ? <Banknote className="h-3.5 w-3.5 shrink-0" /> : <Landmark className="h-3.5 w-3.5 shrink-0" />}
+                    {checkoutForm.paymentMethod === 'CASH' ? <Banknote className="h-3.5 w-3.5 shrink-0" /> : <CreditCard className="h-3.5 w-3.5 shrink-0" />}
                     {checkoutForm.paymentMethod === 'CASH'
                       ? fulfillmentType === 'PICKUP' ? 'Efectivo al recoger' : 'Efectivo al recibir'
-                      : 'Transferencia'}
+                      : 'Tarjeta'}
                   </span>
                 </div>
               </section>
@@ -5485,60 +5383,27 @@ function ProductImage({
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity" onClick={() => setIsPushReminderModalOpen(false)}></div>
           <div className="relative w-full max-w-sm rounded-[32px] bg-white p-6 shadow-2xl animate-in zoom-in-95 duration-200">
             <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-accent-soft text-3xl">
-              {pushPermission === 'denied' ? <BellOff className="h-8 w-8 text-neutral-600" strokeWidth={1.5} /> : <Bell className="h-8 w-8 text-[var(--accent)]" strokeWidth={1.5} />}
+              <Bell className="h-8 w-8 text-[var(--accent)]" strokeWidth={1.5} />
             </div>
             <h3 className="text-center text-xl font-bold tracking-tight text-neutral-900">
-              {pushPermission === 'denied' ? 'Notificaciones bloqueadas' : '¡No pierdas de vista tu pedido!'}
+              ¡No pierdas de vista tu pedido!
             </h3>
             <p className="mt-3 text-center text-sm leading-relaxed text-neutral-600">
-              {pushPermission === 'denied' ? (
-                <>Para recibir alertas en tiempo real, dale clic al <span className="font-semibold text-neutral-900">candadito en la barra de direcciones</span> de tu navegador y activa las notificaciones manualmente.</>
-              ) : (
-                <>Te recomendamos <span className="font-semibold text-neutral-900">permitir las notificaciones</span> para poder avisarte en tiempo real sobre el estado y la llegada de tu pedido.</>
-              )}
+              Tu pedido ya se envió. Puedes activar avisos en este dispositivo o consultar el estado desde Pedidos.
             </p>
             <div className="mt-6 flex flex-col gap-3">
-              {pushPermission === 'denied' ? (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsPushReminderModalOpen(false);
-                    void createOrder();
-                  }}
-                  className="w-full rounded-full bg-[var(--accent)] px-4 py-3.5 text-sm font-semibold text-white shadow-[0_8px_16px_rgba(135,206,235,0.25)] transition hover:bg-[var(--accent)] active:scale-[0.98] active-scale"
-                >
-                  Entendido, continuar con mi pedido
-                </button>
-              ) : (
-                <>
+                  <PushActivationButton
+                    activate={subscribePush}
+                    onActivated={() => setIsPushReminderModalOpen(false)}
+                    className="w-full rounded-full bg-[var(--accent)] px-4 py-3.5 text-sm font-semibold text-white shadow-[0_8px_16px_rgba(135,206,235,0.25)] transition active:scale-[0.98] active-scale"
+                  />
                   <button
                     type="button"
-                    onClick={() => {
-                      setIsPushReminderModalOpen(false);
-                      subscribePush()
-                        .then(() => {
-                          void createOrder();
-                        })
-                        .catch(() => {
-                          void createOrder();
-                        });
-                    }}
-                    className="w-full rounded-full bg-[var(--accent)] px-4 py-3.5 text-sm font-semibold text-white shadow-[0_8px_16px_rgba(135,206,235,0.25)] transition hover:bg-[var(--accent)] active:scale-[0.98] active-scale"
-                  >
-                    Aceptar y Continuar
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsPushReminderModalOpen(false);
-                      void createOrder();
-                    }}
+                    onClick={() => setIsPushReminderModalOpen(false)}
                     className="w-full rounded-full px-4 py-3 text-sm font-semibold text-neutral-500 transition hover:bg-neutral-100 active:scale-[0.98] active-scale"
                   >
-                    No gracias, continuar sin alertas
+                    Ahora no
                   </button>
-                </>
-              )}
             </div>
           </div>
         </div>
@@ -5559,16 +5424,18 @@ function ProductImage({
               Por seguridad de los repartidores, los pedidos mayores a <span className="font-semibold text-neutral-900">${restaurant?.maxCashOrder && restaurant.maxCashOrder > 0 ? restaurant.maxCashOrder : 500}</span> no pueden pagarse en efectivo.
             </p>
             <div className="mt-6 flex flex-col gap-3">
-              <button
-                type="button"
-                onClick={() => {
-                  setCheckoutForm((prev) => ({ ...prev, paymentMethod: 'TRANSFER' }));
-                  setShowMaxCashModal(false);
-                }}
-                className="w-full rounded-full bg-[var(--accent)] px-4 py-3.5 text-sm font-semibold text-white shadow-[0_8px_16px_rgba(135,206,235,0.25)] transition hover:bg-[var(--accent)] active:scale-[0.98] active-scale"
-              >
-                Cambiar a Transferencia
-              </button>
+              {cardEnabled && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCheckoutForm((prev) => ({ ...prev, paymentMethod: 'CREDIT_CARD' }));
+                    setShowMaxCashModal(false);
+                  }}
+                  className="w-full rounded-full bg-[var(--accent)] px-4 py-3.5 text-sm font-semibold text-white shadow-[0_8px_16px_rgba(135,206,235,0.25)] transition hover:bg-[var(--accent)] active:scale-[0.98] active-scale"
+                >
+                  Cambiar a Tarjeta
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => setShowMaxCashModal(false)}
@@ -5596,19 +5463,23 @@ function ProductImage({
               No pudimos acceder a tu GPS. Por políticas de seguridad, los pagos en <span className="font-semibold text-neutral-900">Efectivo</span> requieren ubicación precisa.
             </p>
             <p className="mt-2 text-center text-sm leading-relaxed text-neutral-600">
-              Puedes continuar tu pedido ahora mismo cambiando el método a <span className="font-semibold text-neutral-900">Transferencia</span>.
+              {cardEnabled
+                ? 'Puedes continuar tu pedido ahora mismo eligiendo Tarjeta; con tarjeta no necesitamos tu GPS.'
+                : 'Este restaurante no tiene tarjeta habilitada. Activa tu ubicación para pagar en efectivo.'}
             </p>
             <div className="mt-6 flex flex-col gap-3">
-              <button
-                type="button"
-                onClick={() => {
-                  setCheckoutForm((prev) => ({ ...prev, paymentMethod: 'TRANSFER' }));
-                  setShowGpsCashModal(false);
-                }}
-                className="w-full rounded-full bg-[var(--accent)] px-4 py-3.5 text-sm font-semibold text-white shadow-[0_8px_16px_rgba(135,206,235,0.25)] transition hover:bg-[var(--accent)] active:scale-[0.98] active-scale"
-              >
-                Cambiar a Transferencia
-              </button>
+              {cardEnabled && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCheckoutForm((prev) => ({ ...prev, paymentMethod: 'CREDIT_CARD' }));
+                    setShowGpsCashModal(false);
+                  }}
+                  className="w-full rounded-full bg-[var(--accent)] px-4 py-3.5 text-sm font-semibold text-white shadow-[0_8px_16px_rgba(135,206,235,0.25)] transition hover:bg-[var(--accent)] active:scale-[0.98] active-scale"
+                >
+                  Cambiar a Tarjeta
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => setShowGpsCashModal(false)}
@@ -5679,7 +5550,7 @@ function ProductImage({
           </div>
         ) : restaurant ? (
           <div className="wl-menu">
-            <MenuPromotions apiBase={apiBase} token={token} viewerId={sessionUser?.id} allowModal={!isCheckoutOpen && !isCartOpen && !showAuthModal} />
+            <MenuPromotions apiBase={apiBase} token={token} authReady={isAuthReady} initialBanners={initialBanners} viewerId={sessionUser?.id} allowModal={!isCheckoutOpen && !isCartOpen && !showAuthModal} />
             <div className="space-y-0">
               <h1 className="wl-menu-title">Menú de {restaurant.name}</h1>
               <section className="wl-restaurant-info" hidden={!showRestaurantInfo}>
@@ -5740,10 +5611,10 @@ function ProductImage({
                         </div>
                       </button>
                       {(() => {
-                        const accepted = restaurant.acceptedPaymentMethods ?? (hasTransferDetails(restaurant) ? ['CASH', 'TRANSFER'] : ['CASH']);
+                         const accepted = getAcceptedPaymentMethods(restaurant);
                         const onlyCash = accepted.length === 1 && accepted[0] === 'CASH';
-                        const onlyTransfer = accepted.length === 1 && accepted[0] === 'TRANSFER';
-                        if (!onlyCash && !onlyTransfer) return null;
+                        const onlyCard = accepted.length === 1 && accepted[0] === 'CREDIT_CARD';
+                        if (!onlyCash && !onlyCard) return null;
                         return (
                           <div className="flex min-h-14 min-w-0 flex-1 flex-col items-center justify-center gap-1 rounded-xl bg-neutral-50 px-1 py-2 text-center lg:flex-none lg:rounded-none lg:bg-transparent lg:px-4 dark:bg-zinc-800/70 lg:dark:bg-transparent">
                             <span className="text-[10px] font-bold uppercase tracking-wide text-neutral-500 dark:text-zinc-400">Pago</span>
@@ -5755,8 +5626,8 @@ function ProductImage({
                                 </>
                               ) : (
                                 <>
-                                  <svg className="h-3 w-3 text-neutral-400 dark:text-zinc-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M2.25 21h19.5m-18-18v18m10.5-18v18m6-13.5V21M6.75 6.75h.75m-.75 3h.75m-.75 3h.75m3-6h.75m-.75 3h.75m-.75 3h.75M6.75 21v-3.375c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21M3 3h12m-.75 4.5H21m-3.75 3.75h.008v.008h-.008v-.008zm0 3h.008v.008h-.008v-.008zm0 3h.008v.008h-.008v-.008z" /></svg>
-                                  Transferencia
+                                  <CreditCard className="h-3 w-3 text-neutral-400 dark:text-zinc-500" strokeWidth={2} />
+                                  Tarjeta
                                 </>
                               )}
                             </div>
@@ -5861,14 +5732,14 @@ function ProductImage({
                         </div>
                       </div>
 
-                      {getAcceptedPaymentMethods(restaurant).includes('TRANSFER') && (
+                      {getAcceptedPaymentMethods(restaurant).includes('CREDIT_CARD') && (
                         <div className="flex items-start gap-3 rounded-2xl border border-black/[0.05] bg-neutral-50 p-3.5 dark:border-zinc-800 dark:bg-zinc-800/50">
                           <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white text-emerald-600 shadow-sm dark:bg-zinc-900 dark:text-emerald-400">
-                            <Banknote className="h-[18px] w-[18px]" strokeWidth={1.8} />
+                            <CreditCard className="h-[18px] w-[18px]" strokeWidth={1.8} />
                           </div>
                           <div className="min-w-0">
-                            <p className="text-[13px] font-bold text-neutral-900 dark:text-white">Pago por transferencia</p>
-                            <p className="text-xs leading-relaxed text-neutral-500 dark:text-zinc-400">Este negocio acepta transferencias con comprobante directo.</p>
+                            <p className="text-[13px] font-bold text-neutral-900 dark:text-white">Pago con tarjeta</p>
+                            <p className="text-xs leading-relaxed text-neutral-500 dark:text-zinc-400">Puedes pagar con tarjeta sin importar la distancia a la dirección de entrega.</p>
                           </div>
                         </div>
                       )}
@@ -5903,17 +5774,17 @@ function ProductImage({
                   {product.image && <img src={product.image} alt="" loading="lazy" />}<span><strong>{product.name}</strong><b>{formatCurrency(product.discountPrice ?? product.price)}</b></span>
                 </button>)}</div>
               </section>}
-              <div data-sticky-header className="wl-menu-search-sticky">
-                <div className="py-3">
+              <div ref={categorySearchRef} className="wl-menu-search">
+                <div className="py-1">
                   <div className="relative w-full max-w-2xl mx-auto lg:mx-0">
-                    <span className="pointer-events-none absolute left-2 top-1/2 grid h-10 w-10 -translate-y-1/2 place-items-center rounded-full bg-red-50 text-red-700 dark:bg-red-950/50 dark:text-red-300"><Search aria-hidden="true" className="h-[18px] w-[18px]" strokeWidth={2} /></span>
+                    <span className="pointer-events-none absolute left-2 top-1/2 grid h-8 w-8 -translate-y-1/2 place-items-center rounded-full bg-red-50 text-red-700 dark:bg-red-950/50 dark:text-red-300"><Search aria-hidden="true" className="h-[18px] w-[18px]" strokeWidth={2} /></span>
                     <input
                       type="text"
-                      placeholder="Busca tu favorito"
+                      placeholder="¿Qué se te antoja hoy?"
                       aria-label="Buscar productos en el menú"
                       value={productSearchQuery}
                       onChange={(e) => setProductSearchQuery(e.target.value)}
-                      className="min-h-14 w-full rounded-full border border-neutral-200 bg-white py-3 pl-14 pr-12 text-base font-medium text-neutral-950 shadow-[0_4px_18px_rgba(23,23,23,0.05)] outline-none transition-colors placeholder:font-normal placeholder:text-neutral-500 focus:border-red-500 focus:ring-2 focus:ring-red-100 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:placeholder:text-zinc-400 dark:focus:border-red-400 dark:focus:ring-red-950"
+                      className="min-h-[52px] w-full rounded-full border border-neutral-200 bg-white py-2 pl-14 pr-12 text-base font-medium text-neutral-950 shadow-[0_4px_18px_rgba(23,23,23,0.05)] outline-none transition-colors placeholder:font-normal placeholder:text-neutral-500 focus:border-red-500 focus:ring-2 focus:ring-red-100 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:placeholder:text-zinc-400 dark:focus:border-red-400 dark:focus:ring-red-950"
                     />
                     {productSearchQuery && (
                       <button
@@ -5929,13 +5800,11 @@ function ProductImage({
                   </div>
                 </div>
               </div>
-              <div className="wl-menu-nav wl-reference-categories">
-                {!productSearchQuery.trim() && menuTab === 'home' && (
-                <div className="pb-2.5 lg:pb-3">
-                  <div className="wl-section-heading"><h2><LayoutGrid aria-hidden="true" />Categorías</h2></div>
+              {!productSearchQuery.trim() && menuTab === 'home' && <div className="wl-section-heading"><h2>Categorías</h2></div>}
+              {!productSearchQuery.trim() && menuTab === 'home' && <>
+                 <div ref={categoryNavRef} className="wl-menu-nav wl-reference-categories">
                   <div
-                    ref={categoryNavRef}
-                    className="flex overflow-x-auto px-4 pb-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden snap-x snap-proximity md:snap-none md:px-6 lg:px-6"
+                    className="wl-category-scroll flex overflow-x-auto px-4 pb-0.5 md:px-6 lg:px-6"
                   >
                     <div className="flex min-w-max gap-1.5 mx-auto sm:gap-2">
                       {restaurant.categories.filter(category => category.id !== '__promotions__').map((category) => {
@@ -5947,33 +5816,16 @@ function ProductImage({
                             data-category-id={category.id}
                             onClick={() => scrollToCategory(category.id)}
                             aria-current={isActive ? 'true' : undefined}
-                            className={`whitespace-nowrap rounded-full px-4 py-2.5 text-[13px] font-semibold transition-all duration-200 active:scale-[0.97] ${
-                              isActive
-                                ? 'text-[var(--menu-accent)] dark:text-sky-400 shadow-[inset_0_0_0_1.5px_var(--menu-accent)] dark:shadow-[inset_0_0_0_1.5px_rgb(56_189_248/0.45)]'
-                                : 'text-neutral-500 hover:bg-black/[0.045] hover:text-neutral-800 dark:text-zinc-400 dark:hover:bg-white/[0.06] dark:hover:text-zinc-100'
-                            }`}
-                            style={
-                              isActive
-                                ? { backgroundColor: 'color-mix(in srgb, var(--menu-accent) 13%, transparent)' }
-                                : undefined
-                            }
+                            className="wl-category-tab"
                           >
-                            {(() => {
-                              const icon = (category as any).icon as string | null | undefined;
-                              if (icon) return <CategoryIcon name={icon} className="wl-cat-icon" />;
-                              const name = category.name.toLowerCase();
-                              const Icon = category.id === '__promotions__' ? Gift : /alita|boneless|pollo/.test(name) ? Drumstick : /hamburg/.test(name) ? Hamburger : /hot dog|sandwich/.test(name) ? Sandwich : /bebida|refresco|agua/.test(name) ? CupSoda : Utensils;
-                              return <Icon aria-hidden="true" />;
-                            })()}
-                            {category.name}
+                            <span className={`wl-category-tab-name${/\s/.test(category.name.trim()) ? '' : ' is-single-word'}`} title={category.name}>{category.name}</span>
                           </button>
                         );
                       })}
                     </div>
                   </div>
                 </div>
-                )}
-              </div>
+              </>}
 
               {!restaurant.categories.length && <p className="wl-content-empty">Estamos preparando el menú. Vuelve pronto para consultar los productos disponibles.</p>}
               {productSearchQuery.trim() ? (
@@ -6010,7 +5862,7 @@ function ProductImage({
                             <div className="flex min-w-0 flex-1 flex-col justify-between">
                               <div>
                                 <h3 className="text-base font-semibold text-neutral-950 dark:text-white">{product.name}</h3>
-                                <p className="mt-0.5 text-sm text-neutral-500 line-clamp-2 leading-snug dark:text-zinc-400">{product.description}</p>
+                                {product.description && <button type="button" className="wl-product-description-trigger mt-0.5 text-sm text-neutral-500 dark:text-zinc-400" onClick={() => openProductPreview(product)} aria-label={`Ver detalle de ${product.name}`}><span className="line-clamp-2 leading-snug">{product.description}</span></button>}
                               </div>
                               <div className="mt-2 flex items-center justify-between gap-3">
                                 {product.discountPrice ? (
@@ -6062,7 +5914,7 @@ function ProductImage({
                   }}
                   className="wl-category scroll-mt-[184px] mb-10 px-0 py-0 md:scroll-mt-[184px]"
                 >
-                  <div className="wl-section-heading"><h2>{category.name}</h2><button type="button" onClick={() => scrollToCategory(category.id)}>Ver categoría <ChevronRight aria-hidden="true" /></button></div>
+                  <div className="wl-section-heading"><h2>{category.name}</h2><span className="wl-category-product-count">{category.products.length} {category.products.length === 1 ? 'producto' : 'productos'}</span></div>
 
                   <div className={isPromoCarousel || isLargeCategory ? "relative" : "overflow-hidden"}>
                     <CarouselOrGrid
@@ -6194,16 +6046,7 @@ function ProductImage({
                                 )}
                                 {product.description && (
                                   <div className="mt-1.5">
-                                    <p className="text-[11px] leading-snug text-neutral-500 line-clamp-2 dark:text-zinc-400">{product.description}</p>
-                                    {product.description.length > 60 && (
-                                      <button
-                                        type="button"
-                                        onClick={() => openProductPreview(product)}
-                                        className="mt-0.5 text-[11px] font-bold text-neutral-900 underline-offset-2 transition hover:underline dark:text-white"
-                                      >
-                                        Ver más
-                                      </button>
-                                    )}
+                                    <button type="button" className="wl-product-description-trigger text-[11px] text-neutral-500 dark:text-zinc-400" onClick={() => openProductPreview(product)} aria-label={`Ver detalle de ${product.name}`}><span className="line-clamp-2 leading-snug">{product.description}</span></button>
                                   </div>
                                 )}
                                 <div className="mt-auto pt-3">
@@ -6278,16 +6121,7 @@ function ProductImage({
                                 )}
                                 {product.description && (
                                   <div className="mt-1.5">
-                                    <p className="text-[11px] leading-snug text-neutral-500 line-clamp-2 dark:text-zinc-400">{product.description}</p>
-                                    {product.description.length > 60 && (
-                                      <button
-                                        type="button"
-                                        onClick={() => openProductPreview(product)}
-                                        className="mt-0.5 text-[11px] font-bold text-neutral-900 underline-offset-2 transition hover:underline dark:text-white"
-                                      >
-                                        Ver más
-                                      </button>
-                                    )}
+                                    <button type="button" className="wl-product-description-trigger text-[11px] text-neutral-500 dark:text-zinc-400" onClick={() => openProductPreview(product)} aria-label={`Ver detalle de ${product.name}`}><span className="line-clamp-2 leading-snug">{product.description}</span></button>
                                   </div>
                                 )}
                                 <div className="mt-auto pt-3">
@@ -6379,9 +6213,9 @@ function ProductImage({
                               </div>
                               <div className="wl-product-content flex min-w-0 flex-1 flex-col">
                                 <div className="wl-product-copy flex flex-col gap-0.5">
-                                  <h3 className="text-sm font-bold text-neutral-900 dark:text-white">{product.name}</h3>
+                                  <h3 className="wl-product-list-title text-lg font-black leading-tight text-neutral-950 dark:text-white">{product.name}</h3>
                                   {product.description && (
-                                    <p className="text-xs leading-relaxed text-neutral-500 line-clamp-2 dark:text-zinc-400">{product.description}</p>
+                                    <button type="button" className="wl-product-description-trigger text-xs text-neutral-500 dark:text-zinc-400" onClick={() => openProductPreview(product)} aria-label={`Ver detalle de ${product.name}`}><span className="line-clamp-2 leading-relaxed">{product.description}</span></button>
                                   )}
                                 </div>
                                 <div className="wl-product-purchase">
@@ -6752,7 +6586,7 @@ function ProductImage({
                         <Mail className="w-4 h-4" />
                       </div>
                       <div className="text-sm">
-                        <p className="font-medium text-neutral-900">{activeOrderDetailsMap[selectedOrderId].paymentMethod === 'CASH' ? 'Efectivo' : 'Transferencia'}</p>
+                        <p className="font-medium text-neutral-900">{formatPaymentMethodLabel(activeOrderDetailsMap[selectedOrderId].paymentMethod)}</p>
                         <p className="text-xs text-neutral-500">{activeOrderDetailsMap[selectedOrderId].paymentStatus === 'PENDING' ? 'Pago pendiente' : activeOrderDetailsMap[selectedOrderId].paymentStatus === 'PAID' ? 'Pagado' : activeOrderDetailsMap[selectedOrderId].paymentStatus}</p>
                       </div>
                     </div>
@@ -6774,7 +6608,7 @@ function ProductImage({
                         <Mail className="w-4 h-4" />
                       </div>
                       <div className="text-sm">
-                        <p className="font-medium text-neutral-900">{activeOrderDetailsMap[selectedOrderId].paymentMethod === 'CASH' ? 'Efectivo' : 'Transferencia'}</p>
+                        <p className="font-medium text-neutral-900">{formatPaymentMethodLabel(activeOrderDetailsMap[selectedOrderId].paymentMethod)}</p>
                         <p className="text-xs text-neutral-500">{activeOrderDetailsMap[selectedOrderId].paymentStatus === 'PENDING' ? 'Pago pendiente' : activeOrderDetailsMap[selectedOrderId].paymentStatus === 'PAID' ? 'Pagado' : activeOrderDetailsMap[selectedOrderId].paymentStatus}</p>
                       </div>
                     </div>
@@ -6986,52 +6820,17 @@ function ProductImage({
         </div>
       )}
 
-      {/* Floating Checkout Button */}
-      {cart.length > 0 && !isCartOpen && (
-        <div className={`wl-floating-cart fixed bottom-6 left-1/2 -translate-x-1/2 z-[45] w-[calc(100%-2rem)] max-w-sm pointer-events-auto pb-[env(safe-area-inset-bottom)] transition-all duration-300 ${
-          hideCartButton ? 'pointer-events-none translate-y-24 opacity-0' : ''
-        }`}>
-          <button
-            type="button"
-            onClick={() => setIsCartOpen(true)}
-            className={`group relative flex w-full items-center justify-between overflow-hidden rounded-full bg-neutral-950 px-5 py-3.5 shadow-[0_8px_30px_rgb(0,0,0,0.2)] transition-all hover:scale-[1.02] active:scale-[0.98] active-scale ${
-              cartJustUpdated ? 'scale-[1.05] ring-4 ring-[#0ea5e9]/40' : ''
-            } ${cartPulse ? 'scale-[1.04] ring-4 ring-[#0ea5e9]/40 animate-cart-pulse' : ''}`}
-          >
-            {/* Pulsing background effect */}
-            <div className="absolute inset-0 -z-10 animate-[pulse_2s_ease-in-out_infinite] bg-neutral-800 opacity-50" />
-            
-            <div className="flex items-center gap-3">
-              <div className="relative flex h-8 w-8 items-center justify-center rounded-full bg-white/10 text-white">
-                <span className="text-xs font-bold">{totalProducts}</span>
-              </div>
-              <span className="text-sm font-semibold tracking-wide text-white">Ver carrito</span>
-            </div>
-            
-            <div className="flex items-center gap-2">
-              <span className="text-sm font-bold text-white">
-                ${(cartSubtotal - discountAmount).toFixed(2)}
-              </span>
-              <ChevronRight className="h-4 w-4 text-white/70 transition-transform group-hover:translate-x-1" />
-            </div>
+      {displayCartCount > 0 && !isCartOpen && !isCheckoutOpen && !customizingProduct && !showAuthModal && (
+        <div className="wl-floating-cart">
+          <button type="button" onClick={() => setIsCartOpen(true)}
+            aria-label={`Ver carrito, ${displayCartCount} ${displayCartCount === 1 ? 'producto' : 'productos'}, subtotal ${formatCurrency(effectiveSubtotal)}`}>
+            <span className="wl-floating-cart-count" aria-hidden="true">{displayCartCount > 99 ? '99+' : displayCartCount}</span>
+            <span className="wl-floating-cart-label">Ver carrito</span>
+            <span className="wl-floating-cart-total"><small>Subtotal</small><strong>{formatCurrency(effectiveSubtotal)}</strong></span>
+            <ChevronRight className="wl-floating-cart-arrow" aria-hidden="true" />
           </button>
         </div>
       )}
-
-      <style>{`
-        @keyframes cartPulse {
-          0%, 100% { transform: scale(1); }
-          10% { transform: scale(1.04); }
-          20% { transform: scale(1.02); }
-          30% { transform: scale(1.05); }
-          40% { transform: scale(1.02); }
-          55% { transform: scale(1.04); }
-          70% { transform: scale(1); }
-        }
-        .animate-cart-pulse {
-          animation: cartPulse 1.2s ease-in-out;
-        }
-      `}</style>
 
       {toastMsg ? (
         <div className={`fixed bottom-6 left-1/2 -translate-x-1/2 z-50 rounded-2xl border px-5 py-3 text-sm shadow-[0_4px_16px_rgba(0,0,0,0.08)] flex items-center gap-2 ${
@@ -7100,36 +6899,38 @@ function ProductImage({
         apiBase={apiBase}
       />
 
-      {/* Quick View Modal for Stores */}
+      {/* Product details: the browser manages focus and Escape for the dialog. */}
       {previewProduct && (
-        <div
-          className="animate-overlay-fade fixed inset-0 z-[60] flex items-end justify-center bg-black/80 backdrop-blur-sm px-0 py-0 sm:items-center sm:px-6 sm:py-8"
-          onClick={() => setPreviewProduct(null)}
+        <dialog
+          ref={previewDialogRef}
+          className={`wl-product-detail-dialog${previewProduct.images.length ? '' : ' is-text-only'}`}
+          aria-labelledby="wl-product-detail-title"
+          aria-describedby={previewProduct.description ? 'wl-product-detail-description' : undefined}
+          onClose={() => { if (previewSuspendedRef.current) { previewSuspendedRef.current = false; return; } setPreviewProduct(null); setPreviewLightboxOpen(false); }}
+          onClick={event => { if (event.target === event.currentTarget) event.currentTarget.close(); }}
         >
           <div
-            className="animate-modal-pop relative flex w-full max-w-4xl flex-col overflow-hidden rounded-t-3xl bg-white shadow-2xl ring-1 ring-black/5 max-h-[92dvh] sm:flex-row sm:max-h-[90vh] sm:rounded-3xl dark:bg-neutral-900 dark:ring-white/10"
+            className="wl-product-detail-card relative flex w-full flex-col overflow-hidden bg-white dark:bg-neutral-900"
             onClick={(e) => e.stopPropagation()}
           >
-            {/* Drag handle (mobile bottom sheet) */}
-            <div className="mx-auto mt-2 h-1.5 w-10 shrink-0 rounded-full bg-neutral-300 dark:bg-zinc-600 sm:hidden" />
-
             {/* Close button */}
             <button
               type="button"
-              onClick={() => setPreviewProduct(null)}
-              className="absolute right-3 top-3 z-20 flex h-8 w-8 items-center justify-center rounded-full bg-white/90 text-neutral-700 shadow-md backdrop-blur-sm transition hover:bg-white hover:scale-105 active:scale-95 dark:bg-neutral-800/90 dark:text-zinc-300 dark:hover:bg-neutral-700"
+              onClick={() => previewDialogRef.current?.close()}
+              aria-label="Cerrar detalle del producto"
+              className="absolute right-3 top-3 z-20 flex h-11 w-11 items-center justify-center rounded-full bg-white/90 text-neutral-700 shadow-md backdrop-blur-sm transition hover:bg-white dark:bg-neutral-800/90 dark:text-zinc-300 dark:hover:bg-neutral-700"
             >
               <X className="h-4 w-4" />
             </button>
 
             {/* Image section */}
-            <div className="relative flex w-full shrink-0 items-center justify-center overflow-hidden h-64 sm:h-full sm:w-[55%] sm:min-h-[480px] bg-gradient-to-br from-neutral-100 via-neutral-50 to-neutral-200 dark:from-neutral-800/60 dark:via-neutral-800/30 dark:to-neutral-900">
+            <div className={`wl-product-detail-media${previewProduct.images.length ? '' : ' is-empty'}`}>
               {previewProduct.images.length > 0 ? (
                 <button
                   type="button"
                   onClick={() => setPreviewLightboxOpen(true)}
                   aria-label="Ampliar imagen"
-                  className="relative flex h-full w-full cursor-zoom-in items-center justify-center appearance-none border-0 bg-transparent p-3 sm:p-6"
+                  className="relative flex h-full w-full cursor-zoom-in items-center justify-center appearance-none border-0 bg-transparent p-2 sm:p-4"
                 >
                   <img
                     key={previewIndex}
@@ -7145,11 +6946,9 @@ function ProductImage({
                   </span>
                 </button>
               ) : (
-                <div className="flex h-full w-full flex-col items-center justify-center gap-3 text-neutral-300 dark:text-zinc-600">
-                  <svg className="h-16 w-16" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.2">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 001.5-1.5V6a1.5 1.5 0 00-1.5-1.5H3.75A1.5 1.5 0 002.25 6v12a1.5 1.5 0 001.5 1.5zm10.5-11.25h.008v.008h-.008V8.25zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z" />
-                  </svg>
-                  <span className="text-sm font-medium text-neutral-400 dark:text-zinc-500">Sin imagen</span>
+                <div className="wl-product-detail-placeholder">
+                  <Utensils aria-hidden="true" />
+                  <span>Foto no disponible</span>
                 </div>
               )}
               {previewProduct.discountPrice && (
@@ -7167,6 +6966,7 @@ function ProductImage({
                   <button
                     type="button"
                     onClick={() => setPreviewIndex((prev) => (prev - 1 + previewProduct.images.length) % previewProduct.images.length)}
+                    aria-label="Imagen anterior"
                     className="absolute left-2 top-1/2 z-10 -translate-y-1/2 flex h-9 w-9 items-center justify-center rounded-full bg-white/80 text-neutral-700 shadow-md backdrop-blur-sm transition hover:bg-white hover:scale-105 active:scale-95 dark:bg-neutral-900/80 dark:text-zinc-300 dark:hover:bg-neutral-800"
                   >
                     <ChevronLeft className="h-4 w-4" strokeWidth={2.5} />
@@ -7174,6 +6974,7 @@ function ProductImage({
                   <button
                     type="button"
                     onClick={() => setPreviewIndex((prev) => (prev + 1) % previewProduct.images.length)}
+                    aria-label="Imagen siguiente"
                     className="absolute right-2 top-1/2 z-10 -translate-y-1/2 flex h-9 w-9 items-center justify-center rounded-full bg-white/80 text-neutral-700 shadow-md backdrop-blur-sm transition hover:bg-white hover:scale-105 active:scale-95 dark:bg-neutral-900/80 dark:text-zinc-300 dark:hover:bg-neutral-800"
                   >
                     <ChevronRight className="h-4 w-4" strokeWidth={2.5} />
@@ -7184,6 +6985,8 @@ function ProductImage({
                         key={idx}
                         type="button"
                         onClick={() => setPreviewIndex(idx)}
+                        aria-label={`Ver imagen ${idx + 1}`}
+                        aria-current={idx === previewIndex ? 'true' : undefined}
                         className={`h-1.5 rounded-full transition-all duration-300 ${idx === previewIndex ? 'w-5 bg-neutral-900 dark:bg-white' : 'w-1.5 bg-neutral-300 hover:bg-neutral-500 dark:bg-zinc-600'}`}
                       />
                     ))}
@@ -7199,22 +7002,24 @@ function ProductImage({
               onIndexChange={setPreviewIndex}
               name={previewProduct?.name ?? ''}
               onClose={() => setPreviewLightboxOpen(false)}
+              portalTarget={previewDialogRef.current}
             />
 
             {/* Details section */}
-            <div className="flex w-full min-h-0 flex-1 flex-col sm:h-full sm:w-[45%] sm:flex-none">
-              <div className="min-h-0 flex-1 overflow-y-auto p-5 sm:p-7">
-                <h2 className="text-xl font-bold leading-tight text-neutral-900 sm:text-2xl dark:text-white">{previewProduct.name}</h2>
+            <div className="wl-product-detail-content">
+              <div className="wl-product-detail-copy min-h-0 flex-1 overflow-y-auto">
+                <p className="wl-product-detail-kicker">Menú WingsLab</p>
+                <h2 id="wl-product-detail-title" className="wl-product-detail-title">{previewProduct.name}</h2>
                 {previewProduct.description && (
-                  <p className="mt-3 text-sm leading-relaxed text-neutral-600 dark:text-zinc-300 whitespace-pre-wrap break-words">{previewProduct.description}</p>
+                  <p id="wl-product-detail-description" className="wl-product-detail-description">{previewProduct.description}</p>
                 )}
-                <div className="mt-5">
+                <div className="wl-product-detail-price">
                   {previewProduct.sellBy === 'WEIGHT' ? (
-                    <p className="text-2xl font-bold text-neutral-900 dark:text-white">{formatCurrency(previewProduct.unitPrice || previewProduct.price)}<span className="text-base font-medium text-neutral-500 dark:text-zinc-400">/kg</span></p>
+                    <p className="wl-product-current-price text-2xl font-bold">{formatCurrency(previewProduct.unitPrice || previewProduct.price)}<span className="text-base font-medium text-neutral-500 dark:text-zinc-400">/kg</span></p>
                   ) : getMultiBuyInfo(previewProduct).isMultiBuy ? (
                     <div className="space-y-1">
                       <div className="flex flex-wrap items-baseline gap-x-2.5 gap-y-0.5">
-                        <span className="text-2xl font-bold text-neutral-900 dark:text-white">{formatCurrency(getMultiBuyInfo(previewProduct).basePrice)}</span>
+                        <span className="wl-product-current-price text-2xl font-bold">{formatCurrency(getMultiBuyInfo(previewProduct).basePrice)}</span>
                         <span className="text-sm font-semibold text-emerald-600 dark:text-emerald-500">{formatCurrency(getMultiBuyInfo(previewProduct).effectiveUnitPrice)} c/u llevando {getMultiBuyInfo(previewProduct).buy}</span>
                       </div>
                       <span className="inline-block rounded-full bg-emerald-50 px-2.5 py-0.5 text-[10px] font-bold text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400">
@@ -7224,7 +7029,7 @@ function ProductImage({
                   ) : previewProduct.discountPrice ? (
                     <div className="space-y-1">
                       <div className="flex items-baseline gap-2.5">
-                        <span className="text-2xl font-bold text-rose-600 dark:text-rose-500">{formatCurrency(previewProduct.discountPrice)}</span>
+                        <span className="wl-product-current-price text-2xl font-bold">{formatCurrency(previewProduct.discountPrice)}</span>
                         <span className="text-sm text-neutral-400 line-through dark:text-zinc-500">{formatCurrency(previewProduct.price)}</span>
                       </div>
                       <span className="inline-block rounded-full bg-emerald-50 px-2.5 py-0.5 text-[10px] font-bold text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400">
@@ -7232,21 +7037,24 @@ function ProductImage({
                       </span>
                     </div>
                   ) : (
-                    <p className="text-2xl font-bold text-neutral-900 dark:text-white">{formatCurrency(previewProduct.price)}</p>
+                    <p className="wl-product-current-price text-2xl font-bold">{formatCurrency(previewProduct.price)}</p>
                   )}
                 </div>
               </div>
-              <div className="flex shrink-0 items-center gap-3 border-t border-neutral-100 p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] dark:border-zinc-800 sm:pb-7">
-                {previewProduct.optionGroups?.length ? (
+              <div className="flex shrink-0 items-center gap-3 border-t border-neutral-100 p-4 dark:border-zinc-800 sm:px-7 sm:py-5">
+                {(previewProduct.optionGroups?.length || previewProduct.sellBy === 'WEIGHT') ? (
                   <button
                     type="button"
+                    disabled={!currentPreviewProduct || !getProductAvailability(currentPreviewProduct).available}
                     onClick={() => {
-                      setPreviewProduct(null);
-                      addToCart(previewProduct as any);
+                      if (!currentPreviewProduct) return;
+                      previewSuspendedRef.current = true;
+                      previewDialogRef.current?.close();
+                      addToCart(currentPreviewProduct);
                     }}
-                    className="flex-1 rounded-xl bg-neutral-900 py-3.5 text-sm font-bold text-white shadow-lg shadow-neutral-900/20 transition hover:bg-neutral-800 active:scale-[0.97] dark:bg-white dark:text-neutral-950 dark:hover:bg-zinc-200 dark:shadow-none"
+                    className="wl-product-detail-primary flex-1"
                   >
-                    Personalizar y agregar
+                    {!currentPreviewProduct || !getProductAvailability(currentPreviewProduct).available ? 'Producto no disponible' : 'Personalizar y agregar'}
                   </button>
                 ) : (() => {
                   const qty = getCartQuantity(previewProduct.id);
@@ -7256,8 +7064,8 @@ function ProductImage({
                         <div className="flex items-center justify-between rounded-xl bg-neutral-50 p-1 dark:bg-neutral-800">
                           <button
                             type="button"
+                            aria-label={`Quitar una unidad de ${previewProduct.name}`}
                             onClick={() => {
-                              if (qty <= 1) setPreviewProduct(null);
                               updateCartItem(previewProduct.id, { quantity: qty - 1 });
                             }}
                             className="flex h-10 w-10 items-center justify-center rounded-lg text-neutral-500 transition hover:bg-white hover:text-neutral-800 active:scale-90 dark:text-zinc-300 dark:hover:bg-neutral-700 dark:hover:text-zinc-100"
@@ -7271,7 +7079,9 @@ function ProductImage({
                           <span className="flex h-10 w-10 items-center justify-center text-base font-bold text-neutral-900 dark:text-white">{qty}</span>
                           <button
                             type="button"
-                            onClick={() => addToCart(previewProduct as any)}
+                            aria-label={`Agregar una unidad de ${previewProduct.name}`}
+                            disabled={!currentPreviewProduct || !getProductAvailability(currentPreviewProduct).available || qty >= getProductAvailability(currentPreviewProduct).maxQty}
+                            onClick={() => { if (currentPreviewProduct) addToCart(currentPreviewProduct); }}
                             className="flex h-10 w-10 items-center justify-center rounded-lg text-neutral-500 transition hover:bg-white hover:text-neutral-800 active:scale-90 dark:text-zinc-300 dark:hover:bg-neutral-700 dark:hover:text-zinc-100"
                           >
                             <Plus className="h-4 w-4" strokeWidth={2.5} />
@@ -7280,13 +7090,14 @@ function ProductImage({
                       )}
                       <button
                         type="button"
+                        disabled={qty === 0 && (!currentPreviewProduct || !getProductAvailability(currentPreviewProduct).available)}
                         onClick={() => {
-                          if (qty === 0) addToCart(previewProduct as any);
-                          setPreviewProduct(null);
+                          if (qty === 0 && currentPreviewProduct) addToCart(currentPreviewProduct);
+                          else if (qty > 0) previewDialogRef.current?.close();
                         }}
-                        className="flex-1 rounded-xl bg-neutral-900 py-3.5 text-sm font-bold text-white shadow-lg shadow-neutral-900/20 transition hover:bg-neutral-800 active:scale-[0.97] dark:bg-white dark:text-neutral-950 dark:hover:bg-zinc-200 dark:shadow-none"
+                        className="wl-product-detail-primary flex-1"
                       >
-                        {qty > 0 ? 'Listo' : 'Agregar al carrito'}
+                        {qty > 0 ? 'Listo' : !currentPreviewProduct || !getProductAvailability(currentPreviewProduct).available ? 'Producto no disponible' : 'Agregar al carrito'}
                       </button>
                     </>
                   );
@@ -7294,7 +7105,7 @@ function ProductImage({
               </div>
             </div>
           </div>
-        </div>
+        </dialog>
       )}
     </main>
   );
@@ -7549,36 +7360,13 @@ function buildDetailAddressLabel(address: CustomerOrderDetail['address'] | null 
     .join(', ');
 }
 
-async function persistTransferProof(params: {
-  apiBase: string;
-  token: string;
-  source: string;
-  fileName?: string;
-}) {
-  if (!params.source.startsWith('data:')) {
-    return params.source;
-  }
-
-  const uploaded = await uploadMediaAsset({
-    apiBase: params.apiBase,
-    token: params.token,
-    kind: 'payment-proof',
-    source: params.source,
-    fileName: params.fileName,
-    fallbackMessage: 'No se pudo subir el comprobante de transferencia.',
-    fallbackToSource: true,
-  });
-
-  return uploaded.url;
-}
-
 function getCheckoutValidationMessage(
   checkoutForm: CheckoutForm,
   cart: CartItem[],
   selectedRestaurant: PublicRestaurantDetail | null,
   token: string,
-  hasTransferProof: boolean,
-  fulfillmentType: 'DELIVERY' | 'PICKUP'
+  fulfillmentType: 'DELIVERY' | 'PICKUP',
+  hasCardReward: boolean,
 ) {
   if (!token) {
     return 'Inicia sesion como cliente para confirmar pedidos.';
@@ -7596,16 +7384,16 @@ function getCheckoutValidationMessage(
     return 'Agrega al menos un producto al carrito.';
   }
 
-  if (checkoutForm.paymentMethod === 'TRANSFER' && !hasTransferDetails(selectedRestaurant)) {
-    return 'Este restaurante aun no ha configurado sus datos de transferencia.';
-  }
-
   const acceptedMethods = getAcceptedPaymentMethods(selectedRestaurant);
-  if (checkoutForm.paymentMethod === 'CASH' && !acceptedMethods.includes('CASH')) {
-    return 'Este restaurante no acepta pagos en efectivo. Usa transferencia.';
+  if (!acceptedMethods.includes(checkoutForm.paymentMethod)) {
+    return checkoutForm.paymentMethod === 'CREDIT_CARD'
+      ? 'Este restaurante no acepta pagos con tarjeta. Selecciona efectivo.'
+      : 'Este restaurante no acepta pagos en efectivo.';
   }
-  if (checkoutForm.paymentMethod === 'TRANSFER' && !acceptedMethods.includes('TRANSFER')) {
-    return 'Este restaurante no acepta pagos por transferencia. Usa efectivo.';
+  // Con tarjeta no se descuentan cupones ni recompensas: bloqueamos aquí para
+  // que el total mostrado siempre coincida con el importe cobrado.
+  if (checkoutForm.paymentMethod === 'CREDIT_CARD' && hasCardReward) {
+    return 'Los cupones y recompensas solo están disponibles con efectivo. Quítalos para pagar con tarjeta.';
   }
 
   if (
@@ -7615,10 +7403,6 @@ function getCheckoutValidationMessage(
       !checkoutForm.neighborhood.trim())
   ) {
     return 'Completa la dirección de entrega para continuar.';
-  }
-
-  if (checkoutForm.paymentMethod === 'TRANSFER' && !hasTransferProof) {
-    return 'Carga la imagen del comprobante de transferencia para continuar.';
   }
 
   return '';
@@ -7707,25 +7491,22 @@ function buildRestaurantInitials(name: string) {
     .join('');
 }
 
-function hasTransferDetails(restaurant: PublicRestaurantDetail | null) {
-  if (!restaurant) {
-    return false;
-  }
-
-  return Boolean(
-    restaurant.transferBankName?.trim() &&
-      restaurant.transferAccountNumber?.trim() &&
-      restaurant.transferBeneficiaryName?.trim()
-  );}
+/** Etiqueta única para pedidos nuevos e históricos (TRANSFER solo historia). */
+function formatPaymentMethodLabel(method: string): string {
+  if (method === 'CASH') return 'Efectivo';
+  if (method === 'CREDIT_CARD' || method === 'CARD') return 'Tarjeta';
+  if (method === 'TRANSFER') return 'Transferencia';
+  return method;
+}
 
 function getAcceptedPaymentMethods(restaurant: PublicRestaurantDetail | null): string[] {
-  if (restaurant?.acceptedPaymentMethods?.length) {
-    return restaurant.acceptedPaymentMethods;
+  if (restaurant?.acceptedPaymentMethods) {
+    return restaurant.acceptedPaymentMethods.filter(method => method === 'CASH' || method === 'CREDIT_CARD');
   }
   // Fallback para datos viejos en caché: derivar del estado actual.
   const methods: string[] = [];
   if (restaurant?.acceptsCash !== false) methods.push('CASH');
-  if (hasTransferDetails(restaurant)) methods.push('TRANSFER');
+  if (restaurant?.acceptsCard === true) methods.push('CREDIT_CARD');
   return methods;
 }
 

@@ -9,6 +9,10 @@ module.exports = {
   transform: {
     '^.+\\.tsx?$': ['ts-jest', { tsconfig: {
       rootDir: root, baseUrl: root, allowJs: true,
+      // `packages/shared/src/package.json` declara el árbol como ESM para
+      // Turbopack, pero Jest corre en CommonJS. Forzar el módulo aquí evita
+      // que ts-jest emita `export` sin transformar (y coincide con dist/).
+      module: 'CommonJS', moduleResolution: 'node', esModuleInterop: true,
       paths: { '@sadel/shared': ['packages/shared/src/index.ts'] },
     } }],
   },

@@ -12,6 +12,7 @@ interface ImageZoomLightboxProps {
   onIndexChange: (i: number) => void;
   name: string;
   onClose: () => void;
+  portalTarget?: HTMLElement | null;
 }
 
 export default function ImageZoomLightbox({
@@ -21,6 +22,7 @@ export default function ImageZoomLightbox({
   onIndexChange,
   name,
   onClose,
+  portalTarget,
 }: ImageZoomLightboxProps) {
   const [mounted, setMounted] = useState(false);
   const overlayRef = useRef<HTMLDivElement | null>(null);
@@ -179,6 +181,6 @@ export default function ImageZoomLightbox({
         </div>
       )}
     </div>,
-    document.body,
+    portalTarget || document.body,
   );
 }
