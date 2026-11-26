@@ -37,13 +37,16 @@ const RETRY_CONFIG = {
   baseDelayMs: 1000,
 } as const;
 
-function isTransientError(error: any): boolean {
+export function isTransientError(error: any): boolean {
   if (!error) return false;
   const code = error.statusCode;
   if (code === 429) return true;
   if (code >= 500 && code < 600) return true;
-  if (code === undefined && error.message?.includes('network') || error.message?.includes('timeout') || error.message?.includes('ETIMEDOUT') || error.message?.includes('ECONNRESET')) return true;
-  return false;
+  // Un 4xx (salvo 429) es definitivo: aunque el mensaje mencione un timeout,
+  // reenviarlo solo llena la cola de reintentos sin posibilidad de entrega.
+  if (code !== undefined) return false;
+  const message = typeof error.message === 'string' ? error.message : '';
+  return ['network', 'timeout', 'ETIMEDOUT', 'ECONNRESET'].some(fragment => message.includes(fragment));
 }
 
 function isExpiredSubscription(error: any): boolean {

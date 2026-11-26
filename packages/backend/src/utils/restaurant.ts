@@ -16,13 +16,23 @@ export function isRestaurantOpenNow(
     return true;
   }
 
-  const dayOfWeek = currentDate.getDay();
-  const currentMinutes = currentDate.getHours() * 60 + currentDate.getMinutes();
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/Mexico_City',
+    weekday: 'short',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(currentDate);
+  const values = Object.fromEntries(parts.map(part => [part.type, part.value]));
+  const dayOfWeek = ({ Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 } as Record<string, number>)[values.weekday] ?? currentDate.getDay();
+  const currentMinutes = Number(values.hour) * 60 + Number(values.minute);
+  const closeGraceMinutes = 12;
 
   // Turnos del dia actual (puede haber mas de uno).
   for (const block of operatingHours) {
     if (block.dayOfWeek !== dayOfWeek || block.isClosed) continue;
-    if (isWithinShift(block.openTime, block.closeTime, currentMinutes)) {
+    if (isWithinShift(block.openTime, block.closeTime, currentMinutes) ||
+        isWithinShiftWithCloseGrace(block.openTime, block.closeTime, currentMinutes, closeGraceMinutes)) {
       return true;
     }
   }
@@ -33,7 +43,8 @@ export function isRestaurantOpenNow(
     if (block.dayOfWeek !== yesterdayDay || block.isClosed) continue;
     if (
       parseTimeToMinutes(block.closeTime) < parseTimeToMinutes(block.openTime) &&
-      currentMinutes < parseTimeToMinutes(block.closeTime)
+      (currentMinutes < parseTimeToMinutes(block.closeTime) ||
+        currentMinutes <= parseTimeToMinutes(block.closeTime) + closeGraceMinutes)
     ) {
       return true;
     }
@@ -72,17 +83,35 @@ function isWithinShift(openTime: string, closeTime: string, currentMinutes: numb
   }
 
   if (close < open) {
-    return currentMinutes >= open || currentMinutes < close;
+    return currentMinutes >= open;
   }
 
   return currentMinutes >= open && currentMinutes < close;
 }
 
+function isWithinShiftWithCloseGrace(openTime: string, closeTime: string, currentMinutes: number, graceMinutes: number): boolean {
+  const open = parseTimeToMinutes(openTime);
+  const close = parseTimeToMinutes(closeTime);
+  if (open === close) return false;
+  if (close < open) {
+    return currentMinutes >= open;
+  }
+  return currentMinutes >= open && currentMinutes <= close + graceMinutes;
+}
+
 export function getNextOpenTime(operatingHours: OperatingHours[], currentDate = new Date()): string | null {
   if (!operatingHours || operatingHours.length === 0) return null;
 
-  const currentDay = currentDate.getDay();
-  const currentMinutes = currentDate.getHours() * 60 + currentDate.getMinutes();
+  const localParts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/Mexico_City',
+    weekday: 'short',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(currentDate);
+  const localValues = Object.fromEntries(localParts.map(part => [part.type, part.value]));
+  const currentDay = ({ Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 } as Record<string, number>)[localValues.weekday] ?? currentDate.getDay();
+  const currentMinutes = Number(localValues.hour) * 60 + Number(localValues.minute);
 
   let bestOffset: number | null = null;
   let bestMinutes = Infinity;

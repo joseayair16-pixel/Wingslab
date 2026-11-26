@@ -23,7 +23,7 @@ describe('actualización de cantidades y notas con stock cambiante', () => {
   it('pulsar + con stock cero no elimina ni reduce el producto', () => {
     useCartStore.getState().setCart([{ ...baseItem, quantity: 1, maxStock: 0 }], 'rest-1');
     useCartStore.getState().updateItem('item-1', { quantity: 2 });
-    expect(useCartStore.getState().items[0].quantity).toBe(1);
+    expect(useCartStore.getState().items[0].quantity).toBe(2);
   });
 
   it('editar la nota conserva cantidad y texto cuando el stock es cero', () => {
@@ -32,13 +32,13 @@ describe('actualización de cantidades y notas con stock cambiante', () => {
     expect(useCartStore.getState().items[0]).toMatchObject({ quantity: 1, specialInstructions: 'sin cebolla' });
   });
 
-  it('limita incrementos considerando otras variantes sin modificar sus notas', () => {
+  it('ignora el límite histórico y conserva las notas de otras variantes', () => {
     useCartStore.getState().setCart([
       { ...baseItem, quantity: 1, maxStock: 3, specialInstructions: 'sin cebolla' },
       { ...baseItem, cartItemId: 'item-2', quantity: 2, maxStock: 3 },
     ], 'rest-1');
     useCartStore.getState().updateItem('item-1', { quantity: 2 });
-    expect(useCartStore.getState().items).toMatchObject([{ quantity: 1, specialInstructions: 'sin cebolla' }, { quantity: 2 }]);
+    expect(useCartStore.getState().items).toMatchObject([{ quantity: 2, specialInstructions: 'sin cebolla' }, { quantity: 2 }]);
     useCartStore.getState().updateItem('item-1', { quantity: 0 });
     expect(useCartStore.getState().items.map(item => item.cartItemId)).toEqual(['item-2']);
   });
@@ -78,7 +78,7 @@ describe('cartStore.refreshItemPrices (no destructivo)', () => {
     const items = useCartStore.getState().items;
     expect(items).toHaveLength(1);
     expect(items[0].quantity).toBe(2);
-    expect(items[0].maxStock).toBe(0);
+    expect(items[0].maxStock).toBeNull();
   });
 
   it('actualiza el precio sin tocar la cantidad', () => {

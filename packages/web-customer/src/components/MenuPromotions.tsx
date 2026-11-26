@@ -1,9 +1,8 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { X } from 'lucide-react';
 import { MENU_PROMOTIONS_PATH, menuPromotionImage, readMenuPromotions, type MenuPromotion as Item } from '../lib/menu-promotions';
-
-const safePath = (value: string) => /^\/(?!\/)[a-zA-Z0-9/_?#=&.-]*$/.test(value) && !value.includes('..');
 
 function BannerPlaceholder({ busy = false }: { busy?: boolean }) {
   return <div className="wl-banner-empty" aria-hidden={busy || undefined}>
@@ -113,8 +112,13 @@ export function MenuPromotions({ apiBase, token, authReady, initialBanners, view
         {banners.length > 1 && <div className="wl-banner-dots" aria-label="Elegir promoción">{banners.map((item, position) => <button key={item.id} type="button" aria-label={`Ver promoción ${position + 1}`} aria-current={index === position ? 'true' : undefined} onClick={() => bannerTrack.current?.scrollTo({ left: position * bannerTrack.current.clientWidth, behavior: 'smooth' })}><span /></button>)}</div>}
       </> : <BannerPlaceholder />}
     </section>
-    <dialog ref={dialog} aria-labelledby="welcome-promotion-title" onCancel={() => setModal(null)} onClose={() => setModal(null)} className="wl-promotion-dialog m-auto max-h-[90dvh] w-[calc(100%-2rem)] max-w-md overflow-y-auto rounded-3xl border-0 bg-white p-0 text-neutral-900 shadow-2xl backdrop:bg-black/60">
-      {modal && <><div className="flex justify-end p-3"><button type="button" autoFocus aria-label="Cerrar promoción" className="rounded-full border px-4 py-2 font-semibold" onClick={() => setModal(null)}>Cerrar ✕</button></div><img src={image(modal)} alt={modal.title} className="max-h-[50dvh] w-full object-contain" /><div className="space-y-3 p-6"><h2 id="welcome-promotion-title" className="text-xl font-bold">{modal.title}</h2>{modal.text && <p className="text-sm text-neutral-600">{modal.text}</p>}{safePath(modal.targetUrl) && <a className="inline-block rounded-xl bg-neutral-950 px-5 py-3 font-semibold text-white" href={modal.targetUrl}>{modal.buttonLabel || 'Ver más'}</a>}</div></>}
+    <dialog ref={dialog} aria-label={modal?.title || 'Promoción'} onCancel={() => setModal(null)} onClose={() => setModal(null)} className="m-auto max-h-[calc(100dvh-2rem)] max-w-[calc(100vw-2rem)] overflow-visible border-0 bg-transparent p-0 backdrop:bg-black/70">
+      {modal && <div className="relative">
+        <img src={image(modal)} alt={modal.title} className="block h-auto max-h-[calc(100dvh-2rem)] w-auto max-w-[min(32rem,calc(100vw-2rem))] object-contain shadow-2xl" />
+        <button type="button" autoFocus aria-label="Cerrar promoción" className="absolute right-2 top-2 grid h-11 w-11 place-items-center rounded-full bg-black/65 text-white shadow-lg transition hover:bg-black/85 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white" onClick={() => setModal(null)}>
+          <X className="h-5 w-5" aria-hidden="true" />
+        </button>
+      </div>}
     </dialog>
   </>;
 }

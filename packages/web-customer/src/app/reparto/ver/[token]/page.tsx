@@ -9,8 +9,12 @@
 
 import { useEffect, useRef, useState, use } from 'react';
 import { Banknote, Check, Clock, CreditCard, MapPin, Package, Route, Store } from 'lucide-react';
+import officialWordmark from '../../../../assets/wingslab-wordmark-red.png';
+import officialWhiteWordmark from '../../../../assets/wingslab-wordmark.png';
 import DeliveryRouteMap from '../../../../components/DeliveryRouteMap';
 import DriverTurnByTurnOverlay from '../../../../components/DriverTurnByTurnOverlay';
+import redWordmark from '../../../../assets/wingslab-wordmark-red.png';
+import whiteWordmark from '../../../../assets/wingslab-wordmark.png';
 import type { Html5Qrcode } from 'html5-qrcode';
 import {
   optimizeRoute,
@@ -42,6 +46,14 @@ interface DeliveryTicketData {
     longitude: number;
   };
   notes?: string | null;
+  items?: Array<{
+    id: string;
+    quantity: number;
+    weightG?: number | null;
+    specialInstructions?: string | null;
+    product: { name: string; image?: string | null };
+    options: Array<{ name: string }>;
+  }>;
   handoverPin?: string | null;
   driverArrivedAtCustomer?: string | null;
   isSupportDelivery?: boolean;
@@ -153,6 +165,8 @@ export default function DeliveryTicketPage({ params }: PageProps) {
   const [submitting, setSubmitting] = useState(false);
   const [notifying, setNotifying] = useState(false);
   const [llegueError, setLlegueError] = useState('');
+  const [reviewPickupToken, setReviewPickupToken] = useState<string | null>(null);
+  const [confirmedPickupToken, setConfirmedPickupToken] = useState<string | null>(null);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [modalOpenedFromDashboard, setModalOpenedFromDashboard] = useState(false);
   // Reloj de cuenta regresiva para la espera sin contacto (lugar seguro / no salió).
@@ -1399,26 +1413,18 @@ export default function DeliveryTicketPage({ params }: PageProps) {
         )}
         
         {/* ── HEADER CON "AGREGAR ENTREGA" ── */}
-        <header className={`sticky top-0 z-50 border-b transition-all duration-300 pt-[env(safe-area-inset-top)] ${
-          darkMode 
-            ? 'bg-[#09090b] border-zinc-800/60' 
-            : 'bg-white border-black/[0.04]'
-        }`}>
-          <div className="mx-auto flex max-w-lg items-center justify-between px-4 py-3">
-            <div className="flex items-center gap-2">
-              <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-neutral-950 text-white shadow-md shadow-neutral-900/15">
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 18.75a1.5 1.5 0 0 1-3 0 1.5 1.5 0 0 1 3 0ZM18.75 18.75a1.5 1.5 0 0 1-3 0 1.5 1.5 0 0 1 3 0ZM6.75 18.75h10.5m-10.5-6h7.5L18 18.75m-6.75-6V8.25h5.25L18.75 12" />
-                </svg>
-              </span>
-              <div><p className={`text-sm font-black tracking-tight ${textPrimary}`}>WingsLab</p><p className={`text-[10px] font-medium ${textSecondary}`}>Reparto</p></div>
+        <header className="wl-header wl-official-header sticky top-0 z-50 pt-[env(safe-area-inset-top)]">
+          <div className="wl-delivery-header-inner">
+            <div className="wl-delivery-brand" aria-label="WingsLab Reparto">
+              <img className="wl-logo-on-light" src={redWordmark.src} alt="" />
+              <img className="wl-logo-on-dark" src={whiteWordmark.src} alt="" />
+              <span>Reparto</span>
             </div>
-
-            <div className="flex items-center gap-2">
+            <div className="flex shrink-0 items-center">
               <button
                 type="button"
                 onClick={openAddModal}
-                className="flex min-h-11 items-center gap-1.5 rounded-full bg-gradient-to-b from-red-500 to-red-700 px-4 text-xs font-bold text-white shadow-md shadow-red-200/60 transition hover:from-red-600 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-2"
+                className="flex min-h-11 items-center gap-1.5 rounded-full bg-red-700 px-3.5 text-xs font-bold text-white shadow-sm transition hover:bg-red-800 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-2"
               >
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="3" stroke="currentColor" className="w-3.5 h-3.5">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
@@ -1432,24 +1438,22 @@ export default function DeliveryTicketPage({ params }: PageProps) {
         <main className="mx-auto max-w-lg px-4 pb-20">
 
           {/* ── PANEL "MI JORNADA" (Métricas reales del turno) ── */}
-          <div className={`mt-4 overflow-hidden rounded-[28px] border p-5 shadow-[0_8px_24px_rgba(0,0,0,0.06)] transition-all ${
+          <div className={`mt-4 overflow-hidden rounded-[24px] border p-4 shadow-[0_8px_24px_rgba(0,0,0,0.04)] transition-all ${
             darkMode 
               ? 'bg-gradient-to-br from-zinc-900 via-zinc-900 to-red-950/30 border-zinc-800' 
               : 'bg-gradient-to-br from-white via-white to-red-50 border-black/[0.06]'
           }`}>
             <div className="flex items-start justify-between">
-              <div className="flex items-center gap-3">
-                <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-red-500 to-red-700 text-white shadow-lg shadow-red-600/20"><Route className="h-6 w-6" strokeWidth={1.8} aria-hidden="true" /></span>
+              <div className="flex items-center gap-2.5">
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-300"><Route className="h-5 w-5" strokeWidth={1.8} aria-hidden="true" /></span>
                 <div>
-                <p className={`text-[10px] font-bold uppercase tracking-widest ${darkMode ? 'text-red-400' : 'text-red-600'}`}>
-                  Mi jornada
-                </p>
-                <h2 className={`text-xl font-extrabold tracking-tight mt-1 ${textPrimary}`}>
+                <h2 className={`text-lg font-black tracking-tight ${textPrimary}`}>
                   Tu jornada
                 </h2>
+                <p className={`mt-0.5 text-sm font-medium ${darkMode ? 'text-zinc-300' : 'text-neutral-600'}`}>Resumen de tus entregas</p>
                 </div>
               </div>
-              <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider ${
+              <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1.5 text-[11px] font-bold uppercase tracking-wide ${
                 darkMode 
                   ? 'border-zinc-700 bg-zinc-800/70 text-zinc-200' 
                   : 'border-neutral-200 bg-white text-neutral-700'
@@ -1459,51 +1463,30 @@ export default function DeliveryTicketPage({ params }: PageProps) {
               </span>
             </div>
 
-            <div className="mt-5 grid grid-cols-2 gap-2.5">
+            <div className="mt-4 grid grid-cols-2 gap-2 min-[390px]:grid-cols-4">
               {[
-                { label: 'Tiempo de turno', value: shiftTimeLabel, Icon: Clock },
-                { label: 'Kilómetros recorridos', value: kmDriven.toFixed(1), Icon: Route },
-                { label: 'Por entregar', value: activeList.length, Icon: Package },
-                { label: 'Entregas completadas', value: completedList.length, Icon: Check },
+                { label: 'Tiempo', value: shiftTimeLabel, Icon: Clock },
+                { label: 'Kilómetros', value: `${kmDriven.toFixed(1)} km`, Icon: Route },
+                { label: 'Pendientes', value: activeList.length, Icon: Package },
+                { label: 'Entregadas', value: completedList.length, Icon: Check },
               ].map(({ label, value, Icon }) => (
-                <div key={label} className={`min-w-0 rounded-[18px] border p-3.5 ${darkMode ? 'border-white/5 bg-white/[0.03]' : 'border-black/[0.04] bg-white/80'}`}>
-                  <div className="flex items-center justify-between gap-2">
-                    <Icon className={`h-4 w-4 shrink-0 ${darkMode ? 'text-red-400' : 'text-red-600'}`} strokeWidth={1.8} aria-hidden="true" />
-                    <p className={`text-xl font-extrabold tracking-tight tabular-nums ${textPrimary}`}>{value}</p>
-                  </div>
-                  <p className={`mt-2 text-[11px] leading-snug ${textSecondary}`}>{label}</p>
+                <div key={label} className={`min-w-0 rounded-xl px-3 py-3 ${darkMode ? 'bg-zinc-800' : 'bg-neutral-100'}`}>
+                  <Icon className={`h-4 w-4 ${darkMode ? 'text-red-400' : 'text-red-700'}`} strokeWidth={2} aria-hidden="true" />
+                  <p className={`mt-1.5 break-words text-base font-black leading-tight tabular-nums ${textPrimary}`}>{value}</p>
+                  <p className={`mt-1 text-xs font-semibold leading-tight ${darkMode ? 'text-zinc-300' : 'text-neutral-700'}`}>{label}</p>
                 </div>
               ))}
             </div>
-            {activeList.length === 0 && <p className={`mt-4 text-xs leading-relaxed ${textSecondary}`}>{completedList.length > 0 ? 'Todo entregado. Puedes agregar otra entrega cuando estés listo.' : 'Tu próxima entrega empieza aquí. Agrega un pedido para comenzar.'}</p>}
 
             {/* Total generado de envíos entregados (informativo) */}
             {totalDeliveredAmount > 0 && (
-              <div className="mt-5 flex items-center justify-between border-t border-neutral-100 pt-4 dark:border-zinc-800">
-                <span className={`text-[10px] font-medium uppercase tracking-wider ${textTertiary}`}>
+              <div className="mt-3 flex items-center justify-between border-t border-neutral-100 pt-3 dark:border-zinc-800">
+                <span className={`text-xs font-bold ${darkMode ? 'text-zinc-300' : 'text-neutral-700'}`}>
                   Total de pedidos entregados
                 </span>
-                <span className={`text-base font-semibold tabular-nums ${darkMode ? 'text-emerald-400' : 'text-emerald-600'}`}>
+                <span className={`text-lg font-extrabold tabular-nums ${darkMode ? 'text-emerald-400' : 'text-emerald-700'}`}>
                   ${totalDeliveredAmount.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
                 </span>
-              </div>
-            )}
-
-            {/* Progress bar */}
-            {deliveries.length > 0 && (
-              <div className="mt-5 border-t border-neutral-100 pt-4 dark:border-zinc-800">
-                <div className="flex items-center justify-between text-[10px] font-medium uppercase tracking-wider mb-2">
-                  <span className={textTertiary}>Progreso de entrega</span>
-                  <span className={`font-semibold tabular-nums ${textSecondary}`}>
-                    {Math.round((completedList.length / deliveries.length) * 100)}%
-                  </span>
-                </div>
-                <div className={`h-1 w-full overflow-hidden rounded-full ${darkMode ? 'bg-zinc-800' : 'bg-neutral-100'}`}>
-                  <div 
-                    className="h-full rounded-full bg-red-500 transition-all duration-500"
-                    style={{ width: `${(completedList.length / deliveries.length) * 100}%` }}
-                  />
-                </div>
               </div>
             )}
 
@@ -1622,28 +1605,21 @@ export default function DeliveryTicketPage({ params }: PageProps) {
 
           {/* ── LISTADO DE PEDIDOS ACTIVOS ── */}
           <div className="mt-6">
-            <p className={`text-[10px] font-black uppercase tracking-widest mb-3 ${textTertiary}`}>
+            <p className={`mb-3 text-xs font-extrabold uppercase tracking-wide ${darkMode ? 'text-zinc-300' : 'text-neutral-700'}`}>
               Ruta activa ({activeList.length})
             </p>
 
             {activeList.length === 0 ? (
-              <div className={`rounded-[28px] border-2 border-dashed p-10 text-center transition-all ${
+              <div className={`flex items-center gap-3 rounded-2xl border px-4 py-4 ${
                 darkMode ? 'border-zinc-800 bg-zinc-900/20' : 'border-neutral-200 bg-white'
-              } shadow-[0_8px_30px_rgb(0,0,0,0.01)]`}>
-                <div className="inline-flex h-14 w-14 items-center justify-center rounded-full bg-emerald-500/10 text-emerald-600 mb-3">
-                  <Check className="h-6 w-6" aria-hidden="true" />
+              }`}>
+                <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-emerald-500/10 text-emerald-600">
+                  <Check className="h-5 w-5" aria-hidden="true" />
                 </div>
-                <h3 className={`text-sm font-bold tracking-tight ${textPrimary}`}>¡Ruta completada!</h3>
-                <p className={`text-xs mt-1.5 max-w-[220px] mx-auto leading-relaxed ${textSecondary}`}>
-                  No tienes pedidos pendientes en tu jornada. Toca &quot;Agregar entrega&quot; para escanear un QR de entrega.
-                </p>
-                <button
-                  type="button"
-                  onClick={openAddModal}
-                  className="mt-4 rounded-2xl bg-red-600 px-5 py-3 text-xs font-black uppercase tracking-wider text-white hover:bg-red-500 transition active:scale-95 active-scale shadow-[0_4px_14px_rgba(220,38,38,0.3)]"
-                >
-                  + Agregar entrega
-                </button>
+                <div className="min-w-0">
+                  <h3 className={`text-base font-extrabold tracking-tight ${textPrimary}`}>{completedList.length ? 'Ruta completada' : 'Sin entregas pendientes'}</h3>
+                  <p className={`mt-1 text-sm font-medium leading-snug ${darkMode ? 'text-zinc-300' : 'text-neutral-600'}`}>Agrega una entrega desde el encabezado para comenzar.</p>
+                </div>
               </div>
             ) : (
               <div className="space-y-3.5">
@@ -1832,8 +1808,8 @@ export default function DeliveryTicketPage({ params }: PageProps) {
 
                         {/* Acción Principal: Llegué o Entregar */}
                         {deliv.data.isOwnDelivery && deliv.data.status === 'READY' ? (
-                          <button type="button" onClick={(e) => { e.stopPropagation(); setSelectedToken(deliv.token); }} className="flex items-center justify-center gap-1.5 rounded-2xl bg-red-600 px-4 py-2.5 text-xs font-bold text-white shadow-sm transition hover:bg-red-500 active:scale-95">
-                            <Store className="h-4 w-4" aria-hidden="true" /> Recoger pedido
+                          <button type="button" onClick={(e) => { e.stopPropagation(); setSelectedToken(deliv.token); }} className="flex items-center justify-center gap-1.5 rounded-2xl border border-neutral-900 bg-neutral-900 px-4 py-2.5 text-xs font-bold text-white shadow-sm transition hover:bg-neutral-800 active:scale-95 dark:border-zinc-700 dark:bg-zinc-800 dark:hover:bg-zinc-700">
+                            <Package className="h-4 w-4" aria-hidden="true" /> Tengo el pedido
                           </button>
                         ) : deliv.data.isSupportDelivery && !deliv.pickedUp ? (
                           isWaitingHandover(deliv.token) ? (
@@ -1856,12 +1832,12 @@ export default function DeliveryTicketPage({ params }: PageProps) {
                             onClick={(e) => { e.stopPropagation(); void handleLlegueRestauranteForToken(deliv.token); }}
                             className={`flex items-center justify-center gap-1.5 rounded-2xl py-2.5 px-4 text-xs font-bold transition-all active:scale-95 active-scale disabled:opacity-50 border shadow-sm ${
                               darkMode 
-                                ? 'bg-red-400/10 text-red-300 border-red-400/20 hover:bg-red-400/20' 
-                                : 'bg-red-50 text-red-500 border-red-200 hover:bg-red-100'
+                                ? 'bg-sky-400/10 text-sky-300 border-sky-400/20 hover:bg-sky-400/20'
+                                : 'bg-sky-50 text-sky-700 border-sky-200 hover:bg-sky-100'
                             }`}
                           >
                             {notifying ? (
-                              <div className={`h-3.5 w-3.5 animate-spin rounded-full border-2 ${darkMode ? 'border-red-300/40 border-t-red-300' : 'border-red-400/30 border-t-red-500'}`} />
+                              <div className={`h-3.5 w-3.5 animate-spin rounded-full border-2 ${darkMode ? 'border-sky-300/40 border-t-sky-300' : 'border-sky-400/30 border-t-sky-500'}`} />
                             ) : (
                               <Store className="h-4 w-4" aria-hidden="true" />
                             )}
@@ -1893,12 +1869,12 @@ export default function DeliveryTicketPage({ params }: PageProps) {
                             onClick={(e) => { e.stopPropagation(); void handleLlegueForToken(deliv.token); }}
                             className={`flex items-center justify-center gap-1.5 rounded-2xl py-2.5 px-4 text-xs font-bold transition-all active:scale-95 active-scale disabled:opacity-50 border shadow-sm ${
                               darkMode 
-                                ? 'bg-red-400/10 text-red-300 border-red-400/20 hover:bg-red-400/20' 
-                                : 'bg-red-50 text-red-500 border-red-200 hover:bg-red-100'
+                                ? 'bg-sky-400/10 text-sky-300 border-sky-400/20 hover:bg-sky-400/20'
+                                : 'bg-sky-50 text-sky-700 border-sky-200 hover:bg-sky-100'
                             }`}
                           >
                             {notifying ? (
-                              <div className={`h-3.5 w-3.5 animate-spin rounded-full border-2 ${darkMode ? 'border-red-300/40 border-t-red-300' : 'border-red-400/30 border-t-red-500'}`} />
+                              <div className={`h-3.5 w-3.5 animate-spin rounded-full border-2 ${darkMode ? 'border-sky-300/40 border-t-sky-300' : 'border-sky-400/30 border-t-sky-500'}`} />
                             ) : (
                               <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="2.5" stroke="currentColor" className="w-4 h-4">
                                 <path strokeLinecap="round" strokeLinejoin="round" d="M14.857 17.082a23.848 23.848 0 0 0 5.454-1.31A8.967 8.967 0 0 1 18 9.75V9A6 6 0 0 0 6 9v.75a8.967 8.967 0 0 1-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 0 1-5.714 0m5.714 0a3 3 0 1 1-5.714 0" />
@@ -1930,7 +1906,7 @@ export default function DeliveryTicketPage({ params }: PageProps) {
           {/* ── COMPLETADOS (Historial Elegante) ── */}
           {completedList.length > 0 && (
             <div className="mt-8">
-              <p className={`text-[10px] font-black uppercase tracking-widest mb-3 ${textTertiary}`}>
+              <p className={`mb-3 text-xs font-extrabold uppercase tracking-wide ${darkMode ? 'text-zinc-300' : 'text-neutral-700'}`}>
                 Completados ({completedList.length})
               </p>
               <div className="space-y-2">
@@ -1950,17 +1926,17 @@ export default function DeliveryTicketPage({ params }: PageProps) {
                       }`}>✓</span>
                       
                       <div className="min-w-0">
-                        <span className={`text-xs font-extrabold block truncate ${darkMode ? 'text-zinc-300' : 'text-neutral-700'}`}>
+                        <span className={`block truncate text-sm font-extrabold ${darkMode ? 'text-zinc-100' : 'text-neutral-900'}`}>
                           {deliv.data.customer.name}
                         </span>
-                        <span className={`text-[10px] font-medium block mt-0.5 ${textTertiary}`}>
-                          Ref: {deliv.data.orderReference}
+                        <span className={`mt-0.5 block text-xs font-semibold ${darkMode ? 'text-zinc-300' : 'text-neutral-600'}`}>
+                          {deliv.data.dailyCounter != null ? `Pedido #${String(deliv.data.dailyCounter).padStart(2, '0')}` : 'Número de pedido no disponible'}
                         </span>
                       </div>
                     </div>
                     
                     <div className="flex items-center gap-2.5 shrink-0">
-                      <span className={`text-xs font-bold ${darkMode ? 'text-zinc-400' : 'text-neutral-500'}`}>
+                      <span className={`text-sm font-extrabold ${darkMode ? 'text-zinc-200' : 'text-neutral-800'}`}>
                         ${deliv.data.totalAmount.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
                       </span>
                       <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="3" stroke="currentColor" className={`w-3 h-3 ${
@@ -2455,38 +2431,28 @@ export default function DeliveryTicketPage({ params }: PageProps) {
     <div className={`min-h-[100dvh] font-sans antialiased pb-12 transition-colors duration-300 ${darkMode ? 'bg-[#09090b]' : 'bg-[#f7f7f8]'} ${textPrimary}`}>
       
       {/* ── HEADER DE DETALLE PREMIUM ── */}
-      <header className={`sticky top-0 z-50 border-b backdrop-blur-md transition-all duration-300 pt-[env(safe-area-inset-top)] ${
-        darkMode 
-          ? 'bg-[#09090b]/90 border-zinc-800/60' 
-          : 'bg-white/90 border-black/[0.04]'
-      }`}>
-        <div className="mx-auto flex max-w-lg items-center justify-between px-4 py-3">
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => { triggerHaptic([20]); setSelectedToken(null); }}
-              className={`flex items-center gap-1.5 rounded-xl px-3 py-2 text-[11px] font-bold transition active:scale-95 active-scale border shadow-[0_2px_8px_rgba(0,0,0,0.02)] ${
-                darkMode 
-                  ? 'bg-zinc-900 border-zinc-800 text-zinc-300 hover:bg-zinc-800' 
-                  : 'bg-white border-black/[0.06] text-neutral-700 hover:bg-neutral-50'
-              }`}
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="3" stroke="currentColor" className="w-3 h-3">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5 8.25 12l7.5-7.5" />
-              </svg>
-              <span>Volver</span>
-            </button>
-            <div className="hidden min-[360px]:block"><p className={`text-xs font-black tracking-tight ${textPrimary}`}>WingsLab</p><p className={`text-[10px] ${textSecondary}`}>Reparto</p></div>
+      <header className="wl-header wl-official-header sticky top-0 z-50 pt-[env(safe-area-inset-top)]">
+        <div className="wl-official-header-inner">
+          <button
+            type="button"
+            onClick={() => { triggerHaptic([20]); setSelectedToken(null); }}
+            className="wl-header-status"
+            aria-label="Volver al tablero de reparto"
+          >
+            <svg className="wl-header-status-arrow" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="3" stroke="currentColor" aria-hidden="true">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5 8.25 12l7.5-7.5" />
+            </svg>
+            <span>Volver</span>
+          </button>
+          <div className="wl-official-logo" aria-label="WingsLab Reparto">
+            <img className="wl-logo-on-light" src={officialWordmark.src} width={783} height={229} alt="" fetchPriority="high" />
+            <img className="wl-logo-on-dark" src={officialWhiteWordmark.src} width={783} height={229} alt="" />
           </div>
-
-          <div className={`flex items-center gap-1.5 rounded-full px-3 py-1 text-[11px] font-bold shadow-[0_2px_8px_rgba(0,0,0,0.02)] ${
-            darkMode ? 'bg-zinc-900 text-zinc-300 border border-zinc-800' : 'bg-neutral-900 text-white'
-          }`}>
-            <span className="relative flex h-1.5 w-1.5">
-              <span className="absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75 motion-safe:animate-ping" />
-              <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-red-400" />
+          <div className="wl-header-actions-right">
+            <span className="wl-driver-header-status">
+              <i aria-hidden="true" />
+              Reparto
             </span>
-            <span>{ownDeliveryAwaitingPickup ? 'Listo para recoger' : 'En tránsito'}</span>
           </div>
         </div>
       </header>
@@ -2494,23 +2460,87 @@ export default function DeliveryTicketPage({ params }: PageProps) {
       <main className="mx-auto max-w-lg px-4 pb-20">
 
         {ownDeliveryAwaitingPickup && (
-          <div className={`mt-4 rounded-[24px] border p-5 shadow-[0_8px_24px_rgba(0,0,0,0.04)] ${darkMode ? 'border-red-900/30 bg-gradient-to-br from-zinc-900 to-red-950/30' : 'border-red-100 bg-gradient-to-br from-white to-red-50'}`}>
-            <p className={`text-[10px] font-black uppercase tracking-widest ${darkMode ? 'text-red-300' : 'text-red-600'}`}>Recoger pedido #{currentTicket.dailyCounter || currentTicket.orderReference}</p>
-            <p className={`mt-2 text-base font-extrabold ${textPrimary}`}>{currentTicket.restaurant.name}</p>
-            <p className={`mt-1 text-xs leading-relaxed ${textSecondary}`}>{currentTicket.restaurant.address}</p>
-            <p className={`mt-3 text-xs leading-relaxed ${textSecondary}`}>Confirma cuando tengas el pedido contigo. El reparto aún no ha comenzado.</p>
+          <div className={`mt-4 rounded-[26px] border p-5 shadow-[0_8px_28px_rgba(0,0,0,0.04)] ${darkMode ? 'border-red-900/25 bg-gradient-to-br from-zinc-900 to-red-950/20' : 'border-red-100 bg-gradient-to-br from-white to-red-50/60'}`}>
+            <div className="flex items-start gap-3">
+              <span className={`grid h-11 w-11 shrink-0 place-items-center rounded-2xl ${darkMode ? 'bg-red-400/10 text-red-400' : 'bg-red-50 text-red-600'}`}>
+                <Package className="h-5 w-5" aria-hidden="true" />
+              </span>
+              <div className="min-w-0">
+                <p className={`text-[10px] font-black uppercase tracking-[0.18em] ${darkMode ? 'text-red-400' : 'text-red-600'}`}>Pedido #{currentTicket.dailyCounter || currentTicket.orderReference}</p>
+                <p className={`mt-1 text-sm leading-relaxed ${textSecondary}`}>{confirmedPickupToken === selectedToken ? 'Pedido revisado. Inicia la entrega cuando estés listo para salir.' : 'Revisa que llevas todos los productos antes de iniciar la entrega.'}</p>
+              </div>
+            </div>
             {llegueError && <p role="alert" className="mt-3 text-xs font-semibold text-red-600">{llegueError}</p>}
-            <button type="button" disabled={notifying} onClick={() => void handleLlegueRestaurante()} className="mt-4 min-h-[52px] w-full rounded-2xl bg-gradient-to-b from-red-500 to-red-700 px-4 py-4 text-sm font-bold text-white shadow-lg shadow-red-500/20 transition hover:from-red-600 active:scale-[0.98] disabled:opacity-50">
-              {notifying ? 'Confirmando…' : 'Recoger e iniciar reparto'}
+            <button type="button" disabled={notifying} onClick={() => {
+              if (confirmedPickupToken === selectedToken) void handleLlegueRestaurante();
+              else setReviewPickupToken(selectedToken);
+            }} className={`mt-4 min-h-[52px] w-full rounded-2xl px-4 py-4 text-sm font-bold text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.2),0_10px_24px_-10px_rgba(0,0,0,0.55)] transition active:scale-[0.98] disabled:opacity-50 ${
+              confirmedPickupToken === selectedToken
+                ? 'border border-red-500/60 bg-neutral-900 ring-1 ring-red-500/30 hover:bg-neutral-800 dark:border-red-500/50 dark:bg-zinc-800 dark:hover:bg-zinc-700'
+                : 'border border-neutral-900 bg-neutral-900 hover:bg-neutral-800 dark:border-zinc-700 dark:bg-zinc-800 dark:hover:bg-zinc-700'
+            }`}>
+              {notifying ? 'Iniciando…' : confirmedPickupToken === selectedToken ? 'Iniciar entrega' : 'Tengo el pedido'}
             </button>
           </div>
         )}
 
+        {ownDeliveryAwaitingPickup && reviewPickupToken === selectedToken && (
+          <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/60 px-4 py-6" role="dialog" aria-modal="true" aria-labelledby="pickup-review-title">
+            <div className={`flex max-h-[min(85dvh,680px)] w-full max-w-md flex-col overflow-hidden rounded-[28px] border shadow-2xl ${cardBg} ${cardBorder}`}>
+              <div className="shrink-0 border-b border-neutral-200/70 px-5 py-5 dark:border-zinc-700 sm:px-6">
+                <div className="flex items-start gap-3">
+                  <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-300"><Package className="h-5 w-5" aria-hidden="true" /></span>
+                  <div className="min-w-0">
+                    <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-red-600 dark:text-red-400">{currentTicket.dailyCounter != null ? `Pedido #${String(currentTicket.dailyCounter).padStart(2, '0')}` : 'Detalle del pedido'}</p>
+                    <h2 id="pickup-review-title" className={`mt-1 text-lg font-extrabold tracking-tight ${textPrimary}`}>Revisa el pedido</h2>
+                    <p className={`mt-1 text-sm leading-relaxed ${textSecondary}`}>Comprueba que llevas todos los productos antes de salir.</p>
+                  </div>
+                </div>
+              </div>
+              <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-4 sm:px-6">
+                {Boolean(currentTicket.items?.length) && <p className={`mb-3 text-xs font-bold uppercase tracking-wide ${textSecondary}`}>Productos · {currentTicket.items!.reduce((total, item) => total + item.quantity, 0)} unidades</p>}
+                {currentTicket.items?.length ? currentTicket.items.map(item => (
+                  <div key={item.id} className="flex items-start gap-3 border-b border-neutral-100 py-3 last:border-0 dark:border-zinc-800">
+                    <span className="relative grid h-14 w-14 shrink-0 place-items-center overflow-hidden rounded-2xl bg-neutral-100 text-neutral-400 dark:bg-zinc-800 dark:text-zinc-500">
+                      <Package className="h-6 w-6" aria-hidden="true" />
+                      {item.product?.image && <img src={item.product.image} alt="" className="absolute inset-0 h-full w-full object-cover" onError={(event) => { event.currentTarget.style.display = 'none'; }} />}
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <p className={`break-words text-sm font-extrabold ${textPrimary}`}>{item.product?.name || 'Producto'}</p>
+                      {item.weightG ? <p className={`mt-0.5 text-xs ${textSecondary}`}>{item.weightG} g</p> : null}
+                      {item.options?.length > 0 && <p className={`mt-1 text-xs leading-relaxed ${textSecondary}`}>{item.options.map(option => option.name).join(' · ')}</p>}
+                      {item.specialInstructions && <p className={`mt-1 text-xs leading-relaxed ${textSecondary}`}>Nota: {item.specialInstructions}</p>}
+                    </div>
+                    <span aria-label={`Cantidad: ${item.quantity}`} className="shrink-0 rounded-xl bg-sky-50 px-3 py-2 text-sm font-extrabold text-sky-700 dark:bg-sky-400/10 dark:text-sky-300">×{item.quantity}</span>
+                  </div>
+                )) : <p role="alert" className="py-4 text-sm text-red-600">No se pudo cargar el contenido del pedido. Actualiza la página antes de continuar.</p>}
+              </div>
+              <div className="grid shrink-0 grid-cols-2 gap-2 border-t border-neutral-200/70 p-4 dark:border-zinc-700">
+                <button type="button" onClick={() => setReviewPickupToken(null)} className="min-h-11 rounded-xl border border-red-300 bg-white px-3 text-sm font-bold text-red-700 transition hover:bg-red-50 dark:border-red-500/40 dark:bg-red-500/10 dark:text-red-300 dark:hover:bg-red-500/20">Volver</button>
+                <button type="button" disabled={!currentTicket.items?.length} onClick={() => { setConfirmedPickupToken(selectedToken); setReviewPickupToken(null); }} className="min-h-11 rounded-xl border border-neutral-900 bg-neutral-900 px-3 text-sm font-bold text-white transition hover:bg-neutral-800 disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100 dark:hover:bg-zinc-700">Aceptar</button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {ownDeliveryAwaitingPickup && confirmedPickupToken !== selectedToken && (
+          <p role="status" className={`mt-4 flex items-start gap-2.5 rounded-2xl border px-4 py-3 text-xs font-semibold leading-relaxed ${darkMode ? 'border-sky-900/40 bg-sky-950/20 text-sky-300' : 'border-sky-100 bg-sky-50 text-sky-800'}`}>
+            <Clock className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+            <span>Revisa y confirma el pedido para habilitar los datos y las acciones de entrega.</span>
+          </p>
+        )}
+        <div
+          ref={(element) => {
+            element?.toggleAttribute('inert', ownDeliveryAwaitingPickup && confirmedPickupToken !== selectedToken);
+          }}
+          aria-disabled={ownDeliveryAwaitingPickup && confirmedPickupToken !== selectedToken}
+          className={ownDeliveryAwaitingPickup && confirmedPickupToken !== selectedToken ? 'opacity-50' : undefined}
+        >
         {/* ── CLIENTE + CONTACTO ── */}
         <div className={`mt-4 rounded-[28px] border p-5 shadow-[0_4px_24px_rgba(0,0,0,0.015)] ${cardBg} ${cardBorder}`}>
           <div className="flex items-center justify-between gap-3">
             <div className="min-w-0">
-              <p className={`text-[10px] font-black uppercase tracking-widest ${darkMode ? 'text-red-300' : 'text-red-500'}`}>Entregar a</p>
+              <p className={`text-[10px] font-black uppercase tracking-[0.18em] ${textSecondary}`}>Entregar a</p>
               <h1 className={`text-xl font-black tracking-tight mt-1 truncate ${textPrimary}`}>{fullCustomerName(currentTicket.customer)}</h1>
             </div>
             <div className="flex items-center gap-2.5 shrink-0">              <a
@@ -2518,8 +2548,8 @@ export default function DeliveryTicketPage({ params }: PageProps) {
                 onClick={() => triggerHaptic([30])}
                 className={`flex h-11 w-11 items-center justify-center rounded-xl transition-all active:scale-90 border shadow-sm ${
                   darkMode 
-                    ? 'bg-zinc-900 border-zinc-800 text-zinc-300 hover:bg-zinc-800' 
-                    : 'bg-white border-black/[0.06] text-neutral-700 hover:bg-neutral-50'
+                    ? 'bg-zinc-800 border-zinc-700 text-zinc-100 hover:bg-zinc-700'
+                    : 'bg-neutral-900 border-neutral-900 text-white hover:bg-neutral-800'
                 }`}
                 aria-label="Llamar al cliente"
               >
@@ -2547,7 +2577,7 @@ export default function DeliveryTicketPage({ params }: PageProps) {
               <p className={`text-xs mt-1 ${textSecondary}`}>{addressObj.neighborhood}, {addressObj.city}</p>
               {deliveryDistanceKm !== null && (
                 <span className={`mt-2 inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-extrabold tracking-wide uppercase ${
-                  darkMode ? 'bg-red-500/10 text-red-400' : 'bg-red-50 text-red-600'
+                  darkMode ? 'bg-sky-400/10 text-sky-400' : 'bg-sky-50 text-sky-700'
                 }`}>
                   A tu destino: aprox. {deliveryDistanceKm < 1 ? `${Math.round(deliveryDistanceKm * 1000)} m` : `${deliveryDistanceKm.toFixed(1)} km`} en línea recta
                 </span>
@@ -2573,7 +2603,7 @@ export default function DeliveryTicketPage({ params }: PageProps) {
               <button
                 type="button"
                 onClick={() => { triggerHaptic([40]); setNavOpenFor('delivery'); }}
-                className="w-full mb-2.5 flex items-center justify-center gap-2 rounded-2xl bg-red-500 py-3.5 text-sm font-black text-white shadow-lg shadow-red-500/30 transition active:scale-[0.97] hover:bg-red-400"
+                className="mb-2.5 flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl border border-red-500/50 bg-neutral-900 py-3.5 text-sm font-black text-white shadow-sm transition hover:bg-neutral-800 active:scale-[0.97] dark:bg-zinc-800 dark:hover:bg-zinc-700"
               >
                 <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z" />
@@ -2592,10 +2622,10 @@ export default function DeliveryTicketPage({ params }: PageProps) {
               target="_blank"
               rel="noopener noreferrer"
               onClick={() => triggerHaptic([30])}
-              className={`flex-1 flex items-center justify-center gap-1.5 rounded-2xl border py-3 text-xs font-bold transition active:scale-95 active-scale shadow-sm ${
-                darkMode 
-                  ? 'bg-zinc-900 border-zinc-800 text-zinc-200 hover:bg-zinc-800' 
-                  : 'bg-white border-black/[0.08] text-neutral-800 hover:bg-neutral-50'
+              className={`flex flex-1 items-center justify-center gap-1.5 rounded-2xl border py-3 text-xs font-bold transition active:scale-95 shadow-sm ${
+                darkMode
+                  ? 'border-red-500/30 bg-red-500/10 text-red-300 hover:bg-red-500/20'
+                  : 'border-red-300 bg-white text-red-700 hover:bg-red-50'
               }`}
             >
               <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="2.5" stroke="currentColor" className="w-4 h-4">
@@ -2609,10 +2639,10 @@ export default function DeliveryTicketPage({ params }: PageProps) {
                 target="_blank"
                 rel="noopener noreferrer"
                 onClick={() => triggerHaptic([30])}
-                className={`flex-1 flex items-center justify-center gap-1.5 rounded-2xl border py-3 text-xs font-bold transition active:scale-95 active-scale shadow-sm ${
-                  darkMode 
-                    ? 'bg-zinc-900 border-zinc-800 text-zinc-200 hover:bg-zinc-800' 
-                    : 'bg-white border-black/[0.08] text-neutral-800 hover:bg-neutral-50'
+                className={`flex flex-1 items-center justify-center gap-1.5 rounded-2xl border py-3 text-xs font-bold transition active:scale-95 shadow-sm ${
+                  darkMode
+                    ? 'border-red-500/30 bg-red-500/10 text-red-300 hover:bg-red-500/20'
+                    : 'border-red-300 bg-white text-red-700 hover:bg-red-50'
                 }`}
               >
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="2.5" stroke="currentColor" className="w-4 h-4">
@@ -2634,7 +2664,7 @@ export default function DeliveryTicketPage({ params }: PageProps) {
                 onClick={toggleMap}
                 className="flex w-full flex-col items-center gap-2 px-5 py-6 text-center transition active:scale-[0.99]"
               >
-                <span className={`flex h-11 w-11 items-center justify-center rounded-2xl ${darkMode ? 'bg-red-500/10 text-red-400' : 'bg-red-50 text-red-600'}`}>
+                <span className={`flex h-11 w-11 items-center justify-center rounded-2xl ${darkMode ? 'bg-red-400/10 text-red-400' : 'bg-red-50 text-red-600'}`}>
                   <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor" className="w-5 h-5">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M9 6.75 3 9v11.25l6-2.25m0-11.25 6 2.25m-6-2.25V20.25m6-11.25 6-2.25V18l-6 2.25m0-11.25V20.25" />
                   </svg>
@@ -2738,13 +2768,13 @@ export default function DeliveryTicketPage({ params }: PageProps) {
               onClick={() => { triggerHaptic([40]); void handleLlegueRestaurante(); }}
               className={`w-full flex items-center justify-center gap-2 rounded-2xl py-3.5 text-xs font-bold transition-all active:scale-95 active-scale disabled:opacity-50 border shadow-sm ${
                 darkMode 
-                  ? 'bg-emerald-400/10 text-emerald-300 border border-emerald-400/20 hover:bg-emerald-400/20' 
-                  : 'bg-emerald-50 text-emerald-600 border border-emerald-200 hover:bg-emerald-100'
+                  ? 'bg-red-400/10 text-red-300 border border-red-400/20 hover:bg-red-400/20'
+                  : 'bg-white text-red-700 border border-red-300 hover:bg-red-50'
               }`}
             >
               {notifying ? (
                 <>
-                  <div className={`h-4 w-4 animate-spin rounded-full border-2 ${darkMode ? 'border-emerald-300/40 border-t-emerald-300' : 'border-emerald-500/30 border-t-emerald-600'}`} />
+                  <div className={`h-4 w-4 animate-spin rounded-full border-2 ${darkMode ? 'border-red-300/40 border-t-red-300' : 'border-red-400/30 border-t-red-500'}`} />
                   <span>Iniciando entrega…</span>
                 </>
               ) : (
@@ -2761,13 +2791,13 @@ export default function DeliveryTicketPage({ params }: PageProps) {
               onClick={handleLlegue}
               className={`w-full flex items-center justify-center gap-2 rounded-2xl py-3.5 text-xs font-bold transition-all active:scale-95 active-scale disabled:opacity-50 border shadow-sm ${
                 darkMode 
-                  ? 'bg-red-400/10 text-red-300 border border-red-400/20 hover:bg-red-400/20' 
-                  : 'bg-red-50 text-red-500 border border-red-200 hover:bg-red-100'
+                  ? 'bg-sky-400/10 text-sky-300 border border-sky-400/20 hover:bg-sky-400/20'
+                  : 'bg-sky-50 text-sky-700 border border-sky-200 hover:bg-sky-100'
               }`}
             >
               {notifying ? (
                 <>
-                  <div className={`h-4 w-4 animate-spin rounded-full border-2 ${darkMode ? 'border-red-300/40 border-t-red-300' : 'border-red-400/30 border-t-red-500'}`} />
+                  <div className={`h-4 w-4 animate-spin rounded-full border-2 ${darkMode ? 'border-sky-300/40 border-t-sky-300' : 'border-sky-400/30 border-t-sky-500'}`} />
                   <span>Notificando llegada…</span>
                 </>
               ) : (
@@ -2799,7 +2829,7 @@ export default function DeliveryTicketPage({ params }: PageProps) {
             <button
               type="submit"
               disabled={submitting}
-              className="relative w-full flex items-center justify-center gap-2.5 rounded-2xl py-4 transition-all active:scale-[0.97] active-scale disabled:opacity-40 disabled:cursor-not-allowed shadow-[0_4px_14px_0_rgba(220,38,38,0.39)] hover:shadow-[0_6px_20px_rgba(220,38,38,0.23)] hover:bg-red-500 bg-red-600 text-white"
+              className="relative flex w-full items-center justify-center gap-2.5 rounded-2xl border border-red-500/50 py-4 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.2),0_10px_24px_-10px_rgba(220,38,38,0.7)] ring-1 ring-red-500/20 transition-all hover:bg-neutral-800 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-40 active-scale bg-neutral-900"
             >
               {submitting ? (
                 <>
@@ -2923,7 +2953,8 @@ export default function DeliveryTicketPage({ params }: PageProps) {
             </svg>
           </a>
         </div>
-        
+        </div>
+
         {/* ── MODAL CONFIRMACIÓN DE ENTREGA / COBRO ── */}
         {showConfirmModal && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-[max(1rem,env(safe-area-inset-top))]" role="dialog" aria-modal="true" aria-labelledby="delivery-confirm-title" aria-describedby="delivery-confirm-description">
@@ -2963,7 +2994,7 @@ export default function DeliveryTicketPage({ params }: PageProps) {
               className={`relative max-h-[calc(100dvh-2rem)] w-full max-w-sm overflow-y-auto rounded-[28px] border p-5 shadow-2xl motion-safe:animate-modal-scale-up sm:p-6 ${cardBg} ${cardBorder}`}
             >
               <div className="text-center">
-                <div aria-hidden="true" className={`mx-auto flex h-12 w-12 items-center justify-center rounded-2xl ${darkMode ? 'bg-red-950/50 text-red-400' : 'bg-red-50 text-red-600'}`}>
+                <div aria-hidden="true" className={`mx-auto flex h-12 w-12 items-center justify-center rounded-2xl ${darkMode ? 'bg-red-400/10 text-red-400' : 'bg-red-50 text-red-600'}`}>
                   {isCash ? <svg className="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="7" width="18" height="11" rx="2" /><path d="M6 4h12M7 12h.01M17 12h.01" /><circle cx="12" cy="12.5" r="2" /></svg> : <svg className="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="5" width="18" height="14" rx="3" /><path d="M3 10h18M7 15h3" /></svg>}
                 </div>
                 <h3 id="delivery-confirm-title" className={`mt-3 text-xl font-extrabold tracking-tight ${textPrimary}`}>
@@ -3014,7 +3045,7 @@ export default function DeliveryTicketPage({ params }: PageProps) {
                   type="button"
                   disabled={submitting || (!isCash && !!(currentTicket.isOwnDelivery || currentTicket.handoverPin) && !/^\d{4}$/.test(pin))}
                   onClick={executeDeliver}
-                  className="relative flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-red-600 px-4 py-3 text-sm font-bold text-white shadow-lg shadow-red-600/20 transition hover:bg-red-700 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-600"
+                  className="relative flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl border border-red-500/50 bg-neutral-900 px-4 py-3 text-sm font-bold text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.2),0_10px_24px_-10px_rgba(220,38,38,0.7)] ring-1 ring-red-500/20 transition hover:bg-neutral-800 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-600"
                 >
                   {submitting ? (
                     <>

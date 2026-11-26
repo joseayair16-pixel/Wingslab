@@ -4,6 +4,7 @@ import { getOrCreateDeliveryToken } from './delivery-token.service';
 import { computeInTransitEta } from './order-workflow.service';
 import { OrderStatus, PaymentMethod, PaymentStatus } from '@prisma/client';
 import { driverActiveOrderListSelect } from './order-selects';
+import { generateDeliveryPin } from './delivery-pin';
 
 // Never use a raw `include` here: `customer.user` would carry the password
 // hash and the whole User row into HTTP responses. This is the reviewed
@@ -39,6 +40,12 @@ export async function prepareOwnDelivery(db: any, restaurantUserId: string, orde
     if (!order) throw new AppError(404, 'ORDER_NOT_FOUND', 'Pedido no encontrado para tu restaurante.');
     allowed(order);
     if (order.status !== 'READY') throw new AppError(409, 'INVALID_ORDER_STATE', 'Marca el pedido listo antes de generar el QR.');
+    if (order.paymentMethod !== PaymentMethod.CASH && !order.deliveryPin) {
+      await tx.order.updateMany({
+        where: { id: orderId, status: OrderStatus.READY, deliveryPin: null },
+        data: { deliveryPin: order.handoverPin || generateDeliveryPin() },
+      });
+    }
     const token = await getOrCreateDeliveryToken(tx, orderId);
     if (!order.deliveredByRestaurant) {
       await tx.order.update({ where: { id: orderId }, data: { deliveredByRestaurant: true } });

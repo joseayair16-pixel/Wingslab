@@ -1700,11 +1700,13 @@ export const SettingsSection = React.memo(function SettingsSection({
                           <div className="flex shrink-0 items-center gap-2">
                             <button
                               type="button"
+                              role="switch"
                               onClick={() => togglePromoCodeActive(promo)}
-                              className={`relative h-6 w-11 rounded-full transition-colors ${promo.isActive ? 'bg-emerald-500' : 'bg-neutral-300'}`}
+                              className="wl-admin-switch-btn is-emerald"
+                              aria-checked={promo.isActive}
                               aria-label={promo.isActive ? 'Desactivar cupón' : 'Activar cupón'}
                             >
-                              <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-all ${promo.isActive ? 'left-[22px]' : 'left-0.5'}`} />
+                              <span className="wl-admin-switch-track" aria-hidden="true"><i /></span>
                             </button>
                             <button
                               type="button"

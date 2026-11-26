@@ -97,6 +97,10 @@ test('los ítems de Orders reflejan precios del servidor y no alteran el importe
   expect(mercadoPagoItemsFromSnapshot({ items: [{ ...snapshot.items[0], title: '' }] }, 14550)).toBeUndefined();
   expect(mercadoPagoItemsFromSnapshot(snapshot, 16050)).toBeUndefined();
   expect(mercadoPagoItemsFromSnapshot({ items: [{ ...snapshot.items[0], subtotal: 100 }] }, 10000)).toBeUndefined();
+  expect(mercadoPagoItemsFromSnapshot({ items: [
+    ...snapshot.items,
+    { title: 'Regalo', productId: 'gift-1', quantity: 1, unitPrice: 0, subtotal: 0 },
+  ] }, 14550)).toEqual([{ title: 'Producto', external_code: 'product-1', quantity: 2, unit_price: '72.75' }]);
 });
 
 test('una tarjeta guardada usa payer.customer_id y un token nuevo, no el ID de tarjeta', async () => {

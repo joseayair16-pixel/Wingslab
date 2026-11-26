@@ -160,7 +160,13 @@ export function CustomerNavigation({ active, onHome, onAuthenticated, onLogout }
       if (destination) { if (active !== 'inicio') window.location.hash = destination; else router.push(`/cuenta#${destination}`); }
     }} />
     <dialog ref={dialog} className="wl-info-dialog wl-premium-dialog" aria-labelledby="wl-info-title" onClose={() => { locationRequest.current += 1; setDistance(null); setLocationStatus('idle'); setPanel(null); infoReturnFocus.current?.focus(); }} onClick={event => { if (event.target === event.currentTarget) dialog.current?.close(); }}>
-      <div className="wl-info-heading"><div><h2 id="wl-info-title">Información del restaurante</h2></div><button type="button" aria-label="Cerrar" onClick={() => dialog.current?.close()}><X /></button></div>
+      <div className="wl-info-heading">
+        <div className="wl-info-heading-text">
+          <span className="wl-info-eyebrow">WingsLab · Tu restaurante</span>
+          <h2 id="wl-info-title">Información del restaurante</h2>
+        </div>
+        <button type="button" aria-label="Cerrar" onClick={() => dialog.current?.close()}><X aria-hidden="true" /></button>
+      </div>
       {infoFailed ? <p className="wl-info-message" role="alert">No se pudo cargar la información. Intenta de nuevo más tarde.</p> : !info ? <p className="wl-info-message" role="status">Cargando información…</p> : <div className="wl-info-content">
         <div className="wl-info-identity"><div><img className="wl-logo-on-light" src={officialRedLogo.src} alt="WingsLab" /><img className="wl-logo-on-dark" src={officialLogo.src} alt="" aria-hidden="true" />{info.name && info.name.toLowerCase() !== 'wingslab' && <p>{info.name}</p>}</div>{typeof info.isOpen === 'boolean' && <span className={`wl-info-status ${info.isOpen ? 'is-open' : 'is-closed'}`}><i aria-hidden="true" />{info.isOpen ? 'Abierto' : 'Cerrado'}</span>}</div>
         {info.address && <section className="wl-info-section"><span className="wl-info-icon"><MapPin /></span><div><h3>Ubicación</h3><p>{info.address}</p></div></section>}

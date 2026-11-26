@@ -112,7 +112,6 @@ export function calculateInPersonSaleItems(input: InPersonSaleItemInput[], catal
       const paidQuantity = line.quantity - freeForLine;
       if (freeForLine) freeQuantityRemaining.set(product.id, (freeQuantityRemaining.get(product.id) ?? 0) - freeForLine);
       subtotalCents = unitPriceCents * paidQuantity + optionPriceCents * line.quantity;
-      if (product.trackStock) stockRequired.set(product.id, (stockRequired.get(product.id) ?? 0) + line.quantity);
     }
     if (!Number.isSafeInteger(subtotalCents) || subtotalCents < 0) throw new AppError(400, 'INVALID_SALE_TOTAL', 'No se pudo calcular el precio del producto.');
     return {
@@ -126,7 +125,7 @@ export function calculateInPersonSaleItems(input: InPersonSaleItemInput[], catal
       optionIds,
       options,
       promotionApplied,
-      stockDeducted: sellBy === 'UNIT' && product.trackStock,
+      stockDeducted: false,
     };
   });
   const subtotalCents = items.reduce((sum, item) => sum + item.subtotalCents, 0);

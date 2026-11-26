@@ -1,3 +1,4 @@
+import crypto from 'node:crypto';
 import sharp from 'sharp';
 import { prisma } from '../config/database';
 import { readMenuContent, saveMenuContent, saveMenuImage } from './menu-content.service';
@@ -26,6 +27,20 @@ describe('Local marketing persistence', () => {
     for (const value of ['https://outside.test/image.jpg', 'data:image/svg+xml;base64,PHN2Zz4=', 'data:image/png;base64,YmFk']) {
       await expect(saveMenuImage(value)).rejects.toMatchObject({ statusCode: 400 });
     }
+  });
+  it('acepta una imagen de hasta 3 MiB aunque su versión optimizada supere 400 KB', async () => {
+    const tx = { $queryRawUnsafe: jest.fn(), systemSetting: { count: jest.fn().mockResolvedValue(0), create: jest.fn() } };
+    jest.spyOn(prisma, '$transaction').mockImplementation((async (fn: any) => fn(tx)) as any);
+    jest.spyOn(storage, 'uploadImage').mockResolvedValue({
+      url: 'https://res.cloudinary.com/demo/image/upload/v1/menu/big.webp', publicId: 'menu/big', provider: 'cloudinary', deliveryType: 'upload',
+    });
+    const width = 1700;
+    const raw = crypto.randomBytes(width * width * 3);
+    const jpeg = await sharp(raw, { raw: { width, height: width, channels: 3 } }).jpeg({ quality: 95 }).toBuffer();
+    expect(jpeg.length).toBeGreaterThan(2 * 1024 * 1024);
+    const result = await saveMenuImage(`data:image/jpeg;base64,${jpeg.toString('base64')}`);
+    expect(result.id).toMatch(/^[a-f0-9-]{36}$/);
+    expect(tx.systemSetting.create).toHaveBeenCalledTimes(1);
   });
   it('normaliza el raster y persiste la URL del proveedor de medios', async () => {
     const tx = { $queryRawUnsafe: jest.fn(), systemSetting: { count: jest.fn().mockResolvedValue(0), create: jest.fn() } };

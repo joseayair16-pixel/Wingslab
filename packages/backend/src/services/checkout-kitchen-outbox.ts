@@ -2,6 +2,7 @@ import type { PrismaClient } from '@prisma/client';
 import type { Server as SocketIOServer } from 'socket.io';
 import { emitNotification } from './socket.service';
 import { enqueueRestaurantOrder } from './order-workflow.service';
+import { sendPushNotification } from './notification.service';
 
 const BATCH_SIZE = 50;
 const LEASE_MS = 30_000;
@@ -55,6 +56,19 @@ export async function dispatchCheckoutKitchenOutbox(
       if (io) emitNotification(io, order.restaurant.userId, 'RESTAURANT', 'order:created', {
         orderId, orderReference: order.orderReference, paymentMethod: order.paymentMethod,
       }, { orderId });
+      // Push is independent of queue delivery: do not replay a paid order if
+      // the provider fails; the notification service owns transient retries.
+      void sendPushNotification(order.restaurant.userId, {
+        title: '¡Nuevo pedido pagado!',
+        body: `Pedido ${order.orderReference} — pago con tarjeta confirmado.`,
+        icon: '/app-icon-192.png',
+        badge: '/badge.png',
+        vibrate: [500, 200, 500, 200, 500],
+        requireInteraction: true,
+        sound: '/sounds/notifica.wav',
+        tag: `new-order-${orderId}`,
+        data: { orderId, orderReference: order.orderReference, event: 'order:created', url: `/?orderId=${orderId}` },
+      }).catch(error => onError(error, orderId));
       await db.kitchenOrderOutbox.update({
         where: { orderId },
         data: { status: 'DELIVERED', deliveredAt: new Date(), leaseUntil: null, lastError: null },

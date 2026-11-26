@@ -98,22 +98,10 @@ async function saleCatalog(tx: Tx, items: InPersonSaleItemInput[]) {
 async function quoteSale(tx: Tx, customerId: string, input: InPersonSaleItemInput[], applyReward: boolean) {
   const catalog = await saleCatalog(tx, input);
   const calculated = calculateInPersonSaleItems(input, catalog);
-  const byId = new Map(catalog.map(product => [product.id, product]));
-  for (const [productId, quantity] of calculated.stockRequired) {
-    const product = byId.get(productId);
-    if (!product || product.stock < quantity) throw new AppError(409, 'INSUFFICIENT_STOCK', `No hay existencias suficientes de ${product?.name || 'un producto'}.`);
-  }
   const productIds = [...new Set(calculated.items.map(item => item.productId))];
   const reward = await loyaltyQuote(tx, customerId, calculated.subtotalCents, productIds, calculated.hasPromotion);
-  let rewardEligible = reward.eligible;
-  let rewardUnavailableReason = !reward.eligible ? reward.reason : null;
-  if (reward.eligible && reward.gift?.trackStock) {
-    const saleQuantity = calculated.stockRequired.get(reward.gift.id) ?? 0;
-    if (reward.gift.stock < saleQuantity + 1) {
-      rewardEligible = false;
-      rewardUnavailableReason = 'No hay existencias suficientes para vender el producto y entregar además la recompensa.';
-    }
-  }
+  const rewardEligible = reward.eligible;
+  const rewardUnavailableReason = !reward.eligible ? reward.reason : null;
   const apply = applyReward && rewardEligible;
   let rewardAppliedCents = 0;
   let rewardDescription: string | null = null;
@@ -257,20 +245,13 @@ export async function registerInPersonStamp(db: PrismaClient, input: StampInput)
     if (input.deliverReward && target.rewardKind === 'PRODUCT' && !gift) {
       throw new AppError(409, 'LOYALTY_GIFT_UNAVAILABLE', 'El producto de regalo no está disponible. Puedes agregar el sello sin entregar la recompensa.');
     }
-    if (gift?.trackStock) {
-      const updated = await tx.product.updateMany({
-        where: { id: gift.id, restaurantId: RESTAURANT_ID, isAvailable: true, deleted: false, trackStock: true, stock: { gte: 1 } },
-        data: { stock: { decrement: 1 } },
-      });
-      if (updated.count !== 1) throw new AppError(409, 'LOYALTY_GIFT_UNAVAILABLE', 'El producto se agotó. Puedes agregar el sello sin entregar la recompensa.');
-    }
     const card = state.open ?? await openCard(tx, customerId, state.program);
     const visitId = randomUUID();
     await tx.loyaltyVisit.create({ data: {
       id: visitId, customerId, restaurantId: RESTAURANT_ID, scanSessionId, requestHash,
       amountCents: 0, createdBy: input.staffUserId,
       rewardDescription: input.deliverReward ? target.rewardDescription : null,
-      rewardProductId: gift?.id ?? null, giftStockDecremented: gift?.trackStock ?? false,
+      rewardProductId: gift?.id ?? null, giftStockDecremented: false,
     } });
     const progress = await appendStamp(tx, card, visitId);
     if (input.deliverReward) {
@@ -321,25 +302,14 @@ export async function registerInPerson(prisma: PrismaClient, input: SaleInput) {
     const catalog = await saleCatalog(tx, input.items);
     const sale = calculateInPersonSaleItems(input.items, catalog);
     const productIds = [...new Set(sale.items.map(item => item.productId))];
-    const productById = new Map(catalog.map(product => [product.id, product]));
 
     let reward: Awaited<ReturnType<typeof loyaltyQuote>> | null = null;
     if (input.applyReward) {
       reward = await loyaltyQuote(tx, customerId, sale.subtotalCents, productIds, sale.hasPromotion);
       if (!reward.eligible) throw new AppError(409, 'LOYALTY_REWARD_UNAVAILABLE', reward.reason || 'La recompensa no puede aplicarse a esta compra.');
-      if (reward.gift?.trackStock && reward.gift.stock < (sale.stockRequired.get(reward.gift.id) ?? 0) + 1) {
-        throw new AppError(409, 'LOYALTY_GIFT_UNAVAILABLE', 'No hay existencias suficientes para vender el producto y entregar además la recompensa.');
-      }
     }
 
-    // Stock is optional. Only products with trackStock=true are reserved, and
-    // all checks and decrements are atomic with the sale.
-    for (const [productId, quantity] of sale.stockRequired) {
-      const updated = await tx.product.updateMany({ where: { id: productId, restaurantId: RESTAURANT_ID, isAvailable: true, deleted: false, trackStock: true, stock: { gte: quantity } }, data: { stock: { decrement: quantity } } });
-      if (updated.count !== 1) throw new AppError(409, 'INSUFFICIENT_STOCK', `No hay existencias suficientes de ${productById.get(productId)?.name || 'un producto'}.`);
-    }
-
-    let giftStockDecremented = false;
+    const giftStockDecremented = false;
     let rewardProductId: string | null = null;
     let rewardDescription: string | null = null;
     let rewardAppliedCents = 0;
@@ -347,11 +317,6 @@ export async function registerInPerson(prisma: PrismaClient, input: SaleInput) {
       if (reward.gift) {
         rewardProductId = reward.gift.id;
         rewardDescription = `${reward.gift.name} de regalo`;
-        if (reward.gift.trackStock) {
-          const updated = await tx.product.updateMany({ where: { id: reward.gift.id, restaurantId: RESTAURANT_ID, isAvailable: true, deleted: false, trackStock: true, stock: { gte: 1 } }, data: { stock: { decrement: 1 } } });
-          if (updated.count !== 1) throw new AppError(409, 'LOYALTY_GIFT_UNAVAILABLE', 'El producto de regalo se agotó. No se aplicó la recompensa.');
-          giftStockDecremented = true;
-        }
       } else {
         rewardAppliedCents = reward.discountCents;
         rewardDescription = reward.rewardDescription;

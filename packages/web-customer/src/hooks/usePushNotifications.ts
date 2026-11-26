@@ -4,6 +4,7 @@ import {
   saveStoredPushEndpoint,
   readStoredPushEndpoint,
 } from '@sadel/shared';
+import { getSubscriptionSecrets } from '../lib/subscriptionSecrets';
 import {
   getNativePushPermissionState,
   isNativePlatform,
@@ -100,6 +101,7 @@ export const usePushNotifications = () => {
   // Estado (no valor en render) para evitar mismatch de hidratación: en SSR es null,
   // y se calcula del lado del cliente tras montar.
   const [pushSupportIssue, setPushSupportIssue] = useState<string | null>(null);
+  const [permissionDenied, setPermissionDenied] = useState(false);
   // iOS con Web Push soportado pero PWA sin instalar: suscribir fallaría en
   // silencio; la UI debe guiar a instalar en vez de intentar.
   const [needsIosInstall, setNeedsIosInstall] = useState(false);
@@ -124,6 +126,7 @@ export const usePushNotifications = () => {
       getNativePushPermissionState()
         .then((state) => {
           if (cancelled) return;
+          setPermissionDenied(state === 'denied');
           setIsSubscribed(state === 'granted' && Boolean(readNativeFcmToken()));
         })
         .catch(() => {
@@ -139,6 +142,7 @@ export const usePushNotifications = () => {
         // Sin API no hay permiso que evaluar (pushSupportIssue ya lo cubre).
         return;
       }
+      setPermissionDenied(Notification.permission === 'denied');
 
       if ('serviceWorker' in navigator) {
         navigator.serviceWorker.ready
@@ -152,6 +156,9 @@ export const usePushNotifications = () => {
             // Reconcile with the server: a local endpoint alone does not prove
             // that this account is still registered after logout or DB changes.
             await sendSubscriptionToBackend(sub);
+            // El service worker necesita el JWT y la VAPID vigentes para
+            // re-suscribirse solo si el navegador rota el endpoint.
+            await persistSecrets();
             if (!cancelled) setIsSubscribed(true);
           })
           .catch(() => {
@@ -231,8 +238,13 @@ export const usePushNotifications = () => {
       }
 
 
-      const registration = await navigator.serviceWorker.getRegistration();
-      if (!registration?.active) throw new Error('La aplicación todavía no está lista para activar las notificaciones.');
+      // El registro del layout puede estar todavía instalando. Esperarlo
+      // brevemente evita pedir el permiso y fallar justo después.
+      const registration = await Promise.race([
+        navigator.serviceWorker.ready,
+        new Promise<null>(resolve => window.setTimeout(() => resolve(null), 6000)),
+      ]);
+      if (!registration?.active) throw new Error('La aplicación todavía no está lista para activar las notificaciones. Inténtalo de nuevo en unos segundos.');
 
       // ROBUSTEZ: si ya existe una suscripción válida se REUTILIZA tal cual.
       // Nunca se desuscribe una sub válida para re-crearla: eso mata las push
@@ -282,6 +294,9 @@ export const usePushNotifications = () => {
       await persistSecrets(tokenOverride ?? null);
 
     } catch (error: any) {
+      if (typeof window !== 'undefined' && 'Notification' in window) {
+        setPermissionDenied(Notification.permission === 'denied');
+      }
       if (error?.message !== 'Permiso de notificación no concedido') {
         if (process.env.NODE_ENV !== 'production') {
           console.error('Error al suscribirse a notificaciones:', error);
@@ -309,7 +324,29 @@ export const usePushNotifications = () => {
     return () => navigator.serviceWorker.removeEventListener('message', onMessage);
   }, [isNative, subscribe]);
 
-  return { isSubscribed, pushSupportIssue, needsIosInstall, subscribe };
+  // Un refresh silencioso del JWT cambia la credencial con la que el service
+  // worker reportaría una rotación de suscripción. Si no se actualiza, el SW
+  // sigue usando el token viejo y el backend responde 401; el re-registro muere.
+  useEffect(() => {
+    if (isNative) return;
+    const onTokenRefreshed = (event: Event) => {
+      const nextToken = (event as CustomEvent<string>).detail;
+      if (!nextToken) return;
+      void (async () => {
+        const secrets = await getSubscriptionSecrets();
+        if (secrets?.token === nextToken) return;
+        await persistSecrets(nextToken);
+        if (window.Notification?.permission === 'granted' &&
+            localStorage.getItem('sadel.customer.token') === nextToken) {
+          await subscribe(nextToken).catch(() => {});
+        }
+      })();
+    };
+    window.addEventListener('sadel:token-refreshed', onTokenRefreshed);
+    return () => window.removeEventListener('sadel:token-refreshed', onTokenRefreshed);
+  }, [isNative, subscribe]);
+
+  return { isSubscribed, pushSupportIssue, needsIosInstall, permissionDenied, subscribe };
 };
 
 function urlBase64ToUint8Array(base64String: string) {

@@ -60,6 +60,7 @@ export function startOrderTimeoutJob(fastify: FastifyInstance) {
       const pendingOrders = await prisma.order.findMany({
         where: {
           status: OrderStatus.PENDING,
+          scheduledDeliveryAt: null,
         },
         include: {
           customer: {

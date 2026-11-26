@@ -3,7 +3,7 @@
 import { SectionHeader } from '../SectionHeader';
 
 import { useCallback, useEffect, useState } from 'react';
-import { ArrowDown, ArrowUp, Check, Eye, Image as ImageIcon, Images, Info, Layers, LayoutPanelTop, Pencil, Plus, Trash2 } from 'lucide-react';
+import { ArrowDown, ArrowUp, Check, Eye, Image as ImageIcon, Images, Info, Layers, LayoutPanelTop, Pencil, Plus, Trash2, Users, UserRound } from 'lucide-react';
 
 type Item = {
   id: string; kind: 'modal' | 'banner'; title: string; text: string; imageId: string;
@@ -13,8 +13,6 @@ type Item = {
 type Content = { revision: number; items: Item[] };
 const field = 'wl-menu-field';
 const action = 'wl-menu-action';
-const localDate = (value: string | null) => value ? new Date(Date.parse(value) - new Date(value).getTimezoneOffset() * 60000).toISOString().slice(0, 16) : '';
-const safePath = (value: string) => /^\/(?!\/)[a-zA-Z0-9/_?#=&.-]*$/.test(value) && !value.includes('..');
 // Mismo origen: el rewrite /api/* del frontend llega al backend sin CORS/CORP.
 const imageUrl = (imageId: string) => `/api/public/menu-images/${imageId}`;
 
@@ -68,21 +66,30 @@ export function MenuContentSection({ apiBase, token }: { apiBase: string; token:
       // Los banners son solo imágenes: sin texto, enlace ni botón.
       title: kind === 'banner' ? 'Imagen promocional' : '',
       text: '', imageId: '', targetUrl: '', buttonLabel: '',
-      active: kind === 'banner', audience: 'all', frequency: 'session',
+      active: true, audience: kind === 'modal' ? 'visitors' : 'all', frequency: 'session',
       startsAt: null, endsAt: null,
     });
   };
 
   const upload = async (file?: File) => {
     if (!file || !draft) return;
-    if (file.size > 2 * 1024 * 1024 || !['image/png', 'image/jpeg', 'image/webp'].includes(file.type)) {
-      setError('Selecciona un PNG, JPG o WebP de hasta 2 MiB.'); return;
+    const extension = file.name.split('.').pop()?.toLowerCase();
+    const mediaType = file.type.toLowerCase() === 'image/jpg' ? 'image/jpeg' : file.type.toLowerCase();
+    const normalizedType = mediaType || ({ png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', webp: 'image/webp' } as Record<string, string>)[extension || ''] || '';
+    if (file.size > 3 * 1024 * 1024) {
+      setError(`La imagen pesa ${(file.size / (1024 * 1024)).toFixed(1)} MiB y el máximo es 3 MiB. Elige una versión más ligera.`);
+      return;
+    }
+    if (!['image/png', 'image/jpeg', 'image/webp'].includes(normalizedType)) {
+      setError('Formato no compatible. Elige una imagen PNG, JPG o WebP.');
+      return;
     }
     setBusy(true); setError('');
     try {
       const source = await new Promise<string>((resolve, reject) => {
         const reader = new FileReader();
-        reader.onload = () => resolve(String(reader.result)); reader.onerror = reject; reader.readAsDataURL(file);
+        reader.onload = () => resolve(String(reader.result).replace(/^data:[^;]+;/, `data:${normalizedType};`));
+        reader.onerror = reject; reader.readAsDataURL(file);
       });
       const uploaded = await request('/restaurant-panel/menu-images', 'POST', { source });
       setFileName(file.name);
@@ -110,7 +117,7 @@ export function MenuContentSection({ apiBase, token }: { apiBase: string; token:
     if (!content) return;
     const clean: Item = item.kind === 'banner'
       ? { ...item, targetUrl: '', buttonLabel: '', text: '', active: true }
-      : item;
+      : { ...item, text: '', targetUrl: '', buttonLabel: '' };
     const exists = content.items.some(i => i.id === clean.id);
     void persist(exists ? content.items.map(i => i.id === clean.id ? clean : i) : [...content.items, clean], true);
   };
@@ -131,13 +138,11 @@ export function MenuContentSection({ apiBase, token }: { apiBase: string; token:
       </button>
     </div>
 
-    <div className="wl-menu-info"><Info aria-hidden="true" /><p>
-      {kind === 'modal'
-        ? 'Se muestra como máximo un modal por visita, según su audiencia, vigencia y frecuencia.'
-        : 'Solo imagen, sin textos ni botones. PNG, JPG o WebP de hasta 2 MiB · recomendado 1600 × 900 px.'}
-    </p></div>
+    {kind === 'banner' && <div className="wl-menu-info"><Info aria-hidden="true" /><p>
+      Solo imagen, sin textos ni botones. PNG, JPG o WebP de hasta 3 MiB · recomendado 1600 × 900 px.
+    </p></div>}
 
-    {error && draft?.kind !== 'banner' && <p role="alert" className="wl-campaign-feedback is-error">{error} <button className="underline" disabled={busy} onClick={() => { setDraft(null); void load(); }}>Recargar contenido</button></p>}
+    {error && draft?.kind !== 'banner' && <p role="alert" className="wl-campaign-feedback is-error">{error} {!error.startsWith('La imagen pesa') && !error.startsWith('Formato no compatible') && <button type="button" className="underline" disabled={busy} onClick={() => { setDraft(null); void load(); }}>Recargar contenido</button>}</p>}
 
     {draft && draft.kind === 'banner' && (
       <form className="wl-banner-editor wl-campaign-card" onSubmit={event => { event.preventDefault(); save(draft); }}>
@@ -166,7 +171,7 @@ export function MenuContentSection({ apiBase, token }: { apiBase: string; token:
               <strong>{dragging ? 'Suelta la imagen aquí' : 'Arrastra tu imagen aquí'}</strong>
               <span>o haz clic para elegir un archivo</span>
               {busy ? <span className="wl-banner-dropzone-busy"><span className="wl-banner-spinner" /> Subiendo…</span> : <span className="wl-banner-dropzone-chip">Examinar archivo</span>}
-              <small>PNG, JPG o WebP · hasta 2 MiB · recomendado 1600 × 900</small>
+              <small>PNG, JPG o WebP · hasta 3 MiB · recomendado 1600 × 900</small>
             </>
           )}
           {error && <span role="alert" className="wl-banner-dropzone-error">{error}</span>}
@@ -185,22 +190,21 @@ export function MenuContentSection({ apiBase, token }: { apiBase: string; token:
     )}
 
     {draft && draft.kind === 'modal' && <form className="wl-menu-editor wl-campaign-card" onSubmit={event => { event.preventDefault(); save(draft); }}>
-      <div className="wl-campaign-card-heading"><span className="wl-campaign-heading-icon"><Pencil aria-hidden="true" /></span><div><h2>Configurar bienvenida</h2><p>Agrega el contenido y define cuándo se mostrará.</p></div></div>
-      <div className="wl-menu-editor-layout"><fieldset disabled={busy} className="wl-menu-fields">
-        <label className="text-sm font-semibold">Título / texto alternativo<input className={field} required maxLength={80} value={draft.title} onChange={e => setDraft({ ...draft, title: e.target.value })} /></label>
-        <label className="text-sm font-semibold">Imagen (PNG, JPG o WebP · hasta 2 MiB)<input className={field} type="file" accept="image/png,image/jpeg,image/webp" onChange={e => void upload(e.target.files?.[0])} /></label>
-        <label className="wl-menu-wide">Descripción<textarea className={field} maxLength={240} value={draft.text} onChange={e => setDraft({ ...draft, text: e.target.value })} /></label>
-        <label className="text-sm font-semibold">Destino interno (opcional)<input className={field} placeholder="/cuenta" maxLength={200} value={draft.targetUrl} onChange={e => setDraft({ ...draft, targetUrl: e.target.value })} /></label>
-        <label className="text-sm font-semibold">Texto del botón<input className={field} maxLength={35} value={draft.buttonLabel} onChange={e => setDraft({ ...draft, buttonLabel: e.target.value })} /></label>
-        <label className="text-sm font-semibold">Audiencia<select className={field} value={draft.audience} onChange={e => setDraft({ ...draft, audience: e.target.value as Item['audience'] })}><option value="all">Todos</option><option value="visitors">Solo visitantes sin sesión</option><option value="customers">Solo clientes con sesión</option></select></label>
-        <label className="text-sm font-semibold">Frecuencia por navegador<select className={field} value={draft.frequency} onChange={e => setDraft({ ...draft, frequency: e.target.value as Item['frequency'] })}><option value="session">Una vez por sesión</option><option value="daily">Una vez cada 24 horas</option><option value="once">Una sola vez</option></select></label>
-        <label className="text-sm font-semibold">Desde (hora local, opcional)<input className={field} type="datetime-local" value={localDate(draft.startsAt)} onChange={e => setDraft({ ...draft, startsAt: e.target.value ? new Date(e.target.value).toISOString() : null })} /></label>
-        <label className="text-sm font-semibold">Hasta (hora local, opcional)<input className={field} type="datetime-local" value={localDate(draft.endsAt)} onChange={e => setDraft({ ...draft, endsAt: e.target.value ? new Date(e.target.value).toISOString() : null })} /></label>
-        <label className="wl-menu-publish"><input type="checkbox" checked={draft.active} onChange={e => setDraft({ ...draft, active: e.target.checked })} /> Activar al guardar <span>Se mostrará según las reglas de publicación.</span></label>
+      <div className="wl-campaign-card-heading"><span className="wl-campaign-heading-icon"><Pencil aria-hidden="true" /></span><div><h2>{editing ? 'Editar bienvenida' : 'Crear bienvenida'}</h2><p>Una imagen, un título y el público que quieres alcanzar.</p></div></div>
+      <div className="wl-welcome-editor-layout"><fieldset disabled={busy} className="wl-welcome-fields">
+        <label className="wl-welcome-title">Título de campaña<input className={field} required maxLength={80} placeholder="Ej. ¡Bienvenido!" value={draft.title} onChange={e => setDraft({ ...draft, title: e.target.value })} /></label>
+        <div className="wl-welcome-audience"><span>¿A quién se muestra?</span><div className="wl-welcome-audience-options">
+          <button type="button" aria-pressed={draft.audience === 'visitors'} onClick={() => setDraft({ ...draft, audience: 'visitors' })}><UserRound aria-hidden="true" /><span><strong>Sin sesión</strong><small>Visitantes que aún no han iniciado sesión</small></span>{draft.audience === 'visitors' && <Check aria-hidden="true" />}</button>
+          <button type="button" aria-pressed={draft.audience === 'customers'} onClick={() => setDraft({ ...draft, audience: 'customers' })}><Users aria-hidden="true" /><span><strong>Con sesión</strong><small>Clientes que han iniciado sesión</small></span>{draft.audience === 'customers' && <Check aria-hidden="true" />}</button>
+        </div></div>
+        <label className="wl-welcome-frequency">Frecuencia<select className={field} value={draft.frequency} onChange={e => setDraft({ ...draft, frequency: e.target.value as Item['frequency'] })}><option value="session">Una vez por sesión</option><option value="daily">Una vez cada 24 horas</option><option value="once">Una sola vez por navegador</option></select></label>
+        <label className={`wl-welcome-upload${draft.imageId ? ' has-image' : ''}`}>
+          <input type="file" accept="image/png,image/jpeg,image/webp" disabled={busy} onChange={e => void upload(e.target.files?.[0])} />
+          {draft.imageId ? <><img src={previewUrl || imageUrl(draft.imageId)} alt="" /><span><strong>{fileName || 'Imagen seleccionada'}</strong><small>Pulsa para cambiarla</small></span><Pencil aria-hidden="true" /></> : <><ImageIcon aria-hidden="true" /><span><strong>Elige la imagen de campaña</strong><small>PNG, JPG o WebP · hasta 3 MiB</small></span><span className="wl-welcome-browse">Elegir imagen</span></>}
+        </label>
       </fieldset>
-      <aside className="wl-menu-preview"><div className="wl-menu-preview-heading"><Eye aria-hidden="true" /><div><h3>Vista previa</h3><p>Así se verá tu contenido.</p></div></div><div className="wl-menu-preview-content">{draft.imageId ? <img alt={draft.title || 'Vista previa'} className="max-h-80 w-full object-contain" src={imageUrl(draft.imageId)} /> : <div className="wl-menu-image-placeholder"><ImageIcon aria-hidden="true" /><span>Agrega una imagen para verla aquí</span></div>}{draft.kind === 'modal' && <div className="wl-menu-preview-copy"><h3>{draft.title || 'Título de tu promoción'}</h3><p>{draft.text || 'La descripción aparecerá aquí.'}</p>{draft.targetUrl && <span>{draft.buttonLabel || 'Ver más'}</span>}</div>}</div></aside></div>
-      <p className="wl-menu-help">La frecuencia se guarda en el navegador del visitante; al borrar sus datos, el modal podrá volver a mostrarse. Máximo 24 piezas y 100 imágenes.</p>
-      <div className="wl-menu-form-actions"><button type="button" className={action} disabled={busy} onClick={() => setDraft(null)}>Cancelar edición</button><button className="wl-campaign-button is-primary" disabled={busy || !draft.imageId}>{busy ? 'Guardando…' : 'Guardar contenido'}</button></div>
+      <aside className="wl-welcome-preview"><div className="wl-welcome-preview-label"><Eye aria-hidden="true" /> VISTA PREVIA</div><div className="wl-welcome-preview-card">{draft.imageId ? <img src={previewUrl || imageUrl(draft.imageId)} alt="" /> : <div className="wl-welcome-preview-empty"><ImageIcon aria-hidden="true" /><span>Tu imagen aparecerá aquí</span></div>}<div className="wl-welcome-preview-copy"><span>BIENVENIDA</span><h3>{draft.title || 'Título de campaña'}</h3></div></div><p>Se mostrará a {draft.audience === 'customers' ? 'clientes con sesión' : 'visitantes sin sesión'}.</p></aside></div>
+      <div className="wl-menu-form-actions"><button type="button" className={action} disabled={busy} onClick={() => setDraft(null)}>Cancelar</button><button className="wl-campaign-button is-primary" disabled={busy || !draft.imageId || !draft.title.trim()}>{busy ? 'Guardando…' : 'Guardar campaña'}</button></div>
     </form>}
 
     <section className="wl-campaign-card wl-menu-library" aria-labelledby="menu-library-title">
@@ -223,7 +227,7 @@ export function MenuContentSection({ apiBase, token }: { apiBase: string; token:
           <div className="wl-menu-item-title"><h3>{kind === 'banner' ? `Imagen ${index + 1}` : item.title}</h3><span>#{index + 1}</span></div>
           {kind === 'modal' && <>{item.text && <p className="wl-menu-item-description">{item.text}</p>}<p className="wl-menu-item-meta">Audiencia: {{ all: 'Todos', visitors: 'Visitantes', customers: 'Clientes' }[item.audience]}</p><p className="wl-menu-item-meta">Destino: {item.targetUrl || 'Sin enlace'}</p></>}
           <div className="wl-menu-item-actions">
-            <button type="button" className={action} disabled={busy || !!draft} onClick={() => { setDraft({ ...item }); setFileName(''); setPreviewUrl(''); setConfirmation(null); }}><Pencil aria-hidden="true" />{kind === 'banner' ? 'Cambiar imagen' : 'Editar'}</button>
+            <button type="button" className={action} disabled={busy || !!draft} onClick={() => { setDraft({ ...item, ...(item.kind === 'modal' && item.audience === 'all' ? { audience: 'visitors' as const } : {}) }); setFileName(''); setPreviewUrl(''); setConfirmation(null); }}><Pencil aria-hidden="true" />{kind === 'banner' ? 'Cambiar imagen' : 'Editar'}</button>
             <button type="button" className={action} disabled={busy || !!draft} onClick={() => void persist(content!.items.map(i => i.id === item.id ? { ...i, active: !i.active } : i))}>{item.active ? 'Ocultar' : 'Mostrar'}</button>
             <button type="button" className={action} disabled={busy || !!draft || index === 0} onClick={() => move(item, -1)}><ArrowUp aria-hidden="true" />Subir</button>
             <button type="button" className={action} disabled={busy || !!draft || index === rows.length - 1} onClick={() => move(item, 1)}><ArrowDown aria-hidden="true" />Bajar</button>

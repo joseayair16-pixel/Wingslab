@@ -11,7 +11,7 @@ import { createAdapter } from '@socket.io/redis-adapter';
 
 import './config/env';
 import { validateEnvironment } from './config/env';
-import { assertJobsDisabled, webPushRetryJobEnabled } from './config/isolation';
+import { assertJobsDisabled, restaurantHoursJobEnabled, webPushRetryJobEnabled } from './config/isolation';
 import { assertServiceIdentityVerified, isHermeticTest } from './config/env';
 import { JobSelection, startSelectedJobs, validateJobSelection } from './jobs/policy';
 import { prisma } from './config/database';
@@ -80,7 +80,10 @@ function jwtSecret(): string {
 export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyInstance> {
   const { enableRateLimit = true, enableSocketIO = true, enableJobs = false } = options;
   assertJobsDisabled(enableJobs);
-  const requestedJobs = options.jobs || (webPushRetryJobEnabled() ? { notificationRetry: true } : {});
+  const requestedJobs = options.jobs || {
+    ...(webPushRetryJobEnabled() ? { notificationRetry: true } : {}),
+    ...(restaurantHoursJobEnabled() ? { restaurantHours: true } : {}),
+  };
   validateJobSelection(requestedJobs);
   assertServiceIdentityVerified();
   if (!isHermeticTest()) validateEnvironment();

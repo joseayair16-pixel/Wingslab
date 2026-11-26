@@ -1,9 +1,11 @@
 import type { PrismaClient } from '@prisma/client';
 import { dispatchCheckoutKitchenOutbox } from './checkout-kitchen-outbox';
 import { enqueueRestaurantOrder } from './order-workflow.service';
+import { sendPushNotification } from './notification.service';
 
 jest.mock('./order-workflow.service', () => ({ enqueueRestaurantOrder: jest.fn() }));
 jest.mock('./socket.service', () => ({ emitNotification: jest.fn() }));
+jest.mock('./notification.service', () => ({ sendPushNotification: jest.fn().mockResolvedValue({ success: true }) }));
 
 const orderId = 'paid-order';
 const createdAt = new Date('2026-11-24T12:00:00.000Z');
@@ -37,6 +39,9 @@ test('publica pedidos pagados y marca la fila entregada solo después de encolar
     data: expect.objectContaining({ status: 'PROCESSING', attempts: { increment: 1 } }),
   }));
   expect(enqueueRestaurantOrder).toHaveBeenCalledWith('restaurant', orderId, createdAt, { throwOnError: true });
+  expect(sendPushNotification).toHaveBeenCalledWith('restaurant-user', expect.objectContaining({
+    data: expect.objectContaining({ orderId, event: 'order:created' }),
+  }));
   expect(db.kitchenOrderOutbox.update).toHaveBeenCalledWith(expect.objectContaining({
     where: { orderId }, data: expect.objectContaining({ status: 'DELIVERED', deliveredAt: expect.any(Date) }),
   }));

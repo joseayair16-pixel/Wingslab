@@ -422,36 +422,29 @@ export const CompactActiveOrderBanner = memo(function CompactActiveOrderBanner({
 
       {/* Estado de retraso: reaseguro (el chat se resalta en la esquina) */}
       {delayState.isDelayed && delayState.referenceTime && (
-        <div className="mt-5 rounded-[20px] border border-orange-100 dark:border-orange-900/40 bg-gradient-to-r from-orange-50 to-red-50 dark:from-orange-950/30 dark:to-red-950/30 px-4 py-4 sm:px-5">
-          <div className="flex items-center gap-3 sm:gap-4">
-            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-orange-100 text-red-600 dark:bg-orange-900/40 dark:text-red-400 sm:h-14 sm:w-14"><AlertTriangle className="h-6 w-6" /></div>
-            <div className="min-w-0 flex-1 border-l border-orange-200 dark:border-orange-900/40 pl-3 sm:pl-4">
-              <p className="text-sm sm:text-lg font-bold text-red-700 dark:text-red-300">Va con retraso · {formatOverdueMinutes(delayState.minutesOverdue)}</p>
-              <p className="mt-1 text-xs sm:text-sm text-neutral-700 dark:text-zinc-300">
-                Tu pedido va con retraso {delayState.level === 3 ? 'mayor al esperado' : ''}
-              </p>
-              <p className="text-xs sm:text-sm text-neutral-600 dark:text-zinc-400 mt-0.5 leading-snug">
-                {delayState.level === 3
-                  ? 'Lo sentimos mucho. Estamos trabajando para que llegue lo antes posible.'
-                  : 'Estamos trabajando en tu pedido. Gracias por tu paciencia.'}
-              </p>
-              {delayState.isScheduled && (
-                <p className="text-[11px] text-neutral-400 line-through mt-1 truncate">
-                  Programada: {formatScheduleDateLabel(delayState.referenceTime.toISOString(), currentTimestamp)} ·{' '}
-                  {delayState.referenceTime.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })}
-                </p>
-              )}
-            </div>
-            <Timer aria-hidden="true" className="hidden h-12 w-12 shrink-0 text-red-500 sm:block" />
+        <div className="mt-4 flex items-center gap-2.5 rounded-2xl border border-red-200/70 bg-red-50/50 px-3 py-2.5 dark:border-red-500/25 dark:bg-red-500/5">
+          <span className="grid h-8 w-8 shrink-0 place-items-center rounded-xl bg-white text-red-600 shadow-sm dark:bg-red-500/10 dark:text-red-400">
+            <AlertTriangle className="h-4 w-4" aria-hidden="true" />
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="text-xs font-bold text-red-700 dark:text-red-300">Retraso · {formatOverdueMinutes(delayState.minutesOverdue)}</p>
+            <p className="mt-0.5 truncate text-[10px] text-neutral-500 dark:text-zinc-400">
+              {delayState.isScheduled
+                ? `Programada: ${formatScheduleDateLabel(delayState.referenceTime.toISOString(), currentTimestamp)} · ${delayState.referenceTime.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })}`
+                : 'Te avisaremos en cuanto cambie el estado.'}
+            </p>
           </div>
         </div>
       )}
 
       {/* PIN de recolección para pickup */}
       {isPickup && order?.pickupPin && ['READY', 'PICKED_UP', 'IN_TRANSIT'].includes(activeStatus) && (
-        <div className="mt-3 flex items-center justify-center gap-2 py-2 px-3 bg-emerald-50/60 border border-emerald-200/60 rounded-xl">
-          <span className="text-[9px] font-bold text-emerald-600 uppercase tracking-wider">PIN de recolección:</span>
-          <span className="text-base font-black tracking-[0.25em] text-emerald-900 font-mono">{order.pickupPin}</span>
+        <div className="mt-3 flex items-center justify-between gap-3 rounded-2xl border border-red-200/70 bg-white px-4 py-3 shadow-[0_6px_18px_-12px_rgba(0,0,0,0.35)] dark:border-red-500/25 dark:bg-zinc-900">
+          <div className="min-w-0">
+            <p className="text-[9px] font-black uppercase tracking-[0.18em] text-red-600 dark:text-red-400">PIN de recolección</p>
+            <p className="mt-0.5 text-[10px] leading-tight text-neutral-500 dark:text-zinc-400">Muéstralo al recoger tu pedido</p>
+          </div>
+          <span className="shrink-0 rounded-xl bg-neutral-950 px-3 py-2 font-mono text-lg font-black tracking-[0.22em] tabular-nums text-white shadow-sm dark:bg-zinc-800">{order.pickupPin}</span>
         </div>
       )}
 
@@ -471,11 +464,14 @@ export const CompactActiveOrderBanner = memo(function CompactActiveOrderBanner({
         </a>
       )}
 
-      {/* deliveryPin en banner compacto — solo para transferencia */}
-      {!isPickup && order?.paymentMethod === 'TRANSFER' && ((order?.deliveryPin || order?.handoverPin) && ['READY', 'PICKED_UP', 'IN_TRANSIT'].includes(activeStatus)) && (
-        <div className="mt-3 flex items-center justify-center gap-2 py-2 px-3 bg-indigo-50/60 border border-indigo-200/60 rounded-xl">
-          <span className="text-[9px] font-bold text-indigo-600 uppercase tracking-wider">PIN de entrega:</span>
-          <span className="text-base font-black tracking-[0.25em] text-indigo-900 font-mono">{order?.deliveryPin || order?.handoverPin}</span>
+      {/* PIN solo para pedidos pagados que requieren verificación de entrega. */}
+      {!isPickup && order?.paymentMethod && order.paymentMethod !== 'CASH' && ((order?.deliveryPin || order?.handoverPin) && ['READY', 'PICKED_UP', 'IN_TRANSIT'].includes(activeStatus)) && (
+        <div className="mt-3 flex items-center justify-between gap-3 rounded-2xl border border-red-200/70 bg-white px-4 py-3 shadow-[0_6px_18px_-12px_rgba(0,0,0,0.35)] dark:border-red-500/25 dark:bg-zinc-900">
+          <div className="min-w-0">
+            <p className="text-[9px] font-black uppercase tracking-[0.18em] text-red-600 dark:text-red-400">PIN de entrega</p>
+            <p className="mt-0.5 text-[10px] leading-tight text-neutral-500 dark:text-zinc-400">Muéstralo al recibir tu pedido</p>
+          </div>
+          <span className="shrink-0 rounded-xl bg-neutral-950 px-3 py-2 font-mono text-lg font-black tracking-[0.22em] tabular-nums text-white shadow-sm dark:bg-zinc-800">{order?.deliveryPin || order?.handoverPin}</span>
         </div>
       )}
 

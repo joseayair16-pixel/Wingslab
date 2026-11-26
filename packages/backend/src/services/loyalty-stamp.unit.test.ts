@@ -82,7 +82,7 @@ test('en el último sello completa la tarjeta y registra la entrega del premio d
     .resolves.toMatchObject({ stamps: 8, goal: 8, completed: true, rewardDelivered: true });
   expect(tx.loyaltyCard.update).toHaveBeenCalledWith({ where: { id: 'active-card' }, data: expect.objectContaining({ state: 'COMPLETED' }) });
   expect(tx.loyaltyRedemption.create).toHaveBeenCalledWith({ data: expect.objectContaining({ cardId: 'active-card', state: 'COMPLETED' }) });
-  expect(tx.product.updateMany).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ id: 'papas' }), data: { stock: { decrement: 1 } } }));
+  expect(tx.product.updateMany).not.toHaveBeenCalled();
 });
 
 test('si cambió el progreso o se agotó el premio, no consume el código de forma definitiva', async () => {

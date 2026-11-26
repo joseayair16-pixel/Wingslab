@@ -22,10 +22,12 @@ import { getPromoLimitViolation } from '../services/order-promotion-policy';
 import { isSandboxCardChargingEnabled } from '../services/checkout-sandbox-policy';
 import { listMercadoPagoCards, type MercadoPagoSavedCard } from '../services/mercado-pago-customer';
 import { resolveOwnedSavedCard } from '../services/saved-card-policy';
+import { generateDeliveryPin } from '../services/delivery-pin';
 
 const orderFields = z.object({
   restaurantId: z.literal(RESTAURANT_ID).default(RESTAURANT_ID),
   clientOrderKey: z.string().min(8, 'La clave de pedido es obligatoria.').max(64).refine(key => !key.startsWith('mp:'), 'Clave de pedido reservada.').optional(),
+  scheduledDeliveryAt: z.string().datetime().optional(),
   items: z
     .array(
       z.object({
@@ -76,7 +78,7 @@ function validateOrderAddress(data: Pick<z.output<typeof orderFields>, 'fulfillm
 }
 
 const createOrderSchema = orderFields.superRefine(validateOrderAddress);
-const cardReservationSchema = orderFields.omit({ paymentMethod: true, clientOrderKey: true }).extend({
+const cardReservationSchema = orderFields.omit({ paymentMethod: true, clientOrderKey: true, scheduledDeliveryAt: true }).extend({
   requestKey: z.string().uuid(),
   items: orderFields.shape.items.max(50),
 }).strict().superRefine(validateOrderAddress);
@@ -393,7 +395,7 @@ export async function registerOrderRoutes(fastify: FastifyInstance): Promise<voi
           where: { id: promo.giftProductId ?? '', restaurantId: restaurant.id, isAvailable: true, deleted: false, sellBy: 'UNIT', isAdultOnly: false },
           select: { id: true, name: true, trackStock: true, stock: true, optionGroups: { select: { minSelection: true } } },
         });
-        if (!product || (product.trackStock && product.stock < 1) || product.optionGroups.some(g => g.minSelection > 0)) {
+        if (!product || product.optionGroups.some(g => g.minSelection > 0)) {
           return reply.status(400).send({ success: false, error: { code: 'PROMO_GIFT_UNAVAILABLE', message: 'El producto de regalo no está disponible en este momento.' } });
         }
         gift = { id: product.id, name: product.name };
@@ -466,12 +468,13 @@ export async function registerOrderRoutes(fastify: FastifyInstance): Promise<voi
           });
         }
 
-        const queueInfo = await enqueueRestaurantOrder(order.restaurant.id, order.id, order.createdAt).catch(error => {
+        const isCustomerScheduled = Boolean(order.scheduledDeliveryAt);
+        const queueInfo = isCustomerScheduled ? null : await enqueueRestaurantOrder(order.restaurant.id, order.id, order.createdAt).catch(error => {
           request.log.error({ err: error, orderId: order.id }, 'Pedido guardado; no se pudo actualizar la cola');
           return null;
         });
 
-        emitNotification(
+        if (!isCustomerScheduled) emitNotification(
           fastify.io,
           order.restaurant.userId,
           'RESTAURANT',
@@ -501,7 +504,7 @@ export async function registerOrderRoutes(fastify: FastifyInstance): Promise<voi
         // app nativa. Los siguientes suenan como aviso normal (un toque) hasta
         // que el primero se resuelva y pasen a ser el activo.
         const isQueueHead = queueInfo !== null && queueInfo.position <= 1;
-        void sendPushNotification(order.restaurant.userId, {
+        if (!isCustomerScheduled) void sendPushNotification(order.restaurant.userId, {
           title: '¡Nuevo Pedido Recibido!',
           body: `Pedido ${order.orderReference} — Ingreso: $${restaurantEarnings.toFixed(2)}.`,
           icon: '/app-icon-192.png',
@@ -614,6 +617,27 @@ export async function registerOrderRoutes(fastify: FastifyInstance): Promise<voi
             code: 'CUSTOMER_NOT_FOUND',
             message: 'No se encontro el perfil del cliente.',
           },
+        });
+      }
+
+      // Repair active legacy paid deliveries that were marked READY before
+      // card orders began receiving a PIN. The owner and status are scoped in
+      // the write, and concurrent requests cannot overwrite an existing PIN.
+      const legacyOrder = await prisma.order.findFirst({
+        where: {
+          id: params.data.id,
+          customerId: customerProfile.id,
+          fulfillmentType: 'DELIVERY',
+          paymentMethod: { not: PaymentMethod.CASH },
+          status: { in: [OrderStatus.READY, OrderStatus.PICKED_UP, OrderStatus.IN_TRANSIT] },
+          deliveryPin: null,
+        },
+        select: { id: true, handoverPin: true },
+      });
+      if (legacyOrder) {
+        await prisma.order.updateMany({
+          where: { id: legacyOrder.id, customerId: customerProfile.id, deliveryPin: null, status: { in: [OrderStatus.READY, OrderStatus.PICKED_UP, OrderStatus.IN_TRANSIT] } },
+          data: { deliveryPin: legacyOrder.handoverPin || generateDeliveryPin() },
         });
       }
 

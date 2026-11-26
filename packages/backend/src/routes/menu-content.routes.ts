@@ -96,9 +96,10 @@ export async function registerMenuContentRoutes(app: FastifyInstance) {
       try { return { success: true, data: await saveMenuContent(parsed.data) }; }
       catch (error: any) { if (!error.statusCode) throw error; return reply.code(error.statusCode).send({ success: false, error: { message: error.message } }); }
     });
-    restaurant.post('/restaurant-panel/menu-images', { bodyLimit: 3 * 1024 * 1024 }, async (request, reply) => {
-      const parsed = z.object({ source: z.string().max(2_800_000) }).strict().safeParse(request.body);
-      if (!parsed.success) return reply.code(400).send({ success: false, error: { message: 'Imagen no válida (máximo 2 MiB).' } });
+    restaurant.post('/restaurant-panel/menu-images', { bodyLimit: 4_500_000 }, async (request, reply) => {
+      // 3 MiB binarios ocupan ~4 MiB al codificarse en base64.
+      const parsed = z.object({ source: z.string().max(4_200_000) }).strict().safeParse(request.body);
+      if (!parsed.success) return reply.code(400).send({ success: false, error: { message: 'Imagen no válida (máximo 3 MiB).' } });
       try { return reply.code(201).send({ success: true, data: await saveMenuImage(parsed.data.source) }); }
       catch (error: any) { if (!error.statusCode) throw error; return reply.code(error.statusCode).send({ success: false, error: { message: error.message } }); }
     });

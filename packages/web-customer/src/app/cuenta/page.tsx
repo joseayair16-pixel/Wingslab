@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { io } from 'socket.io-client';
 import { MapPin, Plus, Search, Star, Trash2, LogOut, X, Loader2, Pencil, Camera, Smartphone, PackageCheck, ReceiptText, QrCode, Gift, Award, UserRound } from 'lucide-react';
-import { getWingslabApiUrl, getWingslabSocketUrl, getOrderStatusLabel, readStoredSession, persistStoredSession, requestJson, clearStoredSession, forceSessionExpired, handleSocketUnauthorized, setGlobalSessionExpiredHandler, type AuthUser } from '@sadel/shared';
+import { getWingslabApiUrl, getWingslabSocketUrl, getOrderStatusLabel, readStoredSession, persistStoredSession, requestJson, clearStoredSession, forceSessionExpired, handleSocketUnauthorized, setGlobalSessionExpiredHandler, flushPendingDeviceUnpair, type AuthUser } from '@sadel/shared';
 import { AuthModal } from '../../components/AuthModal';
 import { OrdersView } from '../../views/OrdersView';
 import { CustomerNavigation } from '../../components/CustomerNavigation';
@@ -22,12 +22,12 @@ import { LoyaltyCard } from '../../../../shared/src/loyalty-card';
 const storageKey = 'sadel.customer';
 
 function OrderNotificationSettings({ token }: { token: string }) {
-  const { isSubscribed, subscribe, needsIosInstall, pushSupportIssue } = usePushNotifications();
+  const { isSubscribed, subscribe, needsIosInstall, pushSupportIssue, permissionDenied } = usePushNotifications();
 
   return <section className="wl-profile-card p-4" aria-label="Notificaciones de pedidos">
     <h2 className="font-bold">Notificaciones de pedidos</h2>
-    <p className="mt-1 text-sm" role="status">{isSubscribed ? 'Activadas en este dispositivo.' : needsIosInstall ? 'Añade WingsLab a la pantalla de inicio y ábrelo desde allí para activar los avisos.' : pushSupportIssue || 'Recibe avisos de tus pedidos aunque no tengas WingsLab abierto.'}</p>
-    {!isSubscribed && !needsIosInstall && !pushSupportIssue && <PushActivationButton activate={() => subscribe(token)} className="wl-profile-add mt-2 min-h-11" />}
+    <p className="mt-1 text-sm" role="status">{isSubscribed ? 'Activadas en este dispositivo.' : permissionDenied ? 'Permiso bloqueado. Actívalo en Ajustes → Notificaciones para recibir los avisos.' : needsIosInstall ? 'Añade WingsLab a la pantalla de inicio y ábrelo desde allí para activar los avisos.' : pushSupportIssue || 'Recibe avisos de tus pedidos aunque no tengas WingsLab abierto.'}</p>
+    {!isSubscribed && !needsIosInstall && !pushSupportIssue && !permissionDenied && <PushActivationButton activate={() => subscribe(token)} className="wl-profile-add mt-2 min-h-11" />}
   </section>;
 }
 const moneyFormatter = new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' });
@@ -165,6 +165,13 @@ export default function CustomerAccount() {
   const [selected, setSelected] = useState('');
   const [detail, setDetail] = useState<any>(null);
   const [detailOpen, setDetailOpen] = useState(false);
+  const [detailError, setDetailError] = useState(false);
+  useEffect(() => {
+    if (!detailOpen) return;
+    const close = (event: KeyboardEvent) => { if (event.key === 'Escape') setDetailOpen(false); };
+    window.addEventListener('keydown', close);
+    return () => window.removeEventListener('keydown', close);
+  }, [detailOpen]);
   const [section, setSection] = useState<'pedidos' | 'fidelidad' | 'perfil' | 'soporte'>('perfil');
   const [addressModalOpen, setAddressModalOpen] = useState(false);
   const [addressQuery, setAddressQuery] = useState('');
@@ -193,7 +200,9 @@ export default function CustomerAccount() {
   useEffect(() => {
     const saved = readStoredSession(storageKey);
     if (saved?.token) { setToken(saved.token); setUser(saved.user); }
-  }, []);
+    // Si el logout ocurrió sin red, terminar la desvinculación al reconectar.
+    void flushPendingDeviceUnpair(apiBase).catch(() => {});
+  }, [apiBase]);
   // Un refresh silencioso de requestJson renueva el token en localStorage pero
   // no el estado React. Sin esto, las llamadas y el socket de esta vista siguen
   // usando el token viejo hasta recargar la página.
@@ -209,6 +218,9 @@ export default function CustomerAccount() {
   // socket rechazado deben limpiar esta vista, no dejarla con datos obsoletos.
   useEffect(() => {
     setGlobalSessionExpiredHandler(() => {
+      // Un 401 irrecuperable también debe desvincular el dispositivo: si no,
+      // seguirá recibiendo avisos del usuario anterior.
+      void revokeCustomerPush().catch(() => {});
       clearStoredSession(storageKey);
       setToken(''); setUser(null); setOrders([]); setAddresses([]);
       setLoyalty(null); setAuthOpen(true);
@@ -332,7 +344,8 @@ export default function CustomerAccount() {
     if (!detailOpen || !selected || !token) return;
     let active = true;
     setDetail(null);
-    void requestJson<any>({ apiBase, path: `/me/pedidos/${selected}`, token }).then(r => { if (active) setDetail(r.data); }).catch(() => { if (active) setError('No se pudo cargar el pedido.'); });
+    setDetailError(false);
+    void requestJson<any>({ apiBase, path: `/me/pedidos/${selected}`, token }).then(r => { if (active) setDetail(r.data); }).catch(() => { if (active) setDetailError(true); });
     return () => { active = false; };
   }, [apiBase, token, selected, detailOpen, selectedOrderStatus]);
 
@@ -801,7 +814,45 @@ export default function CustomerAccount() {
         </div>
       </section>
     </div>}
-    {detailOpen && <div className="fixed inset-0 z-50 overflow-y-auto bg-black/50 p-4"><section role="dialog" aria-modal="true" aria-label="Detalle de pedido" className="mx-auto my-8 max-w-lg space-y-4 rounded-2xl bg-white p-6"><button onClick={() => setDetailOpen(false)} className="float-right">Cerrar</button><h2 className="text-xl font-bold">Tu pedido WingsLab</h2>{detail ? <><p>{getOrderStatusLabel(detail.status)}</p><p>{money(detail.totalAmount)}</p>{detail.items?.map((item: any) => <p key={item.id}>{item.quantity} × {item.product?.name || item.productName}</p>)}{detail.tracking?.map((t: any) => <p key={t.id} className="text-sm text-neutral-600">{getOrderStatusLabel(t.status)}</p>)}<p className="text-xs text-neutral-500">{detail.orderReference}</p></> : <p>Cargando pedido…</p>}</section></div>}
+    {detailOpen && (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-neutral-950/60 px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-[max(1rem,env(safe-area-inset-top))] backdrop-blur-sm sm:py-6" onMouseDown={event => { if (event.target === event.currentTarget) setDetailOpen(false); }}>
+        <section role="dialog" aria-modal="true" aria-labelledby="account-order-detail-title" className="relative max-h-full w-full max-w-[480px] overflow-y-auto overscroll-contain rounded-[28px] bg-[#faf9f8] shadow-[0_30px_100px_rgba(0,0,0,0.25)] dark:bg-zinc-950">
+          <div className="sticky top-0 z-10 flex items-center justify-between border-b border-black/5 bg-[#faf9f8]/95 px-5 py-4 backdrop-blur-md dark:border-white/10 dark:bg-zinc-950/95 sm:px-6">
+            <div><p className="text-[10px] font-bold uppercase tracking-[0.16em] text-red-600 dark:text-red-400">Tu pedido</p><h2 id="account-order-detail-title" className="text-lg font-bold tracking-tight text-neutral-950 dark:text-white">Detalles del pedido</h2></div>
+            <button type="button" autoFocus onClick={() => setDetailOpen(false)} aria-label="Cerrar detalles del pedido" className="flex h-10 w-10 items-center justify-center rounded-full bg-white text-neutral-600 shadow-sm ring-1 ring-black/5 transition hover:bg-red-50 hover:text-red-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-red-500 dark:bg-zinc-800 dark:text-zinc-100"><X className="h-5 w-5" aria-hidden="true" /></button>
+          </div>
+          {!detail ? <p role={detailError ? 'alert' : 'status'} className="p-6 text-sm text-neutral-600 dark:text-zinc-300">{detailError ? 'No se pudo cargar el pedido. Cierra el detalle e inténtalo de nuevo.' : 'Cargando pedido…'}</p> : (
+            <div className="space-y-4 px-4 py-5 sm:px-6">
+              <div className="flex items-center gap-4 rounded-[22px] border border-white bg-gradient-to-r from-red-50/80 to-white p-4 shadow-[0_4px_18px_rgba(0,0,0,0.04)] dark:border-zinc-800 dark:from-zinc-900 dark:to-zinc-900">
+                <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-neutral-950 text-lg font-black text-white">{(detail.restaurant?.name || 'WingsLab').slice(0, 2).toUpperCase()}</div>
+                <div className="min-w-0"><h3 className="truncate text-lg font-bold tracking-tight text-neutral-950 dark:text-white">{detail.restaurant?.name || 'WingsLab'}</h3><p className="mt-1 text-xs text-neutral-500 dark:text-zinc-400">{formatOrderDate(detail.createdAt)} · {detail.dailyCounter != null ? `Pedido #${String(detail.dailyCounter).padStart(2, '0')}` : 'Número de pedido no disponible'}</p><span className="mt-2 inline-flex rounded-full bg-red-50 px-3 py-1 text-xs font-semibold text-red-700 dark:bg-red-950/50 dark:text-red-300">{getOrderStatusLabel(detail.status)}</span></div>
+              </div>
+              <div className="space-y-5 rounded-[22px] border border-neutral-100 bg-white p-5 shadow-[0_4px_18px_rgba(0,0,0,0.04)] dark:border-zinc-800 dark:bg-zinc-900">
+                <h3 className="text-sm font-bold text-neutral-950 dark:text-white">Resumen del pedido</h3>
+                <div className="space-y-4">{(detail.items || []).map((item: any) => <div key={item.id} className="flex gap-3 text-sm">
+                  <span className="flex h-8 min-w-8 items-center justify-center rounded-xl bg-red-50 px-2 text-xs font-bold text-red-700 dark:bg-red-950/50 dark:text-red-300">{item.quantity}×</span>
+                  <div className="min-w-0"><p className="font-medium text-neutral-900 dark:text-zinc-100">{item.product?.name || item.productName || 'Producto'}</p>{item.options?.length > 0 && <p className="mt-0.5 text-xs text-neutral-500 dark:text-zinc-400">{item.options.map((option: any) => option.name).join(' · ')}</p>}{item.weightG && <p className="mt-0.5 text-xs text-neutral-500 dark:text-zinc-400">{item.weightG >= 1000 ? `${item.weightG / 1000} kg` : `${item.weightG} g`}</p>}{item.specialInstructions && <p className="mt-1 text-xs text-neutral-500 dark:text-zinc-400">Nota: {item.specialInstructions}</p>}</div>
+                </div>)}</div>
+                <div className="space-y-3 border-t border-dashed border-neutral-200 pt-5 text-sm dark:border-zinc-700">
+                  {detail.subtotal != null && <div className="flex justify-between gap-3 text-neutral-600 dark:text-zinc-300"><span>Subtotal</span><span className="font-medium">{money(Number(detail.subtotal))}</span></div>}
+                  {detail.deliveryFee != null && <div className="flex justify-between gap-3 text-neutral-600 dark:text-zinc-300"><span>Costo de envío</span><span className="font-medium">{money(Number(detail.deliveryFee))}</span></div>}
+                  {Number(detail.serviceFee) > 0 && <div className="flex justify-between gap-3 text-neutral-600 dark:text-zinc-300"><span>Tarifa de servicio</span><span className="font-medium">{money(Number(detail.serviceFee))}</span></div>}
+                  {Number(detail.promoDiscountAmount) > 0 && <div className="flex justify-between gap-3 font-semibold text-sky-700 dark:text-sky-300"><span>Descuento{detail.promoCode ? ` (${detail.promoCode})` : ''}</span><span>-{money(Number(detail.promoDiscountAmount))}</span></div>}
+                  <div className="flex justify-between gap-3 border-t border-dashed border-neutral-200 pt-4 text-lg font-bold text-neutral-950 dark:border-zinc-700 dark:text-white"><span>Total del pedido</span><span className="text-red-700 dark:text-red-400">{money(Number(detail.totalAmount))}</span></div>
+                </div>
+              </div>
+              <div className="space-y-3 rounded-[22px] border border-neutral-100 bg-white p-5 shadow-[0_4px_18px_rgba(0,0,0,0.04)] dark:border-zinc-800 dark:bg-zinc-900">
+                <h3 className="text-sm font-bold text-neutral-950 dark:text-white">{detail.fulfillmentType === 'PICKUP' ? 'Recolección y pago' : 'Entrega y pago'}</h3>
+                <p className="text-sm text-neutral-700 dark:text-zinc-300">{detail.fulfillmentType === 'PICKUP' ? (detail.restaurant?.address || 'Recoger en WingsLab') : detail.address ? [detail.address.street, detail.address.number, detail.address.apartment, detail.address.neighborhood, detail.address.city, detail.address.state, detail.address.zipCode].filter(Boolean).join(', ') : 'Dirección no disponible'}</p>
+                <p className="text-sm text-neutral-700 dark:text-zinc-300">{detail.paymentMethod === 'CASH' ? 'Efectivo' : detail.paymentMethod === 'CREDIT_CARD' ? 'Tarjeta' : detail.paymentMethod === 'TRANSFER' ? 'Transferencia' : 'Método de pago no disponible'}{detail.paymentStatus === 'COMPLETED' || detail.paymentStatus === 'PAID' ? ' · Pagado' : detail.paymentStatus === 'PENDING' ? ' · Pago pendiente' : ''}</p>
+              </div>
+              {detail.fulfillmentType !== 'PICKUP' && (detail.deliveryPin || detail.handoverPin) && ['READY', 'PICKED_UP', 'IN_TRANSIT'].includes(detail.status) && <div className="rounded-3xl border border-indigo-100 bg-indigo-50/50 p-5 text-center dark:border-indigo-900 dark:bg-indigo-950/30"><p className="text-[10px] font-bold uppercase tracking-widest text-indigo-600 dark:text-indigo-400">Código de entrega</p><p className="mt-2 font-mono text-4xl font-black tracking-[0.25em] text-indigo-950 dark:text-indigo-200">{detail.deliveryPin || detail.handoverPin}</p><p className="mt-2 text-xs text-neutral-500 dark:text-zinc-400">Proporciona este código al repartidor al recibir tu pedido.</p></div>}
+              {detail.notes && <div className="rounded-[22px] border border-neutral-100 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900"><h3 className="text-xs font-semibold uppercase tracking-wider text-neutral-500 dark:text-zinc-400">Notas del pedido</h3><p className="mt-2 whitespace-pre-line text-sm text-neutral-700 dark:text-zinc-300">{detail.notes}</p></div>}
+            </div>
+          )}
+        </section>
+      </div>
+    )}
     {addressModalOpen && (
       <div className="wl-auth wl-addr-overlay fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-md p-4 animate-[fadeIn_0.2s_ease-out]" style={addressViewport ? { top: addressViewport.top, height: addressViewport.height, bottom: 'auto' } : undefined} role="dialog" aria-modal="true" aria-labelledby="address-modal-title" onClick={closeAddressModal}>
         <section className="wl-auth-sheet relative flex max-h-[92dvh] w-full max-w-md flex-col overflow-hidden" onClick={(event) => event.stopPropagation()}>

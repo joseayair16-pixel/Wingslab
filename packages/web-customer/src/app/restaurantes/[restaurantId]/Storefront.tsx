@@ -5,7 +5,7 @@ import { AlertTriangle, ArrowLeft, Banknote, Bell, Bike, Check, ChevronLeft, Che
 import officialWordmark from '../../../assets/wingslab-wordmark-red.png';
 import officialWhiteWordmark from '../../../assets/wingslab-wordmark.png';
 import { Hamburger } from 'lucide-react';
-import { categoryAtScrollLine, categoryScrollLine } from '../../../lib/categoryScroll';
+import { stableCategoryAtScrollLine, categoryScrollLine } from '../../../lib/categoryScroll';
 import { CustomerNavigation } from '../../../components/CustomerNavigation';
 import { CartIcon } from '../../../components/CartIcon';
 
@@ -386,6 +386,12 @@ export default function RestaurantPage({
   const [sessionUser, setSessionUser] = useState<AuthUser | null>(null);
   const { isSubscribed, subscribe: subscribePush } = usePushNotifications();
   const [isPushReminderModalOpen, setIsPushReminderModalOpen] = useState(false);
+  useEffect(() => {
+    if (!isPushReminderModalOpen) return;
+    const close = (event: KeyboardEvent) => { if (event.key === 'Escape') setIsPushReminderModalOpen(false); };
+    window.addEventListener('keydown', close);
+    return () => window.removeEventListener('keydown', close);
+  }, [isPushReminderModalOpen]);
   const [showMaxCashModal, setShowMaxCashModal] = useState(false);
   const [showGpsCashModal, setShowGpsCashModal] = useState(false);
   const [rawRestaurant, setRawRestaurant] = useState<PublicRestaurantDetail | null>(initialRestaurant ?? null);
@@ -713,6 +719,18 @@ export default function RestaurantPage({
   }, []);
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(() => urlSearchParams?.checkout === 'true');
+  const [showCardSessionNotice, setShowCardSessionNotice] = useState(() => urlSearchParams?.cardNotice === 'unavailable');
+  const cardSessionNoticeRef = useRef<HTMLDialogElement>(null);
+  useEffect(() => {
+    if (!showCardSessionNotice) return;
+    const dialog = cardSessionNoticeRef.current;
+    if (dialog && !dialog.open) dialog.showModal();
+    const url = new URL(window.location.href);
+    url.searchParams.delete('cardNotice');
+    window.history.replaceState(window.history.state, '', url.toString());
+  }, [showCardSessionNotice]);
+  const [closedProductPrompt, setClosedProductPrompt] = useState<PublicRestaurantDetail['categories'][number]['products'][number] | null>(null);
+  const [scheduledDeliveryAt, setScheduledDeliveryAt] = useState<string | null>(null);
   const cardCheckoutRequestRef = useRef(0);
   const [showInstructions, setShowInstructions] = useState(() =>
     Boolean(checkoutForm.storeNotes || checkoutForm.notes)
@@ -801,6 +819,9 @@ export default function RestaurantPage({
   const [selectedAddressId, setSelectedAddressId] = useState<string | null>(null);
   const [showMapForAddress, setShowMapForAddress] = useState<string | null>(null);
   const [isAddingNewAddress, setIsAddingNewAddress] = useState(false);
+  const [savingCheckoutAddress, setSavingCheckoutAddress] = useState(false);
+  const savingCheckoutAddressRef = useRef(false);
+  const [checkoutAddressSaved, setCheckoutAddressSaved] = useState(false);
   const [newAddressStep, setNewAddressStep] = useState<'search' | 'details'>('search');
   const [addressSearchQuery, setAddressSearchQuery] = useState('');
   const [addressSuggestions, setAddressSuggestions] = useState<any[]>([]);
@@ -1124,6 +1145,7 @@ export default function RestaurantPage({
   // Cualquier 401 del API cierra la sesión globalmente (usuario eliminado, token inválido, etc.)
   useEffect(() => {
     setGlobalSessionExpiredHandler(() => {
+      void revokeCustomerPush().catch(() => {});
       clearStoredSession(storageKey);
       setToken('');
       setSessionUser(null);
@@ -1734,7 +1756,7 @@ export default function RestaurantPage({
   }, [apiBase, sessionUser?.id, token]);
 
   useEffect(() => {
-    if (!isCheckoutOpen || showMaxCashModal || showGpsCashModal || deliveryErrorModal || locationNotice || isPushReminderModalOpen) {
+    if (!isCheckoutOpen || showMaxCashModal || showGpsCashModal || deliveryErrorModal || locationNotice || isPushReminderModalOpen || showCardSessionNotice || transientNotice) {
       return;
     }
 
@@ -1748,7 +1770,7 @@ export default function RestaurantPage({
     return () => {
       document.removeEventListener('mousedown', handlePointerDown);
     };
-  }, [closeCheckout, isCheckoutOpen, showMaxCashModal, showGpsCashModal, deliveryErrorModal, locationNotice, isPushReminderModalOpen]);
+  }, [closeCheckout, isCheckoutOpen, showMaxCashModal, showGpsCashModal, deliveryErrorModal, locationNotice, isPushReminderModalOpen, showCardSessionNotice, transientNotice]);
 
   useEffect(() => {
     if (locationNotice && locationNoticeRef.current && !locationNoticeRef.current.open) {
@@ -1967,7 +1989,7 @@ export default function RestaurantPage({
         freshByProduct[product.id] = {
           price: product.price,
           discountPrice: product.discountPrice ?? null,
-          maxStock: product.trackStock ? (product.stock ?? 0) : null,
+          maxStock: null,
         };
       }
     }
@@ -2250,8 +2272,8 @@ export default function RestaurantPage({
   const loyaltyDiscount = loyaltyApplied ? (loyaltyQuote?.discountCents || 0) / 100 : 0;
   const orderTotal = Math.max(0, effectiveSubtotal - couponDiscount - minOrderDiscount - loyaltyDiscount + serviceFee + (fulfillmentType === 'PICKUP' ? 0 : deliveryFee));
   const checkoutValidationMessage = useMemo(() => {
-    return getCheckoutValidationMessage(checkoutForm, cart, restaurant, token, fulfillmentType, promoCodeState === 'valid' || loyaltyApplied);
-  }, [cart, checkoutForm, restaurant, token, fulfillmentType, promoCodeState, loyaltyApplied]);
+    return getCheckoutValidationMessage(checkoutForm, cart, restaurant, token, fulfillmentType, promoCodeState === 'valid', loyaltyApplied && !loyaltyQuote?.gift);
+  }, [cart, checkoutForm, restaurant, token, fulfillmentType, promoCodeState, loyaltyApplied, loyaltyQuote]);
 
 function triggerHaptic(pattern: number | number[] = 10) {
   if (typeof window !== 'undefined' && navigator.vibrate) {
@@ -2260,13 +2282,8 @@ function triggerHaptic(pattern: number | number[] = 10) {
 }
 
 function getProductAvailability(p: { trackStock?: boolean; stock?: number; lowStockThreshold?: number; isAvailable?: boolean }) {
-  const tracked = !!p.trackStock;
-  const stock = typeof p.stock === 'number' ? p.stock : 0;
-  const threshold = typeof p.lowStockThreshold === 'number' ? p.lowStockThreshold : 5;
-  const available = p.isAvailable !== false && (!tracked || stock > 0);
-  const lowStock = tracked && stock > 0 && stock <= threshold;
-  const maxQty = available ? (tracked ? stock : Number.POSITIVE_INFINITY) : 0;
-  return { available, lowStock, maxQty, tracked };
+  const available = p.isAvailable !== false;
+  return { available, lowStock: false, maxQty: available ? Number.POSITIVE_INFINITY : 0, tracked: false };
 }
 
 function StockBadge({ avail }: { avail: ReturnType<typeof getProductAvailability> }) {
@@ -2325,10 +2342,15 @@ function ProductImage({
   );
 }
 
-  function addToCart(product: PublicRestaurantDetail['categories'][number]['products'][number]) {
+  function addToCart(product: PublicRestaurantDetail['categories'][number]['products'][number], allowWhenClosed = false) {
     const hasOptions = product.optionGroups && product.optionGroups.length > 0;
     const isWeightProduct = product.sellBy === 'WEIGHT';
     const availability = getProductAvailability(product);
+
+    if (!restaurant?.isOpen && !allowWhenClosed) {
+      setClosedProductPrompt(product);
+      return;
+    }
 
     if (!availability.available) {
       setError('Este producto está agotado.');
@@ -2493,6 +2515,8 @@ function ProductImage({
     let viewportHeight = 0;
     let pageHeight = 0;
     let needsMeasure = true;
+    let categoryGesture = false;
+    let categoryGestureTimer: ReturnType<typeof setTimeout> | undefined;
     const elements = restaurant.categories.flatMap(({ id }) => {
       const element = categorySectionRefs.current[id];
       return element && id !== '__promotions__' ? [{ id, element }] : [];
@@ -2525,7 +2549,7 @@ function ProductImage({
       if (categoryScrollTargetRef.current) return;
       const last = sections[sections.length - 1];
       const viewportEnd = scrollY + viewportHeight;
-      const next = viewportEnd >= pageHeight - 2 && last && last.top < viewportEnd ? last.id : categoryAtScrollLine(sections, scrollY + line);
+      const next = viewportEnd >= pageHeight - 2 && last && last.top < viewportEnd ? last.id : stableCategoryAtScrollLine(sections, scrollY + line, activeCategoryRef.current);
       if (next !== activeCategoryRef.current) {
         activeCategoryRef.current = next;
         setActiveCategory(next);
@@ -2535,7 +2559,7 @@ function ProductImage({
     const schedule = () => { if (!frame) frame = requestAnimationFrame(update); };
     const invalidate = () => { needsMeasure = true; schedule(); };
     const revealActive = () => {
-      if (!list || categoryScrollTargetRef.current) return;
+      if (!list || categoryGesture || categoryScrollTargetRef.current) return;
       const button = Array.from(list.querySelectorAll<HTMLButtonElement>('[data-category-id]'))
         .find(element => element.dataset.categoryId === activeCategoryRef.current);
       if (!button) return;
@@ -2558,7 +2582,19 @@ function ProductImage({
       }
       schedule();
     };
-    const onManualScroll = () => { clearPending(); schedule(); };
+    const onManualScroll = (event: Event) => {
+      if (list && event.target instanceof Node && list.contains(event.target)) return;
+      clearPending();
+      schedule();
+    };
+    const holdCategoryGesture = () => {
+      categoryGesture = true;
+      if (categoryGestureTimer) clearTimeout(categoryGestureTimer);
+    };
+    const releaseCategoryGesture = () => {
+      if (categoryGestureTimer) clearTimeout(categoryGestureTimer);
+      categoryGestureTimer = setTimeout(() => { categoryGesture = false; }, 800);
+    };
     const resizeObserver = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(invalidate);
     if (header) resizeObserver?.observe(header);
     if (search) resizeObserver?.observe(search);
@@ -2569,8 +2605,16 @@ function ProductImage({
     window.addEventListener('wheel', onManualScroll, { passive: true });
     window.addEventListener('touchstart', onManualScroll, { passive: true });
     window.addEventListener('resize', invalidate);
+    list?.addEventListener('touchstart', holdCategoryGesture, { passive: true });
+    list?.addEventListener('touchend', releaseCategoryGesture, { passive: true });
+    list?.addEventListener('touchcancel', releaseCategoryGesture, { passive: true });
+    list?.addEventListener('pointerdown', holdCategoryGesture, { passive: true });
+    window.addEventListener('pointerup', releaseCategoryGesture, { passive: true });
+    window.addEventListener('pointercancel', releaseCategoryGesture, { passive: true });
+    list?.addEventListener('wheel', holdCategoryGesture, { passive: true });
+    list?.addEventListener('wheel', releaseCategoryGesture, { passive: true });
     schedule();
-    return () => { window.removeEventListener('scroll', onScroll); window.removeEventListener('wheel', onManualScroll); window.removeEventListener('touchstart', onManualScroll); window.removeEventListener('resize', invalidate); resizeObserver?.disconnect(); clearPending(); if (frame) cancelAnimationFrame(frame); search?.classList.remove('is-joined'); nav.classList.remove('is-joined'); header?.classList.remove('wl-controls-joined'); };
+    return () => { window.removeEventListener('scroll', onScroll); window.removeEventListener('wheel', onManualScroll); window.removeEventListener('touchstart', onManualScroll); window.removeEventListener('resize', invalidate); list?.removeEventListener('touchstart', holdCategoryGesture); list?.removeEventListener('touchend', releaseCategoryGesture); list?.removeEventListener('touchcancel', releaseCategoryGesture); list?.removeEventListener('pointerdown', holdCategoryGesture); window.removeEventListener('pointerup', releaseCategoryGesture); window.removeEventListener('pointercancel', releaseCategoryGesture); list?.removeEventListener('wheel', holdCategoryGesture); list?.removeEventListener('wheel', releaseCategoryGesture); if (categoryGestureTimer) clearTimeout(categoryGestureTimer); resizeObserver?.disconnect(); clearPending(); if (frame) cancelAnimationFrame(frame); search?.classList.remove('is-joined'); nav.classList.remove('is-joined'); header?.classList.remove('wl-controls-joined'); };
   }, [restaurant, menuTab, productSearchQuery]);
 
   function goHome() {
@@ -2615,7 +2659,7 @@ function ProductImage({
   }
 
   async function saveAndSelectAddress() {
-    if (!token) return;
+    if (!token || savingCheckoutAddressRef.current) return;
 
     if (!checkoutForm.street.trim()) {
       setError('Por favor, ingresa una calle válida.');
@@ -2626,6 +2670,8 @@ function ProductImage({
       return;
     }
 
+    savingCheckoutAddressRef.current = true;
+    setSavingCheckoutAddress(true);
     try {
       setError('');
       const payload = await requestJson<{ success: boolean; data: any }>({
@@ -2651,17 +2697,7 @@ function ProductImage({
       });
 
       if (payload.success) {
-        const refreshPayload = await requestJson<{ success: boolean; data: any[] }>({
-          apiBase,
-          path: '/customer/addresses',
-          token,
-          fallbackMessage: 'No se pudo cargar las direcciones actualizadas.',
-        });
-        
-        if (refreshPayload.success) {
-          setAddresses(refreshPayload.data);
-        }
-
+        setAddresses(current => [...current.filter(address => address.id !== payload.data.id), payload.data]);
         setSelectedAddressId(payload.data.id);
         setIsAddingNewAddress(false);
         setNewAddressStep('search');
@@ -2674,21 +2710,20 @@ function ProductImage({
           city: payload.data.city || '',
           state: payload.data.state || '',
           zipCode: payload.data.zipCode || '',
+          country: payload.data.country || current.country,
+          reference: payload.data.reference || '',
           latitude: String(payload.data.latitude),
           longitude: String(payload.data.longitude),
         }));
 
-        setTransientNotice({
-          id: 'address-saved',
-          title: '¡Dirección agregada!',
-          description: 'Se ha guardado y seleccionado tu nueva dirección.',
-          tone: 'success',
-        });
-        setTimeout(() => setTransientNotice(null), 2500);
+        setCheckoutAddressSaved(true);
       }
     } catch (err) {
       console.error('Error saving checkout address:', err);
       setError(err instanceof Error ? err.message : 'Error al guardar la dirección.');
+    } finally {
+      savingCheckoutAddressRef.current = false;
+      setSavingCheckoutAddress(false);
     }
   }
 
@@ -2940,12 +2975,22 @@ function ProductImage({
 
   // This public flag is injected only by the explicit local sandbox config.
   // The backend independently enforces its private sandbox charge gate.
-  const cardEnabled = process.env.NEXT_PUBLIC_WINGSLAB_MP_SANDBOX === 'true' && getAcceptedPaymentMethods(restaurant).includes('CREDIT_CARD');
+  const cardEnabled = !scheduledDeliveryAt &&
+    process.env.NEXT_PUBLIC_WINGSLAB_MP_SANDBOX === 'true' &&
+    getAcceptedPaymentMethods(restaurant).includes('CREDIT_CARD');
 
   async function startCardCheckout() {
     if (!cardEnabled || !token || !sessionUser?.id) return;
-    if (promoCodeState === 'valid' || loyaltyApplied) {
-      setError('Para pagar con tarjeta, quita el cupón o la recompensa aplicados. Solo están disponibles con efectivo.');
+    if (promoCodeState === 'valid') {
+      setError('Los cupones aún no están disponibles con tarjeta. Quita el cupón para continuar.');
+      return;
+    }
+    if (loyaltyLoading || (token && isCheckoutOpen && loyaltyQuote?.source !== loyaltyKey)) {
+      setError('Espera a que termine de consultar tu recompensa antes de confirmar.');
+      return;
+    }
+    if (loyaltyApplied && !loyaltyQuote?.gift) {
+      setError('Solo los regalos de fidelidad están disponibles con tarjeta. Quita el descuento para continuar.');
       return;
     }
     const request = ++cardCheckoutRequestRef.current;
@@ -3000,6 +3045,7 @@ function ProductImage({
       })),
       fulfillmentType,
       paymentMethod: 'CREDIT_CARD',
+      ...(loyaltyApplied && loyaltyQuote?.cardId ? { loyalty: { cardId: loyaltyQuote.cardId, discountCents: loyaltyQuote.discountCents || 0, expectedTotalCents: Math.round(orderTotal * 100) } } : {}),
       locationVerified: !!location,
       ...(location ? { currentLocation: location } : {}),
       ...(form.storeNotes.trim() || form.notes.trim()
@@ -3158,6 +3204,7 @@ function ProductImage({
 
       const body: Record<string, any> = {
         restaurantId: restaurant.id,
+        ...(scheduledDeliveryAt ? { scheduledDeliveryAt } : {}),
         items: cart.map((item) => ({
           productId: item.productId,
           quantity: item.quantity,
@@ -3408,8 +3455,59 @@ function ProductImage({
   return (
     <main
       className="wl-storefront min-h-[100dvh] text-neutral-900"
-      data-order-overlay={isCartOpen || isCheckoutOpen || !!customizingProduct || showAuthModal ? 'open' : undefined}
+      data-order-overlay={isCartOpen || isCheckoutOpen || !!customizingProduct || showAuthModal || isPushReminderModalOpen ? 'open' : undefined}
     >
+      {showCardSessionNotice && (
+        <dialog
+          ref={cardSessionNoticeRef}
+          onClose={() => setShowCardSessionNotice(false)}
+          aria-labelledby="card-session-notice-title"
+          aria-describedby="card-session-notice-description"
+          className="m-auto w-[calc(100%-2rem)] max-w-sm rounded-[28px] border border-neutral-200 bg-white p-6 text-center text-neutral-950 shadow-2xl backdrop:bg-black/60 dark:border-zinc-700 dark:bg-zinc-900 dark:text-white sm:p-7"
+        >
+          <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-red-50 text-red-700 dark:bg-red-950/50 dark:text-red-300">
+            <CreditCard className="h-7 w-7" aria-hidden="true" />
+          </span>
+          <h2 id="card-session-notice-title" className="mt-5 text-xl font-extrabold tracking-tight">Pago no disponible</h2>
+          <p id="card-session-notice-description" className="mt-2 text-sm leading-6 text-neutral-600 dark:text-zinc-300">
+            No pudimos recuperar esta sesión de pago. Si ya intentaste pagar, revisa el estado de tu pedido antes de volver a intentarlo. Si no, selecciona tarjeta de nuevo en el checkout.
+          </p>
+          <button type="button" autoFocus onClick={() => cardSessionNoticeRef.current?.close()} className="mt-6 min-h-12 w-full rounded-2xl bg-red-700 px-5 py-3 text-sm font-bold text-white transition hover:bg-red-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-600">
+            Entendido
+          </button>
+        </dialog>
+      )}
+      {closedProductPrompt && (
+        <div className="fixed inset-0 z-[95] flex items-center justify-center bg-neutral-950/60 px-4 py-6 backdrop-blur-sm"
+          role="dialog" aria-modal="true" aria-labelledby="closed-store-title" aria-describedby="closed-store-description">
+          <section className="w-full max-w-sm overflow-hidden rounded-[28px] border border-white/70 bg-white p-6 shadow-[0_28px_90px_rgba(15,15,15,0.3)] dark:border-zinc-700 dark:bg-zinc-900 sm:p-7">
+            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-amber-50 text-amber-700 ring-8 ring-amber-50/70 dark:bg-amber-950/50 dark:text-amber-300 dark:ring-amber-950/30">
+              <Clock className="h-7 w-7" aria-hidden="true" />
+            </div>
+            <h2 id="closed-store-title" className="mt-6 text-center text-xl font-extrabold tracking-tight text-neutral-950 dark:text-white">La tienda está cerrada</h2>
+            <p id="closed-store-description" className="mt-2 text-center text-sm leading-6 text-neutral-600 dark:text-zinc-300">
+              Puedes seguir explorando y agregar productos. En el carrito podrás elegir la hora aproximada para recibir tu pedido.
+            </p>
+            {restaurant?.nextOpenTime && (
+              <p className="mt-4 rounded-2xl border border-amber-100 bg-amber-50/70 px-4 py-3 text-center text-sm font-semibold text-amber-950 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-100">
+                Próxima apertura: {restaurant.nextOpenTime}
+              </p>
+            )}
+            <div className="mt-6 grid gap-2">
+              <button type="button" autoFocus onClick={() => {
+                const product = closedProductPrompt;
+                setClosedProductPrompt(null);
+                addToCart(product, true);
+              }} className="min-h-12 rounded-2xl bg-neutral-950 px-4 text-sm font-bold text-white transition hover:bg-neutral-800 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-neutral-300">
+                Agregar {closedProductPrompt.name}
+              </button>
+              <button type="button" onClick={() => setClosedProductPrompt(null)} className="min-h-11 rounded-2xl px-4 text-sm font-semibold text-neutral-600 transition hover:bg-neutral-100 dark:text-zinc-300 dark:hover:bg-zinc-800">
+                Seguir explorando
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
       {/* Pull to refresh indicator */}
       <div
         className={`fixed top-0 left-0 right-0 z-50 flex justify-center pt-2 pointer-events-none transition-opacity ${pullDistance > 0 || isRefreshing ? 'opacity-100' : 'opacity-0'}`}
@@ -3442,12 +3540,7 @@ function ProductImage({
       ) : null}
       <header suppressHydrationWarning className={`wl-header wl-official-header sticky top-0 z-40 pt-[env(safe-area-inset-top)] ${headerIsPinned ? 'wl-header-pinned' : ''}`}>
         <div className="wl-official-header-inner">
-          <span aria-hidden="true" />
-          <button type="button" onClick={goHome} className="wl-official-logo" aria-label="WingsLab, ir al inicio">
-            <img className="wl-logo-on-light" src={officialWordmark.src} width={783} height={229} alt="" fetchPriority="high" />
-            <img className="wl-logo-on-dark" src={officialWhiteWordmark.src} width={783} height={229} alt="" />
-          </button>
-          <div className="wl-header-actions-right">
+          <div>
             {!sessionUser && (
               <button
                 type="button"
@@ -3458,6 +3551,12 @@ function ProductImage({
                 <User aria-hidden="true" />
               </button>
             )}
+          </div>
+          <button type="button" onClick={goHome} className="wl-official-logo" aria-label="WingsLab, ir al inicio">
+            <img className="wl-logo-on-light" src={officialWordmark.src} width={783} height={229} alt="" fetchPriority="high" />
+            <img className="wl-logo-on-dark" src={officialWhiteWordmark.src} width={783} height={229} alt="" />
+          </button>
+          <div className="wl-header-actions-right">
             <button ref={cartButtonRef} type="button" onClick={() => setIsCartOpen(true)} className="wl-header-cart wl-official-cart" aria-label={`Abrir carrito de compra, ${displayCartCount} ${displayCartCount === 1 ? 'producto' : 'productos'}`}>
               <CartIcon strokeWidth={1.8} /><span className="wl-cart-count" aria-hidden="true">{displayCartCount > 99 ? '99+' : displayCartCount}</span>
             </button>
@@ -4218,8 +4317,9 @@ function ProductImage({
         isOpen={isCartOpen}
         onClose={() => setIsCartOpen(false)}
         restaurantId={cartRestaurantId}
-        onProceedToCheckout={() => {
+        onProceedToCheckout={(scheduledAt) => {
           setIsCartOpen(false);
+          setScheduledDeliveryAt(scheduledAt ?? null);
           if (!token) {
             setShowAuthModal(true);
           } else {
@@ -4229,6 +4329,7 @@ function ProductImage({
         fulfillmentType={fulfillmentType}
         onFulfillmentTypeChange={handleFulfillmentChange}
         isRestaurantOpen={restaurant?.isOpen}
+        nextOpenTime={restaurant?.nextOpenTime}
         overrideServiceFee={serviceFee}
         overrideDeliveryFee={deliveryFee}
         deliveryFeePending={!restaurant || (restaurant.pricingModel === 'distance' && distanceKm === null && !(restaurant.promoFreeDeliveryThreshold && cartSubtotal - discountAmount >= restaurant.promoFreeDeliveryThreshold))}
@@ -4367,6 +4468,7 @@ function ProductImage({
                                 type="button"
                                 aria-pressed={isSelected}
                                 onClick={() => {
+                                  setCheckoutAddressSaved(false);
                                   setSelectedAddressId(addr.id);
                                   const target = addr;
                                   setCheckoutForm((current) => ({
@@ -4377,6 +4479,8 @@ function ProductImage({
                                     city: target.city || '',
                                     state: target.state || '',
                                     zipCode: target.zipCode || '',
+                                    country: target.country || current.country,
+                                    reference: target.reference || '',
                                     latitude: String(target.latitude),
                                     longitude: String(target.longitude),
                                   }));
@@ -4416,6 +4520,7 @@ function ProductImage({
                           <button
                             type="button"
                             onClick={() => {
+                              setCheckoutAddressSaved(false);
                               setIsAddingNewAddress(true);
                               setNewAddressStep('search');
                               setAddressSearchQuery('');
@@ -4494,6 +4599,11 @@ function ProductImage({
                     )}
 
                     {/* Referencias del domicilio (solo direcciones guardadas) */}
+                    {checkoutAddressSaved && !isAddingNewAddress && (
+                      <p role="status" className="mt-3 rounded-xl bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200">
+                        Dirección guardada y seleccionada para este pedido.
+                      </p>
+                    )}
                     {!isAddingNewAddress && (
                       <div className="mt-4">
                         <Field 
@@ -4572,12 +4682,12 @@ function ProductImage({
                               type="button"
                               onClick={() => void fillCheckoutWithCurrentLocation()}
                               disabled={locatingAddress}
-                              className="flex w-full items-center justify-center gap-2.5 rounded-2xl bg-[var(--accent)] px-4 py-4 text-sm font-bold text-white shadow-lg shadow-[0_4px_14px_var(--accent-soft)] transition hover:bg-[var(--accent)] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-70 disabled:shadow-none"
+                              className="flex min-h-12 w-full items-center justify-center gap-2.5 rounded-2xl border border-red-300 bg-white px-4 py-3.5 text-sm font-bold text-neutral-900 shadow-sm transition hover:border-red-400 hover:bg-red-50/60 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:bg-white dark:border-red-500/30 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:bg-red-500/10"
                             >
                               {locatingAddress ? (
-                                <span className="h-5 w-5 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+                                <span className="h-5 w-5 animate-spin rounded-full border-2 border-red-300/40 border-t-red-600 dark:border-red-400/30 dark:border-t-red-400" />
                               ) : (
-                                <MapPin className="h-5 w-5 shrink-0 text-rose-500 fill-rose-500" strokeWidth={1.5} />
+                                <MapPin className="h-5 w-5 shrink-0 text-red-600 dark:text-red-400" strokeWidth={1.8} />
                               )}
                               <span>{locatingAddress ? 'Obteniendo tu ubicación...' : 'Usar mi ubicación actual'}</span>
                             </button>
@@ -4666,9 +4776,10 @@ function ProductImage({
                               <button
                                 type="button"
                                 onClick={() => void saveAndSelectAddress()}
-                                className="rounded-xl bg-[var(--accent)] px-5 py-2.5 text-xs font-bold text-white transition hover:bg-[var(--accent)] shadow-sm shadow-accent/10"
+                                disabled={savingCheckoutAddress}
+                                className="rounded-xl bg-[var(--accent)] px-5 py-2.5 text-xs font-bold text-white transition hover:bg-[var(--accent)] shadow-sm shadow-accent/10 disabled:opacity-60"
                               >
-                                Confirmar dirección
+                                {savingCheckoutAddress ? 'Guardando…' : 'Confirmar dirección'}
                               </button>
                             </div>
                           </div>
@@ -4892,47 +5003,50 @@ function ProductImage({
                       <div>
                         {(() => {
                           const accepted = getAcceptedPaymentMethods(restaurant);
-                          const showCash = accepted.includes('CASH');
-                          const showCard = cardEnabled && accepted.includes('CREDIT_CARD');
-                          if (!showCash && !showCard) return null;
+                          const methods = [
+                            ...(accepted.includes('CASH') ? [{ id: 'CASH' as const, label: 'Efectivo', Icon: DollarSign }] : []),
+                            ...(cardEnabled && accepted.includes('CREDIT_CARD') ? [{ id: 'CREDIT_CARD' as const, label: 'Tarjeta', Icon: CreditCard }] : []),
+                          ];
+                          if (methods.length === 0) return null;
+                          const activeIndex = Math.max(0, methods.findIndex((method) => method.id === checkoutForm.paymentMethod));
                           return (
-                            <div role="group" aria-label="Método de pago" className="flex gap-1 rounded-2xl border border-neutral-200/80 bg-neutral-100 p-1 dark:border-white/10 dark:bg-zinc-800">
-                              {showCash && (
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    cardCheckoutRequestRef.current += 1;
-                                    setCheckoutForm((current) => ({ ...current, paymentMethod: 'CASH' }));
-                                  }}
-                                  aria-pressed={checkoutForm.paymentMethod === 'CASH'}
-                                  className={`flex min-h-11 min-w-0 flex-1 items-center justify-center gap-1.5 rounded-xl px-2 py-2.5 text-xs font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 dark:focus-visible:ring-offset-zinc-900 ${
-                                    checkoutForm.paymentMethod === 'CASH'
-                                      ? 'bg-[var(--accent)] text-white shadow-sm'
-                                      : 'text-neutral-600 hover:bg-white/60 dark:text-zinc-300 dark:hover:bg-white/5'
-                                  }`}
-                                >
-                                  <DollarSign className="h-4 w-4" strokeWidth={1.5} />
-                                  Efectivo
-                                </button>
-                              )}
-                              {showCard && (
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    cardCheckoutRequestRef.current += 1;
-                                    setCheckoutForm((current) => ({ ...current, paymentMethod: 'CREDIT_CARD' }));
-                                  }}
-                                  aria-pressed={checkoutForm.paymentMethod === 'CREDIT_CARD'}
-                                  className={`flex min-h-11 min-w-0 flex-1 items-center justify-center gap-1.5 rounded-xl px-2 py-2.5 text-xs font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 dark:focus-visible:ring-offset-zinc-900 ${
-                                    checkoutForm.paymentMethod === 'CREDIT_CARD'
-                                      ? 'bg-[var(--accent)] text-white shadow-sm'
-                                      : 'text-neutral-600 hover:bg-white/60 dark:text-zinc-300 dark:hover:bg-white/5'
-                                  }`}
-                                >
-                                  <CreditCard className="h-4 w-4" strokeWidth={1.5} />
-                                  Tarjeta
-                                </button>
-                              )}
+                            <div
+                              role="group"
+                              aria-label="Método de pago"
+                              className="relative grid rounded-[18px] border border-black/[0.06] bg-neutral-100/90 p-1 shadow-[inset_0_1px_2px_rgba(0,0,0,0.05)] dark:border-white/[0.07] dark:bg-zinc-800/90"
+                              style={{ gridTemplateColumns: `repeat(${methods.length}, minmax(0, 1fr))` }}
+                            >
+                              <span
+                                aria-hidden="true"
+                                className="pointer-events-none absolute bottom-1 left-1 top-1 rounded-[14px] bg-white shadow-[0_1px_2px_rgba(0,0,0,0.05),0_8px_18px_-8px_rgba(0,0,0,0.3)] ring-1 ring-black/[0.04] transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] dark:bg-zinc-700 dark:ring-white/10"
+                                style={{ width: `calc((100% - 0.5rem) / ${methods.length})`, transform: `translateX(${activeIndex * 100}%)` }}
+                              />
+                              {methods.map(({ id, label, Icon }) => {
+                                const active = checkoutForm.paymentMethod === id;
+                                return (
+                                  <button
+                                    key={id}
+                                    type="button"
+                                    onClick={() => {
+                                      cardCheckoutRequestRef.current += 1;
+                                      setCheckoutForm((current) => ({ ...current, paymentMethod: id }));
+                                    }}
+                                    aria-pressed={active}
+                                    className={`relative z-10 flex min-h-11 min-w-0 items-center justify-center gap-2 rounded-[14px] px-3 text-[13px] font-semibold tracking-tight transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 dark:focus-visible:ring-offset-zinc-900 ${
+                                      active
+                                        ? 'text-neutral-900 dark:text-white'
+                                        : 'text-neutral-500 hover:text-neutral-800 dark:text-zinc-400 dark:hover:text-zinc-100'
+                                    }`}
+                                  >
+                                    <Icon
+                                      className={`h-4 w-4 shrink-0 transition-colors ${active ? 'text-[var(--accent)]' : 'text-neutral-400 dark:text-zinc-500'}`}
+                                      strokeWidth={active ? 2 : 1.75}
+                                      aria-hidden="true"
+                                    />
+                                    {label}
+                                  </button>
+                                );
+                              })}
                             </div>
                           );
                         })()}
@@ -4978,7 +5092,7 @@ function ProductImage({
                   </div>
                 </div>
 
-                <div className="sticky bottom-0 z-10 border-t border-black/[0.04] dark:border-white/10 bg-white/95 dark:bg-neutral-950/95 px-4 pt-4 pb-[max(1rem,env(safe-area-inset-bottom))] backdrop-blur-xl sm:px-5 shadow-[0_-12px_30px_-8px_rgba(0,0,0,0.08)]">
+                <div className="relative z-10 shrink-0 border-t border-black/[0.04] dark:border-white/10 bg-white/95 dark:bg-neutral-950/95 px-4 pt-4 pb-[max(1rem,env(safe-area-inset-bottom))] backdrop-blur-xl sm:px-5 shadow-[0_-12px_30px_-8px_rgba(0,0,0,0.08)]">
                   {/* Validation Warning Callout (Animated and Professional) */}
                   {checkoutValidationMessage && token && (
                     <div className="mb-3.5 flex justify-center animate-in slide-in-from-bottom-2 fade-in duration-300">
@@ -5379,13 +5493,13 @@ function ProductImage({
 
       {/* Push Reminder Modal */}
       {isPushReminderModalOpen && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+        <div role="dialog" aria-modal="true" aria-labelledby="wl-push-reminder-title" className="fixed inset-0 z-[60] flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity" onClick={() => setIsPushReminderModalOpen(false)}></div>
           <div className="relative w-full max-w-sm rounded-[32px] bg-white p-6 shadow-2xl animate-in zoom-in-95 duration-200">
             <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-accent-soft text-3xl">
               <Bell className="h-8 w-8 text-[var(--accent)]" strokeWidth={1.5} />
             </div>
-            <h3 className="text-center text-xl font-bold tracking-tight text-neutral-900">
+            <h3 id="wl-push-reminder-title" className="text-center text-xl font-bold tracking-tight text-neutral-900">
               ¡No pierdas de vista tu pedido!
             </h3>
             <p className="mt-3 text-center text-sm leading-relaxed text-neutral-600">
@@ -7366,6 +7480,7 @@ function getCheckoutValidationMessage(
   selectedRestaurant: PublicRestaurantDetail | null,
   token: string,
   fulfillmentType: 'DELIVERY' | 'PICKUP',
+  hasCoupon: boolean,
   hasCardReward: boolean,
 ) {
   if (!token) {
@@ -7390,10 +7505,11 @@ function getCheckoutValidationMessage(
       ? 'Este restaurante no acepta pagos con tarjeta. Selecciona efectivo.'
       : 'Este restaurante no acepta pagos en efectivo.';
   }
-  // Con tarjeta no se descuentan cupones ni recompensas: bloqueamos aquí para
-  // que el total mostrado siempre coincida con el importe cobrado.
+  if (checkoutForm.paymentMethod === 'CREDIT_CARD' && hasCoupon) {
+    return 'Los cupones aún no están disponibles con tarjeta. Quita el cupón para continuar.';
+  }
   if (checkoutForm.paymentMethod === 'CREDIT_CARD' && hasCardReward) {
-    return 'Los cupones y recompensas solo están disponibles con efectivo. Quítalos para pagar con tarjeta.';
+    return 'Solo los regalos de fidelidad están disponibles con tarjeta. Quita el descuento para continuar.';
   }
 
   if (

@@ -281,7 +281,7 @@ export default function DriverArrivalModal() {
             </div>
           </div>
 
-          {isTransfer && (arrivedOrder.deliveryPin || arrivedOrder.handoverPin) && (
+          {arrivedOrder.paymentMethod !== 'CASH' && (arrivedOrder.deliveryPin || arrivedOrder.handoverPin) && (
             <div className="p-5 rounded-[20px] bg-neutral-50 border border-neutral-100 text-center">
               <p className="text-[10px] font-bold text-red-700 uppercase tracking-widest">Código de entrega</p>
               <p className="text-4xl font-extrabold tracking-[0.25em] text-neutral-950 font-mono mt-2 mb-1.5 pl-[0.25em]">

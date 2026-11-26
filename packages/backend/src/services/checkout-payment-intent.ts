@@ -12,6 +12,17 @@ import {
 } from './mercado-pago-orders';
 
 const stockSchema = z.array(z.object({ productId: z.string().min(1), quantity: z.number().int().min(1).max(1000) })).max(100);
+const reservationSnapshotSchema = z.object({ promoCode: z.string().nullable().optional() }).passthrough();
+
+async function releasePromoReservation(tx: Prisma.TransactionClient, snapshot: unknown, restaurantId: string) {
+  const promoCode = reservationSnapshotSchema.safeParse(snapshot).success
+    ? reservationSnapshotSchema.parse(snapshot).promoCode : null;
+  if (!promoCode) return;
+  await tx.promoCode.updateMany({
+    where: { restaurantId, code: promoCode, usesCount: { gt: 0 } },
+    data: { usesCount: { decrement: 1 } },
+  });
+}
 
 /** Commit the submission claim before calling the provider. Use the intent UUID as its idempotency key. */
 export async function claimCheckoutPaymentSubmission(db: PrismaClient, id: string, customerId: string, now = new Date()) {
@@ -57,13 +68,14 @@ export async function markCheckoutPaymentDeclined(
       data: { state: 'DECLINED', providerOrderId, declineReason },
     });
     if (result.count !== 1) return false;
-    const intent = await tx.checkoutPaymentIntent.findUniqueOrThrow({ where: { id }, select: { restaurantId: true, stock: true } });
+    const intent = await tx.checkoutPaymentIntent.findUniqueOrThrow({ where: { id }, select: { restaurantId: true, stock: true, snapshot: true } });
     for (const { productId, quantity } of stockSchema.parse(intent.stock)) {
       await tx.product.updateMany({
         where: { id: productId, restaurantId: intent.restaurantId },
         data: { stock: { increment: quantity } },
       });
     }
+    await releasePromoReservation(tx, intent.snapshot, intent.restaurantId);
     return true;
   });
 }
@@ -151,10 +163,11 @@ export async function expireReservedCheckoutPaymentInTransaction(
     data: { state: 'EXPIRED' },
   });
   if (!claimed.count) return false;
-  const intent = await tx.checkoutPaymentIntent.findUniqueOrThrow({ where: { id }, select: { restaurantId: true, stock: true } });
+  const intent = await tx.checkoutPaymentIntent.findUniqueOrThrow({ where: { id }, select: { restaurantId: true, stock: true, snapshot: true } });
   for (const { productId, quantity } of stockSchema.parse(intent.stock)) {
     await tx.product.updateMany({ where: { id: productId, restaurantId: intent.restaurantId }, data: { stock: { increment: quantity } } });
   }
+  await releasePromoReservation(tx, intent.snapshot, intent.restaurantId);
   return true;
 }
 

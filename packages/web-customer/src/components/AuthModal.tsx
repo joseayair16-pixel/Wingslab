@@ -1,5 +1,5 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { CalendarDays, Check, ChevronRight, Clock3, Crown, LockKeyhole, Loader2, Mail, Phone, RefreshCw, UserRound, X } from 'lucide-react';
+import { CalendarDays, Check, ChevronRight, Clock3, LockKeyhole, Loader2, Mail, Phone, RefreshCw, UserRound, UserRoundPlus, X } from 'lucide-react';
 import Image from 'next/image';
 import {
   ApiResponse,
@@ -639,7 +639,7 @@ export const AuthModal = memo(function AuthModal({ isOpen, onClose, onSuccess, a
 
                   {!verificationSuccessNextStep && (authMode === 'login' || (authMode === 'register' && authStep === 'details')) && (
                     <button type="button" className="wl-auth-switch" onClick={() => { setError(''); setAuthMessage(''); setAuthMode(authMode === 'login' ? 'register' : 'login'); setAuthStep(authMode === 'login' ? 'details' : 'request'); }}>
-                      {authMode === 'login' ? <Crown aria-hidden="true" /> : <UserRound aria-hidden="true" />}
+                      {authMode === 'login' ? <UserRoundPlus aria-hidden="true" /> : <UserRound aria-hidden="true" />}
                       <span><strong>{authMode === 'login' ? '¿Aún no tienes cuenta?' : '¿Ya tienes cuenta?'}</strong><small>{authMode === 'login' ? 'Regístrate para comenzar.' : 'Inicia sesión para continuar.'}</small></span><ChevronRight aria-hidden="true" />
                     </button>
                   )}

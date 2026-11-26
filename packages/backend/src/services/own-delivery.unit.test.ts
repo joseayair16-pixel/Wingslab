@@ -118,6 +118,17 @@ test('start, location, arrival, CASH delivery: transactional and revoked after d
   expect(f.history.map(h => h.status)).toEqual(['IN_TRANSIT', 'IN_TRANSIT', 'DELIVERED']);
   await expect(ownDeliveryAction(f.db, TOKEN, 'deliver', { cashReceived: true })).rejects.toMatchObject({ code: 'TOKEN_NOT_FOUND' });
 });
+test('card delivery requires the customer PIN and never collects cash', async () => {
+  const f = fixture('IN_TRANSIT');
+  f.setOrder({ paymentMethod: 'CREDIT_CARD', paymentStatus: 'COMPLETED', deliveryPin: '0042', driverArrivedAtCustomer: new Date() });
+  await expect(ownDeliveryAction(f.db, TOKEN, 'deliver')).rejects.toMatchObject({ code: 'INVALID_PIN' });
+  await expect(ownDeliveryAction(f.db, TOKEN, 'deliver', { pin: '9999' })).rejects.toMatchObject({ code: 'INVALID_PIN' });
+  expect(f.order().status).toBe('IN_TRANSIT');
+  const delivered = await ownDeliveryAction(f.db, TOKEN, 'deliver', { pin: '0042' });
+  expect(delivered.order.status).toBe('DELIVERED');
+  expect(delivered.order.paymentStatus).toBe('COMPLETED');
+  expect(delivered.order.cashPaymentConfirmedAt).toBeUndefined();
+});
 test('failed history write rolls back order and token, preventing partial delivery', async () => {
   const f = fixture('IN_TRANSIT'); f.setOrder({ driverArrivedAtCustomer: new Date() });
   f.db.orderTracking.create.mockRejectedValueOnce(new Error('simulated failure'));

@@ -8,7 +8,7 @@ const Module = require('node:module');
 const source = fs.readFileSync(path.join(__dirname, 'categoryScroll.ts'), 'utf8');
 const mod = new Module('categoryScroll');
 mod._compile(ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS } }).outputText, 'categoryScroll.js');
-const { categoryAtScrollLine, categoryScrollLine } = mod.exports;
+const { categoryAtScrollLine, stableCategoryAtScrollLine, categoryScrollLine } = mod.exports;
 
 test('selecciona la última categoría que alcanzó el borde visible', () => {
   const sections = [{ id: 'a', top: -300 }, { id: 'b', top: 140 }, { id: 'c', top: 600 }];
@@ -24,4 +24,13 @@ test('adelanta el cambio sin que el umbral crezca demasiado', () => {
 test('la primera categoría es activa antes de llegar a sus productos', () => {
   assert.equal(categoryAtScrollLine([{ id: 'a', top: 400 }, { id: 'b', top: 800 }], 150), 'a');
   assert.equal(categoryAtScrollLine([], 150), null);
+});
+test('evita cambios repetidos alrededor del límite de una categoría', () => {
+  const sections = [{ id: 'a', top: 0 }, { id: 'b', top: 300 }, { id: 'c', top: 600 }];
+  assert.equal(stableCategoryAtScrollLine(sections, 305, 'a'), 'a');
+  assert.equal(stableCategoryAtScrollLine(sections, 312, 'a'), 'b');
+  assert.equal(stableCategoryAtScrollLine(sections, 292, 'b'), 'b');
+  assert.equal(stableCategoryAtScrollLine(sections, 287, 'b'), 'a');
+  assert.equal(stableCategoryAtScrollLine(sections, 650, 'a'), 'c');
+  assert.equal(stableCategoryAtScrollLine(sections, 350, 'missing'), 'b');
 });

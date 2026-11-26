@@ -627,17 +627,6 @@ function validateProductConsistency(draft: ProductDraft): string | null {
     }
   }
 
-  if (draft.trackStock) {
-    const stock = draft.stock ? Number(draft.stock) : 0;
-    if (!Number.isInteger(stock) || stock < 0) {
-      return 'El stock debe ser un número entero mayor o igual a cero.';
-    }
-    const threshold = draft.lowStockThreshold ? Number(draft.lowStockThreshold) : 5;
-    if (!Number.isInteger(threshold) || threshold < 0) {
-      return 'La alerta de pocas unidades debe ser un número entero mayor o igual a cero.';
-    }
-  }
-
   for (const group of draft.optionGroups || []) {
     if (!group.name.trim()) return 'Escribe el nombre de cada grupo de opciones.';
     if (!Number.isInteger(group.minSelection) || !Number.isInteger(group.maxSelection) || group.minSelection < 0 || group.maxSelection < 1 || group.minSelection > group.maxSelection) {
@@ -1114,6 +1103,8 @@ export default function Home() {
   const [rescheduleTime, setRescheduleTime] = useState('');
   const [cancelConfirmOrder, setCancelConfirmOrder] = useState<OrderItem | null>(null);
   const [cancelReason, setCancelReason] = useState('');
+  const [cancelOrderProcessing, setCancelOrderProcessing] = useState(false);
+  const cancelOrderProcessingRef = useRef(false);
   const [cancelRequestModalOrder, setCancelRequestModalOrder] = useState<OrderItem | null>(null);
   const [, setCancelRequestNote] = useState('');
   const [cancelRequestProcessing, setCancelRequestProcessing] = useState(false);
@@ -3433,6 +3424,7 @@ export default function Home() {
     options?: {
       preparationTimeMinutes?: PreparationPresetMinutes;
       scheduledDeliveryAt?: string;
+      customerScheduled?: boolean;
       preserveFailedAction?: boolean;
       silentSuccess?: boolean;
       pin?: string;
@@ -3575,7 +3567,7 @@ export default function Home() {
           ...(actionKey === 'accept'
             ? {
               body: JSON.stringify({
-                preparationTimeMinutes: preparationTimeMinutes ?? 15,
+                ...(!options?.customerScheduled ? { preparationTimeMinutes: preparationTimeMinutes ?? 15 } : {}),
                 ...(scheduledDeliveryAt ? { scheduledDeliveryAt } : {}),
               }),
             }
@@ -4445,9 +4437,6 @@ export default function Home() {
             imagePosition: productDraft.imagePosition || null,
             imageZoom: productDraft.imageZoom || null,
             isAdultOnly: productDraft.isAdultOnly,
-            trackStock: productDraft.trackStock,
-            stock: productDraft.stock ? Number(productDraft.stock) : 0,
-            lowStockThreshold: productDraft.lowStockThreshold ? Number(productDraft.lowStockThreshold) : 5,
             isAvailable: true,
             allergens: [],
             optionGroups: productDraft.optionGroups || [],
@@ -4548,9 +4537,6 @@ export default function Home() {
             imagePosition: productDraft.imagePosition || null,
             imageZoom: productDraft.imageZoom || null,
             isAdultOnly: productDraft.isAdultOnly,
-            trackStock: productDraft.trackStock,
-            stock: productDraft.trackStock ? (productDraft.stock ? Number(productDraft.stock) : 0) : 0,
-            lowStockThreshold: productDraft.lowStockThreshold ? Number(productDraft.lowStockThreshold) : 5,
             optionGroups: productDraft.optionGroups || [],
           }),
         },
@@ -5555,8 +5541,13 @@ export default function Home() {
                       <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-red-600"></span>
                     </span>
                     <p className="text-xs font-extrabold uppercase tracking-[0.12em] text-red-700">
-                      Nuevo pedido
+                      {activeIncomingOrder.scheduledDeliveryAt && !activeIncomingOrder.scheduledDeliveryCustomerAcceptedAt ? 'Pedido programado' : 'Nuevo pedido'}
                     </p>
+                    {activeIncomingOrder.scheduledDeliveryAt && !activeIncomingOrder.scheduledDeliveryCustomerAcceptedAt && (
+                      <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-bold text-amber-900">
+                        Hora solicitada: {new Date(activeIncomingOrder.scheduledDeliveryAt).toLocaleString('es-MX', { timeZone: 'America/Mexico_City', weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                      </span>
+                    )}
                   <h2
                     id="incoming-order-title"
                     className="text-lg font-black leading-tight tracking-tight text-neutral-950"
@@ -6040,7 +6031,26 @@ export default function Home() {
               <div className="flex gap-2.5 sm:gap-3">
                 <button
                   type="button"
-                  onClick={() => setIsSelectingPrepTime(true)}
+                  onClick={() => {
+                    const isCustomerScheduled = Boolean(activeIncomingOrder.scheduledDeliveryAt && !activeIncomingOrder.scheduledDeliveryCustomerAcceptedAt);
+                    if (!isCustomerScheduled) {
+                      setIsSelectingPrepTime(true);
+                      return;
+                    }
+                    const acceptScheduled = () => void runOrderAction(activeIncomingOrder.id, 'accept', { customerScheduled: true });
+                    if (activeIncomingOrder.paymentMethod === 'TRANSFER') {
+                      setTransferConfirmationOrder({
+                        id: activeIncomingOrder.id,
+                        preparationTimeMinutes: 10,
+                        paymentProofUrl: activeIncomingOrder.paymentProofUrl,
+                        orderReference: activeIncomingOrder.orderReference,
+                        collectionAmount: getRestaurantCollectionAmount(activeIncomingOrder, profile),
+                        onConfirm: acceptScheduled,
+                      });
+                    } else {
+                      acceptScheduled();
+                    }
+                  }}
                   disabled={Boolean(activeActionKey)}
                   className="min-h-12 flex-[1.3] rounded-2xl bg-red-700 px-3 py-3 text-sm font-bold text-white transition hover:bg-red-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-700 disabled:cursor-not-allowed disabled:opacity-50 sm:px-5"
                 >
@@ -6157,48 +6167,57 @@ export default function Home() {
 
         return (
           <div
-            className="fixed inset-0 z-[90] flex items-end justify-center bg-black/60 pt-[max(1rem,env(safe-area-inset-top))] backdrop-blur-sm sm:items-center sm:px-4 sm:pb-4"
+            className="fixed inset-0 z-[90] flex items-end justify-center bg-black/65 pt-[max(1rem,env(safe-area-inset-top))] backdrop-blur-md sm:items-center sm:px-4 sm:pb-4"
             role="dialog"
             aria-modal="true"
             aria-labelledby="delivery-qr-title"
             aria-describedby="delivery-qr-description"
           >
-            <div className="relative max-h-[calc(100dvh-max(1rem,env(safe-area-inset-top)))] w-full max-w-md overflow-y-auto rounded-t-[28px] border border-black/5 bg-white px-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] pt-5 text-center shadow-2xl dark:border-white/10 dark:bg-zinc-900 sm:rounded-[28px] sm:p-6">
-              <button
-                type="button"
-                onClick={() => setActiveQrCodeData(null)}
-                aria-label="Cerrar"
-                title="Cerrar"
-                className="absolute right-4 top-4 z-10 flex h-11 w-11 items-center justify-center rounded-full bg-neutral-100 text-neutral-600 transition hover:bg-neutral-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-600 dark:bg-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-700"
-              >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M18 6L6 18M6 6l12 12" /></svg>
-              </button>
-              <div className="flex flex-col items-center">
-                <span aria-hidden="true" className="inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-red-50 text-2xl dark:bg-red-950/50">
-                  🛵
+            <div className="relative flex max-h-[calc(100dvh-max(1rem,env(safe-area-inset-top)))] w-full max-w-md flex-col overflow-hidden rounded-t-[28px] border border-black/5 bg-white shadow-[0_-14px_60px_rgba(0,0,0,0.35)] dark:border-white/10 dark:bg-zinc-900 sm:rounded-[28px] sm:shadow-2xl">
+              <div aria-hidden="true" className="mx-auto mt-2.5 h-1 w-10 shrink-0 rounded-full bg-neutral-300 dark:bg-zinc-700 sm:hidden" />
+              <div className="flex shrink-0 items-start gap-3 px-5 pb-3 pt-3 sm:px-6 sm:pt-5">
+                <span aria-hidden="true" className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-red-500 to-red-700 text-white shadow-[0_8px_20px_-8px_rgba(220,38,38,0.9)]">
+                  <Bike className="h-6 w-6" />
                 </span>
-                <h3 id="delivery-qr-title" className="mt-3 text-xl font-bold tracking-tight text-neutral-950 dark:text-white">
-                  QR de reparto
-                </h3>
-                <p className="mt-1 break-all text-xs font-semibold text-neutral-500 dark:text-zinc-400">
-                  Pedido {activeQrCodeData.orderReference}
-                </p>
-                <p id="delivery-qr-description" className="mt-2 max-w-xs text-sm leading-5 text-neutral-600 dark:text-zinc-300">
-                  Pide al repartidor que escanee el código y confirme la recogida.
-                </p>
-
-                {/* Contenedor del QR Code */}
-                <div className="mt-4 max-w-full rounded-3xl border border-neutral-200 bg-white p-3 shadow-sm">
-                  <QRCodeSVG value={deliveryUrl} size={208} level="M" includeMargin aria-label="Código QR para abrir el reparto" className="h-auto w-[min(208px,60vw)] max-w-full" />
+                <div className="min-w-0 flex-1">
+                  <h3 id="delivery-qr-title" className="text-[19px] font-black tracking-tight text-neutral-950 dark:text-white">
+                    QR de reparto
+                  </h3>
+                  <p className="mt-1 inline-flex max-w-full items-center rounded-lg bg-neutral-100 px-2.5 py-1 font-mono text-[11px] font-semibold text-neutral-600 dark:bg-zinc-800 dark:text-zinc-300">
+                    <span className="truncate">{(() => {
+                      const dailyCounter = orders.find(order => order.id === activeQrCodeData.id)?.dailyCounter;
+                      return dailyCounter != null ? `Pedido #${String(dailyCounter).padStart(2, '0')}` : 'Número de pedido no disponible';
+                    })()}</span>
+                  </p>
                 </div>
-                <p className="mt-3 text-xs text-neutral-500 dark:text-zinc-400">Comparte este código solo con tu equipo.</p>
-
-                <div className="mt-4 flex w-full flex-col gap-2">
-                  <a href={deliveryUrl} target="_blank" rel="noopener noreferrer" referrerPolicy="no-referrer"
-                    className="flex min-h-12 w-full items-center justify-center rounded-2xl bg-red-600 px-4 text-sm font-bold text-white transition hover:bg-red-700 active:scale-[0.98] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-600">
-                    Abrir reparto en este dispositivo
-                  </a>
+                <button
+                  type="button"
+                  onClick={() => setActiveQrCodeData(null)}
+                  aria-label="Cerrar"
+                  title="Cerrar"
+                  className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-neutral-100 text-neutral-500 transition hover:bg-neutral-200 hover:text-neutral-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-600 dark:bg-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-700 dark:hover:text-white"
+                >
+                  <X className="h-4 w-4" strokeWidth={2.5} aria-hidden="true" />
+                </button>
+              </div>
+              <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-4 sm:px-6">
+                <p id="delivery-qr-description" className="mx-auto max-w-xs text-center text-[13px] leading-5 text-neutral-600 dark:text-zinc-300">
+                  Pide al repartidor que escanee el código y confirme la recolección.
+                </p>
+                <div className="mx-auto mt-4 flex w-fit max-w-full items-center justify-center rounded-[26px] border border-neutral-200/80 bg-white p-4 shadow-[0_12px_30px_-16px_rgba(0,0,0,0.4)] dark:border-white/10 dark:bg-zinc-800">
+                  <QRCodeSVG value={deliveryUrl} size={208} level="M" includeMargin aria-label="Código QR para abrir el reparto" className="h-auto w-[min(208px,58vw)] max-w-full rounded-lg" />
                 </div>
+                <p className="mt-3 flex items-center justify-center gap-1.5 text-center text-[11px] text-neutral-500 dark:text-zinc-400">
+                  <Lock className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                  Comparte este código solo con tu equipo.
+                </p>
+              </div>
+              <div className="shrink-0 border-t border-neutral-200/70 bg-white px-5 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3 dark:border-white/10 dark:bg-zinc-900 sm:px-6 sm:pb-5">
+                <a href={deliveryUrl} target="_blank" rel="noopener noreferrer" referrerPolicy="no-referrer"
+                  className="flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-b from-red-600 to-red-700 px-4 text-sm font-bold text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.2),0_10px_24px_-10px_rgba(220,38,38,0.8)] transition hover:from-red-500 hover:to-red-600 active:scale-[0.98] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-600">
+                  Abrir reparto en este dispositivo
+                  <ArrowRight className="h-4 w-4 shrink-0" aria-hidden="true" />
+                </a>
               </div>
             </div>
           </div>
@@ -6645,24 +6664,25 @@ export default function Home() {
         </div>
       ) : null}
       {showSaveSuccessModal ? (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-labelledby="save-success-title" aria-describedby="save-success-description" onKeyDown={(event) => { if (event.key === 'Escape') { event.stopPropagation(); setShowSaveSuccessModal(false); } }}>
+        <div className="fixed inset-0 z-[60] flex items-center justify-center overflow-y-auto p-4" role="dialog" aria-modal="true" aria-labelledby="save-success-title" aria-describedby="save-success-description" onKeyDown={(event) => { if (event.key === 'Escape') { event.stopPropagation(); setShowSaveSuccessModal(false); } }}>
           <div
-            className="absolute inset-0 bg-neutral-950/50 backdrop-blur-sm"
+            className="fixed inset-0 bg-neutral-950/55 backdrop-blur-sm"
             onClick={() => setShowSaveSuccessModal(false)}
           />
-          <div className="relative w-full max-w-[380px] overflow-hidden rounded-[28px] border border-neutral-100 bg-white px-6 pb-6 pt-8 text-center shadow-[0_28px_90px_rgba(15,15,15,0.3)] sm:px-8 sm:pb-8">
-            <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-600 ring-8 ring-emerald-50/60">
-              <Check className="h-8 w-8" aria-hidden="true" />
+          <div className="relative my-auto w-full max-w-[400px] overflow-hidden rounded-[28px] border border-white/80 bg-white p-6 text-center shadow-[0_28px_90px_rgba(15,15,15,0.3)] sm:p-8 dark:border-neutral-700 dark:bg-neutral-900">
+            <div aria-hidden="true" className="pointer-events-none absolute inset-x-0 top-0 h-32 bg-gradient-to-b from-emerald-50/80 to-transparent dark:from-emerald-950/30" />
+            <div className="relative mx-auto flex h-16 w-16 items-center justify-center rounded-[22px] border border-emerald-100 bg-white text-emerald-600 shadow-[0_8px_24px_rgba(5,150,105,0.12)] ring-8 ring-emerald-50/80 dark:border-emerald-800/60 dark:bg-neutral-900 dark:text-emerald-400 dark:ring-emerald-950/40">
+              <Check className="h-8 w-8" strokeWidth={2.5} aria-hidden="true" />
             </div>
-            <h3 id="save-success-title" className="text-xl font-bold tracking-tight text-neutral-900">Cambios guardados</h3>
-            <p id="save-success-description" className="mt-2 text-sm leading-6 text-neutral-500">
-              La configuración de tu tienda se actualizó correctamente.
+            <h3 id="save-success-title" className="relative mt-7 text-xl font-bold tracking-tight text-neutral-900 dark:text-white">Cambios guardados</h3>
+            <p id="save-success-description" className="relative mx-auto mt-2 max-w-[280px] text-sm leading-6 text-neutral-500 dark:text-neutral-400">
+              Tus cambios se guardaron correctamente.
             </p>
             <button
               type="button"
               autoFocus
               onClick={() => setShowSaveSuccessModal(false)}
-              className="mt-7 min-h-12 w-full rounded-xl bg-neutral-900 px-5 text-sm font-bold text-white transition hover:bg-neutral-800 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-neutral-300 active:scale-[0.98]"
+              className="relative mt-7 min-h-12 w-full rounded-2xl bg-neutral-900 px-5 text-sm font-bold text-white shadow-sm transition hover:bg-neutral-700 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-neutral-300 active:scale-[0.98] dark:bg-white dark:text-neutral-900 dark:hover:bg-neutral-200 dark:focus-visible:ring-neutral-600"
             >
               Entendido
             </button>
@@ -7515,55 +7535,6 @@ export default function Home() {
                         />
                       </div>
 
-                      <div className="rounded-2xl border border-amber-100 bg-amber-50/50 p-4 sm:col-span-2 mt-2">
-                        <div className="flex items-center justify-between gap-4">
-                          <div className="flex items-start gap-3">
-                            <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-600">
-                              <Package className="h-4 w-4" />
-                            </div>
-                            <div>
-                              <h4 className="text-sm font-bold text-amber-950">Control de inventario</h4>
-                              <p className="mt-0.5 text-xs font-medium text-amber-700/80">
-                                Limita las unidades disponibles por pedido. Las ventas presenciales debes descontarlas manualmente aquí.
-                              </p>
-                            </div>
-                          </div>
-                          <Toggle
-                            checked={productDraft.trackStock}
-                            label="Activar control de inventario"
-                            onClick={() => setProductDraft((curr) => ({ ...curr, trackStock: !curr.trackStock }))}
-                            tone="amber"
-                          />
-                        </div>
-                        {productDraft.trackStock && (
-                          <div className="mt-4 grid grid-cols-2 gap-3">
-                            <div>
-                              <label htmlFor="product-stock" className="text-xs font-bold text-neutral-700">Unidades en stock</label>
-                              <input
-                                id="product-stock"
-                                type="text"
-                                inputMode="numeric"
-                                value={productDraft.stock}
-                                onChange={(e) => { if (/^\d*$/.test(e.target.value)) setProductDraft((curr) => ({ ...curr, stock: e.target.value })); }}
-                                className="mt-1 min-h-12 w-full rounded-xl border border-neutral-200 bg-white px-3 py-2 text-base text-neutral-900 outline-none transition focus:border-amber-400 focus:ring-2 focus:ring-amber-100"
-                                placeholder="0"
-                              />
-                            </div>
-                            <div>
-                              <label htmlFor="product-stock-alert" className="text-xs font-bold text-neutral-700">Alerta de pocas unidades</label>
-                              <input
-                                id="product-stock-alert"
-                                type="text"
-                                inputMode="numeric"
-                                value={productDraft.lowStockThreshold}
-                                onChange={(e) => { if (/^\d*$/.test(e.target.value)) setProductDraft((curr) => ({ ...curr, lowStockThreshold: e.target.value })); }}
-                                className="mt-1 min-h-12 w-full rounded-xl border border-neutral-200 bg-white px-3 py-2 text-base text-neutral-900 outline-none transition focus:border-amber-400 focus:ring-2 focus:ring-amber-100"
-                                placeholder="5"
-                              />
-                            </div>
-                          </div>
-                        )}
-                      </div>
                     </div>
                   </div>
                 </section>
@@ -8846,7 +8817,7 @@ export default function Home() {
                       </div>
                     )}
                   </div>
-)} setOrdersFulfillment={setOrdersFulfillment} setOrdersPeriod={setOrdersPeriod} setOrdersSearch={setOrdersSearch} setPickupConfirmAttemptsLeft={setPickupConfirmAttemptsLeft} setPickupConfirmError={setPickupConfirmError} setPickupConfirmOrderId={setPickupConfirmOrderId} setPickupConfirmPinInput={setPickupConfirmPinInput} setSelectedOrderForEtaExtension={setSelectedOrderForEtaExtension} setSelectedOrderForTicket={setSelectedOrderForTicket} setSelectedStatus={setSelectedStatus} setTransferRefundOrder={setTransferRefundOrder} setUnassignConfirmOrderId={setUnassignConfirmOrderId} setZoomedImageUrl={setZoomedImageUrl} supportAliadoNamesByOrder={supportAliadoNamesByOrder} supportCountdownNow={supportCountdownNow} supportNotifyByOrder={supportNotifyByOrder} token={token} unreadMessagesMap={unreadMessagesMap} visibleOrders={visibleOrders} /> : null}
+)} onCancelOrder={(order: OrderItem) => { setCancelReason(''); setCancelConfirmOrder(order); }} setOrdersFulfillment={setOrdersFulfillment} setOrdersPeriod={setOrdersPeriod} setOrdersSearch={setOrdersSearch} setPickupConfirmAttemptsLeft={setPickupConfirmAttemptsLeft} setPickupConfirmError={setPickupConfirmError} setPickupConfirmOrderId={setPickupConfirmOrderId} setPickupConfirmPinInput={setPickupConfirmPinInput} setSelectedOrderForEtaExtension={setSelectedOrderForEtaExtension} setSelectedOrderForTicket={setSelectedOrderForTicket} setSelectedStatus={setSelectedStatus} setTransferRefundOrder={setTransferRefundOrder} setUnassignConfirmOrderId={setUnassignConfirmOrderId} setZoomedImageUrl={setZoomedImageUrl} supportAliadoNamesByOrder={supportAliadoNamesByOrder} supportCountdownNow={supportCountdownNow} supportNotifyByOrder={supportNotifyByOrder} token={token} unreadMessagesMap={unreadMessagesMap} visibleOrders={visibleOrders} /> : null}
 
                 {activeSection === 'store' && loading ? (
                   <div className="flex flex-col items-center justify-center rounded-[32px] border border-black/5 bg-white px-6 py-20 text-center shadow-[0_10px_30px_rgba(15,15,15,0.04)]">
@@ -10066,7 +10037,7 @@ export default function Home() {
                       Tu horario de cierre programado ha llegado. Puedes cerrar el restaurante ahora para dejar de recibir pedidos, o mantenerlo abierto un momento más.
                     </p>
                     <p className="mt-2 text-xs leading-5 text-neutral-500 font-medium">
-                      Si ignoras este aviso, se cerrará automáticamente en 10 minutos.
+                      Si no eliges mantenerla abierta, la tienda se cerrará automáticamente en 2 minutos.
                     </p>
                   </div>
                   <button
@@ -10225,8 +10196,11 @@ export default function Home() {
                   <div className="mt-6 flex flex-col gap-2.5">
                     <button
                       type="button"
-                      disabled={cancelReason.trim().length < 10}
+                      disabled={cancelReason.trim().length < 10 || cancelOrderProcessing}
                       onClick={async () => {
+                        if (cancelOrderProcessingRef.current) return;
+                        cancelOrderProcessingRef.current = true;
+                        setCancelOrderProcessing(true);
                         try {
                           await requestJson({
                             apiBase,
@@ -10240,11 +10214,14 @@ export default function Home() {
                           loadOrdersOnly();
                         } catch (err: any) {
                           pushToast('error', 'Error', err?.message || 'No se pudo cancelar.');
+                        } finally {
+                          cancelOrderProcessingRef.current = false;
+                          setCancelOrderProcessing(false);
                         }
                       }}
                       className="w-full rounded-full bg-rose-600 hover:bg-rose-700 disabled:opacity-50 disabled:cursor-not-allowed active:scale-[0.98] text-white py-3.5 text-sm font-bold shadow-md shadow-rose-600/10 hover:shadow-rose-600/25 transition"
                     >
-                      Sí, cancelar pedido
+                      {cancelOrderProcessing ? 'Cancelando…' : 'Sí, cancelar pedido'}
                     </button>
                     <button
                       type="button"
@@ -10983,15 +10960,15 @@ function ActionButton({
 }) {
   const palette: Record<typeof tone, string> = {
     primary:
-      'border-sky-300 bg-sky-500 text-white shadow-[0_12px_30px_rgba(14,165,233,0.22)] hover:bg-sky-400',
+      'border-sky-400/50 bg-gradient-to-b from-sky-500 to-sky-600 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.25),0_10px_24px_-10px_rgba(14,165,233,0.65)] hover:from-sky-400 hover:to-sky-500',
     danger:
-      'border-rose-300 bg-rose-500 text-white shadow-[0_12px_30px_rgba(244,63,94,0.22)] hover:bg-rose-400',
+      'border-rose-400/50 bg-gradient-to-b from-rose-500 to-rose-600 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.25),0_10px_24px_-10px_rgba(244,63,94,0.65)] hover:from-rose-400 hover:to-rose-500',
     warning:
-      'border-amber-300 bg-amber-400 text-amber-950 shadow-[0_12px_30px_rgba(251,191,36,0.22)] hover:bg-amber-300',
+      'border-amber-300/70 bg-gradient-to-b from-amber-400 to-amber-500 text-amber-950 shadow-[inset_0_1px_0_rgba(255,255,255,0.4),0_10px_24px_-10px_rgba(251,191,36,0.55)] hover:from-amber-300 hover:to-amber-400',
     success:
-      'border-emerald-300 bg-emerald-500 text-white shadow-[0_12px_30px_rgba(16,185,129,0.22)] hover:bg-emerald-400',
+      'border-emerald-400/50 bg-gradient-to-b from-emerald-500 to-emerald-600 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.25),0_10px_24px_-10px_rgba(16,185,129,0.65)] hover:from-emerald-400 hover:to-emerald-500',
     neutral:
-      'border-slate-300 bg-slate-700 text-white shadow-[0_12px_30px_rgba(51,65,85,0.2)] hover:bg-slate-600',
+      'border-slate-400/40 bg-gradient-to-b from-slate-700 to-slate-800 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.18),0_10px_24px_-10px_rgba(51,65,85,0.6)] hover:from-slate-600 hover:to-slate-700',
   };
 
   return (
@@ -10999,7 +10976,7 @@ function ActionButton({
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className={`w-full sm:w-auto rounded-full border px-5 py-2.5 sm:py-2 text-sm font-semibold transition disabled:cursor-not-allowed disabled:border-black/5 disabled:bg-neutral-200 disabled:text-neutral-400 disabled:shadow-none ${palette[tone]}`}
+      className={`inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-full border px-5 py-2 text-sm font-bold tracking-tight transition-all duration-200 active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-400 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-zinc-900 disabled:cursor-not-allowed disabled:border-black/5 disabled:bg-none disabled:bg-neutral-200 disabled:text-neutral-400 disabled:shadow-none disabled:active:scale-100 sm:w-auto ${palette[tone]}`}
     >
       {children}
     </button>
@@ -11666,10 +11643,12 @@ const CountdownText: React.FC<CountdownTextProps> = memo(({ order, className = "
 });
 
 const OrdersSection = memo(function OrdersSection(props: any) {
-  const { activeActionKey, apiBase, driverArrivedOrders, driverContactOpen, hasCarriedOverActiveOrders, kitchenClockNow, lastFailedAction, loadOrdersOnly, loading, openAcceptOrderPrompt, orderModalId, orderSearchTerm, ordersFulfillment, ordersPeriod, ordersSearch, periodOrders, profile, profileLoadState, pushToast, refreshOrders, refreshingOrders, retryLastFailedAction, runOrderAction, selectedStatus, sessionUser, setActiveQrCodeData, setActiveTicketTab, setDriverContactOpen, setEmergencyConfirmed, setEmergencyDeliveryOrderId, setEmergencyReason, setHandoverPromptOrderId, selectedOrderForTicket, activeTicketTab, renderTicketExtras, renderTicketChat, setOrdersFulfillment, setOrdersPeriod, setOrdersSearch, setPickupConfirmAttemptsLeft, setPickupConfirmError, setPickupConfirmOrderId, setPickupConfirmPinInput, setSelectedOrderForEtaExtension, setSelectedOrderForTicket, setSelectedStatus, setTransferRefundOrder, setUnassignConfirmOrderId, setZoomedImageUrl, supportAliadoNamesByOrder, supportCountdownNow, supportNotifyByOrder, token, unreadMessagesMap, visibleOrders } = props;
+  const { activeActionKey, apiBase, driverArrivedOrders, driverContactOpen, hasCarriedOverActiveOrders, lastFailedAction, loadOrdersOnly, loading, openAcceptOrderPrompt, orderModalId, orderSearchTerm, ordersFulfillment, ordersPeriod, ordersSearch, periodOrders, profile, profileLoadState, pushToast, refreshOrders, refreshingOrders, retryLastFailedAction, runOrderAction, selectedStatus, sessionUser, setActiveQrCodeData, setActiveTicketTab, setDriverContactOpen, setEmergencyConfirmed, setEmergencyDeliveryOrderId, setEmergencyReason, setHandoverPromptOrderId, selectedOrderForTicket, activeTicketTab, renderTicketExtras, renderTicketChat, onCancelOrder, setOrdersFulfillment, setOrdersPeriod, setOrdersSearch, setPickupConfirmAttemptsLeft, setPickupConfirmError, setPickupConfirmOrderId, setPickupConfirmPinInput, setSelectedOrderForEtaExtension, setSelectedOrderForTicket, setSelectedStatus, setTransferRefundOrder, setUnassignConfirmOrderId, setZoomedImageUrl, supportAliadoNamesByOrder, supportCountdownNow, supportNotifyByOrder, token, unreadMessagesMap, visibleOrders } = props;
+  const kitchenClockNow = useSharedClock();
   return (
                    <section className="wl-orders" aria-labelledby="orders-title">
                     <SectionHeader title="Órdenes" titleId="orders-title" icon={<ClipboardList />} className="wl-orders-section-header" />
+                    <div className="wl-orders-controls">
                     <div className="wl-orders-overview" aria-label="Resumen de pedidos cargados">
                       {[
                         { label: 'Por preparar', statuses: ['PENDING', 'CONFIRMED', 'PREPARING'], Icon: ChefHat, tone: 'preparing' },
@@ -11739,6 +11718,7 @@ const OrdersSection = memo(function OrdersSection(props: any) {
                         </button>
                       ) : null}
                     </div>
+                    </div>
                     {visibleOrders.length > 0 || selectedOrderForTicket ? (
                       <div className="wl-orders-list space-y-2">
                         {(selectedOrderForTicket && !visibleOrders.some((order: OrderItem) => order.id === selectedOrderForTicket.id) ? [...visibleOrders, selectedOrderForTicket] : visibleOrders).map((order: OrderItem) => {
@@ -11769,8 +11749,32 @@ const OrdersSection = memo(function OrdersSection(props: any) {
                           const deadlineRemaining = order.scheduledDeliveryAt ? scheduledTime - kitchenClockNow : prepRemaining;
                           const hasDeadline = typeof deadlineRemaining === 'number' && Number.isFinite(deadlineRemaining);
                           const isLate = preparationActive && hasDeadline && deadlineRemaining <= 0;
+                          const prepMinutes = Math.ceil(Number(deadlineRemaining ?? 0) / 60000);
+                          const countdownTone = isLate ? 'is-late' : preparationActive && !order.scheduledDeliveryAt && prepMinutes <= 5 ? 'is-urgent' : '';
                           const productCount = countOrderProducts(order);
                           const paymentLabel = order.paymentMethod === 'CASH' ? 'Efectivo' : order.paymentMethod === 'CREDIT_CARD' ? 'Tarjeta' : order.paymentMethod === 'TRANSFER' ? 'Transferencia (histórico)' : order.paymentMethod ? 'Tarjeta' : 'Pago no indicado';
+                          const prepCountdown = (profile?.businessType === 'RESTAURANT' || (order.preparationTimeMinutes && order.preparationTimeMinutes > 1)) && ['CONFIRMED', 'PREPARING'].includes(order.status) && isPrepCountdownRelevant(order, kitchenClockNow) && (() => {
+                            const remainingMs = getPreparationRemainingMs(order, kitchenClockNow);
+                            if (remainingMs !== null && remainingMs <= 0) return null;
+                            return (
+                              <button
+                                type="button"
+                                onClick={(event) => { event.stopPropagation(); setSelectedOrderForEtaExtension(order); }}
+                                className={`wl-comanda-prep-countdown flex flex-none items-center justify-center rounded-lg border px-3 py-1.5 shadow-sm transition active:scale-95 ${
+                                  isPreparationTimeUrgent(order, kitchenClockNow)
+                                    ? 'border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100 ring-2 ring-rose-200/50'
+                                    : 'border-sky-200 bg-sky-50 text-sky-700 hover:bg-sky-100'
+                                }`}
+                                title="Modificar tiempo de preparación"
+                              >
+                                <CountdownText order={order} className="font-black tabular-nums text-xs" />
+                              </button>
+                            );
+                          })();
+                          const totalBlock = <>
+                            <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-emerald-600 dark:text-emerald-400">Total del pedido</p>
+                            <p className="mt-0.5 text-2xl font-black tracking-tight text-neutral-950 dark:text-white">{formatCurrency(order.totalAmount)}</p>
+                          </>;
                           return (
                             <article
                               key={order.id}
@@ -11789,7 +11793,7 @@ const OrdersSection = memo(function OrdersSection(props: any) {
                                   <span className="wl-order-summary-primary"><span className="wl-order-summary-top"><strong className="wl-order-number">{order.dailyCounter ? `#${String(order.dailyCounter).padStart(2, '0')}` : 'Número no disponible'}</strong><StatusBadge status={order.status} /></span><span className="wl-order-summary-date"><Clock aria-hidden="true" />{order.createdAt ? formatDate(order.createdAt) : 'Fecha no disponible'}</span></span>
                                   <span className="wl-order-summary-person"><strong><User aria-hidden="true" />{getCustomerFullName(order.customer?.user) || 'Cliente'}</strong><span><span className={`wl-order-fulfillment ${order.fulfillmentType === 'PICKUP' ? 'is-pickup' : ''}`}>{order.fulfillmentType === 'PICKUP' ? 'Recogida' : order.fulfillmentType === 'DELIVERY' ? 'Envío' : 'Tipo no disponible'}</span><span>{productCount} {productCount === 1 ? 'producto' : 'productos'}</span></span></span>
                                   <span className="wl-order-summary-billing"><strong><span className="sr-only">Total: </span>{formatCurrency(order.totalAmount)}</strong><span className="wl-order-payment">{paymentLabel}</span></span>
-                                  <span className="wl-order-summary-time">{preparationActive && hasDeadline ? (order.scheduledDeliveryAt ? <span><Clock aria-hidden="true" />Programado: {formatDate(order.scheduledDeliveryAt)}</span> : <span><Clock aria-hidden="true" />{isLate ? `Vencido hace ${Math.ceil(Math.abs(deadlineRemaining) / 60000)} min` : `Preparación: ${Math.ceil(deadlineRemaining / 60000)} min restantes`}</span>) : null}{isLate && <span className="wl-order-summary-alert">Pedido rezagado</span>}{unreadMessagesMap[order.id] > 0 && <span className="wl-order-summary-alert">{unreadMessagesMap[order.id]} mensaje{unreadMessagesMap[order.id] === 1 ? '' : 's'} nuevo{unreadMessagesMap[order.id] === 1 ? '' : 's'}</span>}{(order as any).cancellationRequestedAt && !(order as any).cancelledBy && preparationActive && <span className="wl-order-summary-alert">Cancelación solicitada</span>}</span>
+                                  <span className="wl-order-summary-time">{preparationActive && hasDeadline ? (order.scheduledDeliveryAt ? <span><Clock aria-hidden="true" />Programado: {formatDate(order.scheduledDeliveryAt)}</span> : <span className={`wl-order-countdown ${countdownTone}`}><Clock aria-hidden="true" />Preparación: <CountdownText order={order} /></span>) : null}{isLate && <span className="wl-order-summary-alert">Pedido rezagado</span>}{unreadMessagesMap[order.id] > 0 && <span className="wl-order-summary-alert">{unreadMessagesMap[order.id]} mensaje{unreadMessagesMap[order.id] === 1 ? '' : 's'} nuevo{unreadMessagesMap[order.id] === 1 ? '' : 's'}</span>}{(order as any).cancellationRequestedAt && !(order as any).cancelledBy && preparationActive && <span className="wl-order-summary-alert">Cancelación solicitada</span>}</span>
                                   <span className="wl-order-expand"><ArrowRight aria-hidden="true" /><span className="sr-only">Abrir detalle del pedido</span></span>
                                 </button>}
                                 {orderModalId === order.id && <div className="wl-comanda-overlay" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setSelectedOrderForTicket(null); }}>
@@ -11804,10 +11808,16 @@ const OrdersSection = memo(function OrdersSection(props: any) {
                                   </div>
                                   <div className="wl-comanda-content">
                                     {activeTicketTab === 'chat' ? renderTicketChat(order) : <>
-                                    <div className="wl-comanda-customer"><p><User aria-hidden="true" /><strong>{getCustomerFullName(order.customer?.user) || 'Cliente'}</strong></p><CustomerPhoneLine phone={order.customer?.user?.phone} />{order.fulfillmentType === 'DELIVERY' && <p><MapPin aria-hidden="true" /><span>{formatAddress(order.address)}</span></p>}</div>
+                                    <div className="wl-comanda-customer">
+                                      <div className="wl-comanda-customer-info">
+                                        <p><User aria-hidden="true" /><strong>{getCustomerFullName(order.customer?.user) || 'Cliente'}</strong></p>
+                                        <CustomerPhoneLine phone={order.customer?.user?.phone} />
+                                        {order.fulfillmentType === 'DELIVERY' && <p><MapPin aria-hidden="true" /><span>{formatAddress(order.address)}</span></p>}
+                                      </div>
+                                      {prepCountdown}
+                                    </div>
                                     {!['CANCELLED', 'REJECTED'].includes(order.status) && <div className="wl-comanda-progress" aria-label="Progreso del pedido">{['Preparación', 'Lista', order.fulfillmentType === 'PICKUP' ? 'Recogida' : 'En entrega', 'Completada'].map((label, index) => { const current = ['PENDING', 'CONFIRMED', 'PREPARING'].includes(order.status) ? 0 : order.status === 'READY' ? 1 : ['PICKED_UP', 'IN_TRANSIT'].includes(order.status) ? 2 : 3; return <div key={label} className={index < current ? 'is-done' : index === current ? 'is-current' : ''} aria-current={index === current ? 'step' : undefined}><span>{index < current ? <Check aria-hidden="true" /> : index === current ? <i aria-hidden="true" /> : null}</span><small>{label}</small></div>; })}</div>}
                                     <div className="wl-comanda-products"><h3>Productos ({order.items?.length || 0})</h3>{(order.items || []).map((item: any) => <div className="wl-comanda-product" key={item.id}><span className="wl-order-thumb">{item.product?.image ? <img src={item.product.image} alt="" /> : <Package aria-hidden="true" />}</span><div><strong>{item.product?.name || 'Producto'}{item.weightG ? ` (${item.weightG} g)` : ''}</strong>{item.options?.length ? <p>{item.options.map((option: any) => option.name).join(' · ')}</p> : null}{item.specialInstructions && <p>{item.specialInstructions}</p>}</div><b>×{item.quantity}</b>{item.unitPrice != null && <b>{formatCurrency(Number(item.unitPrice) * item.quantity)}</b>}</div>)}</div>
-                                    <div className="wl-comanda-total"><span>Total del pedido</span><strong>{formatCurrency(order.totalAmount)}</strong></div>
                                     {parseStoreNotes(order.notes) && <div className="wl-comanda-note"><strong>Nota del cliente</strong><p>{parseStoreNotes(order.notes)}</p></div>}
                                 <div className="wl-order-details">
                               {/* Fila 1: Cabecera */}
@@ -11871,48 +11881,6 @@ const OrdersSection = memo(function OrdersSection(props: any) {
                                             📅 {formatDate(order.estimatedDeliveryTime || order.scheduledDeliveryAt || order.createdAt)}
                                           </button>
                                         </>
-                                      );
-                                    })()}
-                                    {profile?.businessType !== 'RESTAURANT' && order.preparationTimeMinutes && order.preparationTimeMinutes > 1 && (order.status === 'CONFIRMED' || order.status === 'PREPARING') && isPrepCountdownRelevant(order, kitchenClockNow) && (() => {
-                                      const remainingMs = getPreparationRemainingMs(order, kitchenClockNow);
-                                      if (remainingMs !== null && remainingMs <= 0) return null;
-                                      return (
-                                        <button
-                                          type="button"
-                                          onClick={(event) => {
-                                            event.stopPropagation();
-                                            setSelectedOrderForEtaExtension(order);
-                                          }}
-                                          className={`rounded-lg border px-3 py-1.5 shadow-sm transition active:scale-95 flex items-center justify-center ${
-                                            isPreparationTimeUrgent(order, kitchenClockNow)
-                                              ? 'border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100 ring-2 ring-rose-200/50'
-                                              : 'border-sky-200 bg-sky-50 text-sky-700 hover:bg-sky-100'
-                                          }`}
-                                          title="Modificar tiempo de preparación"
-                                        >
-                                          <CountdownText order={order} className="font-black tabular-nums text-xs" />
-                                        </button>
-                                      );
-                                    })()}
-                                    {profile?.businessType === 'RESTAURANT' && (order.status === 'CONFIRMED' || order.status === 'PREPARING') && isPrepCountdownRelevant(order, kitchenClockNow) && (() => {
-                                      const remainingMs = getPreparationRemainingMs(order, kitchenClockNow);
-                                      if (remainingMs !== null && remainingMs <= 0) return null;
-                                      return (
-                                        <button
-                                          type="button"
-                                          onClick={(event) => {
-                                            event.stopPropagation();
-                                            setSelectedOrderForEtaExtension(order);
-                                          }}
-                                          className={`rounded-lg border px-3 py-1.5 shadow-sm transition active:scale-95 flex items-center justify-center ${
-                                            isPreparationTimeUrgent(order, kitchenClockNow)
-                                              ? 'border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100 ring-2 ring-rose-200/50'
-                                              : 'border-sky-200 bg-sky-50 text-sky-700 hover:bg-sky-100'
-                                          }`}
-                                          title="Modificar tiempo de preparación"
-                                        >
-                                          <CountdownText order={order} className="font-black tabular-nums text-xs" />
-                                        </button>
                                       );
                                     })()}
                                   </div>
@@ -11982,7 +11950,7 @@ const OrdersSection = memo(function OrdersSection(props: any) {
                                       </span>
                                     ) : hasOwnDelivery ? (
                                       <span className="font-medium text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-100/50">
-                                        {order.status === 'DELIVERED' ? 'Entregado' : order.status === 'IN_TRANSIT' ? 'En camino' : order.status === 'PICKED_UP' ? 'Recogido para entrega' : 'Pendiente de recogida'}
+                                        {order.status === 'DELIVERED' ? 'Entregado' : order.status === 'IN_TRANSIT' ? 'En camino' : order.status === 'PICKED_UP' ? 'Recogido para entrega' : 'Pendiente de recolección'}
                                       </span>
                                     ) : (
                                       <span className="font-medium text-sky-600 bg-sky-50 px-2 py-0.5 rounded border border-sky-100/50">
@@ -12080,12 +12048,6 @@ const OrdersSection = memo(function OrdersSection(props: any) {
                                     </span>
                                   </div>
                                 )}
-                                {parseStoreNotes(order.notes) ? (
-                                  <div className="mt-2 rounded-[16px] border border-amber-100 bg-amber-50 px-4 py-2 text-sm text-amber-800">
-                                    <span className="font-semibold">Nota:</span> {parseStoreNotes(order.notes)}
-                                  </div>
-                                ) : null}
-
                                 {/* Pago en efectivo ya confirmado */}
                                 {order.status === 'PICKED_UP' && order.paymentMethod === 'CASH' && (order as any).cashPaymentConfirmedAt && (
                                   <div className="mt-3 flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700">
@@ -12159,15 +12121,107 @@ const OrdersSection = memo(function OrdersSection(props: any) {
                                 )}
                               </div>
 
-                              {/* Fila 3: Pie (Total y Botones) */}
-                              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-t border-neutral-100 pt-3">
+                              {/* Pickup: Confirmar recolección */}
+                              {((order as any).fulfillmentType === 'PICKUP' && order.status === 'READY') ? (
+                                <div className="flex flex-col sm:flex-row gap-2 mt-2" onClick={(e) => e.stopPropagation()}>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setPickupConfirmOrderId(order.id);
+                                      setPickupConfirmPinInput('');
+                                      setPickupConfirmError(null);
+                                      setPickupConfirmAttemptsLeft(3);
+                                    }}
+                                    className="flex-1 rounded-xl border border-emerald-200 bg-emerald-600 px-4 py-3 text-sm font-semibold text-white shadow-[0_4px_12px_rgba(16,185,129,0.2)] transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-neutral-300 disabled:text-neutral-500"
+                                  >
+                                    ✅ Confirmar recolección
+                                  </button>
+                                </div>
+                              ) : null}
+
+                              {/* Boton de Emergencia: Asumir Reparto o Pedir Apoyo (solo delivery) */}
+                              {((order as any).fulfillmentType !== 'PICKUP' && !order.supportRestaurantId && (order.status === 'READY' || ((order.status === 'CONFIRMED' || order.status === 'PREPARING') && order.noDriversAvailable)) && !order.driver) ? (
+                                <div className="flex flex-col gap-2 mt-2" onClick={(e) => e.stopPropagation()}>
+                                  {/* Esperando respuesta de la red: solo informativo, nunca bloquea acciones */}
+                                  {order.isSupportRequested && order.supportRequestedAt && (
+                                    <div className="rounded-[16px] border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-800">
+                                      <div className="flex items-center gap-2">
+                                        <span className="relative flex h-2.5 w-2.5 shrink-0">
+                                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-sky-400 opacity-75"></span>
+                                          <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-sky-500"></span>
+                                        </span>
+                                        <div className="min-w-0 flex-1">
+                                          <p className="font-semibold">Esperando respuesta de la red…</p>
+                                          <p className="text-xs text-sky-600 mt-0.5">
+                                            {(() => {
+                                              const elapsedMs = Math.max(0, supportCountdownNow - new Date(order.supportRequestedAt!).getTime());
+                                              const remainingMs = Math.max(0, 2 * 60 * 1000 - elapsedMs);
+                                              const secs = Math.ceil(remainingMs / 1000);
+                                              const mm = Math.floor(secs / 60);
+                                              const ss = secs % 60;
+                                              return remainingMs <= 0
+                                                ? 'Finalizando solicitud…'
+                                                : `Si nadie responde en ${mm}:${String(ss).padStart(2, '0')} min, el pedido queda para ti.`;
+                                            })()}
+                                          </p>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  )}
+                                  {supportNotifyHere ? (
+                                    <div className="rounded-[16px] border border-rose-100 bg-rose-50 px-4 py-3 text-sm text-rose-800">
+                                      <div className="flex items-center gap-2">
+                                        <span className="text-base">😕</span>
+                                        <div className="min-w-0 flex-1">
+                                          <p className="font-semibold">Nadie aceptó tu solicitud de apoyo</p>
+                                          {supportNotifyHere.exhausted ? (
+                                            <p className="text-xs text-rose-600 mt-0.5">Agotaste los 2 intentos. Solo puedes ir a entregar tú mismo.</p>
+                                          ) : (
+                                            <p className="text-xs text-rose-600 mt-0.5">
+                                              Puedes reintentar (te queda{supportNotifyHere.attemptsLeft === 1 ? '' : 'n'} {supportNotifyHere.attemptsLeft} intento{supportNotifyHere.attemptsLeft === 1 ? '' : 's'}) o entregarlo tú mismo.
+                                            </p>
+                                          )}
+                                        </div>
+                                        {!WINGSLAB_BUSINESS.ownDeliveryOnly && !supportNotifyHere.exhausted && !order.isSupportRequested && (
+                                          <button
+                                            type="button"
+                                            onClick={() => void runOrderAction(order.id, 'solicitarApoyo')}
+                                            disabled={activeActionKey === `${order.id}:solicitarApoyo`}
+                                            className="shrink-0 rounded-full bg-rose-600 px-4 py-2 text-xs font-bold text-white transition hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-50"
+                                          >
+                                            {activeActionKey === `${order.id}:solicitarApoyo` ? 'Reenviando...' : 'Reintentar'}
+                                          </button>
+                                        )}
+                                      </div>
+                                    </div>
+                                  ) : null}
+                                  <div className="flex flex-col sm:flex-row gap-2">
+                                      {!WINGSLAB_BUSINESS.ownDeliveryOnly && !profile?.hasOwnDelivery && !supportExhaustedHere && !supportNotifyHere?.exhausted && !order.isSupportRequested && (
+                                      <button
+                                        type="button"
+                                        onClick={() => void runOrderAction(order.id, 'solicitarApoyo')}
+                                        disabled={activeActionKey === `${order.id}:solicitarApoyo`}
+                                        className="flex-1 rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm font-semibold text-sky-700 transition hover:bg-sky-100 disabled:cursor-not-allowed disabled:bg-neutral-100 disabled:text-neutral-400"
+                                      >
+                                        {activeActionKey === `${order.id}:solicitarApoyo`
+                                          ? 'Enviando...'
+                                          : '🤝 Pedir apoyo a red'}
+                                      </button>
+                                    )}
+                                  </div>
+                                </div>
+                              ) : null}
+                                </div>
+                                    </>}
+                                  </div>
+                                  {activeTicketTab !== 'chat' && (
+                              <div className="wl-comanda-actions flex flex-col gap-4 border-t border-neutral-200/70 pt-4 dark:border-white/10 sm:flex-row sm:items-end sm:justify-between" onClick={(e) => e.stopPropagation()}>
                                 <div>
                                   {(() => {
                                     if (isHelper) {
                                       return (
                                         <>
-                                          <p className="text-xs font-semibold uppercase tracking-[0.22em] text-emerald-600">Apoyo de entrega · Tu tarifa</p>
-                                          <p className="text-xl font-bold text-neutral-950">{formatCurrency(order.deliveryFee)}</p>
+                                          {totalBlock}
                                           <p className="text-[10px] text-emerald-600 font-medium flex items-center gap-1 mt-1">
                                             <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500" />
                                             {order.paymentMethod === 'CASH'
@@ -12178,15 +12232,10 @@ const OrdersSection = memo(function OrdersSection(props: any) {
                                       );
                                     }
 
-                                    const foodAmount = order.totalAmount - order.deliveryFee;
-
                                     if (hasOwnDelivery && (order as any).fulfillmentType !== 'PICKUP') {
                                       return (
                                         <>
-                                          <p className="text-xs font-semibold uppercase tracking-[0.22em] text-emerald-600">
-                                            {order.status === 'DELIVERED' ? 'Recibido (Envío propio)' : 'Total a recibir (Envío propio)'}
-                                          </p>
-                                          <p className="text-xl font-bold text-neutral-950">{formatCurrency(order.totalAmount)}</p>
+                                          {totalBlock}
                                         </>
                                       );
                                     }
@@ -12195,10 +12244,7 @@ const OrdersSection = memo(function OrdersSection(props: any) {
                                     if (order.deliveredByRestaurant) {
                                       return (
                                         <>
-                                          <p className="text-xs font-semibold uppercase tracking-[0.22em] text-emerald-600">
-                                            {order.status === 'DELIVERED' ? 'Cobrado (Entrega propia)' : 'Total a cobrar (Entrega propia)'}
-                                          </p>
-                                          <p className="text-xl font-bold text-neutral-950">{formatCurrency(order.totalAmount)}</p>
+                                          {totalBlock}
                                           {order.status !== 'DELIVERED' && (
                                             <p className="text-[10px] text-neutral-500">Tú realizas la entrega. El cliente paga el total.</p>
                                           )}
@@ -12211,10 +12257,7 @@ const OrdersSection = memo(function OrdersSection(props: any) {
                                       if (order.paymentMethod === 'TRANSFER') {
                                         return (
                                           <>
-                                            <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-sky-600">
-                                              Recibido por transferencia
-                                            </p>
-                                            <p className="text-xl font-bold text-neutral-950">{formatCurrency(order.totalAmount)}</p>
+                                            {totalBlock}
                                             <p className="text-[10px] text-emerald-600 font-semibold flex items-center gap-1 mt-1">
                                               <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500" />
                                               El cliente recoge en sucursal
@@ -12224,10 +12267,7 @@ const OrdersSection = memo(function OrdersSection(props: any) {
                                       }
                                       return (
                                         <>
-                                          <p className="text-xs font-semibold uppercase tracking-[0.22em] text-emerald-600">
-                                            Total a recibir
-                                          </p>
-                                          <p className="text-xl font-bold text-neutral-950">{formatCurrency(order.totalAmount)}</p>
+                                          {totalBlock}
                                           <p className="text-[10px] text-emerald-600 font-semibold flex items-center gap-1 mt-1">
                                             <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500" />
                                             El cliente recoge en sucursal
@@ -12240,12 +12280,7 @@ const OrdersSection = memo(function OrdersSection(props: any) {
                                       const supportDelivery = !!order.supportRestaurantId;
                                       return (
                                         <>
-                                          <p className="text-xs font-semibold uppercase tracking-[0.22em] text-amber-600">
-                                            {supportDelivery
-                                              ? (['DELIVERED', 'PICKED_UP', 'IN_TRANSIT'].includes(order.status) || order.cashPaymentConfirmedAt ? 'Cobrado al restaurante aliado' : 'Cobrar al restaurante que entrega')
-                                              : (order.status === 'DELIVERED' || order.cashPaymentConfirmedAt ? 'Cobrado al repartidor' : 'Cobrar al repartidor')}
-                                          </p>
-                                          <p className="text-xl font-bold text-neutral-950">{formatCurrency(foodAmount)}</p>
+                                          {totalBlock}
                                           {!['PICKED_UP', 'IN_TRANSIT', 'DELIVERED'].includes(order.status) && !order.cashPaymentConfirmedAt && (
                                             supportDelivery
                                               ? <p className="text-[10px] text-neutral-500">Entregar al aliado al recoger; él cobra el total al cliente y le queda el envío.</p>
@@ -12259,10 +12294,7 @@ const OrdersSection = memo(function OrdersSection(props: any) {
                                       const handedOver = ['PICKED_UP', 'IN_TRANSIT', 'DELIVERED'].includes(order.status);
                                       return (
                                         <>
-                                          <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-sky-600">
-                                            Recibido por transferencia
-                                          </p>
-                                          <p className="text-xl font-bold text-neutral-950">{formatCurrency(order.totalAmount)}</p>
+                                          {totalBlock}
                                           {order.supportRestaurantId ? (
                                             handedOver ? (
                                               <div className="mt-2 rounded-xl border border-emerald-200 bg-emerald-50/60 px-3 py-2">
@@ -12307,8 +12339,7 @@ const OrdersSection = memo(function OrdersSection(props: any) {
                                     // Fallback if paymentMethod is missing
                                     return (
                                       <>
-                                        <p className="text-xs font-semibold uppercase tracking-[0.22em] text-neutral-400">Total (Sin envío)</p>
-                                        <p className="text-xl font-bold text-neutral-950">{formatCurrency(foodAmount)}</p>
+                                        {totalBlock}
                                       </>
                                     );
                                   })()}
@@ -12323,7 +12354,22 @@ const OrdersSection = memo(function OrdersSection(props: any) {
                                     </div>
                                   )}
                                 </div>
-                                <div className="flex flex-col sm:flex-row sm:flex-wrap gap-2 items-stretch sm:items-center justify-end min-w-0" onClick={(e) => e.stopPropagation()}>
+                                <div className="flex min-w-0 flex-col items-stretch justify-end gap-2 sm:flex-row sm:flex-wrap sm:items-center">
+                                  {!isHelper && ['CONFIRMED', 'PREPARING'].includes(order.status) && !(order as any).cancellationRequestedAt && !(order as any).cancelledBy && (
+                                    <button type="button" onClick={() => onCancelOrder(order)} className="min-h-11 rounded-full border border-rose-200 bg-rose-50 px-4 py-2 text-sm font-bold text-rose-700 transition hover:bg-rose-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-rose-600 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-300">
+                                      Cancelar pedido
+                                    </button>
+                                  )}
+                                  {((order as any).fulfillmentType !== 'PICKUP' && !order.supportRestaurantId && (order.status === 'READY' || ((order.status === 'CONFIRMED' || order.status === 'PREPARING') && order.noDriversAvailable)) && !order.driver) && (
+                                    <button
+                                      type="button"
+                                      onClick={() => void runOrderAction(order.id, 'asumirReparto')}
+                                      disabled={activeActionKey === `${order.id}:asumirReparto`}
+                                      className="min-h-11 rounded-xl border border-emerald-200 bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-[0_4px_12px_rgba(16,185,129,0.2)] transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-neutral-300 disabled:text-neutral-500"
+                                    >
+                                      {activeActionKey === `${order.id}:asumirReparto` ? 'Procesando...' : 'Generar QR de reparto'}
+                                    </button>
+                                  )}
                                   {order.status === 'IN_TRANSIT' && !isHelper && !order.supportRestaurantId && (hasOwnDelivery || !order.driver) && (
                                     <button
                                       type="button"
@@ -12426,28 +12472,7 @@ const OrdersSection = memo(function OrdersSection(props: any) {
                                               } else if (actionKey === 'reject' && order.paymentMethod === 'TRANSFER') {
                                                 setTransferRefundOrder(order);
                                               } else if (actionKey === 'cancel') {
-                                                const reason = window.prompt('Motivo de cancelación (mín. 10 caracteres):');
-                                                if (reason && reason.trim().length >= 10) {
-                                                  void runOrderAction(order.id, actionKey, { preserveFailedAction: true });
-                                                  // Send cancel with reason via PATCH
-                                                  requestJson({
-                                                    apiBase,
-                                                    path: `/restaurant-panel/pedidos/${order.id}/cancelar`,
-                                                    token,
-                                                    options: {
-                                                      method: 'PATCH',
-                                                      body: JSON.stringify({ reason: reason.trim() }),
-                                                    },
-                                                    fallbackMessage: 'No se pudo cancelar el pedido.',
-                                                  }).then(() => {
-                                                    loadOrdersOnly();
-                                                    pushToast('success', 'Pedido cancelado', `Motivo: ${reason.trim()}`);
-                                                  }).catch((err: any) => {
-                                                    pushToast('error', 'Error', err?.message || 'No se pudo cancelar.');
-                                                  });
-                                                } else if (reason !== null) {
-                                                  window.alert('El motivo debe tener al menos 10 caracteres.');
-                                                }
+                                                onCancelOrder(order);
                                               } else {
                                                 void runOrderAction(order.id, actionKey);
                                               }
@@ -12465,109 +12490,7 @@ const OrdersSection = memo(function OrdersSection(props: any) {
                                 </div>
                               </div>
 
-                              {/* Pickup: Confirmar recolección */}
-                              {((order as any).fulfillmentType === 'PICKUP' && order.status === 'READY') ? (
-                                <div className="flex flex-col sm:flex-row gap-2 mt-2" onClick={(e) => e.stopPropagation()}>
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      setPickupConfirmOrderId(order.id);
-                                      setPickupConfirmPinInput('');
-                                      setPickupConfirmError(null);
-                                      setPickupConfirmAttemptsLeft(3);
-                                    }}
-                                    className="flex-1 rounded-xl border border-emerald-200 bg-emerald-600 px-4 py-3 text-sm font-semibold text-white shadow-[0_4px_12px_rgba(16,185,129,0.2)] transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-neutral-300 disabled:text-neutral-500"
-                                  >
-                                    ✅ Confirmar recolección
-                                  </button>
-                                </div>
-                              ) : null}
-
-                              {/* Boton de Emergencia: Asumir Reparto o Pedir Apoyo (solo delivery) */}
-                              {((order as any).fulfillmentType !== 'PICKUP' && !order.supportRestaurantId && (order.status === 'READY' || ((order.status === 'CONFIRMED' || order.status === 'PREPARING') && order.noDriversAvailable)) && !order.driver) ? (
-                                <div className="flex flex-col gap-2 mt-2" onClick={(e) => e.stopPropagation()}>
-                                  {/* Esperando respuesta de la red: solo informativo, nunca bloquea acciones */}
-                                  {order.isSupportRequested && order.supportRequestedAt && (
-                                    <div className="rounded-[16px] border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-800">
-                                      <div className="flex items-center gap-2">
-                                        <span className="relative flex h-2.5 w-2.5 shrink-0">
-                                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-sky-400 opacity-75"></span>
-                                          <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-sky-500"></span>
-                                        </span>
-                                        <div className="min-w-0 flex-1">
-                                          <p className="font-semibold">Esperando respuesta de la red…</p>
-                                          <p className="text-xs text-sky-600 mt-0.5">
-                                            {(() => {
-                                              const elapsedMs = Math.max(0, supportCountdownNow - new Date(order.supportRequestedAt!).getTime());
-                                              const remainingMs = Math.max(0, 2 * 60 * 1000 - elapsedMs);
-                                              const secs = Math.ceil(remainingMs / 1000);
-                                              const mm = Math.floor(secs / 60);
-                                              const ss = secs % 60;
-                                              return remainingMs <= 0
-                                                ? 'Finalizando solicitud…'
-                                                : `Si nadie responde en ${mm}:${String(ss).padStart(2, '0')} min, el pedido queda para ti.`;
-                                            })()}
-                                          </p>
-                                        </div>
-                                      </div>
-                                    </div>
                                   )}
-                                  {supportNotifyHere ? (
-                                    <div className="rounded-[16px] border border-rose-100 bg-rose-50 px-4 py-3 text-sm text-rose-800">
-                                      <div className="flex items-center gap-2">
-                                        <span className="text-base">😕</span>
-                                        <div className="min-w-0 flex-1">
-                                          <p className="font-semibold">Nadie aceptó tu solicitud de apoyo</p>
-                                          {supportNotifyHere.exhausted ? (
-                                            <p className="text-xs text-rose-600 mt-0.5">Agotaste los 2 intentos. Solo puedes ir a entregar tú mismo.</p>
-                                          ) : (
-                                            <p className="text-xs text-rose-600 mt-0.5">
-                                              Puedes reintentar (te queda{supportNotifyHere.attemptsLeft === 1 ? '' : 'n'} {supportNotifyHere.attemptsLeft} intento{supportNotifyHere.attemptsLeft === 1 ? '' : 's'}) o entregarlo tú mismo.
-                                            </p>
-                                          )}
-                                        </div>
-                                        {!WINGSLAB_BUSINESS.ownDeliveryOnly && !supportNotifyHere.exhausted && !order.isSupportRequested && (
-                                          <button
-                                            type="button"
-                                            onClick={() => void runOrderAction(order.id, 'solicitarApoyo')}
-                                            disabled={activeActionKey === `${order.id}:solicitarApoyo`}
-                                            className="shrink-0 rounded-full bg-rose-600 px-4 py-2 text-xs font-bold text-white transition hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-50"
-                                          >
-                                            {activeActionKey === `${order.id}:solicitarApoyo` ? 'Reenviando...' : 'Reintentar'}
-                                          </button>
-                                        )}
-                                      </div>
-                                    </div>
-                                  ) : null}
-                                  <div className="flex flex-col sm:flex-row gap-2">
-                                    <button
-                                      type="button"
-                                      onClick={() => void runOrderAction(order.id, 'asumirReparto')}
-                                      disabled={activeActionKey === `${order.id}:asumirReparto`}
-                                      className="flex-1 rounded-xl border border-emerald-200 bg-emerald-600 px-4 py-3 text-sm font-semibold text-white shadow-[0_4px_12px_rgba(16,185,129,0.2)] transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-neutral-300 disabled:text-neutral-500"
-                                    >
-                                      {activeActionKey === `${order.id}:asumirReparto`
-                                        ? 'Procesando...'
-                                        : 'Generar QR de reparto'}
-                                    </button>
-                                      {!WINGSLAB_BUSINESS.ownDeliveryOnly && !profile?.hasOwnDelivery && !supportExhaustedHere && !supportNotifyHere?.exhausted && !order.isSupportRequested && (
-                                      <button
-                                        type="button"
-                                        onClick={() => void runOrderAction(order.id, 'solicitarApoyo')}
-                                        disabled={activeActionKey === `${order.id}:solicitarApoyo`}
-                                        className="flex-1 rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm font-semibold text-sky-700 transition hover:bg-sky-100 disabled:cursor-not-allowed disabled:bg-neutral-100 disabled:text-neutral-400"
-                                      >
-                                        {activeActionKey === `${order.id}:solicitarApoyo`
-                                          ? 'Enviando...'
-                                          : '🤝 Pedir apoyo a red'}
-                                      </button>
-                                    )}
-                                  </div>
-                                </div>
-                              ) : null}
-                                </div>
-                                    </>}
-                                  </div>
                                 </section>
                                 </div>}
                               </div>

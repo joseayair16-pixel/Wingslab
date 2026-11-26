@@ -9,6 +9,7 @@ import {
 import type { Metadata } from 'next';
 import { ClientOnly } from '../components/ClientOnly';
 import { MENU_PROMOTIONS_PATH, menuPromotionImage, readMenuPromotions, type MenuPromotion } from '../lib/menu-promotions';
+import CardPaymentResultModal from '../components/CardPaymentResultModal';
 
 export const dynamic = 'force-dynamic';
 
@@ -53,6 +54,7 @@ export default async function WingsLabPage({ searchParams }: {
         />
       ) : null}
       <ClientOnly><Storefront searchParams={searchParams} initialRestaurant={restaurant} initialBanners={initialBanners} /></ClientOnly>
+      <CardPaymentResultModal />
     </>
   );
 }

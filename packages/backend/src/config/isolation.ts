@@ -17,6 +17,12 @@ export function webPushRetryJobEnabled(): boolean {
   return webPushEnabled() && process.env.WINGSLAB_WEB_PUSH_RETRY_JOB_ENABLED === 'true';
 }
 
+/** First-party schedule enforcement, limited to the isolated reviewed runtime. */
+export function restaurantHoursJobEnabled(): boolean {
+  return process.env.WINGSLAB_RUNTIME_AUTHORIZED === 'reviewed-phase-2b' &&
+    process.env.WINGSLAB_PROFILE === 'container';
+}
+
 export function assertExternalOperationAllowed(): void {
   throw new Error('[WingsLab] External operations are blocked in Phase 2A.');
 }

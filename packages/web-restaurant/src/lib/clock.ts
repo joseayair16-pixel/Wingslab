@@ -7,20 +7,27 @@ import { useSyncExternalStore } from 'react';
 const listeners = new Set<() => void>();
 let current = Date.now();
 let timer: ReturnType<typeof setInterval> | null = null;
+function tick() {
+  current = Date.now();
+  listeners.forEach((notify) => notify());
+}
+function onVisibilityChange() {
+  if (document.visibilityState === 'visible') tick();
+}
 
 function subscribe(listener: () => void) {
   listeners.add(listener);
   if (!timer) {
-    timer = setInterval(() => {
-      current = Date.now();
-      listeners.forEach((notify) => notify());
-    }, 1000);
+    current = Date.now();
+    timer = setInterval(tick, 1000);
+    document.addEventListener('visibilitychange', onVisibilityChange);
   }
   return () => {
     listeners.delete(listener);
     if (listeners.size === 0 && timer) {
       clearInterval(timer);
       timer = null;
+      document.removeEventListener('visibilitychange', onVisibilityChange);
     }
   };
 }

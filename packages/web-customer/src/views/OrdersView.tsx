@@ -89,7 +89,9 @@ export function OrdersView({
                       <span className="mx-1.5">·</span>
                       {formatDate(order.createdAt)}
                     </p>
-                    {order.orderReference && <p className="mt-2 break-all text-[10px] text-neutral-500">{order.orderReference}</p>}
+                    <p className="mt-2 text-xs font-semibold text-neutral-600 dark:text-zinc-300">
+                      {order.dailyCounter != null ? `Pedido #${String(order.dailyCounter).padStart(2, '0')}` : 'Número de pedido no disponible'}
+                    </p>
                   </div>
                 </div>
 

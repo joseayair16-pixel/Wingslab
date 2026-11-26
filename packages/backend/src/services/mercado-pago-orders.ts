@@ -135,13 +135,14 @@ async function requestOrder(accessToken: string, path: string, init?: RequestIni
 
 // Only send exact item breakdowns; never invent prices to absorb fees or discounts.
 export function mercadoPagoItemsFromSnapshot(snapshot: unknown, totalCents: number) {
-  const parsed = z.object({ items: z.array(z.object({ title: z.string().trim().min(1), productId: z.string().min(1), quantity: z.number().int().positive(), unitPrice: z.number().positive(), subtotal: z.number().positive() })).min(1) }).safeParse(snapshot);
+  const parsed = z.object({ items: z.array(z.object({ title: z.string().trim().min(1), productId: z.string().min(1), quantity: z.number().int().positive(), unitPrice: z.number().nonnegative(), subtotal: z.number().nonnegative() })).min(1) }).safeParse(snapshot);
   if (!parsed.success) return undefined;
   let sum = 0;
   const items = [];
   for (const line of parsed.data.items) {
     const cents = Math.round(line.unitPrice * 100);
-    if (cents < 1 || Math.abs(line.unitPrice * 100 - cents) > 1e-6 || cents * line.quantity !== Math.round(line.subtotal * 100)) return undefined;
+    if (Math.abs(line.unitPrice * 100 - cents) > 1e-6 || cents * line.quantity !== Math.round(line.subtotal * 100)) return undefined;
+    if (cents === 0) continue; // Gifts are represented in the order, not as billable provider line items.
     sum += cents * line.quantity;
     items.push({ title: line.title, external_code: line.productId, quantity: line.quantity, unit_price: amount(cents) });
   }

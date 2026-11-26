@@ -9,6 +9,7 @@ import {
   PaymentStatus,
 } from '@prisma/client';
 import { AppError, isAppError } from '../errors/app-error';
+import { generateDeliveryPin } from './delivery-pin';
 import {
   driverScopedOrderSelect,
   restaurantOrderWorkflowSelect,
@@ -428,7 +429,7 @@ export async function updateOrderStatusByRestaurant({
         (order.status === OrderStatus.PENDING && nextStatus === OrderStatus.PREPARING && !isInitialAcceptance)) {
       throw createDomainError(409, 'INVALID_ORDER_TRANSITION', 'El pedido ya no está pendiente de aceptación.');
     }
-    if (order.scheduledDeliveryAt && !order.scheduledDeliveryCustomerAcceptedAt &&
+    if (order.status !== OrderStatus.PENDING && order.scheduledDeliveryAt && !order.scheduledDeliveryCustomerAcceptedAt &&
         (nextStatus === OrderStatus.PREPARING || nextStatus === OrderStatus.READY)) {
       throw createDomainError(409, 'SCHEDULE_NOT_CONFIRMED', 'Espera a que el cliente confirme el horario.');
     }
@@ -482,11 +483,29 @@ export async function updateOrderStatusByRestaurant({
     const isAccepting =
       nextStatus === OrderStatus.CONFIRMED || nextStatus === OrderStatus.PREPARING;
     const isCancelling = nextStatus === OrderStatus.CANCELLED;
+    const isCustomerScheduledAcceptance = isInitialAcceptance &&
+      Boolean(order.scheduledDeliveryAt) &&
+      !order.scheduledDeliveryCustomerAcceptedAt &&
+      nextStatus === OrderStatus.PREPARING;
+    const customerScheduleTravelMinutes = order.fulfillmentType === 'PICKUP'
+      ? 0
+      : estimateDeliveryTravelMinutes(order.restaurant, order);
+    const customerScheduleDeadline = isCustomerScheduledAcceptance
+      ? new Date(order.scheduledDeliveryAt!.getTime() - customerScheduleTravelMinutes * 60_000)
+      : null;
 
     const claimed = await tx.order.updateMany({
       where: { id: order.id, status: order.status, updatedAt: order.updatedAt },
       data: {
         status: nextStatus,
+        ...(isCustomerScheduledAcceptance ? {
+          scheduledDeliveryCustomerAcceptedAt: now,
+          preparationTimeMinutes: 1,
+          preparationStartedAt: now,
+          preparationDeadlineAt: customerScheduleDeadline!,
+          estimatedDeliveryTime: order.scheduledDeliveryAt!,
+          etaExtendedMinutes: 0,
+        } : {}),
         ...(isAccepting ? { noDriversAvailable: false } : {}),
         ...(isCancelling
           ? {
@@ -539,10 +558,15 @@ export async function updateOrderStatusByRestaurant({
               readyAt: now,
               ...(order.fulfillmentType !== 'PICKUP' ? { pickedUpAt: null } : {}),
               ...(order.fulfillmentType !== 'PICKUP' &&
-              order.paymentMethod === PaymentMethod.TRANSFER
+              order.paymentMethod !== PaymentMethod.CASH
                 ? (() => {
-                    const samePin = Math.floor(1000 + Math.random() * 9000).toString();
-                    return { handoverPin: samePin, deliveryPin: samePin };
+                    const deliveryPin = order.deliveryPin || generateDeliveryPin();
+                    return {
+                      deliveryPin,
+                      ...(order.paymentMethod === PaymentMethod.TRANSFER
+                        ? { handoverPin: order.handoverPin || deliveryPin }
+                        : {}),
+                    };
                   })()
                 : {}),
               ...(readyEstimatedDeliveryTime

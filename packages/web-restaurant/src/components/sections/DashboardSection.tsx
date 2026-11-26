@@ -3,6 +3,7 @@ import { CalendarDays, Check, Clock, Clock3, Copy, Pause, Play, Power, PackageCh
 
 import React, { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { isActiveOrderStatus, requestJson } from '@sadel/shared';
+import { useSharedClock } from '../../lib/clock';
 
 function useRestaurantReport(apiBase: string, token: string, query: string) {
   const [result, setResult] = useState<{ data: any; query: string; apiBase: string; token: string } | null>(null);
@@ -384,36 +385,11 @@ const DispatchOrderActions = React.memo(function DispatchOrderActions({ order }:
 });
 
 const CountdownText: React.FC<{ order: any; className?: string }> = ({ order, className = '' }) => {
-  const timerKey = `${order.id}-${order.status}-${order.etaExtendedAt || ''}`;
-  const [remaining, setRemaining] = React.useState<string>('--');
-  React.useEffect(() => {
-    function tick() {
-      if (typeof window === 'undefined') return;
-      try {
-        const raw = localStorage.getItem(`prep_deadline_${order.id}`);
-        if (raw) {
-          const deadline = parseInt(raw, 10);
-          const diff = deadline - Date.now();
-          if (diff <= 0) { setRemaining('0s'); return; }
-          const m = Math.floor(diff / 60000);
-          const s = Math.floor((diff % 60000) / 1000);
-          setRemaining(`${m}m ${s}s`);
-          return;
-        }
-      } catch {}
-      if (order.preparationDeadlineAt) {
-        const diff = new Date(order.preparationDeadlineAt).getTime() - Date.now();
-        if (diff <= 0) { setRemaining('0s'); return; }
-        const m = Math.floor(diff / 60000);
-        const s = Math.floor((diff % 60000) / 1000);
-        setRemaining(`${m}m ${s}s`);
-        return;
-      }
-      setRemaining('--');
-    }
-    tick();
-    const interval = setInterval(tick, 1000);
-    return () => clearInterval(interval);
-  }, [order.id, order.preparationDeadlineAt, timerKey]);
+  const now = useSharedClock();
+  const deadline = order.preparationDeadlineAt ? new Date(order.preparationDeadlineAt).getTime() : NaN;
+  const seconds = Math.max(0, Math.ceil((deadline - now) / 1000));
+  const remaining = Number.isFinite(deadline)
+    ? `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')} restantes`
+    : order.preparationTimeMinutes ? `${order.preparationTimeMinutes} min estimados` : 'Tiempo por definir';
   return <span className={`tabular-nums ${className}`}>{remaining}</span>;
 };

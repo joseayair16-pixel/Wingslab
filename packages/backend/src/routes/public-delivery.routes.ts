@@ -85,6 +85,13 @@ export async function registerPublicDeliveryRoutes(fastify: FastifyInstance): Pr
         include: {
           order: {
             include: {
+              items: {
+                select: {
+                  id: true, quantity: true, weightG: true, specialInstructions: true,
+                  product: { select: { name: true, image: true } },
+                  options: { select: { name: true } },
+                },
+              },
               restaurant: {
                 select: {
                   name: true,
@@ -162,7 +169,10 @@ export async function registerPublicDeliveryRoutes(fastify: FastifyInstance): Pr
           paymentMethod: dToken.order.paymentMethod,
           deliveryAddress: dToken.order.address,
           notes: dToken.order.notes,
-          handoverPin: dToken.order.handoverPin,
+          items: dToken.order.items,
+          // This bearer link belongs to the courier; the customer's delivery
+          // verification code must never be disclosed through it.
+          handoverPin: null,
           isSupportDelivery: Boolean(dToken.order.supportRestaurantId),
           supportRestaurant: dToken.order.supportRestaurant
             ? {

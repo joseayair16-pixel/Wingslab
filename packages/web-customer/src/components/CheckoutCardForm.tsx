@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import Script from 'next/script';
 import { ArrowRight, CreditCard, LoaderCircle, LockKeyhole, ShieldCheck } from 'lucide-react';
 import type { SavedCard } from '../lib/savedCards';
+import type { ConfirmedCardPayment } from '../lib/card-payment-result';
 
 type CardFormData = {
   token?: string;
@@ -38,7 +39,7 @@ type Props = {
   apiBase: string;
   token: string;
   body: Record<string, unknown>;
-  onVerified: () => void;
+  onVerified: (state: ConfirmedCardPayment) => void;
   onError: (message: string) => void;
   savedCard?: SavedCard | null;
 };
@@ -123,6 +124,7 @@ export default function CheckoutCardForm({ publicKey, apiBase, token, body, onVe
   const [message, setMessage] = useState('');
   const [challenge, setChallenge] = useState<{ intentId: string; url: string } | null>(null);
   const [paymentNotice, setPaymentNotice] = useState<PaymentNotice | null>(null);
+  const [pendingConfirmation, setPendingConfirmation] = useState(false);
   const tokenize = useRef<((form: HTMLFormElement) => Promise<void>) | null>(null);
   const [paymentReady, setPaymentReady] = useState(false);
   const [saveCard, setSaveCard] = useState(false);
@@ -153,6 +155,7 @@ export default function CheckoutCardForm({ publicKey, apiBase, token, body, onVe
   }, [apiBase, token]);
 
   const showDecline = useCallback((code?: string) => {
+    setPendingConfirmation(false);
     intentRef.current = null;
     setIntent(null);
     setChallenge(null);
@@ -161,6 +164,7 @@ export default function CheckoutCardForm({ publicKey, apiBase, token, body, onVe
   }, []);
 
   const showExpired = useCallback(() => {
+    setPendingConfirmation(false);
     intentRef.current = null;
     setIntent(null);
     setChallenge(null);
@@ -176,7 +180,7 @@ export default function CheckoutCardForm({ publicKey, apiBase, token, body, onVe
     const check = async () => {
       const remaining = deadline - Date.now();
       if (remaining <= 0) {
-        setMessage('No se pudo confirmar el pago. Revisa tus pedidos antes de volver a pagar.');
+        setPendingConfirmation(true);
         return;
       }
       try {
@@ -185,7 +189,7 @@ export default function CheckoutCardForm({ publicKey, apiBase, token, body, onVe
         });
         if (controller.signal.aborted) return;
         if (status.state === 'VERIFIED' || status.state === 'ORDER_CREATED') {
-          callbacksRef.current.onVerified();
+          callbacksRef.current.onVerified(status.state);
           return;
         }
         if (status.state === 'DECLINED') { showDecline(status.declineReason); return; }
@@ -201,14 +205,16 @@ export default function CheckoutCardForm({ publicKey, apiBase, token, body, onVe
   const settle = useCallback(async (current: IntentStatus) => {
     const deadline = Date.now() + 20_000;
     while (Date.now() < deadline) {
-      const status = await request(`/me/checkout/card/intents/${current.id}`) as IntentStatus & { threeDsUrl?: string };
-      if (status.threeDsUrl) { setChallenge({ intentId: current.id, url: status.threeDsUrl }); return; }
-      if (status.state === 'VERIFIED' || status.state === 'ORDER_CREATED') { callbacksRef.current.onVerified(); return; }
+      const status = await request(`/me/checkout/card/intents/${current.id}`, {
+        signal: AbortSignal.timeout(Math.min(8000, Math.max(1, deadline - Date.now()))),
+      }) as IntentStatus & { threeDsUrl?: string };
+      if (status.threeDsUrl) { setPendingConfirmation(false); setChallenge({ intentId: current.id, url: status.threeDsUrl }); return; }
+      if (status.state === 'VERIFIED' || status.state === 'ORDER_CREATED') { callbacksRef.current.onVerified(status.state); return; }
       if (status.state === 'DECLINED') { showDecline(status.declineReason); return; }
       if (status.state === 'EXPIRED') { showExpired(); return; }
       await new Promise(resolve => setTimeout(resolve, 1500));
     }
-    setMessage('Estamos confirmando el pago. No vuelvas a intentarlo todavía; revisa tus pedidos en unos instantes.');
+    setPendingConfirmation(true);
   }, [request, showDecline, showExpired]);
 
   const submitToken = useCallback(async (data: CardFormData) => {
@@ -230,6 +236,7 @@ export default function CheckoutCardForm({ publicKey, apiBase, token, body, onVe
     try {
       const result = await request(`/me/checkout/card/intents/${current.id}/charge`, {
         method: 'POST',
+        signal: AbortSignal.timeout(30_000),
         body: JSON.stringify({
           cardToken: data.token,
           deviceId: (() => {
@@ -248,27 +255,22 @@ export default function CheckoutCardForm({ publicKey, apiBase, token, body, onVe
         }),
       }) as IntentStatus & { threeDsUrl?: string };
       if (result.threeDsUrl) { setChallenge({ intentId: current.id, url: result.threeDsUrl }); return; }
-      if (result.state === 'VERIFIED' || result.state === 'ORDER_CREATED') { callbacksRef.current.onVerified(); return; }
+      if (result.state === 'VERIFIED' || result.state === 'ORDER_CREATED') { callbacksRef.current.onVerified(result.state); return; }
       if (result.state === 'DECLINED') { showDecline(result.declineReason); return; }
+      if (result.state === 'EXPIRED') { showExpired(); return; }
       await settle(result);
     } catch (error) {
-      if (['PAYMENT_OUTCOME_UNKNOWN', 'CHECKOUT_BUSY'].includes((error as Error & { code?: string })?.code || '')) {
-        try {
-          await settle(current);
-        } catch (settleError) {
-          const text = settleError instanceof Error ? settleError.message : 'No se pudo verificar el pago.';
-          setMessage(text);
-          callbacksRef.current.onError(text);
-        }
-        return;
+      // A lost response may follow a successful charge, even on network or 5xx
+      // errors. Never offer another submission while the outcome is unknown.
+      try {
+        await settle(current);
+      } catch {
+        setPendingConfirmation(true);
       }
-      const text = error instanceof Error ? error.message : 'No se pudo completar el pago.';
-      setMessage(text);
-      callbacksRef.current.onError(text);
     } finally {
       setBusy(false);
     }
-  }, [request, settle, showDecline, savedCard]);
+  }, [request, settle, showDecline, showExpired, savedCard]);
 
   useEffect(() => {
     if (!intent || !sdkReady || !window.MercadoPago) return;
@@ -532,7 +534,7 @@ export default function CheckoutCardForm({ publicKey, apiBase, token, body, onVe
           {!fieldsReady && <p role="status" className="text-sm">{mountFailed ? `Mercado Pago no pudo activar los campos seguros. ${diagnostic}` : diagnostic}</p>}
           {mountFailed && <button type="button" className="min-h-11 text-sm font-semibold underline" onClick={() => setMountAttempt(value => value + 1)}>Volver a cargar los campos</button>}
           {saveNotice && <p role="status" className="text-xs font-medium text-emerald-700 dark:text-emerald-300">{saveNotice}</p>}
-          <button type="submit" disabled={busy || !fieldsReady || !paymentReady} className="flex min-h-14 w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[#dc080e] to-[#a9080d] px-4 text-sm font-bold text-white shadow-sm transition active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-600 focus-visible:ring-offset-2 disabled:opacity-50">
+          <button type="submit" disabled={busy || pendingConfirmation || !fieldsReady || !paymentReady} className="flex min-h-14 w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[#dc080e] to-[#a9080d] px-4 text-sm font-bold text-white shadow-sm transition active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-600 focus-visible:ring-offset-2 disabled:opacity-50">
             {busy ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />}
             {busy ? 'Procesando…' : 'Pagar de forma segura'}
           </button>
@@ -573,6 +575,23 @@ export default function CheckoutCardForm({ publicKey, apiBase, token, body, onVe
             <p className="mt-3 text-center text-[11px] leading-relaxed text-neutral-500 dark:text-zinc-400">
               Revisa tus pedidos antes de volver a pagar. No se realizó ningún cobro.
             </p>
+          </section>
+        </div>
+      )}
+      {pendingConfirmation && (
+        <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/60 px-4 py-6 backdrop-blur-sm">
+          <section role="dialog" aria-modal="true" aria-labelledby="wl-card-pending-title" aria-describedby="wl-card-pending-body" className="w-full max-w-sm rounded-[24px] bg-white p-6 text-center shadow-2xl dark:bg-zinc-900">
+            <LoaderCircle className="mx-auto h-10 w-10 text-amber-600" aria-hidden="true" />
+            <h2 id="wl-card-pending-title" className="mt-4 text-lg font-bold text-neutral-900 dark:text-white">Estamos verificando tu pago</h2>
+            <p id="wl-card-pending-body" className="mt-3 text-sm leading-6 text-neutral-600 dark:text-zinc-300">Todavía no podemos confirmar el resultado. No vuelvas a pagar: consulta el estado de este intento o revisa Mis pedidos más tarde.</p>
+            <button type="button" autoFocus disabled={busy} onClick={() => {
+              const current = intentRef.current;
+              if (!current) return;
+              setBusy(true);
+              void settle(current).catch(() => setPendingConfirmation(true)).finally(() => setBusy(false));
+            }} className="mt-6 min-h-12 w-full rounded-full bg-neutral-900 px-4 text-sm font-bold text-white disabled:opacity-50 dark:bg-white dark:text-neutral-900">
+              {busy ? 'Consultando…' : 'Consultar estado'}
+            </button>
           </section>
         </div>
       )}

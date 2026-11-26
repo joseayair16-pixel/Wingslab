@@ -1,7 +1,7 @@
 'use client';
 import { BadgePercent, Bike, Check, ChevronLeft, ChevronRight, DollarSign, Minus, Plus, Receipt, ShoppingBag, Store, Trash2, Utensils, Wallet, X } from 'lucide-react';
 
-import { memo, useEffect, useMemo, useRef } from 'react';
+import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { formatCurrency as formatSharedCurrency } from '@sadel/shared';
 import redWordmark from '../assets/wingslab-wordmark-red.png';
 import whiteWordmark from '../assets/wingslab-wordmark.png';
@@ -59,7 +59,7 @@ function getLineTotal(item: CartItemLike) {
 type CartDrawerProps = {
   isOpen: boolean;
   onClose: () => void;
-  onProceedToCheckout: () => void;
+  onProceedToCheckout: (scheduledDeliveryAt?: string) => void;
   fulfillmentType: 'DELIVERY' | 'PICKUP';
   onFulfillmentTypeChange: (type: 'DELIVERY' | 'PICKUP') => void;
   isRestaurantOpen?: boolean;
@@ -69,7 +69,13 @@ type CartDrawerProps = {
   pickupOnly?: boolean;
   freeDeliveryThreshold?: number | null;
   restaurantId?: string | null;
+  nextOpenTime?: string | null;
 };
+
+function localDateTimeValue(date: Date) {
+  const pad = (value: number) => String(value).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
 
 export default memo(function CartDrawer({
   isOpen,
@@ -84,7 +90,9 @@ export default memo(function CartDrawer({
   pickupOnly = false,
   freeDeliveryThreshold,
   restaurantId,
+  nextOpenTime = null,
 }: CartDrawerProps) {
+  const [scheduledLocal, setScheduledLocal] = useState('');
   const closeButton = useRef<HTMLButtonElement>(null);
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
@@ -231,7 +239,7 @@ export default memo(function CartDrawer({
                   const hasDirectDiscount = item.discountPrice != null && Number(item.discountPrice) < originalUnitPrice;
                   const isWeightItem = item.sellBy === 'WEIGHT';
                   const quantityForProduct = cart.reduce((sum, line) => line.productId === item.productId ? sum + line.quantity : sum, 0);
-                  const stockLimitReached = item.maxStock != null && quantityForProduct >= item.maxStock;
+                  const stockLimitReached = false;
 
                   return (
                     <div
@@ -404,8 +412,18 @@ export default memo(function CartDrawer({
 
               {!isRestaurantOpen && (
                 <p role="status" className="rounded-lg bg-amber-50 px-3 py-2 text-center text-xs font-medium text-amber-800">
-                  El restaurante está cerrado y no puede aceptar pedidos ahora.
+                  Cerrado ahora{nextOpenTime ? ` · ${nextOpenTime}` : ''}. Elige una hora aproximada para programar tu pedido.
                 </p>
+              )}
+
+              {!isRestaurantOpen && (
+                <label className="grid gap-1.5 rounded-2xl border border-amber-200 bg-gradient-to-br from-amber-50 to-white p-3.5 text-left dark:border-amber-900/60 dark:from-amber-950/40 dark:to-zinc-900">
+                  <span className="text-xs font-bold text-amber-950 dark:text-amber-100">¿A qué hora quieres recibirlo?</span>
+                  <input type="datetime-local" value={scheduledLocal} min={localDateTimeValue(new Date(Date.now() + 15 * 60_000))}
+                    onChange={event => setScheduledLocal(event.target.value)}
+                    className="min-h-12 w-full rounded-xl border border-amber-200 bg-white px-3 text-base font-semibold text-neutral-900 outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-200 dark:border-amber-900 dark:bg-zinc-900 dark:text-white" />
+                  <span className="text-[11px] leading-relaxed text-neutral-500 dark:text-zinc-400">Selecciona una hora dentro del horario de atención. El restaurante confirmará el pedido al abrir.</span>
+                </label>
               )}
 
               <div className="grid gap-2 sm:grid-cols-[0.9fr_1.1fr]">
@@ -419,12 +437,18 @@ export default memo(function CartDrawer({
                 </button>
                 <button
                   type="button"
-                  onClick={onProceedToCheckout}
-                  disabled={!isRestaurantOpen}
+                  onClick={() => {
+                    if (!isRestaurantOpen) {
+                      const selected = new Date(scheduledLocal);
+                      if (!scheduledLocal || Number.isNaN(selected.getTime()) || selected.getTime() < Date.now() + 15 * 60_000) return;
+                    }
+                    onProceedToCheckout(!isRestaurantOpen ? new Date(scheduledLocal).toISOString() : undefined);
+                  }}
+                  disabled={!isRestaurantOpen && (!scheduledLocal || new Date(scheduledLocal).getTime() < Date.now() + 15 * 60_000)}
                   className="group flex min-h-12 items-center justify-center gap-2 rounded-xl bg-[var(--wl-action)] px-4 text-sm font-bold text-white shadow-[0_5px_16px_-4px_rgba(187,10,14,0.35)] transition-colors hover:bg-[var(--wl-action-hover)] active:scale-[0.98] disabled:cursor-not-allowed disabled:bg-neutral-100 disabled:text-neutral-400 disabled:shadow-none dark:disabled:bg-zinc-800 dark:disabled:text-zinc-500"
                 >
                   <span className="flex items-center justify-center gap-2">
-                    Completar pedido
+                    {isRestaurantOpen ? 'Completar pedido' : 'Programar pedido'}
                     <ChevronRight className="h-5 w-5 shrink-0 transition-transform group-hover:translate-x-0.5" strokeWidth={2.5} />
                   </span>
                 </button>

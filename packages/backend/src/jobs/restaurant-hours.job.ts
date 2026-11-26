@@ -6,6 +6,7 @@ import { getRedis } from '../config/redis';
 import { emitNotification } from '../services/socket.service';
 import { sendPushNotification } from '../services/notification.service';
 import { logger } from '../utils/logger';
+import { enqueueRestaurantOrder } from '../services/order-workflow.service';
 
 function timeToMins(timeStr: string): number {
   const [h, m] = timeStr.split(':').map(Number);
@@ -223,6 +224,56 @@ export function startRestaurantHoursJob(fastify: FastifyInstance) {
           }
         }
 
+        // Customer-scheduled orders stay out of the review queue and timeout
+        // clock until the shop is accepting orders. Redis membership makes
+        // this release idempotent across job ticks/restarts.
+        if (restaurant.isAcceptingOrders && !restaurant.isPaused) {
+          const scheduledOrders = await prisma.order.findMany({
+            where: {
+              restaurantId: restaurant.id,
+              status: 'PENDING',
+              scheduledDeliveryAt: { not: null },
+            },
+            select: {
+              id: true,
+              orderReference: true,
+              createdAt: true,
+              scheduledDeliveryAt: true,
+              totalAmount: true,
+              paymentMethod: true,
+              customer: { select: { user: { select: { name: true, lastName: true } } } },
+            },
+            take: 50,
+            orderBy: { createdAt: 'asc' },
+          });
+          for (const order of scheduledOrders) {
+            const queueKey = `restaurant:queue:${restaurant.id}`;
+            const alreadyQueued = await redis.zscore(queueKey, order.id);
+            if (alreadyQueued !== null) continue;
+            const position = await enqueueRestaurantOrder(restaurant.id, order.id, order.createdAt, { throwOnError: true });
+            emitNotification(fastify.io, restaurant.userId, 'RESTAURANT', 'order:created', {
+              orderId: order.id,
+              orderReference: order.orderReference,
+              totalAmount: order.totalAmount,
+              paymentMethod: order.paymentMethod,
+              customerName: [order.customer.user.name, order.customer.user.lastName].filter(Boolean).join(' ').trim() || 'Cliente SaDeL',
+              queuePosition: position.position,
+              queueLength: position.queueLength,
+              isScheduledByCustomer: true,
+              scheduledDeliveryAt: order.scheduledDeliveryAt,
+            }, { requestId: `scheduled-release-${order.id}`, orderId: order.id });
+            void sendPushNotification(restaurant.userId, {
+              title: 'Pedido programado para revisar',
+              body: `Pedido ${order.orderReference} — el cliente indicó ${order.scheduledDeliveryAt?.toLocaleString('es-MX', { timeZone: 'America/Mexico_City' })}.`,
+              icon: '/app-icon-192.png',
+              badge: '/badge.png',
+              requireInteraction: true,
+              tag: `new-order-${order.id}`,
+              data: { orderId: order.id, event: 'order:created', url: `/?orderId=${order.id}` },
+            }).catch(error => logger.error('[RestaurantHoursJob] Falló push de pedido programado', { orderId: order.id, error }));
+          }
+        }
+
         // 1. Apertura Asistida (solo si la tienda no tiene apertura automática)
         if (!restaurant.isAcceptingOrders && !restaurant.autoOpenEnabled) {
           if (bestShiftMins >= openMins && bestShiftMins <= openMins + 4) {
@@ -269,27 +320,33 @@ export function startRestaurantHoursJob(fastify: FastifyInstance) {
 
         // 2. Cierre Inteligente y Auto-Cierre
         if (restaurant.isAcceptingOrders) {
-          const autoCloseStartMins = closeMins + 10;
-          const autoCloseEndMins = closeMins + 720; // 12 hour grace window
-          const hardLimitMins = closeMins + 180; // 3 hours
+          const promptAtMins = closeMins + 10;
+          const automaticCloseAtMins = closeMins + 12;
+          const scheduleKey = `${restaurant.id}_${bestSchedule.id}`;
 
-          if (bestShiftMins >= closeMins && bestShiftMins <= closeMins + 9) {
-            const hasPromptedClose = await redis.get(`prompted_close_${restaurant.id}_${currentDay}`);
+          if (bestShiftMins >= promptAtMins && bestShiftMins < automaticCloseAtMins) {
+            const hasPromptedClose = await redis.get(`prompted_close_${scheduleKey}`);
             if (!hasPromptedClose) {
-              await redis.set(`prompted_close_${restaurant.id}_${currentDay}`, '1', 'EX', 3600 * 12);
-              logger.info(`[RestaurantHoursJob] Restaurante ${restaurant.id} (${restaurant.name}): Hora de cierre alcanzada.`);
+              await redis.set(`prompted_close_${scheduleKey}`, '1', 'EX', 3600 * 36);
+              logger.info(`[RestaurantHoursJob] Restaurante ${restaurant.id} (${restaurant.name}): aviso de cierre (10 min de tolerancia).`);
               emitNotification(fastify.io, restaurant.userId, 'RESTAURANT', 'restaurant:close_prompt', {}, {});
+              await sendPushNotification(restaurant.userId, {
+                title: '¿Cerramos tu restaurante?',
+                body: 'Tu horario terminó hace 10 minutos. La tienda se cerrará automáticamente en 2 minutos si no eliges mantenerla abierta.',
+                icon: '/app-icon-192.png',
+                badge: '/badge.png',
+                tag: `close-reminder-${scheduleKey}`,
+                requireInteraction: true,
+                data: { url: '/', event: 'restaurant:close_prompt' },
+              }).catch(() => {});
             }
-          } else if (bestShiftMins >= autoCloseStartMins && bestShiftMins <= autoCloseEndMins) {
+          }
+
+          if (bestShiftMins >= automaticCloseAtMins) {
             const skipAutoClose = await redis.get(`skip_autoclose_${restaurant.id}`);
-            const isPastHardLimit = bestShiftMins >= hardLimitMins;
-            
-            if (!skipAutoClose || isPastHardLimit) {
-              const reason = isPastHardLimit ? 'Límite máximo de 3 horas excedido' : '10+ min tarde sin posponer';
-              logger.info(`[RestaurantHoursJob] Restaurante ${restaurant.id} (${restaurant.name}): Auto-cierre forzado (${reason}).`);
-              
-              await prisma.restaurant.update({
-                where: { id: restaurant.id },
+            if (!skipAutoClose) {
+              const closed = await prisma.restaurant.updateMany({
+                where: { id: restaurant.id, status: RestaurantStatus.ACTIVE, isAcceptingOrders: true },
                 data: {
                   isAcceptingOrders: false,
                   statusChangedAt: new Date(),
@@ -297,19 +354,17 @@ export function startRestaurantHoursJob(fastify: FastifyInstance) {
                   statusReason: 'Cerrado automáticamente fuera del horario de atención.',
                 },
               });
-
+              if (closed.count) {
+                await redis.del(`prompted_close_${scheduleKey}`);
+                logger.info(`[RestaurantHoursJob] Restaurante ${restaurant.id} (${restaurant.name}): auto-cierre tras 12 minutos.`);
               emitNotification(fastify.io, restaurant.userId, 'RESTAURANT', 'restaurant:auto_closed', {}, {});
-              
-              const bodyMsg = isPastHardLimit 
-                ? 'Cierre de emergencia: Has superado el límite absoluto de 3 horas de extensión. Tu restaurante ha sido apagado.' 
-                : 'Han pasado más de 10 minutos desde tu hora de cierre o tu extensión terminó. Si sigues atendiendo, vuelve a abrirlo.';
-
               await sendPushNotification(restaurant.userId, {
                 title: 'Restaurante Cerrado Automáticamente 💤',
-                body: bodyMsg,
+                  body: 'La tienda se cerró automáticamente 2 minutos después del aviso de cierre.',
                 icon: '/app-icon-192.png',
                 badge: '/badge.png',
               }).catch(() => {});
+              }
             }
           }
         }

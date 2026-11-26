@@ -1,4 +1,4 @@
-import { webPushRetryJobEnabled } from '../config/isolation';
+import { restaurantHoursJobEnabled, webPushRetryJobEnabled } from '../config/isolation';
 
 /** Capability inventory, independent from cron registration and domain logic. */
 export const JOB_GROUPS = {
@@ -16,7 +16,10 @@ export function validateJobSelection(requested: JobSelection = {}): Readonly<Rec
   const names = Object.values(JOB_GROUPS).flat() as JobName[];
   for (const [name, enabled] of Object.entries(requested)) {
     if (!names.includes(name as JobName) || typeof enabled !== 'boolean') throw new Error('[WingsLab] Invalid job selection.');
-    if (enabled && (name !== 'notificationRetry' || !webPushRetryJobEnabled())) {
+    if (enabled && !(
+      (name === 'notificationRetry' && webPushRetryJobEnabled()) ||
+      (name === 'restaurantHours' && restaurantHoursJobEnabled())
+    )) {
       throw new Error(`[WingsLab] Job ${name} is not authorized in Phase 2A.`);
     }
   }

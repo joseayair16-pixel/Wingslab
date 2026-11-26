@@ -10,10 +10,8 @@ const baseInput = {
   fulfillmentType: 'PICKUP' as const,
 };
 
-test('la reserva con tarjeta rechaza cupones y recompensas con un código claro', async () => {
+test('la reserva con tarjeta conserva la restricción explícita de recompensas de fidelidad', async () => {
   const prisma = {} as PrismaClient;
-  await expect(reserveCustomerCardCheckout({ prisma, customerUserId: 'u', input: { ...baseInput, promoCode: 'CUPON' } }, requestKey))
-    .rejects.toMatchObject({ code: 'CARD_REWARD_NOT_SUPPORTED' });
   await expect(reserveCustomerCardCheckout({ prisma, customerUserId: 'u', input: {
     ...baseInput, loyalty: { cardId: '8148d68d-73eb-4365-b96c-be7d555f7aee', discountCents: 100, expectedTotalCents: 900 },
   } }, requestKey)).rejects.toMatchObject({ code: 'CARD_REWARD_NOT_SUPPORTED' });

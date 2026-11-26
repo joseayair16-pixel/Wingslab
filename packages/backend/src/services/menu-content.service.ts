@@ -32,13 +32,16 @@ export async function saveMenuContent(data: MenuContent): Promise<MenuContent> {
 export async function saveMenuImage(source: string) {
   if (!/^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/.test(source)) throw failure(400, 'Selecciona una imagen PNG, JPG o WebP.');
   const input = Buffer.from(source.slice(source.indexOf(',') + 1), 'base64');
-  if (input.length > 2 * 1024 * 1024) throw failure(400, 'La imagen debe pesar como máximo 2 MiB.');
+  if (input.length > 3 * 1024 * 1024) throw failure(400, 'La imagen debe pesar como máximo 3 MiB.');
   let image: Buffer;
   try {
     image = await sharp(input, { limitInputPixels: 20_000_000 }).rotate()
       .resize({ width: 1600, height: 1600, fit: 'inside', withoutEnlargement: true }).webp({ quality: 80 }).toBuffer();
   } catch { throw failure(400, 'No se pudo leer esta imagen. Usa PNG, JPG o WebP.'); }
-  if (image.length > 400_000) throw failure(400, 'La imagen optimizada es demasiado grande. Reduce su tamaño.');
+  // El límite de entrada es 3 MiB: no rechazamos después una imagen válida
+  // porque su versión optimizada supere los 400 KB (una foto detallada puede
+  // convertirse en ~1,5 MB de WebP). Solo acotamos tamaños desproporcionados.
+  if (image.length > 3 * 1024 * 1024) throw failure(400, 'La imagen optimizada es demasiado grande. Reduce su tamaño.');
 
   const id = crypto.randomUUID(), key = IMAGE_KEY + id;
   // El proveedor de medios es la fuente de verdad; la BD solo guarda la

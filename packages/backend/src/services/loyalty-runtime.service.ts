@@ -77,7 +77,15 @@ export async function loyaltyState(tx: Tx, customerId: string) {
   const program = await readProgram(tx);
   if (!program) return null;
   const list = await reconcileLoyalty(tx, customerId, program);
-  const reserved = list.some(c => c.redemptionState === 'RESERVED');
+  const pendingPayments = await tx.checkoutPaymentIntent.findMany({
+    where: { customerId, restaurantId: RESTAURANT_ID, OR: [
+      { state: 'RESERVED', expiresAt: { gt: new Date() } },
+      { state: { in: ['SUBMITTING', 'VERIFIED'] } },
+    ] },
+    select: { snapshot: true },
+  });
+  const reserved = list.some(c => c.redemptionState === 'RESERVED') ||
+    pendingPayments.some(intent => Boolean((intent.snapshot as { loyaltyReservation?: unknown } | null)?.loyaltyReservation));
   const available = list.filter(c => c.state === 'COMPLETED' && !c.redemptionState);
   const open = list.find(c => c.state === 'OPEN');
   const next = available[0] || open;
@@ -90,7 +98,7 @@ export async function findLoyaltyGift(tx: Tx, productId: string | null) {
     where: { id: productId, restaurantId: RESTAURANT_ID, isAvailable: true, deleted: false, sellBy: 'UNIT', isAdultOnly: false },
     select: { id: true, name: true, trackStock: true, stock: true, optionGroups: { select: { minSelection: true } } },
   });
-  if (!product || (product.trackStock && product.stock < 1) || product.optionGroups.some(group => group.minSelection > 0)) return null;
+  if (!product || product.optionGroups.some(group => group.minSelection > 0)) return null;
   return { id: product.id, name: product.name, trackStock: product.trackStock, stock: product.stock };
 }
 

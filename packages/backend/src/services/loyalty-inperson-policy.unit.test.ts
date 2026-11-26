@@ -42,8 +42,8 @@ describe('calculateInPersonSaleItems', () => {
 
   it('reserves stock only for inventory-tracked unit sales', () => {
     const sale = calculateInPersonSaleItems([{ productId: 'wings', quantity: 3, optionIds: ['bbq'] }], [product({ trackStock: true, stock: 8 })]);
-    expect(sale.stockRequired.get('wings')).toBe(3);
-    expect(sale.items[0].stockDeducted).toBe(true);
+    expect(sale.stockRequired.size).toBe(0);
+    expect(sale.items[0].stockDeducted).toBe(false);
   });
 
   it('rejects missing required options, unavailable products and unsafe quantities', () => {

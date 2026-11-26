@@ -114,13 +114,13 @@ export default function SavedCardSelector({ apiBase, token, selectedId, onSelect
         const selected = selectedId === card.id;
         return (
           <div key={card.id}>
-          <label className={`flex min-h-[68px] cursor-pointer items-center gap-3 rounded-2xl border p-3.5 transition-colors focus-within:ring-2 focus-within:ring-[var(--accent)]/40 ${
+          <label className={`relative flex min-h-[68px] cursor-pointer items-center gap-3 rounded-2xl border p-3.5 transition-colors focus-within:ring-2 focus-within:ring-[var(--accent)]/40 ${
             selected
               ? 'border-[var(--accent)] bg-[var(--accent)]/[0.06] ring-1 ring-[var(--accent)]/20'
               : 'border-neutral-200/80 bg-white hover:border-neutral-300 dark:border-white/10 dark:bg-zinc-900 dark:hover:border-white/20'
           }`}>
             <input type="radio" name="saved-payment-card" value={card.id} checked={selected}
-              onChange={() => onSelect(card)} className="sr-only" aria-label={`${card.paymentMethod.name}, termina en ${card.lastFourDigits}`} />
+              onChange={() => onSelect(card)} className="sr-only left-0 top-0" aria-label={`${card.paymentMethod.name}, termina en ${card.lastFourDigits}`} />
             <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${selected ? 'bg-[var(--accent)] text-white' : 'bg-neutral-100 text-neutral-600 dark:bg-zinc-800 dark:text-zinc-300'}`}>
               <CreditCard className="h-5 w-5" strokeWidth={1.7} aria-hidden="true" />
             </span>
